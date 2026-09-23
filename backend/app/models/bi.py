@@ -104,15 +104,38 @@ GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
 #: One ``bi_mart_builds`` row per (bank, as-of, scope).
 MART_BUILD_SCOPES: tuple[str, ...] = ("positions", "events", "gl", "engine", "dims")
-MART_BUILD_STATUSES: tuple[str, ...] = ("running", "succeeded", "failed", "skipped")
+#: There is deliberately no ``skipped``: a fingerprint skip returns BEFORE the
+#: build is marked running, so it leaves the previous ``succeeded`` row — whose
+#: fingerprint equals the current one, which is what makes the skip idempotent
+#: and preserves that row's timings and row counts as the evidence of what the
+#: mart actually holds. A never-attempted slice has no row at all. The skip is
+#: already recorded per attempt on ``jobs.progress``; this is a STATE table.
+MART_BUILD_STATUSES: tuple[str, ...] = ("running", "succeeded", "failed")
 
-#: Reconciliation checks R1–R9 (architecture §Reconciliation → trust) and the
+#: Reconciliation checks R1–R10 (architecture §Reconciliation → trust) and the
 #: trust colours they resolve to. ``grey`` is "not assessed", never green.
-RECONCILIATION_CHECK_IDS: tuple[str, ...] = tuple(f"R{number}" for number in range(1, 10))
+#: R10 (``dpd_completeness``, D-042) is the share of LOAN rows with no
+#: ``dpd_band``, so a badge can never read green over a "we were never told"
+#: figure — it must be storable or the stored badge disagrees with the live one.
+RECONCILIATION_CHECK_IDS: tuple[str, ...] = tuple(f"R{number}" for number in range(1, 11))
 RECONCILIATION_STATUSES: tuple[str, ...] = ("green", "amber", "red", "grey")
 
-#: ``bi_query_log`` vocabularies.
-QUERY_LOG_SURFACES: tuple[str, ...] = ("query", "grid", "drill", "explain", "export", "feed")
+#: ``bi_query_log`` vocabularies. ``trust`` and ``catalogue`` are read surfaces
+#: that return no mart rows, and they are named here for one reason: the read
+#: budget is counted over THIS table, so a surface with no value of its own
+#: either goes unmetered or gets recorded as something it is not — and putting
+#: an event in an append-only audit table that did not happen is worse than the
+#: missing limit. With the values admitted, the routes log what they did (A6-06).
+QUERY_LOG_SURFACES: tuple[str, ...] = (
+    "query",
+    "grid",
+    "drill",
+    "explain",
+    "export",
+    "feed",
+    "trust",
+    "catalogue",
+)
 QUERY_LOG_DECISIONS: tuple[str, ...] = ("allowed", "denied")
 QUERY_LOG_PRINCIPAL_TYPES: tuple[str, ...] = tuple(kind.value for kind in PrincipalType)
 
@@ -204,12 +227,14 @@ class _PositionFactColumns(_TenantKeys, _BuilderStamp):
         Numeric(12, 4), nullable=True
     )
     encumbered: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    hqla_level: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    hqla_level: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: ``attributes.branch_id`` verbatim; ``bi_dim_branch`` resolves it.
     branch_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     product_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     product_family: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    exposure_category: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: A mapped category, or ``unclassified_<slug of the 80-char regulatory
+    #: category>`` for an unrecognised one — hence wider than the category.
+    exposure_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     counterparty_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     counterparty_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     counterparty_group: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -438,7 +463,9 @@ class BiFactEngineMetric(_BuilderStamp, Base):
     tier: Mapped[str] = mapped_column(String(8), primary_key=True)
     value: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    status: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    #: ``live_metrics.status`` (green/amber/red/na) or ``regulatory_runs.status``
+    #: (``succeeded``…), so it is as wide as the wider source.
+    status: Mapped[str | None] = mapped_column(String(24), nullable=True)
     regime: Mapped[str | None] = mapped_column(String(40), nullable=True)
     institution_class: Mapped[str | None] = mapped_column(String(40), nullable=True)
     advisory_designation: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -596,7 +623,7 @@ class BiMartBuild(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
 
 
 class BiReconciliationResult(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
-    """The R1–R9 outcome for a (bank, as-of) that the trust badge is read from."""
+    """The R1–R10 outcome for a (bank, as-of) that the trust badge is read from."""
 
     __tablename__ = "bi_reconciliation_results"
     __table_args__ = (

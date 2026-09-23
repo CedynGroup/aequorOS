@@ -30,6 +30,27 @@ from sqlalchemy.pool import QueuePool
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
+from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
+from app.domain.bi import extract
+from app.domain.bi.authority import UNREGISTERED
+from app.domain.bi.catalogue.version import CATALOGUE_VERSION
+from app.domain.capital.loan_classification import (
+    BANK_GRADE_ORDER,
+    BASIS_DAYS_PAST_DUE,
+    BASIS_RESTRUCTURE_HOLD,
+    BASIS_STAGE_PROXY,
+    BASIS_UNCLASSIFIED,
+    SDI_GRADE_ORDER,
+)
+from app.domain.credit.dpd_bands import DPD_BAND_CODES
+from app.domain.irr.engine import IRR_BUCKETS
+from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
+from app.domain.positions.families import (
+    LOAN_CATEGORY_MAP,
+    PAST_DUE_CATEGORY,
+    UNCLASSIFIED_FAMILY,
+    unclassified_category,
+)
 from app.models import bi
 from app.models.bi import (
     BI_TABLES,
@@ -50,6 +71,18 @@ from app.models.bi import (
     BiQueryLog,
     BiReconciliationResult,
 )
+from app.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalLoanEvent,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+)
+from app.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.models.institution_type import InstitutionType
+from app.models.live import LIVE_MODULES, LiveMetric
+from app.models.regulatory_run import RegulatoryRun
 
 MODELS: tuple[type, ...] = (
     BiFactPositionDaily,
@@ -138,11 +171,62 @@ def _check_definitions(table: Table) -> dict[str, str]:
     }
 
 
+#: The prefix that makes a table part of the BI plane. The plane-boundary guard
+#: (``tests/architecture/test_bi_plane_boundary.py``) derives the WRITABLE set
+#: the same way, so the two cannot disagree about what a BI table is.
+BI_TABLE_PREFIX = "bi_"
+
+
+def _bi_tables_in(metadata: sa.MetaData) -> frozenset[str]:
+    """Every ``bi_*`` table SQLAlchemy knows about in ``metadata``.
+
+    This is the set the four Postgres suites MUST iterate — partition/FORCE-RLS
+    state, CHECK-vocabulary parity, column type/nullability parity and
+    CHECK-name parity all loop over :data:`BI_TABLES`. Deriving the same set
+    from the metadata is what makes the hand-written tuple checkable.
+    """
+    return frozenset(name for name in metadata.tables if name.startswith(BI_TABLE_PREFIX))
+
+
 def test_every_contract_table_is_declared_and_exported() -> None:
     assert tuple(_table(model).name for model in MODELS) == BI_TABLES
-    assert set(BI_TABLES) <= set(Base.metadata.tables)
-    assert all(name.startswith("bi_") for name in BI_TABLES)
+    # BOTH directions. Containment alone (``BI_TABLES <= metadata``) let a new
+    # mart model pass every test while silently escaping the four Postgres
+    # suites that iterate this tuple — the same blind spot that let a
+    # model-only ``String(8)`` reach a migration (audit A6-04, A5-07).
+    assert _bi_tables_in(Base.metadata) == frozenset(BI_TABLES), (
+        "app/models/bi.py declares a bi_* table that BI_TABLES does not name (or "
+        "the reverse), so the Postgres parity/partition/RLS suites would skip it: "
+        f"{sorted(_bi_tables_in(Base.metadata) ^ frozenset(BI_TABLES))}"
+    )
+    assert all(name.startswith(BI_TABLE_PREFIX) for name in BI_TABLES)
     assert set(MONTHLY_PARTITIONED_TABLES) | set(YEARLY_PARTITIONED_TABLES) <= set(BI_TABLES)
+
+
+def test_an_unregistered_bi_table_is_caught_rather_than_silently_skipped() -> None:
+    """Proof the rule above bites, on a SYNTHETIC metadata.
+
+    A real model added to ``Base`` would join ``create_all`` for the whole
+    session, so the future mart is declared on a throwaway
+    :class:`~sqlalchemy.MetaData` instead: the derivation must report it as the
+    difference that fails :func:`test_every_contract_table_is_declared_and_exported`.
+    """
+    synthetic = sa.MetaData()
+    for name in BI_TABLES:
+        sa.Table(name, synthetic, sa.Column("organization_id", sa.String(16)))
+    sa.Table(
+        "bi_fact_hypothetical_future_mart",
+        synthetic,
+        sa.Column("organization_id", sa.String(16)),
+    )
+    # A non-BI table must NOT be dragged in by the prefix rule.
+    sa.Table("regulatory_runs", synthetic, sa.Column("organization_id", sa.String(16)))
+
+    derived = _bi_tables_in(synthetic)
+
+    assert derived != frozenset(BI_TABLES), "the derivation is blind to a new bi_* table"
+    assert derived - frozenset(BI_TABLES) == {"bi_fact_hypothetical_future_mart"}
+    assert "regulatory_runs" not in derived
 
 
 def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table() -> None:
@@ -311,10 +395,30 @@ def test_vocabularies_are_exactly_the_contract() -> None:
     assert bi.LOAN_EVENT_ATTRIBUTION_BASES == ("snapshot_on_or_before", "no_snapshot", "unmatched")
     assert bi.ENGINE_METRIC_TIERS == ("live", "official")
     assert bi.MART_BUILD_SCOPES == ("positions", "events", "gl", "engine", "dims")
-    assert bi.MART_BUILD_STATUSES == ("running", "succeeded", "failed", "skipped")
-    assert bi.RECONCILIATION_CHECK_IDS == ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9")
+    assert bi.MART_BUILD_STATUSES == ("running", "succeeded", "failed")
+    assert bi.RECONCILIATION_CHECK_IDS == (
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "R8",
+        "R9",
+        "R10",
+    )
     assert bi.RECONCILIATION_STATUSES == ("green", "amber", "red", "grey")
-    assert bi.QUERY_LOG_SURFACES == ("query", "grid", "drill", "explain", "export", "feed")
+    assert bi.QUERY_LOG_SURFACES == (
+        "query",
+        "grid",
+        "drill",
+        "explain",
+        "export",
+        "feed",
+        "trust",
+        "catalogue",
+    )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
     assert bi.UNASSIGNED_REGION == "Unassigned region"
     assert bi.UNMAPPED_BRANCH_NAME == "Unmapped branch"
@@ -334,6 +438,180 @@ def test_partition_keys_are_named_for_the_builder() -> None:
     for name, key in {**MONTHLY_PARTITIONED_TABLES, **YEARLY_PARTITIONED_TABLES}.items():
         # The range column leads the primary key, as a partitioned PK requires.
         assert PRIMARY_KEYS[name][0] == key, name
+
+
+# --- column widths ---------------------------------------------------------------
+
+#: Every vocabulary a ``String(n)`` column in the marts is written from, read
+#: from the module that OWNS it, so a value added there is measured here. The
+#: defect this pins: ``bi_fact_engine_metric.status`` was ``String(8)`` while
+#: the official tier copies ``regulatory_runs.status = 'succeeded'`` (nine
+#: characters) — a ``StringDataRightTruncation`` on Postgres that SQLite,
+#: which ignores declared lengths, never showed.
+VOCABULARY_WIDTHS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "bi_fact_position_daily",
+        "maturity_bucket",
+        tuple(bucket.code for bucket in extract.MATURITY_BUCKETS),
+    ),
+    ("bi_fact_position_daily", "repricing_bucket", tuple(name for name, _ in IRR_BUCKETS)),
+    ("bi_fact_position_daily", "dpd_band", DPD_BAND_CODES),
+    ("bi_fact_position_daily", "grade", (*BANK_GRADE_ORDER, *SDI_GRADE_ORDER)),
+    (
+        "bi_fact_position_daily",
+        "classification_basis",
+        (BASIS_DAYS_PAST_DUE, BASIS_STAGE_PROXY, BASIS_UNCLASSIFIED, BASIS_RESTRUCTURE_HOLD),
+    ),
+    (
+        "bi_fact_position_daily",
+        "product_family",
+        (*extract.PRODUCT_FAMILY_LABELS, UNCLASSIFIED_FAMILY),
+    ),
+    (
+        "bi_fact_position_daily",
+        "exposure_category",
+        (
+            *(category for category, _weight in LOAN_CATEGORY_MAP.values()),
+            PAST_DUE_CATEGORY[0],
+            # The longest an unrecognised regulatory category can produce: the
+            # prefix plus a slug of the whole 80-character canonical column.
+            unclassified_category("x" * 80),
+        ),
+    ),
+    ("bi_fact_position_daily", "hqla_level", (HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B)),
+    ("bi_fact_loan_event", "attribution_basis", bi.LOAN_EVENT_ATTRIBUTION_BASES),
+    ("bi_fact_gl_monthly", "balance_basis", bi.GL_BALANCE_BASES),
+    ("bi_fact_engine_metric", "tier", bi.ENGINE_METRIC_TIERS),
+    (
+        "bi_fact_engine_metric",
+        "status",
+        ("green", "amber", "red", "na", "queued", "running", "succeeded", "failed"),
+    ),
+    (
+        "bi_fact_engine_metric",
+        "module",
+        (*LIVE_MODULES, *(family.value for family in MetricFamily)),
+    ),
+    ("bi_fact_engine_metric", "metric_id", tuple(entry.metric_id for entry in REGISTRY)),
+    ("bi_fact_engine_metric", "unit", ("text", "count", "pct", "ccy", "ratio")),
+    ("bi_fact_engine_metric", "regime", tuple(regime.value for regime in Regime)),
+    (
+        "bi_fact_engine_metric",
+        "advisory_designation",
+        (*(designation.value for designation in AdvisoryDesignation), UNREGISTERED),
+    ),
+    ("bi_dim_branch", "outlet_type", OUTLET_TYPES),
+    ("bi_dim_branch", "status", OUTLET_STATUSES),
+    ("bi_dim_branch", "region", (bi.UNASSIGNED_REGION,)),
+    ("bi_dim_branch", "name", (bi.UNMAPPED_BRANCH_NAME,)),
+    ("bi_mart_builds", "scope", bi.MART_BUILD_SCOPES),
+    ("bi_mart_builds", "status", bi.MART_BUILD_STATUSES),
+    ("bi_reconciliation_results", "check_id", bi.RECONCILIATION_CHECK_IDS),
+    ("bi_reconciliation_results", "status", bi.RECONCILIATION_STATUSES),
+    ("bi_query_log", "principal_type", bi.QUERY_LOG_PRINCIPAL_TYPES),
+    ("bi_query_log", "surface", bi.QUERY_LOG_SURFACES),
+    ("bi_query_log", "decision", bi.QUERY_LOG_DECISIONS),
+    ("bi_query_log", "catalogue_version", (CATALOGUE_VERSION,)),
+)
+
+#: Columns COPIED from another table's column must be at least as wide as it.
+COPIED_WIDTHS: tuple[tuple[str, str, type, str], ...] = (
+    ("bi_fact_position_daily", "source_system", CanonicalPositionSnapshot, "source_system"),
+    ("bi_fact_position_daily", "source_reference", CanonicalPositionSnapshot, "source_reference"),
+    ("bi_fact_position_daily", "position_type", CanonicalPosition, "position_type"),
+    ("bi_fact_position_daily", "currency", CanonicalPosition, "currency"),
+    ("bi_fact_position_daily", "rate_type", CanonicalPositionSnapshot, "rate_type"),
+    ("bi_fact_position_daily", "rate_index", CanonicalPositionSnapshot, "rate_index"),
+    (
+        "bi_fact_position_daily",
+        "deposit_account_type",
+        CanonicalPositionSnapshot,
+        "deposit_account_type",
+    ),
+    ("bi_fact_position_daily", "product_code", CanonicalProduct, "product_code"),
+    ("bi_fact_position_daily", "counterparty_type", CanonicalCounterparty, "counterparty_type"),
+    ("bi_fact_position_daily", "counterparty_group", CanonicalCounterparty, "group_reference"),
+    ("bi_fact_position_daily", "gl_account_code", CanonicalGlAccount, "account_code"),
+    ("bi_fact_loan_event", "event_type", CanonicalLoanEvent, "event_type"),
+    ("bi_fact_loan_event", "event_subtype", CanonicalLoanEvent, "event_subtype"),
+    ("bi_fact_loan_event", "source_system", CanonicalLoanEvent, "source_system"),
+    ("bi_fact_loan_event", "source_reference", CanonicalLoanEvent, "source_reference"),
+    (
+        "bi_fact_loan_event",
+        "position_source_reference",
+        CanonicalLoanEvent,
+        "position_source_reference",
+    ),
+    ("bi_fact_loan_event", "currency", CanonicalLoanEvent, "currency"),
+    ("bi_fact_gl_monthly", "gl_account_code", CanonicalGlAccount, "account_code"),
+    ("bi_fact_gl_monthly", "account_class", CanonicalGlAccount, "account_class"),
+    ("bi_fact_engine_metric", "module", LiveMetric, "module"),
+    ("bi_fact_engine_metric", "status", LiveMetric, "status"),
+    ("bi_fact_engine_metric", "status", RegulatoryRun, "status"),
+    ("bi_fact_engine_metric", "engine_version", LiveMetric, "engine_version"),
+    ("bi_fact_engine_metric", "engine_version", RegulatoryRun, "engine_version"),
+    ("bi_fact_engine_metric", "pipeline_state", LiveMetric, "pipeline_state"),
+    ("bi_fact_engine_metric", "input_hash", LiveMetric, "computed_from_input_hash"),
+    ("bi_fact_engine_metric", "institution_class", InstitutionType, "type_code"),
+    ("bi_dim_branch", "name", Outlet, "name"),
+    ("bi_dim_branch", "outlet_type", Outlet, "outlet_type"),
+    ("bi_dim_branch", "status", Outlet, "status"),
+    ("bi_dim_product", "product_code", CanonicalProduct, "product_code"),
+    ("bi_dim_product", "name", CanonicalProduct, "name"),
+    ("bi_dim_product", "regulatory_category", CanonicalProduct, "regulatory_category"),
+    ("bi_dim_product", "risk_weight_code", CanonicalProduct, "risk_weight_code"),
+    ("bi_dim_counterparty", "source_reference", CanonicalCounterparty, "source_reference"),
+    ("bi_dim_counterparty", "name", CanonicalCounterparty, "name"),
+    ("bi_dim_counterparty", "counterparty_type", CanonicalCounterparty, "counterparty_type"),
+    ("bi_dim_counterparty", "group_reference", CanonicalCounterparty, "group_reference"),
+    ("bi_dim_counterparty", "country_code", CanonicalCounterparty, "country_code"),
+    ("bi_dim_counterparty", "rating", CanonicalCounterparty, "rating"),
+    ("bi_dim_gl_account", "account_code", CanonicalGlAccount, "account_code"),
+    ("bi_dim_gl_account", "name", CanonicalGlAccount, "name"),
+    ("bi_dim_gl_account", "account_class", CanonicalGlAccount, "account_class"),
+    ("bi_dim_gl_account", "parent_account_code", CanonicalGlAccount, "account_code"),
+)
+
+
+def _width(table_name: str, column_name: str) -> int:
+    column = Base.metadata.tables[table_name].c[column_name]
+    assert isinstance(column.type, sa.String), f"{table_name}.{column_name} is not a String"
+    assert column.type.length is not None, f"{table_name}.{column_name} has no length"
+    return column.type.length
+
+
+@pytest.mark.parametrize(
+    ("table_name", "column_name", "values"),
+    VOCABULARY_WIDTHS,
+    ids=[f"{table}.{column}" for table, column, _ in VOCABULARY_WIDTHS],
+)
+def test_string_columns_are_at_least_as_wide_as_their_vocabulary(
+    table_name: str, column_name: str, values: tuple[str, ...]
+) -> None:
+    assert values, "an empty vocabulary proves nothing"
+    width = _width(table_name, column_name)
+    too_long = sorted((value for value in values if len(value) > width), key=len)
+    assert not too_long, (
+        f"{table_name}.{column_name} is String({width}) but must hold "
+        f"{too_long[-1]!r} ({len(too_long[-1])} chars); widen the model AND migration 202609220066"
+    )
+
+
+@pytest.mark.parametrize(
+    ("table_name", "column_name", "source", "source_column"),
+    COPIED_WIDTHS,
+    ids=[
+        f"{table}.{column}<-{src.__tablename__}.{col}" for table, column, src, col in COPIED_WIDTHS
+    ],
+)
+def test_copied_columns_are_at_least_as_wide_as_their_source(
+    table_name: str, column_name: str, source: type, source_column: str
+) -> None:
+    source_width = _width(_table(source).name, source_column)
+    assert _width(table_name, column_name) >= source_width, (
+        f"{table_name}.{column_name} is narrower than {_table(source).name}.{source_column} "
+        f"({source_width}); a copied value would be truncated on Postgres"
+    )
 
 
 # --- session factory -----------------------------------------------------------

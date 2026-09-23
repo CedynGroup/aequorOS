@@ -5,6 +5,7 @@ export * from "./AuthApi";
 export * from "./AuthorizationApi";
 export * from "./BanksApi";
 export * from "./BehavioralModelsApi";
+export * from "./BiApi";
 export * from "./CalculationsApi";
 export * from "./CapitalApi";
 export * from "./CapitalPlanApi";

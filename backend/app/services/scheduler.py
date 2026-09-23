@@ -7,9 +7,9 @@ enqueues the due ``market_data_pull`` jobs (see ``market_data_jobs``); then it
 enqueues the next tick at the following hour boundary. It is inert (no enqueue,
 no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
 ``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``,
-``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``, and
-``DESK_CAPTURE_ENABLED`` — is off, so no environment auto-mints heavy
-runs or vendor pulls and tests stay deterministic.
+``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``,
+``DESK_CAPTURE_ENABLED``, and ``BI_SCHEDULER_ENABLED`` — is off, so no
+environment auto-mints heavy runs or vendor pulls and tests stay deterministic.
 
 Actor eligibility and queue attribution are owned by
 ``backend/docs/fx_enforcement_rollout.md`` (Queued and scheduled official runs).
@@ -38,9 +38,12 @@ from app.models import (
     User,
 )
 from app.services import job_queue, module_scope, scoped_authorization
+from app.services.bi.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
+from app.services.bi.versions import BUILDER_VERSION
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
+BI_RETENTION = "bi_retention"
 _LIQUIDITY_MODULE = "liquidity"
 _BASELINE_SCENARIO = "baseline"
 
@@ -57,6 +60,7 @@ def any_scheduling_enabled(settings: Settings) -> bool:
         or settings.database_direct.database_direct_health_enabled
         or settings.worker.live_refresh_enabled
         or settings.desk.desk_capture_enabled
+        or settings.bi.scheduler_enabled
     )
 
 
@@ -135,6 +139,12 @@ def run_tick(session: Session, job: Job) -> None:
         enqueue_due_notification_mirror(session, org_id, now=now) if mirror_enabled() else None
     )
 
+    bi_rebuilds = 0
+    bi_retention_enqueued = False
+    if settings.bi.scheduler_enabled:
+        bi_rebuilds = len(_enqueue_due_bi_rebuilds(session, org_id, now))
+        bi_retention_enqueued = _enqueue_bi_retention(session, org_id, now) is not None
+
     job_queue.enqueue(
         session,
         org_id,
@@ -151,6 +161,8 @@ def run_tick(session: Session, job: Job) -> None:
         "live_refreshes_enqueued": live_refreshes,
         "desk_capture_enqueued": desk_capture_enqueued,
         "deadline_scan_enqueued": deadline_scan_enqueued,
+        "bi_rebuilds_enqueued": bi_rebuilds,
+        "bi_retention_enqueued": bi_retention_enqueued,
         # Key present only when the SMTP mirror is configured (default off).
         **(
             {"notification_mirror_enqueued": mirror_enqueued} if mirror_enqueued is not None else {}
@@ -286,6 +298,69 @@ def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) ->
         )
     session.flush()
     return enqueued
+
+
+def _enqueue_due_bi_rebuilds(session: Session, org_id: str, now: datetime) -> list[Job]:
+    """Recover banks whose live as-of has no complete mart build.
+
+    The BI analogue of :func:`_enqueue_due_live_refreshes` — a safety net for a
+    missed or failed authoritative enqueue, never a timer. Which slices are due
+    is decided by ``bi.enqueue.banks_due_for_rebuild``, inside the BI package,
+    so this module imports no BI model (D-041, D-043); that function also
+    BOUNDS the sweep, dropping a slice that has failed terminally
+    ``MAX_RECOVERY_FAILURES`` times so a deterministically broken bank stops
+    churning the ``bi`` lane every hour. Its manual recovery path is
+    ``POST /operator/v1/tenants/{org}/bi/backfill``.
+
+    The enqueue goes through the same seam as every product hook, so it is also
+    inert while ``BI_MART_ENQUEUE_ENABLED`` is off — the sweep can never queue
+    work the handler would only skip.
+    """
+    _ = now
+    enqueued: list[Job] = []
+    for due in banks_due_for_rebuild(session, organization_id=org_id):
+        job = enqueue_mart_refresh(
+            session,
+            organization_id=due.organization_id,
+            bank_id=due.bank_id,
+            as_of=due.as_of,
+            reason="scheduled mart recovery",
+        )
+        if job is not None:
+            enqueued.append(job)
+    session.flush()
+    return enqueued
+
+
+def _enqueue_bi_retention(session: Session, org_id: str, now: datetime) -> Job | None:
+    """Enqueue the daily ``bi_retention`` pass — at most ONE per calendar day,
+    platform-wide.
+
+    The daily fact partitions are shared by every tenant (one RANGE child per
+    month across the platform), so like ``desk_capture`` the day-uniqueness
+    check ignores organization: whichever org's tick first crosses midnight
+    UTC carries the job and every later tick — same org or not — finds the
+    day's key taken. A completed job keeps its key, so this existence check
+    (not enqueue coalescing, which merges only still-queued jobs) is what
+    holds the daily cadence — the ``reporting_deadline_scan`` idiom. The
+    payload is the contract's ``{"builder_version"}`` and nothing else: the
+    action names no bank.
+    """
+    coalesce_key = f"bi-retention:{now.date().isoformat()}"
+    existing = session.scalar(
+        select(Job.id)
+        .where(Job.job_type == BI_RETENTION, Job.coalesce_key == coalesce_key)
+        .limit(1)
+    )
+    if existing is not None:
+        return None
+    return job_queue.enqueue(
+        session,
+        org_id,
+        BI_RETENTION,
+        payload={"builder_version": BUILDER_VERSION},
+        coalesce_key=coalesce_key,
+    )
 
 
 def seed_tick(db: Session, organization_id: str) -> Job:

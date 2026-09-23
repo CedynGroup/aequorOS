@@ -37,13 +37,24 @@ Column keys carry the window and the currency rule: ``month_domestic``,
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from app.domain.gl import pl_mapping
+from app.domain.gl.pl_mapping import (
+    LINE_ATTRIBUTE,
+    MAPPING_KIND,
+    BalanceBasis,
+    CoaMapping,
+    CurrencyRule,
+    Generation,
+    MappingRule,
+    Window,
+    fiscal_year_start,
+)
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import BankReportingPeriod
 from app.models.canonical import CanonicalGlAccount
@@ -51,103 +62,38 @@ from app.models.regulatory import BankFinancialFact
 
 from ..sources import ResolveContext, reference_rows, resolver
 
-#: Attribute key on a P&L GL account naming the official BSD7A/BSD7B item it feeds.
-LINE_ATTRIBUTE = "bsd7_line"
-#: Reference dataset carrying the bank's CoA → BSD7 item mapping as data.
-MAPPING_KIND = "gl_mapping_bsd7"
+# The pure rules — windows, the CoA → item mapping, the YTD / period-movement
+# arithmetic — live in ``app/domain/gl/pl_mapping.py`` (D-021) so the BI plane's
+# monthly GL mart is computed by the SAME functions this return files. This
+# module keeps the database selection and the resolver registration, and
+# re-exports the names its tests and line maps import.
+__all__ = [
+    "LINE_ATTRIBUTE",
+    "MAPPING_KIND",
+    "BalanceBasis",
+    "CoaMapping",
+    "CurrencyRule",
+    "MappingRule",
+    "Window",
+    "coa_mapping",
+    "fiscal_year_start",
+    "window_start",
+]
 
-type Window = str  # month | quarter | ptd
-type CurrencyRule = str  # domestic | foreign | all
-type BalanceBasis = str  # ytd | period
-
-
-def _window_of(column: str) -> Window:
-    if column.startswith("month"):
-        return "month"
-    if column.startswith("quarter"):
-        return "quarter"
-    return "ptd"
-
-
-def _currency_of(column: str) -> CurrencyRule:
-    if column.endswith("_domestic"):
-        return "domestic"
-    if column.endswith("_foreign"):
-        return "foreign"
-    return "all"
-
-
-def fiscal_year_start(period_end: date, start_month: int) -> date:
-    year = period_end.year if period_end.month >= start_month else period_end.year - 1
-    return date(year, start_month, 1)
+_window_of = pl_mapping.window_of
+_currency_of = pl_mapping.currency_of
 
 
 def window_start(period: BankReportingPeriod, window: Window, start_month: int) -> date:
     """First day of the reporting window ending at ``period.period_end``."""
-    fy_start = fiscal_year_start(period.period_end, start_month)
-    if window == "ptd":
-        return fy_start
-    if window == "month":
-        return max(period.period_start, fy_start)
-    # quarter: the fiscal quarter containing the period end
-    months_into_year = (period.period_end.year - fy_start.year) * 12 + (
-        period.period_end.month - fy_start.month
-    )
-    quarter_offset = months_into_year - (months_into_year % 3)
-    year = fy_start.year + (fy_start.month - 1 + quarter_offset) // 12
-    month = (fy_start.month - 1 + quarter_offset) % 12 + 1
-    return date(year, month, 1)
+    return pl_mapping.window_start(period.period_start, period.period_end, window, start_month)
 
 
 # ---------------------------------------------------------------------------
 # bsd7.pl_line — P&L ledger lines
 # ---------------------------------------------------------------------------
 
-
-@dataclass(frozen=True)
-class MappingRule:
-    """One ``gl_mapping_bsd7`` register row, normalised."""
-
-    item: str
-    sign: Decimal
-    basis: BalanceBasis | None  # None = the line map's / resolver's default
-
-
-@dataclass(frozen=True)
-class CoaMapping:
-    """The bank's CoA → BSD7 item register: exact codes and prefixes (longest first)."""
-
-    codes: dict[str, MappingRule]
-    prefixes: tuple[tuple[str, MappingRule], ...]
-
-    def rule_for(self, account_code: str) -> MappingRule | None:
-        exact = self.codes.get(account_code)
-        if exact is not None:
-            return exact
-        for prefix, rule in self.prefixes:
-            if account_code.startswith(prefix):
-                return rule
-        return None
-
-    def selectors_for(self, item: str) -> tuple[list[str], list[str]]:
-        """(exact codes, prefixes) the register maps to ``item`` — a pre-filter only;
-        :meth:`rule_for` decides the effective item per account."""
-        codes = [code for code, rule in self.codes.items() if rule.item == item]
-        prefixes = [prefix for prefix, rule in self.prefixes if rule.item == item]
-        return codes, prefixes
-
-
-def _mapping_rule(row: dict[str, Any]) -> MappingRule | None:
-    item = str(row.get("bsd7_item") or "").strip()
-    if not item:
-        return None
-    try:
-        sign = Decimal(str(row.get("sign") or "1").strip())
-    except ArithmeticError:
-        sign = Decimal(1)
-    basis_text = str(row.get("balance_basis") or "").strip().lower()
-    basis: BalanceBasis | None = basis_text if basis_text in ("ytd", "period") else None
-    return MappingRule(item=item, sign=sign, basis=basis)
+_mapping_rule = pl_mapping.mapping_rule
 
 
 def coa_mapping(rc: ResolveContext) -> CoaMapping:
@@ -157,33 +103,12 @@ def coa_mapping(rc: ResolveContext) -> CoaMapping:
     cached = rc.cache.get(key)
     if cached is not None:
         return cached
-    codes: dict[str, MappingRule] = {}
-    prefixes: dict[str, MappingRule] = {}
-    for row in reference_rows(rc, MAPPING_KIND):
-        rule = _mapping_rule(row)
-        if rule is None:
-            continue
-        code = str(row.get("gl_account_code") or "").strip()
-        prefix = str(row.get("gl_prefix") or "").strip()
-        if code:
-            codes[code] = rule
-        elif prefix:
-            prefixes[prefix] = rule
-    mapping = CoaMapping(
-        codes=codes,
-        prefixes=tuple(sorted(prefixes.items(), key=lambda kv: len(kv[0]), reverse=True)),
-    )
+    mapping = pl_mapping.coa_mapping_from_rows(reference_rows(rc, MAPPING_KIND))
     rc.cache[key] = mapping
     return mapping
 
 
-@dataclass(frozen=True)
-class _Generation:
-    code: str
-    as_of: date
-    currency: str | None
-    balance: Decimal  # already carries the account's mapping sign
-    basis: BalanceBasis
+_Generation = Generation
 
 
 def _selected_generations(
@@ -245,76 +170,27 @@ def _selected_generations(
     return out
 
 
-def _effective_rule(
-    account_code: str,
-    tag: Any,
-    line_tag: str | None,
-    mapping: CoaMapping,
-    declared_prefixes: list[str],
-) -> MappingRule | None:
-    """The rule under which ``account_code`` feeds ``line_tag`` — or None when it
-    does not: own tag > register exact code > register longest prefix > the line
-    map's declared prefixes (default sign/basis)."""
-    if tag not in (None, ""):
-        selected = line_tag is not None and str(tag) == line_tag
-        rule = MappingRule(item=str(tag), sign=Decimal(1), basis=None) if selected else None
-    else:
-        rule = mapping.rule_for(account_code) if line_tag else None
-        if rule is not None and rule.item != line_tag:
-            rule = None
-    if rule is None and any(account_code.startswith(p) for p in declared_prefixes):
-        rule = MappingRule(item=line_tag or "", sign=Decimal(1), basis=None)
-    return rule
+_effective_rule = pl_mapping.effective_rule
 
 
 def _in_currency(rc: ResolveContext, currency: str | None) -> bool:
     """Guide §2 per column: Domestic = the bank's base currency (a ledger account with
     no stated currency is a base-currency account); Foreign = any other."""
-    rule = _currency_of(rc.column)
-    if rule == "all":
-        return True
-    is_base = currency is None or currency == rc.bank.currency
-    return is_base if rule == "domestic" else not is_base
+    return pl_mapping.in_currency(_currency_of(rc.column), currency, rc.bank.currency)
 
 
 def _ytd_total(rc: ResolveContext, rows: list[_Generation], upper: date) -> Decimal:
     """Σ balance of the latest generation per account code with as_of ≤ ``upper``,
     in this column's currency slice."""
-    latest: dict[str, _Generation] = {}
-    for row in rows:
-        if row.as_of > upper:
-            continue
-        current = latest.get(row.code)
-        if current is None or row.as_of > current.as_of:
-            latest[row.code] = row
-    return sum(
-        (row.balance for row in latest.values() if _in_currency(rc, row.currency)), Decimal(0)
-    )
+    return pl_mapping.ytd_total(rows, upper, in_slice=lambda currency: _in_currency(rc, currency))
 
 
 def _period_total(rc: ResolveContext, rows: list[_Generation], lower: date) -> Decimal:
     """Σ balance of the latest generation per account code per calendar month
     with as_of ≥ ``lower``, in this column's currency slice — period-movement
-    ledgers.
-
-    A ``period``-basis account is closed monthly, so its balance as of any date
-    is the month-to-date movement and the month-end balance is the month's
-    movement. A weekly or daily book therefore lands several current-generation
-    rows per account per month, each a cumulative figure: only the latest one
-    in each month is that month's movement, the earlier ones are superseded by
-    it. Summing every generation would count the intra-month movement twice.
-    Windows always start on day 1 of a month, so a month never straddles one.
-    """
-    latest: dict[tuple[str, int, int], _Generation] = {}
-    for row in rows:
-        if row.as_of < lower:
-            continue
-        key = (row.code, row.as_of.year, row.as_of.month)
-        current = latest.get(key)
-        if current is None or row.as_of > current.as_of:
-            latest[key] = row
-    return sum(
-        (row.balance for row in latest.values() if _in_currency(rc, row.currency)), Decimal(0)
+    ledgers (the H-006 rule; ``pl_mapping.period_total`` states it)."""
+    return pl_mapping.period_total(
+        rows, lower, in_slice=lambda currency: _in_currency(rc, currency)
     )
 
 
@@ -345,25 +221,15 @@ def _pl_line(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     sign = Decimal(str(params.get("sign", 1)))
     fy_start = fiscal_year_start(upper, start_month)
     rows = _selected_generations(rc, params, fy_start, upper)
-    # period-movement accounts: the window's months (latest generation each) ARE the movement
-    period_rows = [row for row in rows if row.basis == "period" and row.as_of >= lower]
-    ytd_rows = [row for row in rows if row.basis != "period"]
-    if not period_rows and not ytd_rows:
-        return None
-    total = _period_total(rc, period_rows, lower)
-    if ytd_rows:
-        current = _ytd_total(rc, ytd_rows, upper)
-        if window == "ptd":
-            total += current
-        else:
-            prior_end = lower - timedelta(days=1)
-            if prior_end < fy_start:
-                total += current  # first window of the fiscal year: nothing to net off
-            elif not any(row.as_of <= prior_end for row in ytd_rows):
-                return None  # cannot split the year-to-date figure honestly
-            else:
-                total += current - _ytd_total(rc, ytd_rows, prior_end)
-    return total * sign
+    return pl_mapping.line_total(
+        rows,
+        window=window,
+        lower=lower,
+        upper=upper,
+        fy_start=fy_start,
+        in_slice=lambda currency: _in_currency(rc, currency),
+        sign=sign,
+    )
 
 
 # ---------------------------------------------------------------------------

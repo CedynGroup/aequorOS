@@ -29,6 +29,7 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.domain.reporting.period_windows import trailing_month_end_window
 from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun, User
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import (
@@ -207,6 +208,61 @@ def test_empty_window_returns_valid_empty_payload(db_session: Session) -> None:
     assert result.daily == []
 
 
+def test_period_count_counts_every_period_the_caller_asked_for(db_session: Session) -> None:
+    """``period_count`` is the wire count of periods the CALLER's dates cover.
+
+    The five module dashboards select their sparkline through
+    ``trailing_month_end_window`` because a fixed 13-ROW slice meant 13
+    month-ends for a monthly feeder and 13 business days for a daily one. This
+    surface has no such stand-in — the horizon is the two dates that were sent,
+    and the window-analysis footer reads this number as "N periods". Thinning
+    the selection to month-ends would drop periods the caller asked for, so the
+    two selections are pinned here as different contracts (audit A1-10).
+    """
+    materialize_canonical_test_book(db_session)
+    for period_end in (date(2026, 3, 6), date(2026, 3, 13), date(2026, 3, 20)):
+        db_session.add(
+            BankReportingPeriod(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                period_start=date(2026, 3, 1),
+                period_end=period_end,
+                label=period_end.isoformat(),
+                status="open",
+            )
+        )
+    db_session.flush()
+
+    result = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 31),
+    )
+
+    # Three weekly closes plus the month-end: the count follows the dates, not
+    # the cadence, and not how many periods happened to resolve a ratio.
+    assert result.period_count == 4
+    assert [stat.ratio for stat in result.ratios] == list(ALL_RATIOS)
+    assert all(len(stat.points) == 1 for stat in result.ratios)
+
+    # The dashboards' helper over the same rows keeps only the month's last
+    # period. Swapping it in here would report 1 period for a window that
+    # covers 4 — the field would stop answering the question it is asked.
+    periods = db_session.scalars(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.organization_id == DEMO_ORG_ID,
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end >= date(2026, 3, 1),
+            BankReportingPeriod.period_end <= date(2026, 3, 31),
+        )
+    ).all()
+    assert [period.period_end for period in trailing_month_end_window(periods)] == [
+        date(2026, 3, 31)
+    ]
+
+
 def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> None:
     """The daily section aggregates the snapshot ladder inside the window."""
     materialize_canonical_test_book(db_session)
@@ -313,6 +369,47 @@ def test_daily_stats_read_the_measured_headline_for_irr_and_credit(db_session: S
     # The signed value survives aggregation as stored (loss negative).
     assert irr.day_count == 1
     assert irr.min == irr.avg == irr.max == Decimal("-7.25")
+
+
+def test_daily_stats_aggregate_the_rating_ladder(db_session: Session) -> None:
+    """The rating engine's PD band is advisory, and it still gets a daily row.
+
+    ``_PRIMARY_METRIC_KEY`` had no ``rating`` entry, so ``_daily_stats`` skipped
+    every rating snapshot: the module computed and the window never mentioned it
+    (decision D-031). Advisory standing is a labelling rule — the panel marks the
+    line advisory — not grounds for dropping an engine from the analysis.
+    """
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    for snapshot_date, upper in ((date(2026, 3, 30), "1.20"), (date(2026, 3, 31), "1.80")):
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module="rating",
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics={"pit_pd_upper_pct": upper, "pit_rating_grade": "bb"},
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.commit()
+
+    result = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 30),
+        end_date=date(2026, 3, 31),
+    )
+
+    rating = next(row for row in result.daily if row.module == "rating")
+    assert rating.metric_key == "pit_pd_upper_pct"
+    assert rating.day_count == 2
+    assert rating.min == Decimal("1.20")
+    assert rating.max == Decimal("1.80")
+    assert rating.avg == Decimal("1.500000")
 
 
 def _principal_with(

@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { WindowStart } from "./WindowStart";
-import {
-  WindowStartFromJSON,
-  WindowStartFromJSONTyped,
-  WindowStartToJSON,
-  WindowStartToJSONTyped,
-} from "./WindowStart";
 import type { PdEstimateRead } from "./PdEstimateRead";
 import {
   PdEstimateReadFromJSON,
@@ -32,6 +25,13 @@ import {
   ReasonToJSON,
   ReasonToJSONTyped,
 } from "./Reason";
+import type { WindowStart1 } from "./WindowStart1";
+import {
+  WindowStart1FromJSON,
+  WindowStart1FromJSONTyped,
+  WindowStart1ToJSON,
+  WindowStart1ToJSONTyped,
+} from "./WindowStart1";
 import type { EclSuggestionRead } from "./EclSuggestionRead";
 import {
   EclSuggestionReadFromJSON,
@@ -114,10 +114,10 @@ export interface CreditPdRead {
   segments?: Array<PdEstimateRead>;
   /**
    *
-   * @type {WindowStart}
+   * @type {WindowStart1}
    * @memberof CreditPdRead
    */
-  windowStart?: WindowStart;
+  windowStart?: WindowStart1;
 }
 
 /**
@@ -182,7 +182,7 @@ export function CreditPdReadFromJSONTyped(
     windowStart:
       json["window_start"] == null
         ? undefined
-        : WindowStartFromJSON(json["window_start"]),
+        : WindowStart1FromJSON(json["window_start"]),
   };
 }
 
@@ -219,6 +219,6 @@ export function CreditPdReadToJSONTyped(
       value["segments"] == null
         ? undefined
         : (value["segments"] as Array<any>).map(PdEstimateReadToJSON),
-    window_start: WindowStartToJSON(value["windowStart"]),
+    window_start: WindowStart1ToJSON(value["windowStart"]),
   };
 }

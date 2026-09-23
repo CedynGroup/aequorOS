@@ -292,6 +292,9 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_account_administration",
         "require_integration_push_ingest",
         "require_capital_run",
+        # BI reads are POST because a BiQuery does not fit a query string
+        # (D-027); the dependency is the human-principal gate, not a role.
+        "require_bi_read",
         "require_capital_plan_write",
         "require_capital_plan_approve",
         "require_ilaap_refresh",

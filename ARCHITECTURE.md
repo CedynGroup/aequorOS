@@ -411,6 +411,71 @@ it, adding one registry entry moved an unrelated family's content digest.
 
 ---
 
+## 3e. BI plane (governed analytics over the same numbers we file)
+
+One governed foundation: worker-built marts and conformed dimensions, a metric
+catalogue, a safe query compiler, and an authorization gate every BI surface
+reads through. Built behind default-off flags (`Settings.bi`); no BI route is
+mounted until `BI_ENABLED`.
+
+**The plane boundary is the whole design.** BI is a DISPATCH plane: it reads
+canonical rows (through `is_current_generation` only), `live_metrics`,
+`regulatory_runs` and the registers, and it writes **`bi_*` tables and nothing
+else**. The regulatory plane never imports BI, with exactly two exceptions —
+`app/services/bi/enqueue.py` and `app/services/bi/versions.py`, the enqueue
+seam the hook sites call, which themselves import no BI model, builder,
+catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins all
+of it, including that BI never calls `derive_facts`.
+
+- **Engine metrics are COPIED, never recomputed.** `bi_fact_engine_metric`
+  carries a `live` tier from `live_metrics` and an `official` tier from the
+  latest succeeded baseline `regulatory_runs` per period, with the input hash,
+  pipeline state and reconciliation-blocked flag that produced them. A metric
+  resolves to its authority by `(metric_id, regime)`; only `filed` designations
+  may be badged certified (an SDI's IRRBB has no registry entry at all and is
+  marked `unregistered`).
+- **Portfolio measures reuse the engines' own pure functions** — loan
+  classification, product family, DPD bands, repricing and ladder buckets, and
+  the BSD7 P&L mapping, all lifted into `app/domain/` so there is one
+  definition rather than a BI copy.
+- **Two FX rules, declared per measure.** Classification counts an unconverted
+  foreign-currency loan at zero; fact derivation excludes it. The mart carries
+  both (`classification_exposure_rc` beside `balance_rc` + `fx_unconverted`) so
+  portfolio NPL reconciles exactly to the engine's, and each measure declares
+  which rule it follows.
+- **Reconciliation R1–R10 drives a trust badge** (`green | amber | red | grey`).
+  A check that cannot run is grey — never a pass. R10 (`dpd_completeness`)
+  exists because a bank that never supplied `days_past_due` would otherwise
+  render PAR-90 as a confident `0.00 %`; the compiler returns NULL when a
+  selecting column is NULL across the whole population, and R10 makes the
+  badge say why.
+
+**Partition RLS is the sharp edge.** Postgres does not inherit row-level
+security onto partitions, so the marts' monthly and yearly children are created
+and dropped only by migration-owned `SECURITY DEFINER` functions
+(`bi_ensure_month_partition` and siblings) that apply `ENABLE`+`FORCE` RLS and
+the tenant policy to every child, pin `search_path` and UTC bounds, and refuse a
+parent of the wrong cadence. The app role owns none of them. A cross-tenant read
+returns zero rows through the parent, a child and the DEFAULT partition alike,
+and zero with no GUC set.
+
+**The compiler never assembles SQL.** `BiQuery` is a closed pydantic schema;
+every member resolves to a mapped column; filters become bound parameters under
+a whitelisted operator set; grouping, pivot and subtotals are computed
+server-side. There is no `text()` anywhere in `app/services/bi` or
+`app/domain/bi` beyond two named constants that set the statement timeout and
+read-only flag — pinned by an AST guard that proves itself against deliberate
+violations, plus Hypothesis fuzzing that asserts no client string ever reaches
+the compiled SQL.
+
+**BI gets its own worker lane** (`risk-worker-bi`, `WORKER_JOB_TYPES=lane:bi`)
+because `claim_next` is FIFO across types and a backfill would otherwise starve
+`pipeline_refresh`. Backfill is ONE self-re-enqueuing cursor job, bounded and
+refusing to advance backwards. Every payload carries `builder_version`; an older
+handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
+
+---
+
 ## 4. Findings infrastructure
 
 Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:

@@ -15,7 +15,10 @@ import SectionCard from '@/components/ui/SectionCard';
 import DeltaBadge from '@/components/ui/DeltaBadge';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { SkeletonLine } from '@/components/ui/Skeleton';
-import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
+import {
+  LIVE_MODULE_LABELS,
+  livePrimaryMetricIsAdvisory,
+} from '@/components/live/moduleDisplay';
 import { useWindowAnalytics } from '@/lib/api/hooks';
 import { labelize, num } from '@/lib/api/values';
 import { fmtPct } from '@/lib/format';
@@ -64,6 +67,16 @@ function monthsAgoIso(months: number): string {
 
 function moduleLabel(module: string): string {
   return LIVE_MODULE_LABELS[module as LiveModule] ?? labelize(module);
+}
+
+/**
+ * Whether the module's daily figure has to be read as advisory rather than as a
+ * certified number (BI decision D-022). FTP's portfolio NIM and the rating
+ * engine's PD band are never filed with a regulator, and the five-year
+ * projected CAR is supervisory-monitoring only.
+ */
+function isAdvisory(module: string): boolean {
+  return livePrimaryMetricIsAdvisory(module as LiveModule);
 }
 
 export default function WindowAnalysis({
@@ -198,7 +211,10 @@ export default function WindowAnalysis({
                   <p key={row.module} className="text-caption text-slate">
                     {moduleLabel(row.module)}: {row.dayCount} daily{' '}
                     {row.dayCount === 1 ? 'close' : 'closes'} ·{' '}
-                    {METRIC_LABELS[row.metricKey] ?? labelize(row.metricKey)}{' '}
+                    {METRIC_LABELS[row.metricKey] ?? labelize(row.metricKey)}
+                    {isAdvisory(row.module) ? (
+                      <span className="text-warning"> (advisory)</span>
+                    ) : null}{' '}
                     avg{' '}
                     <span className="font-mono tnum">
                       {fmtPct(num(row.avg), 1)}

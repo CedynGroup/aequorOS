@@ -46,6 +46,13 @@ import {
   FinancialObligationCreateInterestRateToJSON,
   FinancialObligationCreateInterestRateToJSONTyped,
 } from "./FinancialObligationCreateInterestRate";
+import type { Status2 } from "./Status2";
+import {
+  Status2FromJSON,
+  Status2FromJSONTyped,
+  Status2ToJSON,
+  Status2ToJSONTyped,
+} from "./Status2";
 import type { InstitutionId } from "./InstitutionId";
 import {
   InstitutionIdFromJSON,
@@ -74,13 +81,6 @@ import {
   MaturityDateToJSON,
   MaturityDateToJSONTyped,
 } from "./MaturityDate";
-import type { Status1 } from "./Status1";
-import {
-  Status1FromJSON,
-  Status1FromJSONTyped,
-  Status1ToJSON,
-  Status1ToJSONTyped,
-} from "./Status1";
 
 /**
  *
@@ -168,10 +168,10 @@ export interface FinancialObligationCreate {
   startDate?: StartDate;
   /**
    *
-   * @type {Status1}
+   * @type {Status2}
    * @memberof FinancialObligationCreate
    */
-  status?: Status1;
+  status?: Status2;
 }
 
 /**
@@ -249,7 +249,7 @@ export function FinancialObligationCreateFromJSONTyped(
         ? undefined
         : StartDateFromJSON(json["start_date"]),
     status:
-      json["status"] == null ? undefined : Status1FromJSON(json["status"]),
+      json["status"] == null ? undefined : Status2FromJSON(json["status"]),
   };
 }
 
@@ -289,6 +289,6 @@ export function FinancialObligationCreateToJSONTyped(
     reason: value["reason"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     start_date: StartDateToJSON(value["startDate"]),
-    status: Status1ToJSON(value["status"]),
+    status: Status2ToJSON(value["status"]),
   };
 }

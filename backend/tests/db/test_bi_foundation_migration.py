@@ -19,7 +19,9 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+import sqlalchemy as sa
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
@@ -581,3 +583,115 @@ def test_downgrade_removes_every_bi_object_and_upgrade_restores_them(
     state = _relation_state(migrated_postgres_schema, list(BI_TABLES))
     assert set(state) == set(BI_TABLES)
     assert all(row[1] and row[2] and row[3] == 1 for row in state.values())
+
+
+# --- model ↔ migration parity -------------------------------------------------
+#
+# The hermetic width tests (``tests/models/test_bi_models.py``) measure the
+# MODEL, and the model is not what a deployed database has. Widening a column in
+# ``app/models/bi.py`` without editing ``202609220066`` therefore passes the
+# whole hermetic suite and fails on a real Postgres INSERT — which is precisely
+# the class of defect ``202609200065``'s docstring records (a CHECK the model
+# derived from an enum while the migrated database did not), and how
+# ``bi_fact_engine_metric.status`` came to be ``String(8)`` against a nine-
+# character source value. These two tests close the class rather than the case:
+# after the real migration chain runs, every ``bi_*`` column's type, length,
+# precision, scale and nullability must equal what the model declares, and the
+# CHECK constraints must be the same set on both sides.
+#
+# Both sides are compiled with the SAME PostgreSQL dialect, so there is one
+# source of truth for the comparison and no hand-written type map to fall
+# behind: ``VARCHAR(24)`` from the model is compared to ``VARCHAR(24)``
+# reflected out of the database.
+
+_PG = postgresql.dialect()
+
+
+def _rendered(type_: sa.types.TypeEngine) -> str:
+    return str(type_.compile(dialect=_PG))
+
+
+def test_migrated_columns_match_the_model_type_length_and_nullability(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    inspector = inspect(migrated_postgres_schema.app_engine)
+    drift: list[str] = []
+
+    for table_name in BI_TABLES:
+        model = Base.metadata.tables[table_name]
+        reflected = {
+            column["name"]: column
+            for column in inspector.get_columns(
+                table_name, schema=migrated_postgres_schema.schema_name
+            )
+        }
+        declared = {column.name for column in model.columns}
+        drift.extend(
+            f"{table_name}.{name}: in the migration, not in the model"
+            for name in sorted(reflected.keys() - declared)
+        )
+        for column in model.columns:
+            actual = reflected.get(column.name)
+            if actual is None:
+                drift.append(f"{table_name}.{column.name}: in the model, not in the migration")
+                continue
+            # One comparison covers String length and Numeric precision/scale:
+            # they are part of the compiled type.
+            if _rendered(column.type) != _rendered(actual["type"]):
+                drift.append(
+                    f"{table_name}.{column.name}: model {_rendered(column.type)} "
+                    f"!= migrated {_rendered(actual['type'])}"
+                )
+            if bool(column.nullable) != bool(actual["nullable"]):
+                drift.append(
+                    f"{table_name}.{column.name}: model "
+                    f"{'NULL' if column.nullable else 'NOT NULL'} != migrated "
+                    f"{'NULL' if actual['nullable'] else 'NOT NULL'}"
+                )
+
+    assert not drift, (
+        "app/models/bi.py and migration 202609220066 disagree about these columns. "
+        "The model is what the hermetic suite builds and the migration is what a real "
+        "database has, so a difference here is a latent Postgres-only failure — edit "
+        "BOTH: " + "; ".join(drift)
+    )
+
+
+def test_migrated_check_constraints_are_exactly_the_models(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    """Same parity in the other vocabulary: every declared CHECK, no extras.
+
+    ``test_migrated_checks_agree_with_the_model_vocabularies`` asserts that the
+    VALUES a model CHECK admits are admitted by the migrated constraint of the
+    same name. This asserts the SETS of constraint names match, so a CHECK
+    dropped from one side or added to the other is caught even when no
+    vocabulary changed.
+    """
+    inspector = inspect(migrated_postgres_schema.app_engine)
+    drift: list[str] = []
+
+    for table_name in BI_TABLES:
+        declared = {
+            str(constraint.name)
+            for constraint in Base.metadata.tables[table_name].constraints
+            if isinstance(constraint, sa.CheckConstraint) and constraint.name
+        }
+        migrated = {
+            str(constraint["name"])
+            for constraint in inspector.get_check_constraints(
+                table_name, schema=migrated_postgres_schema.schema_name
+            )
+            if constraint.get("name")
+        }
+        drift.extend(
+            f"{table_name}: {name} is in the model only" for name in sorted(declared - migrated)
+        )
+        drift.extend(
+            f"{table_name}: {name} is in the migration only" for name in sorted(migrated - declared)
+        )
+
+    assert not drift, (
+        "app/models/bi.py and migration 202609220066 declare different CHECK "
+        "constraints: " + "; ".join(drift)
+    )

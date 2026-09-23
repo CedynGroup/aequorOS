@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { AsOf1 } from "./AsOf1";
+import {
+  AsOf1FromJSON,
+  AsOf1FromJSONTyped,
+  AsOf1ToJSON,
+  AsOf1ToJSONTyped,
+} from "./AsOf1";
 import type { SdiMaturityBucketRead } from "./SdiMaturityBucketRead";
 import {
   SdiMaturityBucketReadFromJSON,
@@ -48,10 +55,10 @@ import {
 export interface LiquidityMonitoringRead {
   /**
    *
-   * @type {string}
+   * @type {AsOf1}
    * @memberof LiquidityMonitoringRead
    */
-  asOf: string;
+  asOf: AsOf1;
   /**
    *
    * @type {SdiCounterbalancingCapacityRead}
@@ -124,7 +131,7 @@ export function LiquidityMonitoringReadFromJSONTyped(
   }
   return {
     ...json,
-    asOf: json["as_of"],
+    asOf: AsOf1FromJSON(json["as_of"]),
     counterbalancingCapacity: SdiCounterbalancingCapacityReadFromJSON(
       json["counterbalancing_capacity"],
     ),
@@ -156,7 +163,7 @@ export function LiquidityMonitoringReadToJSONTyped(
   }
 
   return {
-    as_of: value["asOf"],
+    as_of: AsOf1ToJSON(value["asOf"]),
     counterbalancing_capacity: SdiCounterbalancingCapacityReadToJSON(
       value["counterbalancingCapacity"],
     ),

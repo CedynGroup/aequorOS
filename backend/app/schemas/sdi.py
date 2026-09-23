@@ -87,14 +87,18 @@ class ProvisionsHeldRead(ClosedModel):
 
 
 class SdiLoanClassificationRead(ClosedModel):
-    as_of: str
+    #: The business date the classified book carries; ``null`` when the bank's
+    #: current book is empty — there is no reported date to answer with, and
+    #: today's date would assert a position the bank never reported.
+    as_of: str | None
     #: 'bank' (5-grade) or 'sdi' (NBFI 4-grade) — which grid was applied.
     institution_class: str
     loan_count: int
     total_exposure_ghs: Decimal
     npl_exposure_ghs: Decimal
-    #: NPL / total exposure as a fraction.
-    npl_ratio: Decimal
+    #: NPL / total exposure as a fraction; ``null`` when the book carries no
+    #: loans — there is no ratio, and a zero would read as a clean book.
+    npl_ratio: Decimal | None
     total_provision_required_ghs: Decimal
     #: Loans classified via the IFRS-9 stage proxy (no stated days-past-due).
     stage_proxy_count: int
@@ -247,7 +251,10 @@ class SdiCounterbalancingCapacityRead(ClosedModel):
 class LiquidityMonitoringRead(ClosedModel):
     """Institution-neutral canonical liquidity-monitoring analytics."""
 
-    as_of: str
+    #: The business date the analytics carry; ``null`` when the bank's current
+    #: book is empty (same rule as ``SdiLoanClassificationRead.as_of``). The
+    #: readiness rows still say what has to be fed to fill it.
+    as_of: str | None
     institution_class: str
     maturity_ladder: list[SdiMaturityBucketRead]
     funding_concentration: SdiFundingConcentrationRead

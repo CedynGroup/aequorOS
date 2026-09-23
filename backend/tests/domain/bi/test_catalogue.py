@@ -33,6 +33,7 @@ from app.domain.bi.catalogue import (
 from app.domain.bi.catalogue.dimensions import POSITION_TYPE_LABELS
 from app.domain.bi.catalogue.engine import ENGINE_LABELS, engine_measure_id
 from app.domain.bi.catalogue.measures import dpd_bands_from
+from app.domain.bi.catalogue.members import DPD_COMPLETENESS
 from app.domain.bi.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
 from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import POSITION_TYPES
@@ -100,7 +101,7 @@ def test_member_counts_are_what_the_sources_imply(cat: Catalogue) -> None:
     ]
     assert len(cat.engine_measures()) == 2 * len(numeric_authorities)
     assert len(cat.portfolio_measures()) == 44
-    assert len(cat.dimensions()) == 70
+    assert len(cat.dimensions()) == 66
     assert len(cat.hierarchies()) == 13
 
 
@@ -323,6 +324,158 @@ def test_par_measures_filter_on_band_sets(cat: Catalogue) -> None:
     assert filters["position_type"].values == ("LOAN",)
     assert filters["dpd_band"].values == dpd_bands_from(30)
     assert cat.measure("loans.par_30_pct").numerator == "loans.par_30_exposure_rc"
+
+
+def _selects_on_dpd_band(cat: Catalogue, measure: MeasureDef) -> bool:
+    """Whether the measure's own filters select on ``dpd_band``, or a referenced one's do.
+
+    Derivation is followed transitively, so a ratio of a ratio is caught too.
+    """
+    if any(f.column == "dpd_band" for f in measure.row_filters):
+        return True
+    return any(
+        _selects_on_dpd_band(cat, cat.measure(reference))
+        for reference in (measure.numerator, measure.denominator, measure.weight)
+        if reference is not None
+    )
+
+
+#: The mart-side PAR measures, which select on the derived ``dpd_band``.
+DPD_MART_MEASURES = {
+    "loans.par_30_exposure_rc",
+    "loans.par_60_exposure_rc",
+    "loans.par_90_exposure_rc",
+    "loans.par_30_pct",
+    "loans.par_60_pct",
+    "loans.par_90_pct",
+}
+#: The engine metric ids whose VALUE depends on days-past-due having been supplied
+#: (``regulatory_credit._portfolio_at_risk`` divides raw DPD exposures, D-046).
+DPD_ENGINE_METRIC_IDS = {"par_30_pct", "par_60_pct", "par_90_pct"}
+#: Every id those metrics expand to: each registered regime × both tiers.
+DPD_ENGINE_MEASURES = {
+    f"engine.{metric_id}.{regime}.{tier}"
+    for metric_id in DPD_ENGINE_METRIC_IDS
+    for regime in ("crd", "s29")
+    for tier in ("official", "live")
+}
+
+
+def test_the_engine_par_expansion_is_the_whole_registered_set(cat: Catalogue) -> None:
+    """Every registered PAR copy is enumerated above — a new one cannot hide.
+
+    The expansion is derived from the registry here, so adding a ``par_180_pct``
+    authority (or a third regime) fails this test until D-046's set admits it,
+    rather than shipping an unbadged copy.
+    """
+    registered = {
+        measure.id
+        for measure in cat.engine_measures()
+        if measure.engine_rule is not None and measure.engine_rule.metric_id.startswith("par_")
+    }
+    assert registered == DPD_ENGINE_MEASURES
+    assert {
+        measure.engine_rule.metric_id
+        for measure in cat.engine_measures()
+        if measure.engine_rule is not None and measure.engine_rule.metric_id.startswith("par_")
+    } == DPD_ENGINE_METRIC_IDS
+
+
+def test_every_dpd_dependent_measure_carries_the_completeness_check(cat: Catalogue) -> None:
+    """D-042 + D-046: no DPD-dependent figure may be badged green over absent data.
+
+    A measure's value depends on days-past-due either because it selects on the
+    mart's derived ``dpd_band`` (the compiler returns NULL for a wholly-NULL
+    population) or because it is a verbatim COPY of an engine portfolio-at-risk
+    metric (the engine divides raw DPD exposures and yields a genuine ``0``).
+    Both are badged by BI, so both carry R10; nothing else does.
+    """
+    selecting = {m.id for m in cat.measures() if _selects_on_dpd_band(cat, m)}
+    assert selecting == DPD_MART_MEASURES
+    copied = {
+        measure.id
+        for measure in cat.engine_measures()
+        if measure.engine_rule is not None
+        and measure.engine_rule.metric_id in DPD_ENGINE_METRIC_IDS
+    }
+    assert copied == DPD_ENGINE_MEASURES
+    expected = DPD_MART_MEASURES | DPD_ENGINE_MEASURES
+    carrying = {m.id for m in cat.measures() if DPD_COMPLETENESS in m.reconciliation_checks}
+    assert carrying == expected, (
+        f"missing {sorted(expected - carrying)}, unexpected {sorted(carrying - expected)}"
+    )
+    # The copied value is still the engine's: R10 badges, it never recomputes.
+    for member_id in DPD_ENGINE_MEASURES:
+        measure = cat.measure(member_id)
+        assert measure.measure_kind == "certified_engine"
+        assert measure.aggregation == "last_value"
+        assert measure.source.column == "value"
+
+
+#: The engine fact's KEY and provenance columns, withdrawn from the catalogue by
+#: A6-05: every engine measure's identity already pins them, so a group-by could
+#: only return the ungrouped figure while looking like a tier/regime comparison.
+WITHDRAWN_ENGINE_COLUMNS = ("module", "metric_id", "tier", "regime", "advisory_designation")
+
+
+def test_every_advertised_dimension_is_admitted_by_at_least_one_measure(cat: Catalogue) -> None:
+    """A dimension the catalogue publishes must compile somewhere (A6-05).
+
+    The catalogue is what the Explore UI builds its group-by control from, so a
+    member advertised but admitted by no measure is a control that always 422s.
+    Both directions: nothing advertised is unreachable, and nothing admitted is
+    unpublished (the latter would be a member the UI cannot label).
+    """
+    advertised = {dimension.id for dimension in cat.dimensions()}
+    admitted = {
+        dimension_id for measure in cat.measures() for dimension_id in measure.allowed_dimensions
+    }
+    assert advertised - admitted == set(), sorted(advertised - admitted)
+    assert admitted - advertised == set(), sorted(admitted - advertised)
+
+
+def test_the_engine_facts_key_and_provenance_columns_are_not_dimensions(cat: Catalogue) -> None:
+    """A6-05: withdrawn on purpose, so re-adding one is a conscious act.
+
+    Each is constant across the rows any engine measure selects — the measure id
+    pins metric, regime and tier — so grouping by it cannot compare anything.
+    """
+    bound = {(member.table, member.column) for member in cat.members()}
+    for column in WITHDRAWN_ENGINE_COLUMNS:
+        assert ("bi_fact_engine_metric", column) not in bound, column
+    for member_id in (
+        "engine.module",
+        "engine.regime",
+        "engine.tier",
+        "engine.advisory_designation",
+    ):
+        assert member_id not in cat, member_id
+    # What DOES vary per as-of date within one measure stays groupable.
+    for member_id in ("engine.status", "engine.pipeline_state", "engine.reconciliation_blocked"):
+        dimension = cat.dimension(member_id)
+        assert dimension.table == "bi_fact_engine_metric"
+        assert any(member_id in measure.allowed_dimensions for measure in cat.engine_measures()), (
+            member_id
+        )
+    # The information itself is not lost: it is on the member.
+    measure = cat.measure("engine.car_pct.crd.official")
+    assert measure.engine_rule is not None
+    assert (measure.engine_rule.module, measure.engine_rule.tier) == ("capital", "official")
+    assert measure.advisory_designation == "filed"
+    assert measure.label.endswith("· Official")
+
+
+def test_the_dpd_band_dimension_carries_no_checks(cat: Catalogue) -> None:
+    """Grouping BY the band is not the defect; selecting on it is (dimensions hold no checks)."""
+    dimension = cat.dimension("loan.dpd_band")
+    assert not hasattr(dimension, "reconciliation_checks")
+
+
+def test_every_reconciliation_check_id_is_well_formed(cat: Catalogue) -> None:
+    ids = {check for measure in cat.measures() for check in measure.reconciliation_checks}
+    assert ids == {"R1", "R2", "R3", "R5", "R6", "R8", "R9", DPD_COMPLETENESS}
+    for check_id in ids:
+        assert re.fullmatch(r"R[1-9][0-9]*", check_id), check_id
 
 
 def test_single_obligor_exposure_is_restricted_and_aggregates_are_aggregated(

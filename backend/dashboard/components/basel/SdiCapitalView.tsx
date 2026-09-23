@@ -253,13 +253,19 @@ export default function SdiCapitalView({
                 <KpiStat
                   label="NPL ratio"
                   value={
-                    classification.data
+                    // A book with no loans has no ratio. There is deliberately
+                    // no fallback to 0.00%: that reads as a clean book.
+                    classification.data?.npl_ratio != null
                       ? (num(classification.data.npl_ratio) * 100).toFixed(2)
                       : "—"
                   }
                   unit="%"
                   status="ok"
-                  hint="Non-performing loans ÷ total exposure"
+                  hint={
+                    classification.data?.npl_ratio != null
+                      ? "Non-performing loans ÷ total exposure"
+                      : "No loans in the current book to measure"
+                  }
                 />
                 <KpiStat
                   label="Provisions required"

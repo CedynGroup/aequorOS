@@ -32,13 +32,13 @@ import {
   OverlayCreateTenorMonthsToJSON,
   OverlayCreateTenorMonthsToJSONTyped,
 } from "./OverlayCreateTenorMonths";
-import type { Value } from "./Value";
+import type { Value1 } from "./Value1";
 import {
-  ValueFromJSON,
-  ValueFromJSONTyped,
-  ValueToJSON,
-  ValueToJSONTyped,
-} from "./Value";
+  Value1FromJSON,
+  Value1FromJSONTyped,
+  Value1ToJSON,
+  Value1ToJSONTyped,
+} from "./Value1";
 import type { Supersedes } from "./Supersedes";
 import {
   SupersedesFromJSON,
@@ -116,10 +116,10 @@ export interface MarketDataOverlayCreate {
   tenorMonths?: OverlayCreateTenorMonths;
   /**
    *
-   * @type {Value}
+   * @type {Value1}
    * @memberof MarketDataOverlayCreate
    */
-  value: Value;
+  value: Value1;
 }
 
 /**
@@ -211,7 +211,7 @@ export function MarketDataOverlayCreateFromJSONTyped(
       json["tenor_months"] == null
         ? undefined
         : OverlayCreateTenorMonthsFromJSON(json["tenor_months"]),
-    value: ValueFromJSON(json["value"]),
+    value: Value1FromJSON(json["value"]),
   };
 }
 
@@ -239,6 +239,6 @@ export function MarketDataOverlayCreateToJSONTyped(
     note: Note1ToJSON(value["note"]),
     supersedes: SupersedesToJSON(value["supersedes"]),
     tenor_months: OverlayCreateTenorMonthsToJSON(value["tenorMonths"]),
-    value: ValueToJSON(value["value"]),
+    value: Value1ToJSON(value["value"]),
   };
 }

@@ -23,6 +23,7 @@ from app.domain.bi.authority import (
 )
 from app.domain.bi.catalogue.directions import engine_direction
 from app.domain.bi.catalogue.members import (
+    DPD_COMPLETENESS,
     ColumnRef,
     EngineRule,
     MeasureDef,
@@ -172,6 +173,14 @@ ENGINE_DIMENSIONS: tuple[str, ...] = (
 #: R1 reconciles the portfolio's NPL figures to these engine figures.
 _R1_METRICS: frozenset[str] = frozenset({"npl_ratio_pct", "npl_exposure_ghs", "gross_loans_ghs"})
 
+#: Engine metrics whose VALUE depends on the bank having supplied days-past-due
+#: (D-046). ``regulatory_credit._portfolio_at_risk`` divides raw DPD exposures, so
+#: a book that states no arrears data yields a genuine engine ``0`` — which BI
+#: copies verbatim, as it must, and then badges. R10 is what keeps that badge
+#: honest; the value is never touched. The engine's own presentation of the same
+#: gap is the credit owner's item (H-014).
+_DPD_DEPENDENT_METRICS: frozenset[str] = frozenset({"par_30_pct", "par_60_pct", "par_90_pct"})
+
 
 def engine_value_type(metric_id: str) -> ValueType:
     """``pct`` / ``amount`` / ``ratio`` from the wire key's suffix convention."""
@@ -193,6 +202,8 @@ def _reconciliation_checks(metric_id: str, tier: Tier) -> tuple[str, ...]:
     checks: list[str] = []
     if metric_id in _R1_METRICS:
         checks.append("R1")
+    if metric_id in _DPD_DEPENDENT_METRICS:
+        checks.append(DPD_COMPLETENESS)
     if tier == "live":
         # Freshness (mart as-of vs live as-of) and the balance identity the
         # live plane stamps as ``reconciliation_blocked`` apply to live copies.

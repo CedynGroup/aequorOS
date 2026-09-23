@@ -142,6 +142,33 @@ def test_default_as_of_is_the_newest_current_snapshot_date(db_client: TestClient
     assert response.json()["as_of"] == LATER_CURRENT.isoformat()
 
 
+def test_empty_book_reports_no_as_of_rather_than_today(db_client: TestClient) -> None:
+    """A bank that has ingested nothing has no business date to report.
+
+    The view used to answer ``as_of=<today>``, which reads as a position
+    measured today. It now withholds the date and leaves the readiness rows to
+    say what has to be fed (audit A1-09 / decision D-035).
+    """
+    session = get_sessionmaker()()
+    try:
+        materialize_canonical_test_book(session)
+        session.commit()
+    finally:
+        session.close()
+    _, version = _grant()
+
+    response = db_client.get(URL, headers=headers(authorization_version=version))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["as_of"] is None
+    # No fabricated ratio either: there is no deposit base to concentrate.
+    assert body["funding_concentration"]["top_five_pct"] is None
+    # The readiness rows are the honest answer for an empty book.
+    assert body["readiness"]
+    assert all(row["status"] != "ready" for row in body["readiness"])
+
+
 def _add_bank(session: Session, organization_id: str, bank_id: str) -> None:
     session.add(
         Bank(

@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Value1 } from "./Value1";
+import type { Value } from "./Value";
 import {
-  Value1FromJSON,
-  Value1FromJSONTyped,
-  Value1ToJSON,
-  Value1ToJSONTyped,
-} from "./Value1";
+  ValueFromJSON,
+  ValueFromJSONTyped,
+  ValueToJSON,
+  ValueToJSONTyped,
+} from "./Value";
 
 /**
  *
@@ -33,10 +33,10 @@ export interface IcaapTable5CellRead {
   column: string;
   /**
    *
-   * @type {Value1}
+   * @type {Value}
    * @memberof IcaapTable5CellRead
    */
-  value?: Value1;
+  value?: Value;
 }
 
 /**
@@ -63,7 +63,7 @@ export function IcaapTable5CellReadFromJSONTyped(
   return {
     ...json,
     column: json["column"],
-    value: json["value"] == null ? undefined : Value1FromJSON(json["value"]),
+    value: json["value"] == null ? undefined : ValueFromJSON(json["value"]),
   };
 }
 
@@ -81,6 +81,6 @@ export function IcaapTable5CellReadToJSONTyped(
 
   return {
     column: value["column"],
-    value: Value1ToJSON(value["value"]),
+    value: ValueToJSON(value["value"]),
   };
 }

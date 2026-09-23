@@ -15,13 +15,18 @@
  * @export
  * @interface Status2
  */
-export type Status2 = string | null;
+export type Status2 =
+  "active" | "inactive" | "closed" | "matured" | "defaulted" | "unknown" | null;
 
 /**
  * Check if a given object implements the Status2 interface.
  */
 export function instanceOfStatus2(value: unknown): value is Status2 {
-  return typeof value === "string" || value === null;
+  return (
+    ["active", "inactive", "closed", "matured", "defaulted", "unknown"].indexOf(
+      value as never,
+    ) !== -1 || value === null
+  );
 }
 
 export function Status2FromJSON(json: any): Status2 {

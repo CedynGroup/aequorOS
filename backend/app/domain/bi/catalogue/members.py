@@ -51,6 +51,14 @@ ValueType = Literal["amount", "pct", "ratio", "count", "text", "date", "flag"]
 #: The four sensitivity levels, in ascending order of restriction.
 SENSITIVITIES: tuple[Sensitivity, ...] = ("published", "aggregated", "confidential", "restricted")
 
+#: The completeness check every DPD-dependent measure carries (D-042, D-046). A bank
+#: that never supplied ``days_past_due`` has a NULL band on every mart loan row AND a
+#: genuine engine ``0`` for portfolio-at-risk, so either figure would read 0 % —
+#: indistinguishable from a clean book. The compiler returns NULL for the mart
+#: population and the copied engine value stays the engine's; R10
+#: (``dpd_completeness``) is what stops the trust badge reading green over both.
+DPD_COMPLETENESS = "R10"
+
 
 @dataclass(frozen=True, slots=True)
 class ColumnRef:

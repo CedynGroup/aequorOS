@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { AsOf1 } from "./AsOf1";
+import {
+  AsOf1FromJSON,
+  AsOf1FromJSONTyped,
+  AsOf1ToJSON,
+  AsOf1ToJSONTyped,
+} from "./AsOf1";
+import type { NplRatio } from "./NplRatio";
+import {
+  NplRatioFromJSON,
+  NplRatioFromJSONTyped,
+  NplRatioToJSON,
+  NplRatioToJSONTyped,
+} from "./NplRatio";
 import type { ProvisionCoveragePct } from "./ProvisionCoveragePct";
 import {
   ProvisionCoveragePctFromJSON,
@@ -55,10 +69,10 @@ import {
 export interface SdiLoanClassificationRead {
   /**
    *
-   * @type {string}
+   * @type {AsOf1}
    * @memberof SdiLoanClassificationRead
    */
-  asOf: string;
+  asOf: AsOf1;
   /**
    *
    * @type {Array<LoanGradeBucketRead>}
@@ -103,10 +117,10 @@ export interface SdiLoanClassificationRead {
   nplExposureGhs: string;
   /**
    *
-   * @type {string}
+   * @type {NplRatio}
    * @memberof SdiLoanClassificationRead
    */
-  nplRatio: string;
+  nplRatio: NplRatio;
   /**
    *
    * @type {Array<string>}
@@ -222,7 +236,7 @@ export function SdiLoanClassificationReadFromJSONTyped(
   }
   return {
     ...json,
-    asOf: json["as_of"],
+    asOf: AsOf1FromJSON(json["as_of"]),
     buckets: (json["buckets"] as Array<any>).map(LoanGradeBucketReadFromJSON),
     delinquencyBuckets: (json["delinquency_buckets"] as Array<any>).map(
       DelinquencyBucketReadFromJSON,
@@ -232,7 +246,7 @@ export function SdiLoanClassificationReadFromJSONTyped(
     institutionClass: json["institution_class"],
     loanCount: json["loan_count"],
     nplExposureGhs: json["npl_exposure_ghs"],
-    nplRatio: json["npl_ratio"],
+    nplRatio: NplRatioFromJSON(json["npl_ratio"]),
     pendingParameters: json["pending_parameters"],
     portfolioAtRisk: (json["portfolio_at_risk"] as Array<any>).map(
       PortfolioAtRiskReadFromJSON,
@@ -267,7 +281,7 @@ export function SdiLoanClassificationReadToJSONTyped(
   }
 
   return {
-    as_of: value["asOf"],
+    as_of: AsOf1ToJSON(value["asOf"]),
     buckets: (value["buckets"] as Array<any>).map(LoanGradeBucketReadToJSON),
     delinquency_buckets: (value["delinquencyBuckets"] as Array<any>).map(
       DelinquencyBucketReadToJSON,
@@ -277,7 +291,7 @@ export function SdiLoanClassificationReadToJSONTyped(
     institution_class: value["institutionClass"],
     loan_count: value["loanCount"],
     npl_exposure_ghs: value["nplExposureGhs"],
-    npl_ratio: value["nplRatio"],
+    npl_ratio: NplRatioToJSON(value["nplRatio"]),
     pending_parameters: value["pendingParameters"],
     portfolio_at_risk: (value["portfolioAtRisk"] as Array<any>).map(
       PortfolioAtRiskReadToJSON,

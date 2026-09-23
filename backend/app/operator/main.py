@@ -31,6 +31,7 @@ from app.core.request_id import RequestIdMiddleware
 from app.operator.features.activity import router as activity_router
 from app.operator.features.audit_log import router as audit_log_router
 from app.operator.features.auth import router as auth_router
+from app.operator.features.bi_backfill import router as bi_backfill_router
 from app.operator.features.curves import router as curves_router
 from app.operator.features.data_engines import router as data_engines_router
 from app.operator.features.desk import router as desk_router
@@ -118,6 +119,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(inspector_router)
     operator_router.include_router(inspector_reads_router)
     operator_router.include_router(inspector_fix_router)
+    operator_router.include_router(bi_backfill_router)
     operator_router.include_router(jobs_router)
     operator_router.include_router(worker_health_router)
     operator_router.include_router(data_engines_router)

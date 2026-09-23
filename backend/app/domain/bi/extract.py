@@ -44,7 +44,7 @@ as-is — the suffix is a load-bearing key, not a currency claim — and land in
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -59,6 +59,7 @@ from app.domain.bi.authority import (
 )
 from app.domain.capital.loan_classification import ClassifiedLoan
 from app.domain.credit.dpd_bands import dpd_band
+from app.domain.gl import pl_mapping
 from app.domain.irr.buckets import repricing_bucket
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.domain.positions.families import (
@@ -783,6 +784,100 @@ def loan_event_row(
         product_family=source.product_family if source is not None else None,
         counterparty_id=source.counterparty_id if source is not None else None,
         sector=source.sector if source is not None else None,
+    )
+
+
+# --- monthly GL (D-021) -------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class GlMonthlyFactRow:
+    """One ``bi_fact_gl_monthly`` row: one P&L account, one calendar month.
+
+    ``ytd_rc`` / ``prior_ytd_rc`` / ``movement_rc`` are the LEDGER's own
+    balances (unsigned); ``pl_sign`` is the mapping's sign, so an official line
+    is Σ ``pl_sign × ytd_rc`` over its accounts — exactly BSD7's period-to-date
+    figure, which R4 proves.
+    """
+
+    organization_id: str
+    bank_id: str
+    month_end: date
+    gl_account_code: str
+    currency: str
+    calendar_month: date
+    account_class: str
+    ytd_rc: Decimal
+    prior_ytd_rc: Decimal | None
+    movement_rc: Decimal | None
+    missing_prior: bool
+    balance_basis: str
+    pl_line: str | None
+    pl_sign: int | None
+
+
+def gl_monthly_row(  # noqa: PLR0913 - one keyword per input the month depends on
+    generations: Sequence[pl_mapping.Generation],
+    *,
+    organization_id: str,
+    bank_id: str,
+    month_end: date,
+    fy_start: date,
+    account_class: str,
+    rule: pl_mapping.MappingRule | None,
+    base_currency: str,
+) -> GlMonthlyFactRow | None:
+    """The monthly figures of ONE account through BSD7's own rules (``pl_mapping``).
+
+    ``generations`` are the account's included, current-generation ledger rows
+    with as_of ∈ [``fy_start``, ``month_end``] (any currency; their ``basis``
+    field is ignored — the effective basis is the rule's, default ``ytd``).
+    ``rule`` is ``pl_mapping.account_rule(...)`` for the account: ``None`` when
+    the bank has mapped it to no official line (the row still exists, with
+    ``pl_line`` NULL). A rule whose sign is not one the integral ``pl_sign``
+    column can carry raises ``pl_mapping.PlSignError`` — the mart refuses the
+    account rather than truncating a sign the return would file in full.
+    The row's ``currency`` is the LATEST generation's,
+    ``''`` for the reporting currency (an unstated currency IS the reporting
+    currency, per BSD7's Domestic rule). ``None`` when no generation falls on
+    or before ``month_end``.
+    """
+    basis = (rule.basis if rule is not None else None) or pl_mapping.YTD
+    rows = [
+        pl_mapping.Generation(row.code, row.as_of, row.currency, row.balance, basis)
+        for row in generations
+    ]
+    figures = pl_mapping.monthly_account_figures(
+        rows, month_end=month_end, fy_start=fy_start, basis=basis
+    )
+    if figures is None:
+        return None
+    latest = pl_mapping.latest_generation(rows, month_end)
+    assert latest is not None  # noqa: S101 - figures exist only when a generation does
+    currency = (
+        "" if pl_mapping.is_base_currency(latest.currency, base_currency) else str(latest.currency)
+    )
+    return GlMonthlyFactRow(
+        organization_id=organization_id,
+        bank_id=bank_id,
+        month_end=month_end,
+        gl_account_code=latest.code,
+        currency=currency,
+        calendar_month=pl_mapping.month_start(month_end),
+        account_class=account_class,
+        ytd_rc=figures.ytd,
+        prior_ytd_rc=figures.prior_ytd,
+        movement_rc=figures.movement,
+        missing_prior=figures.missing_prior,
+        balance_basis=basis,
+        pl_line=rule.item if rule is not None else None,
+        # The register's sign, refused rather than truncated when it is not one
+        # the integral column can carry (A5-08; ``pl_mapping.PlSignError``).
+        pl_sign=(
+            pl_mapping.register_sign_as_int(rule.sign, account_code=latest.code, item=rule.item)
+            if rule is not None
+            else None
+        ),
     )
 
 

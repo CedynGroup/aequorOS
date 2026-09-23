@@ -153,12 +153,18 @@ def test_handlers_and_job_types_still_cover_each_other() -> None:
 
 
 def test_the_ai_reclaim_window_is_derived_from_settings() -> None:
-    """Shorter than one legitimate call would reclaim a live job and resend it."""
+    """Shorter than one legitimate call would reclaim a live job and resend it.
+
+    Multiplied by the TIER LENGTH since D-053: one handler legitimately spends
+    the per-vendor budget once per vendor while it fails over, so a window sized
+    for a single vendor would reclaim a live job somewhere in the second.
+    """
     ai = get_settings().ai
-    expected = ai.request_timeout_seconds * (ai.max_retries + 1) + ai.stale_margin_seconds
+    per_vendor = ai.request_timeout_seconds * (ai.max_retries + 1)
+    expected = per_vendor * len(ai.provider_order) + ai.stale_margin_seconds
     window = job_queue.stale_after_for("icaap_ai_draft", timedelta(seconds=900))
     assert window == timedelta(seconds=expected)
-    assert window > timedelta(seconds=ai.request_timeout_seconds)
+    assert window > timedelta(seconds=per_vendor * len(ai.provider_order))
 
 
 def test_core_job_types_keep_the_fleet_default() -> None:

@@ -151,6 +151,8 @@ def test_default_as_of_is_the_latest_current_snapshot_not_first_seen_or_a_retire
     assert classification.json()["as_of"] == LATEST_CURRENT.isoformat()
     # The June book is what gets classified, not an empty future date.
     assert classification.json()["loan_count"] == 1
+    # A book with loans still reports its ratio — only an empty one withholds it.
+    assert classification.json()["npl_ratio"] is not None
 
     readiness = db_client.get(f"/api/v1/banks/{bank_id}/sdi/readiness", headers=headers())
     assert readiness.status_code == 200, readiness.text
@@ -163,6 +165,30 @@ def test_default_as_of_is_the_latest_current_snapshot_not_first_seen_or_a_retire
         params={"as_of": FIRST_SEEN.isoformat()},
     )
     assert explicit.json()["as_of"] == FIRST_SEEN.isoformat()
+
+
+def test_empty_book_reports_no_as_of_and_no_npl_ratio(db_client) -> None:  # noqa: ANN001
+    """A bank that has ingested nothing has no reporting date and no ratio.
+
+    The route used to answer ``as_of=<today>`` with ``npl_ratio=0`` — a clean
+    book measured on a date the bank never reported. Both figures are now
+    withheld, and the grade grid is still listed so the surface can show which
+    classification would apply (audit A1-09 / decision D-035).
+    """
+    bank_id = _create_sdi_bank()
+
+    response = db_client.get(f"/api/v1/banks/{bank_id}/loan-classification", headers=headers())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["as_of"] is None
+    assert body["npl_ratio"] is None
+    assert body["loan_count"] == 0
+    # Nothing else is invented either: the unstated figures stay null.
+    assert body["provisions_held"] is None
+    assert body["provision_coverage_pct"] is None
+    # The class grid is registry data, not a position, so it is still answered.
+    assert body["institution_class"] == "sdi"
 
 
 def test_sdi_liquidity_position_returns_typed_unavailable_controls(db_client) -> None:  # noqa: ANN001

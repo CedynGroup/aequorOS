@@ -3092,6 +3092,1419 @@
         "title": "BehavioralProductEstimate",
         "type": "object"
       },
+      "BiBuildRead": {
+        "additionalProperties": false,
+        "description": "One mart build for the date, so a badge can say WHY it is not green.",
+        "properties": {
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "row_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Row Counts",
+            "type": "object"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "status",
+          "fingerprint"
+        ],
+        "title": "BiBuildRead",
+        "type": "object"
+      },
+      "BiCatalogueDimensionRead": {
+        "additionalProperties": false,
+        "description": "A dimension the CALLER may group, filter, pivot or sort by.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "sensitivity": {
+            "title": "Sensitivity",
+            "type": "string"
+          },
+          "value_type": {
+            "title": "Value Type",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/BiCatalogueValueRead"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "module",
+          "sensitivity",
+          "value_type"
+        ],
+        "title": "BiCatalogueDimensionRead",
+        "type": "object"
+      },
+      "BiCatalogueHierarchyRead": {
+        "additionalProperties": false,
+        "description": "A drill path, reduced to the levels the caller may see.\n\nA hierarchy that crosses from an aggregate level into a named one (obligor\ntype \u2192 group \u2192 obligor) is listed with the levels the principal holds and\nno others, so a drill the UI offers is a drill the query path will serve.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Levels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "levels"
+        ],
+        "title": "BiCatalogueHierarchyRead",
+        "type": "object"
+      },
+      "BiCatalogueMeasureRead": {
+        "additionalProperties": false,
+        "description": "A measure the CALLER may read, and everything the UI needs to badge it.",
+        "properties": {
+          "advisory_designation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory Designation"
+          },
+          "aggregation": {
+            "title": "Aggregation",
+            "type": "string"
+          },
+          "allowed_dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Dimensions",
+            "type": "array"
+          },
+          "certified": {
+            "default": false,
+            "title": "Certified",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "engine_metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Metric Id"
+          },
+          "engine_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Tier"
+          },
+          "favourable_direction": {
+            "title": "Favourable Direction",
+            "type": "string"
+          },
+          "grain": {
+            "title": "Grain",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "measure_kind": {
+            "title": "Measure Kind",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "reconciliation_checks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reconciliation Checks",
+            "type": "array"
+          },
+          "sensitivity": {
+            "title": "Sensitivity",
+            "type": "string"
+          },
+          "thresholds_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thresholds Source"
+          },
+          "time_behaviour": {
+            "title": "Time Behaviour",
+            "type": "string"
+          },
+          "value_type": {
+            "title": "Value Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "module",
+          "sensitivity",
+          "measure_kind",
+          "aggregation",
+          "time_behaviour",
+          "value_type",
+          "grain",
+          "allowed_dimensions",
+          "favourable_direction"
+        ],
+        "title": "BiCatalogueMeasureRead",
+        "type": "object"
+      },
+      "BiCatalogueRead": {
+        "additionalProperties": false,
+        "description": "The catalogue as one caller may query it.\n\nFiltered by the same authorization the query path applies, so nothing here\ncan be selected and then refused. ``withheld_members`` is the count the\nprincipal has no sentence for \u2014 a number, never the ids \u2014 so the UI can say\nthat more fields exist without naming them.",
+        "properties": {
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/BiCatalogueDimensionRead"
+            },
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "hierarchies": {
+            "items": {
+              "$ref": "#/components/schemas/BiCatalogueHierarchyRead"
+            },
+            "title": "Hierarchies",
+            "type": "array"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/BiCatalogueMeasureRead"
+            },
+            "title": "Measures",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "withheld_members": {
+            "default": 0,
+            "title": "Withheld Members",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "measures",
+          "dimensions",
+          "hierarchies"
+        ],
+        "title": "BiCatalogueRead",
+        "type": "object"
+      },
+      "BiCatalogueValueRead": {
+        "additionalProperties": false,
+        "description": "One value of a closed dimension vocabulary, with its production label.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "BiCatalogueValueRead",
+        "type": "object"
+      },
+      "BiDateRange": {
+        "additionalProperties": false,
+        "description": "An inclusive reporting window, named at both ends.\n\nA positional pair would be the smaller model but the worse contract: a\nclient reading ``[\"2026-01-01\", \"2026-06-30\"]`` has to know which end is\nwhich. It is also unrepresentable downstream \u2014 a Python tuple renders in\nOpenAPI 3.1 as an array with ``prefixItems`` and no ``items``, which the\ngenerated client's post-processing cannot type (it was the only such schema\nin the spec, and it failed client regeneration).",
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "BiDateRange",
+        "type": "object"
+      },
+      "BiExplainComponentRead": {
+        "additionalProperties": false,
+        "description": "A measure the explained figure is composed from, and its part.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "numerator",
+              "denominator",
+              "weight",
+              "over"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "member_id",
+          "label"
+        ],
+        "title": "BiExplainComponentRead",
+        "type": "object"
+      },
+      "BiExplainEngineRead": {
+        "additionalProperties": false,
+        "description": "The engine row a certified figure is a COPY of, exactly as copied.\n\n``input_hash`` is the engine's own value-based hash of the facts it computed\nfrom: it is how a figure on a dashboard is tied back to the run that\nproduced it, and to the return that was filed from that run.",
+        "properties": {
+          "advisory_designation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory Designation"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "input_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Hash"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "pipeline_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline State"
+          },
+          "reconciliation_blocked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciliation Blocked"
+          },
+          "regime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regime"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric_id",
+          "module",
+          "tier"
+        ],
+        "title": "BiExplainEngineRead",
+        "type": "object"
+      },
+      "BiExplainRead": {
+        "additionalProperties": false,
+        "description": "Where one figure came from: its definition, its source and its checks.\n\nNo SQL: the statement encodes the mart layout and is not a bank-facing\nsurface. What a reviewer gets instead is the measure's own declaration, the\nmart table and tier the value was read from, the window it was read over,\nthe engine metric and input hash when the figure is a copy, and the current\nstatus of every reconciliation check that governs it.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "build_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Fingerprint"
+          },
+          "catalogue_version": {
+            "title": "Catalogue Version",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/BiTrustCheckRead"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "compare_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compare To"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/BiExplainComponentRead"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiExplainEngineRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fx_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rule"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/BiCatalogueMeasureRead"
+          },
+          "source_table": {
+            "title": "Source Table",
+            "type": "string"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/BiTrustBadge"
+          },
+          "used_aggregate": {
+            "title": "Used Aggregate",
+            "type": "boolean"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "required": [
+          "measure",
+          "source_table",
+          "used_aggregate",
+          "catalogue_version"
+        ],
+        "title": "BiExplainRead",
+        "type": "object"
+      },
+      "BiExplainRequest": {
+        "additionalProperties": false,
+        "description": "One measure of a query, and the query it is read in.\n\nProvenance is a property of a figure IN CONTEXT: the same measure explained\nat a different as-of, or against the aggregate table rather than the fact\ntable, has a different answer. ``measure`` must be one of the query's own\nmeasures.",
+        "properties": {
+          "measure": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Measure",
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/BiQuery"
+          }
+        },
+        "required": [
+          "query",
+          "measure"
+        ],
+        "title": "BiExplainRequest",
+        "type": "object"
+      },
+      "BiFilter": {
+        "additionalProperties": false,
+        "description": "One predicate on a catalogue dimension.\n\n``values`` carries exactly what the operator needs: none for the null\ntests, two for ``between`` (low then high), one to ``BI_FILTER_IN_CAP``\nfor the list operators, exactly one for everything else.",
+        "properties": {
+          "member": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Member",
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "eq",
+              "ne",
+              "in",
+              "not_in",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "between",
+              "is_null",
+              "not_null",
+              "contains"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 500,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "member",
+          "op"
+        ],
+        "title": "BiFilter",
+        "type": "object"
+      },
+      "BiGridPageRead": {
+        "additionalProperties": false,
+        "description": "One page of grid rows, with the columns it is keyed by.",
+        "properties": {
+          "build_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Fingerprint"
+          },
+          "catalogue_version": {
+            "title": "Catalogue Version",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/BiResultColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "dimension_count": {
+            "title": "Dimension Count",
+            "type": "integer"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "last_row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Row"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BiGridRowRead"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "start_row": {
+            "title": "Start Row",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/BiTrustBadge"
+          },
+          "used_aggregate": {
+            "title": "Used Aggregate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "columns",
+          "rows",
+          "dimension_count",
+          "start_row",
+          "truncated",
+          "elapsed_ms",
+          "used_aggregate",
+          "catalogue_version"
+        ],
+        "title": "BiGridPageRead",
+        "type": "object"
+      },
+      "BiGridRowRead": {
+        "additionalProperties": false,
+        "description": "One grid row: cells keyed by column id, plus how to render it.",
+        "properties": {
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "subtotal": {
+            "default": false,
+            "title": "Subtotal",
+            "type": "boolean"
+          },
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "BiGridRowRead",
+        "type": "object"
+      },
+      "BiPagedQueryRequest": {
+        "additionalProperties": false,
+        "description": "A query plus the page of rows wanted, as AG Grid's row models ask for it.\n\n``start_row`` / ``end_row`` (exclusive) are the page; the server clamps the\nspan to the surface's cap. The query's own ``limit`` / ``offset`` are\nrefused here rather than silently overridden: two paging mechanisms in one\nrequest cannot both be honoured, and quietly picking one would page a\nrecord grid through data the caller did not ask for.",
+        "properties": {
+          "end_row": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Row"
+          },
+          "query": {
+            "$ref": "#/components/schemas/BiQuery"
+          },
+          "start_row": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Start Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "BiPagedQueryRequest",
+        "type": "object"
+      },
+      "BiPivot": {
+        "additionalProperties": false,
+        "description": "Spread one dimension across the columns as ``<measure>|<value>``.\n\n``max_columns`` is a client preference below the server cap; the compiler\nclamps it to ``BI_PIVOT_MAX_COLUMNS`` whatever is sent (D-030).",
+        "properties": {
+          "dimension": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Dimension",
+            "type": "string"
+          },
+          "max_columns": {
+            "default": 50,
+            "minimum": 1.0,
+            "title": "Max Columns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dimension"
+        ],
+        "title": "BiPivot",
+        "type": "object"
+      },
+      "BiQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "dimensions": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/BiFilter"
+            },
+            "maxItems": 40,
+            "title": "Filters",
+            "type": "array"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "measures": {
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Measures",
+            "type": "array"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "pivot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiPivot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/BiSort"
+            },
+            "maxItems": 8,
+            "title": "Sort",
+            "type": "array"
+          },
+          "subtotals": {
+            "default": false,
+            "title": "Subtotals",
+            "type": "boolean"
+          },
+          "time": {
+            "$ref": "#/components/schemas/BiTime"
+          },
+          "top_n": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiTopN"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "measures",
+          "time"
+        ],
+        "title": "BiQuery",
+        "type": "object"
+      },
+      "BiQueryResult": {
+        "additionalProperties": false,
+        "properties": {
+          "build_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Fingerprint"
+          },
+          "catalogue_version": {
+            "title": "Catalogue Version",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/BiResultColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/BiTrustBadge"
+          },
+          "used_aggregate": {
+            "title": "Used Aggregate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "columns",
+          "rows",
+          "truncated",
+          "elapsed_ms",
+          "used_aggregate",
+          "catalogue_version"
+        ],
+        "title": "BiQueryResult",
+        "type": "object"
+      },
+      "BiResultColumn": {
+        "additionalProperties": false,
+        "description": "One output column: which member it came from and how to format it.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "dimension",
+              "measure",
+              "marker"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
+          },
+          "pivot_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pivot Value"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "current",
+                  "prior",
+                  "delta",
+                  "delta_pct"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "format"
+        ],
+        "title": "BiResultColumn",
+        "type": "object"
+      },
+      "BiSort": {
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "default": "asc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "member": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Member",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member"
+        ],
+        "title": "BiSort",
+        "type": "object"
+      },
+      "BiTime": {
+        "additionalProperties": false,
+        "description": "The reporting window: exactly one of ``as_of`` (a single business date)\nor ``range`` (inclusive, ``start`` through ``end``). ``compare_to`` names\nthe prior period \u2014 the prior date for ``as_of``, the end of an equal-length\nprior window for ``range`` \u2014 and turns every measure into current / prior /\ndelta / delta %.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "compare_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compare To"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiDateRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "BiTime",
+        "type": "object"
+      },
+      "BiTopN": {
+        "additionalProperties": false,
+        "description": "Keep the ``n`` largest groups of ``dimension`` by the first measure;\nwith ``other`` the remainder collapses into one row.",
+        "properties": {
+          "dimension": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Dimension",
+            "type": "string"
+          },
+          "n": {
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "other": {
+            "default": true,
+            "title": "Other",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dimension",
+          "n"
+        ],
+        "title": "BiTopN",
+        "type": "object"
+      },
+      "BiTrustBadge": {
+        "additionalProperties": false,
+        "description": "Placeholder for the reconciliation verdict wave 3 attaches to a result.\n\n``grey`` is \"not assessed\" and is what a result carries until the\nreconciliation summary is wired in; a missing check is never green.",
+        "properties": {
+          "failing_checks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failing Checks",
+            "type": "array"
+          },
+          "status": {
+            "default": "grey",
+            "enum": [
+              "green",
+              "amber",
+              "red",
+              "grey"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "BiTrustBadge",
+        "type": "object"
+      },
+      "BiTrustCheckRead": {
+        "additionalProperties": false,
+        "description": "One reconciliation check's current verdict for a (bank, as-of).",
+        "properties": {
+          "check_id": {
+            "title": "Check Id",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "evaluated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated At"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lhs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lhs"
+          },
+          "rhs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rhs"
+          },
+          "status": {
+            "enum": [
+              "green",
+              "amber",
+              "red",
+              "grey"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance"
+          }
+        },
+        "required": [
+          "check_id",
+          "label",
+          "status"
+        ],
+        "title": "BiTrustCheckRead",
+        "type": "object"
+      },
+      "BiTrustRead": {
+        "additionalProperties": false,
+        "description": "Every reconciliation check for a (bank, as-of), and the builds behind them.\n\nA check with no stored result is ``grey`` \u2014 \"not assessed\" \u2014 and never reads\nas a pass.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "build_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Fingerprint"
+          },
+          "builds": {
+            "items": {
+              "$ref": "#/components/schemas/BiBuildRead"
+            },
+            "title": "Builds",
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/BiTrustCheckRead"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "green",
+              "amber",
+              "red",
+              "grey"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "status",
+          "checks"
+        ],
+        "title": "BiTrustRead",
+        "type": "object"
+      },
       "BindingClass": {
         "enum": [
           "engine_run",
@@ -36025,8 +37438,15 @@
         "description": "Institution-neutral canonical liquidity-monitoring analytics.",
         "properties": {
           "as_of": {
-            "title": "As Of",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
           },
           "counterbalancing_capacity": {
             "$ref": "#/components/schemas/SdiCounterbalancingCapacityRead"
@@ -43559,7 +44979,8 @@
                 "atm_operations",
                 "remittance_flows",
                 "teller_withdrawals",
-                "interest_accruals"
+                "interest_accruals",
+                "performance_targets"
               ]
             },
             "title": "Reference",
@@ -43995,7 +45416,8 @@
               "atm_operations",
               "remittance_flows",
               "teller_withdrawals",
-              "interest_accruals"
+              "interest_accruals",
+              "performance_targets"
             ],
             "title": "Dataset Kind",
             "type": "string"
@@ -49306,8 +50728,15 @@
         "additionalProperties": false,
         "properties": {
           "as_of": {
-            "title": "As Of",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
           },
           "buckets": {
             "items": {
@@ -49346,9 +50775,16 @@
             "type": "string"
           },
           "npl_ratio": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Npl Ratio",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npl Ratio"
           },
           "pending_parameters": {
             "items": {
@@ -58272,6 +59708,742 @@
         "summary": "Train Behavioral Model",
         "tags": [
           "behavioral-models"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/catalogue": {
+      "get": {
+        "description": "Every measure, dimension and drill path THIS caller may query.",
+        "operationId": "getBiCatalogue",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiCatalogueRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Catalogue",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/drill": {
+      "post": {
+        "description": "The records behind a figure: one capped page at the record grain.\n\nA drill must name at least one record-level member (D-028) \u2014 a position\nreference, a position id, an employer. That is what distinguishes it from an\naggregate query, and those members are the ones whose sensitivity requires\nthe record-level sentence, so the authority the page is served under is the\nrecord-level one.",
+        "operationId": "runBiDrillQuery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiPagedQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiGridPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Bi Drill Query",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/explain": {
+      "post": {
+        "description": "Where one figure in a query came from \u2014 definition, source, checks.\n\nIt compiles the query (which is how the source table and whether the daily\naggregate answered it are known) and deliberately never executes it: the\nfigure itself came from ``query``. No statement text is returned.",
+        "operationId": "explainBiMeasure",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiExplainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiExplainRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Explain Bi Measure",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/grid": {
+      "post": {
+        "description": "One page of grouped, pivoted or plain rows for AG Grid Community.",
+        "operationId": "runBiGridQuery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiPagedQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiGridPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Bi Grid Query",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/query": {
+      "post": {
+        "description": "Answer one catalogue query for one institution, under the UI row cap.",
+        "operationId": "runBiQuery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiQueryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Bi Query",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/trust": {
+      "get": {
+        "description": "Every reconciliation check for one (institution, date), with its evidence.\n\nA check with no stored result is reported as \"not assessed\" \u2014 never as a\npass \u2014 so a badge can never read green over a check that did not run.\n\nThe payload is figures, not metadata (audit A6-01), so it is authorized like\nevery other data route: the caller must hold the sentence of every member\n:data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with\ncoverage on another institution of the same tenant, or with no binding at\nall, gets 403 and no body \u2014 ``resolve_tenant_bank`` scopes by organization\nonly, and organization is not institution.",
+        "operationId": "getBiTrust",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The reporting date to report on.",
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "description": "The reporting date to report on.",
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiTrustRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Trust",
+        "tags": [
+          "bi"
         ]
       }
     },

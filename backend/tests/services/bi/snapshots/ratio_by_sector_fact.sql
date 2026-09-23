@@ -1,0 +1,4 @@
+SELECT bi_fact_position_daily.sector AS k0, (CAST(sum(CASE WHEN (bi_fact_position_daily.position_type IN (?)) THEN CASE WHEN (bi_fact_position_daily.non_performing IS 1) THEN bi_fact_position_daily.classification_exposure_rc ELSE ? END END) AS FLOAT) / (nullif(sum(CASE WHEN (bi_fact_position_daily.position_type IN (?)) THEN bi_fact_position_daily.classification_exposure_rc END), ?) + 0.0)) * ? AS m0, sum(CASE WHEN (bi_fact_position_daily.position_type IN (?)) THEN CASE WHEN (bi_fact_position_daily.non_performing IS 1) THEN bi_fact_position_daily.classification_exposure_rc ELSE ? END END) AS m1
+FROM bi_fact_position_daily
+WHERE bi_fact_position_daily.organization_id = ? AND bi_fact_position_daily.bank_id = ? AND bi_fact_position_daily.as_of_date = ? GROUP BY bi_fact_position_daily.sector ORDER BY m1 DESC NULLS LAST
+ LIMIT ? OFFSET ?

@@ -260,6 +260,9 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
+from app.domain.ingestion.reference_schemas.business_units import (
+    normalise_row as _normalise_business_unit_row,
+)
 from app.domain.irr.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
 from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
 from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
@@ -4076,10 +4079,19 @@ def _derive_ftp_products(
 
 
 def _business_unit_names(canonical: _Canonical) -> dict[str, str]:
+    """Branch id -> slugified unit name, read through the dataset's own seam.
+
+    ``normalise_row`` folds the spellings the public contract accepts as aliases
+    (``unit_id`` / ``name``) onto the canonical keys this function reads. It is a
+    no-op for a canonical push, and reference payloads are preserved verbatim, so
+    a register pushed in the documented spelling cannot be renamed at the
+    boundary — resolving it on READ is the only place it can happen.
+    """
     names: dict[str, str] = {}
     for payload in canonical.refs.get("business_units", ()):
-        unit_id = str(payload.get("business_unit_id", "")).strip()
-        name = str(payload.get("business_unit_name", "")).strip()
+        row = _normalise_business_unit_row(payload)
+        unit_id = str(row.get("business_unit_id", "")).strip()
+        name = str(row.get("business_unit_name", "")).strip()
         if unit_id and name:
             names[unit_id] = name.lower().replace(" ", "_")
     return names

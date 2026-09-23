@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Status } from "./Status";
-import {
-  StatusFromJSON,
-  StatusFromJSONTyped,
-  StatusToJSON,
-  StatusToJSONTyped,
-} from "./Status";
 import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
 import {
   FinancialAccountCreateAccountTypeFromJSON,
@@ -39,6 +32,13 @@ import {
   FinancialAccountCreateCurrencyToJSON,
   FinancialAccountCreateCurrencyToJSONTyped,
 } from "./FinancialAccountCreateCurrency";
+import type { Status1 } from "./Status1";
+import {
+  Status1FromJSON,
+  Status1FromJSONTyped,
+  Status1ToJSON,
+  Status1ToJSONTyped,
+} from "./Status1";
 import type { AccountNumber } from "./AccountNumber";
 import {
   AccountNumberFromJSON,
@@ -97,10 +97,10 @@ export interface FinancialAccountCreate {
   reason: string;
   /**
    *
-   * @type {Status}
+   * @type {Status1}
    * @memberof FinancialAccountCreate
    */
-  status?: Status;
+  status?: Status1;
 }
 
 /**
@@ -149,7 +149,8 @@ export function FinancialAccountCreateFromJSONTyped(
         : InstitutionIdFromJSON(json["institution_id"]),
     metadata: json["metadata"] == null ? undefined : json["metadata"],
     reason: json["reason"],
-    status: json["status"] == null ? undefined : StatusFromJSON(json["status"]),
+    status:
+      json["status"] == null ? undefined : Status1FromJSON(json["status"]),
   };
 }
 
@@ -175,6 +176,6 @@ export function FinancialAccountCreateToJSONTyped(
     institution_id: InstitutionIdToJSON(value["institutionId"]),
     metadata: value["metadata"],
     reason: value["reason"],
-    status: StatusToJSON(value["status"]),
+    status: Status1ToJSON(value["status"]),
   };
 }

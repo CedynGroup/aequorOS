@@ -372,6 +372,8 @@ def test_scheduler_tick_enqueues_due_pulls_when_enabled(
         "live_refreshes_enqueued": 0,
         "desk_capture_enqueued": False,
         "deadline_scan_enqueued": True,
+        "bi_rebuilds_enqueued": 0,
+        "bi_retention_enqueued": False,
     }
     queued_ticks = list(
         db_session.scalars(

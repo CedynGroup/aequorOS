@@ -18,13 +18,13 @@ import {
   FactKeyToJSON,
   FactKeyToJSONTyped,
 } from "./FactKey";
-import type { Status2 } from "./Status2";
+import type { Status } from "./Status";
 import {
-  Status2FromJSON,
-  Status2FromJSONTyped,
-  Status2ToJSON,
-  Status2ToJSONTyped,
-} from "./Status2";
+  StatusFromJSON,
+  StatusFromJSONTyped,
+  StatusToJSON,
+  StatusToJSONTyped,
+} from "./Status";
 import type { BlockId } from "./BlockId";
 import {
   BlockIdFromJSON,
@@ -79,10 +79,10 @@ export interface IcaapAiSegmentRead {
   kind: IcaapAiSegmentReadKindEnum;
   /**
    *
-   * @type {Status2}
+   * @type {Status}
    * @memberof IcaapAiSegmentRead
    */
-  status?: Status2;
+  status?: Status;
   /**
    *
    * @type {Text}
@@ -131,8 +131,7 @@ export function IcaapAiSegmentReadFromJSONTyped(
     factKey:
       json["fact_key"] == null ? undefined : FactKeyFromJSON(json["fact_key"]),
     kind: json["kind"],
-    status:
-      json["status"] == null ? undefined : Status2FromJSON(json["status"]),
+    status: json["status"] == null ? undefined : StatusFromJSON(json["status"]),
     text: json["text"] == null ? undefined : TextFromJSON(json["text"]),
   };
 }
@@ -154,7 +153,7 @@ export function IcaapAiSegmentReadToJSONTyped(
     display: DisplayToJSON(value["display"]),
     fact_key: FactKeyToJSON(value["factKey"]),
     kind: value["kind"],
-    status: Status2ToJSON(value["status"]),
+    status: StatusToJSON(value["status"]),
     text: TextToJSON(value["text"]),
   };
 }

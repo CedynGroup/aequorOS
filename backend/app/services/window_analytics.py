@@ -81,13 +81,23 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
     "irr": "worst_eve_change_pct_tier1",
     "fx": "nop_pct_tier1",
     "ftp": "portfolio_nim_pct",
+    # ``pit_pd_upper_pct`` is ADVISORY_ONLY in the authority registry, which is
+    # a reason to label it, not a reason to drop the module: leaving it out made
+    # the rating ladder silently absent from every window a Treasurer opened
+    # while the pulse card headlined the same figure. The window-analysis panel
+    # marks it (and FTP, and forecast) advisory — ``ADVISORY_HEADLINE_MODULES``
+    # in ``components/live/moduleDisplay.ts``, pinned against this registry by
+    # ``tests/services/test_primary_metric_parity.py``.
+    "rating": "pit_pd_upper_pct",
     "forecast": "year5_car_pct",
 }
 
 #: Daily-snapshot modules served only to a principal holding an exact aggregated
 #: ``view`` binding on the engine's module, filtered in SQL before aggregation.
-#: Capital rows are still served to every tenant reader — the capital cutover
-#: owns that decision; this list must only ever grow.
+#: Capital, rating and forecast rows are still served to every tenant reader —
+#: their module cutovers own that decision, and this list stays identical to
+#: ``live_view._GATED_ENGINE_MODULES`` so the two surfaces cannot disagree about
+#: who may read an engine. It must only ever grow.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
     ("credit", Module.CREDIT),
@@ -162,6 +172,24 @@ def _validate_window(start_date: date, end_date: date) -> None:
 def _periods_in_window(
     db: Session, ctx: TenantContext, bank: Bank, start_date: date, end_date: date
 ) -> list[BankReportingPeriod]:
+    """EVERY reporting period whose ``period_end`` falls in [start, end], ascending.
+
+    Deliberately NOT ``domain.reporting.period_windows.trailing_month_end_window``,
+    which the five module dashboards select their sparkline through. That helper
+    exists because their fixed 13-ROW slice stood in for a 13-month horizon, so
+    its span changed meaning with the bank's feed cadence; it is anchored on the
+    latest period, looks back a number of MONTHS, and has no earlier bound to
+    respect.
+
+    Nothing stands in for anything here: the horizon is the caller's own two
+    dates, and ``period_count`` reports this count ON THE WIRE (the window
+    analysis footer reads "N periods"). Thinning the selection to month-ends
+    would drop periods the caller explicitly asked for and cap the 36-month
+    window at 13 points — a change to what an API field means, not a tidier
+    selection. A daily feeder returning ~250 points a year is the honest answer
+    to the dates it was given. Pinned by
+    ``tests/services/test_window_analytics.py::test_period_count_counts_every_period_the_caller_asked_for``.
+    """
     return list(
         db.scalars(
             select(BankReportingPeriod)

@@ -1,0 +1,4 @@
+SELECT bi_dim_product.product_code AS k0, CAST(sum(CASE WHEN (bi_fact_position_daily.position_type IN (?) AND bi_fact_position_daily.position_type IN (?)) THEN bi_fact_position_daily.interest_rate * bi_fact_position_daily.balance_rc END) AS FLOAT) / (nullif(sum(CASE WHEN (bi_fact_position_daily.position_type IN (?) AND bi_fact_position_daily.position_type IN (?)) THEN CASE WHEN (bi_fact_position_daily.interest_rate IS NOT NULL) THEN bi_fact_position_daily.balance_rc ELSE ? END END), ?) + 0.0) AS m0
+FROM bi_fact_position_daily LEFT OUTER JOIN bi_dim_product ON bi_dim_product.organization_id = bi_fact_position_daily.organization_id AND bi_dim_product.bank_id = bi_fact_position_daily.bank_id AND bi_dim_product.product_code = bi_fact_position_daily.product_code
+WHERE bi_fact_position_daily.organization_id = ? AND bi_fact_position_daily.bank_id = ? AND bi_fact_position_daily.as_of_date = ? GROUP BY bi_dim_product.product_code ORDER BY k0 ASC NULLS LAST
+ LIMIT ? OFFSET ?

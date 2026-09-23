@@ -15,16 +15,13 @@
  * @export
  * @interface Status
  */
-export type Status = "active" | "inactive" | "closed" | "unknown" | null;
+export type Status = string | null;
 
 /**
  * Check if a given object implements the Status interface.
  */
 export function instanceOfStatus(value: unknown): value is Status {
-  return (
-    ["active", "inactive", "closed", "unknown"].indexOf(value as never) !==
-      -1 || value === null
-  );
+  return typeof value === "string" || value === null;
 }
 
 export function StatusFromJSON(json: any): Status {

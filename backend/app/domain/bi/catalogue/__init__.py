@@ -16,9 +16,13 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from functools import cache
 
-from app.domain.bi.catalogue.dimensions import dimensions
+from app.domain.bi.catalogue.dimensions import dimensions as _dimensions
 from app.domain.bi.catalogue.engine import engine_measures
 from app.domain.bi.catalogue.hierarchies import hierarchies as _hierarchies
+
+# Both builders are aliased so the SUBMODULES keep their names as attributes of
+# this package: an unaliased ``dimensions`` shadowed ``catalogue.dimensions``, so
+# ``import app.domain.bi.catalogue.dimensions as d`` handed back the function.
 from app.domain.bi.catalogue.measures import portfolio_measures
 from app.domain.bi.catalogue.members import (
     ColumnRef,
@@ -147,7 +151,7 @@ def build_catalogue() -> Catalogue:
             raise CatalogueError(f"duplicate measure id {measure.id!r}")
         measures[measure.id] = measure
     dims: dict[str, DimensionDef] = {}
-    for dimension in dimensions():
+    for dimension in _dimensions():
         if dimension.id in dims or dimension.id in measures:
             raise CatalogueError(f"duplicate member id {dimension.id!r}")
         dims[dimension.id] = dimension

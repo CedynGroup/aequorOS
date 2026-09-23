@@ -67,6 +67,7 @@ from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from app.services import live_refresh_triggers
 from app.services.audit import record_event
+from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.withdrawal_impact import invalidate_register
 
 REQUESTED_EVENT = "canonical_withdrawal.requested"
@@ -442,6 +443,18 @@ def approve_withdrawal(
         bank_id=row.bank_id,
         reason="withdrawal_applied",
     )
+    # The BI mart is per-date slices, so the rollback hazard above does not
+    # apply to it: the slice whose canonical inputs just changed is the
+    # WITHDRAWN date's, and a rebuild replaces only that slice. The live date's
+    # slice (its engine metrics are about to move) is enqueued by the trigger
+    # above; when the two dates coincide the seam coalesces them into one job.
+    enqueue_mart_refresh(
+        db,
+        organization_id=row.organization_id,
+        bank_id=row.bank_id,
+        as_of=row.as_of_date,
+        reason="withdrawal_applied",
+    )
     record_event(
         db,
         ctx,
@@ -625,6 +638,16 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
         db,
         organization_id=row.organization_id,
         bank_id=row.bank_id,
+        reason="withdrawal_reversed",
+    )
+    # And the restored slice, on the withdrawn book's own date — see
+    # ``approve_withdrawal`` for why the mart takes that date and the live
+    # plane does not.
+    enqueue_mart_refresh(
+        db,
+        organization_id=row.organization_id,
+        bank_id=row.bank_id,
+        as_of=row.as_of_date,
         reason="withdrawal_reversed",
     )
     record_event(

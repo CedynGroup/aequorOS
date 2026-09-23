@@ -152,13 +152,6 @@ PIPELINE_STATE_LABELS: dict[str, str] = {
     "blocked": "Blocked by reconciliation",
     "failed": "Failed",
 }
-TIER_LABELS: dict[str, str] = {"official": "Official", "live": "Live"}
-DESIGNATION_LABELS: dict[str, str] = {
-    "filed": "Filed",
-    "supervisory_monitoring": "Supervisory monitoring",
-    "advisory_only": "Advisory",
-    "unregistered": "Unregistered",
-}
 BOOLEAN_VALUES: tuple[EnumValue, ...] = (EnumValue("true", "Yes"), EnumValue("false", "No"))
 
 
@@ -610,25 +603,31 @@ def _engine_dimensions() -> tuple[DimensionDef, ...]:
             value_type="flag",
             values=BOOLEAN_VALUES,
         ),
-        _dim(
-            "engine.tier",
-            "Computation tier",
-            ENGINE_TABLE,
-            "tier",
-            module=RISK,
-            values=tuple(EnumValue(code, label) for code, label in TIER_LABELS.items()),
-        ),
-        _dim(
-            "engine.advisory_designation",
-            "Designation",
-            ENGINE_TABLE,
-            "advisory_designation",
-            module=RISK,
-            values=tuple(EnumValue(code, label) for code, label in DESIGNATION_LABELS.items()),
-        ),
-        _dim("engine.regime", "Regime", ENGINE_TABLE, "regime", module=RISK),
-        _dim("engine.module", "Engine module", ENGINE_TABLE, "module", module=RISK),
     )
+
+
+# ``bi_fact_engine_metric.module`` / ``metric_id`` / ``tier`` / ``regime`` /
+# ``advisory_designation`` are deliberately NOT dimensions (A6-05, 2026-09-22).
+#
+# They are the engine fact's KEY and provenance, and every engine measure's own
+# identity already pins them: ``engine.{metric_id}.{regime}.{tier}`` fixes the
+# metric, the regime and the tier, ``engine_rule.module`` fixes the module, and
+# the designation is a function of ``(metric_id, regime)``. So they are CONSTANT
+# across every row a measure selects, and a group-by over one of them could only
+# ever return a single row equal to the ungrouped figure — while LOOKING like the
+# control that compares CRD against s.29, or the live tier against the official
+# one. It is not: the measure already chose. Offering it would invite a reader to
+# believe a comparison had been made, which is the class of number this build
+# exists to prevent (a bank carries one regime, and H-008 is on record about the
+# two tiers not being comparable even for the same metric). To compare tiers or
+# regimes, select the two MEASURES; each is labelled with its own tier.
+#
+# The three engine dimensions above are kept because they genuinely VARY within
+# one measure's population: a metric can be green on one as-of date and amber on
+# the next, ready on one and blocked on another. That is the test for admitting a
+# fact's own column as a dimension — it must vary across the rows a measure
+# selects — and the same reason `input_hash`, `engine_version`, `run_id` and
+# `computed_at` are not members either.
 
 
 def dimensions() -> tuple[DimensionDef, ...]:

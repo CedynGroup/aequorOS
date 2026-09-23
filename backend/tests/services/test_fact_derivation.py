@@ -17,6 +17,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalFxRate,
     CanonicalGlAccount,
+    CanonicalReferenceRow,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
     IngestionBatch,
@@ -244,6 +245,57 @@ def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0
         assert source == "data_engine" or (
             source == "cash" and fact.attributes.get("derived_by") == "data_engine"
         )
+
+
+def test_branch_names_resolve_the_same_through_the_business_units_aliases(
+    db_session: Session,
+) -> None:
+    """A register pushed in the documented spelling names the same branches.
+
+    ``docs/API_INTEGRATION.md`` documented ``unit_id`` / ``name`` while every
+    reader keyed on ``business_unit_id`` / ``business_unit_name``; reference rows
+    are preserved verbatim and a mapping config cannot rename a column, so such a
+    push used to fall through to the slugified branch id (``br_001``) and the
+    branch profitability facts carried no real names. The aliases are now resolved
+    on read through ``reference_schemas.business_units.normalise_row`` — the one
+    seam — so both spellings derive identically.
+    """
+    result = _prepare(db_session)
+    canonical = {
+        category: fact.amount
+        for category, fact in _by_group(_facts(db_session, result))["ftp_branch"].items()
+    }
+    assert set(canonical) == {"head_office", "osu"}
+
+    # Re-push the same register in the documented spelling, nothing else changed.
+    rows = list(
+        db_session.scalars(
+            select(CanonicalReferenceRow).where(
+                CanonicalReferenceRow.organization_id == ORG_1,
+                CanonicalReferenceRow.bank_id == SAMPLE_BANK_ID,
+                CanonicalReferenceRow.dataset_kind == "business_units",
+            )
+        )
+    )
+    assert rows, "the canonical fixture must carry a business_units register"
+    for row in rows:
+        row.payload = {
+            "unit_id": row.payload["business_unit_id"],
+            "name": row.payload["business_unit_name"],
+        }
+    db_session.flush()
+
+    aliased_result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    aliased = {
+        category: fact.amount
+        for category, fact in _by_group(_facts(db_session, aliased_result))["ftp_branch"].items()
+    }
+
+    assert aliased == canonical
+    # The fallback the fix removes: without alias resolution these would be the
+    # slugified branch ids.
+    assert not {"br_001", "br_002"}.intersection(aliased)
 
 
 # The exact attribute payloads the FX and IRR services read from seed-shaped

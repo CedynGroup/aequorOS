@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
@@ -67,6 +67,8 @@ from app.features.manage_temenos_connections import router as temenos_connection
 from app.features.market_data_sources import router as market_data_sources_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
+from app.features.read_bi import require_bi_enabled
+from app.features.read_bi import router as bi_read_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_feature_flags import router as feature_flags_router
@@ -210,6 +212,19 @@ v1_router.include_router(window_analytics_router, dependencies=BANK_ROUTE_DEPEND
 v1_router.include_router(cashflow_window_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(liquidity_monitoring_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(sdi_diagnostics_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+# BI reads. ``BANK_ROUTE_DEPENDENCIES`` first, so a sibling tenant's BK- is
+# ``404 Bank not found.`` whatever the deployment flag says (the cross-tenant
+# sweep asserts that exact answer on every bank route); ``require_bi_enabled``
+# second, so a deployment without BI answers 404 for its own banks too. The flag
+# is a per-request dependency rather than a conditional mount because
+# ``get_settings()`` is cached for the life of the process: an import-time
+# decision could never be restated, including by the suites that pin the flag
+# per test, and the routes would then be invisible to the impersonation and
+# cross-tenant route sweeps.
+v1_router.include_router(
+    bi_read_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
 # ICAAP draft exports. No ``require_module_access``: that dependency answers
 # 403 for an institution class without the module, and the ICAAP surface has to
 # answer 404 for an SDI — the workspace is banks-only and its existence is not

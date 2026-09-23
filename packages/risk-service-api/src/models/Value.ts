@@ -15,13 +15,13 @@
  * @export
  * @interface Value
  */
-export type Value = number | string;
+export type Value = string | null;
 
 /**
  * Check if a given object implements the Value interface.
  */
 export function instanceOfValue(value: unknown): value is Value {
-  return typeof value === "number" || typeof value === "string";
+  return typeof value === "string" || value === null;
 }
 
 export function ValueFromJSON(json: any): Value {

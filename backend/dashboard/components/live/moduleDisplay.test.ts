@@ -22,6 +22,7 @@ import {
   livePrimaryMetric,
   livePrimaryMetricChange,
   livePrimaryMetricDelta,
+  livePrimaryMetricIsAdvisory,
   livePrimaryMetricKey,
 } from "./moduleDisplay";
 
@@ -244,6 +245,28 @@ test("rise-is-adverse modules still colour a rise red; the rest colour it green"
   });
   assert.equal(liveMetricChangeText(-0), "0.00 pts");
   assert.equal(liveMetricChangeText(-0.001), "0.00 pts");
+});
+
+test("headlines that are never filed read as advisory, filed ones do not", () => {
+  // FTP's portfolio NIM and the rating PD band are advisory_only in the
+  // authority registry; the five-year projected CAR is supervisory_monitoring.
+  // The registry is the authority — `test_primary_metric_parity.py` reads both
+  // and fails when this set stops mirroring it (BI decision D-022).
+  const advisory = MODULES.filter(livePrimaryMetricIsAdvisory);
+  assert.deepEqual([...advisory].sort(), ["forecast", "ftp", "rating"]);
+  for (const liveModule of [
+    "liquidity",
+    "capital",
+    "credit",
+    "irr",
+    "fx",
+  ] as const) {
+    assert.equal(
+      livePrimaryMetricIsAdvisory(liveModule),
+      false,
+      `${liveModule} files its headline — disclaiming it understates the figure`,
+    );
+  }
 });
 
 test("WindowAnalysis METRIC_LABELS mirrors the headline map exactly", () => {

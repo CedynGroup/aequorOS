@@ -709,6 +709,39 @@ class FixConfigChangeRead(ClosedModel):
     after: JsonObject
 
 
+# -- tenant inspector: BI mart backfill --------------------------------------------
+# Operator-triggered only (no product surface enqueues a backfill). Same shape
+# as the fix actions: active inspection session, cross-tenant operator session,
+# one ``bi.backfill`` audit row, ``note`` required.
+
+
+class BiBackfillRequest(ClosedModel):
+    """Walk one bank's mart history newest-first (enqueues ONE ``bi_mart_backfill``).
+
+    ``from_date`` is the first (newest) date built and defaults to the bank's
+    latest canonical position snapshot date; ``until_date`` is the last
+    (oldest) date, inclusive. The job re-enqueues itself hop by hop from
+    ``from_date`` down to ``until_date``.
+    """
+
+    bank_id: str
+    until_date: date
+    from_date: date | None = None
+    note: str = Field(min_length=1, max_length=2000)
+
+
+class BiBackfillRead(ClosedModel):
+    job_id: UUID
+    job_type: str
+    status: str
+    bank_id: str
+    #: The dates the chain will walk, newest first — ``cursor_date`` is the
+    #: resolved ``from_date`` so the console shows the default that was taken.
+    cursor_date: date
+    until_date: date
+    builder_version: int
+
+
 # -- staff identity (email+password primary; SSO secondary) -----------------------
 type OperatorRole = Literal["developer", "operator_admin", "super_admin"]
 

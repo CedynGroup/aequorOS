@@ -118,11 +118,11 @@ _ATTRIBUTION_BASES = "'snapshot_on_or_before', 'no_snapshot', 'unmatched'"
 _TIERS = "'live', 'official'"
 _BALANCE_BASES = "'ytd', 'period'"
 _BUILD_SCOPES = "'positions', 'events', 'gl', 'engine', 'dims'"
-_BUILD_STATUSES = "'running', 'succeeded', 'failed', 'skipped'"
-_CHECK_IDS = "'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'"
+_BUILD_STATUSES = "'running', 'succeeded', 'failed'"
+_CHECK_IDS = "'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10'"
 _RECONCILIATION_STATUSES = "'green', 'amber', 'red', 'grey'"
 _PRINCIPAL_TYPES = "'human', 'machine'"
-_SURFACES = "'query', 'grid', 'drill', 'explain', 'export', 'feed'"
+_SURFACES = "'query', 'grid', 'drill', 'explain', 'export', 'feed', 'trust', 'catalogue'"
 _DECISIONS = "'allowed', 'denied'"
 _UNASSIGNED_REGION = "Unassigned region"
 
@@ -195,11 +195,11 @@ def _position_fact_columns() -> list[sa.Column]:
         sa.Column("deposit_account_type", sa.String(length=16), nullable=True),
         sa.Column("behavioral_maturity_months", sa.Numeric(12, 4), nullable=True),
         sa.Column("encumbered", sa.Boolean(), nullable=True),
-        sa.Column("hqla_level", sa.String(length=8), nullable=True),
+        sa.Column("hqla_level", sa.String(length=16), nullable=True),
         sa.Column("branch_code", sa.String(length=120), nullable=True),
         sa.Column("product_code", sa.String(length=80), nullable=True),
         sa.Column("product_family", sa.String(length=40), nullable=True),
-        sa.Column("exposure_category", sa.String(length=80), nullable=True),
+        sa.Column("exposure_category", sa.String(length=120), nullable=True),
         sa.Column("counterparty_id", sa.Uuid(), nullable=True),
         sa.Column("counterparty_type", sa.String(length=32), nullable=True),
         sa.Column("counterparty_group", sa.String(length=255), nullable=True),
@@ -380,7 +380,7 @@ def _create_engine_metric() -> None:
         sa.Column("tier", sa.String(length=8), nullable=False),
         _money("value"),
         sa.Column("unit", sa.String(length=32), nullable=True),
-        sa.Column("status", sa.String(length=8), nullable=True),
+        sa.Column("status", sa.String(length=24), nullable=True),
         sa.Column("regime", sa.String(length=40), nullable=True),
         sa.Column("institution_class", sa.String(length=40), nullable=True),
         sa.Column("advisory_designation", sa.String(length=40), nullable=True),

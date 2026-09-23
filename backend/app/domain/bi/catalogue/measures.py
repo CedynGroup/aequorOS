@@ -28,6 +28,7 @@ from app.domain.bi.catalogue.dimensions import (
     RISK,
 )
 from app.domain.bi.catalogue.members import (
+    DPD_COMPLETENESS,
     Aggregation,
     ColumnRef,
     FavourableDirection,
@@ -175,6 +176,7 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
                 "classification_exposure_rc",
                 fx_rule="classification",
                 direction="lower_better",
+                checks=(DPD_COMPLETENESS,),
                 filters=_par_filters(days),
                 module=CREDIT,
             )
@@ -189,6 +191,7 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
                 fx_rule="classification",
                 value_type="pct",
                 direction="lower_better",
+                checks=(DPD_COMPLETENESS,),
                 numerator=f"loans.par_{days}_exposure_rc",
                 denominator="loans.classification_exposure_rc",
                 module=CREDIT,

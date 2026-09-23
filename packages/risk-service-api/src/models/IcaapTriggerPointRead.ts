@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Value1 } from "./Value1";
+import type { Value } from "./Value";
 import {
-  Value1FromJSON,
-  Value1FromJSONTyped,
-  Value1ToJSON,
-  Value1ToJSONTyped,
-} from "./Value1";
+  ValueFromJSON,
+  ValueFromJSONTyped,
+  ValueToJSON,
+  ValueToJSONTyped,
+} from "./Value";
 import type { FloorPct } from "./FloorPct";
 import {
   FloorPctFromJSON,
@@ -65,10 +65,10 @@ export interface IcaapTriggerPointRead {
   status: string;
   /**
    *
-   * @type {Value1}
+   * @type {Value}
    * @memberof IcaapTriggerPointRead
    */
-  value?: Value1;
+  value?: Value;
   /**
    *
    * @type {number}
@@ -115,7 +115,7 @@ export function IcaapTriggerPointReadFromJSONTyped(
         : PeriodEndFromJSON(json["period_end"]),
     scenarioCode: json["scenario_code"],
     status: json["status"],
-    value: json["value"] == null ? undefined : Value1FromJSON(json["value"]),
+    value: json["value"] == null ? undefined : ValueFromJSON(json["value"]),
     year: json["year"],
   };
 }
@@ -137,7 +137,7 @@ export function IcaapTriggerPointReadToJSONTyped(
     period_end: PeriodEndToJSON(value["periodEnd"]),
     scenario_code: value["scenarioCode"],
     status: value["status"],
-    value: Value1ToJSON(value["value"]),
+    value: ValueToJSON(value["value"]),
     year: value["year"],
   };
 }
