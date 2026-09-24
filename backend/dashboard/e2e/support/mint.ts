@@ -121,6 +121,14 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 4,
   },
+  // The officer the local issuer's linked account maps onto
+  // (e2e/sso-sign-in.spec.ts). Same grants as `analyst`; the SSO journeys
+  // sign in through the issuer rather than minting this token.
+  sso_analyst: {
+    id: "eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1",
+    roles: ["analyst"],
+    authv: 3,
+  },
 };
 
 export const E2E_STORAGE_ROLES = [

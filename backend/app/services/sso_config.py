@@ -26,6 +26,7 @@ from app.adapters.market_data.credential_manager import (
     encrypt_credential_envelope,
 )
 from app.core.config import get_settings
+from app.core.security import _is_loopback_issuer_allowed
 from app.db.base import utc_now
 from app.models import SsoConnection
 
@@ -92,7 +93,11 @@ def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
     """Create or update the org's SSO connection. ``client_secret=None`` keeps
     the stored secret; a non-empty value replaces it (write-only semantics)."""
     issuer = issuer.strip().rstrip("/")
-    if not issuer.startswith("https://"):
+    # The same carve-out the request schema and the verifier honour: a plain-http
+    # issuer is a local stub IdP, accepted on loopback and on an undeployed
+    # environment only, so the e2e stack can register its issuer through this
+    # path rather than around it.
+    if not issuer.startswith("https://") and not _is_loopback_issuer_allowed(issuer):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Issuer must be an https:// URL exactly as the IdP publishes it.",

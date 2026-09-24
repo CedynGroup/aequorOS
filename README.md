@@ -145,13 +145,6 @@ mise run risk-service:api-fresh                     # must leave git clean
 
 For console checks and CI coverage, see [Architecture §8](ARCHITECTURE.md#8-validation-commands).
 
-The CI gates live in `.github/workflows/`: `risk-service.yml` (backend plus the
-MinIO-backed dashboard Playwright journeys),
-`dashboard.yml` (generated client + dashboard) and `web.yml` (marketing site +
-operator console). Each workflow's header comment is its own gate inventory —
-read that comment rather than inferring coverage from the job names. See
-`ARCHITECTURE.md` for the system map and the full validation table.
-
 ## License & security
 
 Proprietary source-available — see [LICENSE](LICENSE). Public visibility is for

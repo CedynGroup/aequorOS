@@ -321,9 +321,10 @@ Regenerate the API client after any backend contract change:
 ## End-to-end (Playwright)
 
 `playwright.config.ts` boots a **disposable** stack: the FastAPI backend on a
-throwaway sqlite file (deleted and rebuilt every run) plus `next dev`. Both
-servers use OS-selected free ports (optional `E2E_BACKEND_PORT` and
-`E2E_DASHBOARD_PORT` preferences fall back when occupied),
+throwaway sqlite file (deleted and rebuilt every run), a local OpenID Connect
+issuer standing in for the tenant's identity provider, and `next dev`. All
+three servers use OS-selected free ports (optional `E2E_BACKEND_PORT`,
+`E2E_DASHBOARD_PORT` and `E2E_IDP_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
 cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
 normal development cache. Because every journey shares the disposable database
@@ -338,8 +339,9 @@ diagnosis:
    Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
    `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
    or CI has none. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, and opt-in `visual-tour` specs refuse immediately
-   without it rather than letting package assertions time out one at a time.
+   `submission-lifecycle`, and opt-in `visual-tour` specs, plus the SSO
+   attestation journey, refuse immediately without it rather than letting
+   package assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
    manually dispatched GitHub Actions workflow starts a disposable MinIO with
    its built-in KMS and runs the standard suite against that real object store.
@@ -372,19 +374,61 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 
+### Single sign-on against a local issuer
+
+The SSO journeys (`e2e/sso-sign-in.spec.ts`) need no bank IdP or additional
+identity-provider setup. With the [stack prerequisites](#end-to-end-playwright)
+in place, run `pnpm --filter @aequoros/dashboard e2e`; the SSO attestation
+journey also requires object storage. The config
+starts `backend/scripts/e2e_idp.py` — a small, spec-shaped OpenID Provider
+(discovery, a real credential form, PKCE, `client_secret_basic` and
+`client_secret_post`, RS256 JWKS, `auth_time`) bound on loopback — and the
+bootstrap registers it as the e2e tenant's `sso_connections` row through the
+same `app.services.sso_config` path the Settings page uses, with
+`SSO_INTERNAL_KEY` set on both servers so the dashboard's server-to-server
+client-config read is live. A plain-http issuer is accepted only because the
+backend and the dashboard egress guards both carve out loopback on an
+undeployed `APP_ENV`; neither guard is weakened, and the same issuer is refused
+on every deployed environment by construction.
+
+Three static accounts, one password (`e2e-idp-password-not-production-000`),
+each a literal in the repo because none of them may ever be real:
+
+| Account                                  | Tenant outcome                                                                                                  |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `e2e.sso_analyst@aequoros.example`       | Pre-provisioned officer with Analyst authority — links by email on first sign-in and step-up signs as preparer. |
+| `e2e.sso_unprovisioned@aequoros.example` | Allowed domain, no account — refused on the login page, no session.                                             |
+| `e2e.sso_outsider@contractor.example`    | Outside the connection's allowed domains — refused the same way.                                                |
+
+The journeys prove the login page's SSO button → issuer → NextAuth callback →
+`/auth/sso` exchange → session, sign-out and a second sign-in from a clean
+slate, and the attestation step-up round trip (`prompt=login`, `max_age=0`,
+the signer returned to the same ceremony with the markers consumed and the
+authorisation spent server-side) — plus its inverse, the honest "not
+configured" return when the connection is switched off through the
+account-administration API mid-ceremony. Set `E2E_EVIDENCE_DIR` to keep
+screenshots of the issuer form, the signed-in shell, the refusals and the
+step-up return. To drive the issuer by hand:
+
+```bash
+cd backend && E2E_IDP_PORT=8120 uv run python scripts/e2e_idp.py
+```
+
 The `Dashboard Playwright journeys` workflow in
 `.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
 pull requests and pushes do not enqueue it. A maintainer launches it from the
 Actions UI or with
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
 Chromium, starts MinIO with its built-in KMS, and runs this same command against
-real CI-local object storage. The run requires at least 20 journeys to execute
-and the quarantine in `e2e/support/quarantine.ts` to match the size the
-workflow pins. A journey may only be parked there by name, declared with
-`test.fail` and a reason beside it, and with the workflow's gate edited to
-admit it; the custom reporter fails the run for any non-quarantined failure,
-unexpected quarantine pass, skipped or undiscovered quarantine entry, or
-`test.fail` declaration missing from that list.
+real CI-local object storage; the local OIDC issuer needs no container because
+Playwright starts it as a process beside the API. Evidence screenshots are
+uploaded as the `dashboard-journey-evidence` artifact. The run requires at least
+20 journeys to execute and the quarantine in `e2e/support/quarantine.ts` to
+match the size the workflow pins. A journey may only be parked there by name,
+declared with `test.fail` and a reason beside it, and with the workflow's gate
+edited to admit it; the custom reporter fails the run for any non-quarantined
+failure, unexpected quarantine pass, skipped or undiscovered quarantine entry,
+or `test.fail` declaration missing from that list.
 
 The Returns workspace opens on the regulator's latest reporting anchor on or
 before today, and a return generates only from the exact snapshot as of that
