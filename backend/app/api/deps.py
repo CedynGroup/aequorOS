@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Annotated, Final, Literal
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -312,6 +312,10 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_ai_settings_administration",
         "require_fx_run",
         "require_forecasting_run",
+        "require_markets_run",
+        "require_markets_upload",
+        "require_markets_overlay_create",
+        "require_markets_overlay_edit",
         "require_grant_administration",
         "get_scoped_mutation_tenant_context",
         "require_package_validate",
@@ -1685,6 +1689,165 @@ def require_ilaap_refresh(
     return capital_access
 
 
+# Markets authority is split by what the data IS rather than by surface tier:
+# vendor and desk market data is `published` (views, source planes, templates,
+# manual uploads), material derived from the bank's own book is `confidential`
+# (implied ratings, private curve overlays), and credential-bearing connection
+# metadata is `restricted`. Connection lifecycle and source-preference writes
+# keep their legacy gate until configuration authority lands.
+_MARKETS_VIEW_DETAIL = "Markets access requires an active scoped binding."
+
+
+def require_markets_published_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.VIEW,
+        surface="markets_published_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    )
+
+
+def require_markets_template_view(
+    bank_id: Annotated[
+        str,
+        Query(description="Institution the template will be uploaded for (exact BK-* id)."),
+    ],
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """Bind the organization-level template download to one named institution.
+
+    The workbook itself carries no tenant data, but the effective-authority
+    projection has no organization-wide Markets capability, so an
+    organization-target check would leave every institution-scoped analyst
+    unable to fetch the template they are allowed to upload. Naming the bank
+    lets the same exact grant the Markets hub needs decide the download.
+    """
+
+    _ = bank_id  # validated here so a missing bank is a 422, resolved by TenantBank
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.VIEW,
+        surface="markets_template_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    )
+
+
+def require_markets_confidential_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="markets_confidential_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    )
+
+
+def require_markets_restricted_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="markets_restricted_view",
+        detail="Market data connection access requires an active scoped binding.",
+    )
+
+
+def require_markets_run(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="markets_run",
+        detail="Running an implied rating requires an active scoped binding.",
+    )
+
+
+def require_markets_upload(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.CREATE,
+        surface="markets_upload",
+        detail="Uploading market data requires an active scoped binding.",
+    )
+
+
+def require_markets_overlay_create(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.CREATE,
+        surface="markets_overlay_create",
+        detail="Creating a market data overlay requires an active scoped binding.",
+    )
+
+
+def require_markets_overlay_edit(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.EDIT,
+        surface="markets_overlay_edit",
+        detail="Ending a market data overlay requires an active scoped binding.",
+    )
+
+
 def require_liquidity_aggregated_view(
     request: Request,
     db: DbSession,
@@ -2216,6 +2379,22 @@ ForecastingRunDetailView = Annotated[
     InstitutionPermissionAccess, Depends(require_forecasting_run_detail_view)
 ]
 ForecastingRun = Annotated[InstitutionPermissionAccess, Depends(require_forecasting_run)]
+MarketsPublishedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_markets_published_view)
+]
+MarketsTemplateView = Annotated[InstitutionPermissionAccess, Depends(require_markets_template_view)]
+MarketsConfidentialView = Annotated[
+    InstitutionPermissionAccess, Depends(require_markets_confidential_view)
+]
+MarketsRestrictedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_markets_restricted_view)
+]
+MarketsRun = Annotated[InstitutionPermissionAccess, Depends(require_markets_run)]
+MarketsUpload = Annotated[InstitutionPermissionAccess, Depends(require_markets_upload)]
+MarketsOverlayCreate = Annotated[
+    InstitutionPermissionAccess, Depends(require_markets_overlay_create)
+]
+MarketsOverlayEdit = Annotated[InstitutionPermissionAccess, Depends(require_markets_overlay_edit)]
 CapitalPlanWrite = Annotated[InstitutionPermissionAccess, Depends(require_capital_plan_write)]
 CapitalPlanApproveAccess = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_plan_approve)

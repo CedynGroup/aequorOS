@@ -108353,7 +108353,7 @@
     },
     "/api/v1/market-data/templates/{kind}": {
       "get": {
-        "description": "Download the .xlsx upload template for one scope category (\u00a78.2).",
+        "description": "Download the .xlsx upload template for one scope category (\u00a78.2).\n\nThe workbook is bank-neutral; the ``bank_id`` query names the institution\nwhose Markets view grant authorizes the download.",
         "operationId": "getMarketDataTemplate",
         "parameters": [
           {
@@ -108368,6 +108368,17 @@
                 "macro_forecasts"
               ],
               "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Institution the template will be uploaded for (exact BK-* id).",
+            "in": "query",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution the template will be uploaded for (exact BK-* id).",
+              "title": "Bank Id",
               "type": "string"
             }
           }

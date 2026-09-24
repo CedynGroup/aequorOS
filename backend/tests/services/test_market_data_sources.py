@@ -514,7 +514,9 @@ def test_resolve_planes_side_by_side_availability_and_selection(db_session: Sess
     bank_id = _seed_bank(db_session)
     _seed_three_source_curves(db_session, bank_id)
 
-    planes = market_data_sources.resolve_planes(db_session, CTX, bank_id, "curves", AS_OF)
+    planes = market_data_sources.resolve_planes(
+        db_session, CTX, bank_id, "curves", AS_OF, include_overlays=True
+    )
     assert planes.category == "curves"
     assert planes.selected_source == "aequor"
     by_source = {plane.source: plane for plane in planes.planes}
@@ -541,7 +543,9 @@ def test_resolve_planes_marks_absent_plane_unavailable(db_session: Session) -> N
         curve_type="zero",
         rates={3: "0.24"},
     )
-    planes = market_data_sources.resolve_planes(db_session, CTX, bank_id, "curves", AS_OF)
+    planes = market_data_sources.resolve_planes(
+        db_session, CTX, bank_id, "curves", AS_OF, include_overlays=True
+    )
     by_source = {plane.source: plane for plane in planes.planes}
     assert by_source["aequor"].available is True
     assert by_source["bank"].available is False
@@ -573,7 +577,9 @@ def test_resolve_planes_overlay_preview(db_session: Session) -> None:
             effective_from=AS_OF,
         ),
     )
-    planes = market_data_sources.resolve_planes(db_session, CTX, bank_id, "curves", AS_OF)
+    planes = market_data_sources.resolve_planes(
+        db_session, CTX, bank_id, "curves", AS_OF, include_overlays=True
+    )
     assert planes.overlay.available is True
     assert planes.overlay.delta_preview
     delta = planes.overlay.delta_preview[0]
@@ -584,7 +590,9 @@ def test_resolve_planes_overlay_preview(db_session: Session) -> None:
 def test_resolve_planes_rates_category_has_no_overlay(db_session: Session) -> None:
     bank_id = _seed_bank(db_session)
     _seed_index(db_session, bank_id, source_system="AEQUOR_DESK", value="15.0")
-    planes = market_data_sources.resolve_planes(db_session, CTX, bank_id, "rates", AS_OF)
+    planes = market_data_sources.resolve_planes(
+        db_session, CTX, bank_id, "rates", AS_OF, include_overlays=True
+    )
     by_source = {plane.source: plane for plane in planes.planes}
     assert by_source["aequor"].available is True
     index_item = by_source["aequor"].items[0]

@@ -205,6 +205,22 @@ export type ModuleScope = {
   /** Exact BEH/confidential run authority for retraining a model. */
   behavioralRun?: boolean;
   /**
+   * Exact Markets capabilities, split by what the data is: vendor and desk
+   * market data is `published` (views, source planes, templates, uploads),
+   * material derived from the bank's own book is `confidential` (implied
+   * ratings, private curve overlays), and credential-bearing connection
+   * metadata is `restricted`.
+   */
+  marketsPublishedView?: boolean;
+  marketsConfidentialView?: boolean;
+  marketsRestrictedView?: boolean;
+  /** Exact MARKETS/published create authority — manual market-data upload. */
+  marketsUpload?: boolean;
+  /** Exact MARKETS/confidential create authority — adding an overlay version. */
+  marketsOverlayCreate?: boolean;
+  /** Exact MARKETS/confidential edit authority — ending an overlay version. */
+  marketsOverlayEdit?: boolean;
+  /**
    * Server-evaluated exact Liquidity capabilities for the selected
    * institution. Omitted/false is deny, so navigation and controls never infer
    * authority from a legacy role or the broader institution-type entitlement.
@@ -434,12 +450,18 @@ const FTP_CONFIDENTIAL_RUN = "Funds Transfer Pricing · Confidential · Run";
 const FORECASTING_CONFIDENTIAL_RUN = "Forecasting · Confidential · Run";
 const FORECASTING_CONFIDENTIAL_VIEW = "Forecasting · Confidential · View";
 const BEHAVIORAL_CONFIDENTIAL_RUN = "Behavioral Models · Confidential · Run";
+const MARKETS_PUBLISHED_VIEW = "Markets · Published · View";
+const MARKETS_PUBLISHED_CREATE = "Markets · Published · Create";
+const MARKETS_CONFIDENTIAL_VIEW = "Markets · Confidential · View";
+const MARKETS_CONFIDENTIAL_CREATE = "Markets · Confidential · Create";
+const MARKETS_CONFIDENTIAL_EDIT = "Markets · Confidential · Edit";
+const MARKETS_RESTRICTED_VIEW = "Markets · Restricted · View";
 
 const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   command_center: "Risk & Limits · Aggregated · View",
   risk: "Risk & Limits · Confidential · View",
   alerts: "Risk & Limits · Confidential · View",
-  markets: "Markets · Published · View",
+  markets: MARKETS_PUBLISHED_VIEW,
   positions: "Risk & Limits · Confidential · View",
   irrbb: "IRRBB · Aggregated · View",
   liquidity: LIQUIDITY_AGGREGATED_VIEW,
@@ -480,6 +502,24 @@ export const FORECASTING_CONFIDENTIAL_VIEW_REASON = permissionReason([
 ])!;
 export const BEHAVIORAL_CONFIDENTIAL_RUN_REASON = permissionReason([
   BEHAVIORAL_CONFIDENTIAL_RUN,
+])!;
+export const MARKETS_PUBLISHED_VIEW_REASON = permissionReason([
+  MARKETS_PUBLISHED_VIEW,
+])!;
+export const MARKETS_PUBLISHED_CREATE_REASON = permissionReason([
+  MARKETS_PUBLISHED_CREATE,
+])!;
+export const MARKETS_CONFIDENTIAL_VIEW_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_VIEW,
+])!;
+export const MARKETS_CONFIDENTIAL_CREATE_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_CREATE,
+])!;
+export const MARKETS_CONFIDENTIAL_EDIT_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_EDIT,
+])!;
+export const MARKETS_RESTRICTED_VIEW_REASON = permissionReason([
+  MARKETS_RESTRICTED_VIEW,
 ])!;
 
 function liquidityPermissionReason(
@@ -522,8 +562,10 @@ function liquidityPermissionReason(
 type ScopedModuleRoutePolicy = {
   prefix: string;
   label: string;
-  /** The exact aggregated-view capability every page under `prefix` needs. */
-  aggregatedView: keyof ModuleScope;
+  /** The exact entry-view capability every page under `prefix` needs. */
+  entryView: keyof ModuleScope;
+  /** The tier that capability names; modules enter on aggregated unless said otherwise. */
+  entrySensitivity?: "Published";
   /** Pages that need confidential view instead; absent when the module has none. */
   confidential?: {
     view: keyof ModuleScope;
@@ -535,7 +577,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
   {
     prefix: "/irr",
     label: "IRRBB",
-    aggregatedView: "irrbbAggregatedView",
+    entryView: "irrbbAggregatedView",
     confidential: {
       view: "irrbbConfidentialView",
       routes: ["/irr/scenarios"],
@@ -544,7 +586,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
   {
     prefix: "/fx",
     label: "Foreign Exchange",
-    aggregatedView: "fxAggregatedView",
+    entryView: "fxAggregatedView",
     confidential: {
       view: "fxConfidentialView",
       routes: ["/fx/scenarios"],
@@ -553,7 +595,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
   {
     prefix: "/ftp",
     label: "Funds Transfer Pricing",
-    aggregatedView: "ftpAggregatedView",
+    entryView: "ftpAggregatedView",
     confidential: {
       view: "ftpConfidentialView",
       routes: ["/ftp/scenarios"],
@@ -565,7 +607,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
     // detail, so it needs confidential view.
     prefix: "/forecasting",
     label: "Forecasting",
-    aggregatedView: "forecastingAggregatedView",
+    entryView: "forecastingAggregatedView",
     confidential: {
       view: "forecastingConfidentialView",
       routes: [
@@ -580,7 +622,17 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
   {
     prefix: "/behavioral",
     label: "Behavioral Models",
-    aggregatedView: "behavioralAggregatedView",
+    entryView: "behavioralAggregatedView",
+  },
+  {
+    prefix: "/markets",
+    label: "Markets",
+    entryView: "marketsPublishedView",
+    entrySensitivity: "Published",
+    confidential: {
+      view: "marketsConfidentialView",
+      routes: [],
+    },
   },
 ];
 
@@ -615,7 +667,10 @@ function scopedModulePermissionReason(
         (route) => path === route || path.startsWith(`${route}/`),
       )
         ? { capability: confidential.view, sensitivity: "Confidential" }
-        : { capability: routePolicy.aggregatedView, sensitivity: "Aggregated" };
+        : {
+            capability: routePolicy.entryView,
+            sensitivity: routePolicy.entrySensitivity ?? "Aggregated",
+          };
     if (routePolicy.prefix === "/forecasting") {
       const missing: string[] = [];
       if (scope[requirement.capability] !== true) {

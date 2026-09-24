@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Curves explorer (FC-5) — the bank/client-facing single-curve workbench inside
@@ -20,7 +20,7 @@
  * re-derived. Only this bank's overlays are ever visible.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -30,11 +30,17 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
-import { Activity, ArrowRight, BookOpen, CalendarClock, SlidersHorizontal } from 'lucide-react';
-import type { YieldCurveViewRead } from '@aequoros/risk-service-api';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SubTabs from '@/components/ui/SubTabs';
+} from "recharts";
+import {
+  Activity,
+  ArrowRight,
+  BookOpen,
+  CalendarClock,
+  SlidersHorizontal,
+} from "lucide-react";
+import type { YieldCurveViewRead } from "@aequoros/risk-service-api";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SubTabs from "@/components/ui/SubTabs";
 import {
   axisProps,
   chartLegendProps,
@@ -43,17 +49,20 @@ import {
   CHART_ACCENT,
   CHART_GRID,
   seriesColor,
-} from '@/lib/chartTheme';
-import { num, fmtDateUTC } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
-import { tenorLabel } from './CurveBoard';
-import MethodologyDrawer from './MethodologyDrawer';
-import AttributionChip from './AttributionChip';
-import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from './chips';
+} from "@/lib/chartTheme";
+import { num, fmtDateUTC } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
+import { tenorLabel } from "./CurveBoard";
+import MethodologyDrawer from "./MethodologyDrawer";
+import AttributionChip from "./AttributionChip";
+import PermissionAction from "./PermissionAction";
+import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
 /** Prefer a forward curve as the default focus, else the first published curve. */
-function preferredCurve(curves: YieldCurveViewRead[]): YieldCurveViewRead | undefined {
-  return curves.find((c) => c.curveType === 'forward') ?? curves[0];
+function preferredCurve(
+  curves: YieldCurveViewRead[],
+): YieldCurveViewRead | undefined {
+  return curves.find((c) => c.curveType === "forward") ?? curves[0];
 }
 
 type ChartRow = { tenorMonths: number; official: number; adjusted?: number };
@@ -66,6 +75,7 @@ export default function CurvesExplorer({
   onSelectCurve,
   onOpenForward,
   onEditOverlays,
+  editOverlaysReason,
 }: {
   curves: YieldCurveViewRead[];
   asOfDate: Date;
@@ -74,14 +84,17 @@ export default function CurvesExplorer({
   onSelectCurve: (curveName: string) => void;
   onOpenForward: (curveName: string) => void;
   onEditOverlays: (curveName: string) => void;
+  /** The grant the user lacks for the spread editor; the control stays visible. */
+  editOverlaysReason?: string;
 }) {
-  const [view, setView] = useState<'official' | 'adjusted'>('official');
+  const [view, setView] = useState<"official" | "adjusted">("official");
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   // Derive the effective curve every render with a fallback, so an as-of change
   // that drops the selected curve name never strands the view on nothing.
   const selectedCurve =
-    curves.find((c) => c.curveName === selectedCurveName) ?? preferredCurve(curves);
+    curves.find((c) => c.curveName === selectedCurveName) ??
+    preferredCurve(curves);
 
   if (!selectedCurve) return null;
 
@@ -91,22 +104,25 @@ export default function CurvesExplorer({
     .sort((a, b) => a.curveName.localeCompare(b.curveName));
 
   const hasAdjusted = selectedCurve.adjustedPoints.length > 0;
-  const showAdjusted = view === 'adjusted';
+  const showAdjusted = view === "adjusted";
 
   const adjustedByTenor = new Map(
-    selectedCurve.adjustedPoints.map((p) => [p.tenorMonths, num(p.rate) * 100])
+    selectedCurve.adjustedPoints.map((p) => [p.tenorMonths, num(p.rate) * 100]),
   );
   const chartData: ChartRow[] = [...selectedCurve.points]
     .sort((a, b) => a.tenorMonths - b.tenorMonths)
     .map((p) => {
-      const row: ChartRow = { tenorMonths: p.tenorMonths, official: num(p.rate) * 100 };
+      const row: ChartRow = {
+        tenorMonths: p.tenorMonths,
+        official: num(p.rate) * 100,
+      };
       const adj = adjustedByTenor.get(p.tenorMonths);
       if (showAdjusted && adj !== undefined) row.adjusted = adj;
       return row;
     });
 
   const selectClass =
-    'w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy';
+    "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy";
 
   return (
     <div className="space-y-4">
@@ -119,7 +135,9 @@ export default function CurvesExplorer({
           <select
             value={selectedCurve.currency}
             onChange={(event) => {
-              const first = curves.find((c) => c.currency === event.target.value);
+              const first = curves.find(
+                (c) => c.currency === event.target.value,
+              );
               if (first) onSelectCurve(first.curveName);
             }}
             className={selectClass}
@@ -153,34 +171,43 @@ export default function CurvesExplorer({
       <div
         className={`rounded-lg border px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 ${
           isReproduction
-            ? 'border-warning/30 bg-warning-light'
-            : 'border-border-light bg-surface'
+            ? "border-warning/30 bg-warning-light"
+            : "border-border-light bg-surface"
         }`}
       >
         <span className="inline-flex items-center gap-2 text-body min-w-0">
           {isReproduction ? (
-            <CalendarClock size={15} className="text-warning shrink-0" aria-hidden />
+            <CalendarClock
+              size={15}
+              className="text-warning shrink-0"
+              aria-hidden
+            />
           ) : (
             <Activity size={15} className="text-action shrink-0" aria-hidden />
           )}
           <span className="text-navy">
             {isReproduction ? (
               <>
-                Reproduced as published on{' '}
-                <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span> — the golden
-                copy as it stood then, not re-derived.
+                Reproduced as published on{" "}
+                <span className="font-mono font-medium">
+                  {fmtDateUTC(asOfDate)}
+                </span>{" "}
+                — the golden copy as it stood then, not re-derived.
               </>
             ) : (
               <>
-                Live — latest published values as of{' '}
-                <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span>.
+                Live — latest published values as of{" "}
+                <span className="font-mono font-medium">
+                  {fmtDateUTC(asOfDate)}
+                </span>
+                .
               </>
             )}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5 flex-wrap ml-auto">
           <CurveTypeBadge curveType={selectedCurve.curveType} />
-          {selectedCurve.curveType === 'discount' && <SyntheticProxyBadge />}
+          {selectedCurve.curveType === "discount" && <SyntheticProxyBadge />}
           <AttributionChip attribution={selectedCurve.attribution} />
         </span>
       </div>
@@ -189,11 +216,11 @@ export default function CurvesExplorer({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <SubTabs
           items={[
-            { key: 'official', label: 'Official published' },
-            { key: 'adjusted', label: 'Your adjusted' },
+            { key: "official", label: "Official published" },
+            { key: "adjusted", label: "Your adjusted" },
           ]}
           active={view}
-          onChange={(key) => setView(key as 'official' | 'adjusted')}
+          onChange={(key) => setView(key as "official" | "adjusted")}
         />
         <div className="flex items-center gap-2">
           <button
@@ -212,23 +239,24 @@ export default function CurvesExplorer({
             Forecast grid
             <ArrowRight size={13} aria-hidden />
           </button>
-          <button
-            type="button"
+          <PermissionAction
+            reason={editOverlaysReason}
             onClick={() => onEditOverlays(selectedCurve.curveName)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
           >
             <SlidersHorizontal size={13} aria-hidden />
             {selectedCurve.overlayComponents.length > 0
               ? `Edit spreads (${selectedCurve.overlayComponents.length})`
-              : 'Edit spreads'}
-          </button>
+              : "Edit spreads"}
+          </PermissionAction>
         </div>
       </div>
 
       {showAdjusted && !hasAdjusted && (
         <p className="text-caption text-slate">
-          No active spreads on this curve. Your adjusted curve equals the official published curve
-          until you add overlay spreads via &ldquo;Edit spreads&rdquo;.
+          No active spreads on this curve. Your adjusted curve equals the
+          official published curve until you add overlay spreads via &ldquo;Edit
+          spreads&rdquo;.
         </p>
       )}
 
@@ -242,14 +270,18 @@ export default function CurvesExplorer({
         }
         subtitle={
           showAdjusted
-            ? 'Official published (solid) vs your adjusted composition (dashed)'
-            : 'Published curve at the reproduced as-of date'
+            ? "Official published (solid) vs your adjusted composition (dashed)"
+            : "Published curve at the reproduced as-of date"
         }
         height={280}
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={chartMargins}>
-            <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid
+              stroke={CHART_GRID}
+              strokeDasharray="3 3"
+              vertical={false}
+            />
             <XAxis
               {...axisProps}
               dataKey="tenorMonths"
@@ -263,7 +295,10 @@ export default function CurvesExplorer({
             <Tooltip
               {...chartTooltipProps}
               labelFormatter={(value) => `Tenor ${tenorLabel(Number(value))}`}
-              formatter={(value: number | string, name: string) => [fmtPct(Number(value), 2), name]}
+              formatter={(value: number | string, name: string) => [
+                fmtPct(Number(value), 2),
+                name,
+              ]}
             />
             <Legend {...chartLegendProps} />
             <Line
@@ -293,9 +328,12 @@ export default function CurvesExplorer({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border border-border rounded-lg bg-surface/45 px-4 py-3">
         <div>
-          <p className="text-body font-medium text-navy">Need forecast periods or discount factors?</p>
+          <p className="text-body font-medium text-navy">
+            Need forecast periods or discount factors?
+          </p>
           <p className="mt-0.5 text-caption text-slate">
-            Open the published forward grid for the exact calendar-adjusted Start / End / DF / Yield rows.
+            Open the published forward grid for the exact calendar-adjusted
+            Start / End / DF / Yield rows.
           </p>
         </div>
         <button
@@ -309,7 +347,10 @@ export default function CurvesExplorer({
       </div>
 
       {methodologyOpen && (
-        <MethodologyDrawer curve={selectedCurve} onClose={() => setMethodologyOpen(false)} />
+        <MethodologyDrawer
+          curve={selectedCurve}
+          onClose={() => setMethodologyOpen(false)}
+        />
       )}
     </div>
   );

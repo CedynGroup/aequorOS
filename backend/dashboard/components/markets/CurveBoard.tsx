@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Curve board — multi-curve aware: one line per PUBLISHED CURVE (keyed by
@@ -13,7 +13,7 @@
  * bank has active overlays on that curve name.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -23,13 +23,14 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
-import { SlidersHorizontal } from 'lucide-react';
-import type { YieldCurveViewRead } from '@aequoros/risk-service-api';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SectionCard from '@/components/ui/SectionCard';
-import SubTabs from '@/components/ui/SubTabs';
-import DataTable, { type Column } from '@/components/ui/DataTable';
+} from "recharts";
+import { SlidersHorizontal } from "lucide-react";
+import type { YieldCurveViewRead } from "@aequoros/risk-service-api";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SectionCard from "@/components/ui/SectionCard";
+import PermissionAction from "./PermissionAction";
+import SubTabs from "@/components/ui/SubTabs";
+import DataTable, { type Column } from "@/components/ui/DataTable";
 import {
   axisProps,
   chartLegendProps,
@@ -38,11 +39,11 @@ import {
   CHART_ACCENT,
   CHART_GRID,
   seriesColor,
-} from '@/lib/chartTheme';
-import { num, fmtDateUTC } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
-import AttributionChip from './AttributionChip';
-import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from './chips';
+} from "@/lib/chartTheme";
+import { num, fmtDateUTC } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
+import AttributionChip from "./AttributionChip";
+import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
 /** "1M", "9M", "1Y", "18M", "5Y" — tenor-months axis label. */
 export function tenorLabel(months: number): string {
@@ -50,14 +51,14 @@ export function tenorLabel(months: number): string {
   return `${months / 12}Y`;
 }
 
-const ADJUSTED_SUFFIX = ' · yours';
+const ADJUSTED_SUFFIX = " · yours";
 
 type CurvePoint = { tenorMonths: number } & Record<string, number>;
 
 /** Merge every curve (and any adjusted series) into one tenor-keyed table. */
 function mergePoints(
   curves: YieldCurveViewRead[],
-  includeAdjusted: boolean
+  includeAdjusted: boolean,
 ): CurvePoint[] {
   const byTenor = new Map<number, CurvePoint>();
   const row = (tenorMonths: number): CurvePoint => {
@@ -84,23 +85,28 @@ function mergePoints(
 export default function CurveBoard({
   curves,
   onEditOverlays,
+  editOverlaysReason,
 }: {
   curves: YieldCurveViewRead[];
   onEditOverlays?: (curveName: string) => void;
+  /** The grant the user lacks for the spread editor; the controls stay visible. */
+  editOverlaysReason?: string;
 }) {
-  const [view, setView] = useState<'official' | 'adjusted'>('official');
+  const [view, setView] = useState<"official" | "adjusted">("official");
   const hasAdjusted = curves.some((curve) => curve.adjustedPoints.length > 0);
-  const showAdjusted = view === 'adjusted';
+  const showAdjusted = view === "adjusted";
   const chartData = mergePoints(curves, showAdjusted);
 
   const tableColumns: Column<CurvePoint>[] = [
     {
-      key: 'tenor',
-      header: 'Tenor',
+      key: "tenor",
+      header: "Tenor",
       render: (row) => (
-        <span className="font-mono text-caption">{tenorLabel(row.tenorMonths)}</span>
+        <span className="font-mono text-caption">
+          {tenorLabel(row.tenorMonths)}
+        </span>
       ),
-      width: '12%',
+      width: "12%",
     },
     ...curves.flatMap((curve) => {
       const columns: Column<CurvePoint>[] = [
@@ -110,7 +116,7 @@ export default function CurveBoard({
           numeric: true,
           render: (row: CurvePoint) => {
             const value = row[curve.curveName];
-            return value === undefined ? '—' : fmtPct(value, 2);
+            return value === undefined ? "—" : fmtPct(value, 2);
           },
         },
       ];
@@ -122,7 +128,7 @@ export default function CurveBoard({
           render: (row: CurvePoint) => {
             const value = row[`${curve.curveName}${ADJUSTED_SUFFIX}`];
             return value === undefined ? (
-              '—'
+              "—"
             ) : (
               <span className="text-action">{fmtPct(value, 2)}</span>
             );
@@ -138,21 +144,21 @@ export default function CurveBoard({
       <div className="flex items-center justify-between gap-3">
         <SubTabs
           items={[
-            { key: 'official', label: 'Official published' },
-            { key: 'adjusted', label: 'Your adjusted' },
+            { key: "official", label: "Official published" },
+            { key: "adjusted", label: "Your adjusted" },
           ]}
           active={view}
-          onChange={(key) => setView(key as 'official' | 'adjusted')}
+          onChange={(key) => setView(key as "official" | "adjusted")}
         />
         {onEditOverlays && curves.length > 0 && (
-          <button
-            type="button"
+          <PermissionAction
+            reason={editOverlaysReason}
             onClick={() => onEditOverlays(curves[0].curveName)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
           >
             <SlidersHorizontal size={13} aria-hidden />
             Edit spreads
-          </button>
+          </PermissionAction>
         )}
       </div>
 
@@ -160,7 +166,7 @@ export default function CurveBoard({
         <p className="text-caption text-slate">
           No active spreads configured. Your adjusted curve equals the official
           published curve until you add overlay spreads
-          {onEditOverlays ? ' via “Edit spreads”' : ''}.
+          {onEditOverlays ? " via “Edit spreads”" : ""}.
         </p>
       )}
 
@@ -169,8 +175,8 @@ export default function CurveBoard({
           title="Yield curves"
           subtitle={
             showAdjusted
-              ? 'Official published (solid) vs your adjusted composition (dashed)'
-              : 'Every published curve at the as-of date, keyed by curve name'
+              ? "Official published (solid) vs your adjusted composition (dashed)"
+              : "Every published curve at the as-of date, keyed by curve name"
           }
           height={300}
           footer={
@@ -180,21 +186,23 @@ export default function CurveBoard({
                   key={curve.curveName}
                   className="inline-flex items-center gap-1.5 flex-wrap"
                 >
-                  <span className="font-medium text-navy">{curve.currency}</span>
+                  <span className="font-medium text-navy">
+                    {curve.currency}
+                  </span>
                   <MonoChip>{curve.curveName}</MonoChip>
                   <CurveTypeBadge curveType={curve.curveType} />
-                  {curve.curveType === 'discount' && <SyntheticProxyBadge />}
+                  {curve.curveType === "discount" && <SyntheticProxyBadge />}
                   <AttributionChip attribution={curve.attribution} />
                   {onEditOverlays && (
-                    <button
-                      type="button"
+                    <PermissionAction
+                      reason={editOverlaysReason}
                       onClick={() => onEditOverlays(curve.curveName)}
                       className="text-caption text-action hover:underline"
                     >
                       {curve.overlayComponents.length > 0
                         ? `Spreads (${curve.overlayComponents.length})`
-                        : 'Add spread'}
-                    </button>
+                        : "Add spread"}
+                    </PermissionAction>
                   )}
                 </span>
               ))}
@@ -203,7 +211,11 @@ export default function CurveBoard({
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={chartMargins}>
-              <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid
+                stroke={CHART_GRID}
+                strokeDasharray="3 3"
+                vertical={false}
+              />
               <XAxis
                 {...axisProps}
                 dataKey="tenorMonths"
@@ -261,11 +273,11 @@ export default function CurveBoard({
           noPadding
           footer={
             <span>
-              As of{' '}
+              As of{" "}
               <span className="font-mono text-navy">
-                {[...new Set(curves.map((curve) => fmtDateUTC(curve.asOfDate)))].join(
-                  ' · '
-                )}
+                {[
+                  ...new Set(curves.map((curve) => fmtDateUTC(curve.asOfDate))),
+                ].join(" · ")}
               </span>
             </span>
           }

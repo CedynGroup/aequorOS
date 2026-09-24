@@ -14,7 +14,7 @@ from app.adapters.market_data.manual_upload.templates import (
     template_filename,
     template_media_type,
 )
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MarketsTemplateView, MarketsUpload
 from app.features.ingest_data import MAX_UPLOAD_BYTES, IngestionStorage
 from app.schemas.market_data_upload import MarketDataUploadRead
 
@@ -26,9 +26,13 @@ router = APIRouter(tags=["market-data"])
     response_class=StreamingResponse,
     operation_id="getMarketDataTemplate",
 )
-def get_market_data_template(kind: TemplateKind, ctx: Tenant) -> StreamingResponse:
-    """Download the .xlsx upload template for one scope category (§8.2)."""
-    _ = ctx
+def get_market_data_template(kind: TemplateKind, access: MarketsTemplateView) -> StreamingResponse:
+    """Download the .xlsx upload template for one scope category (§8.2).
+
+    The workbook is bank-neutral; the ``bank_id`` query names the institution
+    whose Markets view grant authorizes the download.
+    """
+    _ = access
     content = build_template(kind)
     return StreamingResponse(
         io.BytesIO(content),
@@ -45,7 +49,7 @@ def get_market_data_template(kind: TemplateKind, ctx: Tenant) -> StreamingRespon
 async def upload_market_data(  # noqa: PLR0913 - route wiring: tenant, storage, file, form field
     bank_id: str,
     db: DbSession,
-    ctx: MutationTenant,
+    access: MarketsUpload,
     storage: IngestionStorage,
     file: UploadFile,
     as_of_date: Annotated[date, Form()],
@@ -64,8 +68,8 @@ async def upload_market_data(  # noqa: PLR0913 - route wiring: tenant, storage, 
         )
     return service.upload_market_data(
         db,
-        ctx,
-        bank_id,
+        access.ctx,
+        access.bank.id,
         storage,
         filename=file.filename or "upload",
         content=content,
