@@ -243,6 +243,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `reporting_deadline_scan.py` deliberately pins its own shorter `_LOOKBACK_MONTHS = 2`
   — sharing the picker's window would re-announce the entire historical backlog as one
   critical notification per elapsed anchor per return per day.
+  **Event-driven packs (`ReturnDefinition.event_driven`, the LRT family) are the one
+  exception:** no regulator date exists, so they take their as-of date from the bank's
+  computed snapshots (`anchors.computed_snapshot_dates`, labelled
+  `reporting_date_source='computed_snapshot'`) — rule in `docs/regulatory_reporting.md` §5a.
 - **ICAAP workspace and filing (built 2026-09-19..20; contract
   [`backend/docs/icaap_workspace_and_filing.md`](backend/docs/icaap_workspace_and_filing.md),
   authorization [`icaap_enforcement_rollout.md`](backend/docs/icaap_enforcement_rollout.md),
