@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * NII Forecast — net-interest-income trajectory from the persisted 5-year
@@ -7,40 +7,45 @@
  * sensitivity built from the latest succeeded run per preset scenario.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import Link from 'next/link';
-import { ArrowRight, TrendingUp } from 'lucide-react';
-import type { ForecastRunRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import Sparkline from '@/components/ui/Sparkline';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import DeltaBadge from '@/components/ui/DeltaBadge';
-import QueryBoundary from '@/components/ui/QueryBoundary';
+import PageContainer from "@/components/ui/PageContainer";
+import Link from "next/link";
+import { ArrowRight, TrendingUp } from "lucide-react";
+import type { ForecastRunRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import Sparkline from "@/components/ui/Sparkline";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import DeltaBadge from "@/components/ui/DeltaBadge";
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import EarningsChart, {
   type EarningsPoint,
-} from '@/components/forecasting/charts/EarningsChart';
+} from "@/components/forecasting/charts/EarningsChart";
 import ScenarioLinesChart, {
   type ScenarioPoint,
   type ScenarioSeries,
-} from '@/components/forecasting/charts/ScenarioLinesChart';
-import { useScenarioRunSet } from '@/components/forecasting/hooks';
-import { scenarioLabel, yoyPct } from '@/components/forecasting/lib';
-import { useBankContext } from '@/components/shell/BankContext';
-import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, fmtPctSigned } from '@/lib/format';
-import { seriesColor } from '@/lib/chartTheme';
+} from "@/components/forecasting/charts/ScenarioLinesChart";
+import { useScenarioRunSet } from "@/components/forecasting/hooks";
+import { scenarioLabel, yoyPct } from "@/components/forecasting/lib";
+import { useBankContext } from "@/components/shell/BankContext";
+import { num } from "@/lib/api/values";
+import { fmtCurrency, fmtPct, fmtPctSigned } from "@/lib/format";
+import { seriesColor } from "@/lib/chartTheme";
 
-const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse'] as const;
+const SCENARIO_ORDER = ["base", "adverse", "severely_adverse"] as const;
 
 export default function NiiForecastPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const scenarioSet = useScenarioRunSet(bankId);
+  // The route guard already requires confidential view for this tab; the
+  // hook takes the same projection so nothing is requested without it.
+  const scenarioSet = useScenarioRunSet(
+    moduleScope.forecastingAggregatedView ? bankId : undefined,
+    moduleScope.forecastingConfidentialView === true,
+  );
   const runsByScenario: Record<string, ForecastRunRead | undefined> = {
     base: scenarioSet.base,
     adverse: scenarioSet.adverse,
@@ -56,10 +61,7 @@ export default function NiiForecastPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Forecasting"
-        title="Net Interest Income Forecast"
-      />
+      <PageHeader eyebrow="Forecasting" title="Net Interest Income Forecast" />
 
       <QueryBoundary
         isLoading={scenarioSet.isLoading}
@@ -118,12 +120,14 @@ function NiiDashboard({
   }));
 
   // Scenario comparison — one line per preset scenario with a succeeded run.
-  const presentScenarios = SCENARIO_ORDER.filter((code) => runsByScenario[code]);
+  const presentScenarios = SCENARIO_ORDER.filter(
+    (code) => runsByScenario[code],
+  );
   const scenarioSeries: ScenarioSeries[] = presentScenarios.map((code, i) => ({
     key: code,
     name: scenarioLabel(code),
     colorIndex: i,
-    dashed: code !== 'base',
+    dashed: code !== "base",
   }));
   const years = [1, 2, 3, 4, 5];
   const scenarioData: ScenarioPoint[] = years.map((year) => {
@@ -154,7 +158,7 @@ function NiiDashboard({
         />
         <KpiStat
           label="NII CAGR Y1→Y5"
-          value={niiCagr === null ? '—' : fmtPctSigned(niiCagr, 1)}
+          value={niiCagr === null ? "—" : fmtPctSigned(niiCagr, 1)}
           hint="Derived from the stored path"
         />
         <KpiStat
@@ -171,8 +175,8 @@ function NiiDashboard({
         height={320}
         footer={
           <span>
-            All series are persisted per-year fields on run{' '}
-            <span className="font-mono">{primary.id.slice(0, 8)}</span> —{' '}
+            All series are persisted per-year fields on run{" "}
+            <span className="font-mono">{primary.id.slice(0, 8)}</span> —{" "}
             {scenarioLabel(primary.scenarioCode)} scenario.
           </span>
         }
@@ -211,13 +215,13 @@ function NiiDashboard({
           {base ? (
             <SensitivityTable
               base={base}
-              scenarios={presentScenarios.filter((c) => c !== 'base')}
+              scenarios={presentScenarios.filter((c) => c !== "base")}
               runsByScenario={runsByScenario}
             />
           ) : (
             <p className="px-5 py-4 text-body text-slate">
-              No succeeded base-case run — deltas need a base reference. Run
-              the base scenario from the Balance Sheet tab.
+              No succeeded base-case run — deltas need a base reference. Run the
+              base scenario from the Balance Sheet tab.
             </p>
           )}
         </SectionCard>
@@ -259,10 +263,13 @@ function SensitivityTable({
           {years.map((year) => {
             const baseNii = niiAt(base, year);
             return (
-              <tr key={year} className="border-b border-border-light last:border-b-0">
+              <tr
+                key={year}
+                className="border-b border-border-light last:border-b-0"
+              >
                 <td className="px-4 py-2.5 font-medium text-navy">Y{year}</td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
-                  {baseNii === null ? '—' : fmtCurrency(baseNii)}
+                  {baseNii === null ? "—" : fmtCurrency(baseNii)}
                 </td>
                 {scenarios.map((code) => {
                   const v = niiAt(runsByScenario[code], year);
@@ -276,7 +283,11 @@ function SensitivityTable({
                         <span className="inline-flex items-center gap-2 font-mono tnum">
                           {fmtCurrency(v)}
                           {deltaPct !== null && (
-                            <DeltaBadge value={deltaPct} suffix="%" decimals={1} />
+                            <DeltaBadge
+                              value={deltaPct}
+                              suffix="%"
+                              decimals={1}
+                            />
                           )}
                         </span>
                       )}
@@ -290,14 +301,14 @@ function SensitivityTable({
       </table>
       {scenarios.length === 0 && (
         <p className="px-5 py-3 text-caption text-slate border-t border-border-light">
-          Only the base scenario has a succeeded run — no sensitivity columns
-          to show yet.
+          Only the base scenario has a succeeded run — no sensitivity columns to
+          show yet.
         </p>
       )}
       <p className="px-4 py-2.5 text-caption text-slate border-t border-border-light inline-flex items-center gap-2">
         <StatusPill tone="slate">Derived</StatusPill>
-        Delta is the percentage difference between the two saved projection paths;
-        no values are modeled client-side.
+        Delta is the percentage difference between the two saved projection
+        paths; no values are modeled client-side.
       </p>
     </div>
   );

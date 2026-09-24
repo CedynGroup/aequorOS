@@ -45,7 +45,11 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
+
+pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 REPORTING_DATE = date(2026, 3, 31)
 
 
@@ -193,17 +197,25 @@ def test_stress_pack_without_frontier_omits_the_optional_section(db_session: Ses
 def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
-    for module, runner in (
-        ("liquidity", regulatory_liquidity.create_liquidity_run),
-        ("capital", regulatory_capital.create_capital_run),
+    for payload, runner in (
+        (
+            RegulatoryRunCreate(
+                module="liquidity", reporting_period_id=period_id, scenario_code="baseline"
+            ),
+            regulatory_liquidity.create_liquidity_run,
+        ),
+        (
+            RegulatoryRunCreate(
+                module="capital", reporting_period_id=period_id, scenario_code="baseline"
+            ),
+            regulatory_capital.create_capital_run,
+        ),
     ):
         run = runner(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            RegulatoryRunCreate(
-                module=module, reporting_period_id=period_id, scenario_code="baseline"  # type: ignore[index]
-            ),
+            payload,
         )
         assert run.status == "succeeded"
     with pytest.raises(HTTPException) as excinfo:
@@ -212,9 +224,7 @@ def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
     assert excinfo.value.detail["error_code"] == "no_stress_scenarios"  # type: ignore[index]
 
 
-def test_stress_pack_exports_to_xlsx(
-    db_session: Session, storage: InMemoryStorageClient
-) -> None:
+def test_stress_pack_exports_to_xlsx(db_session: Session, storage: InMemoryStorageClient) -> None:
     _seed_stress_outcomes(db_session)
     package = _generate(db_session)
     artifact = export_package(db_session, MAKER, package, "xlsx")
@@ -315,15 +325,11 @@ def test_a_legacy_post_stress_verdict_never_reaches_the_pack(db_session: Session
     authorised = next(r for r in lights if r["code"] == "capital:severe:car_pct")
     assert authorised["status"] in ("green", "amber", "red")
     assert Decimal(authorised["threshold"]) > 0
-    assert authorised["compliance_basis"] == (
-        "Basel III / BoG Capital Requirement Directive (CRD)"
-    )
+    assert authorised["compliance_basis"] == ("Basel III / BoG Capital Requirement Directive (CRD)")
 
     # The withheld row cannot inflate the headline red count either.
     totals = {r["code"]: r for r in package.snapshot["totals"]}
-    assert int(totals["red_light_count"]["value"]) == sum(
-        1 for r in lights if r["status"] == "red"
-    )
+    assert int(totals["red_light_count"]["value"]) == sum(1 for r in lights if r["status"] == "red")
 
     # Sealed evidence is untouched: the run still carries the row it wrote.
     db_session.refresh(legacy)

@@ -194,7 +194,11 @@ def _enqueue_due_official_runs(
 def _scheduled_official_actor(session: Session, bank: Bank) -> User | None:
     required_modules = [
         module
-        for engine, module in (("fx", Module.FX), ("ftp", Module.FTP))
+        for engine, module in (
+            ("fx", Module.FX),
+            ("ftp", Module.FTP),
+            ("forecast", Module.FORECASTING),
+        )
         if module_scope.runs_module(session, bank, engine)
     ]
     actors = session.scalars(

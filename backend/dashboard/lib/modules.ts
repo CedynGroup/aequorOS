@@ -194,6 +194,12 @@ export type ModuleScope = {
   ftpConfidentialView?: boolean;
   /** Exact FTP/confidential run authority for FTP engines. */
   ftpRun?: boolean;
+  /** Exact FCST/aggregated view authority for presets, run summaries, and the live baseline. */
+  forecastingAggregatedView?: boolean;
+  /** Exact FCST/confidential view authority for full runs and the reverse-stress frontier. */
+  forecastingConfidentialView?: boolean;
+  /** Exact FCST/confidential run authority for the projection, optimizer, what-if, and reverse stress. */
+  forecastingRun?: boolean;
   /**
    * Server-evaluated exact Liquidity capabilities for the selected
    * institution. Omitted/false is deny, so navigation and controls never infer
@@ -421,6 +427,8 @@ const LIQUIDITY_CONFIDENTIAL_VIEW =
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
 const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 const FTP_CONFIDENTIAL_RUN = "Funds Transfer Pricing · Confidential · Run";
+const FORECASTING_CONFIDENTIAL_RUN = "Forecasting · Confidential · Run";
+const FORECASTING_CONFIDENTIAL_VIEW = "Forecasting · Confidential · View";
 
 const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   command_center: "Risk & Limits · Aggregated · View",
@@ -458,6 +466,12 @@ export const IRRBB_CONFIDENTIAL_RUN_REASON = permissionReason([
 ])!;
 export const FTP_CONFIDENTIAL_RUN_REASON = permissionReason([
   FTP_CONFIDENTIAL_RUN,
+])!;
+export const FORECASTING_CONFIDENTIAL_RUN_REASON = permissionReason([
+  FORECASTING_CONFIDENTIAL_RUN,
+])!;
+export const FORECASTING_CONFIDENTIAL_VIEW_REASON = permissionReason([
+  FORECASTING_CONFIDENTIAL_VIEW,
 ])!;
 
 function liquidityPermissionReason(
@@ -519,7 +533,37 @@ const SCOPED_MODULE_ROUTES = [
     confidentialView: "ftpConfidentialView",
     confidentialRoutes: ["/ftp/scenarios"],
   },
+  {
+    // The balance-sheet overview and the assumptions page read presets, run
+    // summaries, and the live baseline; every other tab is built on full run
+    // detail, so it needs confidential view.
+    prefix: "/forecasting",
+    label: "Forecasting",
+    aggregatedView: "forecastingAggregatedView",
+    confidentialView: "forecastingConfidentialView",
+    confidentialRoutes: [
+      "/forecasting/nii",
+      "/forecasting/scenario",
+      "/forecasting/whatif",
+      "/forecasting/reverse-stress",
+      "/forecasting/optimizer",
+    ],
+  },
 ] as const;
+
+export function forecastingWorkspaceAccess(
+  pathname: string,
+  scope: ModuleScope,
+): HrefAccess | undefined {
+  const path = normalize(pathname);
+  if (
+    moduleForPath(path) !== "forecasting" ||
+    !PUBLIC_MODULE_ROUTES.has(path)
+  ) {
+    return undefined;
+  }
+  return hrefAccess(path, scope);
+}
 
 function scopedModulePermissionReason(
   path: string,
@@ -537,6 +581,27 @@ function scopedModulePermissionReason(
     const capability = confidential
       ? routePolicy.confidentialView
       : routePolicy.aggregatedView;
+    if (routePolicy.prefix === "/forecasting") {
+      const missing: string[] = [];
+      if (scope[capability] !== true) {
+        missing.push(
+          `Forecasting · ${confidential ? "Confidential" : "Aggregated"} · View`,
+        );
+      }
+      if (
+        [
+          "/forecasting/nii",
+          "/forecasting/optimizer",
+          "/forecasting/whatif",
+        ].includes(path) &&
+        scope.forecastingAggregatedView !== true
+      ) {
+        missing.push("Forecasting · Aggregated · View");
+      }
+      return missing.length
+        ? `Requires ${missing.join(" and ")}. Ask an Org Owner to grant access via Settings → Members.`
+        : undefined;
+    }
     return scope[capability] === true
       ? undefined
       : permissionReason([
@@ -563,6 +628,8 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
   if (isPersonalSettingsPath(path)) return true;
+  if (forecastingWorkspaceAccess(path, scope)?.state === "disabled")
+    return true;
   const moduleKey = moduleForPath(path);
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
@@ -599,8 +666,8 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 
 /**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
- * hidden; a resolved Liquidity, IRRBB, or FX permission gap stays visible but
- * disabled with the exact grant sentence the user needs.
+ * hidden; a resolved Liquidity, IRRBB, FX, FTP, or Forecasting permission gap
+ * stays visible but disabled with the exact grant sentence the user needs.
  */
 export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (scope.institutionClass === "sdi" && /[?&]code=BSD/i.test(href))
@@ -641,7 +708,12 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
           ? { state: "enabled" }
           : { state: "hidden" };
     }
-    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
+    if (
+      !scope.hasInstitutionAuthority &&
+      !(moduleKey === "forecasting" && PUBLIC_MODULE_ROUTES.has(path))
+    ) {
+      return { state: "hidden" };
+    }
     if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
       return { state: "hidden" };
     }

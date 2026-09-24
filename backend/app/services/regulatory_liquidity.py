@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -128,12 +128,45 @@ MODULE_IRR = "irr"
 MODULE_IRR_SF = "irr_sf"
 MODULE_FX = "fx"
 MODULE_FTP = "ftp"
+MODULE_FORECAST = "forecast"
+MODULE_OPTIMIZER = "optimizer"
+MODULE_WHATIF = "whatif"
+MODULE_REVERSE_STRESS = "reverse_stress"
+
+
+_FORECASTING_SUMMARY_FIELDS = {
+    MODULE_FORECAST: frozenset(
+        {
+            "avg_roe_pct",
+            "year5_car_pct",
+            "year5_lcr_pct",
+            "year5_nsfr_pct",
+            "cumulative_net_income",
+            "min_car_pct",
+            "min_lcr_pct",
+            "min_nsfr_pct",
+        }
+    ),
+    MODULE_OPTIMIZER: frozenset({"candidates_evaluated", "feasible_count"}),
+    MODULE_WHATIF: frozenset({"shock_code"}),
+    MODULE_REVERSE_STRESS: frozenset(),
+}
+
+
+def _forecasting_summary_metrics(run: RegulatoryRun) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in run.metrics.items()
+        if key in _FORECASTING_SUMMARY_FIELDS[run.module]
+        and isinstance(value, (str, int, float, bool, type(None)))
+    }
 
 
 @dataclass(frozen=True)
 class _RegulatoryRunAuthorizationPolicy:
     module: Module
     surface_prefix: str
+    summary_metrics: Callable[[RegulatoryRun], dict[str, Any]] | None = None
 
 
 _REGULATORY_RUN_AUTHORIZATION = {
@@ -154,6 +187,21 @@ _REGULATORY_RUN_AUTHORIZATION = {
         "irrbb_sf",
     ),
     MODULE_FTP: _RegulatoryRunAuthorizationPolicy(Module.FTP, "ftp"),
+    # The projection, the optimizer, the what-if lab and the reverse-stress
+    # frontier are four run modules under ONE Forecasting authority; a binding
+    # that hides Forecasting hides all four from the generic run routes.
+    MODULE_FORECAST: _RegulatoryRunAuthorizationPolicy(
+        Module.FORECASTING, "forecasting", _forecasting_summary_metrics
+    ),
+    MODULE_OPTIMIZER: _RegulatoryRunAuthorizationPolicy(
+        Module.FORECASTING, "forecasting", _forecasting_summary_metrics
+    ),
+    MODULE_WHATIF: _RegulatoryRunAuthorizationPolicy(
+        Module.FORECASTING, "forecasting", _forecasting_summary_metrics
+    ),
+    MODULE_REVERSE_STRESS: _RegulatoryRunAuthorizationPolicy(
+        Module.FORECASTING, "forecasting", _forecasting_summary_metrics
+    ),
 }
 
 BASELINE_SCENARIO = "baseline"
@@ -282,17 +330,22 @@ def list_regulatory_runs(  # noqa: PLR0913
             else ()
         )
     )
+    # Several run modules share one authority (the four Forecasting modules),
+    # so each distinct policy is decided once and applied to every module it covers.
+    allowed_by_policy: dict[_RegulatoryRunAuthorizationPolicy, bool] = {}
     for protected_module, policy in protected_modules:
-        decision = scoped_authorization.evaluate_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=policy.module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface=f"regulatory_run_list_{policy.surface_prefix}",
-        )
-        if decision is None or not decision.allowed:
+        if policy not in allowed_by_policy:
+            decision = scoped_authorization.evaluate_bank_permission(
+                db,
+                ctx,
+                bank,
+                permission=Permission.VIEW,
+                module=policy.module,
+                sensitivity=Sensitivity.AGGREGATED,
+                surface=f"regulatory_run_list_{policy.surface_prefix}",
+            )
+            allowed_by_policy[policy] = decision is not None and decision.allowed
+        if not allowed_by_policy[policy]:
             conditions += (RegulatoryRun.module != protected_module,)
     if module is not None:
         conditions += (RegulatoryRun.module == module,)
@@ -318,6 +371,21 @@ def list_regulatory_runs(  # noqa: PLR0913
             .offset(offset)
         )
     )
+    confidential_by_policy: dict[_RegulatoryRunAuthorizationPolicy, bool] = {}
+    for run, _label in rows:
+        policy = _REGULATORY_RUN_AUTHORIZATION.get(run.module)
+        if policy is None or policy.summary_metrics is None or policy in confidential_by_policy:
+            continue
+        decision = scoped_authorization.evaluate_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=policy.module,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface=f"regulatory_run_list_detail_{policy.surface_prefix}",
+        )
+        confidential_by_policy[policy] = decision is not None and decision.allowed
     return RegulatoryRunListRead(
         bank_id=bank.id,
         runs=[
@@ -329,7 +397,16 @@ def list_regulatory_runs(  # noqa: PLR0913
                 sensitivity=Sensitivity.AGGREGATED,
             )
             if run.module == "enterprise_stress"
-            else _read_summary(db, run, label)
+            else _read_summary(
+                db,
+                run,
+                label,
+                confidential=(
+                    confidential_by_policy.get(_REGULATORY_RUN_AUTHORIZATION[run.module], False)
+                    if run.module in _REGULATORY_RUN_AUTHORIZATION
+                    else False
+                ),
+            )
             for run, label in rows
         ],
         total=total,
@@ -1848,7 +1925,13 @@ def _evidence_read(db: Session, run: RegulatoryRun) -> RunEvidenceRead:
     return RunEvidenceRead.model_validate(withdrawal_impact.run_evidence(db, run).to_dict())
 
 
-def _read_summary(db: Session, run: RegulatoryRun, period_label: str) -> RegulatoryRunSummaryRead:
+def _read_summary(
+    db: Session, run: RegulatoryRun, period_label: str, *, confidential: bool = False
+) -> RegulatoryRunSummaryRead:
+    policy = _REGULATORY_RUN_AUTHORIZATION.get(run.module)
+    metrics = run.metrics
+    if not confidential and policy is not None and policy.summary_metrics is not None:
+        metrics = policy.summary_metrics(run)
     return RegulatoryRunSummaryRead(
         id=run.id,
         module=run.module,  # type: ignore[arg-type]
@@ -1858,7 +1941,7 @@ def _read_summary(db: Session, run: RegulatoryRun, period_label: str) -> Regulat
         period_label=period_label,
         engine_version=run.engine_version,
         input_hash=run.input_hash,
-        metrics=run.metrics,
+        metrics=metrics,
         error=_error_read(run),
         evidence=_evidence_read(db, run),
         created_at=run.created_at,

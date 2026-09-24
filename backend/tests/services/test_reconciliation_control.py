@@ -1313,7 +1313,7 @@ def test_package_generation_refuses_a_book_that_no_longer_reconciles(
     assert db_session.scalar(select(func.count()).select_from(RegulatoryPackage)) == packages_before
 
 
-@pytest.mark.usefixtures("ftp_run_authority")
+@pytest.mark.usefixtures("ftp_run_authority", "forecasting_run_authority")
 def test_scheduled_official_run_no_longer_short_circuits_the_control(
     db_session: Session,
 ) -> None:

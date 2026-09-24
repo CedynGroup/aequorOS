@@ -1,18 +1,19 @@
-'use client';
+"use client";
 
-import PageContainer from '@/components/ui/PageContainer';
-import Link from 'next/link';
-import { Target } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useLatestReverseStress, useRunReverseStress } from '@/lib/api/hooks';
+import PageContainer from "@/components/ui/PageContainer";
+import Link from "next/link";
+import { Target } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useLatestReverseStress, useRunReverseStress } from "@/lib/api/hooks";
 import ReverseStressFrontier, {
   type FrontierAxis,
-} from '@/components/stress/charts/ReverseStressFrontier';
+} from "@/components/stress/charts/ReverseStressFrontier";
 
 // Reverse stress (Phase 2 item 4): bisection over the existing scenario
 // engines for the severity multipliers that breach the LCR floor and the
@@ -27,7 +28,7 @@ function axisValue(axis: Axis, key: string): string | null {
 }
 
 function axisBreached(axis: Axis): boolean {
-  return axis?.['breached'] === true;
+  return axis?.["breached"] === true;
 }
 
 function axisNum(axis: Axis, key: string): number | null {
@@ -42,46 +43,59 @@ function frontierAxis(
   label: string,
   ratioLabel: string,
   ratioKey: string,
-  floorKey: string
+  floorKey: string,
 ): FrontierAxis {
   return {
     label,
     ratioLabel,
     breached: axisBreached(axis),
-    breachMultiplier: axisNum(axis, 'breach_multiplier'),
-    kMax: axisNum(axis, 'k_max') ?? 3,
+    breachMultiplier: axisNum(axis, "breach_multiplier"),
+    kMax: axisNum(axis, "k_max") ?? 3,
     ratioAtBreach: axisNum(axis, ratioKey),
     floor: axisNum(axis, floorKey) ?? 0,
   };
 }
 
 export default function ReverseStress() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const canRun = moduleScope.forecastingRun === true;
 
-  const latest = useLatestReverseStress(bankId, periodId);
+  // The frontier is confidential run detail; it is never requested before the
+  // projection says the caller may open it.
+  const latest = useLatestReverseStress(
+    moduleScope.forecastingConfidentialView ? bankId : undefined,
+    periodId,
+  );
   const run = useRunReverseStress(bankId);
 
   const frontier = latest.data ?? null;
   const liquidity = frontier?.liquidityAxis as Axis;
   const capital = frontier?.capitalAxis as Axis;
 
+  const runButton = (
+    <ForecastingRunGate canRun={canRun}>
+      {(descriptionId) => (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={!canRun || !bankId || !periodId || run.isPending}
+          aria-describedby={descriptionId}
+          onClick={() => periodId && run.mutate(periodId)}
+        >
+          {run.isPending ? "Searching frontier…" : "Run reverse stress"}
+        </button>
+      )}
+    </ForecastingRunGate>
+  );
+
   return (
     <>
       <PageHeader
         eyebrow="Forecasting"
         title="Reverse Stress Testing"
-        action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!bankId || !periodId || run.isPending}
-            onClick={() => periodId && run.mutate(periodId)}
-          >
-            {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
-          </button>
-        }
+        action={runButton}
       />
 
       <QueryBoundary
@@ -97,28 +111,28 @@ export default function ReverseStress() {
                   label="Liquidity frontier (combined scenario)"
                   value={
                     axisBreached(liquidity)
-                      ? `${axisValue(liquidity, 'breach_multiplier')}× severity`
-                      : `No breach to ${axisValue(liquidity, 'k_max')}×`
+                      ? `${axisValue(liquidity, "breach_multiplier")}× severity`
+                      : `No breach to ${axisValue(liquidity, "k_max")}×`
                   }
-                  status={axisBreached(liquidity) ? 'crit' : 'ok'}
+                  status={axisBreached(liquidity) ? "crit" : "ok"}
                   hint={
                     axisBreached(liquidity)
-                      ? `LCR ${axisValue(liquidity, 'lcr_at_breach_pct')}% at breach vs floor ${axisValue(liquidity, 'lcr_min_pct')}%`
-                      : `LCR floor ${axisValue(liquidity, 'lcr_min_pct')}% holds across the search range`
+                      ? `LCR ${axisValue(liquidity, "lcr_at_breach_pct")}% at breach vs floor ${axisValue(liquidity, "lcr_min_pct")}%`
+                      : `LCR floor ${axisValue(liquidity, "lcr_min_pct")}% holds across the search range`
                   }
                 />
                 <KpiStat
                   label="Capital frontier (severe scenario)"
                   value={
                     axisBreached(capital)
-                      ? `${axisValue(capital, 'breach_multiplier')}× severity`
-                      : `No breach to ${axisValue(capital, 'k_max')}×`
+                      ? `${axisValue(capital, "breach_multiplier")}× severity`
+                      : `No breach to ${axisValue(capital, "k_max")}×`
                   }
-                  status={axisBreached(capital) ? 'crit' : 'ok'}
+                  status={axisBreached(capital) ? "crit" : "ok"}
                   hint={
                     axisBreached(capital)
-                      ? `Worst CET1 ${axisValue(capital, 'worst_cet1_at_breach_pct')}% vs minimum ${axisValue(capital, 'cet1_min_pct')}%`
-                      : `CET1 minimum ${axisValue(capital, 'cet1_min_pct')}% holds across the search range`
+                      ? `Worst CET1 ${axisValue(capital, "worst_cet1_at_breach_pct")}% vs minimum ${axisValue(capital, "cet1_min_pct")}%`
+                      : `CET1 minimum ${axisValue(capital, "cet1_min_pct")}% holds across the search range`
                   }
                 />
               </div>
@@ -131,17 +145,17 @@ export default function ReverseStress() {
                   axes={[
                     frontierAxis(
                       liquidity,
-                      'Liquidity (combined scenario)',
-                      'LCR',
-                      'lcr_at_breach_pct',
-                      'lcr_min_pct'
+                      "Liquidity (combined scenario)",
+                      "LCR",
+                      "lcr_at_breach_pct",
+                      "lcr_min_pct",
                     ),
                     frontierAxis(
                       capital,
-                      'Capital (severe scenario)',
-                      'CET1',
-                      'worst_cet1_at_breach_pct',
-                      'cet1_min_pct'
+                      "Capital (severe scenario)",
+                      "CET1",
+                      "worst_cet1_at_breach_pct",
+                      "cet1_min_pct",
                     ),
                   ]}
                 />
@@ -152,19 +166,24 @@ export default function ReverseStress() {
                 subtitle="The most recent saved frontier for this period"
                 footer={
                   <span>
-                    The frontier anchors to both engines&apos; baseline snapshots,
-                    so a Board pack can cite exactly which book and parameter set
-                    produced it. The Stress Test Output Report pack (return code
-                    STRESS-PACK) carries this frontier alongside the traffic lights —
-                    generate it from the{' '}
-                    <Link href="/submissions" className="text-action hover:underline">
+                    The frontier anchors to both engines&apos; baseline
+                    snapshots, so a Board pack can cite exactly which book and
+                    parameter set produced it. The Stress Test Output Report
+                    pack (return code STRESS-PACK) carries this frontier
+                    alongside the traffic lights — generate it from the{" "}
+                    <Link
+                      href="/submissions"
+                      className="text-action hover:underline"
+                    >
                       Regulatory Reporting
                     </Link>
                     .
                   </span>
                 }
               >
-                <p className="text-body text-navy/85 leading-relaxed">{frontier.narrative}</p>
+                <p className="text-body text-navy/85 leading-relaxed">
+                  {frontier.narrative}
+                </p>
               </SectionCard>
             </>
           ) : (
@@ -172,16 +191,7 @@ export default function ReverseStress() {
               Icon={Target}
               title="No reverse-stress frontier yet"
               description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. Both engines need a succeeded baseline for the current reporting period."
-              action={
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                  disabled={!bankId || !periodId || run.isPending}
-                  onClick={() => periodId && run.mutate(periodId)}
-                >
-                  {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
-                </button>
-              }
+              action={runButton}
             />
           )}
         </PageContainer>

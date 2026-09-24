@@ -170,7 +170,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_engine.cache_clear()
 
 
-
 @pytest.fixture(autouse=True)
 def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test may construct a real model client.
@@ -191,6 +190,7 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
         raise ai_client.RealModelForbiddenError(message)
 
     monkeypatch.setattr(ai_client.AnthropicModel, "__init__", _refuse)
+
 
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:
@@ -628,6 +628,32 @@ def ftp_run_authority(db_session: Session) -> None:
         ),
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "ftp-calculation-fixture"),
         reason="Authorize the integration fixture FTP calculations",
+        commit=False,
+    )
+    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    user.authorization_version = 1
+    db_session.commit()
+
+
+@pytest.fixture
+def forecasting_run_authority(db_session: Session) -> None:
+    """Opt-in Forecasting run authority (projection, optimizer, what-if, reverse stress)."""
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION,
+            None,
+            ModuleScope.FORECASTING,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "forecasting-calculation-fixture"),
+        reason="Authorize the integration fixture Forecasting calculations",
         commit=False,
     )
     # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.

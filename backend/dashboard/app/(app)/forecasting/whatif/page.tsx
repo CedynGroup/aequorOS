@@ -41,6 +41,7 @@ import ScenarioLinesChart, {
   type ScenarioPoint,
 } from "@/components/forecasting/charts/ScenarioLinesChart";
 import { ASSUMPTION_FIELDS } from "@/components/forecasting/lib";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useSdiCapitalSummary } from "@/components/basel/sdiHooks";
 import {
@@ -331,6 +332,12 @@ export default function WhatIfLab() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
+  const canRun = moduleScope.forecastingRun === true;
+  // Stored what-if runs are Forecasting run detail; nothing is requested
+  // before the projection says the caller may open them.
+  const runsBankId = moduleScope.forecastingConfidentialView
+    ? bankId
+    : undefined;
 
   // ---- The CAR floor (NEW-37) -------------------------------------------
   // Bank: the capital module's own configured minimum, the same field the limit
@@ -353,7 +360,10 @@ export default function WhatIfLab() {
     useState<WhatIfShockCode>("rate_shock_up_400");
 
   // Latest stored run per shock, for reload on mount (unchanged wiring).
-  const runsQuery = useRegulatoryRuns(bankId, { module: "whatif", limit: 50 });
+  const runsQuery = useRegulatoryRuns(runsBankId, {
+    module: "whatif",
+    limit: 50,
+  });
   const latestIds = new Map<string, string>();
   for (const run of runsQuery.data?.runs ?? []) {
     if (!latestIds.has(run.scenarioCode)) {
@@ -361,18 +371,18 @@ export default function WhatIfLab() {
     }
   }
   const storedRate = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("rate_shock_up_400"),
   );
   const storedCedi = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("cedi_depreciation_20"),
   );
   const storedDefault = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("default_spike"),
   );
-  const storedMpr = useRegulatoryRun(bankId, latestIds.get("mpr_cut_200"));
+  const storedMpr = useRegulatoryRun(runsBankId, latestIds.get("mpr_cut_200"));
   const storedByShock: Record<string, RegulatoryRunRead | undefined> = {
     rate_shock_up_400: storedRate.data,
     cedi_depreciation_20: storedCedi.data,
@@ -562,19 +572,28 @@ export default function WhatIfLab() {
                   );
                 })}
 
-                <button
-                  type="button"
-                  disabled={runWhatIf.isPending || !periodId}
-                  onClick={() => runShock(activeShock)}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-caption font-medium btn-primary disabled:opacity-60"
-                >
-                  {pendingShock === activeShock ? (
-                    <Loader2 size={13} className="animate-spin" aria-hidden />
-                  ) : (
-                    <PlayCircle size={13} aria-hidden />
+                <ForecastingRunGate canRun={canRun} className="w-full">
+                  {(descriptionId) => (
+                    <button
+                      type="button"
+                      disabled={!canRun || runWhatIf.isPending || !periodId}
+                      aria-describedby={descriptionId}
+                      onClick={() => runShock(activeShock)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {pendingShock === activeShock ? (
+                        <Loader2
+                          size={13}
+                          className="animate-spin"
+                          aria-hidden
+                        />
+                      ) : (
+                        <PlayCircle size={13} aria-hidden />
+                      )}
+                      {activeView ? "Re-run" : "Run"} {activeMeta.label}
+                    </button>
                   )}
-                  {activeView ? "Re-run" : "Run"} {activeMeta.label}
-                </button>
+                </ForecastingRunGate>
 
                 <p className="text-caption text-slate leading-relaxed">
                   Each run re-projects the full 5-year path with the shocked

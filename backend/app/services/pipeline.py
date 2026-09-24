@@ -397,16 +397,19 @@ def run_official(session: Session, job: Job) -> None:
     """
     ctx = _ctx_from_job(session, job, require_actor=True)
     bank = _bank_or_error(session, ctx, job)
-    if module_scope.runs_module(session, bank, "ftp"):
-        scoped_authorization.require_resolved_bank_permission(
-            session,
-            ctx,
-            bank,
-            permission=Permission.RUN,
-            module=Module.FTP,
-            sensitivity=Sensitivity.CONFIDENTIAL,
-            surface="official_run",
-        )
+    # Preflight the actor's FTP and Forecasting run authority when planned,
+    # before the period lookup, derivation, or any module dispatch.
+    for engine, module in (("ftp", Module.FTP), ("forecast", Module.FORECASTING)):
+        if module_scope.runs_module(session, bank, engine):
+            scoped_authorization.require_resolved_bank_permission(
+                session,
+                ctx,
+                bank,
+                permission=Permission.RUN,
+                module=module,
+                sensitivity=Sensitivity.CONFIDENTIAL,
+                surface="official_run",
+            )
     as_of = _as_of_from_payload(job)
 
     period = _find_period(session, ctx, bank, as_of)
