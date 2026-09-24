@@ -40,6 +40,7 @@ const resolved = (
     "fx",
     "ftp",
     "forecasting",
+    "behavioral",
   ]),
   modules: new Set([
     "command_center",
@@ -56,6 +57,7 @@ const resolved = (
     "irrbb",
     "ftp",
     "forecasting",
+    "behavioral",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -79,6 +81,8 @@ const resolved = (
   forecastingAggregatedView: true,
   forecastingConfidentialView: true,
   forecastingRun: true,
+  behavioralAggregatedView: true,
+  behavioralRun: true,
   ...capabilities,
   isResolved: true,
 });
@@ -333,6 +337,32 @@ assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
     "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
+// Behavioral has no confidential page: every tab needs the same aggregated
+// view, and a run-only analyst is still shown the exact sentence they lack.
+const deniedBehavioral = resolved(true, true, {
+  behavioralAggregatedView: false,
+  behavioralRun: true,
+});
+for (const href of [
+  "/behavioral",
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment?period=current",
+  "/behavioral/deposit-stability",
+  "/behavioral/liquidity",
+]) {
+  assert.equal(isHrefVisible(href, deniedBehavioral), false);
+  assert.equal(isPathVisible(href, deniedBehavioral), false);
+  assert.deepEqual(hrefAccess(href, deniedBehavioral), {
+    state: "disabled",
+    reason:
+      "Requires Behavioral Models · Aggregated · View. Ask your organization owner or admin to grant it.",
+  });
+  assert.equal(isHrefVisible(href, resolved(true)), true);
+  assert.equal(isPathVisible(href, resolved(true)), true);
+}
+const behavioralReader = resolved(true, true, { behavioralRun: false });
+assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
+assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

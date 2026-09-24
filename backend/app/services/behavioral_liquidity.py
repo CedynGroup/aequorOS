@@ -110,9 +110,11 @@ def _rate_metrics(
         if rate is not None and date in short_rates
     ]
     if len(indexed) < _MIN_RATE_OBSERVATIONS:
-        return None, None, [
-            "At least six matched deposit-rate and market-rate observations are required."
-        ]
+        return (
+            None,
+            None,
+            ["At least six matched deposit-rate and market-rate observations are required."],
+        )
     deposit_rates = np.asarray([row[1] for row in indexed], dtype=float)
     market_rates = np.asarray([row[2] for row in indexed], dtype=float)
     if np.var(market_rates) == 0:
@@ -131,9 +133,7 @@ def _rate_metrics(
         if correlation > best_correlation:
             best_lag, best_correlation = lag, correlation
     reasons = (
-        []
-        if best_lag is not None
-        else ["Rate series cannot support a repricing-lag estimate."]
+        [] if best_lag is not None else ["Rate series cannot support a repricing-lag estimate."]
     )
     return beta, best_lag, reasons
 
@@ -228,22 +228,26 @@ def _approved_scenarios(
 
 
 def get_behavioral_liquidity_report(
-    db: Session, ctx: TenantContext, bank_id: str
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    *,
+    resolved_bank: Bank | None = None,
 ) -> BehavioralLiquidityReport:
-    bank = db.scalar(
+    bank = resolved_bank or db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
     if bank is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    dates = history.available_as_of_dates(db, ctx, bank_id)
+    dates = history.available_as_of_dates(db, ctx, bank.id)
     if not dates:
         return BehavioralLiquidityReport(as_of_date=None, segments=[], scenarios=[])
     as_of = dates[-1]
     cfg = BehavioralTrainingConfig.from_settings(get_settings().behavioral)
     rows = history.load_deposit_month_aggregates(
-        db, ctx, bank_id, as_of, cfg.window_months, non_maturing_only=False
+        db, ctx, bank.id, as_of, cfg.window_months, non_maturing_only=False
     )
-    short_rates = history.load_ghs_short_rate_history(db, ctx, bank_id, as_of, cfg.window_months)
+    short_rates = history.load_ghs_short_rate_history(db, ctx, bank.id, as_of, cfg.window_months)
     segments = [
         _segment_metrics(dimension, segment, points, short_rates)
         for dimension in _DIMENSIONS
@@ -256,5 +260,5 @@ def get_behavioral_liquidity_report(
     return BehavioralLiquidityReport(
         as_of_date=as_of,
         segments=ranked[:40],
-        scenarios=_approved_scenarios(db, ctx, bank_id),
+        scenarios=_approved_scenarios(db, ctx, bank.id),
     )

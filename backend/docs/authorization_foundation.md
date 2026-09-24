@@ -537,9 +537,11 @@ workbench entries, and deployment grants are owned by the
 projection, optimizer, what-if and reverse-stress routes, their rows in shared
 projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
-Regulatory filing — the
-submit and poll routes, the Validator bundle, and the grants that must exist
-before any return can be transmitted — is owned by the
+Behavioral model estimates, liquidity behavior, and retraining are owned by the
+[Behavioral rollout contract](behavioral_enforcement_rollout.md); model
+application stays with the governed model-application cutover. Regulatory
+filing — the submit and poll routes, the Validator bundle, and the grants that
+must exist before any return can be transmitted — is owned by the
 [filing submit authority rollout](filing_submit_authority_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
