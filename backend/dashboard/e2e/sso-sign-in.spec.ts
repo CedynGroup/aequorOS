@@ -30,6 +30,7 @@ import {
   placeBothSignatureFields,
   returnsUrl,
 } from "./support/ceremony";
+import { generateCurrentVersion } from "./support/generate";
 import { mintBackendToken } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
 import {
@@ -284,17 +285,11 @@ test.describe("attestation step-up through single sign-on", () => {
     await signInWithSso(page, IDP_ACCOUNTS.analyst);
 
     await page.goto(returnsUrl(RETURN_CODE, date));
-    await page
-      .getByRole("button", { name: /generate package|regenerate/i })
-      .first()
-      .click();
-    const validate = page.getByRole("button", {
-      name: "Validate",
-      exact: true,
+    // The checks run with generation; there is no separate validation step.
+    await generateCurrentVersion(page);
+    await expect(page.getByText("Checks passed").first()).toBeVisible({
+      timeout: 60_000,
     });
-    await expect(validate).toBeEnabled();
-    await validate.click();
-    await expect(page.getByText(/\bValidated\b/).first()).toBeVisible();
 
     const certify = page.getByRole("button", { name: "Certify and freeze" });
     await expect(certify).toBeEnabled({ timeout: 30_000 });
