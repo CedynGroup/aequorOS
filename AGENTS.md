@@ -673,6 +673,23 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   carries a REDUNDANT static window bound beside its subquery — do not "simplify" it away: Postgres prunes
   partitions at plan time and cannot see a subquery, so without it a twelve-month question scans every month
   the mart holds.
+  **A CALCULATED MEASURE IS AUTHORIZED AS THE FIGURES ITS TEXT NAMES, never as itself** — the walk re-parses
+  the APPROVED expression server-side every time and never reads the stored member column. And **the alert
+  and on-new-data triggers live in the `bi_mart_refresh` HANDLER, not in `refresh_bank_as_of`**: the backfill
+  calls the builder once per date, so a hook inside it would mail a bank a thousand board packs, and the
+  builder's `skipped` outcome is what makes both triggers idempotent.
+- **A REGISTERED JOB WITH NO ENQUEUE SITE IS AN INERT FEATURE, AND NOTHING REPORTS IT (2026-09-27).** BI's
+  threshold alerts shipped with a job type, a worker lane, a reclaim-window decision, a handler and passing
+  handler tests — and no caller anywhere. No alert was ever evaluated; `on_new_data` reports never fired.
+  Every gate was green, because each half was correct. **When you add a job type, the same change must add its
+  enqueue site, and a test must assert the caller calls it** — `tests/services/test_bi_jobs.py` now asserts
+  both directions (a succeeded build asks, a skipped build does not) and the enqueue counts ride on the job's
+  progress record so "queued nothing" is distinguishable from "was never asked".
+  The same class bit this build three other ways, all worth knowing when you read a green suite: a guard whose
+  six rules were never proven able to fire; a route-count tripwire that had gone stale; a Postgres parity
+  suite iterating one model module while eight tables lived in two others; and three front-end surfaces whose
+  routes worked and which never called them. **"The endpoint exists" is not "the feature works", and a green
+  test suite is evidence about the code that was written, not about the code that was not.**
 
 ## Maintaining this file
 

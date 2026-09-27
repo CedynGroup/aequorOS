@@ -519,6 +519,52 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   recorded as something it is not. Its downgrade path deliberately FAILS rather
   than deleting rows: an append-only log a migration can quietly empty is not one.
 
+### Phase 3 additions
+
+- **Self-service reads through the same compiler.** Explore is AG Grid Community
+  over the existing grid endpoint, so row groups, pivot and subtotals are computed
+  SERVER-SIDE and nothing is re-aggregated in the browser. Community has no
+  server-side row model, hence the infinite row model, and the page size is
+  discovered from the server's own cap rather than chosen. The grid's built-in
+  export is disabled and asserted off three ways: it bypasses authorization, the
+  audit record and the watermark, so it is a data-egress path rather than a
+  convenience.
+- **A calculated measure is authorized as THE FIGURES ITS TEXT NAMES.** Never as
+  itself: a formula is a bank's own arithmetic over catalogue members, so the
+  sentence a reader must hold is the union of the sentences those members need.
+  The authorization walk expands it from the server's own re-parse of the APPROVED
+  text every time and never reads the stored member column, so doctoring that
+  column cannot widen the walk, and an id the expansion cannot resolve is left
+  alone so it still refuses. Only certified measures load, so a draft is a generic
+  unknown-id refusal rather than a named one.
+  **The grain is declared in the formula text** (D-195), which is what a checker
+  approves and what the digest covers, and there are exactly three grains because
+  the date dimension carries exactly three flags — a weekly grain would have to
+  invent where the previous period ends. `LAG`'s reach derives from the daily
+  retention window (D-196) divided by the longest a period can be, so a formula
+  cannot be answerable in February and empty in March.
+- **Maker-checker is enforced beneath the service, not only by it.** Two CHECK
+  constraints make a self-approved promotion and a promotion whose expression has
+  moved since approval UNSTORABLE. Separation of duties that lives only in a
+  service is one code path away from being bypassed.
+- **Sharing never carries the owner's authority, and neither does a delivery.**
+  The widget resolver is not given the owner — there is no parameter it could
+  consult — and a subscription renders once PER RECIPIENT under that recipient's
+  own access, which is asserted by the recipient's name appearing in the
+  artifact's own provenance bytes. Confidential content becomes a sign-in link
+  rather than an attachment, decided by the same export classifier before a row is
+  read.
+- **A dashboard's version history is append-only in the database**, the same three
+  ways the audit log and the query log are. It is evidence of what a reader was
+  shown on a date, so rewriting it is refused rather than merely avoided.
+- **Alerts and on-new-data reports are triggered by a SUCCEEDED mart build, in the
+  job handler and not in the builder.** The builder is called once per date by the
+  backfill, so a hook inside it would mail a bank a thousand board packs; and it
+  returns `skipped` when a fingerprint has not moved, which is what makes both
+  triggers idempotent without a second mechanism. This is worth stating because
+  the absence of that one call left both features inert — registered, handled,
+  tested and never invoked — in a way nothing reported.
+
 ---
 
 ## 4. Findings infrastructure
