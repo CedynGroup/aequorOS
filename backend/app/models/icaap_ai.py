@@ -198,13 +198,26 @@ class IcaapAiSuggestion(Base):
     #: Stored for ``validated`` AND ``rejected_validation`` (audit and evals),
     #: but SERVED only when validated. A draft that failed grounding is never
     #: shown — the user sees a status, never ungrounded prose.
-    output: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #:
+    #: ``none_as_null`` is load-bearing, not tidiness. SQLAlchemy's ``JSON``
+    #: writes Python ``None`` as the JSON value ``null`` by default, which is NOT
+    #: SQL NULL, so ``output IS NOT NULL`` is TRUE for a row carrying no draft at
+    #: all — and that is exactly the test
+    #: ``ck_icaap_ai_suggestions_validated_output`` makes to guarantee a
+    #: ``validated`` suggestion HAS one. Without this flag that constraint can be
+    #: satisfied by a row with nothing in it, and its sibling
+    #: ``ck_icaap_ai_suggestions_no_output`` fails in the other direction,
+    #: refusing a legitimate cancelled row. Found while building the BI
+    #: commentary sibling, whose own columns carry the same flag for the same
+    #: reason; demonstrated and pinned in
+    #: ``tests/models/test_nullable_json_is_sql_null.py``.
+    output: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     output_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: ``[{code, where, span}]`` — codes and locations, never the text.
     validation_errors: Mapped[list[Any]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
-    usage: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

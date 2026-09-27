@@ -78,7 +78,14 @@ class RegulatoryParameter(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     #: Scalar value (the common case — a percentage, ratio, amount, or count).
     value_numeric: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     #: Structured value for non-scalar parameters (e.g. a risk-weight bucket map).
-    value_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: ``none_as_null`` is load-bearing: SQLAlchemy's ``JSON`` writes Python
+    #: ``None`` as the JSON value ``null``, which is NOT SQL NULL, so
+    #: ``IS NOT NULL`` is TRUE for a column holding nothing and the CHECK below
+    #: that requires a value is satisfied by a row that has none. Pinned by
+    #: ``tests/models/test_nullable_json_is_sql_null.py``, which scans for exactly
+    #: this pairing of a nullable JSON column and a constraint asserting its
+    #: nullness.
+    value_json: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     #: The unit the value is expressed in: 'percent' | 'ratio' | 'ghs_millions'
     #: | 'days' | 'bps' | 'multiplier' | 'count'.
     unit: Mapped[str] = mapped_column(String(24), nullable=False)

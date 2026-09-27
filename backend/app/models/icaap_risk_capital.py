@@ -588,7 +588,16 @@ class IcaapPillar2Item(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     stressed_derivation: Mapped[str | None] = mapped_column(String(32), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     inputs_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    scenario_definition: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: ``none_as_null`` is load-bearing: SQLAlchemy's ``JSON`` writes Python
+    #: ``None`` as the JSON value ``null``, which is NOT SQL NULL, so
+    #: ``IS NOT NULL`` is TRUE for a column holding nothing and the CHECK below
+    #: that requires a value is satisfied by a row that has none. Pinned by
+    #: ``tests/models/test_nullable_json_is_sql_null.py``, which scans for exactly
+    #: this pairing of a nullable JSON column and a constraint asserting its
+    #: nullness.
+    scenario_definition: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: "Material, but we hold no capital against it" needs saying out loud.
     zero_amount_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
