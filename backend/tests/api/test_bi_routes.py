@@ -668,6 +668,29 @@ def test_a_machine_key_never_reaches_a_bi_query(
     assert response.status_code == 401, response.text
 
 
+#: Every BI route that mutates, or that POSTs a query body. The sweep in
+#: ``test_impersonation_boundary`` classifies by dependency NAME, so each of these
+#: must carry ``require_bi_read`` and ``resolve_tenant_bank``; the test below
+#: asserts that for each, and asserts this set is exactly what the app mounts.
+EXPECTED_UNSAFE_BI_ROUTES: frozenset[str] = frozenset(
+    {
+        "/api/v1/banks/{bank_id}/bi/query",
+        "/api/v1/banks/{bank_id}/bi/grid",
+        "/api/v1/banks/{bank_id}/bi/drill",
+        "/api/v1/banks/{bank_id}/bi/explain",
+        "/api/v1/banks/{bank_id}/bi/export",
+        "/api/v1/banks/{bank_id}/bi/dashboards",
+        "/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}",
+        "/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}/shares",
+        "/api/v1/banks/{bank_id}/bi/measures",
+        "/api/v1/banks/{bank_id}/bi/measures/validation",
+        "/api/v1/banks/{bank_id}/bi/measures/{measure_id}",
+        "/api/v1/banks/{bank_id}/bi/measures/{measure_id}/decision",
+        "/api/v1/banks/{bank_id}/bi/measures/{measure_id}/proposal",
+    }
+)
+
+
 def test_the_post_reads_are_credited_as_guarded_by_the_route_sweep(db_client: TestClient) -> None:
     """D-027: the sweep in ``test_impersonation_boundary`` classifies by
     dependency NAME, so the dependency has to be in the registered set and on
@@ -682,7 +705,14 @@ def test_the_post_reads_are_credited_as_guarded_by_the_route_sweep(db_client: Te
         and "/bi/" in route.path
         and route.methods & {"POST", "PUT", "PATCH", "DELETE"}
     ]
-    assert len(unsafe) == 5, [route.path for route in unsafe]
+    # The SET, not a count. A bare number went stale the moment Phase 3 mounted
+    # ten more routes, and a stale tripwire teaches the next reader to bump it
+    # without looking. Naming the paths means a new unsafe BI route fails HERE by
+    # name, and clearing the failure requires deciding that the route belongs and
+    # confirming below that it carries both guards.
+    assert {route.path for route in unsafe} == EXPECTED_UNSAFE_BI_ROUTES, sorted(
+        {route.path for route in unsafe} ^ EXPECTED_UNSAFE_BI_ROUTES
+    )
     for route in unsafe:
         names = _dependency_names(route)
         assert "require_bi_read" in names, route.path

@@ -93,9 +93,18 @@ BI_OWNED_GLOBS: tuple[str, ...] = (
     "features/read_bi.py",
     "features/bi_*.py",
     "features/*_bi.py",
+    # Phase 3 added `manage_bi_content.py`, which matches none of the three above:
+    # it neither starts nor ends with the token. Named as its own prefix rather
+    # than loosened to `features/*bi*.py`, for the A6-09 reason recorded above.
+    "features/manage_bi_*.py",
     "jobs/bi_*.py",
     "operator/**/bi_*.py",
+    # The BI plane is modelled across several modules now: the marts in `bi.py`,
+    # saved content in `bi_content.py`, alerts and subscriptions in
+    # `bi_notifications.py`. `models/bi.py` alone would leave the newer ones
+    # outside the exemption and convict every BI module that reads them.
     "models/bi.py",
+    "models/bi_*.py",
 )
 
 #: The two BI roots rules (b)–(d) scan.
@@ -165,7 +174,11 @@ BI_OWNED: frozenset[str] = _bi_owned()
 #: non-BI module drifting into this set is a silent boundary hole. Adding a BI
 #: feature file means adding it here in the same change.
 EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
-    {"app/features/read_bi.py", "app/features/export_bi.py"}
+    {
+        "app/features/read_bi.py",
+        "app/features/export_bi.py",
+        "app/features/manage_bi_content.py",
+    }
 )
 
 
@@ -192,6 +205,10 @@ def test_the_bi_owned_globs_resolve_to_no_non_bi_module() -> None:
         "app/jobs/bi_",
         "app/operator/",
         "app/models/bi.py",
+        # `app/models/bi_` and NOT `app/models/bi`: the shorter prefix would also
+        # admit `app/models/bindings.py`, which is the exact substring hazard this
+        # file records being bitten by (A6-09). The underscore is load-bearing.
+        "app/models/bi_",
     )
     strays = sorted(p for p in BI_OWNED if not p.startswith(allowed_roots))
     assert not strays, f"BI_OWNED exempts a path outside the BI roots: {strays}"
@@ -825,17 +842,24 @@ def test_the_writable_table_set_is_derived_from_the_bi_models() -> None:
     kept the prefix would silently stop being checked), and widening (a non-BI
     table must never be in it, or the rule admits the thing it forbids).
     """
-    from app.models import bi as bi_models  # noqa: PLC0415 - read the module's own list
+    # The BI plane is modelled across SEVERAL modules since Phase 3. Reading only
+    # `app.models.bi` would leave saved content, alerts and subscriptions outside
+    # the writable set while `BI_TABLES` (derived from the metadata) contains
+    # them, so every write to one would be convicted as a plane violation.
+    from app.models import bi as bi_models  # noqa: PLC0415 - read each module's own list
+    from app.models import bi_content, bi_notifications  # noqa: PLC0415
 
+    modules = (bi_models, bi_content, bi_notifications)
     declared = {
         value.__tablename__
-        for value in vars(bi_models).values()
+        for module in modules
+        for value in vars(module).values()
         if isinstance(value, type) and issubclass(value, Base) and hasattr(value, "__tablename__")
     }
-    assert declared, "app.models.bi declares no tables"
+    assert declared, "no app.models.bi* module declares a table"
     assert declared == BI_TABLES, (
-        "every table app.models.bi declares must be writable, and nothing else: "
-        f"{sorted(declared ^ BI_TABLES)}"
+        "every table the BI model modules declare must be writable, and nothing "
+        f"else: {sorted(declared ^ BI_TABLES)}"
     )
     assert all(table.startswith("bi_") for table in BI_TABLES)
 

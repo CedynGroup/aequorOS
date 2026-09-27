@@ -73,6 +73,8 @@ from app.models.bi import (
     BiQueryLog,
     BiReconciliationResult,
 )
+from app.models.bi_content import BI_CONTENT_TABLES
+from app.models.bi_notifications import BI_NOTIFICATION_TABLES
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -210,11 +212,26 @@ def test_every_contract_table_is_declared_and_exported() -> None:
     # mart model pass every test while silently escaping the four Postgres
     # suites that iterate this tuple — the same blind spot that let a
     # model-only ``String(8)`` reach a migration (audit A6-04, A5-07).
-    assert _bi_tables_in(Base.metadata) == frozenset(BI_TABLES), (
-        "app/models/bi.py declares a bi_* table that BI_TABLES does not name (or "
-        "the reverse), so the Postgres parity/partition/RLS suites would skip it: "
-        f"{sorted(_bi_tables_in(Base.metadata) ^ frozenset(BI_TABLES))}"
+    # The BI plane is modelled across several modules since Phase 3, and EVERY
+    # `bi_*` table must be named by exactly one module's own tuple — that is what
+    # makes the Postgres parity, partition and RLS suites able to iterate a
+    # complete list. A table in the metadata that no tuple names would silently
+    # escape all four of them, which is the blind spot that let a model-only
+    # `String(8)` reach a migration (audit A6-04, A5-07) and, later, a target
+    # scope column four columns too narrow (A8-01).
+    registered = (
+        frozenset(BI_TABLES) | frozenset(BI_CONTENT_TABLES) | frozenset(BI_NOTIFICATION_TABLES)
     )
+    assert _bi_tables_in(Base.metadata) == registered, (
+        "a bi_* table is declared that no model module's table tuple names (or the "
+        "reverse), so the Postgres parity/partition/RLS suites would skip it: "
+        f"{sorted(_bi_tables_in(Base.metadata) ^ registered)}"
+    )
+    # The three tuples must not overlap, or "exactly one module owns it" is false
+    # and two Postgres suites would both claim the same table.
+    assert len(BI_TABLES) + len(BI_CONTENT_TABLES) + len(BI_NOTIFICATION_TABLES) == len(
+        registered
+    ), "two model modules name the same bi_* table"
     assert all(name.startswith(BI_TABLE_PREFIX) for name in BI_TABLES)
     assert set(MONTHLY_PARTITIONED_TABLES) | set(YEARLY_PARTITIONED_TABLES) <= set(BI_TABLES)
 

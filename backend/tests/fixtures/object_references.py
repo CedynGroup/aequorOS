@@ -100,6 +100,7 @@ from app.models import (
     TemenosConnection,
     User,
 )
+from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -1283,6 +1284,121 @@ def _icaap_suggestion(session: Session, tenant: TenantSeed, objects: ObjectSet) 
     )
 
 
+#: One valid widget for a saved dashboard's canvas. The BI content routes
+#: re-validate a stored canvas on the way out, so the seeded row has to be a
+#: canvas a reader could actually be served rather than an empty placeholder.
+_BI_CANVAS: Final[dict[str, Any]] = {
+    "widgets": [
+        {
+            "id": "loans",
+            "kind": "kpi",
+            "title": "Loan book",
+            "caption": "",
+            "query": {
+                "measures": ["loans.balance_rc"],
+                "dimensions": [],
+                "filters": [],
+                "window": "as_of",
+                "compare": "none",
+                "top_n": None,
+                "sort": [],
+                "limit": None,
+                "offset": 0,
+                "pivot": None,
+                "subtotals": False,
+            },
+            "panel": None,
+            "display": {
+                "show_trend": False,
+                "show_comparison": False,
+                "stacked": False,
+                "show_limit": False,
+                "series_dimension": None,
+                "precision": 0,
+            },
+            "needs_data": None,
+            "pending_capability": None,
+        }
+    ],
+    "layout": [
+        {
+            "i": "loans",
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4,
+            "min_w": None,
+            "min_h": None,
+            "static": False,
+        }
+    ],
+}
+
+
+def _bi_dashboard(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A saved dashboard with its first (append-only) version.
+
+    Organization-wide visibility on purpose: the sweep's question is whether a
+    FOREIGN tenant's dashboard id can be reached, and a private one would answer
+    404 for a reason that has nothing to do with tenancy.
+    """
+    dashboard = BiDashboard(
+        organization_id=tenant.organization_id,
+        bank_id=tenant.bank_id,
+        owner_user_id=tenant.actor_id,
+        title=tenant.marker,
+        description="",
+        visibility="org",
+        visibility_role=None,
+        badge="personal",
+        current_version=1,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    dashboard_id = _uuid(session, dashboard)
+    session.add(
+        BiDashboardVersion(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            dashboard_id=dashboard.id,
+            version=1,
+            title=tenant.marker,
+            description="",
+            spec=_BI_CANVAS,
+            spec_digest=hashlib.sha256(tenant.marker.encode()).hexdigest(),
+            change_note="",
+            created_by_user_id=tenant.actor_id,
+            created_at=_NOW,
+        )
+    )
+    session.flush()
+    return dashboard_id
+
+
+def _bi_measure(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A personal calculated measure, with the formula the server would have parsed."""
+    expression = "[m:loans.balance_rc] * 2"
+    return _uuid(
+        session,
+        BiMeasure(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            measure_key=f"custom.{tenant.bank_id.lower().replace('-', '_')}",
+            owner_user_id=tenant.actor_id,
+            label=tenant.marker,
+            description="",
+            expression=expression,
+            expression_digest=hashlib.sha256(expression.encode()).hexdigest(),
+            referenced_members=["loans.balance_rc"],
+            value_type="amount",
+            favourable_direction="neutral",
+            state="personal",
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
 _BANK_PREFIX: Final = "/api/v1/banks/{bank_id}"
 _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 
@@ -1597,6 +1713,14 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
         ),
     ),
+    # BI content (docs/bi.md §Phase 3). Both surfaces are behind ``BI_ENABLED``,
+    # which these suites leave unset, so the refusal they currently observe is the
+    # deployment flag's 404 rather than the tenancy check's. The ownership and
+    # cross-tenant refusals are proven directly, with the flag ON, in
+    # tests/api/test_bi_content_routes.py; the catalogue entries are here so the
+    # sweep covers them the moment the flag is part of its fixture.
+    ObjectKind("bi_dashboard", _bi_dashboard, (f"{_BANK_PREFIX}/bi/dashboards/{{dashboard_id}}",)),
+    ObjectKind("bi_measure", _bi_measure, (f"{_BANK_PREFIX}/bi/measures/{{measure_id}}",)),
 )
 
 KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OBJECT_KINDS}
@@ -1670,6 +1794,8 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "integration_key": IntegrationKey,
     "binding": AuthorizationBinding,
     "access_request": User,
+    "bi_dashboard": BiDashboard,
+    "bi_measure": BiMeasure,
 }
 
 #: Body and query identifier fields, resolved by the most specific route path

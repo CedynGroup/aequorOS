@@ -19,6 +19,7 @@ from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_authorization import router as authorization_router
 from app.features.manage_banks import router as banks_router
+from app.features.manage_bi_content import router as bi_content_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
@@ -232,6 +233,15 @@ v1_router.include_router(
 # that leaves the platform, so it may never be reachable where a BI read is not.
 v1_router.include_router(
     bi_export_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Saved dashboards and calculated measures, on the same two dependencies and in
+# the same order, for the same two reasons: a sibling tenant's BK-* is 404 before
+# anything else runs, and a deployment without BI has no dashboards to save. The
+# content surface writes no figure and serves none — it stores questions — but it
+# may never be reachable where a BI read is not.
+v1_router.include_router(
+    bi_content_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
 )
 # ICAAP draft exports. No ``require_module_access``: that dependency answers

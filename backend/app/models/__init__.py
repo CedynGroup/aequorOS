@@ -29,6 +29,18 @@ from app.models.bi import (
     BiQueryLog,
     BiReconciliationResult,
 )
+from app.models.bi_content import (
+    BiDashboard,
+    BiDashboardShare,
+    BiDashboardVersion,
+    BiMeasure,
+)
+from app.models.bi_notifications import (
+    BiAlert,
+    BiAlertEvent,
+    BiSubscription,
+    BiSubscriptionDelivery,
+)
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -229,6 +241,11 @@ __all__ = [
     "BankFinancialFact",
     "BankSupervisoryAddon",
     "BiAggPositionDaily",
+    "BiAlert",
+    "BiAlertEvent",
+    "BiDashboard",
+    "BiDashboardShare",
+    "BiDashboardVersion",
     "BiDimBranch",
     "BiDimCounterparty",
     "BiDimDate",
@@ -240,8 +257,11 @@ __all__ = [
     "BiFactPositionDaily",
     "BiFactPositionEom",
     "BiMartBuild",
+    "BiMeasure",
     "BiQueryLog",
     "BiReconciliationResult",
+    "BiSubscription",
+    "BiSubscriptionDelivery",
     "FinancialFactRow",
     "IcaapAiSuggestion",
     "IcaapAiSuggestionDecision",
