@@ -31,9 +31,18 @@ from app.domain.bi.catalogue import (
     catalogue,
 )
 from app.domain.bi.catalogue.dimensions import POSITION_TYPE_LABELS
-from app.domain.bi.catalogue.engine import ENGINE_LABELS, engine_measure_id
+from app.domain.bi.catalogue.engine import (
+    ENGINE_LABELS,
+    UndeclaredValueType,
+    engine_measure_id,
+    engine_value_type,
+)
 from app.domain.bi.catalogue.measures import dpd_bands_from
-from app.domain.bi.catalogue.members import DPD_COMPLETENESS
+from app.domain.bi.catalogue.members import (
+    DPD_COMPLETENESS,
+    NUMERIC_VALUE_TYPES,
+    VALUE_TYPES,
+)
 from app.domain.bi.catalogue.targets import TARGET_SUFFIX, is_targetable, variants_for
 from app.domain.bi.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
 from app.domain.credit.dpd_bands import DPD_BANDS
@@ -103,9 +112,14 @@ def test_member_counts_are_what_the_sources_imply(cat: Catalogue) -> None:
     assert len(cat.engine_measures()) == 2 * len(numeric_authorities)
     assert len(cat.portfolio_measures()) == 44
     # The Phase 2 target variants (``app/domain/bi/catalogue/targets.py``): five
-    # per targetable base, less ``attainment_pct`` where lower is better (D-062)
-    # and less ``variance_pct`` where the base is a bare ratio (D-063).
-    assert len(cat.target_measures()) == 588
+    # per targetable base per REGISTER VERSION (D-072 exposes the budget and the
+    # reforecast as distinct members), less ``attainment_pct`` where lower is
+    # better (D-062). Since D-071 every targetable base carries a
+    # ``variance_pct``, so none of the five is missing for a unit reason.
+    # The arithmetic is spelled out in
+    # ``tests/domain/bi/test_targets.py::test_the_member_count_is_what_the_two_decisions_imply``.
+    assert len(cat.target_measures()) == 1198
+    assert len(cat.measures()) == 1416
     assert len(cat.dimensions()) == 66
     assert len(cat.hierarchies()) == 13
 
@@ -133,6 +147,84 @@ def test_every_enumerated_value_carries_a_label(cat: Catalogue) -> None:
 def test_engine_labels_cover_every_engine_metric_and_nothing_else() -> None:
     metric_ids = {e.metric_id for e in engine_authorities()} - TEXT_VALUED_METRIC_IDS
     assert set(ENGINE_LABELS) == metric_ids
+
+
+# --- value types: what each figure IS ---------------------------------------------------
+
+
+def test_every_value_type_in_use_is_one_the_catalogue_declares(cat: Catalogue) -> None:
+    """No member carries a type outside the declared set, and ``ratio`` is gone.
+
+    A single ``ratio`` type used to serve a fractional interest rate, a
+    concentration index and a duration in years at once, so a surface could not
+    render all three correctly: scaling a rate by a hundred is right and scaling
+    an index or a duration is wrong. The type is split, and the token is retired
+    so nothing can declare it again — the check is over the runtime values too,
+    because ``value_type`` crosses the wire as a plain string.
+    """
+    assert "ratio" not in VALUE_TYPES
+    for member in (*cat.measures(), *cat.dimensions()):
+        assert member.value_type in VALUE_TYPES, (member.id, member.value_type)
+
+
+def test_every_measure_is_a_number_and_every_dimension_type_is_used(cat: Catalogue) -> None:
+    """A measure is a figure; ``text`` / ``date`` / ``flag`` describe dimensions."""
+    for measure in cat.measures():
+        assert measure.value_type in NUMERIC_VALUE_TYPES, (measure.id, measure.value_type)
+    # Nothing in the declared set is dead: every type is carried by a member, so
+    # a renderer held to the whole set is not being asked to handle a fiction.
+    in_use = {member.value_type for member in (*cat.measures(), *cat.dimensions())}
+    assert in_use == set(VALUE_TYPES), sorted(set(VALUE_TYPES) - in_use)
+
+
+def test_each_former_ratio_member_says_what_its_number_is(cat: Catalogue) -> None:
+    """The split, member by member — this is the list a renderer is written against.
+
+    ``fraction`` is a proportion of one and a surface scales it by a hundred;
+    ``index`` is a dimensionless number on its own scale and must never be scaled;
+    ``duration_years`` is a length of time. The last two entries were not ratios
+    of anything at all: both are ``x / tier1 × 100`` in their own engines, so they
+    are percentages that the old "no unit suffix means ratio" guess typed as bare
+    ratios and rendered a hundred times too small.
+    """
+    expected: dict[str, str] = {
+        "loans.weighted_average_rate": "fraction",
+        "deposits.weighted_average_rate": "fraction",
+        "positions.weighted_average_rate": "fraction",
+        "loans.sector_hhi": "index",
+    }
+    for metric_id, value_type in (
+        ("npl_ratio", "fraction"),
+        ("asset_duration", "duration_years"),
+        ("liability_duration", "duration_years"),
+        ("duration_gap", "duration_years"),
+        ("pit_systematic_factor", "index"),
+        ("nop_pct_tier1", "pct"),
+        ("worst_eve_change_pct_tier1", "pct"),
+    ):
+        for measure in cat.engine_measures():
+            rule = measure.engine_rule
+            if rule is not None and rule.metric_id == metric_id:
+                expected[measure.id] = value_type
+    for member_id, value_type in expected.items():
+        assert cat.measure(member_id).value_type == value_type, member_id
+    # And the two percentages agree with their ``_pct`` twins where one exists.
+    assert cat.measure("engine.npl_ratio.crd.official").value_type == "fraction"
+    assert cat.measure("engine.npl_ratio_pct.crd.official").value_type == "pct"
+
+
+def test_an_engine_metric_with_no_declared_unit_is_refused_not_guessed() -> None:
+    """The guess that mis-typed two percentages is gone; a new metric must declare.
+
+    The refusal is deliberately loud: it is raised while the catalogue is being
+    built, so it surfaces in every BI test rather than as a figure that is a
+    hundred times too small on one screen.
+    """
+    assert engine_value_type("car_pct") == "pct"
+    assert engine_value_type("total_capital_ghs") == "amount"
+    assert engine_value_type("duration_gap") == "duration_years"
+    with pytest.raises(UndeclaredValueType, match="does not say what its figure is"):
+        engine_value_type("some_new_metric")
 
 
 # --- vocabularies come from their owners -----------------------------------------------

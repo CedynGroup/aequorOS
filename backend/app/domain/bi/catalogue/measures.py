@@ -289,7 +289,7 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "interest_rate",
             aggregation="weighted_avg",
             fx_rule="derivation",
-            value_type="ratio",
+            value_type="fraction",
             filters=(LOANS,),
             weight="loans.balance_rc",
             description="Balance-weighted contractual rate, as a fraction.",
@@ -315,10 +315,14 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "classification_exposure_rc",
             aggregation="hhi",
             fx_rule="classification",
-            value_type="ratio",
+            value_type="index",
             direction="lower_better",
             filters=(LOANS,),
             over="loan.sector",
+            description=(
+                "The sum of the squared sector shares of classified exposure, on its own "
+                "scale from zero to one. Not a percentage: scaling it would misstate it."
+            ),
             module=CREDIT,
         ),
     )
@@ -382,7 +386,7 @@ def _deposit_measures() -> tuple[MeasureDef, ...]:
             "interest_rate",
             aggregation="weighted_avg",
             fx_rule="derivation",
-            value_type="ratio",
+            value_type="fraction",
             filters=(DEPOSITS,),
             weight="deposits.balance_rc",
             description="Balance-weighted contractual rate, as a fraction.",
@@ -462,7 +466,7 @@ def _position_measures() -> tuple[MeasureDef, ...]:
             "interest_rate",
             aggregation="weighted_avg",
             fx_rule="derivation",
-            value_type="ratio",
+            value_type="fraction",
             weight="positions.balance_rc",
             description="Balance-weighted contractual rate, as a fraction.",
             module=RISK,

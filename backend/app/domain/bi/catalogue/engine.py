@@ -144,13 +144,30 @@ ENGINE_THRESHOLDS: dict[str, str] = {
     "single_ccy_max_pct": "fx_nop_single_limit_pct",
 }
 
-#: Value types for metric ids whose suffix does not say.
+#: What the number IS, for every metric id whose own unit suffix does not say.
+#: There is no catch-all: ``engine_value_type`` REFUSES an id it cannot place,
+#: because the guess it used to make — "anything without a unit suffix is a
+#: ratio" — is how ``nop_pct_tier1`` and ``worst_eve_change_pct_tier1`` came to
+#: be typed as bare ratios. Both are ``x / tier1 × 100`` in their own engines
+#: (``app/domain/fx/engine.py``, ``app/domain/irr/engine.py``), so they are
+#: percentages that were rendered unscaled, reading ``0.12`` where the bank filed
+#: ``12.00 %``. A new registry metric now has to say what its figure is.
 _VALUE_TYPE_OVERRIDES: dict[str, ValueType] = {
-    "npl_ratio": "ratio",
-    "asset_duration": "ratio",
-    "liability_duration": "ratio",
-    "duration_gap": "ratio",
-    "pit_systematic_factor": "ratio",
+    # Percentages that carry ``_pct`` as an INFIX, not as the id's unit suffix.
+    "nop_pct_tier1": "pct",
+    "worst_eve_change_pct_tier1": "pct",
+    # A proportion of one: the same figure as the ``_pct`` twin beside it,
+    # divided by a hundred.
+    "npl_ratio": "fraction",
+    # Durations, in years. A duration gap is a difference of two of them and is
+    # still years — it is not a ratio of anything, and it may be negative.
+    "asset_duration": "duration_years",
+    "liability_duration": "duration_years",
+    "duration_gap": "duration_years",
+    # The standardised systematic factor Z of the point-in-time conditioning: a
+    # signed number on its own scale, never a percentage of anything.
+    "pit_systematic_factor": "index",
+    # Amounts whose id names no unit.
     "cet1_capital": "amount",
     "tier1_capital": "amount",
     "tier2_capital": "amount",
@@ -182,8 +199,18 @@ _R1_METRICS: frozenset[str] = frozenset({"npl_ratio_pct", "npl_exposure_ghs", "g
 _DPD_DEPENDENT_METRICS: frozenset[str] = frozenset({"par_30_pct", "par_60_pct", "par_90_pct"})
 
 
+class UndeclaredValueType(ValueError):
+    """A registry metric whose figure the catalogue cannot name (see the table)."""
+
+
 def engine_value_type(metric_id: str) -> ValueType:
-    """``pct`` / ``amount`` / ``ratio`` from the wire key's suffix convention."""
+    """What the metric's figure IS: declared, or read from the id's unit suffix.
+
+    The two suffixes are the platform's own load-bearing wire-key conventions and
+    are trusted. Anything else must be declared in ``_VALUE_TYPE_OVERRIDES``: a
+    figure nobody has said the unit of cannot be rendered, exported or compared
+    against a target without guessing, and the guess is silent.
+    """
     override = _VALUE_TYPE_OVERRIDES.get(metric_id)
     if override is not None:
         return override
@@ -191,7 +218,12 @@ def engine_value_type(metric_id: str) -> ValueType:
         return "pct"
     if metric_id.endswith("_ghs"):
         return "amount"
-    return "ratio"
+    raise UndeclaredValueType(
+        f"{metric_id} does not say what its figure is. Add it to _VALUE_TYPE_OVERRIDES in "
+        "app/domain/bi/catalogue/engine.py, naming whether it is an amount, a percentage "
+        "already multiplied by a hundred, a fraction of one, an index on its own scale, or "
+        "a duration in years."
+    )
 
 
 def engine_measure_id(metric_id: str, regime: str, tier: Tier) -> str:
