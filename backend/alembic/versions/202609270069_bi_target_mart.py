@@ -77,6 +77,12 @@ _PERIOD_GRAINS = "'month', 'quarter', 'half_year', 'year'"
 _TARGET_VERSIONS = "'budget', 'reforecast'"
 _TIME_BEHAVIOURS = "'stock', 'flow'"
 _SCOPE_BASES = "'exact', 'bank_wide'"
+#: A scope value is copied verbatim from whichever catalogue dimension the target
+#: names, and the widest of those is 255 characters. Pinned here rather than
+#: imported, like every other literal in this file. At 160 one long register row
+#: raised a truncation inside the build's single nested transaction and failed
+#: all six scopes nightly (audit A8-01).
+_SCOPE_VALUE_WIDTH = 255
 
 _BUILDS_TABLE = "bi_mart_builds"
 _BUILDS_SCOPE_CONSTRAINT = "ck_bi_mart_builds_scope"
@@ -97,7 +103,7 @@ def _create_target_fact() -> None:
         sa.Column("as_of_date", sa.Date(), nullable=False),
         sa.Column("measure_id", sa.String(length=160), nullable=False),
         sa.Column("scope_dimension", sa.String(length=80), nullable=False),
-        sa.Column("scope_value", sa.String(length=160), nullable=False),
+        sa.Column("scope_value", sa.String(length=_SCOPE_VALUE_WIDTH), nullable=False),
         sa.Column("target_version", sa.String(length=16), nullable=False),
         sa.Column("period_start", sa.Date(), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
@@ -108,7 +114,7 @@ def _create_target_fact() -> None:
         _money("variance_value"),
         sa.Column("scope_basis", sa.String(length=16), nullable=False),
         sa.Column("declared_scope_dimension", sa.String(length=80), nullable=False),
-        sa.Column("declared_scope_value", sa.String(length=160), nullable=False),
+        sa.Column("declared_scope_value", sa.String(length=_SCOPE_VALUE_WIDTH), nullable=False),
         sa.Column("builder_version", sa.Integer(), nullable=False),
         sa.Column("built_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint(

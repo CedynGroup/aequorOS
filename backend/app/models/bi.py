@@ -117,6 +117,14 @@ TARGET_TIME_BEHAVIOURS: tuple[str, ...] = ("stock", "flow")
 #: never summed, and the row says which was used so the number is auditable
 #: without re-reading the register.
 TARGET_SCOPE_BASES: tuple[str, ...] = ("exact", "bank_wide")
+#: How wide a target's scope value may be, and therefore what the register
+#: accepts. It equals the WIDEST column a scope value can be copied from
+#: (``counterparty.group`` and ``loan.employer``, both ``String(255)``); a
+#: narrower mart column turns one long register row into a nightly total build
+#: failure for that tenant (audit A8-01). Asserted against the catalogue's
+#: scopeable dimensions in ``tests/models/test_bi_models.py``, so a new wider
+#: dimension fails there rather than in a tenant's build.
+TARGET_SCOPE_VALUE_WIDTH = 255
 #: ``bi_fact_target.scope_dimension`` / ``scope_value`` for a bank-wide target.
 #: The register names NO scope for one (never a sentinel); the mart needs a
 #: value it can put in a primary key, so the empty string is that key — the
@@ -551,7 +559,16 @@ class BiFactTarget(_BuilderStamp, Base):
     measure_id: Mapped[str] = mapped_column(String(160), primary_key=True)
     #: The catalogue dimension this row is scoped to; ``''`` is bank-wide.
     scope_dimension: Mapped[str] = mapped_column(String(80), primary_key=True)
-    scope_value: Mapped[str] = mapped_column(String(160), primary_key=True)
+    #: A scope value is COPIED VERBATIM from whichever dimension the target names,
+    #: and the widest of those (``counterparty.group``, ``loan.employer``) is
+    #: ``String(255)``, so this must be too. At 160 a target scoped to a long
+    #: counterparty group raised ``StringDataRightTruncation`` inside the build's
+    #: single nested transaction, which fails ALL SIX scopes — positions, events,
+    #: GL, engine, dims and targets — and re-fails every night, from one register
+    #: row (audit A8-01). ``TARGET_SCOPE_VALUE_WIDTH`` is the one number, and
+    #: the register refuses a longer value at ingestion so the door and the mart
+    #: cannot disagree.
+    scope_value: Mapped[str] = mapped_column(String(TARGET_SCOPE_VALUE_WIDTH), primary_key=True)
     target_version: Mapped[str] = mapped_column(String(16), primary_key=True)
     #: The window the declared target covers: first and last day of its grain.
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
@@ -570,7 +587,9 @@ class BiFactTarget(_BuilderStamp, Base):
     #: scope when ``scope_basis`` is ``exact``, and the bank-wide scope when it
     #: is the fallback.
     declared_scope_dimension: Mapped[str] = mapped_column(String(80), nullable=False)
-    declared_scope_value: Mapped[str] = mapped_column(String(160), nullable=False)
+    declared_scope_value: Mapped[str] = mapped_column(
+        String(TARGET_SCOPE_VALUE_WIDTH), nullable=False
+    )
 
 
 # --- conformed dimensions (Type 1, natural key + org + bank) -------------------

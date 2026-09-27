@@ -63,6 +63,17 @@ VERSIONS: tuple[str, ...] = ("budget", "reforecast")
 
 #: Catalogue measure and dimension ids: dot-separated lower-snake segments
 #: (``loans.npl_ratio_pct``, ``branch.region``, ``engine.car_pct.crd.official``).
+#: The longest scope value the comparison mart can store, so a row that cannot
+#: be stored is refused HERE rather than accepted and then failing the tenant's
+#: nightly build. This is not a cosmetic limit: the value is copied verbatim into
+#: ``bi_fact_target.scope_value``, whose whole build runs in one transaction, so
+#: an over-long value used to take positions, events, GL, engine metrics and
+#: dimensions down with it, every night, until the row was withdrawn (audit
+#: A8-01). It equals ``app.models.bi.TARGET_SCOPE_VALUE_WIDTH``; the two are
+#: asserted equal in ``tests/domain/ingestion/test_reference_schemas.py`` rather
+#: than imported, because this module stays free of ``app.models``.
+SCOPE_VALUE_MAX_LENGTH = 255
+
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z0-9][a-z0-9_]*)+")
 #: The months a grain's window can end in.
 _GRAIN_END_MONTHS: dict[str, tuple[int, ...]] = {
@@ -161,6 +172,13 @@ def validate_target_row(row: dict) -> list[str]:
         problems.append(
             "field 'scope_dimension' must be a catalogue dimension id like 'branch.code' "
             f"(got {dimension!r})"
+        )
+    if len(scope_value) > SCOPE_VALUE_MAX_LENGTH:
+        problems.append(
+            f"field 'scope_value' must be at most {SCOPE_VALUE_MAX_LENGTH} characters "
+            f"(got {len(scope_value)}). It names a value in the bank's own book — a "
+            "branch, a product, a counterparty group — and is stored beside the actual "
+            "it is compared with."
         )
     return problems
 

@@ -450,6 +450,40 @@ def test_vocabularies_are_exactly_the_contract() -> None:
     assert "Unassigned region" in str(region.server_default.arg)
 
 
+def test_a_target_scope_value_is_as_wide_as_the_widest_dimension_it_can_name() -> None:
+    """Audit A8-01. A scope value is copied VERBATIM; too narrow is a build outage.
+
+    ``bi_fact_target.scope_value`` holds whatever the bank named as the scope of a
+    target: a branch, a product family, a counterparty group, an employer. Those
+    values are copied from the position fact's own columns, the widest of which are
+    255 characters. At 160 a target scoped to a long counterparty group raised
+    ``StringDataRightTruncation`` inside the mart build's single nested
+    transaction, which marks ALL SIX scopes failed — so the tenant lost positions,
+    events, GL, engine metrics, dimensions and targets for that date, and re-failed
+    every night, from one register row.
+
+    Neither the model/migration parity tests nor SQLite could see it: the two sides
+    AGREED on 160, and SQLite ignores VARCHAR lengths entirely. So the width is
+    derived here from the columns a value can actually come from.
+    """
+    fact = _table(BiFactPositionDaily)
+    # Every position-fact string column is a candidate: a catalogue dimension may
+    # be bound to any of them, so the bound has to hold for the widest.
+    widest = max(
+        (column.type.length or 0)
+        for column in fact.columns
+        if isinstance(column.type, sa.String) and column.type.length
+    )
+    assert widest <= bi.TARGET_SCOPE_VALUE_WIDTH, (
+        f"a target scope value may be copied from a {widest}-character column but "
+        f"bi_fact_target.scope_value holds only {bi.TARGET_SCOPE_VALUE_WIDTH}. One "
+        "such target fails the tenant's WHOLE nightly mart build, repeatedly."
+    )
+    for column_name in ("scope_value", "declared_scope_value"):
+        column = _table(BiFactTarget).c[column_name]
+        assert column.type.length == bi.TARGET_SCOPE_VALUE_WIDTH, column_name
+
+
 def test_target_vocabularies_match_the_register_that_supplies_them() -> None:
     """The mart CHECKs and the register's enums are ONE vocabulary, both ways.
 

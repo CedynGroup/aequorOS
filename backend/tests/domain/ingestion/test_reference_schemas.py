@@ -35,6 +35,7 @@ from app.domain.ingestion.reference_schemas.business_units import (
 from app.domain.ingestion.reference_schemas.business_units import SCHEMA as UNITS
 from app.domain.ingestion.reference_schemas.performance_targets import (
     GRAINS,
+    SCOPE_VALUE_MAX_LENGTH,
     TIME_BEHAVIOURS,
     VERSIONS,
     period_end_for,
@@ -345,3 +346,42 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
             if any(name == "app.domain.bi" or name.startswith("app.domain.bi.") for name in names):
                 offenders.append(str(path.relative_to(package.parents[2])))
     assert not offenders, f"ingestion must not import the BI catalogue: {sorted(set(offenders))}"
+
+
+def test_the_target_scope_bound_equals_what_the_comparison_mart_can_store() -> None:
+    """Audit A8-01. The door and the mart must agree, or one of them is a trap.
+
+    The register refuses a scope value longer than the mart column that stores it,
+    so an unstorable target is rejected at ingestion with a message naming the
+    limit, instead of being accepted and then failing the tenant's whole nightly
+    build. The two constants are asserted equal rather than imported, because the
+    reference-schema module deliberately stays free of ``app.models``.
+    """
+    from app.models.bi import TARGET_SCOPE_VALUE_WIDTH
+
+    assert SCOPE_VALUE_MAX_LENGTH == TARGET_SCOPE_VALUE_WIDTH, (
+        "the performance_targets register and bi_fact_target disagree about how long "
+        "a scope value may be. Whichever is larger is the trap: a value the door "
+        "accepts and the mart cannot store fails the build, and a value the mart "
+        "could hold but the door refuses is a target the bank cannot state."
+    )
+
+
+def test_an_over_long_target_scope_value_is_refused_by_name() -> None:
+    """And the refusal says what the limit is, so the bank can fix its own file."""
+    row = {
+        "period": "2026-06-30",
+        "grain": "quarter",
+        "measure_id": "loans.balance_rc",
+        "time_behaviour": "stock",
+        "value": "1000",
+        "version": "budget",
+        "scope_dimension": "counterparty.group",
+        "scope_value": "x" * (SCOPE_VALUE_MAX_LENGTH + 1),
+    }
+    problems = validate_target_row(row)
+    assert any("scope_value" in problem for problem in problems), problems
+    assert any(str(SCOPE_VALUE_MAX_LENGTH) in p for p in problems), problems
+
+    row["scope_value"] = "x" * SCOPE_VALUE_MAX_LENGTH
+    assert not [p for p in validate_target_row(row) if "scope_value" in p]
