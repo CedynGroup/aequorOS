@@ -78,6 +78,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, Tenant, TenantBank, TenantContext
+from app.core.authorization import Permission
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import (
@@ -121,8 +122,14 @@ from app.schemas.bi import (
     BiTrustRead,
     BiTrustStatus,
 )
-from app.services.bi import grid_adapter, query_log, reconciliation
-from app.services.bi.authorization import BiAuthorization, authorize_query, scope_pairs
+from app.services.bi import grid_adapter, provenance, query_log, reconciliation
+from app.services.bi.authorization import (
+    ALL_INSTITUTION_DATA,
+    REASON_ALLOWED,
+    BiAuthorization,
+    authorize_query,
+    scope_pairs,
+)
 from app.services.bi.compiler import ColumnSpec, CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.execution import QueryResult, execute
@@ -133,6 +140,9 @@ SURFACE_QUERY = "query"
 SURFACE_GRID = "grid"
 SURFACE_DRILL = "drill"
 SURFACE_EXPLAIN = "explain"
+#: A governed export. Its own surface so the log distinguishes a figure that was
+#: LOOKED AT from one that left the platform as a file (D-065).
+SURFACE_EXPORT = "export"
 #: Not ``bi_query_log`` surfaces — C1's ``surface`` CHECK names the six data
 #: surfaces and neither of these is one. Carried so the decision telemetry and
 #: the ETags can name them (see the module docstring on the trust row).
@@ -319,116 +329,39 @@ class _NotModified(Exception):  # noqa: N818 - a control-flow signal, not an err
 
 
 def _data_window(time: BiTime) -> tuple[date, date]:
-    """Every date the query can read, comparison window included.
+    """Every date the query can read, comparison window included (``provenance``)."""
 
-    Mirrors the compiler's own ``_windows`` (pinned by a test): a single as-of
-    is one day, a range is itself, and a comparison adds the prior date or an
-    equal-length prior window. The badge and the fingerprint must cover the
-    prior period too — a comparison reads it.
-    """
-
-    if time.as_of is not None:
-        if time.compare_to is None:
-            return time.as_of, time.as_of
-        return min(time.as_of, time.compare_to), max(time.as_of, time.compare_to)
-    assert time.range is not None  # noqa: S101 - BiTime validates exactly one window
-    start, end = time.range.start, time.range.end
-    if time.compare_to is None:
-        return start, end
-    prior_start = time.compare_to - (end - start)
-    return min(start, prior_start), max(end, time.compare_to)
+    return provenance.data_window(time)
 
 
 def _build_fingerprint(
     db: Session, organization_id: str, bank_id: str, window: tuple[date, date]
 ) -> str | None:
-    """The fingerprint of the mart state the window was read from.
+    """The fingerprint of the mart state the window was read from (``provenance``)."""
 
-    One successful build stamps every scope of a date with the SAME value-based
-    fingerprint, so the common case — one date, fully built — returns that value
-    verbatim and an ETag can be compared against the builder's own record. A
-    window over several dates, or a date whose scopes did not all succeed, has
-    no single fingerprint: those return one deterministic digest over the build
-    state instead, which changes whenever any part of it does. Nothing built at
-    all returns ``None``, and the ETag then rests on the catalogue version and
-    the principal.
-    """
-
-    rows = db.execute(
-        select(
-            BiMartBuild.as_of_date, BiMartBuild.scope, BiMartBuild.status, BiMartBuild.fingerprint
-        )
-        .where(
-            BiMartBuild.organization_id == organization_id,
-            BiMartBuild.bank_id == bank_id,
-            BiMartBuild.as_of_date >= window[0],
-            BiMartBuild.as_of_date <= window[1],
-        )
-        .order_by(BiMartBuild.as_of_date, BiMartBuild.scope)
-    ).all()
-    if not rows:
-        return None
-    fingerprints = {row.fingerprint for row in rows if row.status == "succeeded"}
-    if not fingerprints:
-        return None
-    if len(fingerprints) == 1 and all(row.status == "succeeded" for row in rows):
-        return fingerprints.pop()
-    material = _HEADER_SEPARATOR.join(
-        f"{row.as_of_date.isoformat()}:{row.scope}:{row.status}:{row.fingerprint}" for row in rows
+    return provenance.build_fingerprint(
+        db, organization_id=organization_id, bank_id=bank_id, window=window
     )
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _stored_checks(
     db: Session, organization_id: str, bank_id: str, window: tuple[date, date]
 ) -> list[BiReconciliationResult]:
-    return list(
-        db.scalars(
-            select(BiReconciliationResult)
-            .where(
-                BiReconciliationResult.organization_id == organization_id,
-                BiReconciliationResult.bank_id == bank_id,
-                BiReconciliationResult.as_of_date >= window[0],
-                BiReconciliationResult.as_of_date <= window[1],
-            )
-            .order_by(BiReconciliationResult.as_of_date, BiReconciliationResult.check_id)
-        )
+    return provenance.stored_checks(
+        db, organization_id=organization_id, bank_id=bank_id, window=window
     )
 
 
 def _trust_badge(
     db: Session, organization_id: str, bank_id: str, window: tuple[date, date]
 ) -> BiTrustBadge:
-    """The verdict for everything the window covers; a missing check is grey.
+    """The verdict for everything the window covers; a missing check is grey."""
 
-    For a single date this is ``reconciliation.trust_for`` (pinned by a test).
-    For a window it is the worst verdict in it — a badge may understate
-    confidence, never overstate it — which is also why a date in the window with
-    no stored result greys the whole badge rather than being skipped.
-    """
-
-    rows = _stored_checks(db, organization_id, bank_id, window)
-    by_date: dict[date, dict[str, str]] = {}
-    for row in rows:
-        by_date.setdefault(row.as_of_date, {})[row.check_id] = row.status
-    if not by_date:
-        return BiTrustBadge(status=_trust_status(reconciliation.GREY), failing_checks=[])
-    overalls: list[str] = []
-    failing: set[str] = set()
-    for stored in by_date.values():
-        statuses = {
-            check_id: stored.get(check_id, reconciliation.GREY)
-            for check_id in reconciliation.STORABLE_CHECK_IDS
-        }
-        overalls.append(reconciliation.overall_trust(statuses.values()))
-        failing.update(
-            check_id
-            for check_id, value in statuses.items()
-            if value in {reconciliation.RED, reconciliation.AMBER}
-        )
+    verdict = provenance.trust_verdict(
+        db, organization_id=organization_id, bank_id=bank_id, window=window
+    )
     return BiTrustBadge(
-        status=_trust_status(reconciliation.overall_trust(overalls)),
-        failing_checks=sorted(failing),
+        status=_trust_status(verdict.status), failing_checks=list(verdict.failing_checks)
     )
 
 
@@ -540,13 +473,76 @@ class _Authorized:
     record: query_log.QueryRecord
 
 
-def _authorize(
+def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
+    db: Session,
+    access: BiReadAccess,
+    cat: Catalogue,
+    query: BiQuery,
+    *,
+    surface: str,
+    permissions: Sequence[Permission],
+) -> BiAuthorization:
+    """Require EVERY permission in ``permissions`` over the query, as one decision.
+
+    A read needs ``view`` and nothing else, so the common case is one evaluator
+    pass. A record-level or confidential EXPORT needs ``export`` **as well as**
+    ``view`` (D-066): the two are different sentences and a bundle that carried
+    one without the other would otherwise let an export return a member its
+    holder could not have queried interactively — or the reverse. Requiring both
+    is deny-by-default in the only direction that matters, and it collapses to
+    ONE ``bi_query_log`` row because the caller sees a single decision.
+
+    The merge is conjunctive: allowed only if every pass allowed, denied members
+    unioned in first-seen order, and the reason taken from the first refusal so
+    the log names why rather than which pass.
+    """
+
+    denied: list[str] = []
+    matched: dict[UUID, None] = {}
+    reason = REASON_ALLOWED
+    member_ids: tuple[str, ...] = ()
+    scope = ALL_INSTITUTION_DATA
+    for permission in permissions:
+        decision = authorize_query(
+            db, access.ctx, access.bank, cat, query, permission=permission, surface=surface
+        )
+        member_ids = decision.member_ids or member_ids
+        if decision.allowed:
+            matched.update(dict.fromkeys(decision.matching_binding_ids))
+            scope = decision.data_scope
+            continue
+        if reason == REASON_ALLOWED:
+            reason = decision.reason
+        denied.extend(member_id for member_id in decision.denied_members if member_id not in denied)
+    if denied:
+        return BiAuthorization(
+            allowed=False,
+            denied_members=tuple(denied),
+            # Nothing is served, so no binding authorized this and there is no
+            # ETag to key on the pairs that did match.
+            matching_binding_ids=(),
+            data_scope=ALL_INSTITUTION_DATA,
+            reason=reason,
+            member_ids=member_ids,
+        )
+    return BiAuthorization(
+        allowed=True,
+        denied_members=(),
+        matching_binding_ids=tuple(matched),
+        data_scope=scope,
+        reason=REASON_ALLOWED,
+        member_ids=member_ids,
+    )
+
+
+def _authorize(  # noqa: PLR0913 - the guarded pipeline's own inputs, all explicit
     db: Session,
     access: BiReadAccess,
     query: BiQuery,
     *,
     surface: str,
     if_none_match: str | None,
+    permissions: Sequence[Permission] = (Permission.VIEW,),
 ) -> _Authorized:
     """Meter, authorize, fingerprint and revalidate — before anything compiles.
 
@@ -566,7 +562,9 @@ def _authorize(
         catalogue_version=CATALOGUE_VERSION,
     )
     try:
-        decision = authorize_query(db, access.ctx, access.bank, cat, query, surface=surface)
+        decision = _merged_decision(
+            db, access, cat, query, surface=surface, permissions=permissions
+        )
     except BiQueryError as exc:
         # An id the catalogue does not know. No decision was reached, so the row
         # names no member and no denial — but the ATTEMPT is recorded, because the
@@ -579,6 +577,7 @@ def _authorize(
     fingerprint = _build_fingerprint(db, access.ctx.organization_id, access.bank.id, window)
     etag = _etag(
         surface,
+        ",".join(permission.value for permission in permissions),
         attempt.query_hash,
         fingerprint,
         CATALOGUE_VERSION,
@@ -725,6 +724,25 @@ def _columns(specs: Sequence[ColumnSpec]) -> list[BiResultColumn]:
         )
         for spec in specs
     ]
+
+
+# --- the pipeline, named for the second surface that reuses it ---------------------------
+#
+# ``app/features/export_bi.py`` runs the SAME guarded steps: budget, authorize,
+# fingerprint, log, refuse. It must not copy them — a second implementation of
+# "may this principal read this query" is how an export comes to return a member
+# its caller could not have queried interactively, which is the one rule
+# ``docs/bi.md`` §Exports states as a rule. These aliases are the seam: public
+# names for the steps above, so the reuse reads as reuse rather than as reaching
+# into another module's internals.
+
+Authorized = _Authorized
+authorize = _authorize
+append_query_log = _append
+query_error = _query_error
+injected_filters = _injected_filters
+data_window = _data_window
+trust_badge = _trust_badge
 
 
 # --- the catalogue this caller may query -------------------------------------------------

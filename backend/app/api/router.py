@@ -8,6 +8,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.examiner_surfaces import router as examiner_router
+from app.features.export_bi import router as bi_export_router
 from app.features.export_icaap_drafts import router as icaap_draft_exports_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
@@ -223,6 +224,14 @@ v1_router.include_router(sdi_diagnostics_router, dependencies=BANK_ROUTE_DEPENDE
 # cross-tenant route sweeps.
 v1_router.include_router(
     bi_read_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Governed exports, on the same two dependencies and in the same order: the
+# institution resolves (a sibling tenant's BK-* is 404) before the deployment
+# flag, which answers 404 for a deployment without BI. An export is a BI read
+# that leaves the platform, so it may never be reachable where a BI read is not.
+v1_router.include_router(
+    bi_export_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
 )
 # ICAAP draft exports. No ``require_module_access``: that dependency answers

@@ -31,9 +31,7 @@ def test_run_once_passes_runtime_identity_to_job_claim(monkeypatch: Any) -> None
 def test_run_once_binds_the_claimed_tenant_before_invoking_a_handler(
     monkeypatch: Any,
 ) -> None:
-    job = SimpleNamespace(
-        id=uuid4(), organization_id="OR-TEST0001", job_type="pipeline_refresh"
-    )
+    job = SimpleNamespace(id=uuid4(), organization_id="OR-TEST0001", job_type="pipeline_refresh")
 
     class FakeSession:
         def __init__(self, claimed: object | None = None) -> None:
@@ -243,7 +241,7 @@ def test_run_once_dispatches_a_bi_job_through_handlers(monkeypatch: Any) -> None
     )
 
     assert worker.run_once(worker.resolve_job_types("lane:bi"), worker_id="risk-worker-bi")
-    assert claimed_types == [("bi_mart_refresh", "bi_mart_backfill", "bi_retention")]
+    assert claimed_types == [("bi_mart_refresh", "bi_mart_backfill", "bi_retention", "bi_export")]
     assert seen == [({"organization_id": "OR-TEST0001"}, job)]
 
 

@@ -68,7 +68,8 @@ def test_mixing_the_ai_lane_with_another_lane_is_refused() -> None:
 # --- the bi lane (D-007: exclusivity is a property of a lane, not a literal) --
 
 
-BI_TYPES = ("bi_mart_refresh", "bi_mart_backfill", "bi_retention")
+#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns.
+BI_TYPES = ("bi_mart_refresh", "bi_mart_backfill", "bi_retention", "bi_export")
 
 
 def test_the_default_selection_never_includes_the_bi_lane() -> None:
@@ -193,12 +194,19 @@ def test_the_backfill_reclaim_window_is_derived_from_the_hop_bound(
 
 
 def test_the_other_bi_types_keep_the_fleet_default() -> None:
-    """Refresh and retention assert they finish inside the default; no override
-    without a measurement (the ``test_job_queue`` rule)."""
+    """Refresh and retention assert they finish inside the default.
+
+    Two of the four BI types take a window of their own, each for a stated
+    reason: ``bi_mart_backfill`` DERIVES one from ``BI_BACKFILL_HOP_SECONDS``
+    (above), and ``bi_export`` takes a static override because only half of a
+    governed export's runtime is bounded by a setting (D-070). Refresh and
+    retention take neither, which is the assertion that they finish inside the
+    fleet default.
+    """
     default = timedelta(seconds=900)
     assert job_queue.stale_after_for("bi_mart_refresh", default) == default
     assert job_queue.stale_after_for("bi_retention", default) == default
-    assert not set(BI_TYPES) & set(job_queue.STALE_AFTER_OVERRIDES_SECONDS)
+    assert set(BI_TYPES) & set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"bi_export"}
 
 
 def test_a_core_worker_never_reaps_a_bi_hop(db_session: Session) -> None:

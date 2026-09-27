@@ -855,3 +855,65 @@ class BiExplainRead(BiClosedModel):
     trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
     build_fingerprint: str | None = None
+
+
+# --- governed exports (T3; ``docs/bi.md`` §Exports) --------------------------------------
+#
+# One contiguous block, added at the end so the pack schemas above keep their
+# place. Every name is unique across ``app/schemas`` (the OpenAPI component-key
+# hazard in AGENTS.md), and the format vocabulary is asserted against
+# ``app.services.bi.exports.EXPORT_FORMATS`` by a test rather than restated with
+# a comment — the renderer that implements a format and the name a client asks
+# for it by must not drift.
+
+BiExportFormat = Literal["csv", "xlsx", "pdf"]
+#: ``summary`` needs ``view``; ``record_level`` — which covers the spec's
+#: "record-level or confidential" — additionally needs ``export``. The SERVER
+#: decides which a query is, from the catalogue's sensitivity declarations; this
+#: value is reported back, never accepted.
+BiExportClass = Literal["summary", "record_level"]
+#: ``ready`` — the file is attached to this response. ``queued`` / ``running`` —
+#: it is being produced by the ``bi_export`` job. ``failed`` / ``denied`` — it
+#: will not be.
+BiExportState = Literal["ready", "queued", "running", "failed", "denied"]
+
+
+class BiExportRequest(BiClosedModel):
+    """One query, and the artifact wanted from it.
+
+    There is deliberately no "this is confidential" flag: the disclosure class is
+    read from the catalogue members the query touches, because a flag on the
+    request body would put the classification in the hands of the party it
+    constrains.
+    """
+
+    query: BiQuery
+    format: BiExportFormat
+
+
+class BiExportRead(BiClosedModel):
+    """A queued or finished export, as its owner sees it.
+
+    ``download_url`` is a short-lived presigned link and is minted when this is
+    read, never stored: a URL persisted in a table is a bearer credential that
+    outlives the request it was issued for.
+    """
+
+    job_id: UUID
+    state: BiExportState
+    format: BiExportFormat
+    export_class: BiExportClass
+    #: Production copy explaining the state, suitable for display as-is.
+    message: str
+    filename: str | None = None
+    media_type: str | None = None
+    row_count: int | None = None
+    #: The export hit the server row cap; the file holds this many rows, not all.
+    truncated: bool = False
+    size_bytes: int | None = None
+    checksum_sha256: str | None = None
+    download_url: str | None = None
+    download_expires_in_seconds: int | None = None
+    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
+    catalogue_version: str
+    build_fingerprint: str | None = None

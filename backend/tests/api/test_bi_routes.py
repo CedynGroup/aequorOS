@@ -117,6 +117,19 @@ ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
             "measure": "loans.balance_rc",
         },
     ),
+    # T3: a governed export is a BI read that leaves the platform, so it must
+    # answer every one of the sweeps below exactly as the read routes do — the
+    # flag, the cross-tenant 404, the impersonated operator, the zero-binding
+    # human. Its own policy (summary vs record-level) is tested in
+    # ``tests/api/test_bi_exports.py``.
+    (
+        "POST",
+        "/export",
+        {
+            "query": {"measures": ["loans.balance_rc"], "time": {"as_of": "2026-08-31"}},
+            "format": "csv",
+        },
+    ),
 )
 
 BALANCE_BY_BRANCH_QUERY: dict[str, Any] = {
@@ -659,7 +672,7 @@ def test_the_post_reads_are_credited_as_guarded_by_the_route_sweep(db_client: Te
         and "/bi/" in route.path
         and route.methods & {"POST", "PUT", "PATCH", "DELETE"}
     ]
-    assert len(unsafe) == 4, [route.path for route in unsafe]
+    assert len(unsafe) == 5, [route.path for route in unsafe]
     for route in unsafe:
         names = _dependency_names(route)
         assert "require_bi_read" in names, route.path

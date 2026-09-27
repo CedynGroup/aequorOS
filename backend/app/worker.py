@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
-from app.jobs import bi_mart_backfill, bi_mart_refresh, bi_retention
+from app.jobs import bi_export, bi_mart_backfill, bi_mart_refresh, bi_retention
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
@@ -66,6 +66,7 @@ HANDLERS: dict[str, Handler] = {
     "bi_mart_refresh": bi_mart_refresh.run_bi_mart_refresh,
     "bi_mart_backfill": bi_mart_backfill.run_bi_mart_backfill,
     "bi_retention": bi_retention.run_bi_retention,
+    "bi_export": bi_export.run_bi_export,
 }
 
 

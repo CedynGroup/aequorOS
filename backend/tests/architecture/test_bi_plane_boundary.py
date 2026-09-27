@@ -164,7 +164,9 @@ BI_OWNED: frozenset[str] = _bi_owned()
 #: :data:`BI_OWNED` from the "no module outside BI imports BI" check, so a
 #: non-BI module drifting into this set is a silent boundary hole. Adding a BI
 #: feature file means adding it here in the same change.
-EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset({"app/features/read_bi.py"})
+EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
+    {"app/features/read_bi.py", "app/features/export_bi.py"}
+)
 
 
 def test_the_bi_owned_globs_resolve_to_no_non_bi_module() -> None:

@@ -1509,7 +1509,20 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         ("/api/v1/notifications/{notification_id}",),
         bank_scoped=False,
     ),
-    ObjectKind("job", _job, ("/api/v1/jobs/{job_id}",), bank_scoped=False),
+    ObjectKind(
+        "job",
+        _job,
+        (
+            "/api/v1/jobs/{job_id}",
+            # A governed BI export is collected by its QUEUE ROW, so the
+            # export route takes a job id too. It answers 404 for a job of
+            # another tenant, another institution, another type or another
+            # principal — the last of those because a presigned download
+            # link carries no identity of its own.
+            "/api/v1/banks/{bank_id}/bi/exports/{job_id}",
+        ),
+        bank_scoped=False,
+    ),
     ObjectKind(
         "integration_key",
         _integration_key,

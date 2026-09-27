@@ -60,6 +60,7 @@ JOB_TYPES = (
     "bi_mart_refresh",
     "bi_mart_backfill",
     "bi_retention",
+    "bi_export",
 )
 
 #: The lane a worker process must be running to claim a job type.
@@ -84,6 +85,7 @@ JOB_LANES: Mapping[str, str] = MappingProxyType(
         "bi_mart_refresh": "bi",
         "bi_mart_backfill": "bi",
         "bi_retention": "bi",
+        "bi_export": "bi",
     }
 )
 
@@ -142,6 +144,17 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     # does not recover it, it duplicates it — and here the duplicate was
     # abusive traffic to the regulator this platform reports to.
     "desk_capture": 6 * 60 * 60,
+    # ``bi_export`` renders up to ``BI_EXPORT_ROW_CAP`` rows (100 000) into a
+    # PDF or a workbook. Only HALF of that is bounded by a setting: the SQL runs
+    # under ``BI_EXPORT_TIMEOUT_MS`` (120 s), and the layout that follows it is
+    # not timed at all — reportlab lays out every row of a 100 000-row table.
+    # There is no measurement yet, so the window is set well above any plausible
+    # render rather than at a number anyone has observed; that is the honest
+    # position, and it errs the safe way. A reclaimed export re-renders to the
+    # SAME object path and is therefore wasteful rather than corrupting, but it
+    # would also write a second ``bi_query_log`` row for one file, which is the
+    # reason not to leave it on the fleet default.
+    "bi_export": 30 * 60,
 }
 
 #: The one BI job whose runtime is a SETTING rather than a measurement:
