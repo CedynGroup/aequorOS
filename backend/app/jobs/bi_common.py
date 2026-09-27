@@ -83,6 +83,32 @@ def load_builder() -> ModuleType:
     return importlib.import_module(BUILDER_MODULE)
 
 
+#: The BI service modules a handler may reach, named so a handler cannot import
+#: an arbitrary one by string. `app/jobs` must import cleanly on a worker with no
+#: BI feature enabled, because a handler is registered a release before the flag
+#: that enqueues it (D-008), and a guard refuses an `app.services.bi` import
+#: statement anywhere in `app/jobs/bi_*.py` — including inside a function, since
+#: `sys.modules` cannot stand in for a name bound by an import statement.
+LOADABLE_MODULES: frozenset[str] = frozenset(
+    {
+        BUILDER_MODULE,
+        "app.services.bi.alerts",
+        "app.services.bi.subscriptions",
+    }
+)
+
+
+def load_module(dotted: str) -> ModuleType:
+    """Import one NAMED BI service module at call time.
+
+    Refuses a name that is not in :data:`LOADABLE_MODULES`, so this cannot become
+    a general back door into the BI plane from the job layer.
+    """
+    if dotted not in LOADABLE_MODULES:
+        raise BiJobError(f"{dotted} is not a loadable BI service module.")
+    return importlib.import_module(dotted)
+
+
 def payload_builder_version(job: Job) -> int:
     """The ``builder_version`` the enqueuer stamped on ``job``. Required."""
     raw = (job.payload or {}).get("builder_version")

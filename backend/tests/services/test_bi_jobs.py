@@ -40,6 +40,9 @@ class StubBuilder:
     next_cursors: list[date | None] = field(default_factory=list)
     raise_on_dispatch: BaseException | None = None
     dropped: tuple[str, ...] = ("bi_fact_position_daily_2026_02",)
+    #: The real builder returns ``skipped`` when a fingerprint has not moved, and
+    #: the handler must enqueue nothing on that path.
+    outcome_status: str = "succeeded"
 
     def refresh_bank_as_of(self, db: Session, **kwargs: Any) -> Any:
         _ = db
@@ -47,7 +50,7 @@ class StubBuilder:
             raise self.raise_on_dispatch
         self.refresh_calls.append(kwargs)
         return SimpleNamespace(
-            status="succeeded",
+            status=self.outcome_status,
             fingerprint="fp-" + kwargs["as_of"].isoformat(),
             row_counts={"bi_fact_position_daily": 12},
             trust={"positions": "green"},
@@ -274,6 +277,88 @@ def test_a_payload_without_a_usable_version_is_a_payload_error(
 
 
 @pytest.mark.usefixtures("bi_on")
+def test_a_succeeded_build_asks_for_an_alert_evaluation_and_the_new_data_runs(
+    db_session: Session, bank: Bank, builder: StubBuilder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The absence of this call is what went unnoticed, so it is asserted directly.
+
+    ``bi_alert_evaluate`` had a job type, a lane, a stale-window decision and a
+    handler, and NO enqueue site anywhere in the application. Nothing failed: the
+    threshold-alerts feature was inert, and inert is indistinguishable from
+    working until somebody sets an alert and waits. The only place that knows a
+    bank's figures have moved is a succeeded build, which is why both hang here.
+    """
+    calls: dict[str, object] = {}
+
+    def fake_alerts_enqueue(db: Session, **kwargs: object) -> object:
+        calls["alert"] = kwargs
+        return object()
+
+    def fake_on_new_data(db: Session, **kwargs: object) -> list[object]:
+        calls["on_new_data"] = kwargs
+        return [object(), object()]
+
+    monkeypatch.setattr(
+        bi_common,
+        "load_module",
+        lambda dotted: (
+            SimpleNamespace(
+                enqueue_evaluation=fake_alerts_enqueue, enqueue_on_new_data=fake_on_new_data
+            )
+            if dotted.startswith("app.services.bi.")
+            else bi_common.load_builder()
+        ),
+    )
+    job = _claimed(db_session, "bi_mart_refresh", _refresh_payload(bank), bank=bank)
+
+    bi_mart_refresh.run_bi_mart_refresh(db_session, job)
+
+    assert calls["alert"] == {
+        "organization_id": ORG_1,
+        "bank_id": bank.id,
+        "as_of": AS_OF,
+    }
+    on_new_data = calls["on_new_data"]
+    assert isinstance(on_new_data, dict)
+    assert on_new_data["organization_id"] == ORG_1
+    assert on_new_data["bank_id"] == bank.id
+    assert on_new_data["as_of"] == AS_OF
+    assert on_new_data["completed_at"] is not None
+    assert job.progress["alert_evaluations_enqueued"] == 1
+    assert job.progress["on_new_data_runs_enqueued"] == 2
+
+
+@pytest.mark.usefixtures("bi_on")
+def test_a_build_that_changed_nothing_asks_for_neither(
+    db_session: Session, bank: Bank, builder: StubBuilder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A skipped build enqueues nothing, which is what makes both idempotent.
+
+    The builder returns ``skipped`` when a slice's fingerprint has not moved, so a
+    rebuild that changed no figure must not re-evaluate an alert or re-send a
+    report. Without this the backfill — which calls the builder once per date —
+    would mail a bank a thousand board packs.
+    """
+    asked: list[str] = []
+    monkeypatch.setattr(
+        bi_common,
+        "load_module",
+        lambda dotted: SimpleNamespace(
+            enqueue_evaluation=lambda *a, **k: asked.append("alert"),
+            enqueue_on_new_data=lambda *a, **k: asked.append("run") or [],
+        ),
+    )
+    builder.outcome_status = "skipped"
+    job = _claimed(db_session, "bi_mart_refresh", _refresh_payload(bank), bank=bank)
+
+    bi_mart_refresh.run_bi_mart_refresh(db_session, job)
+
+    assert asked == [], asked
+    assert job.progress["alert_evaluations_enqueued"] == 0
+    assert job.progress["on_new_data_runs_enqueued"] == 0
+
+
+@pytest.mark.usefixtures("bi_on")
 def test_refresh_dispatches_with_the_contract_signature(
     db_session: Session, bank: Bank, builder: StubBuilder
 ) -> None:
@@ -297,6 +382,15 @@ def test_refresh_dispatches_with_the_contract_signature(
         "fingerprint": "fp-2026-06-30",
         "row_counts": {"bi_fact_position_daily": 12},
         "trust": {"positions": "green"},
+        # A SUCCEEDED build is the only place that knows a bank's figures moved,
+        # so it is where the alert evaluation and the on-new-data runs are queued.
+        # Both are ZERO here because both features ship behind their own flag and
+        # this test does not enable either; the counts are in the progress record
+        # so a build that queued nothing is distinguishable from one that was
+        # never asked to, which is the distinction that was missing when
+        # `bi_alert_evaluate` had a handler and no enqueue site at all.
+        "alert_evaluations_enqueued": 0,
+        "on_new_data_runs_enqueued": 0,
     }
 
 
