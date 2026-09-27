@@ -37,10 +37,28 @@ The pieces, in the order a caller uses them:
 
 ``statements``
     What an insight is: the sentence, the evidence, the trust, the designation.
+
+``assemble``
+    The one impure piece: it reads a bank's headline figures through the QUERY
+    PATH's own compiler and authorization decision and builds the sheet the pure
+    layer above consumes. Everything else in this package is a pure function of
+    its arguments, which is what makes an ``InsightSet`` citable against its own
+    ``fact_sheet_hash``.
 """
 
 from __future__ import annotations
 
+from app.services.bi.insights.assemble import (
+    HEADLINE_MEASURE_CAP,
+    MAX_COMPILED_READS,
+    TIME_DATE_DIMENSION,
+    AssembledInsights,
+    assemble,
+    default_compare_to,
+    engine_measure_applies,
+    engine_regime,
+    headline_measures,
+)
 from app.services.bi.insights.digest import (
     FACT_SHEET_SCHEMA,
     fact_sheet_hash,
@@ -89,6 +107,7 @@ from app.services.bi.insights.rules import (
 from app.services.bi.insights.statements import Emphasis, Insight, StatementClass
 
 __all__ = [
+    "AssembledInsights",
     "BridgeFact",
     "BridgeLeg",
     "BridgeUnavailable",
@@ -100,9 +119,11 @@ __all__ = [
     "FactScope",
     "FactSheet",
     "Favourability",
+    "HEADLINE_MEASURE_CAP",
     "Insight",
     "InsightPolicy",
     "InsightSet",
+    "MAX_COMPILED_READS",
     "MissingReason",
     "MovementFact",
     "ObservedFact",
@@ -113,14 +134,20 @@ __all__ = [
     "RatioBridge",
     "RatioPoint",
     "StatementClass",
+    "TIME_DATE_DIMENSION",
     "TrustState",
     "WHOLE_INSTITUTION",
+    "assemble",
     "bridge_fact",
+    "default_compare_to",
     "derive_insights",
+    "engine_measure_applies",
+    "engine_regime",
     "fact_sheet",
     "fact_sheet_hash",
     "fact_sheet_payload",
     "favourability",
+    "headline_measures",
     "movement_fact",
     "observed_fact",
     "project",

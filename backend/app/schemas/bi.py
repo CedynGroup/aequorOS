@@ -301,7 +301,7 @@ _PACK_COMPARISON_MONTHS: dict[str, int] = {
 }
 
 
-def _shift_months(anchor: date, months: int) -> date:
+def shift_months(anchor: date, months: int) -> date:
     """``anchor`` moved by whole months, on the end-of-month convention.
 
     A month end maps to a month end: the quarter before 30 June is 31 March,
@@ -309,6 +309,11 @@ def _shift_months(anchor: date, months: int) -> date:
     comparison that landed a day short of one would ask the book for a date it
     has no snapshot at and quietly render the prior column as no value. Any
     other day keeps its number, clamped to the target month's length.
+
+    Public because the insights assembler derives its own prior period with the
+    SAME convention (``app/services/bi/insights/assemble.py``). Two spellings of
+    "the month before this reporting date" would let a pack widget and the
+    insight strip beside it compare against different dates.
     """
     total = anchor.year * 12 + anchor.month - 1 + months
     year, month = divmod(total, 12)
@@ -358,7 +363,7 @@ class BiPackQuery(BiClosedModel):
         compare_to = (
             None
             if self.compare == "none"
-            else _shift_months(as_of, -_PACK_COMPARISON_MONTHS[self.compare])
+            else shift_months(as_of, -_PACK_COMPARISON_MONTHS[self.compare])
         )
         if self.window == "as_of":
             time = BiTime(as_of=as_of, compare_to=compare_to)
@@ -388,7 +393,7 @@ class BiPackQuery(BiClosedModel):
         if self.window == "year_to_date":
             return date(as_of.year, 1, 1)
         months = _PACK_TRAILING_MONTHS[self.window]
-        return _shift_months(as_of, -months) + timedelta(days=1)
+        return shift_months(as_of, -months) + timedelta(days=1)
 
 
 class BiWidgetDisplay(BiClosedModel):
@@ -914,6 +919,164 @@ class BiExportRead(BiClosedModel):
     checksum_sha256: str | None = None
     download_url: str | None = None
     download_expires_in_seconds: int | None = None
+    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
+    catalogue_version: str
+    build_fingerprint: str | None = None
+
+
+# --- resolved content packs (T7; ``docs/bi.md`` §Phase 2 Content packs) -------------------
+#
+# ``BiPackSpec`` above is the FILE: what shipped in the repository, with no date
+# and no reader. These models are what one reader is served for one reporting
+# date — the same widgets, each resolved through ``BiPackQuery.for_period`` and
+# each authorized on its own. Two properties are structural rather than
+# conventional:
+#
+# * a refused widget is a model that CANNOT carry a title, a caption, a measure,
+#   a dimension, a filter or a figure, because every one of those fields is
+#   omitted for it (the client's ``RestrictedWidget`` accepts only a height —
+#   anything else sent here would be a disclosure the reader was refused);
+# * a pack carries no date of its own and every ``BiQuery`` in the response was
+#   produced by ``for_period(as_of)``, so a certified dashboard can never show a
+#   date the caller did not ask for.
+
+#: Whether the reader is being shown this widget (or pack) or refused it.
+#: ``restricted`` is the only value a refusal takes, and it names nothing.
+BiPackAccess = Literal["granted", "restricted"]
+
+
+class BiPackWidgetRead(BiClosedModel):
+    """One widget of a pack resolved for one reader and one reporting date.
+
+    A ``granted`` widget carries everything the file declared plus its query
+    resolved for the date. A ``restricted`` widget carries its id and its place
+    on the canvas and NOTHING else: not the title, not the caption, not the
+    measure, not the dimension, not the filter, not a figure. A denial that
+    names what was hidden is a disclosure — "you may not see the largest
+    single-name share" tells the reader the institution tracks one — so the
+    refusal is a model with nothing in it to leak.
+    """
+
+    id: str = Field(min_length=1, max_length=64)
+    #: Where the widget sits. The layout item's ``i`` is the widget id, so this
+    #: is the one thing a refusal may carry: geometry, which the file already
+    #: published and which holds the dashboard's shape together.
+    layout: BiLayoutItem
+    access: BiPackAccess
+    kind: BiWidgetKind | None = None
+    title: str | None = None
+    caption: str | None = None
+    #: The file's query resolved for the requested date. ``None`` for a panel, a
+    #: named gap, or a refusal.
+    query: BiQuery | None = None
+    panel: BiPanelKey | None = None
+    display: BiWidgetDisplay | None = None
+    #: A Data Engine dataset the institution has not supplied. Passed through
+    #: from the file unchanged: it is a dataset KEY, and the client names it.
+    needs_data: str | None = None
+    #: Platform work the figure is waiting on. Never collapsed into
+    #: ``needs_data``: telling a bank it needs data it pushes every night is a
+    #: false statement about its own book.
+    pending_capability: BiPendingCapability | None = None
+
+
+class BiPackRead(BiClosedModel):
+    """A certified dashboard, resolved for one institution, date and reader."""
+
+    id: str
+    title: str
+    description: str
+    audience: BiPackAudience
+    version: str
+    #: The reporting date every query in this response was resolved for.
+    as_of: date
+    access: BiPackAccess
+    #: Production copy stating what the reader is looking at, shown as-is. It is
+    #: never empty: a dashboard whose every figure was refused must not read as a
+    #: dashboard with nothing to show.
+    message: str
+    widgets: list[BiPackWidgetRead]
+    #: How many widgets were refused, and how many could have shown a figure.
+    #: A count is not a disclosure; a name would be.
+    restricted_widgets: int = 0
+    readable_widgets: int = 0
+    catalogue_version: str
+
+
+class BiPackListRead(BiClosedModel):
+    """Every certified dashboard this institution and reader may open."""
+
+    as_of: date
+    packs: list[BiPackRead]
+    catalogue_version: str
+
+
+# --- insights (T7; ``docs/bi.md`` §Phase 2 Insights layer) -------------------------------
+#
+# ``BiInsightRead`` mirrors ``app/services/bi/insights/statements.py::Insight``
+# field for field; the dashboard's ``components/bi/types.ts::BiInsight`` mirrors
+# the same shape in camelCase. Nothing here is recomputed by a client: the
+# figures are already rendered into ``headline`` and ``detail`` in the
+# institution's own unit, with the reservations already attached, because a
+# browser that re-rounded a capital ratio would change what the sentence says.
+
+#: The kind of statement. Mirrors ``statements.StatementClass``.
+BiStatementClass = Literal["movement", "attribution", "projection", "data_gap", "trust_notice"]
+#: Whether the move was good for the bank. Mirrors ``drivers.Favourability``.
+BiFavourability = Literal["favourable", "adverse", "neutral"]
+#: How prominently the statement is shown. Mirrors ``statements.Emphasis``.
+BiEmphasis = Literal["high", "normal", "low"]
+
+
+class BiInsightRead(BiClosedModel):
+    """One statement the platform is prepared to make about a reporting date."""
+
+    id: str
+    rule_id: str
+    statement_class: BiStatementClass
+    headline: str
+    detail: str
+    as_of: date
+    measure_ids: list[str]
+    #: Stable, value-derived fact keys — the citation for the statement. Never
+    #: the volatile fact ids (``insights/facts.py``).
+    evidence: list[str]
+    favourability: BiFavourability
+    emphasis: BiEmphasis
+    #: Reservations that qualify the statement: advisory basis, trust state, a
+    #: gap in the data. Rendered as given.
+    qualifiers: list[str]
+    #: Only a filed engine figure under a green badge may be shown as certified.
+    certified: bool
+    advisory_designation: str | None = None
+    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
+
+
+class BiInsightsRead(BiClosedModel):
+    """What the platform will say about one institution at one date.
+
+    An empty ``insights`` list is a real answer — a date whose figures moved
+    within the materiality threshold honestly has nothing to report — which is
+    why ``measures_read`` is beside it: zero measures read and zero insights is
+    "nothing has been computed", and the client must not render that as "nothing
+    stands out".
+    """
+
+    as_of: date
+    #: The earlier date every movement in this set is measured against.
+    compare_to: date
+    insights: list[BiInsightRead]
+    #: The value-based fingerprint of the facts these statements were derived
+    #: from (``insights/digest.py``), so two strips can be told apart.
+    fact_sheet_hash: str
+    #: The presentation cap was reached and some statements are not shown.
+    truncated: bool = False
+    #: How many headline measures were actually read for this date.
+    measures_read: int = 0
+    #: How many were withheld because the reader's access does not cover them.
+    #: A count only: an insight the reader may not see is not named, and neither
+    #: is its measure.
+    measures_withheld: int = 0
     trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
     build_fingerprint: str | None = None

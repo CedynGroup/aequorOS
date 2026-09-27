@@ -130,6 +130,16 @@ ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
             "format": "csv",
         },
     ),
+    # T7: a certified dashboard resolved for a reader, and the statements the
+    # platform will make about a date. Both join the sweeps for the same reason
+    # the export did — the flag, the cross-tenant 404, the impersonated operator,
+    # the zero-binding human — and each answers the last of those differently,
+    # which is stated route by route in
+    # ``test_no_route_serves_a_principal_holding_no_binding``. Their own behaviour
+    # is tested in ``tests/api/test_bi_packs.py`` and ``test_bi_insights.py``.
+    ("GET", "/packs?as_of=2026-08-31", None),
+    ("GET", "/packs/board?as_of=2026-08-31", None),
+    ("GET", "/insights?as_of=2026-08-31", None),
 )
 
 BALANCE_BY_BRANCH_QUERY: dict[str, Any] = {
@@ -789,10 +799,23 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
 ) -> None:
     """The sweep that would have caught A6-01: every route, one zero-binding human.
 
-    Five routes serve data and must refuse. ``catalogue`` is the one that answers
-    200 — it discloses the platform's own metadata and no tenant value, and a
-    principal with no sentence sees an empty dictionary, which is what the
-    rollout contract now states.
+    Every route that serves a tenant FIGURE must refuse. Three answer 200 or a
+    different refusal, and each is stated here rather than excluded, because "this
+    route answers 200 for a principal with no sentence" is exactly the claim that
+    has to be written down:
+
+    * ``catalogue`` discloses the platform's own metadata and no tenant value, so a
+      principal with no sentence sees an empty dictionary;
+    * the two ``packs`` routes resolve a FILE, not a figure. Every widget that
+      would read one is refused individually, and the pack says so in one sentence
+      — the alternative, a canvas of lock tiles with no statement over it, reads as
+      "there is nothing to show for this date", which is a claim about the bank;
+    * ``insights`` refuses with its own code and names NO measure. It cannot answer
+      200 with an empty list, because an empty strip renders as "nothing stands out
+      for this reporting date" — a statement about the bank's figures made to a
+      reader who was shown none of them.
+
+    Whatever the status, nothing in any answer may be a figure.
     """
     authv = grant_only(db_session, ())
     response = call(
@@ -802,6 +825,8 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
         body,
         request_headers=headers(authorization_version=authv),
     )
+    for leak in ("rows", "lhs", "row_counts", "builds", "checks", "columns"):
+        assert leak not in response.text, leak
     if suffix == "/catalogue":
         assert response.status_code == 200, response.text
         payload = response.json()
@@ -810,12 +835,33 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
         assert payload["hierarchies"] == []
         assert payload["withheld_members"] == len(catalogue().members())
         return
+    if suffix.startswith("/packs"):
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        served = payload.get("packs", [payload])
+        assert served
+        for pack in served:
+            if not pack["readable_widgets"]:
+                continue
+            assert pack["access"] == "restricted", pack["id"]
+            assert pack["restricted_widgets"] == pack["readable_widgets"], pack["id"]
+            assert pack["message"]
+            for widget in pack["widgets"]:
+                if widget["access"] != "restricted":
+                    continue
+                assert widget["title"] is None
+                assert widget["query"] is None
+        return
+    if suffix.startswith("/insights"):
+        assert response.status_code == 403, response.text
+        details = response.json()["error"]["details"]
+        assert details["error_code"] == "bi_insights_authorization_denied"
+        assert "denied_members" not in details
+        return
     assert response.status_code == 403, response.text
     details = response.json()["error"]["details"]
     assert details["error_code"] == "bi_authorization_denied"
     assert details["denied_members"]
-    for leak in ("rows", "lhs", "row_counts", "builds", "checks", "columns"):
-        assert leak not in response.text, leak
 
 
 def test_a_query_naming_an_unknown_member_is_422_before_any_decision(

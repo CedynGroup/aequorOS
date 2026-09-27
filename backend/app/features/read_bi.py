@@ -1,14 +1,18 @@
-"""The BI read surface: six routes under ``/api/v1/banks/{bank_id}/bi/``.
+"""The BI read surface: nine routes under ``/api/v1/banks/{bank_id}/bi/``.
 
 ``catalogue`` says what this caller may ask, ``query`` answers one question,
 ``grid`` and ``drill`` page an answer for the grid, ``explain`` says where a
-figure came from, and ``trust`` says whether the figures reconcile to what the
-platform already files. Everything they need is built elsewhere: the catalogue
+figure came from, ``trust`` says whether the figures reconcile to what the
+platform already files, ``packs`` resolves a certified dashboard for a reader and
+a reporting date, and ``insights`` says what the platform is prepared to state
+about that date. Everything they need is built elsewhere: the catalogue
 declares the members (``app/domain/bi/catalogue``), the compiler turns a
 ``BiQuery`` into one read-only statement (``app/services/bi/compiler.py``), the
 authorization module decides it (``app/services/bi/authorization.py``), and the
-builder wrote the marts. What this module owns is the ORDER those are consulted
-in, and it is the order that carries the security properties:
+builder wrote the marts, the pack files are parsed at import
+(``app/domain/bi/packs``) and the insights layer decides what may be said
+(``app/services/bi/insights``). What this module owns is the ORDER those are
+consulted in, and it is the order that carries the security properties:
 
 1. **The institution, before anything else.** Every route is mounted with
    ``BANK_ROUTE_DEPENDENCIES``, so a ``BK-*`` belonging to another tenant is
@@ -42,7 +46,7 @@ in, and it is the order that carries the security properties:
 7. **Then compile, execute under the server-side guards, and record.**
 
 **Why the log is written before the response and never swallowed.** Every read
-that reaches the four logged surfaces lands in ``bi_query_log`` in the request
+that reaches a logged surface lands in ``bi_query_log`` in the request
 that made it — allowed, denied, refused as malformed, cancelled, or answered
 304 — and the row is committed before the handler returns. The table is
 append-only, so a row cannot be written first and completed later; the row
@@ -54,14 +58,23 @@ subset whose ``denied_members`` is non-empty, and a malformed request is a
 ``denied`` row naming no member at all — the unknown id is client bytes and is
 never stored. ``row_count IS NULL`` is how a row says no rows were served.
 
-``catalogue`` and ``trust`` write NO row: C1's ``surface`` CHECK names only the
-six data surfaces, and recording either under ``query`` or ``explain`` would put
-an event in an append-only audit table that did not happen. Both are still
-authorized (trust over every member its checks disclose — audit A6-01) and both
-are subject to the budget; neither refills it, so a principal polling only those
-two is bounded by nothing but the process. Closing that needs the vocabulary
-widened in ``app/models/bi.py`` + migration ``202609220066`` (C1's files), which
-is named as a follow-up rather than done here.
+``catalogue`` and ``trust`` write NO row: C1's ``surface`` CHECK did not name
+them, and recording either under ``query`` or ``explain`` would put an event in
+an append-only audit table that did not happen. Both are still authorized (trust
+over every member its checks disclose — audit A6-01) and both are subject to the
+budget; neither refills it, so a principal polling only those two is bounded by
+nothing but the process. ``packs`` and ``insights`` DO have surfaces of their
+own, so both record one row per request — including the refusals, because the
+budget is counted over these rows and a probe loop must not be free.
+
+**Two conventions the last two routes add.** A ``packs`` row may carry
+``denied_members`` on an ``allowed`` decision: a dashboard is a MIXED read by
+construction, the reader WAS served it, and the fields they were refused inside
+it are exactly what an operator needs in order to write the grant. And the
+``query_hash`` of a ``packs`` or ``insights`` row is a digest of the SURFACE, the
+date and the pack (:func:`_surface_digest`) rather than of a ``BiQuery``, because
+for those two the question is not a query — the column keeps its meaning (two
+identical questions hash alike) and still holds no value that can be read back.
 """
 
 from __future__ import annotations
@@ -70,6 +83,7 @@ import hashlib
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
+from time import perf_counter
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
@@ -89,7 +103,9 @@ from app.domain.bi.catalogue import (
     MemberDef,
     catalogue,
 )
-from app.domain.bi.catalogue.engine import engine_measure_id
+from app.domain.bi.packs import PackError
+from app.domain.bi.packs import pack as certified_pack
+from app.domain.bi.packs import packs as certified_packs
 from app.models import Bank
 from app.models.bi import (
     RECONCILIATION_STATUSES,
@@ -112,6 +128,15 @@ from app.schemas.bi import (
     BiFilter,
     BiGridPageRead,
     BiGridRowRead,
+    BiInsightRead,
+    BiInsightsRead,
+    BiLayoutItem,
+    BiPackAccess,
+    BiPackListRead,
+    BiPackRead,
+    BiPackSpec,
+    BiPackWidget,
+    BiPackWidgetRead,
     BiPagedQueryRequest,
     BiQuery,
     BiQueryResult,
@@ -122,17 +147,26 @@ from app.schemas.bi import (
     BiTrustRead,
     BiTrustStatus,
 )
+from app.services import institution_types
 from app.services.bi import grid_adapter, provenance, query_log, reconciliation
 from app.services.bi.authorization import (
     ALL_INSTITUTION_DATA,
     REASON_ALLOWED,
     BiAuthorization,
     authorize_query,
+    query_members,
     scope_pairs,
 )
 from app.services.bi.compiler import ColumnSpec, CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.execution import QueryResult, execute
+from app.services.bi.insights import assemble as assemble_insights
+from app.services.bi.insights import (
+    default_compare_to,
+    engine_measure_applies,
+    engine_regime,
+)
+from app.services.bi.insights.statements import Insight
 
 router = APIRouter(tags=["bi"])
 
@@ -143,6 +177,12 @@ SURFACE_EXPLAIN = "explain"
 #: A governed export. Its own surface so the log distinguishes a figure that was
 #: LOOKED AT from one that left the platform as a file (D-065).
 SURFACE_EXPORT = "export"
+#: A certified dashboard resolved for a reader, and the statements the platform
+#: will make about a reporting date. Both are logged: a pack read discloses which
+#: fields a reader was refused inside a dashboard they opened, and an insights
+#: read runs real statements over the marts.
+SURFACE_PACKS = "packs"
+SURFACE_INSIGHTS = "insights"
 #: Not ``bi_query_log`` surfaces — C1's ``surface`` CHECK names the six data
 #: surfaces and neither of these is one. Carried so the decision telemetry and
 #: the ETags can name them (see the module docstring on the trust row).
@@ -773,7 +813,7 @@ def _representative(cat: Catalogue, member_ids: Sequence[str]) -> str:
 
 
 def _visible_pairs(
-    db: Session, access: BiReadAccess, cat: Catalogue
+    db: Session, access: BiReadAccess, cat: Catalogue, *, surface: str = SURFACE_CATALOGUE
 ) -> dict[tuple[str, str], bool]:
     """Which ``(module, sensitivity)`` pairs this caller holds, by asking the
     query path's own decision function.
@@ -785,6 +825,12 @@ def _visible_pairs(
     unrecognised. Instead ONE representative member per distinct pair is put to
     :func:`authorize_query`, which groups by pair anyway: twelve pairs cost one
     call and the answer is, by construction, the answer the query path gives.
+
+    ``surface`` names the caller for the decision telemetry. The packs surface
+    reuses this function for the same reason: a pack widget is granted or refused
+    by ``(module, sensitivity)``, which is the unit ``authorize_query`` decides
+    in, so asking once per widget would give the same answer at twenty-four times
+    the cost.
     """
 
     pairs = scope_pairs(cat.members())
@@ -795,9 +841,7 @@ def _visible_pairs(
     allowed: dict[tuple[str, str], bool] = {}
     for chunk in _chunks(ids, BI_MAX_MEASURES):
         probe = BiQuery(measures=list(chunk), time=BiTime(as_of=utc_now().date()))
-        decision = authorize_query(
-            db, access.ctx, access.bank, cat, probe, surface=SURFACE_CATALOGUE
-        )
+        decision = authorize_query(db, access.ctx, access.bank, cat, probe, surface=surface)
         denied = set(decision.denied_members)
         for member_id in chunk:
             allowed[by_representative[member_id]] = member_id not in denied
@@ -1067,26 +1111,6 @@ def _require_record_level(query: BiQuery) -> None:
     )
 
 
-def _engine_regime(measure: MeasureDef) -> str | None:
-    """The regime encoded in an engine measure id, or ``None`` if it is not one.
-
-    The id is composed by ``engine_measure_id``; this inverts it and checks the
-    round trip against that same composer, so the convention has one owner.
-    """
-
-    rule = measure.engine_rule
-    if rule is None:
-        return None
-    prefix = f"engine.{rule.metric_id}."
-    suffix = f".{rule.tier}"
-    if not (measure.id.startswith(prefix) and measure.id.endswith(suffix)):
-        return None
-    regime = measure.id[len(prefix) : -len(suffix)]
-    if not regime or engine_measure_id(rule.metric_id, regime, rule.tier) != measure.id:
-        return None
-    return regime
-
-
 def _engine_read(
     db: Session, access: BiReadAccess, measure: MeasureDef, window: tuple[date, date]
 ) -> BiExplainEngineRead | None:
@@ -1095,7 +1119,7 @@ def _engine_read(
     rule = measure.engine_rule
     if rule is None:
         return None
-    regime = _engine_regime(measure)
+    regime = engine_regime(measure)
     if regime is None:
         return BiExplainEngineRead(metric_id=rule.metric_id, module=rule.module, tier=rule.tier)
     row = db.scalars(
@@ -1356,4 +1380,631 @@ def get_bi_trust(  # noqa: PLR0913 - FastAPI injects db/access/response/header
             for build in builds
         ],
         build_fingerprint=fingerprint,
+    )
+
+
+# --- certified content packs ---------------------------------------------------------------
+#
+# ``app/domain/bi/packs`` holds the FILES: seven certified dashboards, validated
+# at import, carrying catalogue member ids, a closed relative-window vocabulary
+# and no date at all. These two routes resolve a file for one reader and one
+# reporting date, and the resolution is where three product rules live.
+#
+# **The date is the caller's, and only the caller's.** Every widget query comes
+# back through ``BiPackQuery.for_period(as_of)``; nothing in this module builds a
+# ``BiTime`` for a widget and nothing may. A pack that pinned a date would show a
+# stale book forever, which is the whole reason ``BiPackQuery`` exists.
+#
+# **A refused widget discloses nothing.** The same ``(module, sensitivity)``
+# decision the query path makes decides each widget separately, and a refusal is
+# a ``BiPackWidgetRead`` carrying its id and its place on the canvas — no title,
+# no caption, no measure, no dimension, no filter, no figure. "You may not see
+# the largest single-name share" tells the reader the institution tracks one, and
+# on a filtered view the filter is usually the sensitive half. The 403 on a
+# direct query DOES name the denied members, for the operator writing the grant;
+# a dashboard does not, because the reader is not the operator.
+#
+# **A pack is certified for a licence class, and the class is read from the
+# authority registry** (D-070). The seven packs name CRD engine measures; an SDI
+# is on the s.29 capital regime, so the authority those measures copy is not the
+# one an SDI's figures come from and the mart can never hold a row for them
+# (``insights/assemble.py::engine_measure_applies``). Until a pack set naming an
+# SDI's own authorities exists, the surface answers 404 for an SDI rather than
+# showing it a bank's dashboard. No new notion of "is this an SDI" is introduced
+# to do it: the same registry resolution the mart builder used when it stamped
+# the rows decides here too, so the gate opens by itself the day such a pack set
+# lands.
+
+#: Production copy for each thing the pack surface can tell a reader. A pack
+#: whose every figure was refused must never read as a dashboard with nothing to
+#: show, so the pack-level sentence is always present and always says which it is.
+PACK_MESSAGES: Mapping[str, str] = {
+    "granted": "Your access covers every figure this dashboard reads.",
+    "partial": (
+        "Your access does not cover some of the figures this dashboard reads, so they are "
+        "not shown. An organization owner can grant them."
+    ),
+    "restricted": (
+        "Your access does not cover any of the figures this dashboard reads, so none of "
+        "them are shown. An organization owner can grant them."
+    ),
+}
+
+
+def _pack_engine_reach(
+    cat: Catalogue, spec: BiPackSpec, *, institution_class: str, capital_regime: str
+) -> tuple[int, int]:
+    """How many of the pack's engine measures are THIS institution's, and how many it names.
+
+    Counted over the measures the widget queries name directly: an engine
+    measure's regime is the whole question, and a ratio's components are engine
+    measures in their own right when they are engine measures at all.
+
+    A member id the catalogue no longer carries counts towards the total and
+    never towards the applicable count, so the pack fails closed and is not
+    served. That is a start-up-level defect — ``tests/domain/bi/test_packs.py``
+    resolves every member of every pack through the catalogue — and withholding
+    the dashboard is the right run-time answer to it, rather than a 500 in front
+    of a board.
+    """
+
+    applicable = 0
+    total = 0
+    for widget in spec.widgets:
+        if widget.query is None:
+            continue
+        for member_id in widget.query.measures:
+            try:
+                member = cat.member(member_id)
+            except KeyError:
+                total += 1
+                continue
+            if not isinstance(member, MeasureDef) or member.engine_rule is None:
+                continue
+            total += 1
+            if engine_measure_applies(
+                member, institution_class=institution_class, capital_regime=capital_regime
+            ):
+                applicable += 1
+    return applicable, total
+
+
+def _servable_packs(db: Session, bank: Bank, cat: Catalogue) -> tuple[BiPackSpec, ...]:
+    """Every certified pack this institution's licence class may be shown.
+
+    Two conditions, and the first is D-070:
+
+    1. the pack SET must be certified for this class at all — at least one pack
+       has to name an engine authority that resolves for it. A class for which no
+       pack does is shown no dashboards, because inferring that the five packs
+       naming no engine measure are therefore correct for it would be exactly the
+       "show it a bank's dashboard" the decision refuses;
+    2. the individual pack must name no engine authority belonging to another
+       class.
+
+    Fail-closed through ``institution_types.get_type``: an institution whose
+    licence class does not resolve raises (409) rather than being treated as a
+    bank.
+    """
+
+    institution_type = institution_types.get_type(db, bank)
+    klass = institution_type.institution_class
+    regime = institution_type.capital_regime
+    reach = {
+        spec.id: _pack_engine_reach(cat, spec, institution_class=klass, capital_regime=regime)
+        for spec in certified_packs()
+    }
+    if not any(applicable for applicable, _ in reach.values()):
+        return ()
+    return tuple(spec for spec in certified_packs() if reach[spec.id][0] == reach[spec.id][1])
+
+
+def _pack_class_refusal(db: Session, bank: Bank) -> HTTPException:
+    """404 for a licence class with no certified dashboard set (D-070)."""
+
+    label = institution_types.get_type(db, bank).display_name
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={
+            "error_code": "bi_packs_not_published_for_institution_class",
+            "message": (
+                f"No certified dashboard has been published for a {label} yet. The "
+                "dashboards that exist are built on figures produced under a different "
+                "prudential regime, so not one of them would have a value to show."
+            ),
+        },
+    )
+
+
+def _pack_widget_read(  # noqa: PLR0913 - one widget, its place, its date and its reader
+    cat: Catalogue,
+    widget: BiPackWidget,
+    layout: BiLayoutItem,
+    *,
+    as_of: date,
+    allowed: Mapping[tuple[str, str], bool],
+    denied: list[str],
+) -> BiPackWidgetRead:
+    """One widget resolved for the date, or the refusal that replaced it.
+
+    ``denied`` accumulates the member ids the reader was refused: they reach the
+    append-only log, where an operator can see which grant is missing, and they
+    do NOT reach the response.
+    """
+
+    query = None if widget.query is None else widget.query.for_period(as_of)
+    if query is not None:
+        refused = [
+            member.id for member in query_members(cat, query) if not _visible(member, allowed)
+        ]
+        if refused:
+            denied.extend(member_id for member_id in refused if member_id not in denied)
+            # Everything but the geometry is dropped HERE, by not being passed.
+            return BiPackWidgetRead(id=widget.id, layout=layout, access="restricted")
+    return BiPackWidgetRead(
+        id=widget.id,
+        layout=layout,
+        access="granted",
+        kind=widget.kind,
+        title=widget.title,
+        caption=widget.caption,
+        query=query,
+        panel=widget.panel,
+        display=widget.display,
+        needs_data=widget.needs_data,
+        pending_capability=widget.pending_capability,
+    )
+
+
+def _pack_read(  # noqa: PLR0913 - one pack, its date, its reader and the two logs
+    cat: Catalogue,
+    spec: BiPackSpec,
+    *,
+    as_of: date,
+    allowed: Mapping[tuple[str, str], bool],
+    denied: list[str],
+    served: list[str],
+) -> BiPackRead:
+    """One certified dashboard, resolved for one reader and one reporting date."""
+
+    layouts = {item.i: item for item in spec.layout}
+    widgets = [
+        _pack_widget_read(
+            cat, widget, layouts[widget.id], as_of=as_of, allowed=allowed, denied=denied
+        )
+        for widget in spec.widgets
+    ]
+    readable = sum(1 for widget in spec.widgets if widget.query is not None)
+    restricted = sum(1 for widget in widgets if widget.access == "restricted")
+    for widget, resolved in zip(spec.widgets, widgets, strict=True):
+        if resolved.access != "granted" or widget.query is None or resolved.query is None:
+            continue
+        served.extend(
+            member.id for member in query_members(cat, resolved.query) if member.id not in served
+        )
+    access: BiPackAccess
+    if readable and restricted == readable:
+        access, message = "restricted", PACK_MESSAGES["restricted"]
+    elif restricted:
+        access, message = "granted", PACK_MESSAGES["partial"]
+    else:
+        access, message = "granted", PACK_MESSAGES["granted"]
+    return BiPackRead(
+        id=spec.id,
+        title=spec.title,
+        description=spec.description,
+        audience=spec.audience,
+        version=spec.version,
+        as_of=as_of,
+        access=access,
+        message=message,
+        widgets=widgets,
+        restricted_widgets=restricted,
+        readable_widgets=readable,
+        catalogue_version=CATALOGUE_VERSION,
+    )
+
+
+def _surface_digest(surface: str, *parts: object) -> str:
+    """A one-way digest of a read that is not a ``BiQuery``.
+
+    ``bi_query_log.query_hash`` holds "which question was asked", and for a pack
+    or an insights read the question is the surface, the date and the pack — not a
+    ``BiQuery``, so ``query_log.query_digest`` cannot state it. The material is
+    the same shape and the column keeps its meaning: two identical questions hash
+    alike, and nothing in it can be read back as a value.
+    """
+
+    material = _HEADER_SEPARATOR.join(
+        (surface, *("" if part is None else str(part) for part in parts))
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _pack_record(
+    access: BiReadAccess,
+    *,
+    query_hash: str,
+    decision: str,
+    served: Sequence[str] = (),
+    denied: Sequence[str] = (),
+) -> query_log.QueryRecord:
+    """The ``packs`` log row.
+
+    ``row_count`` stays NULL because a pack read serves a SPEC and no figures —
+    the client then asks ``/bi/query`` for each widget, and each of those writes
+    its own row. ``denied_members`` is populated even on an ``allowed`` row, and
+    this is the one surface where that is right: a dashboard is a MIXED read by
+    construction, the reader was served it, and the fields they were refused
+    inside it are exactly what an operator needs in order to write the grant.
+    """
+
+    return query_log.QueryRecord(
+        organization_id=access.ctx.organization_id,
+        bank_id=access.bank.id,
+        principal_user_id=access.principal_user_id,
+        surface=SURFACE_PACKS,
+        query_hash=query_hash,
+        decision=decision,
+        catalogue_version=CATALOGUE_VERSION,
+        member_ids=tuple(served),
+        denied_members=tuple(denied),
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/bi/packs",
+    response_model=BiPackListRead,
+    operation_id="listBiPacks",
+)
+def list_bi_packs(  # noqa: PLR0913 - FastAPI injects db/access/response/header
+    bank_id: str,
+    db: DbSession,
+    access: BiRead,
+    response: Response,
+    as_of: Annotated[date, Query(description="The reporting date to resolve the packs for.")],
+    if_none_match: IfNoneMatch = None,
+) -> BiPackListRead | Response:
+    """Every certified dashboard this institution and reader may open."""
+
+    _ = bank_id
+    cat = catalogue()
+    _require_budget(db, access)
+    specs = _servable_packs(db, access.bank, cat)
+    query_hash = _surface_digest(SURFACE_PACKS, as_of.isoformat(), *(spec.id for spec in specs))
+    if not specs:
+        _append(db, _pack_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED))
+        raise _pack_class_refusal(db, access.bank)
+    allowed = _visible_pairs(db, access, cat, surface=SURFACE_PACKS)
+    etag = _etag(
+        SURFACE_PACKS,
+        cat.version,
+        as_of.isoformat(),
+        access.bank.id,
+        access.principal_user_id,
+        access.authorization_version,
+        *(f"{spec.id}@{spec.version}" for spec in specs),
+        *sorted(f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.items() if ok),
+    )
+    denied: list[str] = []
+    served: list[str] = []
+    try:
+        reads = [
+            _pack_read(cat, spec, as_of=as_of, allowed=allowed, denied=denied, served=served)
+            for spec in specs
+        ]
+    except BiQueryError as exc:
+        _append(db, _pack_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED))
+        raise _query_error(exc) from exc
+    _append(
+        db,
+        _pack_record(
+            access,
+            query_hash=query_hash,
+            decision=query_log.DECISION_ALLOWED,
+            served=served,
+            denied=denied,
+        ),
+    )
+    if _is_fresh(if_none_match, etag):
+        return _not_modified(etag)
+    response.headers.update(_cache_headers(etag))
+    return BiPackListRead(as_of=as_of, packs=reads, catalogue_version=CATALOGUE_VERSION)
+
+
+@router.get(
+    "/banks/{bank_id}/bi/packs/{pack}",
+    response_model=BiPackRead,
+    operation_id="getBiPack",
+)
+def get_bi_pack(  # noqa: PLR0913 - FastAPI injects db/access/response/header
+    bank_id: str,
+    pack: str,
+    db: DbSession,
+    access: BiRead,
+    response: Response,
+    as_of: Annotated[date, Query(description="The reporting date to resolve the pack for.")],
+    if_none_match: IfNoneMatch = None,
+) -> BiPackRead | Response:
+    """One certified dashboard, resolved for this institution, date and reader.
+
+    ``pack`` is a CLOSED platform catalogue key, not an object identifier: it
+    names a file that shipped in this build and is validated against
+    ``app.domain.bi.packs`` before anything else is read. There is no tenant
+    object behind it and therefore no cross-tenant dimension to it — the
+    institution in the path is the only tenant reference, and the router's own
+    dependency has already resolved it.
+    """
+
+    _ = bank_id
+    cat = catalogue()
+    _require_budget(db, access)
+    query_hash = _surface_digest(SURFACE_PACKS, as_of.isoformat(), pack)
+    specs = {spec.id: spec for spec in _servable_packs(db, access.bank, cat)}
+    spec = specs.get(pack)
+    if spec is None:
+        _append(db, _pack_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED))
+        raise _pack_refusal(db, access.bank, pack)
+    allowed = _visible_pairs(db, access, cat, surface=SURFACE_PACKS)
+    etag = _etag(
+        SURFACE_PACKS,
+        cat.version,
+        as_of.isoformat(),
+        access.bank.id,
+        access.principal_user_id,
+        access.authorization_version,
+        f"{spec.id}@{spec.version}",
+        *sorted(f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.items() if ok),
+    )
+    denied: list[str] = []
+    served: list[str] = []
+    try:
+        read = _pack_read(cat, spec, as_of=as_of, allowed=allowed, denied=denied, served=served)
+    except BiQueryError as exc:
+        _append(db, _pack_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED))
+        raise _query_error(exc) from exc
+    _append(
+        db,
+        _pack_record(
+            access,
+            query_hash=query_hash,
+            decision=query_log.DECISION_ALLOWED,
+            served=served,
+            denied=denied,
+        ),
+    )
+    if _is_fresh(if_none_match, etag):
+        return _not_modified(etag)
+    response.headers.update(_cache_headers(etag))
+    return read
+
+
+def _pack_refusal(db: Session, bank: Bank, pack: str) -> HTTPException:
+    """404 for a pack this institution cannot be shown, or that does not exist.
+
+    Two reasons, two codes, and neither says anything about another institution:
+    a key the build does not carry is simply not found, and a key that IS a pack
+    but is certified for another licence class says so, because "no dashboard
+    exists for your licence class" is the honest and actionable sentence.
+    """
+
+    try:
+        certified_pack(pack)
+    except PackError:
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error_code": "bi_pack_not_found",
+                "message": "There is no such dashboard.",
+            },
+        )
+    return _pack_class_refusal(db, bank)
+
+
+# --- insights ------------------------------------------------------------------------------
+#
+# ``app/services/bi/insights`` decides what may be SAID; ``insights/assemble.py``
+# reads the figures to say it about. This route is the thin seam between them: it
+# meters the read, revalidates the caller's cache, asks the assembler for one
+# institution and one date, records the decision, and shapes the statements for
+# the wire. It computes no figure and judges no movement — both would be a second
+# opinion about what a measure IS.
+#
+# **Nothing here fabricates an empty answer.** A date whose marts hold nothing
+# produces data-gap statements or none at all, and ``measures_read`` is on the
+# response beside the list so the client can tell "nothing stands out" from
+# "nothing has been computed". The dashboard's ``InsightStrip`` renders the
+# second as a sentence the platform did not make if it is handed the first.
+
+
+def _insight_read(insight: Insight) -> BiInsightRead:
+    """One statement as the wire carries it.
+
+    Field for field the same shape as ``statements.py::Insight``, which the
+    dashboard's ``components/bi/types.ts::BiInsight`` mirrors in camelCase. The
+    headline and detail are rendered server-side and are carried as given: a
+    browser that re-rounded a capital ratio would change what the sentence says.
+    """
+
+    return BiInsightRead(
+        id=insight.id,
+        rule_id=insight.rule_id,
+        statement_class=insight.statement_class,
+        headline=insight.headline,
+        detail=insight.detail,
+        as_of=insight.as_of,
+        measure_ids=list(insight.measure_ids),
+        evidence=list(insight.evidence),
+        favourability=insight.favourability,
+        emphasis=insight.emphasis,
+        qualifiers=list(insight.qualifiers),
+        certified=insight.certified,
+        advisory_designation=insight.advisory,
+        trust=BiTrustBadge(
+            status=_trust_status(insight.trust.overall),
+            failing_checks=list(insight.trust.failing_checks),
+        ),
+    )
+
+
+def _insights_record(  # noqa: PLR0913 - one row, spelled out
+    access: BiReadAccess,
+    *,
+    query_hash: str,
+    decision: str,
+    served: Sequence[str] = (),
+    denied: Sequence[str] = (),
+    row_count: int | None = None,
+    duration_ms: int | None = None,
+    build_fingerprint: str | None = None,
+) -> query_log.QueryRecord:
+    """The ``insights`` log row. ONE per request, whatever it took to answer."""
+
+    return query_log.QueryRecord(
+        organization_id=access.ctx.organization_id,
+        bank_id=access.bank.id,
+        principal_user_id=access.principal_user_id,
+        surface=SURFACE_INSIGHTS,
+        query_hash=query_hash,
+        decision=decision,
+        catalogue_version=CATALOGUE_VERSION,
+        member_ids=tuple(served),
+        denied_members=tuple(denied),
+        row_count=row_count,
+        duration_ms=duration_ms,
+        build_fingerprint=build_fingerprint,
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/bi/insights",
+    response_model=BiInsightsRead,
+    operation_id="getBiInsights",
+)
+def get_bi_insights(  # noqa: PLR0913 - FastAPI injects db/access/response/header
+    bank_id: str,
+    db: DbSession,
+    access: BiRead,
+    response: Response,
+    as_of: Annotated[date, Query(description="The reporting date to report on.")],
+    compare_to: Annotated[
+        date | None,
+        Query(description="The earlier period to measure movements against."),
+    ] = None,
+    if_none_match: IfNoneMatch = None,
+) -> BiInsightsRead | Response:
+    """What the platform is prepared to say about one institution at one date.
+
+    An empty list is a real answer. It is not the same answer as "nothing has
+    been computed", which is why ``measures_read`` is reported beside it.
+    """
+
+    _ = bank_id
+    settings = get_settings().bi
+    cat = catalogue()
+    _require_budget(db, access)
+    prior = compare_to or default_compare_to(as_of)
+    query_hash = _surface_digest(SURFACE_INSIGHTS, as_of.isoformat(), prior.isoformat())
+    if prior >= as_of:
+        _append(
+            db, _insights_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED)
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "bi_insights_comparison_not_earlier",
+                "message": "The period compared against has to be earlier than the reporting date.",
+            },
+        )
+    window = _data_window(BiTime(as_of=as_of, compare_to=prior))
+    fingerprint = _build_fingerprint(db, access.ctx.organization_id, access.bank.id, window)
+    etag = _etag(
+        SURFACE_INSIGHTS,
+        cat.version,
+        as_of.isoformat(),
+        prior.isoformat(),
+        fingerprint,
+        access.bank.id,
+        access.principal_user_id,
+        access.authorization_version,
+    )
+    if _is_fresh(if_none_match, etag):
+        # The statements were not run, so no rows were served; the row still goes
+        # in, because the budget is counted over these rows (audit A6-06).
+        _append(
+            db,
+            _insights_record(
+                access,
+                query_hash=query_hash,
+                decision=query_log.DECISION_ALLOWED,
+                build_fingerprint=fingerprint,
+            ),
+        )
+        return _not_modified(etag)
+    started = perf_counter()
+    try:
+        assembled = assemble_insights(
+            db,
+            ctx=access.ctx,
+            bank=access.bank,
+            cat=cat,
+            as_of=as_of,
+            compare_to=prior,
+            surface=SURFACE_INSIGHTS,
+            row_cap=settings.ui_row_cap,
+            timeout_ms=settings.interactive_timeout_ms,
+        )
+    except BiQueryError as exc:
+        _append(
+            db, _insights_record(access, query_hash=query_hash, decision=query_log.DECISION_DENIED)
+        )
+        raise _query_error(exc) from exc
+    elapsed_ms = int((perf_counter() - started) * 1000)
+    insight_set = assembled.insight_set
+    # Nothing read AND something withheld is a refused read, not a quiet one.
+    # Answering 200 with an empty list would hand a strip that renders "nothing
+    # stands out for this reporting date" a statement about the bank's figures,
+    # made to a reader who was shown none of them. So it refuses — and the refusal
+    # names NO measure: the reader is not the operator writing the grant, and the
+    # withheld member ids go to the append-only log instead.
+    served_nothing = assembled.measures_read == 0 and assembled.measures_withheld > 0
+    _append(
+        db,
+        _insights_record(
+            access,
+            query_hash=query_hash,
+            decision=(query_log.DECISION_DENIED if served_nothing else query_log.DECISION_ALLOWED),
+            served=assembled.member_ids,
+            denied=assembled.denied_members,
+            row_count=None if served_nothing else len(insight_set.insights),
+            duration_ms=elapsed_ms,
+            build_fingerprint=assembled.build_fingerprint,
+        ),
+    )
+    if served_nothing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error_code": "bi_insights_authorization_denied",
+                "message": (
+                    "Your access does not cover any of the figures this summary is built "
+                    "from, so nothing is reported. An organization owner can grant them."
+                ),
+            },
+        )
+    response.headers.update(_cache_headers(etag))
+    return BiInsightsRead(
+        as_of=as_of,
+        compare_to=assembled.compare_to,
+        insights=[_insight_read(insight) for insight in insight_set.insights],
+        fact_sheet_hash=insight_set.fact_sheet_hash,
+        truncated=insight_set.truncated,
+        measures_read=assembled.measures_read,
+        measures_withheld=assembled.measures_withheld,
+        trust=BiTrustBadge(
+            status=_trust_status(assembled.trust_status),
+            failing_checks=list(assembled.trust_failing_checks),
+        ),
+        catalogue_version=CATALOGUE_VERSION,
+        build_fingerprint=assembled.build_fingerprint,
     )
