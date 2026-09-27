@@ -8,6 +8,7 @@ not class scoping.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -74,8 +75,20 @@ def list_credit_loans(  # noqa: PLR0913 - one query parameter per blotter filter
     grade: Annotated[str | None, Query()] = None,
     product: Annotated[str | None, Query()] = None,
     branch: Annotated[str | None, Query()] = None,
+    sector: Annotated[str | None, Query(max_length=120)] = None,
+    stage: Annotated[int | None, Query(ge=1, le=3)] = None,
+    dpd_band: Annotated[str | None, Query(max_length=32)] = None,
+    as_of: Annotated[date | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=120)] = None,
 ) -> CreditLoansPageRead:
+    """One page of the classified loan book, narrowed to one slice.
+
+    ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who
+    followed a figure into the rows behind it lands on the SAME slice. The
+    service refuses a stage or band outside the platform's vocabulary and a date
+    with no computed position; the bounds declared here are the same refusals
+    stated in the contract, so a client learns them without asking.
+    """
     return regulatory_credit.list_credit_loans(
         db,
         ctx,
@@ -85,6 +98,10 @@ def list_credit_loans(  # noqa: PLR0913 - one query parameter per blotter filter
         grade=grade,
         product=product,
         branch=branch,
+        sector=sector,
+        stage=stage,
+        dpd_band=dpd_band,
+        as_of=as_of,
         q=q,
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.credit.dpd_bands import dpd_band
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -22,9 +24,9 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.regulatory_credit import CreditScenarioBatchCreate
+from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import fact_derivation, regulatory_credit
+from app.services import fact_derivation, regulatory_credit, reporting_periods
 from app.services.regulatory_reporting import generation as reporting_generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -821,12 +823,22 @@ def test_employer_par30_excludes_an_unconverted_foreign_currency_loan(
 SECOND_SYSTEM = "API_PUSH"
 
 
-def _seed_second_system_loan(
-    db_session: Session, *, as_of: date_type, reference: str, balance: str, dpd: int
+def _seed_second_system_loan(  # noqa: PLR0913 - one keyword per stated attribute
+    db_session: Session,
+    *,
+    as_of: date_type,
+    reference: str,
+    balance: str,
+    dpd: int,
+    sector: str | None = None,
 ) -> None:
     """A LOAN from a SECOND source system carrying a reference the fixture's
     EXCEL_CSV book already uses — legal, because the position natural key is
-    ``(org, bank, source_system, source_reference)``."""
+    ``(org, bank, source_system, source_reference)``.
+
+    ``sector`` is optional because the compact fixture states none: the
+    blotter's sector slice needs a book that does.
+    """
     batch = IngestionBatch(
         organization_id=ORG_1,
         bank_id=SAMPLE_BANK_ID,
@@ -883,7 +895,11 @@ def _seed_second_system_loan(
             position_id=position.id,
             balance=Decimal(balance),
             ifrs9_stage=3 if dpd >= 90 else 1,
-            attributes={"balance_ghs": balance, "days_past_due": dpd},
+            attributes={
+                "balance_ghs": balance,
+                "days_past_due": dpd,
+                **({"sector": sector} if sector is not None else {}),
+            },
         )
     )
     db_session.commit()
@@ -965,3 +981,146 @@ def test_migration_matches_loans_on_their_natural_key_not_the_bare_reference(
         )
 
     assert flow(after, "performing", "npl") == flow(before, "performing", "npl") + Decimal("777")
+
+
+# ---------------------------------------------------------------------------
+# drill-through: the blotter must be able to honour the slice it is sent (P2-F7)
+# ---------------------------------------------------------------------------
+
+
+def test_blotter_narrows_to_the_sector_stage_and_dpd_band_it_is_sent(
+    db_session: Session,
+) -> None:
+    """A reader who follows a BI figure into the rows behind it lands on that
+    figure's slice. Each filter reads the CLASSIFIED row, so the page can never
+    disagree with the grades shown on it, and the band is the one
+    ``app.domain.credit.dpd_bands`` definition rather than a restated boundary."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    for reference, balance, dpd, sector in (
+        ("AGRI/1", "500000", 45, "Agriculture"),
+        ("AGRI/2", "250000", 200, "Agriculture"),
+        ("MFG/1", "100000", 45, "Manufacturing"),
+    ):
+        _seed_second_system_loan(
+            db_session,
+            as_of=FIXTURE_AS_OF,
+            reference=reference,
+            balance=balance,
+            dpd=dpd,
+            sector=sector,
+        )
+
+    def page(
+        *, sector: str | None = None, stage: int | None = None, dpd_band: str | None = None
+    ) -> CreditLoansPageRead:
+        return regulatory_credit.list_credit_loans(
+            db_session,
+            CTX,
+            SAMPLE_BANK_ID,
+            limit=500,
+            sector=sector,
+            stage=stage,
+            dpd_band=dpd_band,
+        )
+
+    whole = page()
+    assert whole.filtered == whole.total
+
+    sector_slice = page(sector="Agriculture")
+    assert {row.source_reference for row in sector_slice.rows} == {"AGRI/1", "AGRI/2"}
+    # ``total`` stays the whole book — it is the denominator the page reports
+    # alongside the slice, never the slice itself.
+    assert sector_slice.total == whole.total
+    assert sector_slice.filtered == 2
+
+    band = dpd_band(45)
+    assert band is not None
+    band_slice = page(dpd_band=band)
+    assert {"AGRI/1", "MFG/1"} <= {row.source_reference for row in band_slice.rows}
+    assert all(dpd_band(row.days_past_due) == band for row in band_slice.rows)
+
+    stage_slice = page(stage=3)
+    assert stage_slice.filtered >= 1
+    assert all(row.ifrs9_stage == 3 for row in stage_slice.rows)
+
+    # Two filters intersect. A union here would show a wider book than asked.
+    assert {row.source_reference for row in page(sector="Agriculture", dpd_band=band).rows} == {
+        "AGRI/1"
+    }
+
+    # A sector the book does not carry narrows to nothing and is never widened
+    # back out to the whole book.
+    assert page(sector="Aquaculture").filtered == 0
+
+
+def test_blotter_refuses_a_stage_or_band_it_cannot_honour(db_session: Session) -> None:
+    """A filter outside the platform's vocabulary is REFUSED, never dropped: a
+    dropped filter answers with a wider book than the heading claims."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+
+    for stage, band, error_code in (
+        (4, None, "unknown_ifrs9_stage"),
+        (0, None, "unknown_ifrs9_stage"),
+        (None, "91_plus", "unknown_dpd_band"),
+        (None, "30-59", "unknown_dpd_band"),
+    ):
+        with pytest.raises(HTTPException) as refusal:
+            regulatory_credit.list_credit_loans(
+                db_session, CTX, SAMPLE_BANK_ID, stage=stage, dpd_band=band
+            )
+        assert refusal.value.status_code == 422
+        detail = cast("dict[str, str]", refusal.value.detail)
+        assert detail["error_code"] == error_code
+
+
+def test_blotter_reads_one_named_date_exactly_and_never_substitutes_another(
+    db_session: Session,
+) -> None:
+    """``as_of`` resolves through the platform's exact-or-refuse rule.
+
+    The May snapshot key is built through ``reporting_periods`` — the one
+    construction site the ingestion pipeline and fact derivation both use — so
+    the test asks for a date the data path could genuinely have produced.
+    """
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    may_end = date_type(2026, 5, 31)
+    db_session.add(
+        reporting_periods.new_snapshot_period(
+            organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=may_end
+        )
+    )
+    db_session.commit()
+
+    current = regulatory_credit.list_credit_loans(db_session, CTX, SAMPLE_BANK_ID, limit=500)
+    assert current.as_of == FIXTURE_AS_OF.isoformat()
+
+    may = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, as_of=may_end, limit=500
+    )
+    assert may.as_of == may_end.isoformat()
+    assert {row.source_reference for row in may.rows} == {"LOAN/1", "LOAN/6", "MAY-ONLY"}
+    assert may.total == 3
+
+
+def test_blotter_refuses_a_date_with_no_computed_position(db_session: Session) -> None:
+    """A date the platform has computed no position for is a 409 that NAMES the
+    date and the closest earlier one — never the latest book under another
+    date's heading, which is a wrong answer that looks right."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+
+    with pytest.raises(HTTPException) as refusal:
+        regulatory_credit.list_credit_loans(
+            db_session, CTX, SAMPLE_BANK_ID, as_of=date_type(2026, 7, 31)
+        )
+    assert refusal.value.status_code == 409
+    detail = cast("dict[str, str]", refusal.value.detail)
+    assert detail["error_code"] == "no_computed_position"
+    message = detail["message"]
+    assert "2026-07-31" in message
+    assert FIXTURE_AS_OF.isoformat() in message
+    assert "not a substitute" in message

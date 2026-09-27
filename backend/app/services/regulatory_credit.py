@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
@@ -1066,6 +1067,120 @@ def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
 # ---------------------------------------------------------------------------
 
 
+#: The IFRS 9 stages a canonical snapshot may state. Not a vocabulary of this
+#: module's making: it is the check constraint
+#: ``ck_canonical_position_snapshots_ifrs9_stage`` (``app/models/canonical.py``),
+#: so a stage outside it cannot exist on a row and asking for one is a mistake
+#: to name rather than a filter to drop.
+_IFRS9_STAGES: tuple[int, ...] = (1, 2, 3)
+
+
+def _require_stage(stage: int | None) -> int | None:
+    """``stage`` as the book states it, or refuse.
+
+    A filter the server cannot honour must never be silently ignored: the
+    blotter would then answer with a WIDER book than was asked for while the
+    heading — and the figure the reader followed in — says otherwise.
+    """
+    if stage is None or stage in _IFRS9_STAGES:
+        return stage
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error_code": "unknown_ifrs9_stage",
+            "message": (
+                "A loan's IFRS 9 stage is 1, 2 or 3. "
+                f"{stage} is not a stage the loan book can hold."
+            ),
+        },
+    )
+
+
+def _require_dpd_band(band: str | None) -> str | None:
+    """``band`` as ``app.domain.credit.dpd_bands`` defines it, or refuse.
+
+    The vocabulary is read from that module — the one band definition, shared
+    with the classification service, the migration engine and the roll-rate
+    matrix — so no boundary is restated here.
+    """
+    if band is None or band in DPD_BAND_CODES:
+        return band
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error_code": "unknown_dpd_band",
+            "message": (
+                f"That is not a days-past-due band. The bands are {', '.join(DPD_BAND_CODES)}."
+            ),
+        },
+    )
+
+
+def _blotter_period(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date | None
+) -> BankReportingPeriod:
+    """The computed position the blotter reads: the current one, or one date.
+
+    With no date the blotter reads the current live business date, as every
+    other credit read does. An EXPLICIT date goes through the platform's one
+    rule for "the book on this date" —
+    ``regulatory_reporting.common.get_snapshot_for_reporting_date`` — which
+    matches exactly for every cadence and refuses a miss by name rather than
+    filling it from the nearest earlier book. That rule is the point of this
+    parameter: a reader who followed a BI figure for one date into the rows
+    behind it must not land on another date's rows, which is a wrong answer
+    that looks right.
+
+    The refusal is worded here because that authority speaks for a REGULATORY
+    RETURN ("…then generate the return"), and a reader in the loan book is not
+    filing anything. Only the words are local: the rule, the 409 and the
+    ``no_computed_position`` code are the authority's, and the two facts it
+    insists on — the date required, and the nearest earlier computed position
+    named explicitly as NOT a substitute — are carried through.
+    """
+    if as_of is None:
+        return current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+
+    from app.services.regulatory_reporting.common import (  # noqa: PLC0415 - breaks an import cycle
+        get_snapshot_for_reporting_date,
+    )
+
+    try:
+        return get_snapshot_for_reporting_date(db, ctx, bank, as_of)
+    except HTTPException as refusal:
+        if refusal.status_code != status.HTTP_409_CONFLICT:
+            raise
+        nearest = db.scalar(
+            select(BankReportingPeriod.period_end)
+            .where(
+                BankReportingPeriod.organization_id == ctx.organization_id,
+                BankReportingPeriod.bank_id == bank.id,
+                BankReportingPeriod.period_end < as_of,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+            .limit(1)
+        )
+        context = (
+            "No earlier position has been computed for this institution."
+            if nearest is None
+            else (
+                f"The closest earlier position is {nearest.isoformat()}, and it is not a "
+                "substitute — an earlier book is not this date's loan book."
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "no_computed_position",
+                "message": (
+                    f"The loan book has not been computed as of {as_of.isoformat()}. "
+                    f"{context} Ingest the book as of {as_of.isoformat()} through the "
+                    "Data Engine to see the loans behind that date's figures."
+                ),
+            },
+        ) from refusal
+
+
 def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     db: Session,
     ctx: TenantContext,
@@ -1076,6 +1191,10 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     grade: str | None = None,
     product: str | None = None,
     branch: str | None = None,
+    sector: str | None = None,
+    stage: int | None = None,
+    dpd_band: str | None = None,
+    as_of: date | None = None,
     q: str | None = None,
 ) -> CreditLoansPageRead:
     """The classified loan blotter, filtered and paged.
@@ -1087,11 +1206,32 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     the full position blotter. Revisit with SQL-side classification only if a
     tenant's LOAN book alone approaches the six-figure row counts that made
     ``/positions`` server-paginated.
+
+    That in-memory shape is also why every filter here reads the CLASSIFIED row
+    rather than a second query: the sector, the stage and the days-past-due band
+    a row is filtered by are the very values the row carries, so a filtered page
+    can never disagree with the grades shown beside it. ``dpd_band`` is the band
+    of ``row.days_past_due`` under ``app.domain.credit.dpd_bands`` — the same
+    pure function the migration engine and the BI fact row use, never a second
+    banding.
+
+    Two refusals, both deliberate. A stage or band outside the platform's own
+    vocabulary is rejected (``_require_stage`` / ``_require_dpd_band``), because
+    dropping it would answer with a wider book than was asked for. An explicit
+    ``as_of`` with no computed position is rejected by ``_blotter_period``,
+    because the latest book is not this date's book.
+
+    ``sector`` has no closed vocabulary — it is whatever the institution's own
+    book states — so it is matched exactly and cannot be dropped either; a
+    sector the book does not carry narrows the page to nothing, which is the
+    truthful answer and is never widened back out.
     """
+    stage = _require_stage(stage)
+    dpd_band = _require_dpd_band(dpd_band)
     bank = _get_bank_or_404(db, ctx, bank_id)
-    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
-    as_of = period.period_end
-    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, as_of)]
+    period = _blotter_period(db, ctx, bank, as_of)
+    resolved_as_of = period.period_end
+    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of)]
     total = len(rows)
     needle = (q or "").strip().lower()
     filtered_rows = [
@@ -1100,6 +1240,9 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
         if (grade is None or row.grade == grade)
         and (product is None or row.product_code == product)
         and (branch is None or row.branch_id == branch)
+        and (sector is None or row.sector == sector)
+        and (stage is None or row.ifrs9_stage == stage)
+        and (dpd_band is None or _dpd_bucket(row.days_past_due) == dpd_band)
         and (
             not needle
             or needle in row.source_reference.lower()
@@ -1108,7 +1251,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     ]
     page = filtered_rows[offset : offset + limit]
     return CreditLoansPageRead(
-        as_of=as_of.isoformat(),
+        as_of=resolved_as_of.isoformat(),
         total=total,
         filtered=len(filtered_rows),
         limit=limit,
