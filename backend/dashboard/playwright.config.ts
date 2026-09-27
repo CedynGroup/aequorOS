@@ -105,6 +105,25 @@ export default defineConfig({
         // ICAAP ceremony on locally must not change what these journeys see.
         // A journey that exercises the ICAAP ceremony sets it to 1 itself.
         ICAAP_SIGNING_ENABLED: "0",
+        // Business Intelligence. `BI_ENABLED` defaults off and is set in no
+        // deployment yet, and with it off every `/banks/{id}/bi/*` route answers
+        // 404 and the shell HIDES Insights, Dashboards and Explore — so without
+        // this the four `bi-*` journeys would navigate to walled-up doors and
+        // pass on an empty state. It is set HERE and not in `backend/.env` so a
+        // developer's own flag state cannot change what the journeys see, in
+        // either direction: `bi-authorization.spec.ts` asserts both the flag-on
+        // and the flag-off shell, the second by intercepting `/feature-flags`.
+        //
+        // The other four BI flags stay OFF, which is the production-shaped
+        // configuration and deliberate. `BI_MART_ENQUEUE_ENABLED` would enqueue
+        // `bi_mart_refresh` into the `bi` worker lane, and this stack runs no
+        // worker at all — the marts are materialised synchronously by
+        // `tests/fixtures/bi_plane.py` during bootstrap, exactly as the live
+        // plane is, so an enqueue flag here would only orphan jobs in `queued`.
+        // `BI_SCHEDULER_ENABLED` / `BI_SUBSCRIPTIONS_ENABLED` add tick branches
+        // nothing here runs, and `BI_ALERTS_ENABLED` is evaluated by a succeeded
+        // mart build that no worker will perform.
+        BI_ENABLED: "1",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: "",
