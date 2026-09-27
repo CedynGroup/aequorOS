@@ -44,6 +44,7 @@ from typing import Any
 
 from app.domain.bi.catalogue import Catalogue
 from app.domain.bi.catalogue import UnknownMember as CatalogueUnknownMember
+from app.domain.bi.catalogue.members import NUMERIC_VALUE_TYPES
 from app.schemas.bi import BiFilter, BiQuery
 from app.services.bi.compiler import ColumnSpec
 from app.services.bi.exports.policy import CLASS_LABELS, ExportClass
@@ -84,8 +85,19 @@ TRUST_LABELS: Mapping[str, str] = {
 #: rows and a measure that is zero are different statements.
 BLANK = ""
 
-#: Column formats whose values are numeric.
-_NUMERIC_FORMATS: frozenset[str] = frozenset({"amount", "pct", "ratio", "count", "int"})
+#: Column formats whose values are numeric. DERIVED from the catalogue's own
+#: vocabulary rather than restated: a value type added there and forgotten here
+#: does not raise — it falls through to text, so the column exports as a STRING
+#: and a reviewer's spreadsheet cannot total it. That is exactly what happened
+#: when ``ratio`` was retired for ``fraction`` / ``index`` / ``duration_years``.
+#: ``int`` is not a catalogue type; it is the subtotal marker the grid adds.
+_NUMERIC_FORMATS: frozenset[str] = frozenset(NUMERIC_VALUE_TYPES) | {"int"}
+
+#: A proportion of one, which a reader is shown multiplied by a hundred (the
+#: catalogue's own definition of ``fraction``). Stated here so the export and
+#: the screen cannot disagree about the same member: a figure that reads 6.20 %
+#: in the browser and 0.06 in the audit twin is unciteable.
+_FRACTION_SCALE = Decimal(100)
 
 #: Leading characters a spreadsheet treats as the start of a formula. A
 #: counterparty name is bank data and reaches a cell verbatim, so text is made
@@ -106,8 +118,9 @@ class ExportColumn:
 
     id: str
     label: str
-    #: A catalogue value type (``amount`` / ``pct`` / ``ratio`` / ``count`` /
-    #: ``text`` / ``date`` / ``flag``) or ``int`` for the subtotal marker.
+    #: A catalogue value type (``amount`` / ``pct`` / ``fraction`` / ``index`` /
+    #: ``duration_years`` / ``count`` / ``text`` / ``date`` / ``flag``) or
+    #: ``int`` for the subtotal marker.
     format: str
 
     @property
@@ -328,6 +341,11 @@ def display_cell(value: Any, column: ExportColumn) -> str:  # noqa: PLR0911 - on
         try:
             return f"{int(value):,}"
         except (TypeError, ValueError):
+            return str(value)
+    if column.format == "fraction":
+        try:
+            return f"{Decimal(str(value)) * _FRACTION_SCALE:,.2f} %"
+        except (TypeError, ValueError, ArithmeticError):
             return str(value)
     if column.numeric:
         try:

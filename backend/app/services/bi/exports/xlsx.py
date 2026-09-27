@@ -56,13 +56,26 @@ EXTENSION = "xlsx"
 DATA_SHEET = "Data"
 METADATA_SHEET = "Export metadata"
 
-#: Number formats by catalogue value type. Amounts and ratios group thousands
-#: and show two decimals; a count is an integer. No currency symbol: the unit is
-#: in the column heading and in the metadata sheet, resolved from the bank.
+#: Number formats by catalogue value type. No currency symbol: the unit is in
+#: the column heading and in the metadata sheet, resolved from the bank.
+#:
+#: ``fraction`` carries a PERCENT format rather than a pre-multiplied number, so
+#: the cell keeps the platform's own exact value while the reader sees the same
+#: figure the browser shows. Multiplying on the way in would make the audit twin
+#: hold a number the mart does not, which is the one thing this file exists to
+#: avoid. ``index`` keeps four decimals because a concentration index is read at
+#: that precision; ``duration_years`` two, because it is a span in years.
+#:
+#: Completeness is asserted against the catalogue vocabulary in
+#: ``tests/services/bi/test_export_value_types.py``: a value type with no entry
+#: here falls through to text, so the column stops being summable in a
+#: reviewer's spreadsheet without anything raising.
 _NUMBER_FORMATS: dict[str, str] = {
     "amount": "#,##0.00;(#,##0.00);-",
-    "ratio": "#,##0.0000",
     "pct": "#,##0.00",
+    "fraction": "#,##0.00%",
+    "index": "#,##0.0000",
+    "duration_years": "#,##0.00",
     "count": "#,##0",
     "int": "#,##0",
     "date": "yyyy-mm-dd",
