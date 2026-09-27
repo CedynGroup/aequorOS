@@ -18,6 +18,6 @@ from __future__ import annotations
 
 #: Bump on any change to a mart's shape or to a fingerprint input. Stamped on
 #: every BI job payload; compared by every ``bi`` lane handler.
-BUILDER_VERSION: int = 1
+BUILDER_VERSION: int = 2
 
 __all__ = ["BUILDER_VERSION"]

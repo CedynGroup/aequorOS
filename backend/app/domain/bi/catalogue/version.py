@@ -9,4 +9,4 @@ sensitivity or module changes; adding a label is not a version change.
 
 from __future__ import annotations
 
-CATALOGUE_VERSION: str = "1.0.0"
+CATALOGUE_VERSION: str = "1.1.0"

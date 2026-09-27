@@ -145,6 +145,7 @@ from app.models.bi import (
     BiFactLoanEvent,
     BiFactPositionDaily,
     BiFactPositionEom,
+    BiFactTarget,
 )
 from app.schemas.bi import (
     BI_PIVOT_MAX_COLUMNS,
@@ -180,6 +181,7 @@ _TABLES: dict[str, Table] = {
         BiFactLoanEvent.__tablename__,
         BiFactGlMonthly.__tablename__,
         BiFactEngineMetric.__tablename__,
+        BiFactTarget.__tablename__,
         BiDimBranch.__tablename__,
         BiDimProduct.__tablename__,
         BiDimCounterparty.__tablename__,
@@ -197,6 +199,7 @@ _FACT_DATE_COLUMN: dict[str, str] = {
     BiFactLoanEvent.__tablename__: "event_date",
     BiFactGlMonthly.__tablename__: "month_end",
     BiFactEngineMetric.__tablename__: "as_of_date",
+    BiFactTarget.__tablename__: "as_of_date",
 }
 
 #: Conformed dimension → (fact key column, dimension key column). ``bi_dim_date``
@@ -527,7 +530,18 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
 
 #: Row-filter columns that define a measure's POPULATION rather than select
 #: within it (see the module docstring, "NULL versus zero").
-_POPULATION_COLUMNS: frozenset[str] = frozenset({"position_type"})
+#:
+#: The three ``bi_fact_target`` keys are here for the reason the rule exists.
+#: A target variant is ABOUT the rows carrying its own measure id, bank-wide
+#: scope and register version; the rows beside them belong to other measures
+#: entirely. As a SELECTION each would contribute ``0``, so a bank holding a
+#: budget for anything else on the same date would see a measure with NO target
+#: render as zero rather than blank — the D-015 hazard the answerable rule was
+#: written for. As a POPULATION they contribute NULL, and a sum of nothing is
+#: NULL (D-064).
+_POPULATION_COLUMNS: frozenset[str] = frozenset(
+    {"position_type", "measure_id", "scope_dimension", "target_version"}
+)
 
 #: Selection columns the D-042 answerable rule does NOT ask about, and why.
 #: ``bi_agg_position_daily`` PRE-COMPUTES both as their own measure columns

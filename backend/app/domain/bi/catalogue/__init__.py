@@ -34,6 +34,7 @@ from app.domain.bi.catalogue.members import (
     MemberDef,
     RowFilter,
 )
+from app.domain.bi.catalogue.targets import TARGET_TABLE, target_variants
 from app.domain.bi.catalogue.version import CATALOGUE_VERSION
 
 __all__ = [
@@ -114,7 +115,25 @@ class Catalogue:
         return tuple(m for m in self._measures.values() if m.measure_kind == "certified_engine")
 
     def portfolio_measures(self) -> tuple[MeasureDef, ...]:
-        return tuple(m for m in self._measures.values() if m.measure_kind == "portfolio")
+        """Mart measures over the bank's own book — never a target variant.
+
+        A variant is ``portfolio`` in KIND (a target is the bank's number, not
+        a certified engine copy) but it is not a portfolio measure: it reads
+        the target mart, it inherits its base's grain and limit source, and an
+        engine base's variant inherits that base's advisory designation. The
+        discriminator is structural — the table it binds to — rather than the
+        shape of its id.
+        """
+        return tuple(
+            m
+            for m in self._measures.values()
+            if m.measure_kind == "portfolio" and m.table != TARGET_TABLE
+        )
+
+    def target_measures(self) -> tuple[MeasureDef, ...]:
+        """Every ``.actual`` / ``.target`` / ``.variance`` / ``.variance_pct`` /
+        ``.attainment_pct`` variant, in catalogue order."""
+        return tuple(m for m in self._measures.values() if m.table == TARGET_TABLE)
 
 
 def _validate(
@@ -146,7 +165,12 @@ def _validate(
 def build_catalogue() -> Catalogue:
     """Assemble and validate a fresh catalogue (``catalogue()`` caches one)."""
     measures: dict[str, MeasureDef] = {}
-    for measure in (*engine_measures(), *portfolio_measures()):
+    bases = (*engine_measures(), *portfolio_measures())
+    # Targets are DERIVED from the bases, so they are folded in after them and
+    # read the finished definitions: every variant copies its base's module,
+    # sensitivity, entitlement, grain and allowed dimensions rather than
+    # restating them, and ``_validate`` then checks the variants for free.
+    for measure in (*bases, *target_variants(bases)):
         if measure.id in measures:
             raise CatalogueError(f"duplicate measure id {measure.id!r}")
         measures[measure.id] = measure

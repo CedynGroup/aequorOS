@@ -34,6 +34,7 @@ from app.domain.bi.catalogue.dimensions import POSITION_TYPE_LABELS
 from app.domain.bi.catalogue.engine import ENGINE_LABELS, engine_measure_id
 from app.domain.bi.catalogue.measures import dpd_bands_from
 from app.domain.bi.catalogue.members import DPD_COMPLETENESS
+from app.domain.bi.catalogue.targets import TARGET_SUFFIX, is_targetable, variants_for
 from app.domain.bi.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
 from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import POSITION_TYPES
@@ -101,6 +102,10 @@ def test_member_counts_are_what_the_sources_imply(cat: Catalogue) -> None:
     ]
     assert len(cat.engine_measures()) == 2 * len(numeric_authorities)
     assert len(cat.portfolio_measures()) == 44
+    # The Phase 2 target variants (``app/domain/bi/catalogue/targets.py``): five
+    # per targetable base, less ``attainment_pct`` where lower is better (D-062)
+    # and less ``variance_pct`` where the base is a bare ratio (D-063).
+    assert len(cat.target_measures()) == 588
     assert len(cat.dimensions()) == 66
     assert len(cat.hierarchies()) == 13
 
@@ -399,7 +404,18 @@ def test_every_dpd_dependent_measure_carries_the_completeness_check(cat: Catalog
         and measure.engine_rule.metric_id in DPD_ENGINE_METRIC_IDS
     }
     assert copied == DPD_ENGINE_MEASURES
+    # A target variant is a function of the ACTUAL, which is the base measure's
+    # own figure, so it inherits the base's checks — all but ``.target``, which
+    # is the number the bank stated and contains none of the platform's
+    # arithmetic.
     expected = DPD_MART_MEASURES | DPD_ENGINE_MEASURES
+    expected |= {
+        variant.id
+        for base_id in DPD_MART_MEASURES | DPD_ENGINE_MEASURES
+        if is_targetable(cat.measure(base_id))
+        for variant in variants_for(cat.measure(base_id))
+        if not variant.id.endswith(f".{TARGET_SUFFIX}")
+    }
     carrying = {m.id for m in cat.measures() if DPD_COMPLETENESS in m.reconciliation_checks}
     assert carrying == expected, (
         f"missing {sorted(expected - carrying)}, unexpected {sorted(carrying - expected)}"

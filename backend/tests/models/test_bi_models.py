@@ -43,6 +43,7 @@ from app.domain.capital.loan_classification import (
     SDI_GRADE_ORDER,
 )
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
+from app.domain.ingestion.reference_schemas import performance_targets
 from app.domain.irr.engine import IRR_BUCKETS
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
 from app.domain.positions.families import (
@@ -67,6 +68,7 @@ from app.models.bi import (
     BiFactLoanEvent,
     BiFactPositionDaily,
     BiFactPositionEom,
+    BiFactTarget,
     BiMartBuild,
     BiQueryLog,
     BiReconciliationResult,
@@ -91,6 +93,7 @@ MODELS: tuple[type, ...] = (
     BiFactLoanEvent,
     BiFactGlMonthly,
     BiFactEngineMetric,
+    BiFactTarget,
     BiDimBranch,
     BiDimProduct,
     BiDimCounterparty,
@@ -122,6 +125,15 @@ PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
         "metric_id",
         "tier",
     ),
+    "bi_fact_target": (
+        "organization_id",
+        "bank_id",
+        "as_of_date",
+        "measure_id",
+        "scope_dimension",
+        "scope_value",
+        "target_version",
+    ),
     "bi_dim_branch": ("organization_id", "bank_id", "branch_code"),
     "bi_dim_product": ("organization_id", "bank_id", "product_code"),
     "bi_dim_counterparty": ("organization_id", "bank_id", "counterparty_id"),
@@ -141,6 +153,10 @@ VOCABULARIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     ("bi_fact_engine_metric", "ck_bi_fact_engine_metric_tier", bi.ENGINE_METRIC_TIERS),
     ("bi_fact_gl_monthly", "ck_bi_fact_gl_monthly_balance_basis", bi.GL_BALANCE_BASES),
+    ("bi_fact_target", "ck_bi_fact_target_period_grain", bi.TARGET_PERIOD_GRAINS),
+    ("bi_fact_target", "ck_bi_fact_target_version", bi.TARGET_VERSIONS),
+    ("bi_fact_target", "ck_bi_fact_target_time_behaviour", bi.TARGET_TIME_BEHAVIOURS),
+    ("bi_fact_target", "ck_bi_fact_target_scope_basis", bi.TARGET_SCOPE_BASES),
     ("bi_mart_builds", "ck_bi_mart_builds_scope", bi.MART_BUILD_SCOPES),
     ("bi_mart_builds", "ck_bi_mart_builds_status", bi.MART_BUILD_STATUSES),
     (
@@ -394,7 +410,7 @@ def test_check_constraints_derive_from_the_vocabulary_tuples(
 def test_vocabularies_are_exactly_the_contract() -> None:
     assert bi.LOAN_EVENT_ATTRIBUTION_BASES == ("snapshot_on_or_before", "no_snapshot", "unmatched")
     assert bi.ENGINE_METRIC_TIERS == ("live", "official")
-    assert bi.MART_BUILD_SCOPES == ("positions", "events", "gl", "engine", "dims")
+    assert bi.MART_BUILD_SCOPES == ("positions", "events", "gl", "engine", "dims", "targets")
     assert bi.MART_BUILD_STATUSES == ("running", "succeeded", "failed")
     assert bi.RECONCILIATION_CHECK_IDS == (
         "R1",
@@ -420,11 +436,45 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         "catalogue",
     )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
+    assert bi.TARGET_PERIOD_GRAINS == ("month", "quarter", "half_year", "year")
+    assert bi.TARGET_VERSIONS == ("budget", "reforecast")
+    assert bi.TARGET_TIME_BEHAVIOURS == ("stock", "flow")
+    assert bi.TARGET_SCOPE_BASES == ("exact", "bank_wide")
+    assert bi.TARGET_BANK_WIDE_SCOPE == ""
     assert bi.UNASSIGNED_REGION == "Unassigned region"
     assert bi.UNMAPPED_BRANCH_NAME == "Unmapped branch"
     region = _table(BiDimBranch).c["region"]
     assert isinstance(region.server_default, sa.DefaultClause)
     assert "Unassigned region" in str(region.server_default.arg)
+
+
+def test_target_vocabularies_match_the_register_that_supplies_them() -> None:
+    """The mart CHECKs and the register's enums are ONE vocabulary, both ways.
+
+    ``app/models/bi.py`` mirrors the ``performance_targets`` register's words
+    rather than importing them, because ``app.models`` stays free of
+    ``app.domain.ingestion``. A mirror with nothing holding the two sides
+    together is the defect it looks like a fix for: a grain added to the
+    register would be accepted on ingestion and then refused by
+    ``ck_bi_fact_target_period_grain`` when the builder tried to store its
+    comparison, so the bank's declared target would silently never appear
+    beside an actual. Asserted in BOTH directions — a value dropped from
+    either side is as wrong as one added to only one.
+    """
+    pairs = (
+        ("grain", bi.TARGET_PERIOD_GRAINS, performance_targets.GRAINS),
+        ("time_behaviour", bi.TARGET_TIME_BEHAVIOURS, performance_targets.TIME_BEHAVIOURS),
+        ("version", bi.TARGET_VERSIONS, performance_targets.VERSIONS),
+    )
+    for field, mart, register in pairs:
+        assert mart == register, (
+            f"bi_fact_target and the performance_targets register disagree about "
+            f"{field!r}: the mart admits {mart} and the register admits {register}. "
+            f"Edit BOTH, and the migration's pinned literal with them."
+        )
+    #: The register's enums are what ingestion validates against, so the field
+    #: names have to be the ones it actually declares.
+    assert set(performance_targets.SCHEMA.enums) == {"grain", "time_behaviour", "version"}
 
 
 def test_partition_keys_are_named_for_the_builder() -> None:

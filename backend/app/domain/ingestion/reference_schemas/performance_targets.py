@@ -19,7 +19,7 @@ that omits it is refused. Defaulting it to ``stock`` would be the misread with
 extra steps.
 
 ``measure_id`` is validated for SHAPE only — a dotted lower-snake catalogue id
-(``loans.balance_rc``, ``engine.car_pct.crd.filed``) — and ``scope_dimension``
+(``loans.balance_rc``, ``engine.car_pct.crd.official``) — and ``scope_dimension``
 likewise (``branch.region``). Whether the id names a measure that exists, and
 whether that measure is targetable at all, is the catalogue's decision at read
 time: ``app/domain/ingestion`` is UPSTREAM of ``app/domain/bi`` and must not
@@ -62,7 +62,7 @@ TIME_BEHAVIOURS: tuple[str, ...] = ("stock", "flow")
 VERSIONS: tuple[str, ...] = ("budget", "reforecast")
 
 #: Catalogue measure and dimension ids: dot-separated lower-snake segments
-#: (``loans.npl_ratio_pct``, ``branch.region``, ``engine.car_pct.crd.filed``).
+#: (``loans.npl_ratio_pct``, ``branch.region``, ``engine.car_pct.crd.official``).
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z0-9][a-z0-9_]*)+")
 #: The months a grain's window can end in.
 _GRAIN_END_MONTHS: dict[str, tuple[int, ...]] = {

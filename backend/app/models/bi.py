@@ -102,8 +102,29 @@ ENGINE_METRIC_TIERS: tuple[str, ...] = ("live", "official")
 #: through ``app/domain/gl/pl_mapping.py`` (D-021).
 GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
+#: ``bi_fact_target`` vocabularies, mirroring
+#: ``app/domain/ingestion/reference_schemas/performance_targets.py`` without
+#: importing it (``app.models`` stays free of ``app.domain.ingestion``);
+#: ``tests/models/test_bi_models.py`` asserts the parity in both
+#: directions, so a grain or version added to the register cannot be stored
+#: under a CHECK that does not know it.
+TARGET_PERIOD_GRAINS: tuple[str, ...] = ("month", "quarter", "half_year", "year")
+TARGET_VERSIONS: tuple[str, ...] = ("budget", "reforecast")
+TARGET_TIME_BEHAVIOURS: tuple[str, ...] = ("stock", "flow")
+#: Which target the builder matched to the row's scope (D-064). ``exact`` is a
+#: target the bank declared for exactly this scope; ``bank_wide`` is the
+#: bank-wide target applied because no scoped one was declared. The two are
+#: never summed, and the row says which was used so the number is auditable
+#: without re-reading the register.
+TARGET_SCOPE_BASES: tuple[str, ...] = ("exact", "bank_wide")
+#: ``bi_fact_target.scope_dimension`` / ``scope_value`` for a bank-wide target.
+#: The register names NO scope for one (never a sentinel); the mart needs a
+#: value it can put in a primary key, so the empty string is that key — the
+#: same convention ``bi_fact_gl_monthly.currency`` already uses.
+TARGET_BANK_WIDE_SCOPE = ""
+
 #: One ``bi_mart_builds`` row per (bank, as-of, scope).
-MART_BUILD_SCOPES: tuple[str, ...] = ("positions", "events", "gl", "engine", "dims")
+MART_BUILD_SCOPES: tuple[str, ...] = ("positions", "events", "gl", "engine", "dims", "targets")
 #: There is deliberately no ``skipped``: a fingerprint skip returns BEFORE the
 #: build is marked running, so it leaves the previous ``succeeded`` row — whose
 #: fingerprint equals the current one, which is what makes the skip idempotent
@@ -478,6 +499,78 @@ class BiFactEngineMetric(_BuilderStamp, Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class BiFactTarget(_BuilderStamp, Base):
+    """The bank's own budget / reforecast figure, PRE-MATCHED to its actual (D-064).
+
+    One row per (as-of, measure, scope, version): the target the bank declared
+    through the ``performance_targets`` register, the ACTUAL the BI compiler
+    reads for the same measure and scope on the same date, and the variance
+    between them. Nothing is joined at query time — the four catalogue
+    variants (``.actual`` / ``.target`` / ``.variance`` / ``.variance_pct`` /
+    ``.attainment_pct``, ``app/domain/bi/catalogue/targets.py``) all read THIS
+    table, so the compiler's one-fact-table rule holds without being relaxed
+    and a bank-wide target can never fan out across a scoped one.
+
+    ``scope_basis`` records WHICH target the builder matched — a target the
+    bank declared for exactly this scope, or the bank-wide target applied as
+    the fallback — so the answer is auditable from the row. ``target_value``
+    is NOT NULL because the row exists only because a target does; a measure
+    with no target has no row at all, which is what makes the variants NULL
+    rather than zero (D-015). ``actual_value`` and ``variance_value`` are
+    nullable: a date whose book cannot answer the base measure still records
+    the target the bank is being held to.
+    """
+
+    __tablename__ = "bi_fact_target"
+    __table_args__ = (
+        CheckConstraint(
+            f"period_grain IN ({_values(TARGET_PERIOD_GRAINS)})",
+            name="ck_bi_fact_target_period_grain",
+        ),
+        CheckConstraint(
+            f"target_version IN ({_values(TARGET_VERSIONS)})",
+            name="ck_bi_fact_target_version",
+        ),
+        CheckConstraint(
+            f"time_behaviour IN ({_values(TARGET_TIME_BEHAVIOURS)})",
+            name="ck_bi_fact_target_time_behaviour",
+        ),
+        CheckConstraint(
+            f"scope_basis IN ({_values(TARGET_SCOPE_BASES)})",
+            name="ck_bi_fact_target_scope_basis",
+        ),
+        _bank_fk(),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    bank_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    as_of_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    #: The BASE catalogue measure id the target was declared against.
+    measure_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    #: The catalogue dimension this row is scoped to; ``''`` is bank-wide.
+    scope_dimension: Mapped[str] = mapped_column(String(80), primary_key=True)
+    scope_value: Mapped[str] = mapped_column(String(160), primary_key=True)
+    target_version: Mapped[str] = mapped_column(String(16), primary_key=True)
+    #: The window the declared target covers: first and last day of its grain.
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    period_grain: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: The bank's declared basis; it must equal the measure's own (a stock
+    #: level compared against a flow accumulation is silently a whole period
+    #: wrong), so a row that disagrees is refused rather than compared.
+    time_behaviour: Mapped[str] = mapped_column(String(8), nullable=False)
+    target_value: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
+    actual_value: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    #: ``actual − target`` in the measure's own unit; NULL when the actual is.
+    variance_value: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    scope_basis: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: The scope the matched target was DECLARED for — equal to this row's
+    #: scope when ``scope_basis`` is ``exact``, and the bank-wide scope when it
+    #: is the fallback.
+    declared_scope_dimension: Mapped[str] = mapped_column(String(80), nullable=False)
+    declared_scope_value: Mapped[str] = mapped_column(String(160), nullable=False)
+
+
 # --- conformed dimensions (Type 1, natural key + org + bank) -------------------
 
 
@@ -742,6 +835,7 @@ BI_TABLES: tuple[str, ...] = (
     BiFactLoanEvent.__tablename__,
     BiFactGlMonthly.__tablename__,
     BiFactEngineMetric.__tablename__,
+    BiFactTarget.__tablename__,
     BiDimBranch.__tablename__,
     BiDimProduct.__tablename__,
     BiDimCounterparty.__tablename__,

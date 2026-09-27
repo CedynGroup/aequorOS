@@ -94,11 +94,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.bi import extract
-from app.domain.bi.catalogue import CATALOGUE_VERSION
+from app.domain.bi.catalogue import CATALOGUE_VERSION, MeasureDef, catalogue
+from app.domain.bi.catalogue import targets as target_catalogue
 from app.domain.capital import loan_classification as classification_engine
 from app.domain.gl import pl_mapping
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.reference_schemas import business_units
+from app.domain.ingestion.reference_schemas import business_units, performance_targets
 from app.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
 from app.models import (
     Bank,
@@ -126,11 +127,20 @@ from app.models import (
     Outlet,
     RegulatoryRun,
 )
-from app.models.bi import MART_BUILD_SCOPES, UNASSIGNED_REGION, UNMAPPED_BRANCH_NAME
+from app.models.bi import (
+    MART_BUILD_SCOPES,
+    TARGET_BANK_WIDE_SCOPE,
+    UNASSIGNED_REGION,
+    UNMAPPED_BRANCH_NAME,
+    BiFactTarget,
+)
 from app.models.canonical import is_current_generation
+from app.schemas.bi import BiDateRange, BiQuery, BiTime
 from app.services import institution_types, jurisdictions, loan_classification
 from app.services import regulatory_parameters as rp
 from app.services.bi import partitions, reconciliation
+from app.services.bi.compiler import compile_query
+from app.services.bi.errors import BiQueryError
 from app.services.bi.versions import BUILDER_VERSION
 
 logger = logging.getLogger(__name__)
@@ -161,9 +171,21 @@ RETENTION_PARENTS: tuple[str, ...] = (
     BiAggPositionDaily.__tablename__,
 )
 
-#: The reference datasets a build reads (the branch register and the CoA →
-#: BSD7 mapping); their latest batch enters the fingerprint.
-REFERENCE_KINDS: tuple[str, ...] = (BUSINESS_UNITS_KIND, pl_mapping.MAPPING_KIND)
+#: The bank's own budget / reforecast register, the right-hand side of every
+#: BI variance.
+TARGETS_KIND = performance_targets.SCHEMA.kind
+
+#: The reference datasets a build reads (the branch register, the CoA → BSD7
+#: mapping and the performance targets); their latest batch enters the
+#: fingerprint. ``TARGETS_KIND`` is not optional: without it a bank that
+#: re-pushes its budget does not move the build fingerprint, so the ETag does
+#: not change and every BI surface keeps serving the OLD variance out of cache
+#: — a wrong financial number under a fresh-looking badge.
+REFERENCE_KINDS: tuple[str, ...] = (
+    BUSINESS_UNITS_KIND,
+    pl_mapping.MAPPING_KIND,
+    TARGETS_KIND,
+)
 
 #: Classification-grid inputs that enter the fingerprint beside the class
 #: grid codes: the Notice ¶12 cure counts ``_restructure_holds`` reads.
@@ -1414,11 +1436,328 @@ def _build_dims(  # noqa: PLR0913 - one build carries its whole identity
 # ---------------------------------------------------------------------------
 
 #: Which ``row_counts`` keys each build scope reports.
+# ---------------------------------------------------------------------------
+# targets (the bank's own budget, pre-matched to its actual)
+# ---------------------------------------------------------------------------
+
+#: ``bi_fact_target.scope_dimension`` / ``scope_value`` for a bank-wide target.
+BANK_WIDE_SCOPE: tuple[str, str] = (TARGET_BANK_WIDE_SCOPE, TARGET_BANK_WIDE_SCOPE)
+
+#: How many months back from a grain's last day its window starts.
+_GRAIN_SPAN_MONTHS: dict[str, int] = {"month": 1, "quarter": 3, "half_year": 6, "year": 12}
+
+
+@dataclass(frozen=True, slots=True)
+class DeclaredTarget:
+    """One register row the catalogue can actually compare against."""
+
+    measure_id: str
+    scope_dimension: str
+    scope_value: str
+    version: str
+    grain: str
+    time_behaviour: str
+    period_start: date
+    period_end: date
+    value: Decimal
+
+    @property
+    def scope(self) -> tuple[str, str]:
+        return (self.scope_dimension, self.scope_value)
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedTarget:
+    """Which declared target applies to one scope, and on what basis."""
+
+    declared: DeclaredTarget
+    #: ``exact`` — declared for this very scope; ``bank_wide`` — the bank-wide
+    #: target applied because no scoped one was declared.
+    basis: str
+
+
+def target_window(period_end: date, grain: str) -> tuple[date, date] | None:
+    """First and last day of the ``grain`` window ending on ``period_end``.
+
+    ``None`` when ``grain`` is unknown, or when ``period_end`` is not that
+    grain's last day — a quarterly target dated 15 March is a mistake about
+    which quarter is meant, and a window inferred from it would compare the
+    bank against three months it did not budget.
+    """
+    span = _GRAIN_SPAN_MONTHS.get(grain)
+    if span is None or performance_targets.period_end_for(period_end, grain) != period_end:
+        return None
+    months = period_end.year * 12 + (period_end.month - 1) - (span - 1)
+    return date(months // 12, months % 12 + 1, 1), period_end
+
+
+def resolve_target_for_scope(
+    candidates: Sequence[DeclaredTarget], *, scope: tuple[str, str]
+) -> ResolvedTarget | None:
+    """The one target that applies to ``scope`` — exact first, bank-wide after.
+
+    The rule D-064 puts in the builder, in one named place: **a target declared
+    for exactly this scope wins; the bank-wide target is the fallback; the two
+    are NEVER summed.** Returning at most one candidate is what makes the
+    fan-out impossible — there is nothing left for a query to add together, at
+    any grain — and the basis rides on the row so the answer is auditable
+    without re-reading the register.
+
+    Two rows with the same identity are the same target stated twice
+    (``performance_targets.target_key``); the later statement wins, because a
+    corrected restatement is the reason a register row is ever repeated.
+    """
+    exact = [candidate for candidate in candidates if candidate.scope == scope]
+    if exact:
+        return ResolvedTarget(exact[-1], "exact")
+    if scope == BANK_WIDE_SCOPE:
+        # There is nothing broader than bank-wide to fall back to.
+        return None
+    bank_wide = [candidate for candidate in candidates if candidate.scope == BANK_WIDE_SCOPE]
+    if bank_wide:
+        return ResolvedTarget(bank_wide[-1], "bank_wide")
+    return None
+
+
+def _decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, ValueError):
+        return None
+
+
+def _declared_targets(rows: Sequence[Mapping[str, Any]], as_of: date) -> list[DeclaredTarget]:
+    """The register rows that are comparable on ``as_of``, and only those.
+
+    Three refusals, each silent in the mart and loud in the log, because every
+    one of them would otherwise produce a number rather than a blank: a row the
+    register's own rules reject; a measure the catalogue does not know or does
+    not make targetable; and a row whose declared stock-or-flow basis disagrees
+    with the measure's, which subtracts a period's accumulation from a level.
+    """
+    cat = catalogue()
+    declared: list[DeclaredTarget] = []
+    for row in rows:
+        problems = performance_targets.SCHEMA.problems_for(dict(row))
+        if problems:
+            logger.warning("bi.mart_builder.target_row_refused problems=%s", problems)
+            continue
+        measure_id = str(row["measure_id"]).strip()
+        if measure_id not in cat:
+            logger.warning("bi.mart_builder.target_measure_unknown measure=%s", measure_id)
+            continue
+        measure = cat.measure(measure_id)
+        if not target_catalogue.is_targetable(measure):
+            logger.warning("bi.mart_builder.target_measure_not_targetable measure=%s", measure_id)
+            continue
+        grain = str(row["grain"]).strip()
+        period_end = date.fromisoformat(str(row["period"]).strip())
+        window = target_window(period_end, grain)
+        if window is None:
+            logger.warning(
+                "bi.mart_builder.target_period_not_grain_end measure=%s grain=%s period=%s",
+                measure_id,
+                grain,
+                period_end,
+            )
+            continue
+        behaviour = str(row["time_behaviour"]).strip()
+        if behaviour != measure.time_behaviour:
+            logger.warning(
+                "bi.mart_builder.target_basis_mismatch measure=%s declared=%s expected=%s",
+                measure_id,
+                behaviour,
+                measure.time_behaviour,
+            )
+            continue
+        value = _decimal(row["value"])
+        if value is None:
+            logger.warning("bi.mart_builder.target_value_unreadable measure=%s", measure_id)
+            continue
+        start, end = window
+        if not start <= as_of <= end:
+            continue
+        declared.append(
+            DeclaredTarget(
+                measure_id=measure_id,
+                scope_dimension=str(row.get("scope_dimension") or "").strip(),
+                scope_value=str(row.get("scope_value") or "").strip(),
+                version=str(row["version"]).strip(),
+                grain=grain,
+                time_behaviour=behaviour,
+                period_start=start,
+                period_end=end,
+                value=value,
+            )
+        )
+    return declared
+
+
+def _measure_actuals(  # noqa: PLR0913 - the query identity plus its tenant
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    as_of: date,
+    measure: MeasureDef,
+    *,
+    scope_dimension: str,
+    window_start: date,
+) -> dict[str, Decimal | None]:
+    """``{scope value: actual}`` for one measure, read through the COMPILER.
+
+    Never a second implementation of the aggregation: the builder asks the
+    query path's own compiler for the base measure, so a pre-matched actual is
+    the same number the BI surface shows for that measure on that date. A stock
+    measure is read at ``as_of``; a flow measure is accumulated from the start
+    of the target's own window to ``as_of``, so a mid-quarter comparison is
+    progress against the quarter rather than a whole period out.
+
+    A query the compiler refuses — a scope dimension the measure does not admit
+    — yields no actual at all rather than a wrong one; the target still lands,
+    with a blank actual and a blank variance.
+    """
+    window = (
+        BiTime(as_of=as_of)
+        if measure.time_behaviour == "stock"
+        else BiTime(range=BiDateRange(start=window_start, end=as_of))
+    )
+    try:
+        query = BiQuery(
+            measures=[measure.id],
+            dimensions=[scope_dimension] if scope_dimension else [],
+            time=window,
+        )
+        compiled = compile_query(
+            db, catalogue(), query, organization_id=organization_id, bank_id=bank_id
+        )
+    except (BiQueryError, ValueError) as exc:
+        logger.warning(
+            "bi.mart_builder.target_actual_unavailable measure=%s scope=%s error=%s",
+            measure.id,
+            scope_dimension or "bank-wide",
+            exc,
+        )
+        return {}
+    rows = db.execute(compiled.select).all()
+    if not scope_dimension:
+        return {TARGET_BANK_WIDE_SCOPE: _decimal(rows[0][-1]) if rows else None}
+    return {str(row[0]): _decimal(row[-1]) for row in rows if row[0] is not None}
+
+
+def _target_values(  # noqa: PLR0913 - one row carries its whole identity
+    declared: DeclaredTarget,
+    resolved: ResolvedTarget,
+    actual: Decimal | None,
+    *,
+    organization_id: str,
+    bank_id: str,
+    as_of: date,
+    scope: tuple[str, str],
+    built_at: datetime,
+) -> dict[str, Any]:
+    target = resolved.declared.value
+    return {
+        "organization_id": organization_id,
+        "bank_id": bank_id,
+        "as_of_date": as_of,
+        "measure_id": declared.measure_id,
+        "scope_dimension": scope[0],
+        "scope_value": scope[1],
+        "target_version": declared.version,
+        "period_start": declared.period_start,
+        "period_end": declared.period_end,
+        "period_grain": declared.grain,
+        "time_behaviour": declared.time_behaviour,
+        "target_value": target,
+        "actual_value": actual,
+        "variance_value": None if actual is None else actual - target,
+        "scope_basis": resolved.basis,
+        "declared_scope_dimension": resolved.declared.scope_dimension,
+        "declared_scope_value": resolved.declared.scope_value,
+        "builder_version": BUILDER_VERSION,
+        "built_at": built_at,
+    }
+
+
+def _build_targets(
+    db: Session, organization_id: str, bank_id: str, as_of: date, *, built_at: datetime
+) -> int:
+    """Pre-match the bank's targets to their actuals for ``as_of`` (D-064).
+
+    One row per (as-of, measure, scope, version): the bank-wide scope always,
+    plus every scope the register declares for that measure, each resolved
+    through :func:`resolve_target_for_scope`. Nothing is left to a query-time
+    join, so there is no fan-out to guard against and a target measure reads
+    from one fact table like every other measure.
+    """
+    db.execute(
+        delete(BiFactTarget).where(*_date_slice(BiFactTarget, organization_id, bank_id, as_of))
+    )
+    rows = reference_rows(db, organization_id, bank_id, TARGETS_KIND, as_of)
+    declared = _declared_targets(rows, as_of)
+    if not declared:
+        return 0
+
+    cat = catalogue()
+    by_measure: dict[str, list[DeclaredTarget]] = defaultdict(list)
+    for candidate in declared:
+        by_measure[candidate.measure_id].append(candidate)
+
+    values: list[dict[str, Any]] = []
+    for measure_id, candidates in sorted(by_measure.items()):
+        measure = cat.measure(measure_id)
+        window_start = min(candidate.period_start for candidate in candidates)
+        scope_dimensions = {
+            candidate.scope_dimension for candidate in candidates if candidate.scope_dimension
+        }
+        actuals: dict[str, dict[str, Decimal | None]] = {
+            dimension: _measure_actuals(
+                db,
+                organization_id,
+                bank_id,
+                as_of,
+                measure,
+                scope_dimension=dimension,
+                window_start=window_start,
+            )
+            for dimension in ("", *sorted(scope_dimensions))
+        }
+        scopes = {BANK_WIDE_SCOPE, *(candidate.scope for candidate in candidates)}
+        versions = {candidate.version for candidate in candidates}
+        for scope in sorted(scopes):
+            for version in sorted(versions):
+                pool = [candidate for candidate in candidates if candidate.version == version]
+                resolved = resolve_target_for_scope(pool, scope=scope)
+                if resolved is None:
+                    continue
+                actual = actuals.get(scope[0], {}).get(
+                    scope[1] if scope[0] else TARGET_BANK_WIDE_SCOPE
+                )
+                values.append(
+                    _target_values(
+                        resolved.declared,
+                        resolved,
+                        actual,
+                        organization_id=organization_id,
+                        bank_id=bank_id,
+                        as_of=as_of,
+                        scope=scope,
+                        built_at=built_at,
+                    )
+                )
+    return _insert_chunks(db, BiFactTarget, values)
+
+
 _SCOPE_TABLES: dict[str, tuple[str, ...]] = {
     "positions": ("bi_fact_position_daily", "bi_agg_position_daily", "bi_fact_position_eom"),
     "events": ("bi_fact_loan_event",),
     "gl": ("bi_fact_gl_monthly",),
     "engine": ("bi_fact_engine_metric",),
+    "targets": ("bi_fact_target",),
     "dims": (
         "bi_dim_branch",
         "bi_dim_product",
@@ -1480,6 +1819,15 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
         db, organization_id, bank_id, as_of, seen=seen, built_at=built_at, row_counts=row_counts
     )
     timings["dims"] = time.monotonic() - clock
+
+    # Targets last: the scope reads the marts THIS build just wrote, through
+    # the same compiler the query path uses, so a pre-matched actual is by
+    # construction the number the BI surface shows for the base measure.
+    clock = time.monotonic()
+    row_counts["bi_fact_target"] = _build_targets(
+        db, organization_id, bank_id, as_of, built_at=built_at
+    )
+    timings["targets"] = time.monotonic() - clock
 
     results = reconciliation.evaluate(db, ctx, bank, as_of)
     reconciliation.persist(

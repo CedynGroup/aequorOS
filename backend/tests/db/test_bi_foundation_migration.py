@@ -52,6 +52,14 @@ pytestmark = [
 
 REVISION = "202609220066"
 PREVIOUS_REVISION = "202609200065"
+#: The BI plane is created across TWO revisions: ``REVISION`` builds the marts,
+#: dimensions, control tables and partitions, and ``202609270069`` adds
+#: ``bi_fact_target`` (the pre-matched target mart) plus the ``targets`` build
+#: scope. ``BI_TABLES`` names both revisions' tables, so the round-trip test
+#: below has to come back up through the later one or it would measure the
+#: model against half a chain. A revision that adds a ``bi_*`` table must be
+#: named here.
+LAST_BI_REVISION = "202609270069"
 PARTITIONED = (*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES)
 PLAIN = tuple(table for table in BI_TABLES if table not in PARTITIONED)
 ORG = "OR-BIFND0001"
@@ -544,6 +552,15 @@ def test_query_log_is_append_only_through_the_parent_and_on_a_partition(
 def test_downgrade_removes_every_bi_object_and_upgrade_restores_them(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
+    """Down to before the BI chain, then back up through every revision in it.
+
+    The downgrade half is the stronger one: it asserts that NO ``bi_`` relation
+    and no partition function survives, runtime-created children included, so a
+    revision that creates something without dropping it fails here rather than
+    leaving an orphan on a real database. The upgrade half then has to reach
+    ``LAST_BI_REVISION`` rather than ``REVISION``, because ``bi_fact_target``
+    is created by the later revision and ``BI_TABLES`` names it.
+    """
     config = alembic_config_for_app()
     schema_name = migrated_postgres_schema.schema_name
     engine = migrated_postgres_schema.app_engine
@@ -578,7 +595,7 @@ def test_downgrade_removes_every_bi_object_and_upgrade_restores_them(
     assert leftover_relations == []
     assert leftover_functions == []
 
-    command.upgrade(config, REVISION)
+    command.upgrade(config, LAST_BI_REVISION)
     clear_database_caches()
     state = _relation_state(migrated_postgres_schema, list(BI_TABLES))
     assert set(state) == set(BI_TABLES)

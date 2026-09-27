@@ -195,7 +195,7 @@ def test_period_end_for_resolves_each_grain() -> None:
 
 def test_the_measure_id_is_checked_for_shape_not_membership() -> None:
     # A real portfolio id and a real engine id, which carries four segments.
-    assert validate_target_row({**GOOD_TARGET, "measure_id": "engine.car_pct.crd.filed"}) == []
+    assert validate_target_row({**GOOD_TARGET, "measure_id": "engine.car_pct.crd.official"}) == []
     # Shape only: an id the catalogue does not define still passes here, because
     # membership is the catalogue's decision at read time.
     assert validate_target_row({**GOOD_TARGET, "measure_id": "loans.no_such_measure"}) == []
