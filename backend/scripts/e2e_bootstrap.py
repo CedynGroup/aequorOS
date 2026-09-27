@@ -81,7 +81,7 @@ from app.services import authorization, membership
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
@@ -497,8 +497,27 @@ def _seed_canonical_positions(session: Session) -> None:
     throwaway sqlite file, exactly as ``live_plane.py`` and ``bi_plane.py`` are:
     it stands in for what the Data Engine and the worker would have written, and
     it exists nowhere near a product code path.
+
+    **The position book is seeded at the date the FACT SPINE reaches, not at the
+    fixture's own default (H-015).** ``_materialize_book`` carries the spine
+    forward to ``latest_month_end_on_or_before()``, and the live plane therefore
+    computes at that date, while ``seed_canonical_fixture``'s default
+    ``FIXTURE_AS_OF`` is fixed. Left alone the two halves of one fixture sit at
+    different dates, and the consequences are silent rather than loud:
+    ``materialize_bi_plane`` builds at the latest POSITION date, looks for live
+    metrics there, finds them two months later, and copies **zero**
+    ``bi_fact_engine_metric`` rows — so every engine measure in BI is empty, and
+    R1 to R4 (which compare the portfolio against the engine) all report
+    ``grey``, "not assessed". A browser journey asserting an engine figure or a
+    trust badge would then be vacuous, or would assert the broken state as if it
+    were the product's. A real bank's book and its fact spine advance together;
+    passing the date explicitly is what makes the fixture behave that way. The
+    hermetic suite keeps the default, so nothing there moves.
     """
-    seed_canonical_fixture(session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
+    as_of = latest_month_end_on_or_before()
+    seed_canonical_fixture(
+        session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=as_of
+    )
     session.flush()
     snapshots = session.scalar(
         select(func.count())
@@ -508,7 +527,7 @@ def _seed_canonical_positions(session: Session) -> None:
             CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
         )
     )
-    print(f"canonical positions: {snapshots} snapshots at {FIXTURE_AS_OF.isoformat()}")
+    print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
 
 
 def _materialize_book(session: Session) -> None:

@@ -98,7 +98,7 @@ export const E2E_USERS: Record<
   // `scripts/e2e_bootstrap.py` must agree — a cookie minted for the wrong
   // subject authenticates as the other fixture's authority.
   macro_viewer: {
-    id: "eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1",
+    id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
     roles: ["viewer"],
     authv: 2,
   },
