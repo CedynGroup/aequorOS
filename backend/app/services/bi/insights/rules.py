@@ -72,6 +72,7 @@ from app.services.bi.insights.statements import (
     insight_from,
     missing_reason_copy,
     render_value,
+    stated_as,
 )
 
 __all__ = [
@@ -123,9 +124,20 @@ class InsightSet:
 # ---------------------------------------------------------------------------
 
 #: A change in a percentage is a change in POINTS, not a percentage of itself.
+#: How a CHANGE in a figure is named, per value type. A difference in a
+#: percentage is percentage points, not a percentage; a difference in a
+#: proportion of one is the same quantity once scaled, so it shares that unit; a
+#: difference in an index is index points; a difference in a duration is years.
+#: An ``index`` and a ``count`` change bare because neither has a unit.
+#: Completeness is asserted in ``tests/services/bi/test_insights_value_types.py``
+#: — a type missing here renders a change with no unit at all (audit A8-03).
 _CHANGE_SUFFIX: dict[str, str] = {
     "pct": " percentage points",
+    "fraction": " percentage points",
+    "index": " index points",
+    "duration_years": " years",
     "amount": " in the reporting currency",
+    "count": "",
 }
 
 _TRUST_HEADLINE: dict[str, str] = {
@@ -153,7 +165,14 @@ _TRUST_EMPHASIS: dict[str, Emphasis] = {"grey": "normal", "amber": "high", "red"
 
 
 def _render_change(value: Decimal, value_type: ValueType) -> str:
-    return f"{canonical_decimal(value)}{_CHANGE_SUFFIX.get(value_type, '')}"
+    """A change at the factor its type is stated at, so it matches the level.
+
+    A fraction's level is shown multiplied by a hundred, so its change must be
+    too; otherwise a strip reads "6.1 %, up by 0.005" about the same measure.
+    """
+    scale, _ = stated_as(value_type)
+    scaled = value * scale if scale != 1 else value
+    return f"{canonical_decimal(scaled)}{_CHANGE_SUFFIX.get(value_type, '')}"
 
 
 def _names(measures: Sequence[str]) -> str:

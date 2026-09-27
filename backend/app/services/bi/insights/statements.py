@@ -53,6 +53,7 @@ __all__ = [
     "insight_from",
     "missing_reason_copy",
     "render_value",
+    "stated_as",
     "trust_qualifier",
     "worst_trust",
 ]
@@ -72,9 +73,25 @@ _STATEMENT_ORDER: dict[StatementClass, int] = {
 
 #: How a figure is stated, by what kind of figure it is. An amount names the
 #: reporting currency rather than any currency: the jurisdiction resolves it.
-_UNIT_SUFFIX: dict[str, str] = {
-    "pct": " %",
-    "amount": " in the reporting currency",
+#: How a figure is stated, per value type: the factor it is shown at, and the
+#: unit that names it. Both halves matter and neither is optional.
+#:
+#: A ``fraction`` is a proportion of one, so it is shown multiplied by a hundred
+#: — a suffix alone would render 0.061 as "0.061 %", and omitting the entry
+#: entirely renders it as a bare "0.061" beside a ``pct`` twin reading "6.1 %",
+#: which is the same quantity stated two ways in one strip (audit A8-03). An
+#: ``index`` and a ``count`` are deliberately bare: neither has a unit, and
+#: inventing one would be a claim about the number. Completeness over the
+#: catalogue's numeric vocabulary is asserted in
+#: ``tests/services/bi/test_insights_value_types.py``, because a value type this
+#: map does not know is not rejected — it silently falls through unscaled.
+_STATED_AS: dict[str, tuple[Decimal, str]] = {
+    "pct": (Decimal(1), " %"),
+    "fraction": (Decimal(100), " %"),
+    "index": (Decimal(1), ""),
+    "duration_years": (Decimal(1), " years"),
+    "amount": (Decimal(1), " in the reporting currency"),
+    "count": (Decimal(1), ""),
 }
 
 #: What a reader is told when a figure has no value. Never "0", never "flat".
@@ -111,9 +128,19 @@ _TRUST_COPY: dict[str, str] = {
 }
 
 
+def stated_as(value_type: str) -> tuple[Decimal, str]:
+    """The factor and unit a figure of this type is stated at.
+
+    Falls back to "as held, unnamed" for a non-numeric type, which is right for
+    text, a date or a flag and is the only case where silence is correct.
+    """
+    return _STATED_AS.get(value_type, (Decimal(1), ""))
+
+
 def render_value(value: Decimal, value_type: ValueType) -> str:
-    """A figure exactly as the fact holds it, with the unit it is stated in."""
-    return f"{canonical_decimal(value)}{_UNIT_SUFFIX.get(value_type, '')}"
+    """A figure as a reader is shown it, at the factor and unit of its type."""
+    scale, suffix = stated_as(value_type)
+    return f"{canonical_decimal(value * scale if scale != 1 else value)}{suffix}"
 
 
 def missing_reason_copy(reason: MissingReason) -> str:
