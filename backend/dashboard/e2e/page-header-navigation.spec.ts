@@ -289,13 +289,18 @@ for (const [route, eyebrow] of [
   });
 }
 
-test("Credit waiting-for-data card shares the header edges at wide viewports", async ({
+test("Credit cards share the header edges at wide viewports", async ({
   page,
 }) => {
+  // This asserted "Waiting for data" until `c50209cd`, which aligned the e2e
+  // fixture's position book with its fact spine. The live credit module now
+  // COMPUTES, so the empty state is gone and the premise was stale rather than
+  // the page being wrong. The test's subject was always the layout, and
+  // `expectAlignedHeaderAndCards` already waits for the first card itself, so
+  // the empty-state assertion was only ever how this spec knew the page had
+  // settled. Asserting a specific empty state here would now mean asserting the
+  // fixture has LESS data than it has.
   await page.goto("/credit");
-  await expect(
-    page.getByText("Waiting for data", { exact: true }),
-  ).toBeVisible();
   await expectAlignedHeaderAndCards(page);
 });
 
