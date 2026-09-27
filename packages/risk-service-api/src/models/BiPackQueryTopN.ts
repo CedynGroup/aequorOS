@@ -22,46 +22,48 @@ import {
 /**
  *
  * @export
- * @interface BiQueryTopN
+ * @interface BiPackQueryTopN
  */
-export interface BiQueryTopN {
+export interface BiPackQueryTopN {
   /**
    *
    * @type {string}
-   * @memberof BiQueryTopN
+   * @memberof BiPackQueryTopN
    */
   dimension: string;
   /**
    *
    * @type {number}
-   * @memberof BiQueryTopN
+   * @memberof BiPackQueryTopN
    */
   n: number;
   /**
    *
    * @type {boolean}
-   * @memberof BiQueryTopN
+   * @memberof BiPackQueryTopN
    */
   other?: boolean;
 }
 
 /**
- * Check if a given object implements the BiQueryTopN interface.
+ * Check if a given object implements the BiPackQueryTopN interface.
  */
-export function instanceOfBiQueryTopN(value: object): value is BiQueryTopN {
+export function instanceOfBiPackQueryTopN(
+  value: object,
+): value is BiPackQueryTopN {
   if (!("dimension" in value) || value["dimension"] === undefined) return false;
   if (!("n" in value) || value["n"] === undefined) return false;
   return true;
 }
 
-export function BiQueryTopNFromJSON(json: any): BiQueryTopN {
-  return BiQueryTopNFromJSONTyped(json, false);
+export function BiPackQueryTopNFromJSON(json: any): BiPackQueryTopN {
+  return BiPackQueryTopNFromJSONTyped(json, false);
 }
 
-export function BiQueryTopNFromJSONTyped(
+export function BiPackQueryTopNFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): BiQueryTopN {
+): BiPackQueryTopN {
   if (json == null) {
     return json;
   }
@@ -72,12 +74,12 @@ export function BiQueryTopNFromJSONTyped(
   };
 }
 
-export function BiQueryTopNToJSON(json: any): BiQueryTopN {
-  return BiQueryTopNToJSONTyped(json, false);
+export function BiPackQueryTopNToJSON(json: any): BiPackQueryTopN {
+  return BiPackQueryTopNToJSONTyped(json, false);
 }
 
-export function BiQueryTopNToJSONTyped(
-  value?: BiQueryTopN | null,
+export function BiPackQueryTopNToJSONTyped(
+  value?: BiPackQueryTopN | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

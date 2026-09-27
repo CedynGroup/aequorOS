@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Title } from "./Title";
+import type { Title1 } from "./Title1";
 import {
-  TitleFromJSON,
-  TitleFromJSONTyped,
-  TitleToJSON,
-  TitleToJSONTyped,
-} from "./Title";
+  Title1FromJSON,
+  Title1FromJSONTyped,
+  Title1ToJSON,
+  Title1ToJSONTyped,
+} from "./Title1";
 
 /**
  *
@@ -39,10 +39,10 @@ export interface IcaapDataBlockCreate {
   params?: { [key: string]: any };
   /**
    *
-   * @type {Title}
+   * @type {Title1}
    * @memberof IcaapDataBlockCreate
    */
-  title?: Title;
+  title?: Title1;
 }
 
 /**
@@ -70,7 +70,7 @@ export function IcaapDataBlockCreateFromJSONTyped(
     ...json,
     blockType: json["block_type"],
     params: json["params"] == null ? undefined : json["params"],
-    title: json["title"] == null ? undefined : TitleFromJSON(json["title"]),
+    title: json["title"] == null ? undefined : Title1FromJSON(json["title"]),
   };
 }
 
@@ -89,6 +89,6 @@ export function IcaapDataBlockCreateToJSONTyped(
   return {
     block_type: value["blockType"],
     params: value["params"],
-    title: TitleToJSON(value["title"]),
+    title: Title1ToJSON(value["title"]),
   };
 }

@@ -32,13 +32,6 @@ import {
   BiSortToJSON,
   BiSortToJSONTyped,
 } from "./BiSort";
-import type { BiTime } from "./BiTime";
-import {
-  BiTimeFromJSON,
-  BiTimeFromJSONTyped,
-  BiTimeToJSON,
-  BiTimeToJSONTyped,
-} from "./BiTime";
 import type { Limit } from "./Limit";
 import {
   LimitFromJSON,
@@ -55,95 +48,137 @@ import {
 } from "./BiPackQueryTopN";
 
 /**
+ * A ``BiQuery`` with its reporting window left to the reader.
  *
+ * Every field of ``BiQuery`` except ``time`` is restated here, and
+ * ``tests/domain/bi/test_packs.py`` pins that parity so a new query field
+ * cannot land on one and not the other. ``time`` is replaced by ``window``
+ * and ``compare``, both closed vocabularies: a pack therefore cannot name a
+ * date, which is the one parameter a certified dashboard must take from the
+ * bank it is being shown for rather than from the file it shipped in.
  * @export
- * @interface BiQuery
+ * @interface BiPackQuery
  */
-export interface BiQuery {
+export interface BiPackQuery {
+  /**
+   *
+   * @type {string}
+   * @memberof BiPackQuery
+   */
+  compare?: BiPackQueryCompareEnum;
   /**
    *
    * @type {Array<string>}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   dimensions?: Array<string>;
   /**
    *
    * @type {Array<BiFilter>}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   filters?: Array<BiFilter>;
   /**
    *
    * @type {Limit}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   limit?: Limit;
   /**
    *
    * @type {Array<string>}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   measures: Array<string>;
   /**
    *
    * @type {number}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   offset?: number;
   /**
    *
    * @type {BiPackQueryPivot}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   pivot?: BiPackQueryPivot;
   /**
    *
    * @type {Array<BiSort>}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   sort?: Array<BiSort>;
   /**
    *
    * @type {boolean}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   subtotals?: boolean;
   /**
    *
-   * @type {BiTime}
-   * @memberof BiQuery
-   */
-  time: BiTime;
-  /**
-   *
    * @type {BiPackQueryTopN}
-   * @memberof BiQuery
+   * @memberof BiPackQuery
    */
   topN?: BiPackQueryTopN;
+  /**
+   *
+   * @type {string}
+   * @memberof BiPackQuery
+   */
+  window: BiPackQueryWindowEnum;
 }
 
 /**
- * Check if a given object implements the BiQuery interface.
+ * @export
  */
-export function instanceOfBiQuery(value: object): value is BiQuery {
+export const BiPackQueryCompareEnum = {
+  None: "none",
+  PriorMonth: "prior_month",
+  PriorQuarter: "prior_quarter",
+  PriorYear: "prior_year",
+} as const;
+export type BiPackQueryCompareEnum =
+  (typeof BiPackQueryCompareEnum)[keyof typeof BiPackQueryCompareEnum];
+
+/**
+ * @export
+ */
+export const BiPackQueryWindowEnum = {
+  AsOf: "as_of",
+  MonthToDate: "month_to_date",
+  QuarterToDate: "quarter_to_date",
+  YearToDate: "year_to_date",
+  Trailing3Months: "trailing_3_months",
+  Trailing6Months: "trailing_6_months",
+  Trailing12Months: "trailing_12_months",
+  Trailing24Months: "trailing_24_months",
+} as const;
+export type BiPackQueryWindowEnum =
+  (typeof BiPackQueryWindowEnum)[keyof typeof BiPackQueryWindowEnum];
+
+/**
+ * Check if a given object implements the BiPackQuery interface.
+ */
+export function instanceOfBiPackQuery(value: object): value is BiPackQuery {
   if (!("measures" in value) || value["measures"] === undefined) return false;
-  if (!("time" in value) || value["time"] === undefined) return false;
+  if (!("window" in value) || value["window"] === undefined) return false;
   return true;
 }
 
-export function BiQueryFromJSON(json: any): BiQuery {
-  return BiQueryFromJSONTyped(json, false);
+export function BiPackQueryFromJSON(json: any): BiPackQuery {
+  return BiPackQueryFromJSONTyped(json, false);
 }
 
-export function BiQueryFromJSONTyped(
+export function BiPackQueryFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): BiQuery {
+): BiPackQuery {
   if (json == null) {
     return json;
   }
   return {
     ...json,
+    compare: json["compare"] == null ? undefined : json["compare"],
     dimensions: json["dimensions"] == null ? undefined : json["dimensions"],
     filters:
       json["filters"] == null
@@ -161,20 +196,20 @@ export function BiQueryFromJSONTyped(
         ? undefined
         : (json["sort"] as Array<any>).map(BiSortFromJSON),
     subtotals: json["subtotals"] == null ? undefined : json["subtotals"],
-    time: BiTimeFromJSON(json["time"]),
     topN:
       json["top_n"] == null
         ? undefined
         : BiPackQueryTopNFromJSON(json["top_n"]),
+    window: json["window"],
   };
 }
 
-export function BiQueryToJSON(json: any): BiQuery {
-  return BiQueryToJSONTyped(json, false);
+export function BiPackQueryToJSON(json: any): BiPackQuery {
+  return BiPackQueryToJSONTyped(json, false);
 }
 
-export function BiQueryToJSONTyped(
-  value?: BiQuery | null,
+export function BiPackQueryToJSONTyped(
+  value?: BiPackQuery | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {
@@ -182,6 +217,7 @@ export function BiQueryToJSONTyped(
   }
 
   return {
+    compare: value["compare"],
     dimensions: value["dimensions"],
     filters:
       value["filters"] == null
@@ -196,7 +232,7 @@ export function BiQueryToJSONTyped(
         ? undefined
         : (value["sort"] as Array<any>).map(BiSortToJSON),
     subtotals: value["subtotals"],
-    time: BiTimeToJSON(value["time"]),
     top_n: BiPackQueryTopNToJSON(value["topN"]),
+    window: value["window"],
   };
 }

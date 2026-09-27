@@ -18,6 +18,13 @@ import {
   BiPackQueryPivotToJSON,
   BiPackQueryPivotToJSONTyped,
 } from "./BiPackQueryPivot";
+import type { BiQuery } from "./BiQuery";
+import {
+  BiQueryFromJSON,
+  BiQueryFromJSONTyped,
+  BiQueryToJSON,
+  BiQueryToJSONTyped,
+} from "./BiQuery";
 import type { BiFilter } from "./BiFilter";
 import {
   BiFilterFromJSON,
@@ -57,93 +64,96 @@ import {
 /**
  *
  * @export
- * @interface BiQuery
+ * @interface BiPackWidgetReadQuery
  */
-export interface BiQuery {
+export interface BiPackWidgetReadQuery {
   /**
    *
    * @type {Array<string>}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   dimensions?: Array<string>;
   /**
    *
    * @type {Array<BiFilter>}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   filters?: Array<BiFilter>;
   /**
    *
    * @type {Limit}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   limit?: Limit;
   /**
    *
    * @type {Array<string>}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   measures: Array<string>;
   /**
    *
    * @type {number}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   offset?: number;
   /**
    *
    * @type {BiPackQueryPivot}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   pivot?: BiPackQueryPivot;
   /**
    *
    * @type {Array<BiSort>}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   sort?: Array<BiSort>;
   /**
    *
    * @type {boolean}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   subtotals?: boolean;
   /**
    *
    * @type {BiTime}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   time: BiTime;
   /**
    *
    * @type {BiPackQueryTopN}
-   * @memberof BiQuery
+   * @memberof BiPackWidgetReadQuery
    */
   topN?: BiPackQueryTopN;
 }
 
 /**
- * Check if a given object implements the BiQuery interface.
+ * Check if a given object implements the BiPackWidgetReadQuery interface.
  */
-export function instanceOfBiQuery(value: object): value is BiQuery {
+export function instanceOfBiPackWidgetReadQuery(
+  value: object,
+): value is BiPackWidgetReadQuery {
   if (!("measures" in value) || value["measures"] === undefined) return false;
   if (!("time" in value) || value["time"] === undefined) return false;
   return true;
 }
 
-export function BiQueryFromJSON(json: any): BiQuery {
-  return BiQueryFromJSONTyped(json, false);
+export function BiPackWidgetReadQueryFromJSON(
+  json: any,
+): BiPackWidgetReadQuery {
+  return BiPackWidgetReadQueryFromJSONTyped(json, false);
 }
 
-export function BiQueryFromJSONTyped(
+export function BiPackWidgetReadQueryFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): BiQuery {
+): BiPackWidgetReadQuery {
   if (json == null) {
     return json;
   }
   return {
-    ...json,
     dimensions: json["dimensions"] == null ? undefined : json["dimensions"],
     filters:
       json["filters"] == null
@@ -169,12 +179,12 @@ export function BiQueryFromJSONTyped(
   };
 }
 
-export function BiQueryToJSON(json: any): BiQuery {
-  return BiQueryToJSONTyped(json, false);
+export function BiPackWidgetReadQueryToJSON(json: any): BiPackWidgetReadQuery {
+  return BiPackWidgetReadQueryToJSONTyped(json, false);
 }
 
-export function BiQueryToJSONTyped(
-  value?: BiQuery | null,
+export function BiPackWidgetReadQueryToJSONTyped(
+  value?: BiPackWidgetReadQuery | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

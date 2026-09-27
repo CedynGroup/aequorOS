@@ -85,6 +85,10 @@ export interface ListCreditLoansRequest {
   grade?: string | null;
   product?: string | null;
   branch?: string | null;
+  sector?: string | null;
+  stage?: number | null;
+  dpdBand?: string | null;
+  asOf?: Date | null;
   q?: string | null;
 }
 
@@ -519,6 +523,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
+   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.
    * List Credit Loans
    */
   async listCreditLoansRaw(
@@ -554,6 +559,24 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
       queryParameters["branch"] = requestParameters["branch"];
     }
 
+    if (requestParameters["sector"] != null) {
+      queryParameters["sector"] = requestParameters["sector"];
+    }
+
+    if (requestParameters["stage"] != null) {
+      queryParameters["stage"] = requestParameters["stage"];
+    }
+
+    if (requestParameters["dpdBand"] != null) {
+      queryParameters["dpd_band"] = requestParameters["dpdBand"];
+    }
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
     if (requestParameters["q"] != null) {
       queryParameters["q"] = requestParameters["q"];
     }
@@ -587,6 +610,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
+   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.
    * List Credit Loans
    */
   async listCreditLoans(

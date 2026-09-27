@@ -22,39 +22,41 @@ import {
 /**
  *
  * @export
- * @interface BiQueryPivot
+ * @interface BiPackQueryPivot
  */
-export interface BiQueryPivot {
+export interface BiPackQueryPivot {
   /**
    *
    * @type {string}
-   * @memberof BiQueryPivot
+   * @memberof BiPackQueryPivot
    */
   dimension: string;
   /**
    *
    * @type {number}
-   * @memberof BiQueryPivot
+   * @memberof BiPackQueryPivot
    */
   maxColumns?: number;
 }
 
 /**
- * Check if a given object implements the BiQueryPivot interface.
+ * Check if a given object implements the BiPackQueryPivot interface.
  */
-export function instanceOfBiQueryPivot(value: object): value is BiQueryPivot {
+export function instanceOfBiPackQueryPivot(
+  value: object,
+): value is BiPackQueryPivot {
   if (!("dimension" in value) || value["dimension"] === undefined) return false;
   return true;
 }
 
-export function BiQueryPivotFromJSON(json: any): BiQueryPivot {
-  return BiQueryPivotFromJSONTyped(json, false);
+export function BiPackQueryPivotFromJSON(json: any): BiPackQueryPivot {
+  return BiPackQueryPivotFromJSONTyped(json, false);
 }
 
-export function BiQueryPivotFromJSONTyped(
+export function BiPackQueryPivotFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): BiQueryPivot {
+): BiPackQueryPivot {
   if (json == null) {
     return json;
   }
@@ -64,12 +66,12 @@ export function BiQueryPivotFromJSONTyped(
   };
 }
 
-export function BiQueryPivotToJSON(json: any): BiQueryPivot {
-  return BiQueryPivotToJSONTyped(json, false);
+export function BiPackQueryPivotToJSON(json: any): BiPackQueryPivot {
+  return BiPackQueryPivotToJSONTyped(json, false);
 }
 
-export function BiQueryPivotToJSONTyped(
-  value?: BiQueryPivot | null,
+export function BiPackQueryPivotToJSONTyped(
+  value?: BiPackQueryPivot | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

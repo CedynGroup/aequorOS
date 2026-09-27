@@ -102,13 +102,6 @@ import {
   DatabaseToJSON,
   DatabaseToJSONTyped,
 } from "./Database";
-import type { DisplayName } from "./DisplayName";
-import {
-  DisplayNameFromJSON,
-  DisplayNameFromJSONTyped,
-  DisplayNameToJSON,
-  DisplayNameToJSONTyped,
-} from "./DisplayName";
 import type { ConnectionReadReplicasUpdate } from "./ConnectionReadReplicasUpdate";
 import {
   ConnectionReadReplicasUpdateFromJSON,
@@ -116,6 +109,13 @@ import {
   ConnectionReadReplicasUpdateToJSON,
   ConnectionReadReplicasUpdateToJSONTyped,
 } from "./ConnectionReadReplicasUpdate";
+import type { DisplayName1 } from "./DisplayName1";
+import {
+  DisplayName1FromJSON,
+  DisplayName1FromJSONTyped,
+  DisplayName1ToJSON,
+  DisplayName1ToJSONTyped,
+} from "./DisplayName1";
 
 /**
  * Post-onboarding management and credential rotation.
@@ -156,10 +156,10 @@ export interface DatabaseConnectionUpdate {
   database?: Database;
   /**
    *
-   * @type {DisplayName}
+   * @type {DisplayName1}
    * @memberof DatabaseConnectionUpdate
    */
-  displayName?: DisplayName;
+  displayName?: DisplayName1;
   /**
    *
    * @type {ConnectionExtractionSpecUpdate}
@@ -263,7 +263,7 @@ export function DatabaseConnectionUpdateFromJSONTyped(
     displayName:
       json["display_name"] == null
         ? undefined
-        : DisplayNameFromJSON(json["display_name"]),
+        : DisplayName1FromJSON(json["display_name"]),
     extractionSpec:
       json["extraction_spec"] == null
         ? undefined
@@ -326,7 +326,7 @@ export function DatabaseConnectionUpdateToJSONTyped(
     ),
     credentials: ConnectionCredentialsToJSON(value["credentials"]),
     database: DatabaseToJSON(value["database"]),
-    display_name: DisplayNameToJSON(value["displayName"]),
+    display_name: DisplayName1ToJSON(value["displayName"]),
     extraction_spec: ConnectionExtractionSpecUpdateToJSON(
       value["extractionSpec"],
     ),

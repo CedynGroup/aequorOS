@@ -13,9 +13,31 @@
 import * as runtime from "../runtime";
 import type {
   BiCatalogueRead,
+  BiDashboardCreateRequest,
+  BiDashboardListRead,
+  BiDashboardRead,
+  BiDashboardShareListRead,
+  BiDashboardShareRequest,
+  BiDashboardSummaryRead,
+  BiDashboardUpdateRequest,
+  BiDashboardVersionListRead,
   BiExplainRead,
   BiExplainRequest,
+  BiExportRead,
+  BiExportRequest,
   BiGridPageRead,
+  BiInsightsRead,
+  BiMeasureCreateRequest,
+  BiMeasureDecisionRead,
+  BiMeasureDecisionRequest,
+  BiMeasureListRead,
+  BiMeasureProposalRequest,
+  BiMeasureRead,
+  BiMeasureUpdateRequest,
+  BiMeasureValidationRead,
+  BiMeasureValidationRequest,
+  BiPackListRead,
+  BiPackRead,
   BiPagedQueryRequest,
   BiQuery,
   BiQueryResult,
@@ -25,12 +47,56 @@ import type {
 import {
   BiCatalogueReadFromJSON,
   BiCatalogueReadToJSON,
+  BiDashboardCreateRequestFromJSON,
+  BiDashboardCreateRequestToJSON,
+  BiDashboardListReadFromJSON,
+  BiDashboardListReadToJSON,
+  BiDashboardReadFromJSON,
+  BiDashboardReadToJSON,
+  BiDashboardShareListReadFromJSON,
+  BiDashboardShareListReadToJSON,
+  BiDashboardShareRequestFromJSON,
+  BiDashboardShareRequestToJSON,
+  BiDashboardSummaryReadFromJSON,
+  BiDashboardSummaryReadToJSON,
+  BiDashboardUpdateRequestFromJSON,
+  BiDashboardUpdateRequestToJSON,
+  BiDashboardVersionListReadFromJSON,
+  BiDashboardVersionListReadToJSON,
   BiExplainReadFromJSON,
   BiExplainReadToJSON,
   BiExplainRequestFromJSON,
   BiExplainRequestToJSON,
+  BiExportReadFromJSON,
+  BiExportReadToJSON,
+  BiExportRequestFromJSON,
+  BiExportRequestToJSON,
   BiGridPageReadFromJSON,
   BiGridPageReadToJSON,
+  BiInsightsReadFromJSON,
+  BiInsightsReadToJSON,
+  BiMeasureCreateRequestFromJSON,
+  BiMeasureCreateRequestToJSON,
+  BiMeasureDecisionReadFromJSON,
+  BiMeasureDecisionReadToJSON,
+  BiMeasureDecisionRequestFromJSON,
+  BiMeasureDecisionRequestToJSON,
+  BiMeasureListReadFromJSON,
+  BiMeasureListReadToJSON,
+  BiMeasureProposalRequestFromJSON,
+  BiMeasureProposalRequestToJSON,
+  BiMeasureReadFromJSON,
+  BiMeasureReadToJSON,
+  BiMeasureUpdateRequestFromJSON,
+  BiMeasureUpdateRequestToJSON,
+  BiMeasureValidationReadFromJSON,
+  BiMeasureValidationReadToJSON,
+  BiMeasureValidationRequestFromJSON,
+  BiMeasureValidationRequestToJSON,
+  BiPackListReadFromJSON,
+  BiPackListReadToJSON,
+  BiPackReadFromJSON,
+  BiPackReadToJSON,
   BiPagedQueryRequestFromJSON,
   BiPagedQueryRequestToJSON,
   BiQueryFromJSON,
@@ -43,6 +109,32 @@ import {
   ErrorResponseToJSON,
 } from "../models/index";
 
+export interface CreateBiDashboardRequest {
+  bankId: string;
+  biDashboardCreateRequest: BiDashboardCreateRequest;
+}
+
+export interface CreateBiMeasureRequest {
+  bankId: string;
+  biMeasureCreateRequest: BiMeasureCreateRequest;
+}
+
+export interface DecideBiMeasurePromotionRequest {
+  bankId: string;
+  measureId: string;
+  biMeasureDecisionRequest: BiMeasureDecisionRequest;
+}
+
+export interface DeleteBiDashboardRequest {
+  bankId: string;
+  dashboardId: string;
+}
+
+export interface DeleteBiMeasureRequest {
+  bankId: string;
+  measureId: string;
+}
+
 export interface ExplainBiMeasureRequest {
   bankId: string;
   biExplainRequest: BiExplainRequest;
@@ -54,16 +146,81 @@ export interface GetBiCatalogueRequest {
   ifNoneMatch?: string | null;
 }
 
+export interface GetBiDashboardRequest {
+  bankId: string;
+  dashboardId: string;
+  asOf: Date;
+}
+
+export interface GetBiExportRequest {
+  bankId: string;
+  jobId: string;
+}
+
+export interface GetBiInsightsRequest {
+  bankId: string;
+  asOf: Date;
+  compareTo?: Date | null;
+  ifNoneMatch?: string | null;
+}
+
+export interface GetBiMeasureRequest {
+  bankId: string;
+  measureId: string;
+}
+
+export interface GetBiPackRequest {
+  bankId: string;
+  pack: string;
+  asOf: Date;
+  ifNoneMatch?: string | null;
+}
+
 export interface GetBiTrustRequest {
   bankId: string;
   asOf: Date;
   ifNoneMatch?: string | null;
 }
 
+export interface ListBiDashboardSharesRequest {
+  bankId: string;
+  dashboardId: string;
+}
+
+export interface ListBiDashboardVersionsRequest {
+  bankId: string;
+  dashboardId: string;
+}
+
+export interface ListBiDashboardsRequest {
+  bankId: string;
+}
+
+export interface ListBiMeasuresRequest {
+  bankId: string;
+}
+
+export interface ListBiPacksRequest {
+  bankId: string;
+  asOf: Date;
+  ifNoneMatch?: string | null;
+}
+
+export interface ProposeBiMeasurePromotionRequest {
+  bankId: string;
+  measureId: string;
+  biMeasureProposalRequest: BiMeasureProposalRequest;
+}
+
 export interface RunBiDrillQueryRequest {
   bankId: string;
   biPagedQueryRequest: BiPagedQueryRequest;
   ifNoneMatch?: string | null;
+}
+
+export interface RunBiExportRequest {
+  bankId: string;
+  biExportRequest: BiExportRequest;
 }
 
 export interface RunBiGridQueryRequest {
@@ -78,10 +235,393 @@ export interface RunBiQueryRequest {
   ifNoneMatch?: string | null;
 }
 
+export interface SetBiDashboardSharesRequest {
+  bankId: string;
+  dashboardId: string;
+  biDashboardShareRequest: BiDashboardShareRequest;
+}
+
+export interface UpdateBiDashboardRequest {
+  bankId: string;
+  dashboardId: string;
+  biDashboardUpdateRequest: BiDashboardUpdateRequest;
+}
+
+export interface UpdateBiMeasureRequest {
+  bankId: string;
+  measureId: string;
+  biMeasureUpdateRequest: BiMeasureUpdateRequest;
+}
+
+export interface ValidateBiMeasureExpressionRequest {
+  bankId: string;
+  biMeasureValidationRequest: BiMeasureValidationRequest;
+}
+
 /**
  *
  */
 export class BiApi extends runtime.BaseAPI {
+  /**
+   * Save a dashboard: an authored canvas, or a copy of a certified pack.  The author must hold every figure the canvas reads. Deny-by-default applied to writing as well as reading: a principal cannot persist a question they may not ask, which also keeps the refusal marker a property of SHARING rather than something an author can produce for themselves.
+   * Create Bi Dashboard
+   */
+  async createBiDashboardRaw(
+    requestParameters: CreateBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardSummaryRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createBiDashboard().',
+      );
+    }
+
+    if (requestParameters["biDashboardCreateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biDashboardCreateRequest",
+        'Required parameter "biDashboardCreateRequest" was null or undefined when calling createBiDashboard().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiDashboardCreateRequestToJSON(
+          requestParameters["biDashboardCreateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardSummaryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Save a dashboard: an authored canvas, or a copy of a certified pack.  The author must hold every figure the canvas reads. Deny-by-default applied to writing as well as reading: a principal cannot persist a question they may not ask, which also keeps the refusal marker a property of SHARING rather than something an author can produce for themselves.
+   * Create Bi Dashboard
+   */
+  async createBiDashboard(
+    requestParameters: CreateBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardSummaryRead> {
+    const response = await this.createBiDashboardRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Save a personal calculated measure.  The formula is parsed HERE and the figures it names come from that parse, not from the request: a client sends text and nothing else about what the text means. Every figure it names is then authorized for the author.
+   * Create Bi Measure
+   */
+  async createBiMeasureRaw(
+    requestParameters: CreateBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createBiMeasure().',
+      );
+    }
+
+    if (requestParameters["biMeasureCreateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biMeasureCreateRequest",
+        'Required parameter "biMeasureCreateRequest" was null or undefined when calling createBiMeasure().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiMeasureCreateRequestToJSON(
+          requestParameters["biMeasureCreateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Save a personal calculated measure.  The formula is parsed HERE and the figures it names come from that parse, not from the request: a client sends text and nothing else about what the text means. Every figure it names is then authorized for the author.
+   * Create Bi Measure
+   */
+  async createBiMeasure(
+    requestParameters: CreateBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureRead> {
+    const response = await this.createBiMeasureRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The checker\'s half: certify the measure for the institution, or send it back.  Proposer ≠ approver, through the platform\'s own separation-of-duties machinery; the formula must be the one the checker read; and approving needs APPROVAL authority over every figure the formula names, not merely the authority to view them.
+   * Decide Bi Measure Promotion
+   */
+  async decideBiMeasurePromotionRaw(
+    requestParameters: DecideBiMeasurePromotionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureDecisionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling decideBiMeasurePromotion().',
+      );
+    }
+
+    if (requestParameters["measureId"] == null) {
+      throw new runtime.RequiredError(
+        "measureId",
+        'Required parameter "measureId" was null or undefined when calling decideBiMeasurePromotion().',
+      );
+    }
+
+    if (requestParameters["biMeasureDecisionRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biMeasureDecisionRequest",
+        'Required parameter "biMeasureDecisionRequest" was null or undefined when calling decideBiMeasurePromotion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/{measure_id}/decision`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"measure_id"}}`,
+            encodeURIComponent(String(requestParameters["measureId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiMeasureDecisionRequestToJSON(
+          requestParameters["biMeasureDecisionRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureDecisionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The checker\'s half: certify the measure for the institution, or send it back.  Proposer ≠ approver, through the platform\'s own separation-of-duties machinery; the formula must be the one the checker read; and approving needs APPROVAL authority over every figure the formula names, not merely the authority to view them.
+   * Decide Bi Measure Promotion
+   */
+  async decideBiMeasurePromotion(
+    requestParameters: DecideBiMeasurePromotionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureDecisionRead> {
+    const response = await this.decideBiMeasurePromotionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Delete a dashboard, its history and its shares. Owner only.
+   * Delete Bi Dashboard
+   */
+  async deleteBiDashboardRaw(
+    requestParameters: DeleteBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deleteBiDashboard().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling deleteBiDashboard().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "DELETE",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Delete a dashboard, its history and its shares. Owner only.
+   * Delete Bi Dashboard
+   */
+  async deleteBiDashboard(
+    requestParameters: DeleteBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.deleteBiDashboardRaw(requestParameters, initOverrides);
+  }
+
+  /**
+   * Delete a calculated measure. Owner only.
+   * Delete Bi Measure
+   */
+  async deleteBiMeasureRaw(
+    requestParameters: DeleteBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deleteBiMeasure().',
+      );
+    }
+
+    if (requestParameters["measureId"] == null) {
+      throw new runtime.RequiredError(
+        "measureId",
+        'Required parameter "measureId" was null or undefined when calling deleteBiMeasure().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/{measure_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"measure_id"}}`,
+            encodeURIComponent(String(requestParameters["measureId"])),
+          ),
+        method: "DELETE",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Delete a calculated measure. Owner only.
+   * Delete Bi Measure
+   */
+  async deleteBiMeasure(
+    requestParameters: DeleteBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.deleteBiMeasureRaw(requestParameters, initOverrides);
+  }
+
   /**
    * Where one figure in a query came from — definition, source, checks.  It compiles the query (which is how the source table and whether the daily aggregate answered it are known) and deliberately never executes it: the figure itself came from ``query``. No statement text is returned.
    * Explain Bi Measure
@@ -225,6 +765,408 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * One saved dashboard, resolved for THIS reader and this reporting date.  Every widget is authorized for the caller through the same ``authorize_query`` decision ``/bi/query`` makes. The owner\'s authority is not consulted: a dashboard shared by a broadly-authorized principal to a narrow one resolves to refusal markers for the narrow reader, and the refusal carries its id and its place on the canvas and nothing else.
+   * Get Bi Dashboard
+   */
+  async getBiDashboardRaw(
+    requestParameters: GetBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiDashboard().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling getBiDashboard().',
+      );
+    }
+
+    if (requestParameters["asOf"] == null) {
+      throw new runtime.RequiredError(
+        "asOf",
+        'Required parameter "asOf" was null or undefined when calling getBiDashboard().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One saved dashboard, resolved for THIS reader and this reporting date.  Every widget is authorized for the caller through the same ``authorize_query`` decision ``/bi/query`` makes. The owner\'s authority is not consulted: a dashboard shared by a broadly-authorized principal to a narrow one resolves to refusal markers for the narrow reader, and the refusal carries its id and its place on the canvas and nothing else.
+   * Get Bi Dashboard
+   */
+  async getBiDashboard(
+    requestParameters: GetBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardRead> {
+    const response = await this.getBiDashboardRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: a presigned GET is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
+   * Get Bi Export
+   */
+  async getBiExportRaw(
+    requestParameters: GetBiExportRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiExportRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiExport().',
+      );
+    }
+
+    if (requestParameters["jobId"] == null) {
+      throw new runtime.RequiredError(
+        "jobId",
+        'Required parameter "jobId" was null or undefined when calling getBiExport().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/exports/{job_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"job_id"}}`,
+            encodeURIComponent(String(requestParameters["jobId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiExportReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: a presigned GET is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
+   * Get Bi Export
+   */
+  async getBiExport(
+    requestParameters: GetBiExportRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiExportRead> {
+    const response = await this.getBiExportRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * What the platform is prepared to say about one institution at one date.  An empty list is a real answer. It is not the same answer as \"nothing has been computed\", which is why ``measures_read`` is reported beside it.
+   * Get Bi Insights
+   */
+  async getBiInsightsRaw(
+    requestParameters: GetBiInsightsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiInsightsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiInsights().',
+      );
+    }
+
+    if (requestParameters["asOf"] == null) {
+      throw new runtime.RequiredError(
+        "asOf",
+        'Required parameter "asOf" was null or undefined when calling getBiInsights().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    if (requestParameters["compareTo"] != null) {
+      queryParameters["compare_to"] = (requestParameters["compareTo"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["ifNoneMatch"] != null) {
+      headerParameters["If-None-Match"] = String(
+        requestParameters["ifNoneMatch"],
+      );
+    }
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/insights`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiInsightsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * What the platform is prepared to say about one institution at one date.  An empty list is a real answer. It is not the same answer as \"nothing has been computed\", which is why ``measures_read`` is reported beside it.
+   * Get Bi Insights
+   */
+  async getBiInsights(
+    requestParameters: GetBiInsightsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiInsightsRead> {
+    const response = await this.getBiInsightsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One calculated measure, if this identity may read it.
+   * Get Bi Measure
+   */
+  async getBiMeasureRaw(
+    requestParameters: GetBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiMeasure().',
+      );
+    }
+
+    if (requestParameters["measureId"] == null) {
+      throw new runtime.RequiredError(
+        "measureId",
+        'Required parameter "measureId" was null or undefined when calling getBiMeasure().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/{measure_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"measure_id"}}`,
+            encodeURIComponent(String(requestParameters["measureId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One calculated measure, if this identity may read it.
+   * Get Bi Measure
+   */
+  async getBiMeasure(
+    requestParameters: GetBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureRead> {
+    const response = await this.getBiMeasureRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One certified dashboard, resolved for this institution, date and reader.  ``pack`` is a CLOSED platform catalogue key, not an object identifier: it names a file that shipped in this build and is validated against ``app.domain.bi.packs`` before anything else is read. There is no tenant object behind it and therefore no cross-tenant dimension to it — the institution in the path is the only tenant reference, and the router\'s own dependency has already resolved it.
+   * Get Bi Pack
+   */
+  async getBiPackRaw(
+    requestParameters: GetBiPackRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiPackRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiPack().',
+      );
+    }
+
+    if (requestParameters["pack"] == null) {
+      throw new runtime.RequiredError(
+        "pack",
+        'Required parameter "pack" was null or undefined when calling getBiPack().',
+      );
+    }
+
+    if (requestParameters["asOf"] == null) {
+      throw new runtime.RequiredError(
+        "asOf",
+        'Required parameter "asOf" was null or undefined when calling getBiPack().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["ifNoneMatch"] != null) {
+      headerParameters["If-None-Match"] = String(
+        requestParameters["ifNoneMatch"],
+      );
+    }
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/packs/{pack}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"pack"}}`,
+            encodeURIComponent(String(requestParameters["pack"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiPackReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One certified dashboard, resolved for this institution, date and reader.  ``pack`` is a CLOSED platform catalogue key, not an object identifier: it names a file that shipped in this build and is validated against ``app.domain.bi.packs`` before anything else is read. There is no tenant object behind it and therefore no cross-tenant dimension to it — the institution in the path is the only tenant reference, and the router\'s own dependency has already resolved it.
+   * Get Bi Pack
+   */
+  async getBiPack(
+    requestParameters: GetBiPackRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiPackRead> {
+    const response = await this.getBiPackRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
    * Every reconciliation check for one (institution, date), with its evidence.  A check with no stored result is reported as \"not assessed\" — never as a pass — so a badge can never read green over a check that did not run.  The payload is figures, not metadata (audit A6-01), so it is authorized like every other data route: the caller must hold the sentence of every member :data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with coverage on another institution of the same tenant, or with no binding at all, gets 403 and no body — ``resolve_tenant_bank`` scopes by organization only, and organization is not institution.
    * Get Bi Trust
    */
@@ -301,6 +1243,433 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * Who this dashboard is shared with. Owner only.  Owner-only because the list is a membership disclosure: telling one reader who else can open a document is not part of being able to open it.
+   * List Bi Dashboard Shares
+   */
+  async listBiDashboardSharesRaw(
+    requestParameters: ListBiDashboardSharesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardShareListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiDashboardShares().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling listBiDashboardShares().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}/shares`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardShareListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Who this dashboard is shared with. Owner only.  Owner-only because the list is a membership disclosure: telling one reader who else can open a document is not part of being able to open it.
+   * List Bi Dashboard Shares
+   */
+  async listBiDashboardShares(
+    requestParameters: ListBiDashboardSharesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardShareListRead> {
+    const response = await this.listBiDashboardSharesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * A dashboard\'s history: who changed it, when, and what they said about it.  Metadata only. An old canvas is not served here: a reader\'s access is decided against the CURRENT canvas, and showing an earlier one safely would mean authorizing every widget of every version.
+   * List Bi Dashboard Versions
+   */
+  async listBiDashboardVersionsRaw(
+    requestParameters: ListBiDashboardVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardVersionListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiDashboardVersions().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling listBiDashboardVersions().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}/versions`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardVersionListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * A dashboard\'s history: who changed it, when, and what they said about it.  Metadata only. An old canvas is not served here: a reader\'s access is decided against the CURRENT canvas, and showing an earlier one safely would mean authorizing every widget of every version.
+   * List Bi Dashboard Versions
+   */
+  async listBiDashboardVersions(
+    requestParameters: ListBiDashboardVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardVersionListRead> {
+    const response = await this.listBiDashboardVersionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every saved dashboard of this institution this identity may open.  No widget and no member id: a list is read by everyone a dashboard reaches, and the figures it names are only disclosed once they have been authorized — which happens when the dashboard is opened.
+   * List Bi Dashboards
+   */
+  async listBiDashboardsRaw(
+    requestParameters: ListBiDashboardsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiDashboards().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every saved dashboard of this institution this identity may open.  No widget and no member id: a list is read by everyone a dashboard reaches, and the figures it names are only disclosed once they have been authorized — which happens when the dashboard is opened.
+   * List Bi Dashboards
+   */
+  async listBiDashboards(
+    requestParameters: ListBiDashboardsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardListRead> {
+    const response = await this.listBiDashboardsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every calculated measure this identity may read.  Their own drafts, plus the institution\'s certified ones — and only those whose figures their access covers. A measure they may not compute is ABSENT rather than named: its label is authored text that can describe the very figure they were refused.
+   * List Bi Measures
+   */
+  async listBiMeasuresRaw(
+    requestParameters: ListBiMeasuresRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiMeasures().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every calculated measure this identity may read.  Their own drafts, plus the institution\'s certified ones — and only those whose figures their access covers. A measure they may not compute is ABSENT rather than named: its label is authored text that can describe the very figure they were refused.
+   * List Bi Measures
+   */
+  async listBiMeasures(
+    requestParameters: ListBiMeasuresRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureListRead> {
+    const response = await this.listBiMeasuresRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every certified dashboard this institution and reader may open.
+   * List Bi Packs
+   */
+  async listBiPacksRaw(
+    requestParameters: ListBiPacksRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiPackListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiPacks().',
+      );
+    }
+
+    if (requestParameters["asOf"] == null) {
+      throw new runtime.RequiredError(
+        "asOf",
+        'Required parameter "asOf" was null or undefined when calling listBiPacks().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["ifNoneMatch"] != null) {
+      headerParameters["If-None-Match"] = String(
+        requestParameters["ifNoneMatch"],
+      );
+    }
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/packs`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiPackListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every certified dashboard this institution and reader may open.
+   * List Bi Packs
+   */
+  async listBiPacks(
+    requestParameters: ListBiPacksRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiPackListRead> {
+    const response = await this.listBiPacksRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The maker\'s half of a promotion: put a personal measure up for certification.
+   * Propose Bi Measure Promotion
+   */
+  async proposeBiMeasurePromotionRaw(
+    requestParameters: ProposeBiMeasurePromotionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling proposeBiMeasurePromotion().',
+      );
+    }
+
+    if (requestParameters["measureId"] == null) {
+      throw new runtime.RequiredError(
+        "measureId",
+        'Required parameter "measureId" was null or undefined when calling proposeBiMeasurePromotion().',
+      );
+    }
+
+    if (requestParameters["biMeasureProposalRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biMeasureProposalRequest",
+        'Required parameter "biMeasureProposalRequest" was null or undefined when calling proposeBiMeasurePromotion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/{measure_id}/proposal`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"measure_id"}}`,
+            encodeURIComponent(String(requestParameters["measureId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiMeasureProposalRequestToJSON(
+          requestParameters["biMeasureProposalRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The maker\'s half of a promotion: put a personal measure up for certification.
+   * Propose Bi Measure Promotion
+   */
+  async proposeBiMeasurePromotion(
+    requestParameters: ProposeBiMeasurePromotionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureRead> {
+    const response = await this.proposeBiMeasurePromotionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * The records behind a figure: one capped page at the record grain.  A drill must name at least one record-level member (D-028) — a position reference, a position id, an employer. That is what distinguishes it from an aggregate query, and those members are the ones whose sensitivity requires the record-level sentence, so the authority the page is served under is the record-level one.
    * Run Bi Drill Query
    */
@@ -372,6 +1741,78 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiGridPageRead> {
     const response = await this.runBiDrillQueryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Export one catalogue query as CSV, a workbook or a PDF.  Answers with the file when it fits in one request, and with :class:`~app.schemas.bi.BiExportRead` and ``202`` when it does not.
+   * Run Bi Export
+   */
+  async runBiExportRaw(
+    requestParameters: RunBiExportRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<any>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling runBiExport().',
+      );
+    }
+
+    if (requestParameters["biExportRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biExportRequest",
+        'Required parameter "biExportRequest" was null or undefined when calling runBiExport().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/export`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiExportRequestToJSON(requestParameters["biExportRequest"]),
+      },
+      initOverrides,
+    );
+
+    if (this.isJsonMime(response.headers.get("content-type"))) {
+      return new runtime.JSONApiResponse<any>(response);
+    } else {
+      return new runtime.TextApiResponse(response) as any;
+    }
+  }
+
+  /**
+   * Export one catalogue query as CSV, a workbook or a PDF.  Answers with the file when it fits in one request, and with :class:`~app.schemas.bi.BiExportRead` and ``202`` when it does not.
+   * Run Bi Export
+   */
+  async runBiExport(
+    requestParameters: RunBiExportRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<any> {
+    const response = await this.runBiExportRaw(
       requestParameters,
       initOverrides,
     );
@@ -526,6 +1967,330 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiQueryResult> {
     const response = await this.runBiQueryRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * Replace the set of identities this dashboard reaches. Owner only.  Reachability, not authority: each of these identities is re-authorized widget by widget every time they open it, so naming someone here can never show them a figure their own bindings do not cover.
+   * Set Bi Dashboard Shares
+   */
+  async setBiDashboardSharesRaw(
+    requestParameters: SetBiDashboardSharesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardShareListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling setBiDashboardShares().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling setBiDashboardShares().',
+      );
+    }
+
+    if (requestParameters["biDashboardShareRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biDashboardShareRequest",
+        'Required parameter "biDashboardShareRequest" was null or undefined when calling setBiDashboardShares().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}/shares`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiDashboardShareRequestToJSON(
+          requestParameters["biDashboardShareRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardShareListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Replace the set of identities this dashboard reaches. Owner only.  Reachability, not authority: each of these identities is re-authorized widget by widget every time they open it, so naming someone here can never show them a figure their own bindings do not cover.
+   * Set Bi Dashboard Shares
+   */
+  async setBiDashboardShares(
+    requestParameters: SetBiDashboardSharesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardShareListRead> {
+    const response = await this.setBiDashboardSharesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Replace the canvas, appending a version. Owner only.  The history is append-only, so an edit ADDS the new layout rather than overwriting the old one: a dashboard\'s history cannot be rewritten, only extended.
+   * Update Bi Dashboard
+   */
+  async updateBiDashboardRaw(
+    requestParameters: UpdateBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiDashboardSummaryRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateBiDashboard().',
+      );
+    }
+
+    if (requestParameters["dashboardId"] == null) {
+      throw new runtime.RequiredError(
+        "dashboardId",
+        'Required parameter "dashboardId" was null or undefined when calling updateBiDashboard().',
+      );
+    }
+
+    if (requestParameters["biDashboardUpdateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biDashboardUpdateRequest",
+        'Required parameter "biDashboardUpdateRequest" was null or undefined when calling updateBiDashboard().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/dashboards/{dashboard_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dashboard_id"}}`,
+            encodeURIComponent(String(requestParameters["dashboardId"])),
+          ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiDashboardUpdateRequestToJSON(
+          requestParameters["biDashboardUpdateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiDashboardSummaryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Replace the canvas, appending a version. Owner only.  The history is append-only, so an edit ADDS the new layout rather than overwriting the old one: a dashboard\'s history cannot be rewritten, only extended.
+   * Update Bi Dashboard
+   */
+  async updateBiDashboard(
+    requestParameters: UpdateBiDashboardRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiDashboardSummaryRead> {
+    const response = await this.updateBiDashboardRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Edit a calculated measure. Owner only, and a changed formula drops certification.  An approver approved a formula, not a name: the moment the text moves, the approval and the proposal behind it are cleared and the measure is personal again. The database refuses the alternative outright.
+   * Update Bi Measure
+   */
+  async updateBiMeasureRaw(
+    requestParameters: UpdateBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateBiMeasure().',
+      );
+    }
+
+    if (requestParameters["measureId"] == null) {
+      throw new runtime.RequiredError(
+        "measureId",
+        'Required parameter "measureId" was null or undefined when calling updateBiMeasure().',
+      );
+    }
+
+    if (requestParameters["biMeasureUpdateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biMeasureUpdateRequest",
+        'Required parameter "biMeasureUpdateRequest" was null or undefined when calling updateBiMeasure().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/{measure_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"measure_id"}}`,
+            encodeURIComponent(String(requestParameters["measureId"])),
+          ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiMeasureUpdateRequestToJSON(
+          requestParameters["biMeasureUpdateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Edit a calculated measure. Owner only, and a changed formula drops certification.  An approver approved a formula, not a name: the moment the text moves, the approval and the proposal behind it are cleared and the measure is personal again. The database refuses the alternative outright.
+   * Update Bi Measure
+   */
+  async updateBiMeasure(
+    requestParameters: UpdateBiMeasureRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureRead> {
+    const response = await this.updateBiMeasureRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Check a formula without saving it. The server\'s verdict is the only one.  A refusal carries the named message and the position it happened at, never an echo of the caller\'s text; a formula naming a figure this caller may not read is refused with those figures listed, which is the same answer saving it would give.
+   * Validate Bi Measure Expression
+   */
+  async validateBiMeasureExpressionRaw(
+    requestParameters: ValidateBiMeasureExpressionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiMeasureValidationRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling validateBiMeasureExpression().',
+      );
+    }
+
+    if (requestParameters["biMeasureValidationRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biMeasureValidationRequest",
+        'Required parameter "biMeasureValidationRequest" was null or undefined when calling validateBiMeasureExpression().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/measures/validation`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiMeasureValidationRequestToJSON(
+          requestParameters["biMeasureValidationRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiMeasureValidationReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Check a formula without saving it. The server\'s verdict is the only one.  A refusal carries the named message and the position it happened at, never an echo of the caller\'s text; a formula naming a figure this caller may not read is refused with those figures listed, which is the same answer saving it would give.
+   * Validate Bi Measure Expression
+   */
+  async validateBiMeasureExpression(
+    requestParameters: ValidateBiMeasureExpressionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiMeasureValidationRead> {
+    const response = await this.validateBiMeasureExpressionRaw(
+      requestParameters,
+      initOverrides,
+    );
     return await response.value();
   }
 }
