@@ -40,6 +40,7 @@ from app.adapters.temenos_t24.transport import FixtureTransport
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES
 from app.domain.ingestion.contracts import AdapterConfig
+from app.domain.ingestion.reference_schemas import business_units
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -227,6 +228,29 @@ class TemenosContractSuite:
         kinds = {row.dataset_kind for row in refs}
         assert "business_units" in kinds
         assert "institution" in kinds
+
+        # The kind existing is not enough, and asserting only that is how this
+        # broke: when `business_units` began enforcing its own schema, every T24
+        # branch row was refused because the adapter emitted the vendor's spelling
+        # (`COMPANY.CODE` / `BRANCH`), and the dataset simply never appeared. The
+        # pull still succeeded. So assert the row SATISFIES the register it is
+        # stored under, which is what a downstream consumer depends on.
+        units = [row for row in refs if row.dataset_kind == "business_units"]
+        problems: list[str] = []
+        for row in units:
+            payload = dict(row.payload or {})
+            normalised = business_units.normalise_row(payload)
+            problems.extend(business_units.SCHEMA.problems_for(normalised))
+            assert str(normalised.get("business_unit_id") or "").strip(), (
+                f"a business unit reached the register with no id: {payload}"
+            )
+            name = str(normalised.get("business_unit_name") or "").strip()
+            assert name, f"a business unit reached the register with no name: {payload}"
+            # The UNIT's name, not the legal entity's. Mapping the company name
+            # here would give every branch the same one and collapse the BI branch
+            # dimension to a single row.
+            assert name != str(normalised.get("institution_name") or ""), payload
+        assert not problems, f"T24 business units do not satisfy their register: {problems}"
 
     def test_position_snapshots_carry_lcy_balance_for_the_engines(
         self, run_pull, db_session: Session, bank: Bank

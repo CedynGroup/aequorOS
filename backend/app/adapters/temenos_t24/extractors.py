@@ -82,8 +82,35 @@ def _entity_record(entry: CatalogEntry, record: OfsRecord, source_locator: str) 
 
 
 def _reference_record(entry: CatalogEntry, record: OfsRecord, source_locator: str) -> RawRecord:
-    """Preserve a reference-domain row as a stringified payload under its kind."""
+    """A reference-domain row under its kind, with its ``field_map`` applied.
+
+    The payload is the vendor's own keys, EXCEPT where the catalog names a
+    canonical one. Applying ``field_map`` here was missing, and it stopped being
+    cosmetic the moment a register began enforcing its own schema: T24 publishes
+    branches as ``COMPANY.CODE`` / ``BRANCH`` / ``REGION``, the
+    ``business_units`` register requires ``business_unit_id`` and
+    ``business_unit_name``, and so every branch row a T24 bank pulled was refused
+    and the dataset simply never appeared. Nothing raised — the pull succeeded and
+    the register stayed empty, which meant no branch names in the BI branch
+    dimension and a Branch Network dashboard with nothing in it.
+
+    ``field_map`` is documented as "renames raw T24 fields to canonical output
+    keys", which is exactly this, and the entity path has always done it. The raw
+    vendor record is unchanged in the staged bundle, so lineage keeps the original
+    spelling; what reaches the register is the canonical shape a register is
+    entitled to expect from an ADAPTER. A pushed register is different and is
+    still preserved verbatim: a bank that sends the documented spelling must not
+    have it renamed at the boundary, which is why the alias seam resolves on READ.
+    """
     data: dict[str, Any] = {name: record.scalar(name) for name in record.fields}
+    for t24_field, canonical_key in entry.field_map.items():
+        value = data.pop(t24_field, None)
+        # The id field is often the record id rather than a separate assignment,
+        # exactly as on the entity path.
+        if value is None and t24_field == entry.id_field:
+            value = record.record_id or None
+        if value is not None:
+            data[canonical_key] = value
     if entry.id_field and entry.id_field not in data and record.record_id:
         data[entry.id_field] = record.record_id
     return RawRecord(

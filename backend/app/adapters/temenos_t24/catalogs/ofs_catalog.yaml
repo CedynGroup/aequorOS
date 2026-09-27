@@ -225,7 +225,10 @@ BUSINESS_UNITS:
   page_size: 500
   selection: {}
   dataset_key: business_units
-  field_map: {}
+  field_map:
+    COMPANY.CODE: business_unit_id
+    BRANCH: business_unit_name
+    REGION: region
   attribute_keys: []
   lcy_fields: {}
   enum_mappings: {}

@@ -184,7 +184,10 @@ BUSINESS_UNITS:
   endpoint: reference/v1.0.0/companies
   id_field: companyCode
   page_size: 500
-  field_map: {}
+  field_map:
+    companyCode: business_unit_id
+    branch: business_unit_name
+    region: region
   dataset_key: business_units
 INSTITUTION:
   supported: true
