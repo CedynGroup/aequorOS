@@ -620,6 +620,44 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   requires the bank to exist (`_get_bank_or_404`), so onboarding a non-Ghana
   institution needs that path built, not just these leaks fixed.
 
+- **BI plane (built from 2026-09-21; spec `docs/bi.md`, shape ARCHITECTURE.md §3e, ledger the
+  gitignored `.ai/BI_*.md`).** Governed analytics over the same numbers the platform files, so a bank can
+  drop its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows (current
+  generation only), `live_metrics`, `regulatory_runs` and the registers, and writes **`bi_*` tables and
+  nothing else**; the regulatory plane never imports BI except the two enqueue-seam modules
+  (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder, catalogue or
+  compiler. `tests/architecture/test_bi_plane_boundary.py` pins it, `derive_facts` included.
+  **Engine metrics are COPIED, never recomputed**, and portfolio measures reuse the engines' own pure
+  functions out of `app/domain/` — one definition, not a BI copy. **Nothing is mounted by default:**
+  `BI_ENABLED`, `BI_MART_ENQUEUE_ENABLED` and `BI_SCHEDULER_ENABLED` all ship off and are set in no
+  deployment, so every BI route 404s today; turning it on is ordered, and `risk-worker-bi` must be
+  DEPLOYED before the enqueue flag flips or every job it produces strands in `queued` (the shared
+  `jobs` table hazard). **`CATALOGUE_VERSION` and `BUILDER_VERSION` both enter the build fingerprint**,
+  so bumping either forces a full mart rebuild per tenant — bump deliberately.
+  Four things here are easy to assume away:
+  **(1) Postgres does not inherit RLS onto partitions.** The marts' monthly and yearly children are
+  created and dropped ONLY by migration-owned `SECURITY DEFINER` functions (`bi_ensure_month_partition`
+  and siblings) that apply ENABLE+FORCE RLS and the tenant policy to every child; the app role runs no
+  raw `CREATE TABLE`. A cross-tenant read must return zero rows through the parent, a named child and
+  the DEFAULT partition alike. **A green Postgres run is not evidence of this** — an RLS test self-skips
+  at exit 0 when the `TEST_DATABASE_URL` role bypasses RLS (the shared one does) or when
+  `TEST_DATABASE_URL` is not EXPORTED, and one more self-skips without `CREATEROLE`. Check the
+  passed-count and that skips are ZERO; the local recipe is in `.ai/BI_TEST_MATRIX.md`.
+  **(2) Missing data is never zero, structurally.** A measure with no target has no `bi_fact_target`
+  row; a widget with no data says `needs_data: <dataset>` (or `pending_capability` when the gap is
+  platform work, not the bank's book); an insight may only restate a typed fact, so it cannot describe a
+  missing figure as flat; the ratio bridge refuses rather than emitting a leg worth nothing. Never
+  "fix" one of these by defaulting to 0 — that is the defect they exist to prevent.
+  **(3) A filter can itself disclose**, so `authorize_query` evaluates every distinct (module,
+  sensitivity) across measures, dimensions AND filters, deny-by-default, and export authority is
+  derived from the member set the query touches — never a client flag, and re-checked after compilation
+  where the second check can only refuse. **(4) No `text()` in `app/services/bi` or `app/domain/bi`**
+  (an AST guard that proves itself), no currency/regulator literal in BI code or pack JSON — though
+  `eve_base_ghs` and `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_`
+  fact categories and the `refinitiv` vendor id.
+  **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a different
+  capital regime and needs its own pack set before it is shown a dashboard.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.

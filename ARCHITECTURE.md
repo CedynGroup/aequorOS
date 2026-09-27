@@ -474,6 +474,51 @@ because `claim_next` is FIFO across types and a backfill would otherwise starve
 refusing to advance backwards. Every payload carries `builder_version`; an older
 handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
+### Phase 2 additions
+
+- **Targets are PRE-MATCHED, not joined.** `bi_fact_target` holds the bank's own
+  budget or reforecast beside the actual and the variance, one row per (as-of,
+  measure, scope, version), so all five catalogue variants read one table and the
+  compiler's one-fact-table rule holds unrelaxed. A target joined at query time
+  would fan out — a bank-wide target multiplied across the scoped rows of the
+  same measure double-counts, and the double count is invisible because both
+  operands are legitimate figures. A measure with no target has **no row**, which
+  is what makes its variants NULL rather than zero; the three discriminator
+  columns are POPULATION filters for the same reason (as selection filters the
+  compiler emits `sum(CASE WHEN … ELSE 0 END)`, so a bank that budgets its loan
+  book but not its NPL ratio would read `0.00` — a bank exactly on plan).
+  `attainment_pct` is not emitted where lower is better: 120 % on an NPL ratio is
+  a miss and reads as over-achievement away from its badge.
+- **Content packs are data, validated at import.** `app/domain/bi/packs/<id>.json`
+  under a pydantic `PackSpec`; a malformed pack fails module import, so a bad pack
+  is a start-up failure rather than a 500 in front of a board. **A pack carries no
+  date** — `BiPackQuery.for_period(as_of)` resolves it, because a pinned reporting
+  date is the one parameter that must come from the bank being served. A widget
+  with no data says `needs_data: <dataset>`; a widget blocked on PLATFORM work
+  says `pending_capability` instead, because "Needs data: positions" to a bank
+  that pushes positions nightly is a false statement about its book. Never zero.
+- **An insight may only restate a typed fact.** There is no path from a query
+  result to a sentence that does not pass through `insights/facts.py`, so an
+  insight cannot assert a figure the platform did not compute, describe a missing
+  figure as zero or flat, or present an unreconciled or advisory number as
+  certified. The ratio bridge sums exactly or returns `BridgeUnavailable` with a
+  reason — never a leg worth nothing.
+- **Export authority is derived from the member set, never from a client flag.**
+  `authorization.query_members` gives the transitive walk and each member declares
+  its sensitivity; the class is re-checked after compilation from
+  `CompiledQuery.member_ids`, and that second check can only refuse. So the export
+  path cannot serve a member the read routes would refuse, and a principal who may
+  run a query interactively is not thereby allowed to extract it. Every export is
+  audited and watermarked; over the interactive threshold it becomes a `bi_export`
+  job that re-authorizes at render time rather than trusting the request's
+  authority.
+- **`bi_query_log` names every surface it records**, including `trust`,
+  `catalogue`, `packs` and `insights` — surfaces that return no mart rows or that
+  make a statement rather than return a figure. The read budget is counted over
+  this table, so a surface with no word of its own either goes unmetered or is
+  recorded as something it is not. Its downgrade path deliberately FAILS rather
+  than deleting rows: an append-only log a migration can quietly empty is not one.
+
 ---
 
 ## 4. Findings infrastructure
