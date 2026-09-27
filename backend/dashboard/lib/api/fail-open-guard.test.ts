@@ -309,6 +309,76 @@ for (const file of files) {
 // rather than quietly shrinking the covered surface.
 assert.ok(files.length >= 300, `expected to scan the regulatory UI, found ${files.length} files`);
 
+// --- the negative control (audit A8-10) ---------------------------------------
+//
+// Everything above this line can pass while proving nothing. A scan whose
+// regexes have silently stopped matching — because a field was renamed, because
+// a `?? 0` moved onto the next line, because a rule was edited and its
+// alternation broke — reports "368 regulatory UI files clean" forever, and that
+// sentence reads exactly like a guard that is working. This file's own comments
+// record being bitten by that three times: the camelCase half of the floor
+// fallback was unpoliced while this printed clean, `components/ftp/` was outside
+// the scan, and the stale count in CI's gate inventory said 220 when it was 368.
+//
+// So every rule is required to convict a KNOWN violation. One snippet per rule,
+// written to look like the defect it names, and a rule with no snippet fails
+// here — a new rule cannot be added without a proof that it can fire.
+const SELF_PROOFS: Record<string, string> = {
+  'P0-21 hardcoded regulatory floor': 'export const CAR_FLOOR_PCT = 13;',
+  'P0-19 zero-on-absence floor fallback': "const floor = num(data?.buffers.carMinPct ?? '10');",
+  'P0-23 num() applied to a nullable regulatory figure': 'const car = num(summary.car_pct);',
+  'P0-21 hardcoded floor in a caption': 'const caption = "against a floor 13% today";',
+  'NEW-53 stored-run threshold used as the current floor': 'const t = runMetricThreshold(run, key);',
+  '§5 client-side ratio with a fabricated zero':
+    'const provisionCoverage = denominator ? held / denominator : 0;',
+};
+
+const unproven = RULES.filter((rule) => !(rule.id in SELF_PROOFS)).map((rule) => rule.id);
+assert.deepEqual(
+  unproven,
+  [],
+  `every fail-open rule needs a snippet in SELF_PROOFS proving it still fires; missing: ${unproven.join(', ')}`
+);
+
+const stale = Object.keys(SELF_PROOFS).filter((id) => !RULES.some((rule) => rule.id === id));
+assert.deepEqual(
+  stale,
+  [],
+  `SELF_PROOFS names rules that no longer exist, so it proves nothing about the live set: ${stale.join(', ')}`
+);
+
+const inert: string[] = [];
+for (const rule of RULES) {
+  if (matches(SELF_PROOFS[rule.id], rule.pattern).length === 0) {
+    inert.push(rule.id);
+  }
+}
+assert.deepEqual(
+  inert,
+  [],
+  `these rules did NOT match their own known violation, so they are no longer policing anything and every "clean" result above is meaningless: ${inert.join(', ')}`
+);
+
+// And the controls must not be so loose that they convict innocent code, or the
+// proof above is satisfied by a rule that matches everything.
+const INNOCENT = [
+  'const shown = numOrNull(data?.buffers.carMinPct);',
+  'const provisionCoverage = denominator ? held / denominator : null;',
+  'const caption = "measured against the regulatory minimum";',
+  'export const COLUMN_WIDTH_PX = 240;',
+];
+for (const rule of RULES) {
+  for (const line of INNOCENT) {
+    assert.equal(
+      matches(line, rule.pattern).length,
+      0,
+      `rule ${rule.id} matched code that is correct, so it will be disabled by whoever hits the false positive: ${line}`
+    );
+  }
+}
+
+console.log(`fail-open guard: ${RULES.length} rules, each proven to convict its own violation.`);
+
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
   console.error(`\n${failures.length} fail-open pattern(s) found in the regulatory UI.`);

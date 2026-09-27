@@ -17,10 +17,21 @@ name: Dashboard CI
 #                this can be a gate rather than a warning nobody reads.
 #   test       — node:test suites. These are CONTROLS, not unit trivia, and were
 #                the reason this job existed at all without enforcing them:
-#                  * lib/api/fail-open-guard.test.ts — a static guard over 220
-#                    regulatory UI files (with its own negative control) proving
-#                    no regulatory surface fails OPEN. The test reports the count
-#                    itself and floor-asserts it at 210; "123" here was stale;
+#                  * lib/api/fail-open-guard.test.ts — a static guard over 374
+#                    regulatory UI files proving no regulatory surface fails
+#                    OPEN. The test reports the count itself and floor-asserts it
+#                    at 300. Every count written here has gone stale ("123", then
+#                    "220"), so treat the number as indicative and the test as
+#                    authoritative.
+#                    It gained a real NEGATIVE CONTROL on 2026-09-27 (audit
+#                    A8-10): this comment claimed one for months while the only
+#                    assertion was the file count, so a regex that silently
+#                    stopped matching would have printed "N regulatory UI files
+#                    clean" forever — which is what this guard's own history
+#                    records happening three times. Each of the six rules must
+#                    now convict a known violation of itself, a rule without such
+#                    a proof fails, and the proofs are checked against innocent
+#                    code so a rule cannot pass by matching everything;
 #                  * lib/outbound.test.ts + lib/ip-version.test.ts — the SSRF
 #                    egress guard, including a 60,000-case differential test
 #                    against node:net.
