@@ -32,6 +32,31 @@ export const BI_DRILL_PREFIX = "bi-drill";
 export const BI_EXPLAIN_PREFIX = "bi-explain";
 export const BI_TRUST_PREFIX = "bi-trust";
 export const BI_FEATURE_PREFIX = "bi-features";
+/**
+ * Threshold alerts, scheduled reports and their histories.
+ *
+ * These carry no figure in their LIST forms — an alert row names a threshold and
+ * a verdict, a report names a question and a schedule — but they are keyed on
+ * exactly the same five dimensions as every other BI read, for the same reason
+ * and with no exception: an alert's verdict IS a figure in all but name, a
+ * delivery history names the people a report reaches, and both are decided
+ * per principal and per institution by a server that re-decides every request.
+ * A cache hit returns rows without asking the server anything, so a key that
+ * dropped the actor or the authorization generation would show one colleague
+ * another's distribution list.
+ */
+export const BI_ALERTS_PREFIX = "bi-alerts";
+export const BI_ALERT_EVENTS_PREFIX = "bi-alert-events";
+export const BI_SUBSCRIPTIONS_PREFIX = "bi-subscriptions";
+export const BI_DELIVERIES_PREFIX = "bi-deliveries";
+
+/** Every notification prefix, as the unit of scoped invalidation after a change. */
+export const BI_NOTIFICATION_PREFIXES: readonly string[] = [
+  BI_ALERTS_PREFIX,
+  BI_ALERT_EVENTS_PREFIX,
+  BI_SUBSCRIPTIONS_PREFIX,
+  BI_DELIVERIES_PREFIX,
+];
 
 export const BI_QUERY_PREFIXES: readonly string[] = [
   BI_CATALOGUE_PREFIX,
@@ -243,5 +268,49 @@ export function biExplainKey(
     biWindowKey(biWindowOf(query)),
     measure,
     biQueryFingerprint(query),
+  );
+}
+
+/** `GET …/bi/alerts` — every threshold alert this identity owns or is told about. */
+export function biAlertsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(BI_ALERTS_PREFIX, scope, bankDimension(bankId));
+}
+
+/** `GET …/bi/alerts/{id}/events` — one alert's recorded verdicts. */
+export function biAlertEventsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  alertId: string,
+): QueryKey {
+  return scopedQueryKey(
+    BI_ALERT_EVENTS_PREFIX,
+    scope,
+    bankDimension(bankId),
+    alertId,
+  );
+}
+
+/** `GET …/bi/subscriptions` — every scheduled report this identity owns or receives. */
+export function biSubscriptionsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(BI_SUBSCRIPTIONS_PREFIX, scope, bankDimension(bankId));
+}
+
+/** `GET …/bi/subscriptions/{id}/deliveries` — who was sent what, and who was not. */
+export function biDeliveriesKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  subscriptionId: string,
+): QueryKey {
+  return scopedQueryKey(
+    BI_DELIVERIES_PREFIX,
+    scope,
+    bankDimension(bankId),
+    subscriptionId,
   );
 }

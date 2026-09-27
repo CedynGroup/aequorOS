@@ -178,6 +178,7 @@ EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
         "app/features/read_bi.py",
         "app/features/export_bi.py",
         "app/features/manage_bi_content.py",
+        "app/features/manage_bi_notifications.py",
     }
 )
 

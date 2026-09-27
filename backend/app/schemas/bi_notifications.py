@@ -19,7 +19,11 @@ Three rules are enforced only here, because a JSON column cannot carry them:
   arbitrary mailbox is outside every authorization decision the platform can
   make, so a recipient must be a principal the evaluator can answer about. The
   cap is ``app.services.bi.subscriptions.MAX_RECIPIENTS`` and it bounds how long
-  one delivery run can occupy a worker.
+  one delivery run can occupy a worker. A recipient may be named by id or by
+  ADDRESS (``recipient_emails`` / ``notify_emails``), because reading the tenant's
+  user directory needs its own Account authority that a report author does not
+  hold; an address the route cannot resolve to an identity of this organization
+  refuses the whole request, so what is STORED is still only user ids.
 * **A subscription's query names a window SHAPE, not a date.** ``time.as_of``
   only: a stored ``range`` or ``compare_to`` is an absolute historical window
   that a recurring delivery drifts away from, and there is no "previous period"
@@ -75,6 +79,56 @@ BI_ALERT_MAX_RECIPIENTS = 50
 #: this is enough to name a slice and not enough to build a report.
 BI_ALERT_MAX_FILTERS = 8
 
+#: ``users.email`` is ``String(320)``; an address longer than the column could
+#: never name a principal, so it is refused here rather than truncated.
+BI_MAX_EMAIL_LENGTH = 320
+
+
+def _normalised_addresses(values: list[str]) -> list[str]:
+    """Trimmed, lower-cased, de-duplicated addresses, order preserved.
+
+    Normalised HERE rather than at the resolving route so that one spelling of a
+    colleague's address cannot be counted twice against the recipient cap, and so
+    that the cap the schema enforces is the cap the route resolves. It is not an
+    address VALIDATOR: whether an address names a principal of this tenant is a
+    question only the server's own directory can answer, and it answers it by
+    refusing the ones it cannot resolve.
+    """
+
+    seen: dict[str, None] = {}
+    for raw in values:
+        address = raw.strip().lower()
+        if not address:
+            raise ValueError("a recipient address cannot be blank")
+        if len(address) > BI_MAX_EMAIL_LENGTH:
+            raise ValueError("a recipient address cannot be longer than 320 characters")
+        if "@" not in address:
+            raise ValueError(f"{address} is not an email address")
+        seen[address] = None
+    return list(seen)
+
+
+class BiNotificationRecipient(BiClosedModel):
+    """One named identity of this tenant, as the OWNER of the object sees it.
+
+    Disclosed only to the owner. Telling one recipient who else is on a
+    distribution list is not part of being on it — the same rule, for the same
+    reason, as a saved dashboard's share list.
+    """
+
+    user_id: UUID
+    email: str
+    display_name: str | None = None
+    #: A deactivated identity stays on the list and is refused at delivery time.
+    #: Shown so an owner can see why a colleague stopped receiving the report.
+    is_active: bool
+
+
+class BiNotificationDeactivateRequest(BiClosedModel):
+    """Stop an alert or a subscription without deleting its history."""
+
+    reason: str = Field(min_length=1, max_length=500)
+
 
 class BiAlertUpsert(BiClosedModel):
     """Create or replace one threshold alert.
@@ -93,6 +147,10 @@ class BiAlertUpsert(BiClosedModel):
     threshold_basis: BiAlertThresholdBasis = "stated"
     threshold: Decimal | None = None
     notify_user_ids: list[UUID] = Field(default_factory=list, max_length=BI_ALERT_MAX_RECIPIENTS)
+    #: The same distribution list, named by the address the author knows instead
+    #: of the identifier they do not — see :class:`BiSubscriptionUpsert` for why
+    #: this exists and why it is still not a free-text mailbox.
+    notify_emails: list[str] = Field(default_factory=list, max_length=BI_ALERT_MAX_RECIPIENTS)
     is_active: bool = True
     reason: str = Field(min_length=1, max_length=500)
 
@@ -110,6 +168,7 @@ class BiAlertUpsert(BiClosedModel):
     def _recipients_are_distinct(self) -> BiAlertUpsert:
         if len(set(self.notify_user_ids)) != len(self.notify_user_ids):
             raise ValueError("notify_user_ids must be distinct")
+        self.notify_emails = _normalised_addresses(self.notify_emails)
         return self
 
 
@@ -127,13 +186,25 @@ class BiAlertRead(BiClosedModel):
     threshold_basis: BiAlertThresholdBasis
     threshold: Decimal | None = None
     owner_user_id: UUID
+    owner_display_name: str | None = None
+    #: Whether the caller may change this alert. Only the owner may.
+    owned_by_caller: bool
+    #: For a NON-owner this carries only their own identity: see
+    #: :class:`BiNotificationRecipient`.
     notify_user_ids: list[UUID] = Field(default_factory=list)
+    #: The named distribution list. Populated for the OWNER only.
+    recipients: list[BiNotificationRecipient] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    #: The newest verdict, when there is one.
+    #: The newest verdict, when there is one AND the caller's access covers the
+    #: figure it is about. An owner whose grant was withdrawn keeps the alert and
+    #: loses the verdict; ``latest_detail`` then says so.
     latest_state: BiAlertState | None = None
     latest_as_of: date | None = None
+    #: Production copy for the newest verdict, or for its absence. Never a raw
+    #: enum and never a figure the caller was refused.
+    latest_detail: str
 
 
 class BiAlertEventRead(BiClosedModel):
@@ -171,7 +242,19 @@ class BiSubscriptionUpsert(BiClosedModel):
     #: ISO-8601 weekday, Monday = 1.
     day_of_week: int | None = Field(default=None, ge=1, le=7)
     day_of_month: int | None = Field(default=None, ge=1, le=28)
-    recipient_user_ids: list[UUID] = Field(min_length=1, max_length=BI_SUBSCRIPTION_MAX_RECIPIENTS)
+    recipient_user_ids: list[UUID] = Field(
+        default_factory=list, max_length=BI_SUBSCRIPTION_MAX_RECIPIENTS
+    )
+    #: The same list, named by ADDRESS. It exists because the platform decided
+    #: that reading the tenant's user directory needs its own Account authority
+    #: (``/organization/users``), which an analyst who may build a report does not
+    #: hold — so without this a reader could name nobody at all. It is still not
+    #: a free-text mailbox: the route resolves every address to an identity of
+    #: THIS organization and refuses the whole request if one does not resolve,
+    #: so the stored row carries user ids and nothing else.
+    recipient_emails: list[str] = Field(
+        default_factory=list, max_length=BI_SUBSCRIPTION_MAX_RECIPIENTS
+    )
     is_active: bool = True
     reason: str = Field(min_length=1, max_length=500)
 
@@ -214,6 +297,21 @@ class BiSubscriptionUpsert(BiClosedModel):
     def _recipients_are_distinct(self) -> BiSubscriptionUpsert:
         if len(set(self.recipient_user_ids)) != len(self.recipient_user_ids):
             raise ValueError("recipient_user_ids must be distinct")
+        self.recipient_emails = _normalised_addresses(self.recipient_emails)
+        # A subscription with no recipient would run every cadence and deliver to
+        # nobody, which reads as a broken relay rather than as an empty list.
+        if not self.recipient_user_ids and not self.recipient_emails:
+            raise ValueError("a subscription needs at least one recipient")
+        # The cap is the count of PEOPLE, so it is applied to the two ways of
+        # naming them together; the route applies it again after resolution,
+        # because an address and an id may name the same person.
+        if (
+            len(self.recipient_user_ids) + len(self.recipient_emails)
+            > BI_SUBSCRIPTION_MAX_RECIPIENTS
+        ):
+            raise ValueError(
+                f"a subscription may name at most {BI_SUBSCRIPTION_MAX_RECIPIENTS} recipients"
+            )
         return self
 
 
@@ -234,7 +332,13 @@ class BiSubscriptionRead(BiClosedModel):
     #: institution's jurisdiction. Shown so "07:30" is never ambiguous.
     time_zone: str
     owner_user_id: UUID
+    owner_display_name: str | None = None
+    #: Whether the caller may change this subscription. Only the owner may.
+    owned_by_caller: bool
+    #: For a NON-owner this carries only their own identity.
     recipient_user_ids: list[UUID] = Field(default_factory=list)
+    #: The named distribution list. Populated for the OWNER only.
+    recipients: list[BiNotificationRecipient] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -266,14 +370,48 @@ class BiSubscriptionDeliveryRead(BiClosedModel):
     #: feature. Never a raw enum on a surface.
     detail: str
     sent_at: datetime | None = None
+    #: The recipient's own address, so an owner's history reads as people rather
+    #: than as identifiers. Populated for the OWNER only, which is who the
+    #: delivery history is served to.
+    recipient_email: str | None = None
+    recipient_display_name: str | None = None
+
+
+class BiAlertListRead(BiClosedModel):
+    """Every alert of one institution the caller may see."""
+
+    alerts: list[BiAlertRead] = Field(default_factory=list)
+
+
+class BiAlertEventListRead(BiClosedModel):
+    """One alert's recorded transitions, newest first."""
+
+    alert_id: UUID
+    events: list[BiAlertEventRead] = Field(default_factory=list)
+
+
+class BiSubscriptionListRead(BiClosedModel):
+    """Every subscription of one institution the caller may see."""
+
+    subscriptions: list[BiSubscriptionRead] = Field(default_factory=list)
+
+
+class BiSubscriptionDeliveryListRead(BiClosedModel):
+    """One subscription's delivery history, newest run first."""
+
+    subscription_id: UUID
+    deliveries: list[BiSubscriptionDeliveryRead] = Field(default_factory=list)
 
 
 __all__ = [
     "BI_ALERT_MAX_FILTERS",
     "BI_ALERT_MAX_RECIPIENTS",
+    "BI_MAX_EMAIL_LENGTH",
     "BI_SUBSCRIPTION_MAX_RECIPIENTS",
     "BiAlertDirection",
+    "BiAlertEventListRead",
     "BiAlertEventRead",
+    "BiAlertListRead",
     "BiAlertRead",
     "BiAlertState",
     "BiAlertThresholdBasis",
@@ -281,9 +419,13 @@ __all__ = [
     "BiDeliveryMode",
     "BiDeliveryStatus",
     "BiDeliveryTrigger",
+    "BiNotificationDeactivateRequest",
+    "BiNotificationRecipient",
     "BiSubscriptionCadence",
+    "BiSubscriptionDeliveryListRead",
     "BiSubscriptionDeliveryRead",
     "BiSubscriptionFormat",
+    "BiSubscriptionListRead",
     "BiSubscriptionRead",
     "BiSubscriptionUpsert",
 ]

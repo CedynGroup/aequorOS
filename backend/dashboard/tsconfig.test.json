@@ -42,6 +42,8 @@
     "components/bi/result.ts",
     "components/bi/exploreQuery.ts",
     "components/bi/exploreQuery.test.ts",
+    "components/bi/notifications.ts",
+    "components/bi/notifications.test.ts",
     "components/bi/gridCells.ts",
     "components/bi/pivotGrid.test.ts",
     "lib/api/behavioralInvalidation.test.ts",

@@ -20,6 +20,7 @@ from app.features.manage_attestation import router as attestation_router
 from app.features.manage_authorization import router as authorization_router
 from app.features.manage_banks import router as banks_router
 from app.features.manage_bi_content import router as bi_content_router
+from app.features.manage_bi_notifications import router as bi_notifications_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
@@ -242,6 +243,15 @@ v1_router.include_router(
 # may never be reachable where a BI read is not.
 v1_router.include_router(
     bi_content_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Threshold alerts and scheduled report subscriptions, on the same two
+# dependencies and in the same order. These are the only BI surface that makes
+# the platform act — judge a figure, mail a report — without anybody present, so
+# a deployment where a BI read is 404 must not be one where a subscription can be
+# created: it would keep sending after the feature was switched off.
+v1_router.include_router(
+    bi_notifications_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
 )
 # ICAAP draft exports. No ``require_module_access``: that dependency answers

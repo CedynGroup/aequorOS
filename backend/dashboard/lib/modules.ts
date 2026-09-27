@@ -849,6 +849,13 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/forecasting/scenario",
   "/forecasting/whatif",
   "/explore",
+  // The two things a reader does with a question they have built in Explore.
+  // Public like their hub for the same reason: they are surfaces somebody is
+  // sent to (a refused recipient of a confidential report lands on `/explore`),
+  // not deep links into another person's data — so a baseline-only member
+  // returns to `/` rather than meeting a 404.
+  "/explore/alerts",
+  "/explore/subscriptions",
   "/ftp",
   "/ftp/expost",
   "/ftp/lines",

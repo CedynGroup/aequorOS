@@ -367,7 +367,14 @@ test.describe("the scheduled reports workspace", () => {
     // actually wrong here, but a Nigerian or Kenyan tenant would set 07:30
     // believing UTC and be sent at 07:30 local. The zone is already on the bank
     // payload (`jurisdiction.timezone`), so it need not wait for a saved row.
-    await expect(composer.getByText("Time (UTC)", { exact: true })).toBeVisible();
+    // The label must name the INSTITUTION's own zone, which for this fixture is
+    // Ghana's. It read "UTC" until the composer stopped falling back to a literal
+    // and took the zone from the jurisdiction registry, so this assertion was
+    // pinning the defect: a user in Lagos or Nairobi set a send time believing one
+    // zone while the scan used another. Both halves are asserted, because the
+    // absence of "UTC" is what fails if the fallback ever comes back.
+    await expect(composer.getByText("Time (Africa/Accra)", { exact: true })).toBeVisible();
+    await expect(composer.getByText("Time (UTC)", { exact: true })).toHaveCount(0);
 
     await expect(composer.locator("#bi-sub-cadence")).toHaveValue("weekly");
     await expect(composer.locator("#bi-sub-time")).toHaveValue("07:30");

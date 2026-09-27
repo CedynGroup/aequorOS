@@ -687,6 +687,17 @@ EXPECTED_UNSAFE_BI_ROUTES: frozenset[str] = frozenset(
         "/api/v1/banks/{bank_id}/bi/measures/{measure_id}",
         "/api/v1/banks/{bank_id}/bi/measures/{measure_id}/decision",
         "/api/v1/banks/{bank_id}/bi/measures/{measure_id}/proposal",
+        # Threshold alerts and scheduled report subscriptions. These BELONG in the
+        # unsafe set for a stronger reason than the rest: they are the only BI
+        # writes that make the platform act later, with nobody present — judging a
+        # figure, mailing a report — so an unguarded one would keep acting under an
+        # authority nobody re-checked. Both guards are confirmed below.
+        "/api/v1/banks/{bank_id}/bi/alerts",
+        "/api/v1/banks/{bank_id}/bi/alerts/{alert_id}",
+        "/api/v1/banks/{bank_id}/bi/alerts/{alert_id}/deactivation",
+        "/api/v1/banks/{bank_id}/bi/subscriptions",
+        "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}",
+        "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deactivation",
     }
 )
 

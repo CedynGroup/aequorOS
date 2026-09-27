@@ -101,6 +101,7 @@ from app.models import (
     User,
 )
 from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
+from app.models.bi_notifications import BiAlert, BiSubscription
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -1399,6 +1400,74 @@ def _bi_measure(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> st
     )
 
 
+def _bi_alert(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A threshold alert owned by the tenant's own actor.
+
+    Owned rather than merely addressed: the sweep asks whether a FOREIGN tenant's
+    alert id can be reached under this bank, and an alert the caller has no
+    relationship with answers 404 for a reason that has nothing to do with
+    tenancy.
+    """
+    return _uuid(
+        session,
+        BiAlert(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            name=f"{tenant.marker} threshold",
+            measure_id="loans.balance_rc",
+            filters=[],
+            direction="above",
+            threshold_basis="stated",
+            threshold=Decimal("1000"),
+            owner_user_id=tenant.actor_id,
+            notify_user_ids=[],
+            is_active=True,
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
+def _bi_subscription(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A daily scheduled report owned by the tenant's own actor.
+
+    The stored query is a complete ``BiQuery`` because the read routes re-validate
+    a stored question on the way out; a placeholder would refuse for the wrong
+    reason.
+    """
+    return _uuid(
+        session,
+        BiSubscription(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            name=f"{tenant.marker} daily pack",
+            owner_user_id=tenant.actor_id,
+            query={
+                "measures": ["loans.balance_rc"],
+                "dimensions": [],
+                "filters": [],
+                "time": {"as_of": "2026-08-31"},
+                "top_n": None,
+                "sort": [],
+                "limit": None,
+                "offset": 0,
+                "pivot": None,
+                "subtotals": False,
+            },
+            artifact_format="csv",
+            cadence="daily",
+            hour=7,
+            minute=30,
+            day_of_week=None,
+            day_of_month=None,
+            recipient_user_ids=[str(tenant.actor_id)],
+            is_active=True,
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
 _BANK_PREFIX: Final = "/api/v1/banks/{bank_id}"
 _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 
@@ -1721,6 +1790,12 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
     # sweep covers them the moment the flag is part of its fixture.
     ObjectKind("bi_dashboard", _bi_dashboard, (f"{_BANK_PREFIX}/bi/dashboards/{{dashboard_id}}",)),
     ObjectKind("bi_measure", _bi_measure, (f"{_BANK_PREFIX}/bi/measures/{{measure_id}}",)),
+    ObjectKind("bi_alert", _bi_alert, (f"{_BANK_PREFIX}/bi/alerts/{{alert_id}}",)),
+    ObjectKind(
+        "bi_subscription",
+        _bi_subscription,
+        (f"{_BANK_PREFIX}/bi/subscriptions/{{subscription_id}}",),
+    ),
 )
 
 KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OBJECT_KINDS}
@@ -1796,6 +1871,8 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "access_request": User,
     "bi_dashboard": BiDashboard,
     "bi_measure": BiMeasure,
+    "bi_alert": BiAlert,
+    "bi_subscription": BiSubscription,
 }
 
 #: Body and query identifier fields, resolved by the most specific route path
