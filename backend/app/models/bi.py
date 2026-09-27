@@ -156,6 +156,8 @@ QUERY_LOG_SURFACES: tuple[str, ...] = (
     "feed",
     "trust",
     "catalogue",
+    "packs",
+    "insights",
 )
 QUERY_LOG_DECISIONS: tuple[str, ...] = ("allowed", "denied")
 QUERY_LOG_PRINCIPAL_TYPES: tuple[str, ...] = tuple(kind.value for kind in PrincipalType)

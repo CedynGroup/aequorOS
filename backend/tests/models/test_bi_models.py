@@ -434,6 +434,8 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         "feed",
         "trust",
         "catalogue",
+        "packs",
+        "insights",
     )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
     assert bi.TARGET_PERIOD_GRAINS == ("month", "quarter", "half_year", "year")
