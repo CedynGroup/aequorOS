@@ -1,0 +1,130 @@
+"""The insights layer: statements a bank can be shown, and the facts behind them.
+
+``docs/bi.md`` §"Insights layer". One idea holds the package together: an
+insight may only restate something a typed fact already carries. There is no
+path from a query result to a sentence that does not pass through
+:mod:`~app.services.bi.insights.facts`, so an insight cannot assert a figure the
+platform did not compute, cannot describe a missing figure as zero or flat, and
+cannot present an unreconciled or advisory number as a certified one.
+
+The pieces, in the order a caller uses them:
+
+``facts``
+    The closed, typed vocabulary of what may be asserted: an observation, a
+    movement, a ratio bridge, a projection. Each carries its own measure
+    identity, trust state and advisory designation, and each is built from a
+    catalogue :class:`~app.domain.bi.catalogue.members.MeasureDef` so none of
+    that metadata is a caller's choice.
+
+``digest``
+    ``fact_sheet_hash`` — a value-based fingerprint, in the posture of the
+    regulatory ``input_hash`` and the attestation digests: identifiers and
+    timestamps are excluded by rule, every value and the trust state are
+    included, and the facts are ordered by content so re-derivation over
+    unchanged figures produces an unchanged hash.
+
+``drivers``
+    The exact ratio bridge, and the one judgement of whether a move was good for
+    the bank (D-013 on magnitude).
+
+``projections``
+    Forward-looking statements, typed apart from observation and refusing rather
+    than guessing when the series will not support one.
+
+``rules``
+    The deterministic conditions that turn a fact sheet into insights, and the
+    presentation policy that decides how many a reader gets.
+
+``statements``
+    What an insight is: the sentence, the evidence, the trust, the designation.
+"""
+
+from __future__ import annotations
+
+from app.services.bi.insights.digest import (
+    FACT_SHEET_SCHEMA,
+    fact_sheet_hash,
+    fact_sheet_payload,
+)
+from app.services.bi.insights.drivers import (
+    BridgeLeg,
+    BridgeUnavailable,
+    Favourability,
+    RatioBridge,
+    RatioPoint,
+    favourability,
+    ratio_bridge,
+)
+from app.services.bi.insights.facts import (
+    WHOLE_INSTITUTION,
+    BridgeFact,
+    Fact,
+    FactProvenance,
+    FactScope,
+    FactSheet,
+    MissingReason,
+    MovementFact,
+    ObservedFact,
+    ProjectionFact,
+    TrustState,
+    bridge_fact,
+    fact_sheet,
+    movement_fact,
+    observed_fact,
+    projection_fact,
+    trust_state,
+)
+from app.services.bi.insights.projections import (
+    Observation,
+    Projection,
+    ProjectionUnavailable,
+    project,
+)
+from app.services.bi.insights.rules import (
+    DEFAULT_POLICY,
+    InsightPolicy,
+    InsightSet,
+    derive_insights,
+)
+from app.services.bi.insights.statements import Emphasis, Insight, StatementClass
+
+__all__ = [
+    "BridgeFact",
+    "BridgeLeg",
+    "BridgeUnavailable",
+    "DEFAULT_POLICY",
+    "Emphasis",
+    "FACT_SHEET_SCHEMA",
+    "Fact",
+    "FactProvenance",
+    "FactScope",
+    "FactSheet",
+    "Favourability",
+    "Insight",
+    "InsightPolicy",
+    "InsightSet",
+    "MissingReason",
+    "MovementFact",
+    "ObservedFact",
+    "Observation",
+    "Projection",
+    "ProjectionFact",
+    "ProjectionUnavailable",
+    "RatioBridge",
+    "RatioPoint",
+    "StatementClass",
+    "TrustState",
+    "WHOLE_INSTITUTION",
+    "bridge_fact",
+    "derive_insights",
+    "fact_sheet",
+    "fact_sheet_hash",
+    "fact_sheet_payload",
+    "favourability",
+    "movement_fact",
+    "observed_fact",
+    "project",
+    "projection_fact",
+    "ratio_bridge",
+    "trust_state",
+]

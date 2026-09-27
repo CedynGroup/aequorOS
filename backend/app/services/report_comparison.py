@@ -502,23 +502,39 @@ def _numeric_metrics(metrics: dict[str, object]) -> dict[str, Decimal]:
     return parsed
 
 
-def _favorability(
-    key: str, left: Decimal, right: Decimal, direction: LineDirection
+def favorability_for_disposition(
+    disposition: str, left: Decimal, right: Decimal, direction: LineDirection
 ) -> LineFavorability:
-    if direction == "flat":
-        return "neutral"
-    disposition = favorable_direction(key)
-    if disposition == "neutral":
+    """Was the move from ``left`` to ``right`` good for the bank, given its
+    declared favourable direction?
+
+    Public and DIRECTION-keyed, not key-keyed, so a caller that already knows
+    the disposition can ask without owning a metric key. The BI catalogue is
+    such a caller: a portfolio measure has a ``favourable_direction`` but no
+    entry in this module's key registries, so before this it had to restate the
+    rule, and a restated rule is one that drifts. :func:`_favorability` resolves
+    the key and then defers here, so both planes read one definition.
+
+    D-013 lives here: ``magnitude_lower_better`` is judged on |value|, because
+    ΔEVE and Earnings-at-Risk are signed and a sign flip at equal magnitude is
+    no change in risk.
+    """
+    if direction == "flat" or disposition == "neutral":
         return "neutral"
     if disposition == "magnitude_lower_better":
-        # Judged on |value|: −8% → −12% is adverse, −12% → −8% favorable, and a
-        # sign flip at the same magnitude (−8% → +8%) is no change in risk.
+        # −8% → −12% is adverse, −12% → −8% favorable, and −8% → +8% is neutral.
         if abs(right) == abs(left):
             return "neutral"
         return "favorable" if abs(right) < abs(left) else "adverse"
     good_when_up = disposition == "higher_better"
     line_went_up = direction == "up"
     return "favorable" if good_when_up == line_went_up else "adverse"
+
+
+def _favorability(
+    key: str, left: Decimal, right: Decimal, direction: LineDirection
+) -> LineFavorability:
+    return favorability_for_disposition(favorable_direction(key), left, right, direction)
 
 
 def _build_line(key: str, left: Decimal | None, right: Decimal | None) -> ComparisonLineRead:
