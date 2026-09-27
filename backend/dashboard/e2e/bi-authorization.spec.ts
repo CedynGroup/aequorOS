@@ -19,7 +19,10 @@
  *     restricted` and NOTHING ELSE: this spec asserts that none of the ten check
  *     labels, none of the nine denied member labels and none of the figures
  *     appear anywhere in the document. A lock icon is not the property — the
- *     absence of the withheld strings is.
+ *     absence of the withheld strings is. The insight strip sits on that same
+ *     page, so those document-wide checks now cover it too, and the journey adds
+ *     the positive control: the strip DOES tell this reader about the figures they
+ *     hold, so the absence assertions cannot pass on a blank page.
  *  4. THE SAME READER'S CATALOGUE is filtered member by member, and what is kept
  *     back is reported as a COUNT. The count is asserted, and so is the fact that
  *     the ids behind it never reach the page.
@@ -248,6 +251,26 @@ test.describe("a reader whose access does not cover the view", () => {
         `a refused reconciliation must show no verdict, and it shows "${verdict}"`,
       ).toHaveCount(0);
     }
+
+    // THE POSITIVE CONTROL, and it is what makes every absence above mean
+    // something. This reader is refused the reconciliation section but is served
+    // `GET …/bi/insights` for the two liquidity measures their sentence covers, and
+    // the strip on this same page states them. So the page is NOT blank, and the
+    // withheld strings are absent because they were withheld rather than because
+    // nothing rendered.
+    const strip = await biApi(
+      request,
+      "liquidity_viewer",
+      `/banks/${SAMPLE_BANK_ID}/bi/insights?as_of=${asOf}`,
+    );
+    expect(strip.status).toBe(200);
+    const statements = (
+      strip.body as { insights: { headline: string }[]; measures_read: number }
+    ).insights;
+    expect(statements.length).toBeGreaterThan(0);
+    await expect(
+      page.getByText(statements[0].headline, { exact: true }).first(),
+    ).toBeVisible();
   });
 
   test("sees a catalogue filtered to its own sentence, with the rest reported as a count", async ({

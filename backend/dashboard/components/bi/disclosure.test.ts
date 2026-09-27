@@ -170,6 +170,181 @@ assert.equal(
   "InsightStrip must stay on the SVG Sparkline: it is meant for the Command Center, whose bundle the home-route guard protects.",
 );
 
+// --- 3. a refused PACK widget is given nothing but its geometry --------------
+//
+// The server sends a refusal as an id, a layout item and `access: "restricted"`,
+// and nothing else. The property that keeps it that way on the client is a TYPE:
+// the `restricted` variant of `BiPackWidgetView` declares no field that could
+// hold a title, a caption, a measure, a dimension, a filter or a figure, so the
+// canvas cannot read one on that branch even by mistake — the compiler refuses
+// it. These assertions pin the type and the two places that consume it, because
+// a widened variant would compile and would leak.
+
+const types = code("components/bi/types.ts");
+const restrictedVariant =
+  /\|\s*Readonly<\{\s*state:\s*"restricted";([^}]*)\}>/.exec(types)?.[1] ?? "";
+assert.ok(
+  restrictedVariant.length > 0,
+  "could not read the `restricted` variant of BiPackWidgetView from types.ts",
+);
+assert.deepEqual(
+  [...restrictedVariant.matchAll(/(\w+)\??:/g)].map((match) => match[1]).sort(),
+  ["id", "layout"],
+  "The refused variant of BiPackWidgetView may carry only its id and its " +
+    "geometry. Any other field can hold what the reader was refused.",
+);
+
+const dashboards = code("components/bi/dashboards.ts");
+const refusalReturn =
+  /access === "restricted"\)\s*\{\s*return \{([^}]*)\};/.exec(
+    dashboards,
+  )?.[1] ?? "";
+assert.ok(
+  refusalReturn.length > 0,
+  "components/bi/dashboards.ts must decide a refusal explicitly",
+);
+assert.deepEqual(
+  // The leading identifier of each comma-separated entry, which is the property
+  // being set — never a value read on the right-hand side of one.
+  refusalReturn
+    .split(",")
+    .map((entry) => /^\s*(\w+)/.exec(entry)?.[1] ?? "")
+    .filter((name) => name.length > 0)
+    .sort(),
+  ["id", "layout", "state"],
+  "A refused pack widget must be built from its id, its geometry and its state " +
+    "alone.",
+);
+// And the refusal is decided FIRST, before the branch that would read a query,
+// a panel or a dataset off the same payload.
+const refusalAt = dashboards.indexOf('access === "restricted"');
+for (const later of ["widget.query", "widget.panel", "widget.needsData"]) {
+  assert.ok(
+    refusalAt > 0 && refusalAt < dashboards.indexOf(later),
+    `components/bi/dashboards.ts must decide a refusal before it reads ${later}.`,
+  );
+}
+
+const canvas = code("components/bi/DashboardCanvas.tsx");
+const restrictedTag = /<RestrictedWidget([^/>]*)\/>/.exec(canvas)?.[1] ?? "";
+assert.ok(
+  restrictedTag.length > 0,
+  "components/bi/DashboardCanvas.tsx must render RestrictedWidget for a refusal",
+);
+assert.deepEqual(
+  [...restrictedTag.matchAll(/(\w+)=/g)].map((match) => match[1]).sort(),
+  ["height"],
+  "A refused widget on the canvas may be given its height and nothing else.",
+);
+
+// --- 4. no pack is defined in the browser -----------------------------------
+//
+// A pack binds widgets to catalogue measures, declares each widget's window
+// relative to the reporting date, and is validated server-side. A copy here would
+// be a second definition, free to disagree with the one the exports, the
+// scheduled reports and the commentary read — so the client reads the pack routes
+// and holds no pack of its own.
+
+for (const hook of ["useBiPacks", "useBiPack"]) {
+  assert.ok(
+    dashboards.includes(hook),
+    `components/bi/dashboards.ts must read the pack routes through ${hook}.`,
+  );
+}
+for (const literal of [
+  "alco",
+  "board",
+  "branch_network",
+  "compliance",
+  "cro",
+  "finance",
+  "balance_sheet_mix",
+  "positions.balance_rc",
+  "loans.npl_ratio_pct",
+]) {
+  assert.equal(
+    new RegExp(`["'\`]${literal}["'\`]`).test(dashboards),
+    false,
+    `components/bi/dashboards.ts must not name "${literal}". A pack, a widget ` +
+      "or a measure written down here is a second definition of it.",
+  );
+}
+
+// --- 5. an empty insight strip states which emptiness it is ------------------
+//
+// "No statements" has two meanings and only the payload separates them: the
+// figures were read and nothing moved materially, or nothing was computed at all.
+// Rendering the first sentence in the second case is a claim about the
+// institution's figures that the platform never made.
+
+const strip = code("components/bi/InsightStrip.tsx");
+assert.ok(
+  /measuresRead/.test(strip),
+  "InsightStrip must decide its empty state on `measuresRead`: an empty list " +
+    "over zero measures read is not 'nothing stands out'.",
+);
+assert.ok(
+  /Nothing stands out for this reporting date\./.test(strip) &&
+    /No analytics figures have been computed for this reporting date yet/.test(
+      strip,
+    ),
+  "InsightStrip must carry both empty sentences, so the honest one can be shown.",
+);
+assert.ok(
+  /isBiAccessDenied/.test(strip),
+  "InsightStrip must render the route's refusal as a refusal. The route answers " +
+    "403 rather than an empty list when nothing was readable.",
+);
+
+// --- 6. every way out of a BI view is the governed one -----------------------
+
+const exportActions = code("components/bi/ExportActions.tsx");
+for (const format of ['"csv"', '"xlsx"', '"pdf"']) {
+  assert.ok(
+    exportActions.includes(format),
+    `ExportActions must offer ${format} through the governed route.`,
+  );
+}
+assert.ok(
+  /useBiExport/.test(exportActions),
+  "ExportActions must run every artifact through `POST …/bi/export`, which " +
+    "authorizes, audits and watermarks what it releases.",
+);
+assert.ok(
+  /printExportOption\(\)/.test(exportActions),
+  "ExportActions must keep the browser print option: it is available wherever a " +
+    "view is, and it releases nothing the reader is not already looking at.",
+);
+assert.ok(
+  /An organization owner can grant it\./.test(exportActions),
+  "A reader without export authority must be told so in the same words a " +
+    "refused widget uses — naming no field.",
+);
+
+// --- 7. the drill action is reachable on both answering surfaces -------------
+//
+// `WidgetRenderer` adds the "Rows behind" column only when it is given the query
+// AS SUBMITTED. Omit it and the resolver, the destinations and their tests are all
+// correct and none of them is reachable in a browser.
+
+for (const surface of [
+  "components/bi/DashboardCanvas.tsx",
+  "app/(app)/explore/page.tsx",
+]) {
+  // Up to the self-closing bracket ON ITS OWN LINE, which is this tag's. A lazy
+  // match to the first `/>` would stop inside a nested element passed as a prop.
+  const tag = /<WidgetRenderer\b([\s\S]*?)\n\s*\/>/.exec(code(surface))?.[1];
+  assert.ok(tag, `${surface} must render WidgetRenderer`);
+  // A prop of the tag itself — a line whose first token is `query=` — never a
+  // `query={…}` nested inside another prop's expression.
+  assert.ok(
+    tag!.split("\n").some((line) => line.trim().startsWith("query={")),
+    `${surface} must pass the submitted query to WidgetRenderer as its own ` +
+      "prop, or the drill action never renders.",
+  );
+}
+
 console.log(
-  "disclosure.test.ts: BI refusals name nothing, absences never render as zero.",
+  "disclosure.test.ts: BI refusals name nothing, absences never render as zero, " +
+    "no pack is defined in the browser, and every way out is the governed one.",
 );

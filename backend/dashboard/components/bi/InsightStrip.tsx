@@ -11,20 +11,36 @@
  * not recompute a figure, re-round one, or drop a qualifier to make a sentence
  * read better.
  *
+ * IT TAKES THE SERVER'S WHOLE ANSWER, NOT A LIST OF SENTENCES. That is the point
+ * of the props below. "No statements" has two completely different meanings and
+ * only the payload can tell them apart:
+ *
+ *  * `measuresRead > 0` and no statements — the figures WERE read and every
+ *    movement fell inside the materiality threshold. *Nothing stands out.*
+ *  * `measuresRead === 0` and no statements — nothing was computed for this date
+ *    at all. Saying "nothing stands out" there would be a claim about the
+ *    institution's figures made to a reader who was shown none of them, and the
+ *    platform never made it.
+ *
+ * A reader whose access covers none of the headline measures is refused outright
+ * (`403 bi_insights_authorization_denied`, naming no measure) rather than handed
+ * an empty list, and that refusal is rendered as a refusal.
+ *
  * It draws with the lightweight SVG `Sparkline`, never with an ECharts canvas.
  * The strip is meant to sit under the page header on landing pages including
  * the Command Center, and `scripts/assert-home-route-bundle.mjs` keeps the
  * charting runtime out of that route's initial bundle.
- *
- * No insights is a real state, not a failure: a date whose marts have not been
- * built, or whose movements are all unremarkable, honestly has none.
  */
 
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
+import type { BiInsightsRead } from "@aequoros/risk-service-api";
 import Sparkline from "@/components/ui/Sparkline";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { isBiAccessDenied } from "@/lib/api/bi";
+import { isoDay } from "@/lib/api/biKeys";
+import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
 import type { BiFavourability, BiInsight } from "./types";
 
@@ -39,6 +55,42 @@ const ACCENT: Record<BiFavourability, string> = {
   adverse: "border-l-critical",
   neutral: "border-l-border",
 };
+
+/** Nothing was computed for this date, which is not the same as nothing to say. */
+const NOTHING_COMPUTED =
+  "No analytics figures have been computed for this reporting date yet, so the platform has nothing to say about it.";
+/** The figures were read and every movement fell inside the threshold. */
+const NOTHING_STANDS_OUT = "Nothing stands out for this reporting date.";
+
+/**
+ * The server's statements in the shape the cards render.
+ *
+ * The one thing that changes is the DATE: the generated client parses
+ * `format: date` into a `Date`, and everything in this app compares calendar
+ * days. Nothing else is touched — in particular no figure is reformatted, and
+ * `series` and `href` are left absent because the wire carries neither. The
+ * sparkline and the "See the working" affordance are both conditional, so a
+ * statement without them degrades to the sentence itself rather than to a
+ * broken link or an invented trend.
+ */
+export function insightViews(
+  read: BiInsightsRead | null | undefined,
+): readonly BiInsight[] {
+  return (read?.insights ?? []).map((insight) => ({
+    id: insight.id,
+    ruleId: insight.ruleId,
+    statementClass: insight.statementClass,
+    headline: insight.headline,
+    detail: insight.detail,
+    asOf: isoDay(insight.asOf) ?? "",
+    measureIds: insight.measureIds,
+    favourability: insight.favourability,
+    emphasis: insight.emphasis,
+    qualifiers: insight.qualifiers,
+    certified: insight.certified,
+    trust: insight.trust,
+  }));
+}
 
 function InsightCard({ insight }: { insight: BiInsight }) {
   const body = (
@@ -95,17 +147,16 @@ function InsightCard({ insight }: { insight: BiInsight }) {
 }
 
 export default function InsightStrip({
-  insights,
+  data,
   isLoading = false,
   error = null,
   onRetry,
-  emptyMessage = "Nothing stands out for this reporting date.",
 }: {
-  insights: readonly BiInsight[];
+  /** The whole `GET …/bi/insights` answer. Never a list assembled elsewhere. */
+  data: BiInsightsRead | null | undefined;
   isLoading?: boolean;
   error?: unknown;
   onRetry?: () => void;
-  emptyMessage?: string;
 }) {
   if (isLoading) {
     return (
@@ -121,6 +172,10 @@ export default function InsightStrip({
     );
   }
 
+  // The route refuses rather than serving an empty list to a reader who holds
+  // none of the headline measures, and it names none of them in doing so.
+  if (isBiAccessDenied(error)) return <RestrictedWidget />;
+
   if (error) {
     return (
       <ErrorPanel
@@ -131,11 +186,17 @@ export default function InsightStrip({
     );
   }
 
+  const insights = insightViews(data);
+
   if (insights.length === 0) {
     return (
       <div className="card flex items-center gap-3 px-5 py-4">
         <Sparkles size={16} className="shrink-0 text-slate" aria-hidden />
-        <p className="text-body text-slate">{emptyMessage}</p>
+        <p className="text-body text-slate">
+          {(data?.measuresRead ?? 0) > 0
+            ? NOTHING_STANDS_OUT
+            : NOTHING_COMPUTED}
+        </p>
       </div>
     );
   }

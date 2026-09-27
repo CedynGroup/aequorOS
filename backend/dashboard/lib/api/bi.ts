@@ -33,8 +33,12 @@ import {
   FeatureFlagsApi,
   type BiCatalogueRead,
   type BiExplainRead,
+  type BiExportRead,
   type BiFilter,
   type BiGridPageRead,
+  type BiInsightsRead,
+  type BiPackListRead,
+  type BiPackRead,
   type BiPagedQueryRequest,
   type BiQuery,
   type BiQueryResult,
@@ -66,9 +70,13 @@ import {
   biExplainKey,
   biFeatureKey,
   biGridKey,
+  biInsightsKey,
+  biPackKey,
+  biPacksKey,
   biQueryKey,
   biSubscriptionsKey,
   biTrustKey,
+  biWindowOf,
   isoDay,
   utcDay,
 } from "./biKeys";
@@ -270,6 +278,283 @@ export function useBiTrust(
   });
 }
 
+/**
+ * Every certified content pack this institution and reader may open.
+ *
+ * `as_of` is REQUIRED by the route and is not defaulted here either: a pack
+ * carries no date of its own, and a client that picked one would be choosing an
+ * institution's reporting date on its behalf. Until the page knows the date it
+ * asks nothing.
+ *
+ * A deployment whose licence class has no certified pack set answers 404, which
+ * `isBiUnavailable` recognises — the same shape as the feature being off, and
+ * for the same reason: the surface is not there.
+ */
+export function useBiPacks(
+  bankId: string | undefined,
+  asOf: string | null | undefined,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  const day = isoDay(asOf);
+  return useQuery<BiPackListRead>({
+    queryKey: biPacksKey(scope, bankId, day),
+    queryFn: () =>
+      apiCall(() => biApi.listBiPacks({ bankId: bankId!, asOf: utcDay(day!) })),
+    enabled: enabled && Boolean(bankId) && day !== null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * One certified pack, resolved for one reader and one reporting date.
+ *
+ * The response is the ONLY definition of the pack the browser sees: the widgets,
+ * their geometry and the query behind each granted one all arrive resolved and
+ * authorized. There is no client-side copy to disagree with it.
+ */
+export function useBiPack(
+  bankId: string | undefined,
+  pack: string | null,
+  asOf: string | null | undefined,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  const day = isoDay(asOf);
+  return useQuery<BiPackRead>({
+    queryKey: biPackKey(scope, bankId, pack ?? "unset", day),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.getBiPack({ bankId: bankId!, pack: pack!, asOf: utcDay(day!) }),
+      ),
+    enabled:
+      enabled &&
+      Boolean(bankId) &&
+      pack !== null &&
+      pack !== "" &&
+      day !== null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * What the platform is prepared to SAY about one institution at one reporting
+ * date.
+ *
+ * `measuresRead` rides beside the statements and must be read with them: zero
+ * statements over zero measures read is "nothing has been computed", which is a
+ * different answer from "nothing stands out". When NOTHING was readable and
+ * something was withheld the route answers 403 rather than an empty list, so a
+ * refusal here is a normal state of the strip and not a failure.
+ *
+ * `compareTo` is optional: omitted, the server compares against the prior period
+ * on the packs' own end-of-month convention, so a strip and the dashboard beside
+ * it cannot measure a movement against different dates.
+ */
+export function useBiInsights(
+  bankId: string | undefined,
+  asOf: string | null | undefined,
+  compareTo?: string | null,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  const day = isoDay(asOf);
+  const prior = isoDay(compareTo);
+  return useQuery<BiInsightsRead>({
+    queryKey: biInsightsKey(scope, bankId, day, prior),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.getBiInsights({
+          bankId: bankId!,
+          asOf: utcDay(day!),
+          compareTo: prior === null ? undefined : utcDay(prior),
+        }),
+      ),
+    enabled: enabled && Boolean(bankId) && day !== null,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The governed export
+// ---------------------------------------------------------------------------
+
+/**
+ * THE ONE WAY FIGURES LEAVE A BI VIEW.
+ *
+ * `POST …/bi/export` re-makes the same authorization decision the screen was
+ * served under, classifies the disclosure from the catalogue members the query
+ * touches (never from a flag on the request), audits the release and watermarks
+ * the artifact. A chart library's or a grid's own "download data" does none of
+ * those, which is why neither is wired to anything.
+ *
+ * This is a hand-rolled request rather than the generated `runBiExport` for one
+ * reason: the operation is declared as returning either the FILE or a queued job,
+ * so the generated method is typed `any` and resolves the body through a JSON or
+ * TEXT reader. A workbook and a PDF are bytes — read as text they arrive
+ * corrupted — and the filename the server chose lives in a response HEADER the
+ * generated method discards. So the response is taken whole here: the bearer
+ * comes from the SAME resolver every generated call uses, and failures are shaped
+ * into `client.ts`'s `ApiError`, so a 403 surfaces identically to every other
+ * refusal.
+ */
+export type BiExportFormat = "csv" | "xlsx" | "pdf";
+
+/** Where a finished export is collected from, and what it is called. */
+export type BiExportedFile = Readonly<{ url: string; filename: string }>;
+
+/**
+ * What to call the file when the server's own choice cannot be read.
+ *
+ * The server names every artifact `{institution}-analytics-{window}.{ext}` and
+ * sends it on `Content-Disposition`. **A browser cannot read that header across
+ * an origin** unless the API lists it in `Access-Control-Expose-Headers`, and it
+ * does not — the dashboard and the API are different hosts in every deployment, so
+ * the name is invisible here. Falling back to one fixed name would give a bank
+ * three identically-named files for three reporting dates, which is how a March
+ * book gets discussed as if it were August.
+ *
+ * So the same two inputs the server uses are used here: the institution, and the
+ * window the QUERY asked about. Nothing governed is duplicated — the authority for
+ * what is in the file is the provenance block inside it, and a filename is
+ * presentation. The header still wins whenever it is readable.
+ */
+function composedFilename(
+  bankId: string,
+  query: BiQuery,
+  format: BiExportFormat,
+): string {
+  const window = biWindowOf(query);
+  const span =
+    window.asOf ??
+    (window.start && window.end
+      ? `${window.start}-to-${window.end}`
+      : "all-dates");
+  // The format IS the extension for all three artifacts, as it is on the
+  // server (`exports.EXTENSIONS`).
+  return `${bankId}-analytics-${span}.${format}`;
+}
+
+/** The filename the SERVER chose, from `Content-Disposition`, when readable. */
+function headerFilename(header: string | null): string | null {
+  const quoted = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header ?? "");
+  const name = quoted?.[1]?.trim();
+  return name && name.length > 0 ? name : null;
+}
+
+/** How long a queued export is waited on before the reader is told to come back. */
+const EXPORT_POLL_INTERVAL_MS = 2_000;
+const EXPORT_POLL_ATTEMPTS = 45;
+
+async function exportError(response: Response): Promise<ApiError> {
+  const body: unknown = await response.json().catch(() => null);
+  const envelope = field(body, "error") ?? body;
+  const details =
+    field(envelope, "details") ?? field(envelope, "detail") ?? null;
+  return new ApiError({
+    message:
+      optStr(field(details, "message")) ??
+      optStr(field(envelope, "message")) ??
+      `The export could not be produced (${response.status}).`,
+    status: response.status,
+    code: optStr(field(envelope, "code")),
+    errorCode: optStr(field(details, "error_code")),
+    details,
+  });
+}
+
+/**
+ * Run one governed export and hand back where the file is and what it is called.
+ *
+ * Two deliveries, both the server's choice, never the caller's: an answer that
+ * fits one request is streamed back and turned into an object URL here; a larger
+ * one becomes a job in the `bi` worker lane, and this polls the job's own route
+ * until the server mints a short-lived download link. A job that ends `denied` or
+ * `failed` raises with the SERVER's own production copy — the reader is told what
+ * the platform decided, not what the browser guessed.
+ */
+export function useBiExport(bankId: string | undefined) {
+  return useMutation<
+    BiExportedFile,
+    unknown,
+    { query: BiQuery; format: BiExportFormat }
+  >({
+    mutationFn: async ({ query, format }) => {
+      const resolve = configuration.accessToken;
+      const token = resolve ? await resolve("bearerAuth", []) : "";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/octet-stream, application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(`${apiBaseUrl}/banks/${bankId!}/bi/export`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ format, query: BiQueryToJSON(query) }),
+      });
+      if (!response.ok) throw await exportError(response);
+
+      if (response.status !== 202) {
+        const blob = await response.blob();
+        return {
+          url: URL.createObjectURL(blob),
+          filename:
+            headerFilename(response.headers.get("content-disposition")) ??
+            composedFilename(bankId!, query, format),
+        };
+      }
+
+      // Queued. The job id is the only thing this request served; the file is
+      // collected from the job's own route, which mints the link for its owner
+      // and for nobody else.
+      const queued: unknown = await response.json().catch(() => null);
+      const jobId = optStr(field(queued, "job_id"));
+      if (jobId === null) {
+        throw new ApiError({
+          message:
+            optStr(field(queued, "message")) ??
+            "The export was accepted but the platform did not say where to collect it.",
+          status: response.status,
+          code: null,
+          errorCode: null,
+        });
+      }
+      for (let attempt = 0; attempt < EXPORT_POLL_ATTEMPTS; attempt += 1) {
+        await new Promise((done) => setTimeout(done, EXPORT_POLL_INTERVAL_MS));
+        const job: BiExportRead = await apiCall(() =>
+          biApi.getBiExport({ bankId: bankId!, jobId }),
+        );
+        if (job.state === "ready" && job.downloadUrl) {
+          return {
+            url: job.downloadUrl,
+            // The queued path answers in JSON, so the server's own filename IS
+            // readable here; the composed one is only the fallback.
+            filename: job.filename ?? composedFilename(bankId!, query, format),
+          };
+        }
+        if (job.state === "denied" || job.state === "failed") {
+          throw new ApiError({
+            message: job.message,
+            status: job.state === "denied" ? 403 : 500,
+            code: null,
+            errorCode: `bi_export_${job.state}`,
+          });
+        }
+      }
+      throw new ApiError({
+        message:
+          "This export is still being prepared. Open the Export menu again in a " +
+          "few minutes to collect it.",
+        status: null,
+        code: null,
+        errorCode: "bi_export_still_preparing",
+      });
+    },
+  });
+}
+
 export {
   biAlertEventsKey,
   biAlertsKey,
@@ -278,6 +563,9 @@ export {
   biDrillKey,
   biExplainKey,
   biGridKey,
+  biInsightsKey,
+  biPackKey,
+  biPacksKey,
   biQueryKey,
   biSubscriptionsKey,
   biTrustKey,

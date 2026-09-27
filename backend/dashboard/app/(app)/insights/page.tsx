@@ -17,11 +17,16 @@
  * then refused. Members the reader has no sentence for are returned as a COUNT
  * and never as ids.
  *
- * The generated statements — movements, attributions, projections and their
- * drivers — are composed server-side in `app/services/bi/insights/` and have no
- * route yet. `components/bi/InsightStrip.tsx` is the surface that renders them
- * and binds here the day that route lands; nothing on this page fabricates one
- * in the meantime.
+ * WHAT THE PLATFORM WILL SAY. `GET …/bi/insights` composes the movements,
+ * attributions, projections and data gaps server-side from typed facts, with
+ * every figure already formatted in the institution's own unit and every
+ * reservation already attached. The strip renders those sentences as given and
+ * fabricates none: a date with nothing computed says so, a date whose movements
+ * were all immaterial says something different, and a reader who holds none of
+ * the headline measures is refused rather than shown an empty strip. It sits
+ * directly under the page header, which is where `docs/bi.md` §Insights layer
+ * puts it — the Command Center and the module landing pages are the other two
+ * homes and are outside this route.
  */
 
 import { useMemo, useState } from "react";
@@ -35,6 +40,7 @@ import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
 import FilterBar from "@/components/bi/FilterBar";
+import InsightStrip from "@/components/bi/InsightStrip";
 import TrustBadge from "@/components/bi/TrustBadge";
 import RestrictedWidget from "@/components/bi/RestrictedWidget";
 import { moduleLabel, sensitivityLabel } from "@/components/bi/labels";
@@ -43,6 +49,7 @@ import {
   isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
+  useBiInsights,
   useBiTrust,
 } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
@@ -69,6 +76,11 @@ export default function InsightsPage() {
 
   const catalogue = useBiCatalogue(bank?.id);
   const trust = useBiTrust(bank?.id, asOf);
+  // The comparison date is deliberately not named here: the server takes the
+  // prior period on the content packs' own end-of-month convention, so a
+  // statement on this strip and a widget's prior column cannot be measured
+  // against two different dates.
+  const insights = useBiInsights(bank?.id, asOf);
 
   const pairs = useMemo(() => {
     const seen = new Map<string, { module: string; sensitivity: string }>();
@@ -115,6 +127,13 @@ export default function InsightsPage() {
           onAsOfChange={setChosenDate}
           filters={[]}
           onFiltersChange={() => undefined}
+        />
+
+        <InsightStrip
+          data={insights.data}
+          isLoading={insights.isPending}
+          error={insights.error}
+          onRetry={() => void insights.refetch()}
         />
 
         <SectionCard

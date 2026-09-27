@@ -32,7 +32,11 @@
  * NOTHING IS EXPORTED FROM THE GRID ITSELF. AG Grid's own CSV export is
  * disabled in `components/bi/PivotGridCanvas.tsx`; every way out of this page
  * goes through the governed Export menu, which authorizes, audits and
- * watermarks what it releases.
+ * watermarks what it releases. The menu offers the same question in three
+ * artifacts plus the browser's own print, and each governed one is answered by
+ * `POST …/bi/export` — re-authorized, classified from the catalogue members the
+ * question touches, audited and stamped. A reader whose access does not cover an
+ * export of these figures is told so; no partial file is ever produced.
  */
 
 import { useMemo, useState } from "react";
@@ -46,7 +50,7 @@ import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
 import ExplainDrawer from "@/components/bi/ExplainDrawer";
-import ExportMenu, { printExportOption } from "@/components/bi/ExportMenu";
+import ExportActions from "@/components/bi/ExportActions";
 import FilterBar from "@/components/bi/FilterBar";
 import GridShapeControls from "@/components/bi/GridShapeControls";
 import PivotGrid from "@/components/bi/PivotGrid";
@@ -201,7 +205,7 @@ export default function ExplorePage() {
         title="Explore"
         subtitle="Choose what to measure and how to break it down. Everything offered here is something your access already covers."
         asOf={asOf}
-        action={<ExportMenu options={[printExportOption()]} />}
+        action={<ExportActions bankId={bank?.id} query={query} />}
       />
 
       <PageContainer className="space-y-6 py-6">
@@ -440,7 +444,15 @@ export default function ExplorePage() {
           </div>
         )}
 
-        {!query && hasMeasures && blocking.length === 0 && (
+        {/*
+          Shown exactly when no measure has been chosen, which is what it says.
+          It used to be gated on `blocking.length === 0` and was therefore
+          unreachable: the one path that returns a null query also raises the
+          blocking `no-measure` problem, whose own message renders inside a branch
+          that requires a measure to have been chosen — so a reader landing here
+          was given no instruction beside the answer area at all.
+        */}
+        {hasMeasures && shape.measures.length === 0 && (
           <EmptyState
             Icon={Table2}
             title="Choose a measure to see an answer"
@@ -475,7 +487,11 @@ export default function ExplorePage() {
               error={summaryAnswer.error}
               onRetry={() => void summaryAnswer.refetch()}
               onExplain={setExplaining}
-              actions={<ExportMenu options={[printExportOption()]} />}
+              actions={<ExportActions bankId={bank?.id} query={query} />}
+              // The query AS SUBMITTED, which is what a drill-through needs: it
+              // carries the reader's date and every filter they narrowed by, so
+              // the rows behind a figure are the figure's own rows.
+              query={query}
             />
           </div>
         )}
@@ -484,7 +500,7 @@ export default function ExplorePage() {
           <SectionCard
             title="Your question, row by row"
             subtitle="Each page is fetched and authorized on its own. Sorting is applied by the server to the whole answer, not to the page on screen."
-            actions={<ExportMenu options={[printExportOption()]} />}
+            actions={<ExportActions bankId={bank?.id} query={query} />}
             noPadding
           >
             <div className="p-4">

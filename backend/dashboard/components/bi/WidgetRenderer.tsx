@@ -68,7 +68,7 @@ function chartOption(
     .map((column, index) => ({ column, index }))
     .filter((entry) => entry.column.kind === "measure");
 
-  if (kind === "pie") {
+  if (kind === "pie" || kind === "donut") {
     const first = measureIndices[0];
     return {
       tooltip: { trigger: "item" },
@@ -88,6 +88,10 @@ function chartOption(
   }
 
   const stacked = kind === "stacked_bar";
+  // An `area` is a line with the space under it filled. It stays a LINE series
+  // so `connectNulls: false` keeps holding: an area chart that bridged an
+  // unmeasured month would fill the gap as well as span it.
+  const line = kind === "line" || kind === "area";
   return {
     tooltip: { trigger: "axis" },
     legend:
@@ -96,7 +100,8 @@ function chartOption(
     yAxis: { type: "value" },
     series: measureIndices.map((entry) => ({
       name: entry.column.label,
-      type: kind === "line" ? "line" : "bar",
+      type: line ? "line" : "bar",
+      areaStyle: kind === "area" ? {} : undefined,
       stack: stacked ? "total" : undefined,
       // A null cell stays null: ECharts leaves a gap, which is what an
       // unmeasured point is. Substituting 0 would draw a measurement.
@@ -172,12 +177,11 @@ export default function WidgetRenderer({
 }) {
   const height = widgetBodyHeight(spec.layout.h);
 
+  const drawsAChart =
+    spec.kind !== "table" && spec.kind !== "kpi" && spec.kind !== "kpi_row";
   const option = useMemo(
-    () =>
-      result && spec.kind !== "table" && spec.kind !== "kpi"
-        ? chartOption(spec.kind, result)
-        : null,
-    [result, spec.kind],
+    () => (result && drawsAChart ? chartOption(spec.kind, result) : null),
+    [drawsAChart, result, spec.kind],
   );
 
   if (isLoading) {
@@ -209,6 +213,11 @@ export default function WidgetRenderer({
     return (
       <NeedsDataWidget
         dataset={spec.dataset}
+        // The widget's own words, so a canvas of gaps says WHICH views are
+        // waiting rather than only that something is. This is a widget the reader
+        // was granted; a refusal is the branch above and names nothing.
+        title={spec.title}
+        caption={spec.subtitle}
         height={height + WIDGET_CHROME_HEIGHT}
       />
     );
@@ -237,12 +246,14 @@ export default function WidgetRenderer({
     </>
   );
 
-  if (spec.kind === "kpi") {
+  if (spec.kind === "kpi" || spec.kind === "kpi_row") {
+    // A `kpi` states ONE figure; a `kpi_row` states every measure the widget
+    // asked for, side by side. Showing only the first of a row would drop the
+    // rest silently — a tile headed "Capital adequacy" that omits Tier 1 is
+    // worse than one that prints both plainly — so the row renders one stat per
+    // measure column and the single KPI renders exactly one.
     const firstRow = result.rows[0] ?? [];
-    const index = result.columns.findIndex(
-      (column) => column.id === primaryMeasure?.id,
-    );
-    const raw = index >= 0 ? firstRow[index] : null;
+    const shown = spec.kind === "kpi" ? measures.slice(0, 1) : measures;
     return (
       <section
         className="card flex flex-col gap-3 p-4"
@@ -257,11 +268,31 @@ export default function WidgetRenderer({
           </div>
           <div className="flex shrink-0 items-center gap-2">{frameActions}</div>
         </div>
-        <KpiStat
-          label={primaryMeasure?.label ?? spec.title}
-          value={formatCell(raw, primaryMeasure?.format ?? "text")}
-          className="border-0 shadow-none p-0"
-        />
+        <div
+          className={
+            shown.length > 1
+              ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              : undefined
+          }
+        >
+          {shown.map((measure) => {
+            const index = result.columns.findIndex(
+              (column) => column.id === measure.id,
+            );
+            return (
+              <KpiStat
+                key={measure.id}
+                label={measure.label}
+                // An absent cell formats to the em dash, never to a number.
+                value={formatCell(
+                  index >= 0 ? firstRow[index] : null,
+                  measure.format,
+                )}
+                className="border-0 shadow-none p-0"
+              />
+            );
+          })}
+        </div>
       </section>
     );
   }

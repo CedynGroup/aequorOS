@@ -17,13 +17,13 @@
  * state worth pinning — the alternative is to edit the fixture until the badge
  * flatters it, which would delete the coverage rather than earn it.
  *
- * The generated STATEMENTS have a route (`GET …/bi/insights`) but no binding on
- * the page yet: `components/bi/InsightStrip.tsx` is written and unit-tested and
- * `app/(app)/insights/page.tsx` still says so in its own header. So the strip is
- * covered here through the engine that feeds it, including the per-reader
- * filtering that is its disclosure property. When the strip binds, the browser
- * half of `the statements this reader may be told` moves onto the page and this
- * spec's API half becomes its contract test.
+ * THE GENERATED STATEMENTS ARE COVERED FROM BOTH SIDES. `GET …/bi/insights`
+ * composes them server-side and `InsightStrip` renders them under the page
+ * header, so the third journey drives the route — where the per-reader filtering
+ * that is the strip's disclosure property can be measured against a narrower
+ * identity — and the fourth reads the same sentences off the screen. Neither is
+ * redundant: the API half proves the withholding, the browser half proves the
+ * reader is actually told.
  */
 
 import { expect, test } from "@playwright/test";
@@ -260,5 +260,75 @@ test.describe("Insights", () => {
         `a Liquidity-only reader's insights must not name ${withheld}`,
       ).toBe(false);
     }
+  });
+
+  test("the strip states what the platform will say, under the page header", async ({
+    page,
+    request,
+  }) => {
+    const asOf = await fixtureAsOf(request);
+    // Read from the route first, so what the screen is asserted to carry is the
+    // platform's own words rather than this spec's guess at them.
+    const { status, body } = await biApi(
+      request,
+      "admin",
+      `/banks/${SAMPLE_BANK_ID}/bi/insights?as_of=${asOf}`,
+    );
+    expect(status).toBe(200);
+    const served = body as {
+      insights: { rule_id: string; headline: string; detail: string }[];
+      measures_read: number;
+    };
+    expect(served.measures_read).toBeGreaterThan(0);
+
+    await page.goto("/insights");
+    await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
+
+    // The reservation first: this book does not reconcile, and the notice the
+    // engine composed for that is on screen verbatim.
+    const notice = served.insights.find(
+      (insight) => insight.rule_id === "trust_notice",
+    )!;
+    await expect(page.getByText(notice.headline, { exact: true })).toBeVisible();
+
+    // A figure that was not computed is SAID to be absent, in the platform's own
+    // words — and explicitly not as a zero or as flat. This sentence is the
+    // executable form of the rule the whole engine is built around.
+    await expect(
+      page.getByText(/It is not zero, and it has not stayed flat\./).first(),
+    ).toBeVisible();
+
+    // Every statement on screen carries its reservations: the strip renders the
+    // trust verdict beside each one rather than letting a sentence read clean.
+    // Scoped to the CARD that carries this statement (`InsightCard` renders an
+    // `article.card`), so the badge is asserted on the sentence it qualifies and
+    // not satisfied by a badge somewhere else on the page.
+    const card = page
+      .locator("article.card")
+      .filter({ hasText: notice.headline })
+      .first();
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByText(EXPECTED_OVERALL_BADGE, { exact: true }).first(),
+    ).toBeVisible();
+    // A statement never reads clean: it carries at least one reservation beside
+    // its badge.
+    expect(
+      await card.locator("span.rounded.border").count(),
+    ).toBeGreaterThan(1);
+
+    // AND THE EMPTY STATE IS NOT SHOWN, in either of its two forms. The strip must
+    // never report "nothing stands out" over a date it read nothing for, and this
+    // date it read plenty.
+    await expect(
+      page.getByText("Nothing stands out for this reporting date.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        /No analytics figures have been computed for this reporting date yet/,
+      ),
+    ).toHaveCount(0);
   });
 });

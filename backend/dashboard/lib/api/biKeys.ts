@@ -33,6 +33,25 @@ export const BI_EXPLAIN_PREFIX = "bi-explain";
 export const BI_TRUST_PREFIX = "bi-trust";
 export const BI_FEATURE_PREFIX = "bi-features";
 /**
+ * The certified content packs, and one resolved pack.
+ *
+ * A pack response is not a list of names: every widget it grants carries the
+ * query the server resolved for the date, and every widget it refuses carries
+ * only geometry. Which widgets those are is decided per principal, so the pack
+ * routes are keyed on exactly the same five dimensions as a figure — a key that
+ * dropped the actor or the authorization generation would serve one colleague
+ * the widget set another was granted.
+ */
+export const BI_PACKS_PREFIX = "bi-packs";
+export const BI_PACK_PREFIX = "bi-pack";
+/**
+ * The statements the platform will make about a reporting date.
+ *
+ * Each one states a figure in words, and which figures are read is decided per
+ * principal — so a strip is a data read and is keyed like one.
+ */
+export const BI_INSIGHTS_PREFIX = "bi-insights";
+/**
  * Threshold alerts, scheduled reports and their histories.
  *
  * These carry no figure in their LIST forms — an alert row names a threshold and
@@ -65,6 +84,9 @@ export const BI_QUERY_PREFIXES: readonly string[] = [
   BI_DRILL_PREFIX,
   BI_EXPLAIN_PREFIX,
   BI_TRUST_PREFIX,
+  BI_PACKS_PREFIX,
+  BI_PACK_PREFIX,
+  BI_INSIGHTS_PREFIX,
 ];
 
 /** The reporting window as one comparable token, for a key and for a label. */
@@ -268,6 +290,55 @@ export function biExplainKey(
     biWindowKey(biWindowOf(query)),
     measure,
     biQueryFingerprint(query),
+  );
+}
+
+/** `GET …/bi/packs` — every certified dashboard this reader may open, for one date. */
+export function biPacksKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  asOf: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(
+    BI_PACKS_PREFIX,
+    scope,
+    bankDimension(bankId),
+    isoDay(asOf) ?? "unset",
+  );
+}
+
+/** `GET …/bi/packs/{pack}` — one certified dashboard, resolved for one date. */
+export function biPackKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  pack: string,
+  asOf: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(
+    BI_PACK_PREFIX,
+    scope,
+    bankDimension(bankId),
+    pack,
+    isoDay(asOf) ?? "unset",
+  );
+}
+
+/**
+ * `GET …/bi/insights` — the statements for one (institution, date), measured
+ * against a prior date the reader may or may not have named. The comparison is
+ * part of the question, so it is part of the key.
+ */
+export function biInsightsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  asOf: string | null | undefined,
+  compareTo?: string | null,
+): QueryKey {
+  return scopedQueryKey(
+    BI_INSIGHTS_PREFIX,
+    scope,
+    bankDimension(bankId),
+    biWindowKey({ asOf, compareTo }),
   );
 }
 

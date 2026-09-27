@@ -17,6 +17,7 @@
  */
 
 import { labelize } from "@/lib/api/values";
+import type { BiDatasetRequirement, BiPanelKey, BiPanelSurface } from "./types";
 
 const MODULE_LABELS: Readonly<Record<string, string>> = {
   credit: "Credit",
@@ -66,4 +67,85 @@ export function designationLabel(designation: string | null): string | null {
   if (designation === "supervisory_monitoring") return "Supervisory monitoring";
   if (designation === "unregistered") return "Not a registered return figure";
   return labelize(designation);
+}
+
+/**
+ * A Data Engine dataset key, as the bank's own upload screens name it, with the
+ * route that accepts it.
+ *
+ * The key is a DATASET NAME the pack file carries
+ * (`BiPackWidget.needs_data`), not a label — so the words a reader sees are
+ * decided here, once, and match the names the ingestion surfaces use. An
+ * unmapped key degrades to a readable form and the generic upload route rather
+ * than being hidden: a dataset added to a pack must be nameable on screen the
+ * day it is added, even before this map learns its wording.
+ */
+const DATASET_REQUIREMENTS: Readonly<Record<string, BiDatasetRequirement>> = {
+  positions: {
+    label: "Positions and balances for this date",
+    href: "/data-engine/positions",
+  },
+  business_units: {
+    label: "The branch and region register",
+    href: "/data-engine/excel-csv",
+  },
+  performance_targets: {
+    label: "Performance targets",
+    href: "/data-engine/excel-csv",
+  },
+  gl_mapping_bsd7: {
+    label: "The general ledger account mapping",
+    href: "/data-engine/excel-csv",
+  },
+};
+
+const GENERIC_UPLOAD_HREF = "/data-engine/excel-csv";
+
+export function datasetRequirement(key: string): BiDatasetRequirement {
+  return (
+    DATASET_REQUIREMENTS[key] ?? {
+      label: labelize(key),
+      href: GENERIC_UPLOAD_HREF,
+    }
+  );
+}
+
+/**
+ * Where a surface a certified pack EMBEDS actually lives.
+ *
+ * A pack names a closed set of platform surfaces and can express no route, no
+ * parameter and no query of its own; this map is the one place a key becomes a
+ * link, and the surface it points at authorizes whoever follows it. An unmapped
+ * key is `null`, and the widget then states the surface it is waiting on rather
+ * than offering a link to nowhere.
+ */
+const PANEL_SURFACES: Readonly<Record<BiPanelKey, BiPanelSurface>> = {
+  credit_migration: {
+    label: "Open delinquency and migration",
+    href: "/credit/delinquency",
+  },
+  credit_vintages: {
+    label: "Open the vintage cohorts",
+    href: "/credit/vintages",
+  },
+  return_calendar: {
+    label: "Open the filing calendar",
+    href: "/submissions/calendar",
+  },
+  attestation_status: {
+    label: "Open the signature register",
+    href: "/submissions/signatures",
+  },
+  reconciliation_trust: {
+    label: "Open the reconciliation checks",
+    href: "/insights",
+  },
+  ingestion_quality: {
+    label: "Open the ingestion history",
+    href: "/data-engine",
+  },
+};
+
+export function panelSurface(key: string): BiPanelSurface | null {
+  return PANEL_SURFACES[key as BiPanelKey] ?? null;
 }

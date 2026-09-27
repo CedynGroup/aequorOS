@@ -11,6 +11,12 @@
  * So the absence is stated in words, named by the DATASET the institution has
  * not supplied yet, with the Data Engine route that accepts it. That turns a
  * blank tile into the one instruction that fixes it.
+ *
+ * The WIDGET's own title is carried too when the caller has one. A dashboard of
+ * four gaps that all read "Needs data: Positions and balances" tells a reader
+ * that something is missing and not which view is missing — and the title is the
+ * pack's own words about a view this reader was GRANTED, so withholding it
+ * protects nobody. A refusal is the other component entirely.
  */
 
 import Link from "next/link";
@@ -19,11 +25,16 @@ import type { BiDatasetRequirement } from "./types";
 
 export default function NeedsDataWidget({
   dataset,
+  /** The view this gap belongs to, in the words its author gave it. */
+  title,
+  caption,
   /** Pixel height, so a missing widget keeps the layout the pack laid out. */
   height,
   className = "",
 }: {
   dataset: BiDatasetRequirement;
+  title?: string;
+  caption?: string;
   height?: number;
   className?: string;
 }) {
@@ -35,6 +46,12 @@ export default function NeedsDataWidget({
       <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface text-slate">
         <Database size={16} aria-hidden />
       </div>
+      {title && <h3 className="text-h3 text-navy">{title}</h3>}
+      {caption && (
+        <p className="max-w-xs text-caption leading-relaxed text-slate">
+          {caption}
+        </p>
+      )}
       <p className="text-body font-medium text-navy">
         Needs data: {dataset.label}
       </p>

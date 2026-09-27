@@ -4,7 +4,7 @@
  * Editing a dashboard's definition.
  *
  * Two rules decide whether this route resolves, and together they refuse every
- * id today.
+ * id this surface can be given today.
  *
  * ONLY THE OWNER EDITS. A saved dashboard belongs to the person who saved it;
  * nobody else may change or delete it, however widely it is shared. Sharing a
@@ -15,25 +15,19 @@
  * copier's own personal dashboard. Letting a reader rearrange the certified
  * original would leave two different things wearing one badge.
  *
- * No dashboard has an owner yet, because no dashboard source is published yet
- * (`components/bi/dashboards.ts`), so `canEditDashboard` is false for every id
- * and this route is not found — the truthful answer, rather than an editor with
- * nowhere to save to. The arrangement surface goes in the branch below, in the
- * same change that gives it somewhere to save.
+ * The only dashboards bound to this surface are the platform's certified content
+ * packs (`components/bi/dashboards.ts`), so the second rule refuses all of them
+ * and this route is not found. That is the truthful answer, rather than an editor
+ * with nowhere to save to. `components/bi/dashboards.ts::canEditDashboard` is
+ * where the rule lives; the arrangement surface goes here in the same change that
+ * binds the saved-dashboard routes and gives it somewhere to save.
+ *
+ * Nothing is fetched. Whether a view may be edited is a property of its STANDING,
+ * not of its contents, so the refusal is reached without reading one figure.
  */
 
-import { use } from "react";
-import { notFound, redirect } from "next/navigation";
-import { canEditDashboard, findDashboard } from "@/components/bi/dashboards";
+import { notFound } from "next/navigation";
 
-export default function EditDashboardPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
-  if (canEditDashboard(findDashboard(id))) {
-    redirect(`/dashboards/${id}`);
-  }
+export default function EditDashboardPage() {
   notFound();
 }

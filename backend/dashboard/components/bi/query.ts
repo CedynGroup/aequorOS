@@ -59,3 +59,25 @@ export function effectiveQuery(
     filters: mergeFilters(query.filters, filters),
   };
 }
+
+/**
+ * A query whose WINDOW is already settled, narrowed only by the page's filters.
+ *
+ * This is what a certified pack's widget needs and `effectiveQuery` is not. A
+ * pack widget declares its window RELATIVE to the reporting date — month to date,
+ * trailing twelve months, the prior quarter — and the server resolves that
+ * relative window into a `BiTime` when it serves the pack for the date the reader
+ * asked about. Overwriting it with the page's single date would silently turn a
+ * twelve-month trend into a point read and a year-to-date total into one day's,
+ * and the chart would still draw, headed with the title the pack authored.
+ *
+ * So the date reaches a pack by being the date the PACK was requested for, and
+ * the only thing merged in afterwards is the reader's own narrowing — which the
+ * server authorizes member by member regardless of who added it.
+ */
+export function narrowedQuery(
+  query: BiQuery,
+  filters: readonly BiFilter[],
+): BiQuery {
+  return { ...query, filters: mergeFilters(query.filters, filters) };
+}

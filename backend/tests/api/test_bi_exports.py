@@ -628,3 +628,46 @@ def test_an_export_that_does_not_exist_is_404(
         f"{BASE}/exports/{UUID(int=7)}", headers=headers(authorization_version=authv)
     )
     assert response.status_code == 404, response.text
+
+
+def test_a_browser_can_read_the_export_headers_it_needs() -> None:
+    """CORS exposes a short safelist by default, so these must be named.
+
+    The export route sets the filename and the disclosure class as response
+    headers, and without `expose_headers` a browser cannot READ either: the
+    dashboard silently fell back to a filename it composed itself while the
+    server's choice never arrived, and it could not tell a summary export from a
+    record-level one. Measured on a real download while the export menu was being
+    wired.
+
+    Asserted two ways, because either alone is weak. The declared list must name
+    the headers the export route actually sets, read out of that route's own
+    source rather than restated here; and the middleware must be given that list,
+    so declaring it and not passing it fails too.
+    """
+    import inspect as _inspect  # noqa: PLC0415
+
+    from fastapi.middleware.cors import CORSMiddleware  # noqa: PLC0415
+
+    from app.core.logging import REQUEST_ID_HEADER  # noqa: PLC0415
+    from app.features import export_bi  # noqa: PLC0415
+    from app.main import EXPOSED_RESPONSE_HEADERS, create_app  # noqa: PLC0415
+
+    route_source = _inspect.getsource(export_bi)
+    for header in ("Content-Disposition", "X-Bi-Export-Class"):
+        assert header in route_source, (
+            f"{header} is no longer set by the export route, so exposing it is stale"
+        )
+        assert header in EXPOSED_RESPONSE_HEADERS, (
+            f"the export route sets {header} and a browser cannot read it"
+        )
+    assert REQUEST_ID_HEADER in EXPOSED_RESPONSE_HEADERS
+
+    # And the middleware must actually be GIVEN the list. The test environment
+    # blanks the allowed origins, so the layer is only added when a deployment
+    # configures one; where it is added, it must carry these.
+    app = create_app()
+    for middleware in app.user_middleware:
+        if middleware.cls is CORSMiddleware:
+            exposed = set(middleware.kwargs.get("expose_headers") or ())
+            assert set(EXPOSED_RESPONSE_HEADERS) <= exposed, sorted(exposed)

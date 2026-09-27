@@ -13,13 +13,13 @@
  * module is never registered and `suppressCsvExport` / `suppressExcelExport` are
  * set, because an export from the browser has no authorization decision, no audit
  * row and no watermark behind it. Exercising it would be testing the thing the
- * product forbids. So the export journey does two things instead: it proves the
- * page offers NO ungoverned way out, and it drives the governed route itself and
- * asserts the artifact carries its provenance block, its disclosure class and its
- * trust verdict — and that the same request from a reader without the sentence is
- * refused. The Export menu on screen currently offers print only, because the
- * governed route is not bound to a menu item yet; that gap is stated in the
- * journey rather than papered over.
+ * product forbids. The GOVERNED route is the one the reader can reach, and the
+ * export journey drives it three ways: it takes a file out of the browser through
+ * the Export menu and reads the downloaded bytes, it drives the same route
+ * directly to pin the provenance block line by line, and it asserts the grid
+ * itself still offers no way out of its own. A fourth journey signs in as a reader
+ * who may READ a restricted field but not export one, and asserts the refusal
+ * reaches the screen in words that name no field.
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -76,17 +76,12 @@ test.describe("Explore", () => {
     await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
     await expect(page.locator('input[type="date"]').first()).toHaveValue(asOf);
 
-    // Nothing is queried until a measure is chosen, and the Break down by card
-    // says why it is offering nothing.
-    //
-    // NOTE, and reported as defect T20-D1: the `Choose a measure to see an
-    // answer` empty state next to the answer area is UNREACHABLE. It renders
-    // only when `query === null && blocking.length === 0`, and the one path in
-    // `buildExploreQuery` that returns a null query also adds the blocking
-    // `no-measure` problem — whose own message is rendered inside a branch gated
-    // on at least one measure being chosen. So a reader who lands on Explore is
-    // shown no instruction beside the answer area at all. Asserted as it
-    // behaves, not as it was meant to.
+    // Nothing is queried until a measure is chosen, and the reader is told so in
+    // BOTH places it matters: the Break down by card says why it is offering no
+    // fields, and the answer area says what to do next. The second one used to be
+    // unreachable (T20-D1) because it was gated on there being no blocking
+    // problem, while the one path that produces no query raises exactly such a
+    // problem — so a reader landing here got no instruction at all.
     await expect(
       page.getByText(
         "Choose a measure first — the fields it can be grouped by depend on what is being measured.",
@@ -94,10 +89,21 @@ test.describe("Explore", () => {
     ).toBeVisible();
     await expect(
       page.getByText("Choose a measure to see an answer", { exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Nothing is queried until you do — this page asks the server only for the question you build.",
+      ),
+    ).toBeVisible();
 
     await chooseMeasure(page, "Gross loans");
     await chooseDimension(page, "Classification grade");
+
+    // And it goes away once there is a question, rather than sitting above the
+    // answer it was asking for.
+    await expect(
+      page.getByText("Choose a measure to see an answer", { exact: true }),
+    ).toHaveCount(0);
 
     // THE ANSWER. Two grades the fixture book actually holds, each with the
     // figure the marts carry, formatted in the bank's own reporting currency.
@@ -231,32 +237,110 @@ test.describe("Explore", () => {
     await page.getByRole("button", { name: "Full grid", exact: true }).click();
     await expect(page.locator(".ag-root-wrapper")).toBeVisible();
 
-    // NO UNGOVERNED DOOR. AG Grid's export module is never registered, so the
-    // grid offers no CSV or Excel action anywhere on the page — the menu the
-    // reader can open must not contain one either.
+    // THE MENU THE READER CAN OPEN. Four items: the three artifacts the governed
+    // route renders, and the browser's own print. Matched on the START of each
+    // accessible name, which folds in the description.
     await page
       .getByRole("button", { name: "Export", exact: false })
       .first()
       .click();
-    const menu = page.getByRole("menu");
+    const menu = page.getByRole("menu").first();
     await expect(menu).toBeVisible();
-    await expect(
-      menu.getByRole("menuitem", { name: /Print or save as PDF/ }),
-    ).toBeVisible();
-    for (const forbidden of [
-      /CSV/i,
-      /Excel/i,
-      /spreadsheet/i,
-      /download data/i,
-      /copy to clipboard/i,
+    for (const item of [
+      /^Comma-separated values\b/,
+      /^Excel workbook\b/,
+      /^Watermarked PDF\b/,
+      /^Print or save as PDF\b/,
     ]) {
       await expect(
-        menu.getByRole("menuitem", { name: forbidden }),
-        `the export menu must offer no ungoverned ${forbidden} action`,
-      ).toHaveCount(0);
+        menu.getByRole("menuitem", { name: item }),
+        `the export menu must offer ${item}`,
+      ).toBeVisible();
     }
+
+    // AND THE FILE COMES OUT OF THE BROWSER. Taken through the menu, not through
+    // an API call: the download proves the whole chain a reader actually uses —
+    // the control, the hook, the bearer, the route's decision, the artifact.
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      menu
+        .getByRole("menuitem", { name: /^Comma-separated values\b/ })
+        .click(),
+    ]);
+    // The file is named for the institution and the reporting date, so three
+    // exports of three dates are three distinguishable files.
+    //
+    // MEASURED, AND IT IS THE CLIENT'S NAME, NOT THE SERVER'S: the server sends
+    // its own `{institution}-analytics-{window}.csv` on `Content-Disposition`, and
+    // a browser cannot read that header across an origin unless the API lists it
+    // in `Access-Control-Expose-Headers` — which it does not, and the dashboard
+    // and the API are different hosts in every deployment. So
+    // `lib/api/bi.ts::composedFilename` builds the same name from the same two
+    // inputs, and the header still wins the day it becomes readable. Either way
+    // the pattern below holds.
+    expect(download.suggestedFilename()).toMatch(
+      new RegExp(`^${SAMPLE_BANK_ID}-analytics-${asOf}\\.csv$`),
+    );
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const downloaded = Buffer.concat(chunks).toString("utf8");
+    // The provenance the platform stamps on it. None of this is producible by a
+    // copy out of the browser, which is the whole reason the ungoverned door is
+    // shut.
+    expect(downloaded).toContain("Exported by,e2e.admin@aequoros.example");
+    expect(downloaded).toContain("Institution,Sample Bank Ltd (BK-SAMP0001)");
+    expect(downloaded).toContain("Disclosure class,Summary");
+    expect(downloaded).toMatch(/Analytics build,[0-9a-f]{64}/);
+    expect(downloaded).toContain(FIXTURE_FIGURES.standardGradeRaw);
+
+    // THE TWO BINARY ARTIFACTS COME OUT INTACT. This is why the export is a
+    // hand-rolled request rather than the generated operation: that method is
+    // declared as returning either a file or a queued job, so it resolves the body
+    // through a JSON or TEXT reader — and a workbook or a PDF read as text arrives
+    // corrupted. Each file's own signature is asserted on the downloaded bytes.
+    for (const [item, signature] of [
+      [/^Excel workbook\b/, "PK"],
+      [/^Watermarked PDF\b/, "%PDF"],
+    ] as const) {
+      await page
+        .getByRole("button", { name: "Export", exact: false })
+        .first()
+        .click();
+      const [file] = await Promise.all([
+        page.waitForEvent("download"),
+        page.getByRole("menu").first().getByRole("menuitem", { name: item }).click(),
+      ]);
+      const artifact = await file.createReadStream();
+      const head: Buffer[] = [];
+      for await (const chunk of artifact) head.push(Buffer.from(chunk));
+      const bytes = Buffer.concat(head);
+      expect(
+        bytes.subarray(0, signature.length).toString("latin1"),
+        `${item} must arrive as a real ${signature} file, not as re-encoded text`,
+      ).toBe(signature);
+      expect(bytes.length).toBeGreaterThan(1000);
+    }
+
+    // NO UNGOVERNED DOOR. AG Grid's export module is never registered, so the
+    // grid offers none of its own actions: no context menu, and none of the
+    // library's own export wording anywhere on the page.
     await page.keyboard.press("Escape");
     await expect(page.getByText(/Export to (CSV|Excel)/i)).toHaveCount(0);
+    await expect(page.getByText(/Copy to clipboard/i)).toHaveCount(0);
+    // Right-clicking inside the grid raises nothing. The Community build with no
+    // menu or export module registered has no context menu at all, which is where
+    // its own CSV and Excel actions would otherwise live — and neither is
+    // authorized, audited or watermarked. The wrapper is used rather than a row
+    // selector so this asserts the product rather than the library's internals.
+    await page
+      .locator(".ag-root-wrapper")
+      .click({ button: "right", position: { x: 30, y: 60 } });
+    await expect(
+      page.locator(".ag-menu"),
+      "AG Grid's own context menu must not exist: it is where its CSV and Excel " +
+        "export actions live, and neither is authorized, audited or watermarked.",
+    ).toHaveCount(0);
 
     // THE GOVERNED PATH ITSELF. `POST …/bi/export` authorizes every member,
     // classifies the disclosure, audits the release and stamps the artifact.
@@ -326,17 +410,13 @@ test.describe("Explore", () => {
       answer.getByText(FIXTURE_FIGURES.standardGradeOnScreen, { exact: true }),
     ).toBeVisible();
 
-    // REPORTED AS DEFECT T20-D2, and asserted as it behaves. `WidgetRenderer`
-    // adds the `Rows behind` column only when it is given the query AS
-    // SUBMITTED, and `app/(app)/explore/page.tsx` does not pass `query` to it —
-    // `DashboardCanvas` does. So the only surface that renders a drill action is
-    // a dashboard canvas, and no dashboard has widgets yet. The mapping itself
-    // is real and is exercised below against the answer the server gave; when
-    // Explore passes its query, this expectation flips to the link being present
-    // and the navigation below becomes a click.
+    // THE ACTION IS ON THE ANSWER. `WidgetRenderer` adds the `Rows behind` column
+    // only when it is given the query AS SUBMITTED — the widget's own narrowing
+    // merged with the reader's date and filters — because a drill built from the
+    // question as authored would land on a wider book than the figure clicked.
     await expect(
       answer.getByRole("columnheader", { name: "Rows behind" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
 
     // THE MAPPING, from the product's own module, over the server's own answer.
     // Nothing about the destination is hand-written here: `drillDestinations`
@@ -395,7 +475,12 @@ test.describe("Explore", () => {
     expect(notStatedRow, "the fixture must have a not-stated group").toBeDefined();
     expect(drillDestinations(result, notStatedRow!, asked)).toHaveLength(0);
 
-    await page.goto(destinations[0].href);
+    // FOLLOWED AS A READER FOLLOWS IT: the action on the Standard row, clicked.
+    // Its accessible name carries the destination and the group, so the link that
+    // is clicked is provably the one for the figure asserted above.
+    await answer
+      .getByRole("link", { name: "Open in Loan Book for standard" })
+      .click();
     await expect(page).toHaveURL(
       new RegExp(`/credit/book\\?grade=standard&as_of=${asOf}$`),
     );
@@ -428,5 +513,75 @@ test.describe("Explore", () => {
     };
     expect(loans.filtered).toBeLessThan(loans.total);
     expect(loans.rows.every((row) => row.grade === "standard")).toBe(true);
+  });
+});
+
+test.describe("a reader who may read a restricted field but not export one", () => {
+  test.use({ storageState: path.join(E2E_TMP, "approver.json") });
+
+  test("is refused the file in words that name no field, and gets no partial one", async ({
+    page,
+    request,
+  }) => {
+    const asOf = await fixtureAsOf(request);
+
+    // THE READER. `approver` holds organization-wide authority over every module
+    // at every sensitivity — but the Approver bundle carries `view` and not
+    // `export`, so a summary export is served and a RECORD-LEVEL one is not. That
+    // is the whole point of the export policy: a reader who can see a figure on
+    // screen is not thereby allowed to take a spreadsheet of named obligors out of
+    // the platform.
+    await page.goto("/explore");
+    await chooseMeasure(page, "Gross loans");
+    await chooseDimension(page, "Counterparty name");
+
+    const answer = page.locator("section.card").filter({
+      has: page.getByRole("heading", { name: "Your question", level: 3 }),
+    });
+    // The question is ANSWERED on screen: the refusal below is about the export
+    // and not about the read, which is what makes it the property under test.
+    await expect(answer).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Export", exact: false })
+      .first()
+      .click();
+    await page
+      .getByRole("menu")
+      .first()
+      .getByRole("menuitem", { name: /^Comma-separated values\b/ })
+      .click();
+
+    // An honest refusal, in the same words a refused widget uses — naming no
+    // measure, no field and no figure.
+    await expect(
+      page.getByText(
+        "Your access does not cover everything this export needs. An organization owner can grant it.",
+      ),
+    ).toBeVisible();
+
+    // And the same request on the wire is 403 with no bytes: there is no partial
+    // file, and the response carries no figure.
+    const refused = await biApi(
+      request,
+      "approver",
+      `/banks/${SAMPLE_BANK_ID}/bi/export`,
+      {
+        method: "POST",
+        data: {
+          format: "csv",
+          query: {
+            measures: ["loans.balance_rc"],
+            dimensions: ["counterparty.name"],
+            time: { as_of: asOf },
+            filters: [],
+          },
+        },
+      },
+    );
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(refused.body)).not.toContain(
+      FIXTURE_FIGURES.standardGradeRaw,
+    );
   });
 });

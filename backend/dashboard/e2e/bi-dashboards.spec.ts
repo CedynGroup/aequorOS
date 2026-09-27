@@ -4,14 +4,12 @@
  *
  * TWO HALVES, AND THE SPLIT IS THE PRODUCT'S, NOT THIS SPEC'S. The packs are
  * authored, validated and authorized server-side and served by
- * `GET …/bi/packs`; `components/bi/dashboards.ts` has not bound that route yet
- * and says so in its own header, so `/dashboards` today shows its honest empty
- * state and every dashboard URL is not found. This spec therefore asserts the
- * pack engine against the wire and the page against the screen, and the page
- * half is a TRIPWIRE: when the pack route binds, `no dashboards yet` stops being
- * true and the failure here is the reminder to replace it with the pack tiles,
- * their certification labels and their per-tile badges. That is the intended
- * behaviour of this test, not a defect in it.
+ * `GET …/bi/packs`; `components/bi/dashboards.ts` reads that route and holds no
+ * pack of its own. So this spec asserts the pack engine against the WIRE and the
+ * same packs against the SCREEN, and the two halves are deliberately not the same
+ * assertions: the wire half proves the resolution and the refusal, the screen half
+ * proves a reader can actually open one and that the sentence a refused pack shows
+ * agrees with the tiles underneath it.
  *
  * THE REFUSED WIDGET IS THE SHARPEST ASSERTION IN THE BI SUITE. A refusal that
  * names what it hid is a disclosure: "you may not see Largest single-name share"
@@ -30,6 +28,7 @@ import { E2E_TMP } from "../playwright.config";
 import {
   biApi,
   CERTIFIED_PACKS,
+  EXPECTED_OVERALL_BADGE,
   EXPECTED_OVERALL_STATUS,
   fixtureAsOf,
   SAMPLE_BANK_ID,
@@ -51,6 +50,27 @@ const WITHHELD_ALCO_STRINGS = [
   "positions.balance_rc",
   "loans.weighted_average_rate",
   "position.maturity_bucket",
+] as const;
+
+/**
+ * Titles, captions and members the `credit` pack carries for the widgets a
+ * Liquidity-only reader is refused. Every one must be absent from that reader's
+ * SCREEN, for the same reason it is absent from the payload.
+ *
+ * `Disbursements` is deliberately NOT in this list even though it is a refused
+ * widget's whole title: the pack also carries `Disbursements against target`,
+ * which this reader IS granted (it reads no figure — it names a dataset the bank
+ * has not supplied), so a substring scan cannot tell the two apart. It is
+ * asserted separately below as an EXACT text node, which can.
+ */
+const WITHHELD_CREDIT_STRINGS = [
+  "Portfolio by product",
+  "Portfolio at risk",
+  "Recoveries and write-offs",
+  "Balances by origination month",
+  "loans.balance_rc",
+  "loans.npl_ratio_pct",
+  "loan.grade",
 ] as const;
 
 test.describe("certified dashboards", () => {
@@ -244,46 +264,198 @@ test.describe("certified dashboards", () => {
 test.describe("the Dashboards page", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  // TRIPWIRE, by design. `components/bi/dashboards.ts` returns an empty list
-  // because the pack route above is not bound to the page yet. When agent F
-  // binds it, this test fails — and the fix is to assert the seven tiles, their
-  // `Platform-certified` labels and their per-tile trust badges, not to relax
-  // this. Keeping the current state pinned is what stops the empty state from
-  // being mistaken for "packs work in the browser".
-  test("says there is nothing to open, rather than showing tiles that resolve to nothing", async ({
+  test("offers all seven certified packs, and one of them opens with its figures", async ({
     page,
+    request,
   }) => {
+    const asOf = await fixtureAsOf(request);
     await page.goto("/dashboards");
     await expect(
       page.getByRole("heading", { name: "Dashboards" }),
     ).toBeVisible();
 
+    // Every pack the route serves is on screen, by the title the pack file
+    // carries, each labelled with the standing that stands behind its figures.
+    // Nothing here can be produced by a client-side list: `dashboards.ts` names
+    // no pack (pinned by `components/bi/disclosure.test.ts`).
+    for (const pack of CERTIFIED_PACKS) {
+      const tile = page
+        .locator("li")
+        .filter({ has: page.getByRole("heading", { name: pack.title, level: 2 }) })
+        .first();
+      await expect(tile, `${pack.id} must be offered`).toBeVisible();
+      await expect(
+        tile.getByText("Platform-certified", { exact: true }),
+      ).toBeVisible();
+      // The per-tile badge is the institution's own reconciliation verdict for
+      // the date — the same verdict every figure on the pack will carry.
+      await expect(
+        tile.getByText(EXPECTED_OVERALL_BADGE, { exact: true }),
+      ).toBeVisible();
+      await expect(tile.getByRole("link")).toHaveAttribute(
+        "href",
+        `/dashboards/${pack.id}`,
+      );
+    }
+    // And the honest empty state is NOT shown, because there is something to open.
+    await expect(page.getByText("No dashboards yet", { exact: true })).toHaveCount(
+      0,
+    );
+
+    // OPEN ONE. The pack resolves for the date the reader is on, carries the
+    // version a citation needs, and draws the figures the fixture book answers.
+    await page
+      .getByRole("link", { name: /Asset and liability committee/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/dashboards\/alco$/);
     await expect(
-      page.getByText("No dashboards yet", { exact: true }),
+      page.getByRole("heading", { name: "Asset and liability committee" }),
+    ).toBeVisible();
+    await expect(page.getByText(/^Version \d+\.\d+\.\d+$/)).toBeVisible();
+    await expect(page.locator('input[type="date"]').first()).toHaveValue(asOf);
+
+    // Two widgets whose queries the marts can answer, by their authored titles.
+    for (const widget of ["Balance sheet mix", "Deposit mix"]) {
+      await expect(
+        page.getByText(widget, { exact: true }).first(),
+        `${widget} must be drawn for a reader refused nothing`,
+      ).toBeVisible();
+    }
+    // A figure the platform has not published yet says so, and shows no number:
+    // `loans_to_deposits` is a `pending_capability` tile on this pack.
+    await expect(page.getByText("Loans to deposits", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(
+        /The platform does not publish this figure as a measure yet/,
+      ).first(),
+    ).toBeVisible();
+
+    // This reader is refused nothing, so the pack-level refusal notice is absent.
+    await expect(
+      page.getByText(/Your access does not cover/),
+    ).toHaveCount(0);
+  });
+
+  test("the governed export is the control on a figure's own frame", async ({
+    page,
+  }) => {
+    await page.goto("/dashboards/alco");
+    const mix = page
+      .locator("section.card, div.card")
+      .filter({ has: page.getByText("Deposit mix", { exact: true }) })
+      .first();
+    await expect(mix).toBeVisible();
+
+    // A governed export is an export of ONE ANSWER, so the control belongs to
+    // the widget and carries the widget's own question. Every artifact in it goes
+    // through `POST …/bi/export`, which authorizes, audits and watermarks.
+    await mix.getByRole("button", { name: /Export/ }).first().click();
+    const menu = page.getByRole("menu").first();
+    // Matched on the START of each item's accessible name, because the name folds
+    // in the description: a bare "PDF" would match the print item too, which is
+    // exactly the ambiguity the governed item is named "Watermarked PDF" to avoid.
+    for (const item of [
+      /^Comma-separated values\b/,
+      /^Excel workbook\b/,
+      /^Watermarked PDF\b/,
+      /^Print or save as PDF\b/,
+    ]) {
+      await expect(menu.getByRole("menuitem", { name: item })).toBeVisible();
+    }
+  });
+});
+
+test.describe("a pack whose every figure this reader is refused", () => {
+  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+
+  test("says so, names none of them, and accounts for the tiles still on screen", async ({
+    page,
+  }) => {
+    // `credit` is the sharpest case: every one of its five query-bearing widgets
+    // reads the loan book, so a Liquidity-only reader is refused all of them and
+    // the server answers `access: "restricted"`. Four tiles remain — two embedded
+    // platform surfaces, a dataset the bank has not supplied and a breakdown the
+    // marts cannot yet make — so a sentence that stopped at "none of them are
+    // shown" would contradict the screen. Both sentences are asserted.
+    await page.goto("/dashboards/credit");
+    await expect(
+      page.getByRole("heading", { name: "Credit and collections" }),
     ).toBeVisible();
     await expect(
       page.getByText(
-        /Nothing has been published to this institution and you have not saved a view of your own\./,
+        "Your access does not cover any of the figures this dashboard reads, so none of them are shown. An organization owner can grant them.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "The views still shown read no figure of their own: they open another part of the platform, or name what is outstanding.",
       ),
     ).toBeVisible();
 
-    // The empty state is not a dead end: it names where a view starts.
-    await page.getByRole("link", { name: /Open Explore/ }).click();
-    await expect(page).toHaveURL(/\/explore$/);
+    // The refusals are drawn, with the sentence that names nothing.
+    const locked = page.getByText("Access restricted", { exact: true });
+    expect(await locked.count()).toBeGreaterThan(0);
 
-    // And a pack id the API serves is NOT openable through the page, which is
-    // the unbound half stated as a fact rather than left ambiguous.
+    // And the tiles that are NOT refusals are all there, which is what the second
+    // sentence accounts for. All three kinds appear on this one screen.
     //
-    // The refusal is decided by `notFound()` inside a client component, after
-    // the shell has been flushed, so the DOCUMENT is a 200 carrying the
-    // not-found boundary — measured, not assumed. The product-visible fact is
-    // the copy and the absence of the pack, so those are what is asserted.
-    await page.goto("/dashboards/alco");
+    // An EMBEDDED SURFACE: named, with the door to the part of the platform it
+    // shows. Nothing is fetched for it here, so nothing can be disclosed by it —
+    // whoever follows the link is authorized when they arrive.
     await expect(
-      page.getByText(/404|not found|could not be found/i).first(),
+      page.getByText("Roll rates", { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByText("Asset and liability committee"),
+      page.getByRole("link", { name: /Open delinquency and migration/ }).first(),
+    ).toBeVisible();
+
+    // A DATASET THE BANK HAS NOT SUPPLIED: the view is named in its author's
+    // words, and so is the dataset that turns it on. Not a zero and not a blank.
+    await expect(
+      page.getByText("Disbursements against target", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Needs data: Performance targets", { exact: true }),
+    ).toBeVisible();
+
+    // PLATFORM WORK OUTSTANDING, stated as platform work and never as "needs
+    // data": this bank pushes its loan book every night, and telling it to supply
+    // something it already supplies would be a false statement about its own book.
+    await expect(
+      page.getByText("Relationship officer league table", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        /The analytics tables do not carry the field this view groups by yet/,
+      ),
+    ).toBeVisible();
+
+    // The refused `Disbursements` widget's own title, as an exact text node, is
+    // absent — which the substring scan below cannot decide because the granted
+    // `Disbursements against target` contains it.
+    await expect(
+      page.getByText("Disbursements", { exact: true }),
+      "the refused Disbursements widget must not be named",
     ).toHaveCount(0);
+
+    // THE DISCLOSURE PROPERTY, on the rendered document rather than the payload:
+    // not one of the refused widgets' titles, captions or members is anywhere on
+    // screen or in the markup.
+    const document = (await page.locator("body").innerText()).replace(
+      /\s+/g,
+      " ",
+    );
+    const markup = await page.content();
+    for (const withheld of WITHHELD_CREDIT_STRINGS) {
+      expect(
+        document.includes(withheld),
+        `a refused widget must not name "${withheld}" on screen`,
+      ).toBe(false);
+      expect(
+        markup.includes(withheld),
+        `a refused widget must not name "${withheld}" in the markup`,
+      ).toBe(false);
+    }
   });
 });
