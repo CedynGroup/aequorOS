@@ -53,6 +53,9 @@ function DashboardWidget({
       onExplain={
         onExplain ? (measureId) => onExplain(measureId, query) : undefined
       }
+      // The query AS SUBMITTED, so a drill-through carries the page's date and
+      // filters and not just the widget as authored.
+      query={query}
     />
   );
 }

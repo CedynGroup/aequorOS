@@ -103,6 +103,7 @@ import {
   regulatoryReportingApi,
   temenosApi,
 } from "./client";
+import { utcDay } from "./biKeys";
 import { ingestionApi } from "./ingestion";
 import {
   getForwardGrid,
@@ -600,6 +601,19 @@ export type CreditLoanFilters = {
   grade?: string;
   product?: string;
   branch?: string;
+  /** The institution's own stated sector — matched exactly, never a prefix. */
+  sector?: string;
+  /** 1, 2 or 3. The server refuses anything else rather than dropping it. */
+  stage?: number;
+  /** A band code from the platform's own days-past-due vocabulary. */
+  dpdBand?: string;
+  /**
+   * The reporting date to read the book AS OF. The server matches it exactly
+   * and refuses a date it has computed no position for — a drill-through that
+   * silently fell back to the latest book would answer one date's figure with
+   * another date's rows.
+   */
+  asOf?: string;
   q?: string;
 };
 
@@ -616,6 +630,10 @@ export function useCreditLoansPage(
       filters.grade ?? null,
       filters.product ?? null,
       filters.branch ?? null,
+      filters.sector ?? null,
+      filters.stage ?? null,
+      filters.dpdBand ?? null,
+      filters.asOf ?? null,
       filters.q ?? null,
     ],
     queryFn: () =>
@@ -627,6 +645,10 @@ export function useCreditLoansPage(
           grade: filters.grade,
           product: filters.product,
           branch: filters.branch,
+          sector: filters.sector,
+          stage: filters.stage,
+          dpdBand: filters.dpdBand,
+          asOf: filters.asOf ? utcDay(filters.asOf) : undefined,
           q: filters.q,
         }),
       ),
@@ -1976,6 +1998,12 @@ export type CanonicalPositionsPageParams = {
   offset: number;
   positionType?: string;
   currency?: string;
+  /**
+   * Keep only positions whose current snapshot carries this business date. The
+   * endpoint matches it exactly with no fallback, so a drill-through from a
+   * figure measured on one date cannot land on another date's book.
+   */
+  asOf?: string;
   q?: string;
 };
 
@@ -1987,7 +2015,14 @@ export type CanonicalPositionsPageParams = {
  */
 export function useCanonicalPositionsPage(
   bankId: string | undefined,
-  { limit, offset, positionType, currency, q }: CanonicalPositionsPageParams,
+  {
+    limit,
+    offset,
+    positionType,
+    currency,
+    asOf,
+    q,
+  }: CanonicalPositionsPageParams,
 ) {
   return useQuery({
     queryKey: [
@@ -1997,6 +2032,7 @@ export function useCanonicalPositionsPage(
       offset,
       positionType ?? null,
       currency ?? null,
+      asOf ?? null,
       q ?? null,
     ],
     queryFn: () =>
@@ -2005,6 +2041,7 @@ export function useCanonicalPositionsPage(
           bankId: bankId!,
           limit,
           offset,
+          asOfDate: asOf ? utcDay(asOf) : undefined,
           positionType: positionType || undefined,
           currency: currency || undefined,
           q: q || undefined,

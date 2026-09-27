@@ -22,16 +22,18 @@
 
 import { useMemo, type ReactNode } from "react";
 import { Info } from "lucide-react";
-import type { BiQueryResult } from "@aequoros/risk-service-api";
+import type { BiQuery, BiQueryResult } from "@aequoros/risk-service-api";
 import ChartFrame from "@/components/ui/ChartFrame";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import KpiStat from "@/components/ui/KpiStat";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import DrillAction from "./DrillAction";
 import EChart, { type BiEChartsOption } from "./EChart";
 import NeedsDataWidget from "./NeedsDataWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
 import { isBiAccessDenied } from "@/lib/api/bi";
+import { drillDestinations } from "./drill";
 import {
   formatCell,
   cellNumber,
@@ -104,14 +106,39 @@ function chartOption(
   } as BiEChartsOption;
 }
 
-function tableColumns(result: BiQueryResult): Column<RowShape>[] {
-  return result.columns.map((column, index) => ({
+function tableColumns(
+  result: BiQueryResult,
+  query: BiQuery | undefined,
+): Column<RowShape>[] {
+  const columns: Column<RowShape>[] = result.columns.map((column, index) => ({
     key: `${column.id}:${index}`,
     header: column.label,
     align: column.kind === "measure" ? "right" : "left",
     numeric: column.kind === "measure",
     render: (row: RowShape) => formatCell(row.cells[index], column.format),
   }));
+  if (!query) return columns;
+  // The drill column exists only when at least one row can be carried into a
+  // destination exactly. An always-present column of blanks would read as a
+  // broken action rather than as an answer this table cannot give.
+  const carryable = result.rows.some(
+    (row) => drillDestinations(result, row, query).length > 0,
+  );
+  if (!carryable) return columns;
+  return [
+    ...columns,
+    {
+      key: "drill",
+      header: "Rows behind",
+      align: "right",
+      render: (row: RowShape) => (
+        <DrillAction
+          destinations={drillDestinations(result, row.cells, query)}
+          rowLabel={row.label}
+        />
+      ),
+    },
+  ];
 }
 
 export default function WidgetRenderer({
@@ -122,6 +149,7 @@ export default function WidgetRenderer({
   onRetry,
   onExplain,
   actions,
+  query,
 }: {
   spec: BiWidgetSpec;
   result: BiQueryResult | null | undefined;
@@ -132,6 +160,15 @@ export default function WidgetRenderer({
   onExplain?: (measureId: string) => void;
   /** Extra controls for the frame's action slot, such as an export menu. */
   actions?: ReactNode;
+  /**
+   * The query this answer came from, AS SUBMITTED — the widget's own narrowing
+   * merged with the page's date and filter bar. Drill-through needs it and
+   * `spec.query` will not do: that is the widget as authored, so a drill built
+   * from it would carry neither the reader's chosen date nor the filters they
+   * narrowed by, and would land on a wider book than the figure they clicked.
+   * Omitted, no drill action is offered at all.
+   */
+  query?: BiQuery;
 }) {
   const height = widgetBodyHeight(spec.layout.h);
 
@@ -242,7 +279,7 @@ export default function WidgetRenderer({
           <div className="flex shrink-0 items-center gap-2">{frameActions}</div>
         </div>
         <DataTable<RowShape>
-          columns={tableColumns(result)}
+          columns={tableColumns(result, query)}
           rows={result.rows.map((row) => ({
             label: rowLabel(result, row),
             cells: row,

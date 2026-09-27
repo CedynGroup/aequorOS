@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Positions blotter — the canonical position book behind every module
@@ -8,38 +8,45 @@
  * the whole book. Page, size, and filters sync to the URL for deep links.
  * Balances stay in their position currency (no cross-currency aggregation is
  * invented).
+ *
+ * It is also a drill-through destination. `?ref=` names ONE account reference:
+ * the blotter narrows to it and opens that row's lineage drawer, so a reader who
+ * followed a figure here sees where the record came from. `?as_of=` pins the
+ * business date — the endpoint matches it exactly, with no fallback, so a figure
+ * measured on one date is never explained with another date's book.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Layers, Search } from 'lucide-react';
-import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import StatusPill from '@/components/ui/StatusPill';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+import PageContainer from "@/components/ui/PageContainer";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight, Layers, Search } from "lucide-react";
+import type { CanonicalPositionRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import StatusPill from "@/components/ui/StatusPill";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCanonicalPositionFacets,
   useCanonicalPositionsPage,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, labelize } from '@/lib/api/values';
-import { fmtInt } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { utcDay } from "@/lib/api/biKeys";
+import { fmtDateUTC, labelize } from "@/lib/api/values";
+import { fmtInt } from "@/lib/format";
 import PositionDrawer, {
   fmtBalance,
   fmtRate,
   validationTone,
-} from '@/components/positions/PositionDrawer';
+} from "@/components/positions/PositionDrawer";
 
 const PAGE_SIZES = [100, 250, 500] as const;
 const DEFAULT_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 300;
-const ALL = 'all';
+const ALL = "all";
 
 /** Clamp a ?limit= value to the supported page sizes. */
 function parseLimit(raw: string | null): number {
@@ -71,16 +78,21 @@ function PositionsBlotter() {
   const searchParams = useSearchParams();
 
   // URL is the source of truth for filters + paging (deep-linkable views).
-  const typeFilter = searchParams.get('type') ?? ALL;
-  const currencyFilter = searchParams.get('ccy') ?? ALL;
-  const q = searchParams.get('q') ?? '';
-  const limit = parseLimit(searchParams.get('limit'));
-  const offset = parseOffset(searchParams.get('offset'));
+  const typeFilter = searchParams.get("type") ?? ALL;
+  const currencyFilter = searchParams.get("ccy") ?? ALL;
+  const asOf = searchParams.get("as_of") ?? "";
+  // One exact account reference, from a drill-through. It narrows the blotter
+  // AND selects the row, so the reader lands on the record itself.
+  const refParam = searchParams.get("ref") ?? "";
+  const q = searchParams.get("q") ?? "";
+  const reference = q || refParam;
+  const limit = parseLimit(searchParams.get("limit"));
+  const offset = parseOffset(searchParams.get("offset"));
 
   const setParams = (updates: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
-      if (value === null || value === '') next.delete(key);
+      if (value === null || value === "") next.delete(key);
       else next.set(key, value);
     }
     const qs = next.toString();
@@ -89,21 +101,23 @@ function PositionsBlotter() {
 
   // Search box: local echo of ?q= with a 300ms debounce before it hits the
   // server (every keystroke would otherwise be a filtered COUNT + page read).
-  const [search, setSearch] = useState(q);
+  const [search, setSearch] = useState(reference);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => setSearch(q), [q]);
+  useEffect(() => setSearch(reference), [reference]);
   const onSearchChange = (value: string) => {
     setSearch(value);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
-      setParams({ q: value.trim() || null, offset: null });
+      // Editing the search abandons the drilled-to record: `ref` names one row
+      // and must not keep re-selecting it under a different search.
+      setParams({ q: value.trim() || null, ref: null, offset: null });
     }, SEARCH_DEBOUNCE_MS);
   };
   useEffect(
     () => () => {
       if (debounce.current) clearTimeout(debounce.current);
     },
-    []
+    [],
   );
 
   const facets = useCanonicalPositionFacets(bank?.id);
@@ -112,7 +126,8 @@ function PositionsBlotter() {
     offset,
     positionType: typeFilter === ALL ? undefined : typeFilter,
     currency: currencyFilter === ALL ? undefined : currencyFilter,
-    q,
+    asOf: asOf || undefined,
+    q: reference,
   });
 
   const [selected, setSelected] = useState<CanonicalPositionRead | null>(null);
@@ -121,43 +136,73 @@ function PositionsBlotter() {
   const total = page.data?.total ?? 0;
   const bookTotal = facets.data?.total ?? 0;
   const filtersActive =
-    typeFilter !== ALL || currencyFilter !== ALL || q !== '';
+    typeFilter !== ALL ||
+    currencyFilter !== ALL ||
+    reference !== "" ||
+    asOf !== "";
+
+  // A drill-through opens the drawer on the record it named, once. Tracking
+  // which reference has been opened lets the reader close it and keep reading
+  // the blotter instead of fighting an effect that re-opens on every render.
+  const openedReference = useRef<string | null>(null);
+  useEffect(() => {
+    if (!refParam) {
+      openedReference.current = null;
+      return;
+    }
+    if (openedReference.current === refParam) return;
+    const landed = positions.find(
+      (position) => position.sourceReference === refParam,
+    );
+    if (!landed) return;
+    openedReference.current = refParam;
+    setSelected(landed);
+  }, [refParam, positions]);
 
   const columns: Column<CanonicalPositionRead>[] = [
     {
-      key: 'ref',
-      header: 'Reference',
+      key: "ref",
+      header: "Reference",
       render: (p) => (
-        <span className="font-mono text-caption text-navy">{p.sourceReference}</span>
+        <span className="font-mono text-caption text-navy">
+          {p.sourceReference}
+        </span>
       ),
-      width: '18%',
+      width: "18%",
     },
-    { key: 'type', header: 'Type', render: (p) => labelize(p.positionType) },
+    { key: "type", header: "Type", render: (p) => labelize(p.positionType) },
     {
-      key: 'ccy',
-      header: 'Ccy',
-      render: (p) => <span className="font-mono text-caption">{p.currency}</span>,
-      width: '7%',
+      key: "ccy",
+      header: "Ccy",
+      render: (p) => (
+        <span className="font-mono text-caption">{p.currency}</span>
+      ),
+      width: "7%",
     },
     {
-      key: 'balance',
-      header: 'Balance (ccy)',
+      key: "balance",
+      header: "Balance (ccy)",
       numeric: true,
       render: (p) => fmtBalance(p.balance),
     },
-    { key: 'rate', header: 'Rate', numeric: true, render: (p) => fmtRate(p.interestRate) },
     {
-      key: 'maturity',
-      header: 'Maturity',
+      key: "rate",
+      header: "Rate",
+      numeric: true,
+      render: (p) => fmtRate(p.interestRate),
+    },
+    {
+      key: "maturity",
+      header: "Maturity",
       render: (p) => (
         <span className="font-mono text-caption">
-          {p.contractualMaturity ? fmtDateUTC(p.contractualMaturity) : '—'}
+          {p.contractualMaturity ? fmtDateUTC(p.contractualMaturity) : "—"}
         </span>
       ),
     },
     {
-      key: 'source',
-      header: 'Source',
+      key: "source",
+      header: "Source",
       render: (p) => (
         <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate">
           {p.sourceSystem}
@@ -165,9 +210,9 @@ function PositionsBlotter() {
       ),
     },
     {
-      key: 'quality',
-      header: 'Quality',
-      align: 'right',
+      key: "quality",
+      header: "Quality",
+      align: "right",
       render: (p) => (
         <StatusPill tone={validationTone(p.validationStatus)}>
           {p.validationStatus}
@@ -177,9 +222,9 @@ function PositionsBlotter() {
   ];
 
   const selectClass =
-    'px-2.5 py-2 text-caption font-medium bg-surface-raised border border-border rounded-md text-navy';
+    "px-2.5 py-2 text-caption font-medium bg-surface-raised border border-border rounded-md text-navy";
   const pagerButtonClass =
-    'inline-flex items-center gap-1 px-2.5 py-1.5 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40 disabled:pointer-events-none';
+    "inline-flex items-center gap-1 px-2.5 py-1.5 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40 disabled:pointer-events-none";
 
   const windowStart = total === 0 ? 0 : offset + 1;
   const windowEnd = Math.min(offset + positions.length, total);
@@ -189,9 +234,7 @@ function PositionsBlotter() {
       <PageHeader
         eyebrow="Positions"
         title="Positions"
-        asOf={
-          page.data?.asOfDate ? fmtDateUTC(page.data.asOfDate) : undefined
-        }
+        asOf={page.data?.asOfDate ? fmtDateUTC(page.data.asOfDate) : undefined}
       />
 
       <QueryBoundary
@@ -232,7 +275,7 @@ function PositionsBlotter() {
                   hint={facets.data?.positionTypes
                     .slice(0, 3)
                     .map((facet) => labelize(facet.value))
-                    .join(' · ')}
+                    .join(" · ")}
                 />
                 <KpiStat
                   label="Currencies"
@@ -240,12 +283,14 @@ function PositionsBlotter() {
                   hint={facets.data?.currencies
                     .slice(0, 3)
                     .map((facet) => facet.value)
-                    .join(' · ')}
+                    .join(" · ")}
                 />
                 <KpiStat
                   label="Matching filters"
                   value={fmtInt(total)}
-                  hint={filtersActive ? 'server-filtered' : 'no filters applied'}
+                  hint={
+                    filtersActive ? "server-filtered" : "no filters applied"
+                  }
                 />
               </div>
 
@@ -271,7 +316,8 @@ function PositionsBlotter() {
                   value={typeFilter}
                   onChange={(event) =>
                     setParams({
-                      type: event.target.value === ALL ? null : event.target.value,
+                      type:
+                        event.target.value === ALL ? null : event.target.value,
                       offset: null,
                     })
                   }
@@ -289,7 +335,8 @@ function PositionsBlotter() {
                   value={currencyFilter}
                   onChange={(event) =>
                     setParams({
-                      ccy: event.target.value === ALL ? null : event.target.value,
+                      ccy:
+                        event.target.value === ALL ? null : event.target.value,
                       offset: null,
                     })
                   }
@@ -303,11 +350,30 @@ function PositionsBlotter() {
                     </option>
                   ))}
                 </select>
+                {asOf && (
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-2 text-caption font-medium text-slate">
+                    As of {fmtDateUTC(utcDay(asOf))}
+                    <button
+                      type="button"
+                      onClick={() => setParams({ as_of: null, offset: null })}
+                      className="text-action hover:underline"
+                    >
+                      Current book
+                    </button>
+                  </span>
+                )}
                 {filtersActive && (
                   <button
                     type="button"
                     onClick={() =>
-                      setParams({ type: null, ccy: null, q: null, offset: null })
+                      setParams({
+                        type: null,
+                        ccy: null,
+                        q: null,
+                        ref: null,
+                        as_of: null,
+                        offset: null,
+                      })
                     }
                     className="text-caption font-medium text-action hover:underline"
                   >
@@ -325,13 +391,19 @@ function PositionsBlotter() {
                 <EmptyState
                   Icon={Layers}
                   title="No positions match the filters"
-                  description="Clear the search or widen the type/currency filters."
+                  description={
+                    asOf
+                      ? `No position carries this reference or these filters in the book as of ${fmtDateUTC(
+                          utcDay(asOf),
+                        )}. Clear the date to read the current book.`
+                      : "Clear the search or widen the type/currency filters."
+                  }
                 />
               ) : (
                 <>
                   <div
                     className={`card overflow-hidden transition-opacity ${
-                      page.isPlaceholderData ? 'opacity-50' : ''
+                      page.isPlaceholderData ? "opacity-50" : ""
                     }`}
                     aria-busy={page.isPlaceholderData}
                   >
@@ -348,7 +420,7 @@ function PositionsBlotter() {
                   {/* Pagination footer */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-caption text-slate">
-                      Showing {fmtInt(windowStart)}–{fmtInt(windowEnd)} of{' '}
+                      Showing {fmtInt(windowStart)}–{fmtInt(windowEnd)} of{" "}
                       {fmtInt(total)} positions
                     </p>
                     <div className="flex items-center gap-2">
@@ -380,7 +452,9 @@ function PositionsBlotter() {
                         onClick={() =>
                           setParams({
                             offset:
-                              offset - limit > 0 ? String(offset - limit) : null,
+                              offset - limit > 0
+                                ? String(offset - limit)
+                                : null,
                           })
                         }
                         disabled={offset === 0 || page.isPlaceholderData}
@@ -391,7 +465,9 @@ function PositionsBlotter() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setParams({ offset: String(offset + limit) })}
+                        onClick={() =>
+                          setParams({ offset: String(offset + limit) })
+                        }
                         disabled={
                           offset + limit >= total || page.isPlaceholderData
                         }
