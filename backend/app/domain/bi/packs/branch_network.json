@@ -1,0 +1,99 @@
+{
+  "id": "branch_network",
+  "title": "Branch network",
+  "description": "How the network is performing outlet by outlet and region by region, and what the book needs to carry before each view can be drawn.",
+  "audience": "branch_network",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "branch_league_table",
+      "kind": "table",
+      "title": "Branch league table",
+      "caption": "Book size, arrears and account count by branch. Branches appear once the loan book carries a branch identifier.",
+      "query": {
+        "measures": [
+          "loans.balance_rc",
+          "loans.npl_ratio_pct",
+          "loans.count"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "branch.name"
+        ],
+        "sort": [
+          {
+            "member": "loans.balance_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      },
+      "needs_data": "positions"
+    },
+    {
+      "id": "book_by_region",
+      "kind": "bar",
+      "title": "Book by region",
+      "caption": "Balances by region. Regions are declared in the bank's business unit register and are never inferred.",
+      "query": {
+        "measures": [
+          "loans.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "branch.region"
+        ]
+      },
+      "display": {
+        "series_dimension": "branch.region"
+      },
+      "needs_data": "business_units"
+    },
+    {
+      "id": "branch_contribution",
+      "kind": "bar",
+      "title": "Branch contribution",
+      "caption": "Funds transfer priced contribution by branch. The published contribution figure is institution-wide and cannot yet be split by branch.",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "branches_against_target",
+      "kind": "table",
+      "title": "Branches against target",
+      "caption": "Branch performance against the bank's own plan. Supply the performance targets dataset to turn it on.",
+      "needs_data": "performance_targets"
+    }
+  ],
+  "layout": [
+    {
+      "i": "branch_league_table",
+      "x": 0,
+      "y": 0,
+      "w": 12,
+      "h": 6
+    },
+    {
+      "i": "book_by_region",
+      "x": 0,
+      "y": 6,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "branch_contribution",
+      "x": 6,
+      "y": 6,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "branches_against_target",
+      "x": 0,
+      "y": 11,
+      "w": 12,
+      "h": 5
+    }
+  ]
+}

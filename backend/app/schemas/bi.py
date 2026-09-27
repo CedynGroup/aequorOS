@@ -15,7 +15,8 @@ and the generated client cannot map those back (AGENTS.md, openapi hazard).
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -188,6 +189,363 @@ class BiQuery(BiClosedModel):
     pivot: BiPivot | None = None
     #: Emit a rollup over the dimension order with a ``__level`` marker column.
     subtotals: bool = False
+
+
+# --- dashboard packs -------------------------------------------------------------------
+
+#: Bounds on a pack, so a certified dashboard cannot be pathological and a
+#: layout cannot describe a canvas no client will render.
+BI_PACK_MAX_WIDGETS = 24
+BI_PACK_GRID_COLUMNS = 12
+BI_PACK_MAX_ROWS = 64
+
+#: Who a certified pack is written for. One pack per audience.
+BiPackAudience = Literal[
+    "board",
+    "alco",
+    "cro",
+    "credit",
+    "branch_network",
+    "finance",
+    "compliance",
+]
+
+#: How a widget draws what it reads. ``panel`` is the kind of a widget that
+#: embeds an existing platform surface rather than a query of its own.
+BiWidgetKind = Literal[
+    "kpi",
+    "kpi_row",
+    "line",
+    "bar",
+    "stacked_bar",
+    "area",
+    "donut",
+    "waterfall",
+    "table",
+    "record_grid",
+    "heatmap",
+    "panel",
+]
+
+#: Platform surfaces a pack may EMBED. Closed on purpose: each key resolves
+#: server-side to a surface that already carries its own authorization
+#: sentence, so a pack can reference one without being able to express a
+#: query, a route, a parameter or a column. Adding a key is a decision about
+#: what a certified dashboard may show, taken here rather than in a pack file.
+BiPanelKey = Literal[
+    "credit_migration",
+    "credit_vintages",
+    "return_calendar",
+    "attestation_status",
+    "reconciliation_trust",
+    "ingestion_quality",
+]
+
+#: The reporting window a pack widget asks for, RELATIVE to the bank's own
+#: reporting date. A pack carries no date: a date is a parameter, and a
+#: certified dashboard that pinned one would show a stale book forever.
+#: :meth:`BiPackQuery.for_period` turns one of these into a ``BiTime``.
+BiPackWindow = Literal[
+    "as_of",
+    "month_to_date",
+    "quarter_to_date",
+    "year_to_date",
+    "trailing_3_months",
+    "trailing_6_months",
+    "trailing_12_months",
+    "trailing_24_months",
+]
+
+#: Which earlier period a widget compares against, as an offset from the
+#: window it already names.
+BiPackComparison = Literal["none", "prior_month", "prior_quarter", "prior_year"]
+
+#: Why a pack widget carries no query and no panel yet, when the gap is the
+#: PLATFORM's rather than a dataset the bank has not supplied:
+#:
+#: * ``catalogue_member`` — the figure needs a measure or dimension the
+#:   catalogue does not define, so no honest query can be written for it;
+#: * ``governed_limit`` — the value is readable but its limit is governed
+#:   elsewhere and is not resolved for display, and a limit line nobody
+#:   governs would be a number the platform invented;
+#: * ``mart_field`` — the marts carry no attribute to slice the figure by.
+#:
+#: It is a separate field from ``needs_data`` because the two say different
+#: things to a bank. "Needs data: positions" on the dashboard of a bank that
+#: pushes positions every night is a false statement about that bank's book.
+BiPendingCapability = Literal["catalogue_member", "governed_limit", "mart_field"]
+
+#: How many months each relative window spans, and how far back each
+#: comparison steps. A comparison may never be SHORTER than the window it
+#: compares, or the prior period would overlap the current one.
+_PACK_WINDOW_MONTHS: dict[str, int] = {
+    "as_of": 0,
+    "month_to_date": 1,
+    "quarter_to_date": 3,
+    "year_to_date": 12,
+    "trailing_3_months": 3,
+    "trailing_6_months": 6,
+    "trailing_12_months": 12,
+    "trailing_24_months": 24,
+}
+_PACK_TRAILING_MONTHS: dict[str, int] = {
+    "trailing_3_months": 3,
+    "trailing_6_months": 6,
+    "trailing_12_months": 12,
+    "trailing_24_months": 24,
+}
+_PACK_COMPARISON_MONTHS: dict[str, int] = {
+    "prior_month": 1,
+    "prior_quarter": 3,
+    "prior_year": 12,
+}
+
+
+def _shift_months(anchor: date, months: int) -> date:
+    """``anchor`` moved by whole months, on the end-of-month convention.
+
+    A month end maps to a month end: the quarter before 30 June is 31 March,
+    not 30 March. Reporting dates are overwhelmingly period ends, and a
+    comparison that landed a day short of one would ask the book for a date it
+    has no snapshot at and quietly render the prior column as no value. Any
+    other day keeps its number, clamped to the target month's length.
+    """
+    total = anchor.year * 12 + anchor.month - 1 + months
+    year, month = divmod(total, 12)
+    month += 1
+    last = monthrange(year, month)[1]
+    if anchor.day == monthrange(anchor.year, anchor.month)[1]:
+        return date(year, month, last)
+    return date(year, month, min(anchor.day, last))
+
+
+class BiPackQuery(BiClosedModel):
+    """A ``BiQuery`` with its reporting window left to the reader.
+
+    Every field of ``BiQuery`` except ``time`` is restated here, and
+    ``tests/domain/bi/test_packs.py`` pins that parity so a new query field
+    cannot land on one and not the other. ``time`` is replaced by ``window``
+    and ``compare``, both closed vocabularies: a pack therefore cannot name a
+    date, which is the one parameter a certified dashboard must take from the
+    bank it is being shown for rather than from the file it shipped in.
+    """
+
+    measures: list[BiMemberId] = Field(min_length=1, max_length=BI_MAX_MEASURES)
+    dimensions: list[BiMemberId] = Field(default_factory=list, max_length=BI_MAX_DIMENSIONS)
+    filters: list[BiFilter] = Field(default_factory=list, max_length=BI_MAX_FILTERS)
+    window: BiPackWindow
+    compare: BiPackComparison = "none"
+    top_n: BiTopN | None = None
+    sort: list[BiSort] = Field(default_factory=list, max_length=BI_MAX_SORTS)
+    limit: int | None = Field(default=None, ge=1)
+    offset: int = Field(default=0, ge=0)
+    pivot: BiPivot | None = None
+    subtotals: bool = False
+
+    @model_validator(mode="after")
+    def _comparison_does_not_overlap_the_window(self) -> BiPackQuery:
+        if self.compare == "none":
+            return self
+        if _PACK_COMPARISON_MONTHS[self.compare] < _PACK_WINDOW_MONTHS[self.window]:
+            raise ValueError(
+                f"{self.compare} steps back less than {self.window} spans, so the prior "
+                "period would overlap the current one"
+            )
+        return self
+
+    def for_period(self, as_of: date) -> BiQuery:
+        """This query as the compiler takes it, read at the bank's ``as_of``."""
+        compare_to = (
+            None
+            if self.compare == "none"
+            else _shift_months(as_of, -_PACK_COMPARISON_MONTHS[self.compare])
+        )
+        if self.window == "as_of":
+            time = BiTime(as_of=as_of, compare_to=compare_to)
+        else:
+            time = BiTime(
+                range=BiDateRange(start=self._window_start(as_of), end=as_of),
+                compare_to=compare_to,
+            )
+        return BiQuery(
+            measures=list(self.measures),
+            dimensions=list(self.dimensions),
+            filters=list(self.filters),
+            time=time,
+            top_n=self.top_n,
+            sort=list(self.sort),
+            limit=self.limit,
+            offset=self.offset,
+            pivot=self.pivot,
+            subtotals=self.subtotals,
+        )
+
+    def _window_start(self, as_of: date) -> date:
+        if self.window == "month_to_date":
+            return as_of.replace(day=1)
+        if self.window == "quarter_to_date":
+            return date(as_of.year, 3 * ((as_of.month - 1) // 3) + 1, 1)
+        if self.window == "year_to_date":
+            return date(as_of.year, 1, 1)
+        months = _PACK_TRAILING_MONTHS[self.window]
+        return _shift_months(as_of, -months) + timedelta(days=1)
+
+
+class BiWidgetDisplay(BiClosedModel):
+    """Presentation only.
+
+    No threshold, no target, no currency and no axis maximum: a number a pack
+    carried would be a number nobody governs, shown beside figures that are
+    governed. A limit resolves at read time from the measure's own
+    ``thresholds_source`` register CODE, for the tenant being served.
+    """
+
+    show_trend: bool = False
+    show_comparison: bool = False
+    stacked: bool = False
+    show_limit: bool = False
+    #: Which of the query's own dimensions becomes the series (or slice) axis.
+    series_dimension: BiMemberId | None = None
+    #: Decimal places for the values shown. A rounding, not a governed figure.
+    precision: int = Field(default=0, ge=0, le=6)
+
+
+class BiLayoutItem(BiClosedModel):
+    """One widget's place on the react-grid-layout canvas."""
+
+    #: The widget id this item positions (react-grid-layout's own field name).
+    i: str = Field(min_length=1, max_length=64)
+    x: int = Field(ge=0, lt=BI_PACK_GRID_COLUMNS)
+    y: int = Field(ge=0, le=BI_PACK_MAX_ROWS)
+    w: int = Field(ge=1, le=BI_PACK_GRID_COLUMNS)
+    h: int = Field(ge=1, le=BI_PACK_MAX_ROWS)
+    min_w: int | None = Field(default=None, ge=1, le=BI_PACK_GRID_COLUMNS)
+    min_h: int | None = Field(default=None, ge=1, le=BI_PACK_MAX_ROWS)
+    static: bool = False
+
+    @model_validator(mode="after")
+    def _fits_the_canvas(self) -> BiLayoutItem:
+        if self.x + self.w > BI_PACK_GRID_COLUMNS:
+            raise ValueError(f"{self.i} runs past column {BI_PACK_GRID_COLUMNS}")
+        if self.y + self.h > BI_PACK_MAX_ROWS:
+            raise ValueError(f"{self.i} runs past row {BI_PACK_MAX_ROWS}")
+        if self.min_w is not None and self.min_w > self.w:
+            raise ValueError(f"{self.i} is narrower than its own minimum width")
+        if self.min_h is not None and self.min_h > self.h:
+            raise ValueError(f"{self.i} is shorter than its own minimum height")
+        return self
+
+
+class BiPackWidget(BiClosedModel):
+    """One tile of a certified pack.
+
+    A widget reads through exactly one of two doors, or through neither:
+
+    * ``query`` — a closed ``BiPackQuery`` of catalogue members;
+    * ``panel`` — a closed key naming a platform surface that already carries
+      its own authorization sentence;
+    * neither, when the figure cannot honestly be produced yet. Such a widget
+      still SHIPS, and names what it is waiting for in ``needs_data`` (a
+      dataset the bank has not supplied) or ``pending_capability`` (platform
+      work), or both. It renders as a named gap and never as a zero.
+
+    ``needs_data`` is also carried by widgets that DO have a query but whose
+    figure degrades to "—" when a dataset is absent: days past due is the
+    worked example, where a missing column would otherwise read as a clean
+    book. It is a dataset KEY, never prose — the human label and the Data
+    Engine template link belong to the client, which is also what keeps the
+    file free of jurisdiction-specific wording.
+    """
+
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    kind: BiWidgetKind
+    title: str = Field(min_length=1, max_length=120)
+    caption: str = Field(default="", max_length=280)
+    query: BiPackQuery | None = None
+    panel: BiPanelKey | None = None
+    display: BiWidgetDisplay = Field(default_factory=BiWidgetDisplay)
+    needs_data: str | None = Field(default=None, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    pending_capability: BiPendingCapability | None = None
+
+    @model_validator(mode="after")
+    def _reads_through_one_door(self) -> BiPackWidget:
+        if self.query is not None and self.panel is not None:
+            raise ValueError(f"{self.id} names both a query and a panel; it may name one")
+        if (
+            self.query is None
+            and self.panel is None
+            and self.needs_data is None
+            and self.pending_capability is None
+        ):
+            raise ValueError(
+                f"{self.id} has no query and no panel, so it must name what it is "
+                "waiting for in needs_data or pending_capability"
+            )
+        if self.panel is not None:
+            if self.kind != "panel":
+                raise ValueError(f"{self.id} embeds a panel, so its kind must be panel")
+            if self.needs_data is not None or self.pending_capability is not None:
+                raise ValueError(f"{self.id} embeds a panel, which carries its own empty state")
+            if self.display.series_dimension is not None:
+                raise ValueError(f"{self.id} embeds a panel and cannot name a series dimension")
+            if self.display.show_comparison or self.display.show_limit or self.display.stacked:
+                raise ValueError(f"{self.id} embeds a panel and cannot restyle it")
+        elif self.kind == "panel":
+            raise ValueError(f"{self.id} is of kind panel but embeds no panel")
+        if self.display.show_comparison and (self.query is None or self.query.compare == "none"):
+            raise ValueError(f"{self.id} shows a comparison but its query names no prior period")
+        if self.display.show_limit and self.query is None:
+            raise ValueError(f"{self.id} shows a limit but reads no measure to resolve it from")
+        series = self.display.series_dimension
+        if series is not None and (self.query is None or series not in self.query.dimensions):
+            raise ValueError(f"{self.id} draws a series by {series}, which it does not group by")
+        return self
+
+    @property
+    def is_gap(self) -> bool:
+        """Whether this widget renders as a named gap rather than a figure."""
+        return self.query is None and self.panel is None
+
+
+class BiPackSpec(BiClosedModel):
+    """A certified dashboard pack: its widgets and where they sit.
+
+    Saved dashboards use the same shape, so an editable copy of a pack is
+    simply a copy. Nothing here can name a table, a column, a route or a
+    parameter: every model is closed, the only query is a ``BiPackQuery`` of
+    catalogue member ids, and ``panel`` is a closed key.
+    """
+
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=400)
+    audience: BiPackAudience
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
+    widgets: list[BiPackWidget] = Field(min_length=1, max_length=BI_PACK_MAX_WIDGETS)
+    layout: list[BiLayoutItem] = Field(min_length=1, max_length=BI_PACK_MAX_WIDGETS)
+
+    @model_validator(mode="after")
+    def _every_widget_is_positioned_exactly_once(self) -> BiPackSpec:
+        widget_ids = [widget.id for widget in self.widgets]
+        if len(widget_ids) != len(set(widget_ids)):
+            raise ValueError("widget ids must be unique within a pack")
+        positioned = [item.i for item in self.layout]
+        if len(positioned) != len(set(positioned)):
+            raise ValueError("a widget may be positioned only once")
+        if set(positioned) != set(widget_ids):
+            missing = sorted(set(widget_ids) - set(positioned))
+            unknown = sorted(set(positioned) - set(widget_ids))
+            raise ValueError(
+                f"the layout must position every widget and nothing else; "
+                f"unpositioned: {missing}, unknown: {unknown}"
+            )
+        return self
+
+    def widget(self, widget_id: str) -> BiPackWidget:
+        for widget in self.widgets:
+            if widget.id == widget_id:
+                return widget
+        raise KeyError(widget_id)
 
 
 # --- results ---------------------------------------------------------------------------
