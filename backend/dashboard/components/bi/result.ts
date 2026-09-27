@@ -10,18 +10,64 @@
  * plots a gap where there is a gap.
  *
  * Units come from the column's declared `format`, which is the catalogue's own
- * value type. `ratio` is deliberately rendered as the fraction the server sent,
- * unscaled: the catalogue uses that type both for a rate expressed as a
- * fraction and for a concentration index, and multiplying either by a hundred
- * to make it "look like a percentage" would be a display that disagrees with
- * the figure. Percentages arrive already percentage-scaled, as `pct`.
+ * value type, and this module is the ONE place that turns one into text — the
+ * charts, the tables and the self-service grid all call `formatCell`, so they
+ * cannot disagree about a member. The server's exporters
+ * (`app/services/bi/exports/context.py`) apply the same rules to the same value
+ * types, which is what makes a figure on screen citable against the audit twin.
+ *
+ * There is deliberately no catch-all numeric type. The catalogue used to have
+ * one — `ratio` — which served a fractional rate, a concentration index and a
+ * duration in years at once, and left this module no way to be right about all
+ * three: a rate wants x100 and a percent sign, an index and a duration must
+ * never be scaled. `ratio` was retired for `fraction`, `index` and
+ * `duration_years`, so each is now handled on its own terms:
+ *
+ * * `amount` — money in the bank's own reporting currency;
+ * * `pct` — a percentage the engine already multiplied by a hundred
+ *   (`car_pct` arrives as `14.20`);
+ * * `fraction` — a proportion of one, shown multiplied by a hundred with a
+ *   percent sign, so `0.062` reads as `6.20%` here and in the export;
+ * * `index` — dimensionless, on its own scale: never scaled, never given a
+ *   percent sign, and it may be negative;
+ * * `duration_years` — a span of time, named in years;
+ * * `count` — a whole number of things;
+ * * `text` / `date` / `flag` — a dimension's values.
+ *
+ * An unrecognised value type is shown as it arrived rather than coerced: a type
+ * added to the catalogue and forgotten here must read oddly for one release,
+ * never wrongly.
  */
 
 import type { BiQueryResult, BiResultColumn } from "@aequoros/risk-service-api";
-import { fmtCurrency, fmtInt, fmtPct } from "@/lib/format";
+// Relative, not the `@/` alias: this module is compiled and run under node by
+// `pnpm --filter @aequoros/dashboard test`, which cannot resolve the alias.
+import { currencyCode, fmtCurrency, fmtInt, fmtNum, fmtPct } from "../../lib/format";
 
 /** The display for a value the platform did not measure. */
 export const NOT_MEASURED = "—";
+
+/** A `fraction` is a proportion of one; a reader is shown it out of a hundred. */
+const FRACTION_SCALE = 100;
+/** Decimal places an index carries: enough to separate two close portfolios. */
+const INDEX_DECIMALS = 4;
+/** Decimal places a duration in years carries. */
+const DURATION_DECIMALS = 2;
+
+/**
+ * The catalogue value types that are figures — `NUMERIC_VALUE_TYPES` in
+ * `app/domain/bi/catalogue/members.py`, plus `int`, which is not a catalogue
+ * type but the level marker the grid surfaces add.
+ */
+const NUMERIC_FORMATS: readonly string[] = [
+  "amount",
+  "pct",
+  "fraction",
+  "index",
+  "duration_years",
+  "count",
+  "int",
+];
 
 export function dimensionColumns(
   result: Pick<BiQueryResult, "columns">,
@@ -57,9 +103,30 @@ export function formatCell(value: unknown, format: string): string {
   if (parsed === null) return String(value);
   if (format === "amount") return fmtCurrency(parsed);
   if (format === "pct") return fmtPct(parsed);
+  if (format === "fraction") return fmtPct(parsed * FRACTION_SCALE);
+  if (format === "index") return fmtNum(parsed, INDEX_DECIMALS);
+  if (format === "duration_years") {
+    return `${fmtNum(parsed, DURATION_DECIMALS)} years`;
+  }
   if (format === "count" || format === "int") return fmtInt(parsed);
-  if (format === "ratio") return parsed.toFixed(4);
   return String(value);
+}
+
+/**
+ * The unit a column heading states, so a reader does not have to infer it from
+ * the first cell — which may be the one cell that is absent. An amount names the
+ * institution's own currency, resolved from the active jurisdiction.
+ */
+export function columnUnit(format: string): string | null {
+  if (format === "amount") return currencyCode();
+  if (format === "pct" || format === "fraction") return "%";
+  if (format === "duration_years") return "years";
+  return null;
+}
+
+/** True when a column holds figures, so a surface can right-align them. */
+export function isNumericFormat(format: string): boolean {
+  return NUMERIC_FORMATS.includes(format);
 }
 
 /**

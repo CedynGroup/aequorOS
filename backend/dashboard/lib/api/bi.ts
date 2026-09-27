@@ -24,7 +24,8 @@
  * opened anyway.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BiApi,
   FeatureFlagsApi,
@@ -147,6 +148,44 @@ export function useBiGrid(
     enabled: enabled && Boolean(bankId) && request !== null,
     retry: false,
   });
+}
+
+/**
+ * Fetch one grid page on demand, through the same cache identity `useBiGrid`
+ * uses.
+ *
+ * AG Grid's Infinite Row Model asks for a block of rows from a callback, which
+ * is not a place a hook can be called — so paging needs an imperative fetch.
+ * It goes through `QueryClient.fetchQuery` rather than straight to the API so
+ * that a page already in the cache is not asked for twice, and — the reason
+ * this lives here and not in a component — so the key is built by `biGridKey`
+ * like every other BI read. A page fetched under a hand-rolled key would be
+ * cached without the tenant, the actor or the authorization generation in it,
+ * which is exactly the leak `./biKeys` exists to prevent.
+ *
+ * Omitting `endRow` asks the server for one page at ITS cap, which is how the
+ * grid learns the page size instead of choosing one.
+ */
+export function useBiGridPages(
+  bankId: string | undefined,
+): (request: BiPagedQueryRequest) => Promise<BiGridPageRead> {
+  const scope = useQueryAuthorityScope();
+  const client = useQueryClient();
+  return useCallback(
+    (request: BiPagedQueryRequest) =>
+      client.fetchQuery<BiGridPageRead>({
+        queryKey: biGridKey(scope, bankId, request),
+        queryFn: () =>
+          apiCall(() =>
+            biApi.runBiGridQuery({
+              bankId: bankId!,
+              biPagedQueryRequest: request,
+            }),
+          ),
+        retry: false,
+      }),
+    [bankId, client, scope],
+  );
 }
 
 /** The records behind a figure: one capped page at the record grain. */
