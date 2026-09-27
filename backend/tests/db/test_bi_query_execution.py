@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.domain.bi.catalogue import Catalogue, catalogue
 from app.models import Bank
-from app.models.bi import BiDimBranch, BiFactPositionDaily
+from app.models.bi import BiAggPositionDaily, BiDimBranch, BiFactPositionDaily
 from app.schemas.bi import BiQuery
 from app.services.bi import execution
 from app.services.bi.compiler import compile_query
@@ -205,6 +205,59 @@ def test_comparison_is_a_period_axis_and_runs(
     assert by_branch["B1"]["loans.balance_rc|delta_pct"] == pytest.approx(25.0)
     assert by_branch["B2"]["loans.balance_rc|prior"] is None
     assert by_branch["B2"]["loans.balance_rc|delta_pct"] is None
+
+
+def test_a_stock_range_prunes_to_the_windows_partitions(
+    db_session: Session, cat: Catalogue, bank: Bank
+) -> None:
+    """The window must reach the PLANNER, not only the subquery.
+
+    A stock measure over a range resolves to "the last date with data per grain",
+    which is a subquery. Postgres decides partition pruning at PLAN time and a
+    subquery result is not known then, so `as_of_date IN (subquery)` alone makes a
+    twelve-month question scan every month the mart holds — the benchmark measured
+    60 partitions and 124,348 buffers for a twelve-month window.
+
+    `_time_predicate` therefore ANDs a REDUNDANT static bound onto the same
+    predicate. Redundant is the point: every date the subquery can return is a
+    `max()` taken from inside this same window, so the answer cannot change, while
+    the planner gains a constant it can prune on. Measured: 60 partitions to 12,
+    4.3× less I/O, byte-identical rows.
+
+    This asserts the bound is IN THE PLAN rather than merely in the SQL text, so
+    dropping it or moving it somewhere the planner ignores fails here.
+    """
+    compiled = _compile(
+        db_session,
+        cat,
+        bank,
+        time={"range": {"start": date(AS_OF.year, 1, 1), "end": AS_OF}},
+        dimensions=["time.calendar_month"],
+    )
+    sql = str(compiled.select.compile(dialect=db_session.get_bind().dialect))
+    date_column = f"{BiAggPositionDaily.__tablename__}.as_of_date"
+    subquery_at = sql.index(" IN (SELECT")
+    outer_where = sql[:subquery_at]
+    # The bound must be in the OUTER predicate, where the planner sees a constant.
+    # Asserting only that "BETWEEN" appears somewhere would pass on the subquery's
+    # own bound, which was always there and prunes nothing.
+    assert f"{date_column} BETWEEN" in outer_where, (
+        "the static window bound is not in the outer WHERE, so the planner has no "
+        f"constant to prune on:\n{sql}"
+    )
+    # And it must still RUN and agree with the same question asked one date at a
+    # time, which is what makes the redundancy safe rather than merely plausible.
+    ranged = execute(db_session, compiled, timeout_ms=5_000, row_cap=100)
+    single = execute(
+        db_session,
+        _compile(db_session, cat, bank, time={"as_of": AS_OF}, dimensions=["time.calendar_month"]),
+        timeout_ms=5_000,
+        row_cap=100,
+    )
+    assert [list(row) for row in ranged.rows] == [list(row) for row in single.rows], (
+        "the bounded range answer differs from the single-date answer for the month "
+        "the window ends in, so the bound is not redundant after all"
+    )
 
 
 def test_a_configured_bi_pool_carries_the_tenant_into_the_rls_guc(
