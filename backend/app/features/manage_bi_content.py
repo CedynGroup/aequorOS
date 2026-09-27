@@ -1055,8 +1055,8 @@ def list_bi_measures(bank_id: str, db: DbSession, access: BiRead) -> BiMeasureLi
             _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
             for measure in measures
         ],
-        available_in_queries=False,
-        message=content.MEASURES_NOT_QUERYABLE,
+        available_in_queries=True,
+        message=content.MEASURES_QUERYABLE,
     )
 
 

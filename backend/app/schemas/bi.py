@@ -559,6 +559,32 @@ BiResultColumnKind = Literal["dimension", "measure", "marker"]
 BiComparisonRole = Literal["current", "prior", "delta", "delta_pct"]
 BiTrustStatus = Literal["green", "amber", "red", "grey"]
 
+#: How a client renders a result column: the CATALOGUE's value-type vocabulary
+#: (``app/domain/bi/catalogue/members.py::VALUE_TYPES``) plus ``int`` for the
+#: subtotal marker, which is a row level rather than a figure.
+#:
+#: Named as a Literal rather than left as ``str`` (audit A8-11). The untyped
+#: version is why retiring the old catch-all ``ratio`` type broke four consumers
+#: in silence: nothing on the wire said what the vocabulary was, so no format map
+#: could be held to it and every one of them fell through to text (D-189). It is
+#: restated here rather than imported because ``app/schemas`` may not import
+#: ``app.domain.bi`` — the plane boundary deliberately keeps this file in its scan
+#: — and ``tests/services/bi/test_compiler_calculated.py`` asserts the two sides
+#: equal in BOTH directions, the same way ``BiExportFormat`` is held to the
+#: renderers it names.
+BiResultColumnFormat = Literal[
+    "amount",
+    "pct",
+    "fraction",
+    "index",
+    "duration_years",
+    "count",
+    "text",
+    "date",
+    "flag",
+    "int",
+]
+
 
 class BiResultColumn(BiClosedModel):
     """One output column: which member it came from and how to format it."""
@@ -566,9 +592,10 @@ class BiResultColumn(BiClosedModel):
     id: str
     label: str
     kind: BiResultColumnKind
-    #: The catalogue value type (``amount`` / ``pct`` / ``ratio`` / ``count`` /
-    #: ``text`` / ``date`` / ``flag``) or ``int`` for marker columns.
-    format: str
+    #: The catalogue value type the member declared, or ``int`` for the subtotal
+    #: marker column. A ``fraction`` is NOT pre-scaled and a ``pct`` already is
+    #: (D-189), so a renderer must read this rather than guess from the number.
+    format: BiResultColumnFormat
     member_id: str | None = None
     #: Set on comparison columns; ``None`` when the query has no ``compare_to``.
     role: BiComparisonRole | None = None

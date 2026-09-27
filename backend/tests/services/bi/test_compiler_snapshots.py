@@ -13,13 +13,14 @@ Postgres form).
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.dialects import sqlite
@@ -27,10 +28,11 @@ from sqlalchemy.orm import Session
 
 from app.domain.bi.catalogue import Catalogue, catalogue
 from app.models import Bank
-from app.models.bi import BiFactPositionDaily
+from app.models.bi import BiDimDate, BiFactPositionDaily
+from app.models.bi_content import BiMeasure
 from app.schemas.bi import BiFilter, BiQuery
 from app.services.bi.compiler import compile_query
-from tests.api.helpers import ORG_1
+from tests.api.helpers import ORG_1, USER_1
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 AS_OF = date(2026, 9, 18)
@@ -151,6 +153,27 @@ QUERIES: dict[str, tuple[dict[str, Any], list[BiFilter]]] = {
         },
         [],
     ),
+    # A bank-certified calculated measure. No period function, so it is plain
+    # arithmetic over the query's own window: two aggregates and a NULL-safe divide.
+    "calculated_ratio": (
+        {
+            "measures": ["custom.loans_to_deposits"],
+            "dimensions": ["branch.region"],
+            "time": {"as_of": AS_OF},
+        },
+        [],
+    ),
+    # The same measure's period-comparing sibling (D-195): each figure is
+    # aggregated once per period the formula declares, under that period's own
+    # window predicate, in ONE grouped select — the period axis ``compare_to``
+    # already uses, not a join of two grouped results.
+    "calculated_month_on_month": (
+        {
+            "measures": ["loans.balance_rc", "custom.loan_growth"],
+            "time": {"as_of": AS_OF},
+        },
+        [],
+    ),
     "every_operator_with_injected_scope": (
         {
             "measures": ["loans.balance_rc"],
@@ -179,6 +202,41 @@ QUERIES: dict[str, tuple[dict[str, Any], list[BiFilter]]] = {
 @pytest.fixture
 def cat() -> Catalogue:
     return catalogue()
+
+
+def _certified(bank: Bank, key: str, label: str, expression: str) -> BiMeasure:
+    """A certified calculated measure, so the compiler's own arm has a snapshot.
+
+    Written directly rather than through the promotion path: what the snapshot is
+    about is the SQL a certified formula compiles to, and the promotion has its own
+    tests. ``approved_expression`` is what the compiler reads.
+    """
+    digest = hashlib.sha256(expression.encode("utf-8")).hexdigest()
+    return BiMeasure(
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        measure_key=key,
+        owner_user_id=USER_1,
+        label=label,
+        description="",
+        expression=expression,
+        expression_digest=digest,
+        referenced_members=[],
+        value_type="fraction",
+        favourable_direction="neutral",
+        state="bank_certified",
+        proposed_by_user_id=USER_1,
+        proposed_at=datetime(2026, 9, 19, tzinfo=UTC),
+        proposed_expression_digest=digest,
+        proposal_reason="Snapshot fixture.",
+        approved_by_user_id=UUID("22222222-2222-4222-8222-222222222222"),
+        approved_at=datetime(2026, 9, 19, tzinfo=UTC),
+        approved_expression=expression,
+        approved_expression_digest=digest,
+        approval_reason="Snapshot fixture.",
+        created_at=datetime(2026, 9, 19, tzinfo=UTC),
+        updated_at=datetime(2026, 9, 19, tzinfo=UTC),
+    )
 
 
 @pytest.fixture
@@ -216,6 +274,44 @@ def bank(db_session: Session) -> Bank:
                 built_at=datetime(2026, 9, 19, tzinfo=UTC),
             )
         )
+    # The month ends a period comparison is read at (``is_last_in_month`` is the
+    # last date WITH DATA in the month, D-014) and the two certified measures whose
+    # compiled SQL is snapshotted.
+    for day in (date(2026, 7, 31), date(2026, 8, 31), AS_OF):
+        db_session.add(
+            BiDimDate(
+                organization_id=ORG_1,
+                bank_id=bank.id,
+                date=day,
+                has_data=True,
+                is_last_in_month=True,
+                is_last_in_quarter=False,
+                is_last_in_year=False,
+                calendar_month=day.replace(day=1),
+                calendar_quarter=date(day.year, 3 * ((day.month - 1) // 3) + 1, 1),
+                calendar_year=day.year,
+                fiscal_year=day.year,
+                fiscal_quarter=(day.month - 1) // 3 + 1,
+                builder_version=1,
+                built_at=datetime(2026, 9, 19, tzinfo=UTC),
+            )
+        )
+    db_session.add_all(
+        [
+            _certified(
+                bank,
+                "custom.loans_to_deposits",
+                "Loans to deposits",
+                "SAFE_DIV([m:loans.balance_rc], [m:deposits.balance_rc])",
+            ),
+            _certified(
+                bank,
+                "custom.loan_growth",
+                "Loan growth on the month",
+                "PCT_CHANGE([m:loans.balance_rc], MONTH)",
+            ),
+        ]
+    )
     db_session.flush()
     return bank
 

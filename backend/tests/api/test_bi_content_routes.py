@@ -736,11 +736,19 @@ def test_a_measures_state_is_the_servers_and_a_client_cannot_send_one(
     assert response.status_code == 422
 
 
-def test_the_measure_list_says_what_cannot_be_done_with_them_yet(
+def test_the_measure_list_says_a_certified_measure_can_be_charted(
     db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
 ) -> None:
-    """Production copy rather than a silent gap: a client must not offer a
-    calculated measure as a chart field while the query engine cannot evaluate one."""
+    """The copy tracks the capability, and the capability now exists.
+
+    This asserted the opposite until the authorization walk learned to expand a
+    calculated measure into the figures its text names. Until then a calculated id
+    was refused as unknown BEFORE a query was compiled, so the compiler's arm was
+    real and unreachable, and a surface offering the field would have been a worse
+    lie than one saying "not yet". The route-level proof that it is now reachable
+    is ``test_a_certified_measure_can_be_charted_through_the_query_route``; this
+    test exists so the copy cannot drift back to a claim that is no longer true.
+    """
 
     _ = plane
     _create_measure(db_client, db_session)
@@ -748,12 +756,130 @@ def test_the_measure_list_says_what_cannot_be_done_with_them_yet(
     listed = db_client.get(f"{BASE}/measures", headers=_headers(db_session, USER_1))
 
     payload = listed.json()
-    assert payload["available_in_queries"] is False
-    assert "cannot yet be added to a chart or a grid" in payload["message"]
+    assert payload["available_in_queries"] is True
+    assert "cannot yet" not in payload["message"]
     assert [measure["measure_key"] for measure in payload["measures"]] == [
         "custom.loans_to_deposits"
     ]
     assert payload["measures"][0]["badge"] == "personal"
+
+
+def test_a_certified_measure_can_be_charted_through_the_query_route(
+    db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
+) -> None:
+    """The reachability proof: a certified formula answers through `POST /bi/query`.
+
+    This is the acceptance test for the whole calculated-measure feature. The
+    compiler could evaluate a formula for some time while no read route could
+    reach that arm, because the authorization walk resolved every measure id
+    against the static catalogue and refused a calculated one as unknown before a
+    query was compiled. A unit test of the compiler cannot see that: the refusal
+    happened a layer above it. So this goes through the route.
+    """
+
+    _grant(
+        db_session,
+        VIEWER,
+        module=ModuleScope.ALL,
+        sensitivity=SensitivityScope.ALL,
+        bundle=RoleBundle.APPROVER,
+    )
+    db_session.commit()
+    _ = plane
+    created = _create_measure(db_client, db_session)
+    db_client.post(
+        f"{BASE}/measures/{created['id']}/proposal",
+        json={"reason": "For the board pack"},
+        headers=_headers(db_session, USER_1),
+    )
+    decided = db_client.post(
+        f"{BASE}/measures/{created['id']}/decision",
+        json={
+            "decision": "approve",
+            "reason": "Reviewed against the register",
+            "expression_digest": _digest(db_client, db_session, created["id"]),
+        },
+        headers=_headers(db_session, VIEWER),
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["measure"]["state"] == "bank_certified"
+
+    answered = db_client.post(
+        f"{BASE}/query",
+        json={
+            "measures": ["custom.loans_to_deposits"],
+            "dimensions": [],
+            "time": {"as_of": AS_OF},
+        },
+        headers=_headers(db_session, USER_1),
+    )
+
+    assert answered.status_code == 200, answered.text
+    body = answered.json()
+    ids = [column["id"] for column in body["columns"]]
+    assert "custom.loans_to_deposits" in ids, ids
+    # A value or an honest absence, never a fabricated zero. The fixture's book
+    # decides which; what must never happen is a 422 for an unknown member.
+    assert body["rows"], body
+
+
+def test_charting_a_formula_grants_a_reader_nothing_they_did_not_hold(
+    db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
+) -> None:
+    """The other half, and the one that matters more.
+
+    A formula is authorized as the FIGURES ITS TEXT NAMES, expanded from the
+    server's own parse of the approved expression. If it were authorized as itself,
+    a certified measure would be a way to reach a figure through a name nobody
+    evaluated.
+
+    The approver has to be broad to approve, so the narrow reader is a third
+    identity: ``VIEWER``, which the neighbouring test already establishes cannot
+    even see this measure in its list.
+    """
+
+    _grant(
+        db_session,
+        OWNER_ROLE_USER,
+        module=ModuleScope.ALL,
+        sensitivity=SensitivityScope.ALL,
+        bundle=RoleBundle.APPROVER,
+    )
+    db_session.commit()
+    _ = plane
+    created = _create_measure(db_client, db_session)
+    db_client.post(
+        f"{BASE}/measures/{created['id']}/proposal",
+        json={"reason": "For the board pack"},
+        headers=_headers(db_session, USER_1),
+    )
+    decided = db_client.post(
+        f"{BASE}/measures/{created['id']}/decision",
+        json={
+            "decision": "approve",
+            "reason": "Reviewed against the register",
+            "expression_digest": _digest(db_client, db_session, created["id"]),
+        },
+        headers=_headers(db_session, OWNER_ROLE_USER),
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["measure"]["state"] == "bank_certified"
+
+    refused = db_client.post(
+        f"{BASE}/query",
+        json={
+            "measures": ["custom.loans_to_deposits"],
+            "dimensions": [],
+            "time": {"as_of": AS_OF},
+        },
+        headers=_headers(db_session, VIEWER),
+    )
+
+    assert refused.status_code == 403, refused.text
+    body = refused.text
+    # The refusal must name a FIGURE the reader could not read, so an operator
+    # knows what to grant. Naming only the formula would tell them nothing.
+    assert LOANS in body or DEPOSITS in body, body
 
 
 def test_a_measure_a_reader_cannot_compute_is_absent_from_their_list(

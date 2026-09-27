@@ -35,6 +35,8 @@ from app.domain.bi import expr as expr_module
 from app.domain.bi.expr import (
     ALPHABET,
     FUNCTION_NAMES,
+    GRAIN_MAX_DAYS,
+    GRAIN_WORDS,
     MAX_DEPTH,
     MAX_EXCERPT_LENGTH,
     MAX_EXPRESSION_LENGTH,
@@ -51,14 +53,17 @@ from app.domain.bi.expr import (
     ExpressionTooDeep,
     ExpressionTooLong,
     Lag,
+    LagBeyondRetention,
     Logical,
     LogicalNot,
     MalformedMemberReference,
     MemberReference,
+    MixedPeriodGrains,
     Negation,
     NonNumericExpression,
     NumberLiteral,
     PercentChange,
+    PeriodGrain,
     SafeDivide,
     TooManyMemberReferences,
     TrailingContent,
@@ -67,10 +72,13 @@ from app.domain.bi.expr import (
     UnexpectedEndOfExpression,
     UnexpectedToken,
     UnknownFunction,
+    UnknownPeriodGrain,
     WrongArgumentCount,
     WrongArgumentType,
+    declared_grain,
     depth,
-    parse,
+    max_lag_periods,
+    period_offsets,
     referenced_members,
     walk,
 )
@@ -78,6 +86,27 @@ from app.schemas.bi import BI_MAX_MEASURES
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from _typeshed import DataclassInstance
+
+#: The retention window these tests parse against unless they say otherwise. A
+#: deployment default of 95 days allows a three-month reach, which is too short to
+#: write the lag bounds down; 400 days is a realistic long-retention deployment
+#: (``tests/test_config.py`` uses the same number) and gives twelve months, four
+#: quarters and one year.
+RETENTION_DAYS = 400
+
+
+def parse(source: str, *, retention_days: int | None = RETENTION_DAYS) -> Expr:
+    """``expr.parse`` with a retention window supplied.
+
+    The real signature REQUIRES ``retention_days`` and has no default (D-196): the
+    write path passes the deployment's window and an authorization walk passes
+    ``None``, and neither may get its behaviour by forgetting to say which. This
+    shim supplies one so the hundred tests that are about something else do not
+    each restate it; ``test_parse_will_not_guess_a_retention_window`` pins that the
+    real function still refuses to be called without it.
+    """
+    return expr_module.parse(source, retention_days=retention_days)
+
 
 #: How a figure reference is spotted in RAW SOURCE, independently of the parser.
 #: Deliberately a second implementation: a completeness property checked with
@@ -103,8 +132,8 @@ NODE_KINDS = (
 #: One formula that reaches every node kind, with a different figure in each
 #: position so the order :func:`referenced_members` reports can be read off it.
 KITCHEN_SINK = (
-    "IF(PCT_CHANGE([m:a]) > SAFE_DIV([m:b], LAG([m:c], 2)) AND NOT [m:d] < -[m:e], "
-    "[m:f] * 2, [m:g] + 1)"
+    "IF(PCT_CHANGE([m:a], MONTH) > SAFE_DIV([m:b], LAG([m:c], 2, MONTH)) "
+    "AND NOT [m:d] < -[m:e], [m:f] * 2, [m:g] + 1)"
 )
 
 #: Characters no message may contain, whatever the caller sent. Quotes, comment
@@ -131,8 +160,13 @@ def _shape(node: Expr) -> object:
 
 def _refuse(source: str) -> ExpressionError:
     """Parse ``source``, require a named refusal, and return it."""
+    return _refuse_with(source, retention_days=RETENTION_DAYS)
+
+
+def _refuse_with(source: str, *, retention_days: int | None) -> ExpressionError:
+    """The same, against a stated retention window."""
     with pytest.raises(ExpressionError) as caught:
-        parse(source)
+        parse(source, retention_days=retention_days)
     error = caught.value
     _assert_posture(error, source)
     return error
@@ -257,8 +291,8 @@ def test_whitespace_between_tokens_is_insignificant() -> None:
 def test_every_function_parses_to_its_own_node() -> None:
     assert isinstance(parse("SAFE_DIV([m:a], [m:b])"), SafeDivide)
     assert isinstance(parse("IF([m:a] > 1, 1, 0)"), Conditional)
-    assert isinstance(parse("PCT_CHANGE([m:a])"), PercentChange)
-    assert isinstance(parse("LAG([m:a], 3)"), Lag)
+    assert isinstance(parse("PCT_CHANGE([m:a], MONTH)"), PercentChange)
+    assert isinstance(parse("LAG([m:a], 3, QUARTER)"), Lag)
 
 
 def test_function_and_keyword_names_are_case_insensitive() -> None:
@@ -275,9 +309,8 @@ def test_function_and_keyword_names_are_case_insensitive() -> None:
         ("SAFE_DIV([m:a])", 2, 1),
         ("SAFE_DIV([m:a], [m:b], [m:c])", 2, 3),
         ("IF([m:a] > 1, 1)", 3, 2),
-        ("PCT_CHANGE([m:a], [m:b])", 1, 2),
-        ("PCT_CHANGE()", 1, 0),
-        ("LAG([m:a])", 2, 1),
+        ("PCT_CHANGE([m:a], MONTH, MONTH)", 2, 3),
+        ("LAG([m:a], 1, MONTH, MONTH)", 3, 4),
     ],
 )
 def test_a_function_called_with_the_wrong_number_of_inputs_is_named(
@@ -309,7 +342,11 @@ def test_if_requires_a_condition_and_two_numbers(source: str) -> None:
 
 
 def test_a_comparison_cannot_be_used_as_a_number() -> None:
-    for source in ("SAFE_DIV([m:a] > 1, [m:b])", "PCT_CHANGE([m:a] > 1)", "LAG([m:a] > 1, 1)"):
+    for source in (
+        "SAFE_DIV([m:a] > 1, [m:b])",
+        "PCT_CHANGE([m:a] > 1, MONTH)",
+        "LAG([m:a] > 1, 1, MONTH)",
+    ):
         assert isinstance(_refuse(source), WrongArgumentType)
 
 
@@ -320,20 +357,36 @@ def test_a_number_cannot_be_used_as_a_condition() -> None:
 
 @pytest.mark.parametrize(
     "periods",
-    ["1.5", "-1", "0", str(MAX_LAG_PERIODS + 1), "[m:b]", "1 + 1", "PCT_CHANGE([m:b])"],
+    [
+        "1.5",
+        "-1",
+        "0",
+        str(MAX_LAG_PERIODS + 1),
+        "[m:b]",
+        "1 + 1",
+        "PCT_CHANGE([m:b], MONTH)",
+    ],
 )
 def test_lag_takes_a_whole_number_of_periods_written_directly(periods: str) -> None:
     """A lag decides how far back the query window is widened, so it cannot be a
     per-row value, a fraction, or a look FORWARD spelled as a negative."""
-    error = _refuse(f"LAG([m:a], {periods})")
+    error = _refuse(f"LAG([m:a], {periods}, MONTH)")
     assert isinstance(error, WrongArgumentType)
     assert str(MAX_LAG_PERIODS) in error.message
 
 
 def test_lag_accepts_its_bounds() -> None:
-    assert parse("LAG([m:a], 1)").periods == 1  # type: ignore[attr-defined]
-    assert parse(f"LAG([m:a], {MAX_LAG_PERIODS})").periods == MAX_LAG_PERIODS  # type: ignore[attr-defined]
-    assert parse("LAG([m:a], 2.0)").periods == 2  # type: ignore[attr-defined]
+    """The LANGUAGE's ceiling, with no retention window applied.
+
+    ``MAX_LAG_PERIODS`` is structural — it keeps the tree finite — and is
+    deliberately not the bound a deployment answers to; that one is
+    :func:`max_lag_periods` and has its own tests below. Parsing with
+    ``retention_days=None`` is what separates the two.
+    """
+    assert parse("LAG([m:a], 1, MONTH)", retention_days=None).periods == 1  # type: ignore[attr-defined]
+    ceiling = parse(f"LAG([m:a], {MAX_LAG_PERIODS}, MONTH)", retention_days=None)
+    assert ceiling.periods == MAX_LAG_PERIODS  # type: ignore[attr-defined]
+    assert parse("LAG([m:a], 2.0, MONTH)", retention_days=None).periods == 2  # type: ignore[attr-defined]
 
 
 def test_an_unknown_function_names_the_ones_that_exist() -> None:
@@ -398,6 +451,198 @@ def test_an_empty_formula_is_named(source: str) -> None:
     assert isinstance(_refuse(source), EmptyExpression)
 
 
+# --- the declared period grain (D-195) ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("word", ["MONTH", "QUARTER", "YEAR"])
+def test_a_period_comparison_declares_its_grain_in_the_text(word: str) -> None:
+    """The grain is in the FORMULA, which is what a checker reads and approves.
+
+    D-195: the alternative is inheriting it from the query, and then one certified
+    label renders month-on-month in one widget and quarter-on-quarter in the next.
+    """
+    tree = parse(f"PCT_CHANGE([m:a], {word})", retention_days=None)
+    assert isinstance(tree, PercentChange)
+    assert tree.grain == word.lower()
+    assert declared_grain(tree) == word.lower()
+
+
+def test_the_grain_word_is_case_insensitive_like_every_other_word() -> None:
+    assert _shape(parse("LAG([m:a], 1, month)")) == _shape(parse("LAG([m:a], 1, MONTH)"))
+
+
+def test_the_grain_is_part_of_the_tree_and_not_an_annotation() -> None:
+    """Two grains are two different formulas, so they cannot compare equal — a
+    measure whose grain lived outside the tree would hash and diff as one thing."""
+    assert _shape(parse("PCT_CHANGE([m:a], MONTH)")) != _shape(parse("PCT_CHANGE([m:a], QUARTER)"))
+
+
+def test_a_formula_with_no_period_function_declares_no_grain() -> None:
+    assert declared_grain(parse("SAFE_DIV([m:a], [m:b])")) is None
+
+
+def test_an_unknown_period_word_names_the_ones_that_exist() -> None:
+    error = _refuse("PCT_CHANGE([m:a], WEEK)")
+    assert isinstance(error, UnknownPeriodGrain)
+    assert "WEEK" in error.message
+    for word in GRAIN_WORDS:
+        assert word in error.message
+
+
+def test_an_absurdly_long_period_word_is_not_repeated_back() -> None:
+    error = _refuse(f"PCT_CHANGE([m:a], {'W' * 200})")
+    assert isinstance(error, UnknownPeriodGrain)
+    assert "W" * 200 not in error.message
+
+
+def test_a_period_function_written_without_its_grain_is_taught_the_whole_rule() -> None:
+    """The old one- and two-input forms. The refusal has to say that the period is
+    part of what the measure MEANS, not report a count and leave them guessing."""
+    for source, example in (
+        ("PCT_CHANGE([m:a])", "PCT_CHANGE([m:a], MONTH)"),
+        ("LAG([m:a], 2)", "LAG([m:a], 1, MONTH)"),
+    ):
+        error = _refuse(source)
+        assert isinstance(error, WrongArgumentType)
+        assert example in error.message
+
+
+def test_the_grain_has_to_be_the_last_input() -> None:
+    """``PCT_CHANGE(MONTH, [m:a])`` reads as a different formula and is refused, so
+    two people cannot write the same measure two ways."""
+    assert isinstance(_refuse("PCT_CHANGE(MONTH, [m:a])"), UnknownFunction)
+    assert isinstance(_refuse("LAG(MONTH, [m:a], 1)"), UnknownFunction)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "PCT_CHANGE([m:a], MONTH) + PCT_CHANGE([m:b], QUARTER)",
+        "LAG([m:a], 1, MONTH) - LAG([m:a], 1, YEAR)",
+        "PCT_CHANGE(LAG([m:a], 1, QUARTER), MONTH)",
+    ],
+)
+def test_one_formula_may_compare_over_one_period_only(source: str) -> None:
+    error = _refuse(source)
+    assert isinstance(error, MixedPeriodGrains)
+
+
+def test_mixed_grains_are_refused_even_with_no_retention_bound_applied() -> None:
+    """The grain rule is about MEANING, so it does not depend on the window."""
+    with pytest.raises(MixedPeriodGrains):
+        expr_module.parse("PCT_CHANGE([m:a], MONTH) + PCT_CHANGE([m:b], YEAR)", retention_days=None)
+
+
+# --- the periods a formula reads ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("[m:a] + 1", (0,)),
+        ("PCT_CHANGE([m:a], MONTH)", (0, 1)),
+        ("LAG([m:a], 3, MONTH)", (0, 3)),
+        ("[m:a] - LAG([m:a], 1, MONTH)", (0, 1)),
+        # The trap: a lag OUTSIDE a change reads two and three periods back, not
+        # one and two. Getting this wrong is silently a whole period off.
+        ("LAG(PCT_CHANGE([m:a], MONTH), 2, MONTH)", (0, 2, 3)),
+        ("LAG(LAG([m:a], 2, MONTH), 3, MONTH)", (0, 5)),
+    ],
+)
+def test_period_offsets_compose_rather_than_accumulate(
+    source: str, expected: tuple[int, ...]
+) -> None:
+    assert period_offsets(parse(source, retention_days=None)) == expected
+
+
+def test_the_query_s_own_period_is_always_read() -> None:
+    """Even a formula that is nothing but a lag: other figures in the same result
+    are at the query's own window, and the scan has to admit it."""
+    assert period_offsets(parse("LAG([m:a], 4, MONTH)", retention_days=None))[0] == 0
+
+
+# --- the retention bound (D-196) ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("retention_days", "grain", "expected"),
+    [
+        # The shipped default. 95 days is three whole months, one whole quarter,
+        # and not a year — so a year-on-year comparison cannot be made from it.
+        (95, "month", 3),
+        (95, "quarter", 1),
+        (95, "year", 0),
+        (400, "month", 12),
+        (400, "quarter", 4),
+        (400, "year", 1),
+        (0, "month", 0),
+    ],
+)
+def test_max_lag_periods_converts_days_to_periods_at_the_longest_period(
+    retention_days: int, grain: str, expected: int
+) -> None:
+    assert max_lag_periods(retention_days, cast("PeriodGrain", grain)) == expected
+
+
+def test_the_conversion_uses_the_longest_a_period_can_be() -> None:
+    """The refusing direction. Dividing by an average month would accept a reach
+    that is answerable in February and empty in March — an empty answer that reads
+    as a real figure of nothing, which is the whole of D-196."""
+    assert GRAIN_MAX_DAYS["month"] == 31
+    assert max_lag_periods(GRAIN_MAX_DAYS["month"] * 3, "month") == 3
+    assert max_lag_periods(GRAIN_MAX_DAYS["month"] * 3 - 1, "month") == 2
+
+
+def test_the_structural_ceiling_still_caps_a_very_long_retention_window() -> None:
+    assert max_lag_periods(1_000_000, "month") == MAX_LAG_PERIODS
+
+
+def test_a_negative_retention_window_is_a_programming_error_not_a_refusal() -> None:
+    with pytest.raises(ValueError, match="retention_days"):
+        max_lag_periods(-1, "month")
+
+
+def test_the_reach_is_bounded_by_retention_and_the_refusal_names_the_limit() -> None:
+    allowed = max_lag_periods(RETENTION_DAYS, "month")
+    assert parse(f"LAG([m:a], {allowed}, MONTH)") is not None
+    error = _refuse(f"LAG([m:a], {allowed + 1}, MONTH)")
+    assert isinstance(error, LagBeyondRetention)
+    assert str(RETENTION_DAYS) in error.message
+    assert str(allowed) in error.message
+
+
+def test_a_grain_no_window_can_cover_says_so_rather_than_naming_a_limit_of_zero() -> None:
+    error = _refuse_with("PCT_CHANGE([m:a], YEAR)", retention_days=95)
+    assert isinstance(error, LagBeyondRetention)
+    assert "less than one year" in error.message
+    assert "95 days" in error.message
+
+
+def test_the_bound_is_measured_on_the_composed_reach_not_the_written_number() -> None:
+    """``LAG(PCT_CHANGE(x), n)`` reaches ``n + 1`` periods back, so the bound has to
+    be checked on what the formula actually reads."""
+    allowed = max_lag_periods(RETENTION_DAYS, "month")
+    assert isinstance(
+        _refuse(f"LAG(PCT_CHANGE([m:a], MONTH), {allowed}, MONTH)"), LagBeyondRetention
+    )
+
+
+def test_parse_will_not_guess_a_retention_window() -> None:
+    """No default, in either direction (the ICAAP ``record=`` lesson): the write
+    path passes the deployment's window and an authorization walk passes ``None``,
+    and a caller that says neither is a caller that has not decided."""
+    with pytest.raises(TypeError):
+        expr_module.parse("[m:a]")  # type: ignore[call-arg]
+
+
+def test_no_retention_window_means_the_bound_is_not_applied_at_all() -> None:
+    """Which figures a stored formula names must not change when a deployment
+    shortens its retention: that is an AUTHORIZATION question, and a measure that
+    vanished from its own author's list on a configuration change would be wrong."""
+    tree = expr_module.parse("LAG([m:a], 40, YEAR)", retention_days=None)
+    assert referenced_members(tree) == ("a",)
+
+
 # --- referenced_members -------------------------------------------------------------------------
 
 
@@ -421,8 +666,8 @@ def test_referenced_members_reaches_a_figure_buried_in_every_slot() -> None:
     """One figure per operand position of every node kind, checked as a set: a
     walk that skipped one slot would show up here as a missing id."""
     tree = parse(
-        "IF(LAG([m:s1], 1) = PCT_CHANGE([m:s2]) OR NOT -[m:s3] < SAFE_DIV([m:s4], [m:s5]), "
-        "[m:s6] / [m:s7], [m:s8] * [m:s9])"
+        "IF(LAG([m:s1], 1, MONTH) = PCT_CHANGE([m:s2], MONTH) "
+        "OR NOT -[m:s3] < SAFE_DIV([m:s4], [m:s5]), [m:s6] / [m:s7], [m:s8] * [m:s9])"
     )
     assert set(referenced_members(tree)) == {f"s{index}" for index in range(1, 10)}
 
@@ -493,9 +738,9 @@ def _wider(inner: st.SearchStrategy[str]) -> st.SearchStrategy[str]:
             inner,
         ),
         st.builds(lambda left, right: f"SAFE_DIV({left}, {right})", inner, inner),
-        st.builds(lambda value: f"PCT_CHANGE({value})", inner),
+        st.builds(lambda value: f"PCT_CHANGE({value}, MONTH)", inner),
         st.builds(
-            lambda value, periods: f"LAG({value}, {periods})",
+            lambda value, periods: f"LAG({value}, {periods}, MONTH)",
             inner,
             st.integers(min_value=1, max_value=MAX_LAG_PERIODS),
         ),
@@ -528,7 +773,7 @@ def test_referenced_members_reports_every_figure_the_source_names(source: str) -
     the direction that matters is the superset: an id that is in the text and
     not in the tuple is a figure computed without a binding."""
     try:
-        tree = parse(source)
+        tree = parse(source, retention_days=None)
     except (ExpressionTooDeep, ExpressionTooLong, TooManyMemberReferences):
         reject()
 
@@ -778,10 +1023,14 @@ def test_the_figure_limit_matches_the_measures_one_query_can_carry() -> None:
         ("[m:]", MalformedMemberReference),
         ("[x:a]", MalformedMemberReference),
         ("NOPE(1)", UnknownFunction),
-        ("PCT_CHANGE()", WrongArgumentCount),
+        ("SAFE_DIV([m:a])", WrongArgumentCount),
         ("NOT 1", WrongArgumentType),
         ("[m:a] > 1", NonNumericExpression),
         ("1/0", DivisionByZero),
+        ("PCT_CHANGE([m:a], FORTNIGHT)", UnknownPeriodGrain),
+        ("PCT_CHANGE([m:a], MONTH) + PCT_CHANGE([m:b], YEAR)", MixedPeriodGrains),
+        # 400 days of retention is one whole year, so two years back is past it.
+        ("LAG([m:a], 2, YEAR)", LagBeyondRetention),
     ],
 )
 def test_each_failure_shape_has_its_own_named_error(

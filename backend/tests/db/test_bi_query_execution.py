@@ -6,8 +6,10 @@ inside the guarded statement and are gone afterwards — and that a cancelled
 statement leaves the enclosing session usable, because the savepoint is
 rolled back; that a write attempted inside the guarded statement is refused
 by the read-only transaction; that ``GROUP BY ROLLUP`` / ``grouping()``
-compile and run; that the comparison compiles without a join and runs; and
-that a configured BI pool carries the caller's tenant into the RLS GUC.
+compile and run; that the comparison compiles without a join and runs; that a
+CALCULATED measure's period axis and its NULL-safe divide behave the same on real
+Postgres numerics as they do on SQLite (D-195); and that a configured BI pool
+carries the caller's tenant into the RLS GUC.
 
 Opt-in with ``TEST_DATABASE_URL`` (a disposable Postgres — never the primary).
 """
@@ -28,13 +30,14 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.domain.bi.catalogue import Catalogue, catalogue
 from app.models import Bank
-from app.models.bi import BiAggPositionDaily, BiDimBranch, BiFactPositionDaily
+from app.models.bi import BiAggPositionDaily, BiDimBranch, BiDimDate, BiFactPositionDaily
+from app.models.bi_content import BiMeasure
 from app.schemas.bi import BiQuery
 from app.services.bi import execution
 from app.services.bi.compiler import compile_query
-from app.services.bi.errors import BiQueryTimeout
+from app.services.bi.errors import BiQueryTimeout, InvalidQuery
 from app.services.bi.execution import execute, run_select
-from tests.api.helpers import ORG_1
+from tests.api.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
@@ -277,3 +280,191 @@ def test_a_configured_bi_pool_carries_the_tenant_into_the_rls_guc(
     finally:
         get_settings.cache_clear()
     assert tenant == ORG_1
+
+
+# --- calculated measures (D-195) -----------------------------------------------------------
+
+
+@pytest.fixture
+def calculated(db_session: Session, bank: Bank) -> Bank:
+    """The two month ends a period comparison needs, and one certified formula.
+
+    Kept out of the ``bank`` fixture so the other tests in this file keep the exact
+    mart they were written against: a calendar row changes what a stock RANGE query
+    can see, and the partition-pruning test above measures that.
+    """
+
+    for day in (PRIOR, AS_OF):
+        db_session.add(
+            BiDimDate(
+                organization_id=ORG_1,
+                bank_id=bank.id,
+                date=day,
+                has_data=True,
+                is_last_in_month=True,
+                is_last_in_quarter=False,
+                is_last_in_year=False,
+                calendar_month=day.replace(day=1),
+                calendar_quarter=date(day.year, 3 * ((day.month - 1) // 3) + 1, 1),
+                calendar_year=day.year,
+                fiscal_year=day.year,
+                fiscal_quarter=(day.month - 1) // 3 + 1,
+                builder_version=1,
+                built_at=datetime(2026, 9, 19, tzinfo=UTC),
+            )
+        )
+    # The aggregate table carries the same book, so the compiler's choice of source
+    # cannot decide whether the figure exists. ``loan.sector`` is deliberately used
+    # by one test below to force the FACT path and prove the two agree.
+    for as_of, branch, balance in ((AS_OF, "B1", "100"), (AS_OF, "B2", "250"), (PRIOR, "B1", "80")):
+        db_session.add(
+            BiAggPositionDaily(
+                as_of_date=as_of,
+                id=uuid4(),
+                organization_id=ORG_1,
+                bank_id=bank.id,
+                position_type="LOAN",
+                branch_code=branch,
+                currency="GHS",
+                row_count=1,
+                balance_rc_sum=Decimal(balance),
+                classification_exposure_rc_sum=Decimal(balance),
+                non_performing_exposure_rc_sum=Decimal("0"),
+                provision_required_rc_sum=Decimal("0"),
+                provision_held_rc_sum=Decimal("0"),
+                collateral_rc_sum=Decimal("0"),
+                rate_x_balance_rc_sum=Decimal("0"),
+                fx_unconverted_count=0,
+                builder_version=1,
+                built_at=datetime(2026, 9, 19, tzinfo=UTC),
+            )
+        )
+    expression = "PCT_CHANGE([m:loans.balance_rc], MONTH)"
+    digest = "0" * 64
+    db_session.add(
+        BiMeasure(
+            organization_id=ORG_1,
+            bank_id=bank.id,
+            measure_key="custom.loan_growth",
+            owner_user_id=USER_1,
+            label="Loan growth on the month",
+            description="",
+            expression=expression,
+            expression_digest=digest,
+            referenced_members=[],
+            value_type="fraction",
+            favourable_direction="neutral",
+            state="bank_certified",
+            proposed_by_user_id=USER_1,
+            proposed_at=datetime(2026, 9, 19, tzinfo=UTC),
+            proposed_expression_digest=digest,
+            proposal_reason="Postgres guard.",
+            approved_by_user_id=uuid4(),
+            approved_at=datetime(2026, 9, 19, tzinfo=UTC),
+            approved_expression=expression,
+            approved_expression_digest=digest,
+            approval_reason="Postgres guard.",
+            created_at=datetime(2026, 9, 19, tzinfo=UTC),
+            updated_at=datetime(2026, 9, 19, tzinfo=UTC),
+        )
+    )
+    db_session.commit()
+    return bank
+
+
+def test_a_calculated_period_comparison_runs_on_postgres(
+    db_session: Session, cat: Catalogue, calculated: Bank
+) -> None:
+    """September's book is 100 + 250 = 350; August's is 80. 270 on 80 is 3.375.
+
+    The whole point of running it here: the period axis is two aggregates over one
+    scan with a ``max(date)`` subquery per period, and Postgres numerics, NULL
+    handling and the ``nullif`` divide are what the figure a bank reads comes out
+    of. SQLite agreeing is not evidence about Postgres.
+    """
+
+    compiled = compile_query(
+        db_session,
+        cat,
+        BiQuery.model_validate({"measures": ["custom.loan_growth"], "time": {"as_of": AS_OF}}),
+        organization_id=ORG_1,
+        bank_id=calculated.id,
+    )
+    assert [column.id for column in compiled.columns] == ["custom.loan_growth"]
+    assert compiled.columns[0].format == "fraction"
+    assert compiled.used_aggregate
+    result = execute(db_session, compiled, timeout_ms=5_000, row_cap=100)
+    assert result.rows[0][0] == pytest.approx(3.375)
+
+    # The same question off the FACT table (``loan.sector`` is not in the
+    # aggregate's grain), which must give the same figure: "both sources answer
+    # alike" is the one invariant aggregate selection rests on.
+    on_fact = compile_query(
+        db_session,
+        cat,
+        BiQuery.model_validate(
+            {
+                "measures": ["custom.loan_growth"],
+                "dimensions": ["loan.sector"],
+                "time": {"as_of": AS_OF},
+            }
+        ),
+        organization_id=ORG_1,
+        bank_id=calculated.id,
+    )
+    assert not on_fact.used_aggregate
+    fact_rows = execute(db_session, on_fact, timeout_ms=5_000, row_cap=100).rows
+    assert [(row[0], row[1]) for row in fact_rows] == [("agri", pytest.approx(3.375))]
+
+
+def test_a_calculated_measure_survives_rollup_on_postgres(
+    db_session: Session, cat: Catalogue, calculated: Bank
+) -> None:
+    """``GROUP BY ROLLUP`` with a formula in the select list: the subtotal row is
+    the formula over the subtotal's own aggregates, not a sum of the leaf figures."""
+
+    compiled = compile_query(
+        db_session,
+        cat,
+        BiQuery.model_validate(
+            {
+                "measures": ["custom.loan_growth"],
+                "dimensions": ["branch.code"],
+                "time": {"as_of": AS_OF},
+                "subtotals": True,
+            }
+        ),
+        organization_id=ORG_1,
+        bank_id=calculated.id,
+    )
+    sql = str(compiled.select.compile(dialect=db_session.get_bind().dialect))
+    assert "ROLLUP" in sql
+    result = execute(db_session, compiled, timeout_ms=5_000, row_cap=100)
+    ids = [column.id for column in result.columns]
+    rows = [dict(zip(ids, row, strict=True)) for row in result.rows]
+    total = next(row for row in rows if row["__level"] == 0)
+    # 350 against 80 for the institution as a whole.
+    assert total["custom.loan_growth"] == pytest.approx(3.375)
+    # B1 alone: 100 against 80. B2 has no August book, so its change is no value.
+    by_branch = {row["branch.code"]: row for row in rows if row["__level"] == 1}
+    assert by_branch["B1"]["custom.loan_growth"] == pytest.approx(0.25)
+    assert by_branch["B2"]["custom.loan_growth"] is None
+
+
+def test_a_reporting_date_that_ends_no_period_is_refused_on_postgres(
+    db_session: Session, cat: Catalogue, calculated: Bank
+) -> None:
+    """The period-end probe is a real query against ``bi_dim_date`` (D-195)."""
+
+    with pytest.raises(InvalidQuery) as caught:
+        compile_query(
+            db_session,
+            cat,
+            BiQuery.model_validate(
+                {"measures": ["custom.loan_growth"], "time": {"as_of": date(2026, 9, 17)}}
+            ),
+            organization_id=ORG_1,
+            bank_id=calculated.id,
+        )
+    assert "close of a month" in caught.value.message
+    assert PRIOR.isoformat() in caught.value.message

@@ -21,7 +21,10 @@ Four properties live here, and each is the reason a sentence in ``docs/bi.md``
    member set through the authorization walk. A client never sends a member list,
    a module or a sensitivity, so there is nothing for a hostile formula to
    under-report: the ids come from ``expr.referenced_members``, whose walk is
-   structural.
+   structural. The same text is re-parsed by the same walk everywhere it matters
+   — here, on every read (:func:`_readable`), at certification, and in the
+   compiler when the formula is actually evaluated — and the stored
+   ``referenced_members`` column is never the authority for any of them.
 4. **A promotion is maker-checker, judged by the platform's own policy.**
    :func:`decide_promotion` reuses ``grant_administration``'s ``SodDecision`` /
    ``SodOutcome`` / ``SodFinding`` / ``SodPolicyBlocked`` rather than inventing a
@@ -57,6 +60,7 @@ from app.core.authorization import (
     RoleBundle,
     Sensitivity,
 )
+from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi import expr
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, MeasureDef, MemberDef, catalogue
@@ -76,6 +80,7 @@ from app.schemas.bi_content import BiDashboardSpec
 from app.services import authorization as authorization_service
 from app.services import grant_administration, scoped_authorization
 from app.services.bi.authorization import authorize_query, query_members, scope_pairs
+from app.services.bi.compiler import expand_calculated_measures
 from app.services.bi.errors import UnknownMember
 
 #: The ``bi_query_log`` surface a dashboard read is recorded under.
@@ -107,9 +112,23 @@ _BADGE_BY_STATE: Mapping[str, str] = {
 #: Production copy for a formula the server accepted.
 EXPRESSION_ACCEPTED = "This formula is valid."
 
-#: Production copy for the one capability a calculated measure does not have yet.
-MEASURES_NOT_QUERYABLE = (
-    "Calculated measures can be written, reviewed and certified here. They cannot yet be "
+#: Production copy for what a reader may do with a calculated measure.
+#:
+#: This said "not yet" while the compiler could evaluate a certified formula and
+#: no read route could reach that arm: ``authorize_query`` resolved every measure
+#: id against the STATIC catalogue, so a calculated id was refused as unknown
+#: before a query was ever compiled. A surface offering the field while the route
+#: refused it would have been the worse lie, so the sentence stayed honest and the
+#: flag stayed false.
+#:
+#: The hook landed (``authorize_query`` now walks
+#: ``compiler.expand_calculated_measures``), and the route-level proof is
+#: ``tests/api/test_bi_content_routes.py::
+#: test_a_certified_measure_can_be_charted_through_the_query_route``. A formula is
+#: authorized as the FIGURES ITS TEXT NAMES, so being able to chart one grants a
+#: reader nothing they did not already hold.
+MEASURES_QUERYABLE = (
+    "Calculated measures can be written, reviewed and certified here. Once certified they can be "
     "added to a chart or a grid."
 )
 
@@ -362,17 +381,51 @@ class ViewerAuthority:
         ``UnknownMember`` (the compiler's own refusal) for an id the catalogue
         does not know, so a stored canvas naming a retired member fails loudly
         rather than rendering as a silent gap.
+
+        A widget may name one of the institution's CERTIFIED calculated measures,
+        which is not a catalogue member and has no ``(module, sensitivity)`` of its
+        own: what it needs is a sentence for every FIGURE its formula names. The
+        query is therefore expanded first
+        (``compiler.expand_calculated_measures``) — from the server's own parse of
+        the certified text — and both the member walk and the evaluation see the
+        expanded form, so a formula cannot be a way round a missing binding.
         """
 
-        members = query_members(self.cat, query)
+        expanded = expand_calculated_measures(
+            self.db,
+            self.cat,
+            query,
+            organization_id=self.ctx.organization_id,
+            bank_id=self.bank.id,
+        )
+        members = query_members(self.cat, expanded)
         pairs = scope_pairs(members)
         unknown = [pair for pair in pairs if pair not in self._verdicts]
         if unknown:
-            self._evaluate(query, pairs)
+            self._evaluate(expanded, pairs)
         return tuple(
             member.id
             for member in members
             if not self._verdicts.get((member.module, member.sensitivity), False)
+        )
+
+    def served_members(self, query: BiQuerySchema) -> tuple[MemberDef, ...]:
+        """Every catalogue figure a granted widget actually reads.
+
+        The same expansion :meth:`refused_members` authorizes over, so what the
+        append-only log records as SERVED is the set that was authorized rather than
+        the set the request happened to name.
+        """
+
+        return query_members(
+            self.cat,
+            expand_calculated_measures(
+                self.db,
+                self.cat,
+                query,
+                organization_id=self.ctx.organization_id,
+                bank_id=self.bank.id,
+            ),
         )
 
     def _evaluate(
@@ -477,7 +530,7 @@ def resolve_widgets(
             resolved.append(ResolvedWidget(widget=widget, query=None, granted=False))
             continue
         served.extend(
-            member.id for member in query_members(authority.cat, query) if member.id not in served
+            member.id for member in authority.served_members(query) if member.id not in served
         )
         resolved.append(ResolvedWidget(widget=widget, query=query, granted=True))
     return ResolvedCanvas(
@@ -485,10 +538,12 @@ def resolve_widgets(
     )
 
 
-def check_canvas_shape(spec: BiDashboardSpec) -> None:
+def check_canvas_shape(  # noqa: PLR0912 - one branch per named refusal
+    spec: BiDashboardSpec, *, certified_measures: frozenset[str] = frozenset()
+) -> None:
     """Refuse a widget the query engine would refuse, naming the widget.
 
-    Two rules, both the compiler's own
+    Three rules, all the compiler's own
     (``compiler.py``: every sliceable dimension must be allowed by every measure
     the query reads):
 
@@ -496,7 +551,14 @@ def check_canvas_shape(spec: BiDashboardSpec) -> None:
       — a figure is not something to group by, and the reverse;
     * every dimension a widget slices by (grouped, filtered, pivoted or Top-N'd)
       must appear in the ``allowed_dimensions`` of every measure it reads, because
-      a measure is only correct at the grains its own table carries.
+      a measure is only correct at the grains its own table carries;
+    * a CALCULATED measure on a saved canvas must be one the institution has
+      CERTIFIED. A saved dashboard is a document other people open, and a personal
+      formula on one turns a share into a way to make someone else compute the
+      owner's arithmetic under the owner's label. ``certified_measures`` is the
+      institution's certified keys and defaults to EMPTY, so a caller that does
+      not supply them refuses every calculated measure rather than admitting one
+      unchecked. The compiler applies the same rule again when the widget runs.
 
     Called AFTER the authorization walk on purpose: a shape message names members,
     and naming one to a principal who was refused it would be a disclosure.
@@ -508,6 +570,18 @@ def check_canvas_shape(spec: BiDashboardSpec) -> None:
             continue
         measures: list[MeasureDef] = []
         for member_id in widget.query.measures:
+            if member_id not in cat:
+                if member_id in certified_measures:
+                    # A certified calculated measure. Its own figures decide which
+                    # breakdowns it allows, and the compiler checks them against
+                    # the formula it re-parses; this pre-check has nothing truer to
+                    # say about it than that it exists and is certified.
+                    continue
+                raise CanvasRefused(
+                    f"{widget.title}: {member_id} is not a figure this institution has "
+                    "certified. Certify the calculated measure before putting it on a "
+                    "saved dashboard."
+                )
             member = cat.member(member_id)
             if not isinstance(member, MeasureDef):
                 raise CanvasRefused(
@@ -524,6 +598,11 @@ def check_canvas_shape(spec: BiDashboardSpec) -> None:
         if widget.query.top_n is not None:
             sliced.append(widget.query.top_n.dimension)
         for dimension_id in sliced:
+            if dimension_id not in cat:
+                raise CanvasRefused(
+                    f"{widget.title}: {dimension_id} is not something this platform can "
+                    "group or filter by."
+                )
             dimension = cat.member(dimension_id)
             if isinstance(dimension, MeasureDef):
                 raise CanvasRefused(
@@ -977,18 +1056,36 @@ class CompiledExpression:
         return tuple(member.label for member in self.members)
 
 
-def _parse(source: str) -> expr.Expr:
+def _parse(source: str, *, retention_days: int | None) -> expr.Expr:
     """The one place a formula becomes structure. Never on a client.
 
     ``ExpressionError.message`` is production copy by contract and its
     ``position`` is a 0-based offset; the wire model counts from 1, the way an
     editor does.
+
+    ``retention_days`` decides whether the reach of a period comparison is checked
+    (D-196) and has no default, because the two callers want opposite things and
+    neither may get it by omission:
+
+    * the WRITE path passes the deployment's window, so a formula reaching past
+      the history the marts hold is refused where its author can shorten it;
+    * an AUTHORIZATION walk passes ``None``, because which figures a stored
+      formula names — and therefore who may read it — must not change when a
+      deployment shortens its retention window. A measure that vanished from its
+      own author's list on a configuration change would be the wrong answer to
+      the right question, and the compiler refuses the read anyway.
     """
 
     try:
-        return expr.parse(source)
+        return expr.parse(source, retention_days=retention_days)
     except expr.ExpressionError as error:
         raise ExpressionRefused(error.message, position=error.position + 1) from error
+
+
+def _retention_days() -> int:
+    """How long the deployment keeps daily history (``BI_DAILY_RETENTION_DAYS``)."""
+
+    return get_settings().bi.daily_retention_days
 
 
 def compile_expression(
@@ -1010,7 +1107,7 @@ def compile_expression(
        the ids it is given are the ones step 1 derived.
     """
 
-    tree = _parse(source)
+    tree = _parse(source, retention_days=_retention_days())
     referenced = expr.referenced_members(tree)
     if not referenced:
         raise ExpressionRefused("A calculated measure has to name at least one figure.")
@@ -1377,7 +1474,11 @@ def decide_promotion(  # noqa: PLR0913 - the complete checker sentence
         db,
         ctx,
         bank,
-        tuple(expr.referenced_members(_parse(measure.expression))),
+        # ``None``: this parse establishes WHICH FIGURES the checker must hold
+        # authority over. A retention window that has since been shortened must not
+        # be able to block a rejection, and the compiler applies that bound itself
+        # before the measure can ever be read.
+        tuple(expr.referenced_members(_parse(measure.expression, retention_days=None))),
         proposer_user_id=measure.proposed_by_user_id,
         actor_user_id=actor_user_id,
         surface=surface,
@@ -1477,7 +1578,7 @@ def _readable(authority: ViewerAuthority, measure: BiMeasure) -> bool:
     """
 
     try:
-        member_ids = expr.referenced_members(expr.parse(measure.expression))
+        member_ids = expr.referenced_members(expr.parse(measure.expression, retention_days=None))
     except expr.ExpressionError:
         # A stored formula that no longer parses is not readable by anyone: the
         # measure's own figures cannot be established, so neither can the

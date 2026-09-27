@@ -87,11 +87,13 @@ the surface's row cap and asks for one row more to detect truncation (S13).
 
 from __future__ import annotations
 
+from calendar import monthrange
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Literal, cast
+from types import MappingProxyType
+from typing import Any, Literal, cast, get_args
 from uuid import UUID
 
 from sqlalchemy import (
@@ -111,6 +113,7 @@ from sqlalchemy import (
     case,
     func,
     literal,
+    not_,
     null,
     or_,
     select,
@@ -123,6 +126,7 @@ from sqlalchemy.sql.expression import cast as sql_cast
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.domain.bi import expr
 from app.domain.bi.catalogue import (
     Catalogue,
     DimensionDef,
@@ -147,7 +151,9 @@ from app.models.bi import (
     BiFactPositionEom,
     BiFactTarget,
 )
+from app.models.bi_content import BiMeasure
 from app.schemas.bi import (
+    BI_MAX_MEASURES,
     BI_PIVOT_MAX_COLUMNS,
     BI_TOP_N_OTHER_LABEL,
     BiComparisonRole,
@@ -155,6 +161,7 @@ from app.schemas.bi import (
     BiFilterValue,
     BiPivot,
     BiQuery,
+    BiResultColumnFormat,
     BiTime,
     BiTopN,
 )
@@ -162,11 +169,21 @@ from app.services.bi import execution
 from app.services.bi.errors import InvalidQuery, UnknownMember
 
 __all__ = [
+    "MAX_PERIODS_PER_QUERY",
     "ColumnSpec",
     "CompiledQuery",
     "aggregate_table_covers",
     "compile_query",
+    "expand_calculated_measures",
 ]
+
+#: Most distinct periods one compiled statement may carry. Every period is a
+#: second aggregation of every measure component, so the statement grows with
+#: this number; a formula that reads its figures at eight different periods is
+#: past anything a person composes and well inside what the retention bound
+#: already allows (D-196 caps the REACH; this caps how many points inside it one
+#: formula may name).
+MAX_PERIODS_PER_QUERY = 8
 
 # --- the mapped plane ------------------------------------------------------------------
 
@@ -254,6 +271,11 @@ _PIVOT_SEPARATOR = "|"
 # --- output -------------------------------------------------------------------------------
 
 
+#: Every format a result column may declare, as a SET, for checking a value that
+#: arrives as text (a calculated measure's ``value_type`` comes off a row).
+_RESULT_FORMATS: frozenset[str] = frozenset(get_args(BiResultColumnFormat))
+
+
 @dataclass(frozen=True, slots=True)
 class ColumnSpec:
     """One column of the result: its wire id and how the client renders it."""
@@ -262,7 +284,7 @@ class ColumnSpec:
     label: str
     kind: Literal["dimension", "measure", "marker"]
     #: A catalogue value type, or ``int`` for the marker column.
-    format: str
+    format: BiResultColumnFormat
     member_id: str | None = None
     role: BiComparisonRole | None = None
     pivot_value: str | None = None
@@ -322,9 +344,66 @@ class _Window:
     single: bool
 
 
+#: The one state in which a calculated measure belongs to the INSTITUTION rather
+#: than to one person, and therefore the only one the compiler will evaluate. The
+#: value is pinned against ``app/models/bi_content.py``'s own vocabulary by
+#: ``tests/services/bi/test_compiler_calculated.py``.
+_CERTIFIED_STATE = "bank_certified"
+
+
+@dataclass(frozen=True, slots=True)
+class _Certified:
+    """A bank-certified calculated measure, straight off the row.
+
+    Deliberately carries the certified TEXT and not a member list: what the
+    formula names is re-derived from this text on every compile
+    (``expr.referenced_members``), so the stored ``referenced_members`` column
+    can never become the authority for which figures a statement reads.
+    """
+
+    id: str
+    label: str
+    value_type: str
+    expression: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Calculated:
+    """One certified calculated measure, resolved against the catalogue."""
+
+    id: str
+    label: str
+    value_type: BiResultColumnFormat
+    tree: expr.Expr
+    #: The period the formula compares over, declared in its own text (D-195);
+    #: ``None`` when it names no period function and is plain arithmetic.
+    grain: expr.PeriodGrain | None
+    #: The figures the formula names, in the order written. From the SERVER's
+    #: parse, resolved to catalogue measures.
+    references: tuple[MeasureDef, ...]
+    #: Every period the formula reads, as grains back from the query's own window.
+    periods: tuple[int, ...]
+
+    @property
+    def reach(self) -> int:
+        return max(self.periods)
+
+
+#: What the compiler emits one result column for: a catalogue measure, or one of
+#: the institution's own certified calculated measures. Both declare the three
+#: things a column needs — an id, a label and a value type.
+_Emitted = MeasureDef | _Calculated
+
+
 @dataclass(slots=True)
 class _Resolved:
     fact: str
+    #: The result columns, in the order the request named them.
+    outputs: list[_Emitted]
+    #: Every CATALOGUE measure the query reads: the measure outputs, plus every
+    #: figure a calculated output's formula names. Every shape rule — one fact
+    #: table, one time behaviour, allowed dimensions — is decided on this list,
+    #: so a calculated measure is held to exactly the rules its figures are.
     measures: list[MeasureDef]
     #: Row group keys, in order (the pivot dimension is not one of them).
     dimensions: list[DimensionDef]
@@ -339,6 +418,14 @@ class _Resolved:
     prior: _Window | None
     member_ids: tuple[str, ...]
     injected_member_ids: tuple[str, ...]
+    #: The declared grain every calculated output shares, or ``None``.
+    grain: expr.PeriodGrain | None = None
+    #: Distinct periods the statement must aggregate, ascending from ``0``.
+    periods: tuple[int, ...] = (0,)
+
+    @property
+    def calculated(self) -> tuple[_Calculated, ...]:
+        return tuple(output for output in self.outputs if isinstance(output, _Calculated))
 
 
 def _lookup(cat: Catalogue, member_id: str) -> MemberDef:
@@ -364,6 +451,230 @@ def _composed(cat: Catalogue, measure: MeasureDef) -> list[MeasureDef]:
     return out
 
 
+#: Calendar months per period of each declared grain. The grain VOCABULARY is
+#: ``app/domain/bi/expr.py``'s (the formula declares it); what a period spans on a
+#: calendar is the compiler's, because only the compiler turns it into dates.
+_MONTHS_PER_PERIOD: Mapping[str, int] = {"month": 1, "quarter": 3, "year": 12}
+
+
+def _period_bounds(day: date, grain: str) -> tuple[date, date]:
+    """The first and last calendar day of the ``grain`` period containing ``day``."""
+    span = _MONTHS_PER_PERIOD[grain]
+    first_month = ((day.month - 1) // span) * span + 1
+    last_month = first_month + span - 1
+    return (
+        date(day.year, first_month, 1),
+        date(day.year, last_month, monthrange(day.year, last_month)[1]),
+    )
+
+
+def _shifted_period(day: date, grain: str, periods_back: int) -> tuple[date, date]:
+    """The bounds of the period ``periods_back`` grains before ``day``'s own.
+
+    Calendar arithmetic on months rather than on days: three months before 31 May
+    is March, whose end is the 31st, and no number of days says that.
+    """
+    start, _ = _period_bounds(day, grain)
+    months = (start.year * 12 + start.month - 1) - periods_back * _MONTHS_PER_PERIOD[grain]
+    year, month = divmod(months, 12)
+    return _period_bounds(date(year, month + 1, 1), grain)
+
+
+def _period_window(as_of: date, grain: str, periods_back: int) -> _Window:
+    """The window of the period ``periods_back`` grains before ``as_of``'s own.
+
+    Never past the reporting date: a closed period is read whole, and the period in
+    progress is read up to the date asked for. Clipping matters for a flow, where
+    the window is an accumulation; for a stock it is the period's last date with
+    data either way.
+    """
+    start, end = _shifted_period(as_of, grain, periods_back)
+    return _Window(start, min(end, as_of), single=False)
+
+
+def _load_certified(
+    db: Session, q: BiQuery, cat: Catalogue, *, organization_id: str, bank_id: str
+) -> Mapping[str, _Certified]:
+    """The institution's certified calculated measures this query names.
+
+    Only ``bank_certified`` rows, and only the ids the request actually asked
+    for. Three properties, each of which is the reason this is not a wider query:
+
+    * **Certified only.** A personal draft or a measure awaiting review is not
+      loaded at all, so it resolves as an unknown id exactly like a typo. That is
+      deliberate on two counts: a saved or shared dashboard must not be able to
+      make someone else run a formula nobody certified, and the compiler holds no
+      principal, so it could not tell a draft's own author from anyone else
+      without being handed an identity it has no other use for. The refusal is
+      the generic one because naming the measure would tell a caller that another
+      person's private draft exists.
+    * **Institution-scoped at the query.** Two banks of one organization share an
+      RLS tenant, so organization scoping alone cannot isolate their rows
+      (the by-id rule in ``AGENTS.md``).
+    * **The certified TEXT.** ``approved_expression`` is what a checker approved,
+      frozen at approval; the row's CHECK constraints guarantee it is present on
+      a certified row and equal in digest to ``expression``.
+    """
+    wanted = [member_id for member_id in dict.fromkeys(q.measures) if member_id not in cat]
+    if not wanted:
+        return {}
+    rows = db.scalars(
+        select(BiMeasure).where(
+            BiMeasure.organization_id == organization_id,
+            BiMeasure.bank_id == bank_id,
+            BiMeasure.state == _CERTIFIED_STATE,
+            BiMeasure.measure_key.in_(wanted),
+        )
+    )
+    found: dict[str, _Certified] = {}
+    for row in rows:
+        text = row.approved_expression
+        if text is None:  # pragma: no cover - refused by ck_bi_measures_approval_complete
+            continue
+        found[row.measure_key] = _Certified(
+            id=row.measure_key, label=row.label, value_type=row.value_type, expression=text
+        )
+    return found
+
+
+def expand_calculated_measures(
+    db: Session, cat: Catalogue, q: BiQuery, *, organization_id: str, bank_id: str
+) -> BiQuery:
+    """``q`` with every certified calculated measure replaced by the FIGURES it names.
+
+    This is the authorization surface of a calculated measure, and it is the only
+    thing the authorization walk needs: ``authorize_query`` evaluates a sentence per
+    ``(module, sensitivity)`` pair of the members a query touches, and a formula
+    touches exactly the catalogue figures its text names. Hand it this query instead
+    of the caller's and a reader cannot use a formula to reach a figure they hold no
+    binding for — the ids come from the SERVER's parse of the stored text, by the
+    same structural walk (``expr.referenced_members``) that
+    ``content.py::_readable`` uses, and never from the stored
+    ``referenced_members`` column or from anything on the request.
+
+    Three deliberately refusing properties:
+
+    * an id that is neither a catalogue member nor a CERTIFIED measure of this
+      institution is left exactly as it arrived, so it resolves as unknown. The
+      same is true of a stored formula that no longer parses: an expansion that
+      dropped either would hand the walk a SHORTER member list than the statement
+      would read, which is the one failure mode here that is a leak rather than an
+      inconvenience;
+    * a sort key naming a calculated measure is dropped from the probe, because it
+      is not a catalogue member and the figures behind it are already in the list;
+    * the expanded list is capped at the same number of figures a request may name,
+      so twenty-five formulas of twenty-five figures cannot be composed into one
+      evaluation.
+
+    The retention bound (D-196) is NOT applied: whether an identity may read the
+    figures a formula names must not change when a deployment shortens its window.
+    The compiler applies it where it belongs, before any figure is served.
+    """
+    certified = _load_certified(db, q, cat, organization_id=organization_id, bank_id=bank_id)
+    if not certified:
+        return q
+    expanded: list[str] = []
+
+    def keep(member_id: str) -> None:
+        if member_id not in expanded:
+            expanded.append(member_id)
+
+    for member_id in q.measures:
+        stored = certified.get(member_id)
+        if stored is None:
+            keep(member_id)
+            continue
+        try:
+            tree = expr.parse(stored.expression, retention_days=None)
+        except expr.ExpressionError:
+            keep(member_id)
+            continue
+        for reference in expr.referenced_members(tree):
+            keep(reference)
+    if not expanded:
+        raise InvalidQuery("This result names no figure, so there is nothing to read.")
+    if len(expanded) > BI_MAX_MEASURES:
+        raise InvalidQuery(
+            f"This result reads {len(expanded)} figures once its calculated measures are "
+            f"worked out; at most {BI_MAX_MEASURES} can be read at once."
+        )
+    return q.model_copy(
+        update={
+            "measures": expanded,
+            "sort": [sort for sort in q.sort if sort.member not in certified],
+        }
+    )
+
+
+def _resolve_calculated(cat: Catalogue, certified: _Certified, retention_days: int) -> _Calculated:
+    """Parse a certified formula and resolve every figure it names.
+
+    The ids come from ``expr.referenced_members`` over the tree this function
+    parses — never from the stored ``referenced_members`` column, and never from
+    the request. That is what makes the member set a statement reads the same set
+    the authorization walk was given: both derive it from the same text by the
+    same structural walk.
+
+    The retention bound (D-196) is applied again here, not only where the formula
+    was written: a deployment that SHORTENS ``BI_DAILY_RETENTION_DAYS`` after a
+    measure was certified would otherwise start answering it out of partitions
+    that no longer exist, and an empty prior period renders as a real figure of
+    nothing.
+    """
+    try:
+        tree = expr.parse(certified.expression, retention_days=retention_days)
+    except expr.ExpressionError as error:
+        raise InvalidQuery(
+            f"{certified.label} cannot be computed: {error.message}", members=(certified.id,)
+        ) from error
+    references: list[MeasureDef] = []
+    for member_id in expr.referenced_members(tree):
+        member = _lookup(cat, member_id)
+        if not isinstance(member, MeasureDef):
+            raise InvalidQuery(
+                f"{certified.label} names {member_id}, which is something to group or filter "
+                "by rather than a figure.",
+                members=(certified.id, member_id),
+            )
+        if member.aggregation in _CONCENTRATION:
+            raise InvalidQuery(
+                f"{certified.label} names {member.label}, a concentration figure. "
+                "Those are worked out over a second grouping of their own and cannot be "
+                "combined inside a formula.",
+                members=(certified.id, member_id),
+            )
+        references.append(member)
+    if not references:
+        raise InvalidQuery(
+            f"{certified.label} names no figure, so there is nothing to compute.",
+            members=(certified.id,),
+        )
+    if certified.value_type not in _RESULT_FORMATS:
+        # The row's own CHECK constraint already limits this to the catalogue's
+        # measure value types; refusing here as well is what makes the narrowing
+        # below honest rather than an unchecked assertion about a text column.
+        raise InvalidQuery(
+            f"{certified.label} declares a kind of number this result cannot render.",
+            members=(certified.id,),
+        )
+    periods = expr.period_offsets(tree)
+    if len(periods) > MAX_PERIODS_PER_QUERY:
+        raise InvalidQuery(
+            f"{certified.label} reads its figures at {len(periods)} different periods; "
+            f"at most {MAX_PERIODS_PER_QUERY} can be shown in one result.",
+            members=(certified.id,),
+        )
+    return _Calculated(
+        id=certified.id,
+        label=certified.label,
+        value_type=cast(BiResultColumnFormat, certified.value_type),
+        tree=tree,
+        grain=expr.declared_grain(tree),
+        references=tuple(references),
+        periods=periods,
+    )
+
+
 def _windows(time: BiTime) -> tuple[_Window, _Window | None]:
     if time.as_of is not None:
         current = _Window(time.as_of, time.as_of, single=True)
@@ -377,20 +688,123 @@ def _windows(time: BiTime) -> tuple[_Window, _Window | None]:
     return current, _Window(time.compare_to - (end - start), time.compare_to, single=False)
 
 
+def _period_shape(  # noqa: PLR0911, PLR0912 - one branch per named refusal
+    q: BiQuery,
+    outputs: Sequence[_Emitted],
+    *,
+    time_axis: Sequence[DimensionDef],
+    stock: bool,
+    retention_days: int,
+) -> tuple[expr.PeriodGrain | None, tuple[int, ...]]:
+    """D-195: the query must CARRY the grain a calculated measure declares.
+
+    A calculated measure that names ``PCT_CHANGE`` or ``LAG`` states the period it
+    compares over, and it means that period everywhere it appears. A query that
+    cannot answer at that period is therefore REFUSED BY NAME rather than answered
+    at whatever period it happens to have — the point of certifying a measure is
+    that one label means one figure, and a figure that is month-on-month in one
+    widget and quarter-on-quarter in the next defeats it.
+
+    Four things a query has to carry, each refused in the measure's own words:
+
+    1. **One declared grain per result.** Two calculated measures comparing over
+       different periods cannot share a result: the rows would be at two periods.
+    2. **A single reporting date.** "The period before" is defined relative to one
+       date. Over a window there is no single period to be before, and the row
+       axis this compiler builds cannot carry a per-row shift.
+    3. **No second period axis.** ``compare_to`` and a time dimension each add
+       their own comparison; two comparisons under one label is the ambiguity
+       this whole rule exists to refuse.
+    4. **Reach inside the retained window** (D-196), and for a FLOW the whole of
+       the lagged period has to be retained rather than just its last date —
+       a stock reads the period's closing book, a flow adds the period up
+       (D-195), so the same reach costs one more period of history.
+    """
+    grained = [
+        output for output in outputs if isinstance(output, _Calculated) and output.grain is not None
+    ]
+    if not grained:
+        return None, (0,)
+    first = grained[0]
+    grain = cast(expr.PeriodGrain, first.grain)
+    period = expr.GRAIN_LABELS[grain]
+    for output in grained[1:]:
+        if output.grain != grain:
+            other = expr.GRAIN_LABELS[cast(expr.PeriodGrain, output.grain)]
+            raise InvalidQuery(
+                f"{first.label} compares by {period} and {output.label} by {other}. "
+                "One result can carry one comparison period; show them side by side "
+                "on a dashboard instead.",
+                members=(first.id, output.id),
+            )
+    opening = f"{first.label} compares each {period} with the {period} before it"
+    if q.time.as_of is None:
+        raise InvalidQuery(
+            f"{opening}, so it has to be read at a single reporting date rather than "
+            "over a window.",
+            members=(first.id,),
+        )
+    if q.time.compare_to is not None:
+        raise InvalidQuery(
+            f"{opening}, so it cannot also be compared with another period.",
+            members=(first.id,),
+        )
+    if time_axis:
+        raise InvalidQuery(
+            f"{opening}, so the result cannot also be broken down by {time_axis[0].label}.",
+            members=(first.id, time_axis[0].id),
+        )
+    periods = sorted({offset for output in grained for offset in output.periods})
+    if len(periods) > MAX_PERIODS_PER_QUERY:
+        raise InvalidQuery(
+            f"This result reads its figures at {len(periods)} different periods; "
+            f"at most {MAX_PERIODS_PER_QUERY} can be shown at once.",
+            members=tuple(output.id for output in grained),
+        )
+    if not stock:
+        # A flow is added up ACROSS the lagged period, so the retained window has
+        # to reach that period's FIRST day; a stock only needs its last.
+        needed = (max(periods) + 1) * expr.GRAIN_MAX_DAYS[grain]
+        if needed > retention_days:
+            raise InvalidQuery(
+                f"{first.label} adds up over each {period}, so this comparison needs "
+                f"{needed} days of history and daily figures are kept for "
+                f"{retention_days}.",
+                members=(first.id,),
+            )
+    return grain, tuple(periods)
+
+
 def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
-    cat: Catalogue, q: BiQuery, injected_filters: Sequence[BiFilter]
+    cat: Catalogue,
+    q: BiQuery,
+    injected_filters: Sequence[BiFilter],
+    certified: Mapping[str, _Certified] = MappingProxyType({}),
+    retention_days: int = 0,
 ) -> _Resolved:
     """Ids → members, then every shape rule. Unknown ids are refused first."""
     hierarchies: dict[str, HierarchyDef] = {h.id: h for h in cat.hierarchies()}
 
     # 1. Existence: every id the request names must be a catalogue member (a
-    #    hierarchy id stands for its levels). Nothing else is examined yet.
+    #    hierarchy id stands for its levels) or one of the institution's own
+    #    CERTIFIED calculated measures. Nothing else is examined yet.
+    outputs: list[_Emitted] = []
     measures: list[MeasureDef] = []
     for member_id in q.measures:
+        stored = certified.get(member_id)
+        if stored is not None:
+            calculated = _resolve_calculated(cat, stored, retention_days)
+            outputs.append(calculated)
+            measures.extend(
+                reference for reference in calculated.references if reference not in measures
+            )
+            continue
         member = _lookup(cat, member_id)
         if not isinstance(member, MeasureDef):
             raise InvalidQuery(f"{member_id} is a dimension, not a measure.", members=(member_id,))
-        measures.append(member)
+        outputs.append(member)
+        if member not in measures:
+            measures.append(member)
     dimension_ids: list[str] = []
     for member_id in q.dimensions:
         hierarchy = hierarchies.get(member_id)
@@ -416,7 +830,11 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
     top_n_dimension = None if q.top_n is None else _dimension(q.top_n.dimension, "top_n")
     pivot_dimension = None if q.pivot is None else _dimension(q.pivot.dimension, "pivot")
     for sort in q.sort:
-        _lookup(cat, sort.member)
+        # A sort key naming one of the institution's certified calculated measures
+        # is not a catalogue member; the shape rules below still require it to be
+        # among the requested outputs.
+        if sort.member not in certified:
+            _lookup(cat, sort.member)
     composed = {m.id: m for measure in measures for m in _composed(cat, measure)}
     over_dimensions: dict[str, DimensionDef] = {}
     for measure in measures:
@@ -443,6 +861,12 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
             members=tuple(measure.id for measure in measures),
         )
     fact = next(iter(facts))
+    if len(measures) > BI_MAX_MEASURES:
+        raise InvalidQuery(
+            f"This result reads {len(measures)} figures once its calculated measures are "
+            f"worked out; at most {BI_MAX_MEASURES} can be read at once.",
+            members=tuple(output.id for output in outputs),
+        )
     behaviours = {measure.time_behaviour for measure in measures}
     if len(behaviours) != 1:
         raise InvalidQuery(
@@ -454,7 +878,34 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
             "Concentration measures over different dimensions cannot share one query.",
             members=tuple(measure.id for measure in measures if measure.over),
         )
+    grain, periods = _period_shape(
+        q,
+        outputs,
+        time_axis=[
+            *(dimension for dimension in dimensions if dimension.table == DATE_TABLE),
+            *(
+                [pivot_dimension]
+                if pivot_dimension is not None and pivot_dimension.table == DATE_TABLE
+                else []
+            ),
+        ],
+        stock=measures[0].time_behaviour == "stock",
+        retention_days=retention_days,
+    )
     over_dimension = next(iter(over_dimensions.values()), None)
+    if over_dimension is not None and any(isinstance(output, _Calculated) for output in outputs):
+        # A concentration measure is aggregated twice — once per obligor, then over
+        # the group — and a calculated measure's own components are finalized at the
+        # outer level. Combining the two would re-aggregate one inside the other,
+        # so they are kept apart rather than made to look combinable.
+        raise InvalidQuery(
+            "A concentration figure and a calculated measure cannot be read in one result.",
+            members=tuple(
+                output.id
+                for output in outputs
+                if isinstance(output, _Calculated) or output.over is not None
+            ),
+        )
     if pivot_dimension is not None and over_dimension is not None:
         raise InvalidQuery("A concentration measure cannot be pivoted.")
     if pivot_dimension is not None and pivot_dimension in dimensions:
@@ -482,14 +933,14 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
                     f"{measure.id} cannot be sliced by {dimension.id}.",
                     members=(measure.id, dimension.id),
                 )
-    requested = {m.id for m in measures} | {d.id for d in dimensions}
+    requested = {output.id for output in outputs} | {d.id for d in dimensions}
     for sort in q.sort:
         if sort.member not in requested:
             raise InvalidQuery(
                 f"Sort by {sort.member} needs it among the requested measures or dimensions.",
                 members=(sort.member,),
             )
-        if q.pivot is not None and sort.member in {m.id for m in measures}:
+        if q.pivot is not None and sort.member in {output.id for output in outputs}:
             raise InvalidQuery(
                 "A pivoted result cannot be sorted by a measure; sort by a row dimension.",
                 members=(sort.member,),
@@ -498,6 +949,7 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
     current, prior = _windows(q.time)
     member_ids: list[str] = []
     for member_id in (
+        *(output.id for output in outputs),
         *(m.id for m in measures),
         *composed,
         *(d.id for d in dimensions),
@@ -510,6 +962,7 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
             member_ids.append(member_id)
     return _Resolved(
         fact=fact,
+        outputs=outputs,
         measures=measures,
         dimensions=dimensions,
         filters=[*filters, *injected],
@@ -523,6 +976,8 @@ def _resolve(  # noqa: PLR0912, PLR0915 - one branch per shape rule, all named
         prior=prior,
         member_ids=tuple(member_ids),
         injected_member_ids=tuple(dict.fromkeys(spec.dimension.id for spec in injected)),
+        grain=grain,
+        periods=periods,
     )
 
 
@@ -839,7 +1294,7 @@ Finalizer = Callable[[Mapping[str, ColumnElement[Any]]], ColumnElement[Any]]
 
 @dataclass(frozen=True, slots=True)
 class _MeasurePlan:
-    measure: MeasureDef
+    measure: _Emitted
     #: First-level aggregates (over fact rows), by alias.
     components: tuple[_Component, ...]
     #: Second-level aggregates (over the ``over`` grouping), by alias; empty
@@ -1053,6 +1508,131 @@ def _plan_measure(  # noqa: PLR0911, PLR0913 - one return per aggregation kind
     raise InvalidQuery(f"{measure.id} uses an aggregation the compiler does not support.")
 
 
+def _plan_calculated(  # noqa: PLR0913 - one plan per figure per period, all explicit
+    cat: Catalogue,
+    source: _Source,
+    calculated: _Calculated,
+    prefix: str,
+    pivot_predicate: ColumnElement[Any] | None,
+    windows: Mapping[int, ColumnElement[Any] | None],
+) -> _MeasurePlan:
+    """A calculated measure: one sub-plan per (figure it names × period it reads).
+
+    The formula itself never becomes an aggregate. Each FIGURE it names is planned
+    exactly as it would be if the query had asked for it directly — same
+    components, same population/selection split, same D-042 answerable count —
+    once per period the formula reads it at, under that period's own window
+    predicate. The formula is then evaluated over those finalized values
+    (:func:`_evaluate`), which is why a calculated measure cannot reach outside the
+    aggregation vocabulary the catalogue already declares: it has no aggregate of
+    its own to reach with.
+    """
+    parts: dict[tuple[str, int], _MeasurePlan] = {}
+    components: list[_Component] = []
+    for index, measure in enumerate(calculated.references):
+        for offset in calculated.periods:
+            plan = _plan_measure(
+                cat,
+                source,
+                measure,
+                f"{prefix}r{index}p{offset}",
+                _all(pivot_predicate, windows[offset]),
+                None,
+            )
+            parts[(measure.id, offset)] = plan
+            components.extend(plan.components)
+    return _MeasurePlan(
+        calculated,
+        tuple(components),
+        None,
+        lambda cols: _evaluate(calculated.tree, cols, parts, 0),
+    )
+
+
+def _evaluate(  # noqa: PLR0911, PLR0912 - one branch per node shape, all named
+    node: expr.Expr,
+    cols: Mapping[str, ColumnElement[Any]],
+    parts: Mapping[tuple[str, int], _MeasurePlan],
+    offset: int,
+) -> ColumnElement[Any]:
+    """The formula's AST as one SQL expression over already-aggregated values.
+
+    ``offset`` is which period this sub-expression is being read at, in grains
+    back from the query's own; ``LAG`` and ``PCT_CHANGE`` shift it rather than
+    producing an aggregate, so a nested lag composes into a single lookup.
+
+    **A missing figure stays missing.** Every division — the ``/`` operator as
+    well as ``SAFE_DIV`` — goes through :func:`_ratio`, so a zero or absent
+    denominator gives NO VALUE rather than zero, "flat", or a database error that
+    would fail the whole result. ``IF`` names BOTH branches explicitly instead of
+    using ``ELSE``, so a condition that cannot be evaluated (a figure the bank
+    never supplied) yields no value either, rather than quietly taking the false
+    branch and reading as a real answer.
+    """
+    if isinstance(node, expr.NumberLiteral):
+        return literal(node.value, Numeric(38, 10))
+    if isinstance(node, expr.MemberReference):
+        return parts[(node.member_id, offset)].finalize(cols)
+    if isinstance(node, expr.Negation):
+        return -_evaluate(node.operand, cols, parts, offset)
+    if isinstance(node, expr.Arithmetic):
+        left = _evaluate(node.left, cols, parts, offset)
+        right = _evaluate(node.right, cols, parts, offset)
+        if node.operator == "+":
+            return left + right
+        if node.operator == "-":
+            return left - right
+        if node.operator == "*":
+            return left * right
+        return _ratio(left, right)
+    if isinstance(node, expr.Comparison):
+        return _compared(
+            node.operator,
+            _evaluate(node.left, cols, parts, offset),
+            _evaluate(node.right, cols, parts, offset),
+        )
+    if isinstance(node, expr.Logical):
+        left = _evaluate(node.left, cols, parts, offset)
+        right = _evaluate(node.right, cols, parts, offset)
+        return and_(left, right) if node.operator == "and" else or_(left, right)
+    if isinstance(node, expr.LogicalNot):
+        return not_(_evaluate(node.operand, cols, parts, offset))
+    if isinstance(node, expr.SafeDivide):
+        return _ratio(
+            _evaluate(node.numerator, cols, parts, offset),
+            _evaluate(node.denominator, cols, parts, offset),
+        )
+    if isinstance(node, expr.Conditional):
+        condition = _evaluate(node.condition, cols, parts, offset)
+        return case(
+            (condition, _evaluate(node.when_true, cols, parts, offset)),
+            (not_(condition), _evaluate(node.when_false, cols, parts, offset)),
+        )
+    if isinstance(node, expr.PercentChange):
+        now = _evaluate(node.operand, cols, parts, offset)
+        before = _evaluate(node.operand, cols, parts, offset + 1)
+        return _ratio(now - before, before)
+    lag = cast(expr.Lag, node)
+    return _evaluate(lag.operand, cols, parts, offset + lag.periods)
+
+
+def _compared(
+    operator: str, left: ColumnElement[Any], right: ColumnElement[Any]
+) -> ColumnElement[Any]:
+    """One comparison, as SQL. NULL on either side is SQL's own unknown."""
+    if operator == "=":
+        return left == right
+    if operator == "!=":
+        return left != right
+    if operator == "<":
+        return left < right
+    if operator == "<=":
+        return left <= right
+    if operator == ">":
+        return left > right
+    return left >= right
+
+
 def _weight_of(cat: Catalogue, measure: MeasureDef) -> MeasureDef:
     if measure.weight is None:
         raise InvalidQuery(f"{measure.id} is a weighted average with no weight.")
@@ -1235,8 +1815,8 @@ class _Grouped:
 
     statement: Select[Any] | CompoundSelect
     key_aliases: tuple[str, ...]
-    #: ``(alias, measure, pivot value)`` per measure column.
-    measure_aliases: tuple[tuple[str, MeasureDef, Any | None], ...]
+    #: ``(alias, output, pivot value)`` per measure column.
+    measure_aliases: tuple[tuple[str, _Emitted, Any | None], ...]
     has_level: bool
 
 
@@ -1312,7 +1892,7 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
     build: _Build,
     window: _Window,
     dimensions: Sequence[DimensionDef],
-    measures: Sequence[MeasureDef],
+    measures: Sequence[_Emitted],
     *,
     prior: _Window | None = None,
     rollup: bool,
@@ -1356,8 +1936,31 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
         periods = [("", current_period), ("p", prior_period)]
         in_window = or_(current_period, prior_period)
 
-    # Measure plans, one per (measure, pivot value, period).
-    plans: list[tuple[str, MeasureDef, Any | None, str, _MeasurePlan]] = []
+    # The periods a calculated measure declares (D-195), each a window of its own,
+    # derived from the query's reporting date by calendar arithmetic on the grain.
+    #
+    # Period 0 is the WHOLE declared period up to the reporting date, and that is
+    # not the same thing as the reporting date: a stock reads the period's closing
+    # book (which is what the date is, because the date has to end its period —
+    # ``_require_period_end``), while a flow is added up across it. Comparing a
+    # day's flow with a whole month's would be out by a whole period, which is the
+    # error D-195 names. Plain measures keep the query's own window and therefore
+    # gain an explicit predicate here, because the WHERE now admits every period's
+    # rows and a component with no predicate would sum across all of them.
+    lagged: dict[int, ColumnElement[Any] | None] = {0: None}
+    if resolved.grain is not None:
+        periods = [("", current_period)]
+        windows = {
+            offset: _time_predicate(
+                source, build, _period_window(window.end, resolved.grain, offset), time_dimensions
+            )
+            for offset in resolved.periods
+        }
+        lagged = dict(windows)
+        in_window = or_(current_period, *windows.values())
+
+    # Measure plans, one per (output, pivot value, period).
+    plans: list[tuple[str, _Emitted, Any | None, str, _MeasurePlan]] = []
     for j, measure in enumerate(measures):
         cells: list[tuple[str, Any | None, ColumnElement[Any] | None]] = (
             [
@@ -1369,14 +1972,24 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
         )
         for alias, value, pivot_predicate in cells:
             for suffix, period_predicate in periods:
-                plan = _plan_measure(
-                    build.cat,
-                    source,
-                    measure,
-                    f"{alias}{suffix}",
-                    _all(pivot_predicate, period_predicate),
-                    over_column,
-                )
+                if isinstance(measure, _Calculated):
+                    plan = _plan_calculated(
+                        build.cat,
+                        source,
+                        measure,
+                        f"{alias}{suffix}",
+                        pivot_predicate,
+                        lagged if measure.grain is not None else {0: period_predicate},
+                    )
+                else:
+                    plan = _plan_measure(
+                        build.cat,
+                        source,
+                        measure,
+                        f"{alias}{suffix}",
+                        _all(pivot_predicate, period_predicate),
+                        over_column,
+                    )
                 plans.append((alias, measure, value, suffix, plan))
 
     where = _where(source, build, in_window)
@@ -1390,7 +2003,10 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
         # Level 1: the fact grouped by keys + the concentration dimension.
         first = _statement(
             [
-                *[expr.label(alias) for expr, alias in zip(key_exprs, key_aliases, strict=True)],
+                *[
+                    column.label(alias)
+                    for column, alias in zip(key_exprs, key_aliases, strict=True)
+                ],
                 over_column.label("over"),
                 *[
                     component.expr.label(component.alias)
@@ -1428,7 +2044,7 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
     group_exprs: list[ColumnElement[Any]] = list(key_exprs)
     finalized = {(alias, suffix): plan.finalize(components) for alias, _, _, suffix, plan in plans}
     value_columns: list[ColumnElement[Any]] = []
-    aliases: list[tuple[str, MeasureDef, Any | None]] = []
+    aliases: list[tuple[str, _Emitted, Any | None]] = []
     for alias, measure, value, suffix, _ in plans:
         if suffix:
             continue
@@ -1444,7 +2060,9 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
                     (_ratio(current - previous, previous) * 100).label(f"{alias}_delta_pct"),
                 )
             )
-    key_columns = [expr.label(alias) for expr, alias in zip(key_exprs, key_aliases, strict=True)]
+    key_columns = [
+        column.label(alias) for column, alias in zip(key_exprs, key_aliases, strict=True)
+    ]
     measure_aliases = tuple(aliases)
 
     if not rollup:
@@ -1456,8 +2074,8 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
     depth = len(group_exprs)
     if build.dialect == "postgresql":
         level: ColumnElement[Any] = literal(depth, Integer)
-        for expr in group_exprs:
-            level = level - func.grouping(expr)
+        for group_expr in group_exprs:
+            level = level - func.grouping(group_expr)
         statement = _statement([*key_columns, level.label(_LEVEL_MARKER), *value_columns])
         statement = statement.group_by(func.rollup(*group_exprs))
         return _Grouped(statement, key_aliases, measure_aliases, has_level=True)
@@ -1466,8 +2084,8 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
     levels: list[Select[Any]] = []
     for kept in range(depth, -1, -1):
         keys = [
-            (expr.label(alias) if i < kept else null().label(alias))
-            for i, (expr, alias) in enumerate(zip(key_exprs, key_aliases, strict=True))
+            (column.label(alias) if i < kept else null().label(alias))
+            for i, (column, alias) in enumerate(zip(key_exprs, key_aliases, strict=True))
         ]
         marker = literal(kept, Integer).label(_LEVEL_MARKER)
         level_select = _statement([*keys, marker, *value_columns])
@@ -1485,7 +2103,7 @@ def _top_keys(build: _Build) -> Select[Any]:
         build,
         resolved.current,
         [resolved.top_n_dimension],
-        [resolved.measures[0]],
+        [resolved.outputs[0]],
         rollup=False,
         pivot=False,
     )
@@ -1534,6 +2152,59 @@ def _pivot_values(db: Session, build: _Build) -> tuple[Any, ...]:
             members=(resolved.pivot_dimension.id,),
         )
     return tuple(row[0] for row in rows)
+
+
+def _require_period_end(db: Session, build: _Build, grain: expr.PeriodGrain) -> None:
+    """The reporting date must be the last date WITH DATA in its ``grain`` period.
+
+    The other half of D-195. A measure that compares each quarter with the one
+    before it is only a quarter-on-quarter figure when the date it is read at ends
+    a quarter; read three weeks into a quarter it would compare a part period with
+    a whole one, and come out a whole period off — which is the defect class the
+    targets work already paid for.
+
+    "Ends the period" is the platform's own semi-additive rule, not a new one: it
+    is ``bi_dim_date.is_last_in_<grain>``, the LAST DATE THE BANK FED in that
+    period (D-014), which is what every stock measure at that grain already reads.
+    So a genuine period end qualifies, and so does the institution's latest book —
+    and an arbitrary date in the middle of a closed period does not.
+
+    The refusal names the nearest date that would work, the way
+    ``no_computed_position`` does, and never substitutes it: choosing a different
+    reporting date on the reader's behalf is how a figure comes to be about a day
+    nobody asked about.
+    """
+    as_of = build.resolved.current.end
+    calendar = _TABLES[DATE_TABLE]
+    statement = select(func.max(calendar.c["date"])).where(
+        calendar.c["organization_id"] == build.organization_id,
+        calendar.c["bank_id"] == build.bank_id,
+        calendar.c[f"is_last_in_{grain}"].is_(true()),
+        calendar.c["date"] <= as_of,
+    )
+    rows = execution.run_select(
+        db,
+        statement,
+        organization_id=build.organization_id,
+        timeout_ms=get_settings().bi.interactive_timeout_ms,
+    )
+    nearest = rows[0][0] if rows else None
+    if nearest == as_of:
+        return
+    period = expr.GRAIN_LABELS[grain]
+    named = tuple(output.id for output in build.resolved.calculated)
+    if nearest is None:
+        raise InvalidQuery(
+            f"This result compares each {period} with the {period} before it, and this "
+            f"institution has no {period} end on or before the date asked for.",
+            members=named,
+        )
+    raise InvalidQuery(
+        f"This result compares each {period} with the {period} before it, so it can only "
+        f"be read at the close of a {period}. The most recent one on or before the date "
+        f"asked for is {nearest.isoformat()}.",
+        members=named,
+    )
 
 
 _COMPARISON_ROLES: tuple[BiComparisonRole, ...] = ("current", "prior", "delta", "delta_pct")
@@ -1671,7 +2342,9 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
     cannot name, weaken or remove them. ``db`` is used only for the pivot
     value probe and to learn the dialect.
     """
-    resolved = _resolve(cat, q, injected_filters)
+    retention_days = get_settings().bi.daily_retention_days
+    certified = _load_certified(db, q, cat, organization_id=organization_id, bank_id=bank_id)
+    resolved = _resolve(cat, q, injected_filters, certified, retention_days)
     dialect = db.get_bind().dialect.name
     build = _Build(
         cat=cat,
@@ -1681,6 +2354,8 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
         dialect=dialect,
         aggregate=aggregate_table_covers(cat, resolved),
     )
+    if resolved.grain is not None:
+        _require_period_end(db, build, resolved.grain)
     if resolved.top_n is not None:
         build.top_other = resolved.top_n.other
         build.top_keys = _top_keys(build)
@@ -1693,7 +2368,7 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
         build,
         resolved.current,
         resolved.dimensions,
-        resolved.measures,
+        resolved.outputs,
         prior=resolved.prior,
         rollup=rollup,
         pivot=resolved.pivot is not None,

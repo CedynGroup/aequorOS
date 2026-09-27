@@ -260,7 +260,27 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
     Everything else is a returned decision; nothing raises 403.
     """
 
-    members = query_members(cat, q)
+    # A calculated measure is authorized as the FIGURES ITS TEXT NAMES, never as
+    # itself. A formula is a bank's own arithmetic over catalogue members, so the
+    # sentence a reader must hold is the union of the sentences those members
+    # need; there is no separate grant for a formula and there must not be one, or
+    # a measure would become a way to reach a figure through a name nobody
+    # evaluated. The expansion re-parses the APPROVED text server-side every time
+    # and never reads the stored member column, so doctoring that column cannot
+    # widen the walk, and an id it cannot resolve is left exactly as it arrived so
+    # it still refuses as unknown.
+    #
+    # Imported inside the call because the compiler imports this module: the
+    # authorization decision is the lower layer and must not depend on the query
+    # builder at module scope.
+    from app.services.bi.compiler import (  # noqa: PLC0415 - one-way dependency at run time
+        expand_calculated_measures,
+    )
+
+    walked = expand_calculated_measures(
+        db, cat, q, organization_id=ctx.organization_id, bank_id=bank.id
+    )
+    members = query_members(cat, walked)
     member_ids = tuple(member.id for member in members)
     telemetry_surface = f"bi_{surface}"
 

@@ -12,7 +12,7 @@ job (``app/services/bi/compiler.py``), and the compiler is also the one that
 decides whether a referenced id is a catalogue member at all — see
 :class:`MemberReference`.
 
-Three properties the rest of the BI plane rests on:
+Four properties the rest of the BI plane rests on:
 
 1. **:func:`referenced_members` is complete.** Authorization walks a calculated
    measure by walking the ids it names; an id that the walk misses is a figure
@@ -27,7 +27,15 @@ Three properties the rest of the BI plane rests on:
    stack) and the finished tree is measured iteratively (so ``1+1+1+…``, which
    the parser builds in a loop, cannot hand the compiler a tree it would
    recurse down). Nothing here can hang or raise ``RecursionError``.
-3. **Nothing of the caller's text is repeated back unchecked.** Every failure
+3. **A period comparison DECLARES its grain (D-195).** ``PCT_CHANGE`` and
+   ``LAG`` each take the period they compare over as their last input, written
+   in the formula (``PCT_CHANGE([m:a], MONTH)``), so the text a checker approves
+   states the meaning and the same measure cannot render month-on-month in one
+   widget and quarter-on-quarter in another under one certification badge. One
+   formula may name one grain; how far back it may reach is a property of the
+   deployment's retention window, not a constant here (:func:`max_lag_periods`,
+   D-196).
+4. **Nothing of the caller's text is repeated back unchecked.** Every failure
    is a named :class:`ExpressionError` carrying the offset it happened at.
    ``message`` is fixed copy plus, at most, a value the language itself made
    well-formed (a figure id, a function name); ``excerpt`` is a short window on
@@ -56,6 +64,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 __all__ = [
     "ALPHABET",
     "FUNCTION_NAMES",
+    "GRAIN_LABELS",
+    "GRAIN_MAX_DAYS",
+    "GRAIN_WORDS",
     "MAX_DEPTH",
     "MAX_EXCERPT_LENGTH",
     "MAX_EXPRESSION_LENGTH",
@@ -75,15 +86,18 @@ __all__ = [
     "ExpressionTooDeep",
     "ExpressionTooLong",
     "Lag",
+    "LagBeyondRetention",
     "Logical",
     "LogicalNot",
     "LogicalOperator",
     "MalformedMemberReference",
     "MemberReference",
+    "MixedPeriodGrains",
     "Negation",
     "NonNumericExpression",
     "NumberLiteral",
     "PercentChange",
+    "PeriodGrain",
     "SafeDivide",
     "TooManyMemberReferences",
     "TrailingContent",
@@ -92,10 +106,14 @@ __all__ = [
     "UnexpectedEndOfExpression",
     "UnexpectedToken",
     "UnknownFunction",
+    "UnknownPeriodGrain",
     "WrongArgumentCount",
     "WrongArgumentType",
+    "declared_grain",
     "depth",
+    "max_lag_periods",
     "parse",
+    "period_offsets",
     "referenced_members",
     "walk",
 ]
@@ -122,10 +140,45 @@ MAX_DEPTH: Final = 64
 #: equal by ``tests/domain/bi/test_expr.py``.
 MAX_MEMBER_REFERENCES: Final = 25
 
-#: Most periods ``LAG`` may look back. A bound, not a policy: whether that many
-#: periods exist in the requested window is the compiler's question, and it will
-#: still answer it. This only stops a formula asking for an unbounded history.
+#: The language's own ceiling on ``LAG``'s reach, in periods. It is a STRUCTURAL
+#: bound — it keeps the tree, and therefore the compiled statement, finite — and
+#: it is deliberately NOT the policy bound. What a formula may actually ask for
+#: is :func:`max_lag_periods`, which is derived from how long the marts keep
+#: daily history (D-196); this number only stops an unbounded tree.
 MAX_LAG_PERIODS: Final = 60
+
+#: The period a calculated measure compares over, DECLARED in the formula
+#: (D-195). ``PCT_CHANGE([m:a], MONTH)`` means month-on-month wherever that
+#: measure appears, so the same label and the same certification badge cannot
+#: render as one comparison in a widget and a different one in the next.
+#:
+#: Exactly three, and not by preference: these are the grains ``bi_dim_date``
+#: carries an ``is_last_in_*`` flag for, which is what fixes where "the period
+#: before" ENDS for a stock measure (D-014). A grain with no flag would have to
+#: invent that, and inventing it is how a figure comes out a whole period off.
+PeriodGrain = Literal["month", "quarter", "year"]
+
+#: The word a formula writes for each grain, in the order a message lists them.
+#: Matched case-insensitively, like the function names and the connectives.
+GRAIN_WORDS: Final[Mapping[str, PeriodGrain]] = MappingProxyType(
+    {"MONTH": "month", "QUARTER": "quarter", "YEAR": "year"}
+)
+
+#: How a grain is named in production copy. A separate map from
+#: :data:`GRAIN_WORDS` because a message reads "the month before", lower case and
+#: in prose, while the formula is written in the language's own upper-case word.
+GRAIN_LABELS: Final[Mapping[PeriodGrain, str]] = MappingProxyType(
+    {"month": "month", "quarter": "quarter", "year": "year"}
+)
+
+#: The LONGEST a period of each grain can be, in days. The maximum rather than an
+#: average, because the bound derived from it decides whether a formula is
+#: accepted at all: taking 30 for a month would accept a formula that is
+#: answerable in February and comes back empty in March, which is precisely the
+#: "an empty answer looks like a real figure of nothing" failure D-196 refuses.
+GRAIN_MAX_DAYS: Final[Mapping[PeriodGrain, int]] = MappingProxyType(
+    {"month": 31, "quarter": 92, "year": 366}
+)
 
 #: Longest window on the source an error may carry back to the caller.
 MAX_EXCERPT_LENGTH: Final = 40
@@ -136,6 +189,35 @@ _NAME_ECHO_LIMIT: Final = 32
 #: Most inputs any function takes; a longer call is refused before its
 #: arguments are built rather than after.
 _MAX_ARGUMENTS: Final = 3
+
+#: The two functions whose LAST input is a period grain word rather than an
+#: expression. Parsed positionally (``_Parser.time_call``) for that reason.
+_GRAIN_FUNCTIONS: Final = frozenset({"PCT_CHANGE", "LAG"})
+
+
+def max_lag_periods(retention_days: int, grain: PeriodGrain) -> int:
+    """How far back a formula may look at ``grain``, given the retained window.
+
+    D-196: the reach of a period comparison is the daily retention window
+    (``BI_DAILY_RETENTION_DAYS``), because past it the marts no longer hold the
+    rows and the answer comes back EMPTY — which on a chart is indistinguishable
+    from a real figure of nothing. The bound is therefore a property of the
+    deployment, checked when the formula is written, and not a number in this
+    module.
+
+    The conversion is days to PERIODS at the grain's longest length
+    (:data:`GRAIN_MAX_DAYS`), which is the refusing direction: a formula accepted
+    here is answerable in every month of the year, not only in the short ones.
+    :data:`MAX_LAG_PERIODS` still caps the result, so the tree stays finite
+    however long a deployment keeps its history.
+
+    Zero is a legitimate answer and means what it says: a window shorter than one
+    period of this grain supports no comparison at that grain at all.
+    """
+    if retention_days < 0:
+        raise ValueError("retention_days cannot be negative")
+    return min(MAX_LAG_PERIODS, retention_days // GRAIN_MAX_DAYS[grain])
+
 
 #: Every character the language itself can contain. An error excerpt is mapped
 #: onto this set, so what comes back to a caller is always a fragment of a
@@ -336,6 +418,61 @@ class NonNumericExpression(ExpressionError):
         )
 
 
+class UnknownPeriodGrain(ExpressionError):
+    """A period word that is not one of :data:`GRAIN_WORDS`."""
+
+    code = "unknown_period_grain"
+
+    def __init__(self, position: int, name: str) -> None:
+        super().__init__(
+            f"There is no period called {name}. A formula can compare by "
+            f"{_listed(tuple(GRAIN_WORDS))}.",
+            position,
+        )
+
+
+class MixedPeriodGrains(ExpressionError):
+    """One formula comparing over two different periods.
+
+    Refused rather than resolved, because a calculated measure declares ONE
+    period grain (D-195) and a figure that is month-on-month in one term and
+    quarter-on-quarter in another has no single meaning to certify.
+    """
+
+    code = "mixed_period_grains"
+
+    def __init__(self, position: int, first: PeriodGrain, second: PeriodGrain) -> None:
+        super().__init__(
+            "A calculated measure compares one period. This formula asks for both the "
+            f"{GRAIN_LABELS[first]} and the {GRAIN_LABELS[second]}. "
+            "Write it as two calculated measures.",
+            position,
+        )
+
+
+class LagBeyondRetention(ExpressionError):
+    """A comparison reaching further back than the marts keep (D-196)."""
+
+    code = "lag_beyond_retention"
+
+    def __init__(
+        self, position: int, grain: PeriodGrain, retention_days: int, allowed: int
+    ) -> None:
+        period = GRAIN_LABELS[grain]
+        kept = f"Daily figures are kept for {_counted(retention_days, 'day')}"
+        if allowed < 1:
+            super().__init__(
+                f"{kept}, which is less than one {period}, so no comparison by "
+                f"{period} can be made here. Compare by a shorter period.",
+                position,
+            )
+            return
+        super().__init__(
+            f"{kept}, so a formula can look back at most {_counted(allowed, period)}.",
+            position,
+        )
+
+
 class DivisionByZero(ExpressionError):
     """A divisor written as zero."""
 
@@ -363,8 +500,10 @@ LogicalOperator = Literal["and", "or"]
 #: The functions the language has, in the order a message lists them.
 FUNCTION_NAMES: Final[tuple[str, ...]] = ("SAFE_DIV", "IF", "PCT_CHANGE", "LAG")
 
+#: Inputs per function. ``PCT_CHANGE`` and ``LAG`` count their period grain as
+#: one, because the grain is written in the call and is not optional (D-195).
 _FUNCTION_ARITY: Final[Mapping[str, int]] = MappingProxyType(
-    {"SAFE_DIV": 2, "IF": 3, "PCT_CHANGE": 1, "LAG": 2}
+    {"SAFE_DIV": 2, "IF": 3, "PCT_CHANGE": 2, "LAG": 3}
 )
 
 _ARITHMETIC_RULE: Final = (
@@ -382,7 +521,22 @@ _PCT_CHANGE_RULE: Final = "PCT_CHANGE needs a number."
 _LAG_VALUE_RULE: Final = "LAG needs a number as its first input."
 _LAG_PERIODS_RULE: Final = (
     "LAG needs a whole number of periods written directly, between 1 and "
-    f"{MAX_LAG_PERIODS} — for example LAG([m:a], 1)."
+    f"{MAX_LAG_PERIODS} — for example LAG([m:a], 1, MONTH)."
+)
+#: What each period-comparing function needs, in full. A formula written the old
+#: way — without the period — lands here rather than on a bare count, because the
+#: thing to teach is that the period is part of what the measure MEANS.
+_TIME_FUNCTION_RULES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "PCT_CHANGE": (
+            "PCT_CHANGE needs a number and the period to compare it with — "
+            "for example PCT_CHANGE([m:a], MONTH)."
+        ),
+        "LAG": (
+            "LAG needs a number, how many periods to look back, and the period — "
+            "for example LAG([m:a], 1, MONTH)."
+        ),
+    }
 )
 _FUNCTION_CALL_RULE: Final = "A function has to be followed by an opening bracket."
 _CHAINED_COMPARISON_RULE: Final = (
@@ -578,9 +732,16 @@ class Conditional(Expr):
 
 @dataclass(frozen=True, slots=True)
 class PercentChange(Expr):
-    """``PCT_CHANGE(a)`` — the change on the period before, relative to it."""
+    """``PCT_CHANGE(a, GRAIN)`` — the change on the period before, relative to it.
+
+    ``grain`` is the formula's own declaration of what "the period before" is
+    (D-195) and is never inherited from the query: a measure whose meaning
+    depended on the question it was asked in could not be certified, because two
+    widgets would show two different figures under one approved label.
+    """
 
     operand: Expr
+    grain: PeriodGrain
     position: int
 
     def __post_init__(self) -> None:
@@ -593,15 +754,18 @@ class PercentChange(Expr):
 
 @dataclass(frozen=True, slots=True)
 class Lag(Expr):
-    """``LAG(a, n)`` — the value of ``a`` ``n`` periods earlier.
+    """``LAG(a, n, GRAIN)`` — the value of ``a`` ``n`` periods of ``GRAIN`` earlier.
 
     ``n`` is a whole number held on the node, never an expression: the number of
     periods decides how far back the compiler has to widen the query window, and
-    a window cannot be widened by an amount that is only known per row.
+    a window cannot be widened by an amount that is only known per row. The bound
+    on ``n`` here is the language's structural ceiling; what a deployment will
+    actually answer is :func:`max_lag_periods`, applied by :func:`parse`.
     """
 
     operand: Expr
     periods: int
+    grain: PeriodGrain
     position: int
 
     def __post_init__(self) -> None:
@@ -662,6 +826,56 @@ def referenced_members(node: Expr) -> tuple[str, ...]:
         if isinstance(current, MemberReference):
             found.setdefault(current.member_id, None)
     return tuple(found)
+
+
+def declared_grain(node: Expr) -> PeriodGrain | None:
+    """The ONE period grain this formula compares over, or ``None`` for no comparison.
+
+    D-195: a calculated measure declares its grain, so a formula that names two
+    is :class:`MixedPeriodGrains` rather than a figure whose meaning depends on
+    which term a reader looks at. ``None`` means the formula names no period
+    function at all and is therefore answerable at any grain.
+    """
+    found: PeriodGrain | None = None
+    for current in walk(node):
+        if not isinstance(current, PercentChange | Lag):
+            continue
+        if found is None:
+            found = current.grain
+        elif current.grain != found:
+            raise MixedPeriodGrains(current.position, found, current.grain)
+    return found
+
+
+def period_offsets(node: Expr) -> tuple[int, ...]:
+    """Every period the formula reads, counted in grains BACK from the query's own.
+
+    ``0`` — the query's own period — is always present, so the window a caller
+    asked for is always part of what gets scanned even when every figure in the
+    formula is lagged. A nested lag COMPOSES: ``LAG(PCT_CHANGE([m:a], MONTH), 2,
+    MONTH)`` reads two and three months back, never one and two, which is the
+    whole-period-out error D-195 names.
+
+    Iterative, like :func:`walk`, and it visits a shared operand once per offset
+    rather than once per node — which is exactly the point: the same figure read
+    at two periods is two aggregates.
+    """
+    found: set[int] = {0}
+    pending: list[tuple[Expr, int]] = [(node, 0)]
+    while pending:
+        current, offset = pending.pop()
+        if isinstance(current, Lag):
+            pending.append((current.operand, offset + current.periods))
+            continue
+        if isinstance(current, PercentChange):
+            pending.append((current.operand, offset))
+            pending.append((current.operand, offset + 1))
+            continue
+        if isinstance(current, MemberReference):
+            found.add(offset)
+            continue
+        pending.extend((child, offset) for child in current.children)
+    return tuple(sorted(found))
 
 
 def depth(node: Expr) -> int:
@@ -907,8 +1121,53 @@ class _Parser:
         if self.peek().kind != "(":
             raise UnexpectedToken(self.peek().position, _FUNCTION_CALL_RULE)
         self.advance()
+        if name in _GRAIN_FUNCTIONS:
+            return self.time_call(token, name, arity)
         arguments = self.arguments(token, name, arity)
         return _function_node(token, name, arguments)
+
+    def time_call(self, token: _Token, name: str, arity: int) -> Expr:
+        """``PCT_CHANGE(value, GRAIN)`` / ``LAG(value, periods, GRAIN)``.
+
+        Parsed POSITIONALLY rather than through :meth:`arguments`, because the
+        last input is a period WORD and not an expression — and because the grain
+        has to be the last input rather than merely present somewhere, so a
+        formula reads in one order and a reviewer compares two formulas without
+        re-deriving which argument was which.
+
+        A call written the old way, with no period at all, is refused with the
+        whole rule (:data:`_TIME_FUNCTION_RULES`) rather than a bare count: the
+        period is part of what the measure means, not a forgotten argument.
+        """
+        given: list[Expr] = []
+        grain: PeriodGrain | None = None
+        for index in range(arity):
+            if index and self.peek().kind != ",":
+                raise WrongArgumentType(token.position, _TIME_FUNCTION_RULES[name])
+            if index:
+                self.advance()
+            if index == arity - 1:
+                grain = self.grain_word(name)
+            else:
+                given.append(self.expression(0))
+        if self.peek().kind == ",":
+            raise WrongArgumentCount(token.position, name, arity, arity + 1)
+        if self.peek().kind != ")":
+            raise UnbalancedParenthesis(self.peek().position)
+        self.advance()
+        assert grain is not None  # noqa: S101 - every grain function has arity >= 1
+        return _time_node(token, name, given, grain)
+
+    def grain_word(self, name: str) -> PeriodGrain:
+        """One of :data:`GRAIN_WORDS`, consumed as a bare word."""
+        word = self.peek()
+        if word.kind != "name":
+            raise WrongArgumentType(word.position, _TIME_FUNCTION_RULES[name])
+        self.advance()
+        grain = GRAIN_WORDS.get(word.lexeme.upper())
+        if grain is None:
+            raise UnknownPeriodGrain(word.position, _echo(word.lexeme, _NAME_ECHO_LIMIT))
+        return grain
 
     def arguments(self, token: _Token, name: str, arity: int) -> list[Expr]:
         given: list[Expr] = []
@@ -941,16 +1200,20 @@ def _infix_node(token: _Token, left: Expr, right: Expr) -> Expr:
 def _function_node(token: _Token, name: str, given: list[Expr]) -> Expr:
     if name == "SAFE_DIV":
         return SafeDivide(numerator=given[0], denominator=given[1], position=token.position)
-    if name == "IF":
-        return Conditional(
-            condition=given[0],
-            when_true=given[1],
-            when_false=given[2],
-            position=token.position,
-        )
+    # ``IF`` is the only other function whose inputs are all expressions; the two
+    # period functions are built by :func:`_time_node`.
+    return Conditional(
+        condition=given[0],
+        when_true=given[1],
+        when_false=given[2],
+        position=token.position,
+    )
+
+
+def _time_node(token: _Token, name: str, given: list[Expr], grain: PeriodGrain) -> Expr:
     if name == "PCT_CHANGE":
-        return PercentChange(operand=given[0], position=token.position)
-    return Lag(operand=given[0], periods=_periods(given[1]), position=token.position)
+        return PercentChange(operand=given[0], grain=grain, position=token.position)
+    return Lag(operand=given[0], periods=_periods(given[1]), grain=grain, position=token.position)
 
 
 def _periods(node: Expr) -> int:
@@ -968,24 +1231,38 @@ def _periods(node: Expr) -> int:
 # --- the entry point --------------------------------------------------------------------------
 
 
-def parse(source: str) -> Expr:
+def parse(source: str, *, retention_days: int | None) -> Expr:
     """Parse a calculated-measure formula, or raise a named :class:`ExpressionError`.
 
     The result is guaranteed to be a NUMBER-typed tree no deeper than
     :data:`MAX_DEPTH` naming no more than :data:`MAX_MEMBER_REFERENCES` distinct
-    figures, every one of which :func:`referenced_members` reports. It is not
-    guaranteed that those figures exist, or that the caller may read them: the
-    catalogue lookup and the authorization walk both happen afterwards, on the
-    ids this function hands back.
+    figures, every one of which :func:`referenced_members` reports, comparing over
+    at most one period grain (:func:`declared_grain`). It is not guaranteed that
+    those figures exist, or that the caller may read them: the catalogue lookup
+    and the authorization walk both happen afterwards, on the ids this function
+    hands back.
+
+    ``retention_days`` is how long the deployment keeps daily history
+    (``BI_DAILY_RETENTION_DAYS``) and is what bounds a period comparison (D-196,
+    :func:`max_lag_periods`). It is a REQUIRED keyword with no default, and
+    ``None`` means "do not apply that bound" — the two readings are genuinely
+    different callers and neither may be reached by forgetting to say which:
+
+    * a value is what the WRITE path passes, so a formula asking for history the
+      marts do not hold is refused where a person can fix it;
+    * ``None`` is what an AUTHORIZATION walk passes, because whether an identity
+      may read the figures a stored formula names must not change when a
+      deployment shortens its retention window — that would make a measure
+      silently vanish from its own author's list.
     """
     try:
-        return _parse(source)
+        return _parse(source, retention_days)
     except ExpressionError as error:
         error.attach_source(source)
         raise
 
 
-def _parse(source: str) -> Expr:
+def _parse(source: str, retention_days: int | None) -> Expr:
     if len(source) > MAX_EXPRESSION_LENGTH:
         raise ExpressionTooLong(MAX_EXPRESSION_LENGTH)
     if not source.strip(_WHITESPACE):
@@ -999,4 +1276,20 @@ def _parse(source: str) -> Expr:
         raise ExpressionTooDeep(root.position)
     if root.result_type != "number":
         raise NonNumericExpression(root.position)
+    grain = declared_grain(root)
+    if grain is not None and retention_days is not None:
+        allowed = max_lag_periods(retention_days, grain)
+        reach = max(period_offsets(root))
+        if reach > allowed:
+            raise LagBeyondRetention(
+                _first_period_node(root).position, grain, retention_days, allowed
+            )
     return root
+
+
+def _first_period_node(node: Expr) -> Expr:
+    """The leftmost period function, which is where a reader looks for the reach."""
+    for current in walk(node):
+        if isinstance(current, PercentChange | Lag):
+            return current
+    return node
