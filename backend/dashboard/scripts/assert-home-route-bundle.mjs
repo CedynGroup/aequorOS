@@ -45,6 +45,7 @@ const initialJavaScript = [
 ].filter((file) => file.endsWith(".js"));
 const offendingChunks = [];
 const offendingEditorChunks = [];
+const offendingBiChunks = [];
 let rawBytes = 0;
 let gzipBytes = 0;
 
@@ -52,6 +53,28 @@ let gzipBytes = 0;
 // its runtime contract (its own stylesheet and behaviour key off them), so
 // they survive production minification wherever the library itself is bundled.
 const EDITOR_MARKERS = ["ProseMirror-hideselection", "ProseMirror-focused"];
+
+/**
+ * Runtimes the BI workspace uses that must never reach the Command Center.
+ *
+ * `data-zr-dom-id` is the attribute zrender writes onto every canvas layer it
+ * creates, and `_echarts_instance_` the one ECharts writes onto a chart's host
+ * element; both are DOM contracts, so they survive production minification
+ * wherever the libraries are bundled. The AG Grid markers are its own root and
+ * theme class names, on the same principle — that library is not a dependency
+ * yet (Phase 3, Community edition, no licence key), and naming it here now is
+ * what stops the first import of it from landing in the home bundle unnoticed.
+ *
+ * The home insight strip uses the lightweight SVG `components/ui/Sparkline`.
+ * Any BI chart must be reached through `components/bi/EChart.tsx`, which loads
+ * the canvas with `dynamic(..., { ssr: false })`.
+ */
+const BI_RUNTIME_MARKERS = [
+  ["ECharts", "_echarts_instance_"],
+  ["zrender", "data-zr-dom-id"],
+  ["AG Grid", "ag-root-wrapper"],
+  ["AG Grid", "ag-theme-quartz"],
+];
 
 for (const chunk of initialJavaScript) {
   const source = readFileSync(resolve(distDir, chunk));
@@ -67,6 +90,11 @@ for (const chunk of initialJavaScript) {
   if (EDITOR_MARKERS.some((marker) => text.includes(marker))) {
     offendingEditorChunks.push(chunk);
   }
+  for (const [library, marker] of BI_RUNTIME_MARKERS) {
+    if (text.includes(marker)) {
+      offendingBiChunks.push(`${chunk} (${library})`);
+    }
+  }
 }
 
 if (offendingChunks.length > 0) {
@@ -81,6 +109,16 @@ if (offendingEditorChunks.length > 0) {
       `ProseMirror runtime: ${offendingEditorChunks.join(", ")}. Tiptap must be ` +
       "reached only through components/icaap/SectionEditorLoader.tsx, which " +
       "imports it with dynamic(..., { ssr: false }).",
+  );
+}
+
+if (offendingBiChunks.length > 0) {
+  throw new Error(
+    "Command Center initial entry graph contains a BI charting or grid " +
+      `runtime: ${offendingBiChunks.join(", ")}. Charts must be reached only ` +
+      "through components/bi/EChart.tsx, which imports the canvas with " +
+      "dynamic(..., { ssr: false }); the home insight strip uses the SVG " +
+      "components/ui/Sparkline.",
   );
 }
 
@@ -146,6 +184,42 @@ if (!deferredEditorHasProseMirror) {
   );
 }
 
+// The positive half of the BI rule: the ECharts canvas must EXIST in a deferred
+// chunk of a route that draws one, so the negative check above cannot pass
+// vacuously — for example because the import path changed, or because the chart
+// stopped being rendered at all.
+const exploreLoadableManifestPath = resolve(
+  distDir,
+  "server/app/(app)/explore/page",
+  "react-loadable-manifest.json",
+);
+const exploreEntries = Object.values(
+  JSON.parse(readFileSync(exploreLoadableManifestPath, "utf8")),
+);
+
+if (exploreEntries.length === 0) {
+  throw new Error(
+    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. components/bi/EChart.tsx must load the canvas with next/dynamic.`,
+  );
+}
+
+const deferredBiChunks = exploreEntries
+  .flatMap((entry) => entry.files)
+  .filter((file) => file.endsWith(".js"));
+const deferredBiHasEcharts = deferredBiChunks.some((chunk) => {
+  const text = readFileSync(resolve(distDir, chunk), "utf8");
+  return text.includes("data-zr-dom-id") || text.includes("_echarts_instance_");
+});
+
+if (!deferredBiHasEcharts) {
+  throw new Error(
+    "Deferred BI chart chunks no longer expose an ECharts or zrender runtime " +
+      `marker: ${deferredBiChunks.join(", ")}. Either the markers changed in ` +
+      "an echarts upgrade (update BI_RUNTIME_MARKERS after checking the new " +
+      "build output) or the chart no longer bundles it.",
+  );
+}
+
 console.log(
-  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}.`,
+  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts deferred to ${deferredBiChunks.join(", ")}.`,
 );

@@ -12,6 +12,7 @@ import {
   isRootPath,
   landingPathFor,
   type ModuleScope,
+  type ModuleKey as ModuleKeyForTest,
 } from "./modules";
 import { existsSync as fileExists } from "node:fs";
 import { join as joinPath, resolve as resolvePath } from "node:path";
@@ -652,10 +653,23 @@ assert.equal(
   true,
 );
 // A credit view is a credit view only: it does not drag the Risk & Limits
-// surfaces in with it the way the mirrored `risk` row does.
-assert.deepEqual([...effectiveInstitutionModules(null, [creditView])].sort(), [
-  "credit",
-]);
+// surfaces in with it the way the mirrored `risk` row does. The property is
+// pinned by NAME as well as by the exact set, so that a module legitimately
+// joining the set later (as `bi` did) cannot quietly take the risk surfaces
+// with it.
+const fromCreditView = effectiveInstitutionModules(null, [creditView]);
+for (const dragged of ["risk", "alerts", "positions", "command_center"]) {
+  assert.equal(
+    fromCreditView.has(dragged as ModuleKeyForTest),
+    false,
+    `a credit view must not admit ${dragged}`,
+  );
+}
+// `bi` is in the set because Business Intelligence is the READING surface over
+// whatever a principal already holds: a credit view opens the credit measures
+// of the catalogue, and nothing else. It is not an institution-type module and
+// has no entitlement of its own.
+assert.deepEqual([...fromCreditView].sort(), ["bi", "credit"]);
 
 // A member with no authority at all is told the grant that opens the hub, and
 // deep links below it stay hidden rather than disabled.
@@ -893,6 +907,114 @@ assert.equal(
 const withoutP2Capabilities: ModuleScope = resolved(true, true);
 assert.notEqual(withoutP2Capabilities.capitalApprove, true);
 assert.notEqual(withoutP2Capabilities.auditCreate, true);
+
+// --- Business Intelligence visibility ---------------------------------------
+//
+// BI is not an institution-type module: it is in no licence class's
+// `default_modules`, and it is opened by a view grant on any module the
+// catalogue draws from. Two gates therefore have to hold at once — the
+// capability that admits it, and the DEPLOYMENT FLAG, which is not a grant and
+// so hides the nav entry rather than disabling it with a sentence.
+
+const biCapabilities = [
+  {
+    module: "credit",
+    sensitivity: "aggregated",
+    permission: "view",
+    requiresContextualAuthorization: false,
+  },
+] as Parameters<typeof effectiveInstitutionModules>[1];
+
+// The entitlement list never contains `bi`, and that must not hide it.
+assert.equal(
+  effectiveInstitutionModules(
+    ["command_center", "risk", "credit"],
+    biCapabilities,
+  ).has("bi"),
+  true,
+  "a view grant on a BI source module must admit the BI module",
+);
+
+// A module the catalogue declares no member in opens nothing.
+assert.equal(
+  effectiveInstitutionModules(["data_engine"], [
+    {
+      module: "data",
+      sensitivity: "restricted",
+      permission: "view",
+      requiresContextualAuthorization: false,
+    },
+  ] as Parameters<typeof effectiveInstitutionModules>[1]).has("bi"),
+  false,
+  "a Data Engine grant alone must not admit BI",
+);
+
+// A grant that is not a view is not a read.
+assert.equal(
+  effectiveInstitutionModules(["credit"], [
+    {
+      module: "credit",
+      sensitivity: "aggregated",
+      permission: "export",
+      requiresContextualAuthorization: false,
+    },
+  ] as Parameters<typeof effectiveInstitutionModules>[1]).has("bi"),
+  false,
+);
+
+const biScope = (biEnabled: boolean | undefined): ModuleScope => ({
+  ...resolved(true, true, { biEnabled }),
+  modules: new Set([...resolved(true, true).modules!, "bi"]),
+});
+
+for (const href of ["/insights", "/dashboards", "/explore"]) {
+  assert.equal(moduleForPath(href), "bi", `${href} must map to the BI module`);
+  // The flag is on: the entry is offered.
+  assert.equal(hrefAccess(href, biScope(true)).state, "enabled", href);
+  // The flag is off: there is no grant that would fix it, so it is hidden, not
+  // disabled with a sentence to ask for.
+  assert.deepEqual(hrefAccess(href, biScope(false)), { state: "hidden" }, href);
+  // Not yet known: hidden too, so no BI link flashes into the nav on load.
+  assert.deepEqual(
+    hrefAccess(href, biScope(undefined)),
+    { state: "hidden" },
+    href,
+  );
+  // The ROUTE GUARD is the mirror image: it refuses only on a definite no, so a
+  // deep-link refresh does not briefly 404 while the flag is still resolving.
+  assert.equal(isPathVisible(href, biScope(true)), true, href);
+  assert.equal(isPathVisible(href, biScope(false)), false, href);
+  assert.equal(isPathVisible(href, biScope(undefined)), true, href);
+}
+
+// A deep link inside a dashboard follows its module.
+assert.equal(moduleForPath("/dashboards/board/edit"), "bi");
+assert.equal(isPathVisible("/dashboards/board/edit", biScope(false)), false);
+
+// A principal with no BI-source grant never reaches the module, flag or no flag.
+const noBiScope: ModuleScope = {
+  ...resolved(true, true, { biEnabled: true }),
+  modules: new Set(["command_center", "settings"]),
+  entitledModules: new Set(["command_center", "settings"]),
+};
+assert.equal(hrefAccess("/insights", noBiScope).state, "hidden");
+assert.equal(isPathVisible("/insights", noBiScope), false);
+
+// A baseline-only member is told which grant opens it, like every other module.
+const baselineBi: ModuleScope = {
+  ...resolved(false, false, { biEnabled: true }),
+  modules: new Set(),
+  entitledModules: null,
+  organizationModules: new Set(),
+  hasInstitutionAuthority: false,
+};
+const baselineBiAccess = hrefAccess("/insights", baselineBi);
+assert.equal(baselineBiAccess.state, "disabled");
+assert.match(
+  baselineBiAccess.state === "disabled" ? baselineBiAccess.reason : "",
+  /Business Intelligence/,
+);
+assert.equal(hubRedirectFor("/insights", baselineBi), "/");
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

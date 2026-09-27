@@ -24,6 +24,7 @@ import type {
   BankReportingPeriodRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useBiAvailability } from "@/lib/api/bi";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
@@ -101,6 +102,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const isPersonalSelfService = isPersonalSettingsPath(pathname);
   const profileQuery = useUserProfile();
   const banksQuery = useBanks(!isPersonalSelfService);
+  const { biEnabled } = useBiAvailability(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities = useMemo(
@@ -329,11 +331,16 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      // A DEPLOYMENT FLAG, not a permission: with BI off every BI route answers
+      // 404, so the nav must not offer the door and the route guard must refuse
+      // it. `undefined` until `GET /feature-flags` answers — see ModuleScope.
+      biEnabled,
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [
       bank,
       banksQuery.isLoading,
+      biEnabled,
       institutionCapabilities,
       organizationCapabilities,
       profileQuery.isLoading,

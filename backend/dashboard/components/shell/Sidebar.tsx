@@ -24,6 +24,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpenCheck,
+  Lightbulb,
+  LayoutGrid,
+  Table2,
 } from "lucide-react";
 import Logo from "./Logo";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -50,6 +53,16 @@ const groups: { label: string; items: NavItem[] }[] = [
       { href: "/", label: "Command Center", icon: LayoutDashboard },
       { href: "/risk", label: "Risk & Limits", icon: Gauge },
       { href: "/alerts", label: "Alerts", icon: BellRing },
+    ],
+  },
+  {
+    // Business Intelligence sits directly under Command: it reads across every
+    // module a principal holds rather than belonging to one of them.
+    label: "Intelligence",
+    items: [
+      { href: "/insights", label: "Insights", icon: Lightbulb },
+      { href: "/dashboards", label: "Dashboards", icon: LayoutGrid },
+      { href: "/explore", label: "Explore", icon: Table2 },
     ],
   },
   {

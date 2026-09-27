@@ -31,7 +31,13 @@ export type ModuleKey =
   | "ftp"
   | "fx"
   | "markets"
-  | "positions";
+  | "positions"
+  // Business Intelligence is not an institution-type module: it appears in no
+  // `default_modules` set and no licence class is entitled to it. It is the
+  // READING surface over the modules a principal already holds, so it is
+  // admitted by capability alone — see `effectiveInstitutionModules` and
+  // `ENTITLEMENT_EXEMPT_MODULES` below.
+  | "bi";
 
 /**
  * Route-prefix → module slug. Longest matching prefix wins; `/` is the Command
@@ -41,6 +47,9 @@ export type ModuleKey =
  */
 const ROUTE_MODULES: ReadonlyArray<readonly [string, ModuleKey]> = [
   ["/risk", "risk"],
+  ["/insights", "bi"],
+  ["/dashboards", "bi"],
+  ["/explore", "bi"],
   ["/alerts", "alerts"],
   ["/markets", "markets"],
   ["/positions", "positions"],
@@ -209,6 +218,18 @@ export type ModuleScope = {
   /** Exact IRRBB/confidential/run authority for regulatory and compute-only engines. */
   irrbbRun?: boolean;
   /**
+   * Whether THIS DEPLOYMENT serves Business Intelligence (`GET /feature-flags`
+   * → `bi_enabled`). Not a permission: with the flag off every BI route answers
+   * 404, so there is no grant a user could be told to ask for and the nav must
+   * not offer the door (the same rule the ICAAP flag follows).
+   *
+   * `undefined` is "not yet known" and is deliberately distinct from `false`:
+   * navigation hides BI until the answer arrives, so nothing flashes, while the
+   * route guard only refuses on a definite no, so a deep-link refresh does not
+   * briefly 404.
+   */
+  biEnabled?: boolean;
+  /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
    * assume "everything" — the fix for the every-module-flashes-on-refresh race.
@@ -260,6 +281,41 @@ const CAPABILITY_MODULES = {
   readonly ModuleKey[]
 >;
 
+/**
+ * The capability modules the BI catalogue draws its members from.
+ *
+ * Every BI measure and dimension carries its own `(module, sensitivity)` and is
+ * evaluated against the caller's bindings by the query route, so a principal
+ * with a view grant on ANY of these can read something in BI — and one with a
+ * grant on none of them gets an empty catalogue, which is a page with nothing
+ * on it rather than a page they should be offered.
+ *
+ * Deliberately not `account`, `audit`, `data` or `reg`: the catalogue declares
+ * no member in those modules, so holding one of them alone opens nothing.
+ */
+const BI_SOURCE_CAPABILITY_MODULES: ReadonlySet<
+  EffectiveCapabilityRead["module"]
+> = new Set<EffectiveCapabilityRead["module"]>([
+  "credit",
+  "risk",
+  "cap",
+  "liq",
+  "irrbb",
+  "markets",
+  "fcst",
+  "fx",
+  "ftp",
+]);
+
+/**
+ * Modules that are NOT institution-type entitlements and must not be filtered
+ * against `default_modules`. Only Business Intelligence is one: the registry
+ * has no `bi` entry, so an entitlement check would hide it from every tenant.
+ */
+const ENTITLEMENT_EXEMPT_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
+  "bi",
+]);
+
 export function effectiveInstitutionModules(
   defaultModules: readonly string[] | null | undefined,
   capabilities: readonly EffectiveCapabilityRead[],
@@ -272,6 +328,13 @@ export function effectiveInstitutionModules(
       if (!entitled || entitled.has(capabilityModule)) {
         modules.add(capabilityModule);
       }
+    }
+    // BI skips the entitlement gate on purpose. It is not in any licence
+    // class's module set, and the server authorizes each widget independently
+    // against the very grant that admitted the module here — so a BI page can
+    // only ever show what the principal could already read elsewhere.
+    if (BI_SOURCE_CAPABILITY_MODULES.has(capability.module)) {
+      modules.add("bi");
     }
   }
   return modules;
@@ -359,6 +422,10 @@ function isIcaapPath(path: string): boolean {
   return path === "/icaap" || path.startsWith("/icaap/");
 }
 
+export function isBiPath(path: string): boolean {
+  return moduleForPath(normalize(path)) === "bi";
+}
+
 function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
@@ -403,6 +470,11 @@ function bindingControlledSubrouteHidden(
   ) {
     return true;
   }
+  // A deployment without BI answers every BI route 404, so the route guard
+  // refuses too — but only once the flag has actually resolved. `undefined`
+  // here is "not yet known", and refusing on that would 404 a deep-link
+  // refresh before the answer arrives.
+  if (isBiPath(path) && scope.biEnabled === false) return true;
   if (
     (path === "/basel" ||
       path === "/basel/rwa" ||
@@ -454,6 +526,13 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   institution: "Account Administration · Restricted · View",
   regulatory_reporting: "Regulatory Reporting · Published · View",
   settings: "Account Administration · Restricted · Administer",
+  // BI has no sentence of its own: every measure and dimension carries the
+  // module and sensitivity of the thing it reports on, and the query route
+  // requires every one the submitted question touches. What opens the module is
+  // a view grant on any module the catalogue draws from, so the sentence names
+  // the commonest one rather than inventing a "Business Intelligence" grant
+  // nobody can issue.
+  bi: "a view grant on a module Business Intelligence reads, such as Credit · Aggregated · View",
 };
 
 function permissionReason(permissions: readonly string[]): string | undefined {
@@ -630,6 +709,10 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (isIcaapPath(path) && bindingControlledSubrouteHidden(path, scope)) {
     return { state: "hidden" };
   }
+  // Same rule, same reason: a deployment flag is not a grant, so a BI link is
+  // hidden rather than disabled-with-a-sentence. `!== true` (not `=== false`)
+  // because the nav must not offer the door before the flag has resolved.
+  if (isBiPath(path) && scope.biEnabled !== true) return { state: "hidden" };
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
     if (isBaselineOnlyScope(scope)) {
@@ -655,7 +738,11 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
           : { state: "hidden" };
     }
     if (!scope.hasInstitutionAuthority) return { state: "hidden" };
-    if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
+    if (
+      scope.entitledModules &&
+      !ENTITLEMENT_EXEMPT_MODULES.has(moduleKey) &&
+      !scope.entitledModules.has(moduleKey)
+    ) {
       return { state: "hidden" };
     }
   }
@@ -684,6 +771,9 @@ const LANDING_CANDIDATES: readonly string[] = [
   "/",
   "/risk",
   "/alerts",
+  "/insights",
+  "/dashboards",
+  "/explore",
   "/markets",
   "/positions",
   "/irr",
@@ -742,6 +832,7 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/credit/concentration",
   "/credit/delinquency",
   "/credit/vintages",
+  "/dashboards",
   "/data-engine",
   "/data-engine/adapters",
   "/data-engine/api",
@@ -757,6 +848,7 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/forecasting/reverse-stress",
   "/forecasting/scenario",
   "/forecasting/whatif",
+  "/explore",
   "/ftp",
   "/ftp/expost",
   "/ftp/lines",
@@ -770,6 +862,7 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/fx/scenarios",
   "/fx/var",
   "/icaap",
+  "/insights",
   "/institution",
   "/institution/history",
   "/institution/outlets",
@@ -835,7 +928,9 @@ export function hubRedirectFor(
     moduleKey &&
     PUBLIC_MODULE_ROUTES.has(path) &&
     !subrouteHidden(path, scope) &&
-    (!scope.entitledModules || scope.entitledModules.has(moduleKey)) &&
+    (!scope.entitledModules ||
+      ENTITLEMENT_EXEMPT_MODULES.has(moduleKey) ||
+      scope.entitledModules.has(moduleKey)) &&
     isBaselineOnlyScope(scope)
   ) {
     return "/";

@@ -88,6 +88,11 @@ const SCANNED_DIRS = [
   // a preparer believes about staleness. `lib/api/icaap.ts` is listed as a file
   // because the hooks and the display types live there.
   'components/icaap',
+  // The BI widgets decide what a reader sees where the server refused a view or
+  // answered with nothing. Both of those states are one `?? 0` away from being
+  // a fabricated measurement on a board pack, which is exactly this guard's
+  // subject — so the whole tree is in scope from the day it exists.
+  'components/bi',
   'app/(app)',
 ];
 const SCANNED_FILES: string[] = [
