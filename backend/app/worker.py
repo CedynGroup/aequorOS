@@ -27,11 +27,13 @@ from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
 from app.jobs import (
+    bi_alerts,
     bi_commentary,
     bi_export,
     bi_mart_backfill,
     bi_mart_refresh,
     bi_retention,
+    bi_subscriptions,
 )
 from app.models import Job, WorkerHeartbeat
 from app.services import (
@@ -74,6 +76,9 @@ HANDLERS: dict[str, Handler] = {
     "bi_mart_backfill": bi_mart_backfill.run_bi_mart_backfill,
     "bi_retention": bi_retention.run_bi_retention,
     "bi_export": bi_export.run_bi_export,
+    "bi_alert_evaluate": bi_alerts.run_bi_alert_evaluate,
+    "bi_subscription_scan": bi_subscriptions.run_bi_subscription_scan,
+    "bi_subscription_run": bi_subscriptions.run_bi_subscription_run,
 }
 
 

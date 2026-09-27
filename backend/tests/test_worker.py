@@ -241,7 +241,17 @@ def test_run_once_dispatches_a_bi_job_through_handlers(monkeypatch: Any) -> None
     )
 
     assert worker.run_once(worker.resolve_job_types("lane:bi"), worker_id="risk-worker-bi")
-    assert claimed_types == [("bi_mart_refresh", "bi_mart_backfill", "bi_retention", "bi_export")]
+    assert claimed_types == [
+        (
+            "bi_mart_refresh",
+            "bi_mart_backfill",
+            "bi_retention",
+            "bi_export",
+            "bi_alert_evaluate",
+            "bi_subscription_scan",
+            "bi_subscription_run",
+        )
+    ]
     assert seen == [({"organization_id": "OR-TEST0001"}, job)]
 
 

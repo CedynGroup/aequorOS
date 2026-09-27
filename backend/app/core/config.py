@@ -57,6 +57,16 @@ class DatabaseSettings(BaseSettings):
         return value
 
 
+#: Origin of the authenticated bank product (``bank.aequoros.com``). Read by TWO
+#: settings classes from the SAME environment variable — the staff console needs
+#: it to hand an operator off to the read-only examiner view, and BI
+#: subscriptions need it for the sign-in link that stands in for an attachment
+#: the platform will not email. Declared once here so the two cannot drift to
+#: different hosts, which would send half the platform's links to the wrong
+#: origin.
+DEFAULT_BANK_APP_BASE_URL = "https://bank.aequoros.com"
+
+
 class SmtpSettings(BaseSettings):
     """Outbound email for the notification mirror (plan GAP-5).
 
@@ -773,9 +783,7 @@ class AiSettings(BaseSettings):
     #: lives in the browser bundle.
     client_poll_seconds: int = Field(default=5, alias="AI_CLIENT_POLL_SECONDS")
     consent_version: str = Field(default="ai-consent-2026-09-v1", alias="AI_CONSENT_VERSION")
-    production_approval_ref: str | None = Field(
-        default=None, alias="AI_PRODUCTION_APPROVAL_REF"
-    )
+    production_approval_ref: str | None = Field(default=None, alias="AI_PRODUCTION_APPROVAL_REF")
     #: ``tiered`` walks ``AI_PROVIDER_TIER``; ``anthropic`` pins every request to
     #: the one vendor (what counsel may require, and what the platform did before
     #: D-053); ``recorded`` replays fixtures and is REFUSED outside local/test.
@@ -901,7 +909,10 @@ class BiSettings(BaseSettings):
        it is re-checked at run time by every BI handler (kill-switch idiom), so
        flipping it off also drains the backlog as ``skipped``.
     3. ``BI_ENABLED`` mounts the tenant-facing BI routers; ``BI_SCHEDULER_ENABLED``
-       adds the recovery sweep, retention and subscriptions to the hourly tick.
+       adds the recovery sweep and retention to the hourly tick, and
+       ``BI_SUBSCRIPTIONS_ENABLED`` adds the subscription scan to it.
+       ``BI_ALERTS_ENABLED`` needs no tick at all: alerts are evaluated by a
+       succeeded mart build.
 
     ``GET /api/v1/feature-flags`` projects the three booleans to the dashboard;
     nothing else in this class is served. There is deliberately no grid licence
@@ -921,6 +932,33 @@ class BiSettings(BaseSettings):
     enabled: bool = Field(default=False, alias="BI_ENABLED")
     mart_enqueue_enabled: bool = Field(default=False, alias="BI_MART_ENQUEUE_ENABLED")
     scheduler_enabled: bool = Field(default=False, alias="BI_SCHEDULER_ENABLED")
+    #: Threshold alerts (``docs/bi.md`` §Phase 3). Event-driven, not scheduled:
+    #: an evaluation is enqueued by a SUCCEEDED ``bi_mart_refresh`` and by
+    #: nothing else, which is why this flag is deliberately absent from
+    #: ``scheduler.any_scheduling_enabled`` — it owns no branch of the tick. If
+    #: an alert recovery sweep is ever added, it goes there in the same change.
+    alerts_enabled: bool = Field(default=False, alias="BI_ALERTS_ENABLED")
+    #: Scheduled subscriptions. This one DOES own a tick branch (the hourly
+    #: ``bi_subscription_scan``), so it is named in ``any_scheduling_enabled``:
+    #: a deployment that enabled only this would otherwise find the tick inert
+    #: and the feature silently never running.
+    subscriptions_enabled: bool = Field(default=False, alias="BI_SUBSCRIPTIONS_ENABLED")
+    #: The largest artifact a scheduled delivery will attach. Above it the
+    #: recipient is sent a sign-in link instead: an aggregated pack they are
+    #: entitled to must not be dropped merely because the relay would refuse it,
+    #: and a relay that bounces a 40 MB message fails the whole run. 5 MB is
+    #: comfortably inside the default limit of every relay this ships against;
+    #: a deployment whose relay allows more may raise it.
+    subscription_attachment_max_bytes: int = Field(
+        default=5_000_000, gt=0, alias="BI_SUBSCRIPTION_ATTACHMENT_MAX_BYTES"
+    )
+    #: Where a subscription's sign-in link points when the content may not be
+    #: attached. The SAME environment variable the staff console reads
+    #: (``BANK_APP_BASE_URL``, one constant above), read here rather than through
+    #: ``OperatorSettings`` so a tenant-facing service does not depend on the
+    #: staff control plane's configuration object. No host literal lives in the BI
+    #: code; this is the only place the origin is named.
+    bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
     daily_retention_days: int = Field(default=95, gt=0, alias="BI_DAILY_RETENTION_DAYS")
     database_url: str | None = Field(default=None, alias="BI_DATABASE_URL")
     interactive_timeout_ms: int = Field(default=10_000, gt=0, alias="BI_INTERACTIVE_TIMEOUT_MS")
@@ -932,6 +970,14 @@ class BiSettings(BaseSettings):
         default=10_000, gt=0, alias="BI_EXPORT_ASYNC_THRESHOLD_ROWS"
     )
     backfill_hop_seconds: int = Field(default=600, gt=0, alias="BI_BACKFILL_HOP_SECONDS")
+
+    @field_validator("bank_app_base_url", mode="before")
+    @classmethod
+    def default_bank_app_base_url(cls, value: str | None) -> str:
+        """Blank reads as "unset"; trailing slashes are trimmed so a path joins safely."""
+        if value is None or not str(value).strip():
+            return DEFAULT_BANK_APP_BASE_URL
+        return str(value).strip().rstrip("/")
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -1239,7 +1285,7 @@ class OperatorSettings(BaseSettings):
     #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
-    bank_app_base_url: str = Field(default="https://bank.aequoros.com", alias="BANK_APP_BASE_URL")
+    bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
     #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
     #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
     #: the saga records the step as honestly skipped rather than pretending.
@@ -1265,7 +1311,7 @@ class OperatorSettings(BaseSettings):
         """Blank reads as "unset" (the documented default); trailing slashes are
         trimmed so the console can safely join a handoff path."""
         if value is None or not str(value).strip():
-            return "https://bank.aequoros.com"
+            return DEFAULT_BANK_APP_BASE_URL
         return str(value).strip().rstrip("/")
 
     @property

@@ -62,6 +62,9 @@ JOB_TYPES = (
     "bi_mart_backfill",
     "bi_retention",
     "bi_export",
+    "bi_alert_evaluate",
+    "bi_subscription_scan",
+    "bi_subscription_run",
 )
 
 #: The lane a worker process must be running to claim a job type.
@@ -90,6 +93,9 @@ JOB_LANES: Mapping[str, str] = MappingProxyType(
         "bi_mart_backfill": "bi",
         "bi_retention": "bi",
         "bi_export": "bi",
+        "bi_alert_evaluate": "bi",
+        "bi_subscription_scan": "bi",
+        "bi_subscription_run": "bi",
     }
 )
 
@@ -159,6 +165,17 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     # would also write a second ``bi_query_log`` row for one file, which is the
     # reason not to leave it on the fleet default.
     "bi_export": 30 * 60,
+    # ``bi_subscription_run`` renders one artifact PER RECIPIENT, up to
+    # ``MAX_RECIPIENTS``. Unlike ``bi_export`` its runtime is bounded on BOTH
+    # halves: a delivery renders under the INTERACTIVE caps (5 000 rows, a 10 s
+    # statement timeout), not the export caps, so the worst case is fifty renders
+    # of a five-thousand-row summary. The window is roughly 2.4x that bound, which
+    # is the ``etl_dedup`` lesson applied rather than a number picked: a reclaim
+    # that fires on a live job does not recover it, and the duplicate here would
+    # mail a bank its board pack twice. The alert evaluation and the subscription
+    # scan stay on the fleet default, because each is a single bounded pass that
+    # ENQUEUES work rather than doing it.
+    "bi_subscription_run": 30 * 60,
 }
 
 #: ``bi_commentary`` takes NO entry here on purpose: it is an ``ai``-lane type, so

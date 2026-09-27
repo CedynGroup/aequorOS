@@ -83,7 +83,15 @@ def test_mixing_the_ai_lane_with_another_lane_is_refused() -> None:
 
 
 #: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns.
-BI_TYPES = ("bi_mart_refresh", "bi_mart_backfill", "bi_retention", "bi_export")
+BI_TYPES = (
+    "bi_mart_refresh",
+    "bi_mart_backfill",
+    "bi_retention",
+    "bi_export",
+    "bi_alert_evaluate",
+    "bi_subscription_scan",
+    "bi_subscription_run",
+)
 
 
 def test_the_default_selection_never_includes_the_bi_lane() -> None:
@@ -212,19 +220,27 @@ def test_the_backfill_reclaim_window_is_derived_from_the_hop_bound(
 
 
 def test_the_other_bi_types_keep_the_fleet_default() -> None:
-    """Refresh and retention assert they finish inside the default.
+    """Everything unlisted asserts it finishes inside the fleet default.
 
-    Two of the four BI types take a window of their own, each for a stated
-    reason: ``bi_mart_backfill`` DERIVES one from ``BI_BACKFILL_HOP_SECONDS``
-    (above), and ``bi_export`` takes a static override because only half of a
-    governed export's runtime is bounded by a setting (D-070). Refresh and
-    retention take neither, which is the assertion that they finish inside the
-    fleet default.
+    Three BI types take a window of their own, each for a stated reason:
+    ``bi_mart_backfill`` DERIVES one from ``BI_BACKFILL_HOP_SECONDS`` (above);
+    ``bi_export`` takes a static override because only half of a governed
+    export's runtime is bounded by a setting (D-070); and
+    ``bi_subscription_run`` takes one because it renders one artifact per
+    recipient, where a reclaim firing on a live job would mail a bank its board
+    pack twice. Refresh, retention, the alert evaluation and the subscription
+    scan take none, and that absence is the assertion that each finishes inside
+    the default — a bounded single pass that enqueues work rather than doing it.
     """
     default = timedelta(seconds=900)
     assert job_queue.stale_after_for("bi_mart_refresh", default) == default
     assert job_queue.stale_after_for("bi_retention", default) == default
-    assert set(BI_TYPES) & set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"bi_export"}
+    assert job_queue.stale_after_for("bi_alert_evaluate", default) == default
+    assert job_queue.stale_after_for("bi_subscription_scan", default) == default
+    assert set(BI_TYPES) & set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {
+        "bi_export",
+        "bi_subscription_run",
+    }
 
 
 def test_a_core_worker_never_reaps_a_bi_hop(db_session: Session) -> None:
