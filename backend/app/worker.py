@@ -26,7 +26,13 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
-from app.jobs import bi_export, bi_mart_backfill, bi_mart_refresh, bi_retention
+from app.jobs import (
+    bi_commentary,
+    bi_export,
+    bi_mart_backfill,
+    bi_mart_refresh,
+    bi_retention,
+)
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
@@ -63,6 +69,7 @@ HANDLERS: dict[str, Handler] = {
     "database_direct_health": database_direct_jobs.run_database_direct_health,
     "desk_capture": desk_capture_job.run_desk_capture,
     "icaap_ai_draft": icaap_ai_jobs.run_icaap_ai_draft,
+    "bi_commentary": bi_commentary.run_bi_commentary,
     "bi_mart_refresh": bi_mart_refresh.run_bi_mart_refresh,
     "bi_mart_backfill": bi_mart_backfill.run_bi_mart_backfill,
     "bi_retention": bi_retention.run_bi_retention,
@@ -362,6 +369,12 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
         logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")
     elif not ai_client.backend_configured(settings):
         logger.warning("AI worker started without a usable model backend; requests will cancel.")
+    # ``bi_commentary`` runs in this lane and re-reads the BI switch at its own run
+    # gate, so an AI worker on a deployment with BI off cancels every commentary
+    # request. Worth one line at boot: the symptom otherwise is a surface that
+    # only ever shows the platform's own commentary, with nothing saying why.
+    if not settings.bi.enabled:
+        logger.warning("AI worker started with BI_ENABLED off; commentary requests will cancel.")
 
 
 def _warn_if_bi_disabled(settings) -> None:  # pragma: no cover - process entrypoint

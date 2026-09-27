@@ -20,11 +20,17 @@ from app.services import job_queue
 from app.worker import HANDLERS, WorkerConfigurationError, resolve_job_types
 from tests.api.helpers import ORG_1
 
+#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns. Both
+#: hold an external model credential while they run: ``bi_commentary`` is the BI
+#: surface's job but belongs to THIS lane, because the lane is about the key.
+AI_TYPES = ("icaap_ai_draft", "bi_commentary")
+
 
 def test_the_default_selection_never_includes_the_ai_lane() -> None:
     """The safety property: adding an AI handler cannot widen the core fleet."""
-    assert "icaap_ai_draft" not in resolve_job_types(None)
-    assert "pipeline_refresh" in resolve_job_types(None)
+    core = resolve_job_types(None)
+    assert not set(AI_TYPES) & set(core)
+    assert "pipeline_refresh" in core
 
 
 @pytest.mark.parametrize("raw", ["", "   ", None])
@@ -33,7 +39,15 @@ def test_an_unset_selection_is_the_core_lane(raw: str | None) -> None:
 
 
 def test_the_ai_lane_selects_exactly_the_ai_types() -> None:
-    assert resolve_job_types("lane:ai") == ("icaap_ai_draft",)
+    assert resolve_job_types("lane:ai") == AI_TYPES
+    assert job_queue.job_types_in_lane("ai") == AI_TYPES
+
+
+def test_every_ai_type_is_in_the_ai_lane() -> None:
+    """An AI type WITHOUT a lane entry would be claimed by the core worker — and
+    by the daemon thread inside the API process, which must never hold a key."""
+    for job_type in AI_TYPES:
+        assert job_queue.lane_of(job_type) == "ai"
 
 
 def test_the_core_lane_is_the_default_selection() -> None:
@@ -138,7 +152,7 @@ def test_the_inprocess_worker_uses_the_core_lane_whatever_the_environment_says(
     monkeypatch.setattr(threading, "Thread", _Thread)
     worker_module.start_inprocess_worker()
     job_types = captured["kwargs"]["job_types"]  # type: ignore[index]
-    assert "icaap_ai_draft" not in job_types
+    assert not set(AI_TYPES) & set(job_types)
 
 
 # --- lanes in the queue -----------------------------------------------------
@@ -163,9 +177,13 @@ def test_the_ai_reclaim_window_is_derived_from_settings() -> None:
     ai = get_settings().ai
     per_vendor = ai.request_timeout_seconds * (ai.max_retries + 1)
     expected = per_vendor * len(ai.provider_order) + ai.stale_margin_seconds
-    window = job_queue.stale_after_for("icaap_ai_draft", timedelta(seconds=900))
-    assert window == timedelta(seconds=expected)
-    assert window > timedelta(seconds=per_vendor * len(ai.provider_order))
+    for job_type in AI_TYPES:
+        window = job_queue.stale_after_for(job_type, timedelta(seconds=900))
+        assert window == timedelta(seconds=expected)
+        assert window > timedelta(seconds=per_vendor * len(ai.provider_order))
+        # Derived, never pinned: an entry in the static map would be a second,
+        # competing number for the same bound.
+        assert job_type not in job_queue.STALE_AFTER_OVERRIDES_SECONDS
 
 
 def test_core_job_types_keep_the_fleet_default() -> None:

@@ -57,6 +57,7 @@ JOB_TYPES = (
     "database_direct_health",
     "desk_capture",
     "icaap_ai_draft",
+    "bi_commentary",
     "bi_mart_refresh",
     "bi_mart_backfill",
     "bi_retention",
@@ -65,12 +66,14 @@ JOB_TYPES = (
 
 #: The lane a worker process must be running to claim a job type.
 #:
-#: Lanes exist for ONE reason: ``icaap_ai_draft`` is the only job that holds an
-#: external model credential, and adding it to ``HANDLERS`` (which the parity
-#: test above requires) would otherwise make EVERY worker able to claim it —
+#: Lanes exist for ONE reason: the AI types are the only jobs that hold an
+#: external model credential, and adding them to ``HANDLERS`` (which the parity
+#: test above requires) would otherwise make EVERY worker able to claim them —
 #: including the API's in-process thread. The default lane never contains an AI
 #: type, so the core fleet is unchanged by construction rather than by
-#: configuration.
+#: configuration. ``bi_commentary`` is an AI type for exactly that reason and NOT
+#: a BI-lane one: it is the BI surface's job, but the process that runs it is the
+#: process holding the model key, and that process must run nothing else.
 #:
 #: The ``bi`` lane reuses that mechanism for a different reason: mart builds
 #: are heavy and the queue is FIFO across every type in a worker's selection,
@@ -82,6 +85,7 @@ DEFAULT_LANE = "core"
 JOB_LANES: Mapping[str, str] = MappingProxyType(
     {
         "icaap_ai_draft": "ai",
+        "bi_commentary": "ai",
         "bi_mart_refresh": "bi",
         "bi_mart_backfill": "bi",
         "bi_retention": "bi",
@@ -157,6 +161,11 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "bi_export": 30 * 60,
 }
 
+#: ``bi_commentary`` takes NO entry here on purpose: it is an ``ai``-lane type, so
+#: ``stale_after_for`` derives its window from the AI settings below — one model
+#: call per vendor in the tier plus a margin — which is exactly the bound its
+#: runtime has. An entry here would pin a second, competing number.
+#:
 #: The one BI job whose runtime is a SETTING rather than a measurement:
 #: ``bi_mart_backfill`` processes dates for ``BI_BACKFILL_HOP_SECONDS`` and
 #: then re-enqueues itself, so its window is derived from that bound in
