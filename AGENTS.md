@@ -656,7 +656,23 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   `eve_base_ghs` and `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_`
   fact categories and the `refinitiv` vendor id.
   **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a different
-  capital regime and needs its own pack set before it is shown a dashboard.
+  capital regime and is refused the packs surface until its own pack set ships (the gate resolves through the
+  authority registry and opens by itself).
+  **Phase 3 (2026-09-27) added eight more tables across `app/models/bi_content.py` and `bi_notifications.py`,
+  which changes where you must register one.** Three registries span the BI model modules and each will convict
+  you by name if you miss it: the plane guard's `BI_OWNED` globs and its writable-table derivation, and the
+  table census that requires every `bi_*` table to be named by exactly one module's tuple. **And check which
+  Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py` reads `app/models/bi.py`
+  ALONE, so the Phase 3 tables needed `tests/db/test_bi_phase3_migration.py` to get column, CHECK and
+  FORCE-RLS parity at all. That absence is precisely how a column four characters too narrow for the values
+  copied into it reached a commit, failing a tenant's WHOLE nightly build every night: the model and the
+  migration agreed on the wrong number, and SQLite ignores VARCHAR lengths.
+  Two more Phase 3 properties worth not breaking: a shared dashboard carries **no** owner authority (the widget
+  resolver is not given the owner), and a subscription delivery is rendered **as each recipient**, asserted by
+  the recipient's name appearing in the artifact's own provenance bytes. A range query over a stock measure
+  carries a REDUNDANT static window bound beside its subquery — do not "simplify" it away: Postgres prunes
+  partitions at plan time and cannot see a subquery, so without it a twelve-month question scans every month
+  the mart holds.
 
 ## Maintaining this file
 
