@@ -113,7 +113,19 @@ def test_credit_loans_blotter_pages_and_facets_are_consistent(db_client: TestCli
         assert Decimal(row["provision_required_ghs"]) >= 0
 
 
-def test_credit_official_run_seals_a_reproducible_baseline(db_client: TestClient) -> None:
+def test_credit_official_run_seals_a_reproducible_baseline(
+    db_client: TestClient, credit_run_authority: None
+) -> None:
+    """Sealing a baseline needs the Analyst CREDIT/confidential ``run`` sentence.
+
+    ASSERTION CHANGED at the P4-C cutover: this test used to pass on the hermetic
+    ``viewer / all / all`` baseline because the route was gated on a scalar
+    mutation role. ``run`` is not in the Viewer bundle, so the fixture now grants
+    the sentence explicitly; the run's own properties below are unchanged, and
+    ``tests/api/test_credit_route_authorization.py`` pins that the SAME request
+    without that sentence is refused.
+    """
+    _ = credit_run_authority
     _seed_and_refresh(db_client)
     session = get_sessionmaker()()
     try:

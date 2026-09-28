@@ -51,13 +51,18 @@ _MODULES = {
 _FULL_HTTP_QUERY_COUNTS = {
     # Router-level tenant-bank resolution adds one organization-scoped bank SELECT.
     "liquidity": 15,
-    # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
-    "capital": 19,
+    # Scoped CAP view adds bank resolution plus principal, binding, and institution
+    # checks, and — since the Phase 4 data-scope dimension — one re-read of the
+    # bindings that MATCHED the decision (``authorization.effective_data_scope``,
+    # which deliberately does not trust the caller's id list as authority). Every
+    # surface on ``deps._require_institution_permission`` pays that one query;
+    # capital and FX are the two dashboards in this suite that do.
+    "capital": 20,
     # Prefetched scoped IRRBB view reuses the dashboard's resolved bank.
     "irr": 16,
     # Scoped FX view reuses the router-resolved tenant bank, then adds principal,
-    # binding, and institution checks.
-    "fx": 15,
+    # binding, and institution checks, plus the same data-scope re-read.
+    "fx": 16,
     # Prefetched scoped FTP view reuses the dashboard's resolved bank.
     "ftp": 12,
 }
@@ -74,9 +79,11 @@ _FULL_HTTP_QUERY_COUNTS = {
 #       is in-memory and moves no count.
 _CURRENT_MODE_HTTP_QUERY_COUNTS = {
     "liquidity": 17,
-    "capital": 21,
+    # +1 over the pre-Phase-4 21 for the data-scope re-read, as above.
+    "capital": 22,
     "irr": 18,
-    "fx": 17,
+    # +1 over the pre-Phase-4 17 for the data-scope re-read, as above.
+    "fx": 18,
     "ftp": 14,
 }
 

@@ -117,14 +117,46 @@ class CreditLoanRead(ClosedModel):
     origination_date: str | None = None
 
 
+class CreditDataScopeRead(ClosedModel):
+    """What the rows and counts in this response were restricted to.
+
+    A branch- or region-scoped reader is served a smaller book than the
+    institution holds, and a count over that smaller book is indistinguishable
+    on the wire from an institution with a smaller book. So the response SAYS
+    which scope produced it: without this, "412 loans" reads as the bank's whole
+    blotter, and an empty page reads as "this bank has no loans" rather than
+    "your grant covers no branch that has any".
+
+    ``kind`` is the reduction of the reader's own bindings (``all``, ``branch``,
+    ``region`` or ``mixed``). ``branches`` is the resolved code set the filter
+    actually applied — for a region grant, the codes the institution's own
+    business-unit register places in that region. ``unresolved_regions`` names a
+    granted region no unit in the register belongs to, because zero rows for that
+    reason is a grant to correct, not a book to report.
+    """
+
+    kind: Literal["all", "branch", "region", "mixed"]
+    #: Empty when ``kind`` is ``all`` — nothing was filtered out.
+    branches: list[str] = []
+    #: The regions the reader's bindings declare, verbatim.
+    regions: list[str] = []
+    #: Declared regions that match no business unit in the institution's register.
+    unresolved_regions: list[str] = []
+
+
 class CreditLoansPageRead(ClosedModel):
     as_of: str
+    #: Loans this reader may see on this date, BEFORE the client's own filters —
+    #: the whole book only when ``data_scope.kind`` is ``all``. Counting rows
+    #: outside the reader's scope would disclose the size of the book they were
+    #: not granted.
     total: int
-    #: Loans matching the active filters (pagination denominator).
+    #: Loans matching the active filters within ``total`` (pagination denominator).
     filtered: int
     limit: int
     offset: int
     rows: list[CreditLoanRead]
+    data_scope: CreditDataScopeRead
 
 
 class CreditFacetCountRead(ClosedModel):
@@ -133,11 +165,15 @@ class CreditFacetCountRead(ClosedModel):
 
 
 class CreditLoanFacetsRead(ClosedModel):
+    """The blotter's own filter counts — every tally over the SAME scoped set the
+    blotter pages, so a facet can never offer a value the page cannot show."""
+
     as_of: str
     grades: list[CreditFacetCountRead]
     products: list[CreditFacetCountRead]
     branches: list[CreditFacetCountRead]
     sectors: list[CreditFacetCountRead]
+    data_scope: CreditDataScopeRead
 
 
 # --- concentration monitor (credit PR-3) -----------------------------------
@@ -263,6 +299,7 @@ class CreditActivityRead(ClosedModel):
     disbursement_count: int
     repayment_count: int
     monthly_flows: list[MonthlyFlowRead]
+    data_scope: CreditDataScopeRead
 
 
 # --- monthly migration (credit PR-5) ---------------------------------------

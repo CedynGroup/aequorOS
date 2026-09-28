@@ -33,7 +33,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -46,6 +46,7 @@ from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.domain.ingestion.reference_schemas import business_units
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -54,6 +55,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    CanonicalReferenceRow,
     ParamCreditThreshold,
     RegulatoryMetricResult,
     RegulatoryRun,
@@ -63,6 +65,7 @@ from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_credit import (
     CreditActivityRead,
     CreditDashboardRead,
+    CreditDataScopeRead,
     CreditFacetCountRead,
     CreditLoanFacetsRead,
     CreditLoanRead,
@@ -92,6 +95,7 @@ from app.schemas.sdi import (
 from app.services import filing_reconciliation, jurisdictions
 from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
+from app.services.authorization import EffectiveDataScope
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409
 from app.services.live_types import LiveFindingSpec, LiveModuleResult, findings_from_validations
@@ -1067,6 +1071,170 @@ def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# data scope: the filter the reader cannot remove
+# ---------------------------------------------------------------------------
+#
+# ``branch`` on the blotter is a filter the CLIENT chooses. A data scope is a
+# different thing in kind: the reduction of the reader's own bindings
+# (``authorization.effective_data_scope``), applied by the server, intersected
+# with whatever the client asked for, and never widened by anything the client
+# sends. Passing a branch outside the scope answers the intersection — no rows —
+# and never an error, because "that branch is not yours" and "that branch does
+# not exist" must be indistinguishable.
+#
+# Region is DECLARED, never inferred: the ``business_units`` register is the only
+# place a branch's region comes from (see that schema's module docstring). The BI
+# branch dimension reads the same field, so a region grant resolves to the same
+# code set in both planes — but this module must not read ``bi_*`` tables (BI is a
+# dispatch plane and the dependency only runs one way), so the register is read
+# here directly.
+
+
+#: The vocabulary a RESOLVED credit scope can carry. ``none`` is deliberately
+#: absent: it means nothing authorized the read, which cannot be true of a scope
+#: that reached a route body, so it is refused rather than represented.
+type CreditScopeKind = Literal["all", "branch", "region", "mixed"]
+
+
+@dataclass(frozen=True)
+class ResolvedDataScope:
+    """A declared scope resolved against one institution's own register.
+
+    ``branch_codes`` is ``None`` for whole-institution access — the ONLY value
+    that means "do not filter". Every other kind carries a concrete code set,
+    and an EMPTY set is a legitimate answer that yields no rows (a region the
+    register places no unit in). The two are deliberately different types so a
+    reader cannot fall from "no codes" into "no filter".
+    """
+
+    kind: CreditScopeKind
+    branch_codes: frozenset[str] | None
+    regions: tuple[str, ...]
+    unresolved_regions: tuple[str, ...]
+
+    @property
+    def whole_institution(self) -> bool:
+        return self.branch_codes is None
+
+    def admits(self, branch_id: str | None) -> bool:
+        """Whether a row stating ``branch_id`` is inside this scope.
+
+        A row that states NO branch is outside every narrowed scope: it is not
+        attributable to a granted branch, so serving it would be the fail-open.
+        """
+        if self.branch_codes is None:
+            return True
+        if branch_id is None:
+            return False
+        return branch_id.strip() in self.branch_codes
+
+    def read(self) -> CreditDataScopeRead:
+        return CreditDataScopeRead(
+            kind=self.kind,
+            branches=sorted(self.branch_codes or ()),
+            regions=list(self.regions),
+            unresolved_regions=list(self.unresolved_regions),
+        )
+
+
+WHOLE_INSTITUTION_SCOPE: ResolvedDataScope = ResolvedDataScope(
+    kind="all", branch_codes=None, regions=(), unresolved_regions=()
+)
+
+
+def _business_unit_regions(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> list[tuple[str, str | None]]:
+    """``(business_unit_id, declared region)`` from the latest register on/before ``as_of``.
+
+    The "latest as-of, then latest BATCH within it" rule is the reference
+    dataset's own (a corrected re-push replaces rather than adds). It is stated
+    in three places — ``bog_forms.sources.reference_rows`` for form resolution,
+    ``bi.mart_builder.reference_rows`` for the mart, and here — because neither of
+    those is importable from the calculation plane: the first needs a form
+    ``ResolveContext``, and the second is inside the BI dispatch plane, which this
+    module must not import. Field names go through ``business_units.normalise_row``,
+    the one seam that resolves the documented aliases.
+    """
+    scope = (
+        CanonicalReferenceRow.organization_id == ctx.organization_id,
+        CanonicalReferenceRow.bank_id == bank.id,
+        CanonicalReferenceRow.dataset_kind == business_units.SCHEMA.kind,
+    )
+    latest = db.scalar(
+        select(func.max(CanonicalReferenceRow.as_of_date)).where(
+            *scope, CanonicalReferenceRow.as_of_date <= as_of
+        )
+    )
+    if latest is None:
+        return []
+    latest_batch = db.scalar(
+        select(CanonicalReferenceRow.ingestion_batch_id)
+        .where(*scope, CanonicalReferenceRow.as_of_date == latest)
+        .order_by(CanonicalReferenceRow.created_at.desc(), CanonicalReferenceRow.id.desc())
+        .limit(1)
+    )
+    if latest_batch is None:
+        return []
+    units: list[tuple[str, str | None]] = []
+    for payload in db.scalars(
+        select(CanonicalReferenceRow.payload)
+        .where(
+            *scope,
+            CanonicalReferenceRow.as_of_date == latest,
+            CanonicalReferenceRow.ingestion_batch_id == latest_batch,
+        )
+        .order_by(CanonicalReferenceRow.row_index)
+    ):
+        row = business_units.normalise_row(dict(payload or {}))
+        unit_id = str(row.get("business_unit_id") or "").strip()
+        if not unit_id:
+            continue
+        region = str(row.get("region") or "").strip() or None
+        units.append((unit_id, region))
+    return units
+
+
+def resolve_data_scope(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, scope: EffectiveDataScope
+) -> ResolvedDataScope:
+    """Resolve a declared scope against this institution's register.
+
+    ``kind="none"`` must be unreachable from an ALLOWED decision, so it is a
+    programming error here rather than an empty result: silently answering no
+    rows would hide a gate that failed to run.
+
+    Region matching is exact after whitespace stripping — the same comparison the
+    BI branch dimension stores, so one grant means one code set in both planes.
+    Casefolding would be WIDER than the grant, which is the wrong direction for a
+    dimension whose entire purpose is to narrow.
+    """
+    # ``EffectiveDataScope.serves_nothing``, spelt as the comparison so the
+    # remaining vocabulary is the narrow one this module stores.
+    if scope.kind == "none":
+        msg = "an allowed decision cannot carry a data scope of kind 'none'"
+        raise RuntimeError(msg)
+    if scope.whole_institution:
+        return WHOLE_INSTITUTION_SCOPE
+    codes: set[str] = {value.strip() for value in scope.branches if value.strip()}
+    unresolved: tuple[str, ...] = ()
+    if scope.regions:
+        wanted = {value.strip() for value in scope.regions if value.strip()}
+        matched: set[str] = set()
+        for unit_id, region in _business_unit_regions(db, ctx, bank, as_of):
+            if region is not None and region in wanted:
+                codes.add(unit_id)
+                matched.add(region)
+        unresolved = tuple(sorted(wanted - matched))
+    return ResolvedDataScope(
+        kind=scope.kind,
+        branch_codes=frozenset(codes),
+        regions=tuple(scope.regions),
+        unresolved_regions=unresolved,
+    )
+
+
 #: The IFRS 9 stages a canonical snapshot may state. Not a vocabulary of this
 #: module's making: it is the check constraint
 #: ``ck_canonical_position_snapshots_ifrs9_stage`` (``app/models/canonical.py``),
@@ -1186,6 +1354,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     ctx: TenantContext,
     bank_id: str,
     *,
+    data_scope: EffectiveDataScope,
     limit: int = 100,
     offset: int = 0,
     grade: str | None = None,
@@ -1225,13 +1394,26 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     book states — so it is matched exactly and cannot be dropped either; a
     sector the book does not carry narrows the page to nothing, which is the
     truthful answer and is never widened back out.
+
+    ``data_scope`` is required and has NO default: a caller that forgot it would
+    serve a branch-scoped reader the whole book, so the omission has to be a type
+    error rather than a silent widening. It is applied BEFORE ``total`` is taken,
+    because a total that counts rows the reader cannot see discloses the size of
+    the book outside their scope; and it is applied ALONGSIDE the client's own
+    ``branch``, so a request for an out-of-scope branch answers the intersection —
+    no rows — rather than that branch's rows or an error naming it.
     """
     stage = _require_stage(stage)
     dpd_band = _require_dpd_band(dpd_band)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _blotter_period(db, ctx, bank, as_of)
     resolved_as_of = period.period_end
-    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of)]
+    scope = resolve_data_scope(db, ctx, bank, resolved_as_of, data_scope)
+    rows = [
+        entry.row
+        for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of)
+        if scope.admits(entry.row.branch_id)
+    ]
     total = len(rows)
     needle = (q or "").strip().lower()
     filtered_rows = [
@@ -1257,13 +1439,28 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
         limit=limit,
         offset=offset,
         rows=page,
+        data_scope=scope.read(),
     )
 
 
-def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> CreditLoanFacetsRead:
+def get_credit_loan_facets(
+    db: Session, ctx: TenantContext, bank_id: str, *, data_scope: EffectiveDataScope
+) -> CreditLoanFacetsRead:
+    """The blotter's filter counts, over the SAME scoped set the blotter pages.
+
+    Every tally here is a count, and a count over the whole book would disclose
+    the size of the book outside the reader's scope just as plainly as the rows
+    would — including the ``branches`` facet, which would otherwise enumerate
+    every branch the institution has.
+    """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
-    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, period.period_end)]
+    scope = resolve_data_scope(db, ctx, bank, period.period_end, data_scope)
+    rows = [
+        entry.row
+        for entry in _classified_loan_rows(db, ctx, bank, period.period_end)
+        if scope.admits(entry.row.branch_id)
+    ]
 
     def counts(values: list[str | None]) -> list[CreditFacetCountRead]:
         tally: dict[str, int] = {}
@@ -1280,6 +1477,7 @@ def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> Cre
         products=counts([row.product_code for row in rows]),
         branches=counts([row.branch_id for row in rows]),
         sectors=counts([row.sector for row in rows]),
+        data_scope=scope.read(),
     )
 
 
@@ -1518,8 +1716,84 @@ def _trailing_flow_totals(
     return totals
 
 
-def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> CreditActivityRead:
-    """Restructures, write-offs, recoveries and monthly aggregates."""
+def _facility_branch_history(
+    db: Session, ctx: TenantContext, bank: Bank, references: set[str], as_of: date
+) -> dict[tuple[str, str], list[tuple[date, str | None]]]:
+    """Per facility, the ascending ``(computed date, stated branch)`` history to ``as_of``.
+
+    Keyed by the facility's own ``(source_system, source_reference)`` — the
+    identity D-018 fixes for event attribution, never a cross-system guess on the
+    reference alone (``ClassifiedLoanRow`` states why the reference is not an
+    identity by itself).
+    """
+    if not references:
+        return {}
+    history: dict[tuple[str, str], list[tuple[date, str | None]]] = {}
+    records = db.execute(
+        select(
+            CanonicalPosition.source_system,
+            CanonicalPosition.source_reference,
+            CanonicalPositionSnapshot.as_of_date,
+            CanonicalPositionSnapshot.attributes,
+        )
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date <= as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+            CanonicalPosition.source_reference.in_(references),
+        )
+        .order_by(CanonicalPositionSnapshot.as_of_date)
+    ).all()
+    for source_system, source_reference, snapshot_date, attributes in records:
+        branch = _str_or_none((attributes or {}).get("branch_id"))
+        history.setdefault((source_system, source_reference), []).append((snapshot_date, branch))
+    return history
+
+
+def _events_in_scope(
+    events: list[CanonicalLoanEvent],
+    history: dict[tuple[str, str], list[tuple[date, str | None]]],
+    scope: ResolvedDataScope,
+) -> list[CanonicalLoanEvent]:
+    """The events whose facility was in ``scope`` WHEN THE EVENT HAPPENED.
+
+    The branch is read from the facility's latest computed position on or before
+    the event date (D-018's rule), not from the current book: a facility written
+    off eight months ago has no current position, and attributing its write-off to
+    nothing would understate a branch's losses. An event whose facility has no
+    computed position on or before its date is admitted by no narrowed scope —
+    where the facility was is not stated, so it cannot be claimed as anyone's.
+    """
+    if scope.whole_institution:
+        return events
+    admitted: list[CanonicalLoanEvent] = []
+    for event in events:
+        entries = history.get((event.source_system, event.position_source_reference), ())
+        branch: str | None = None
+        stated = False
+        for when, value in entries:
+            if when > event.event_date:
+                break
+            branch, stated = value, True
+        if stated and scope.admits(branch):
+            admitted.append(event)
+    return admitted
+
+
+def get_credit_activity(
+    db: Session, ctx: TenantContext, bank_id: str, *, data_scope: EffectiveDataScope
+) -> CreditActivityRead:
+    """Restructures, write-offs, recoveries and monthly aggregates.
+
+    ``data_scope`` is required and undefaulted for the same reason the blotter's
+    is, and it narrows the event list BEFORE the two counts and the monthly flow
+    totals are taken — a count or a total over events the reader may not see is a
+    disclosure in its own right.
+    """
     from datetime import timedelta  # noqa: PLC0415
 
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -1527,6 +1801,15 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
     as_of = period.period_end
     base_ccy = jurisdictions.base_currency(bank)
     events = _load_events(db, ctx, bank, start=as_of - timedelta(days=365), end=as_of)
+    scope = resolve_data_scope(db, ctx, bank, as_of, data_scope)
+    if not scope.whole_institution:
+        events = _events_in_scope(
+            events,
+            _facility_branch_history(
+                db, ctx, bank, {event.position_source_reference for event in events}, as_of
+            ),
+            scope,
+        )
 
     def read(event: CanonicalLoanEvent) -> LoanEventRead:
         return LoanEventRead(
@@ -1567,6 +1850,7 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
             for month, amounts in sorted(monthly.items())
         ],
+        data_scope=scope.read(),
     )
 
 

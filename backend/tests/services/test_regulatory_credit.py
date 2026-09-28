@@ -27,6 +27,7 @@ from app.models import (
 from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import fact_derivation, regulatory_credit, reporting_periods
+from app.services.authorization import ALL_INSTITUTION_DATA
 from app.services.regulatory_reporting import generation as reporting_generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -246,7 +247,9 @@ def test_activity_read_groups_events_by_type_and_month(db_session: Session) -> N
             {"ref": "A4", "type": "DISBURSEMENT", "date": "2026-06-01", "amount": "5000"},
         ],
     )
-    read = regulatory_credit.get_credit_activity(db_session, CTX, SAMPLE_BANK_ID)
+    read = regulatory_credit.get_credit_activity(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA
+    )
     assert [event.source_reference for event in read.restructures] == ["A1"]
     assert [event.source_reference for event in read.write_offs] == ["A2"]
     assert [event.source_reference for event in read.recoveries] == ["A3"]
@@ -919,7 +922,7 @@ def test_blotter_keeps_two_systems_apart_when_they_share_a_reference(
     )
 
     page = regulatory_credit.list_credit_loans(
-        db_session, CTX, SAMPLE_BANK_ID, q="LOAN/1", limit=500
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, q="LOAN/1", limit=500
     )
 
     twins = [row for row in page.rows if row.source_reference == "LOAN/1"]
@@ -937,7 +940,9 @@ def test_blotter_keeps_two_systems_apart_when_they_share_a_reference(
     assert pushed_loan.provision_required_ghs == Decimal("777")  # 100%
 
     # The facets count both, under their own grades.
-    facets = regulatory_credit.get_credit_loan_facets(db_session, CTX, SAMPLE_BANK_ID)
+    facets = regulatory_credit.get_credit_loan_facets(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA
+    )
     grades = {facet.value: facet.count for facet in facets.grades}
     assert grades["loss"] >= 1
     assert sum(grades.values()) == page.total
@@ -1018,6 +1023,7 @@ def test_blotter_narrows_to_the_sector_stage_and_dpd_band_it_is_sent(
             db_session,
             CTX,
             SAMPLE_BANK_ID,
+            data_scope=ALL_INSTITUTION_DATA,
             limit=500,
             sector=sector,
             stage=stage,
@@ -1068,7 +1074,12 @@ def test_blotter_refuses_a_stage_or_band_it_cannot_honour(db_session: Session) -
     ):
         with pytest.raises(HTTPException) as refusal:
             regulatory_credit.list_credit_loans(
-                db_session, CTX, SAMPLE_BANK_ID, stage=stage, dpd_band=band
+                db_session,
+                CTX,
+                SAMPLE_BANK_ID,
+                data_scope=ALL_INSTITUTION_DATA,
+                stage=stage,
+                dpd_band=band,
             )
         assert refusal.value.status_code == 422
         detail = cast("dict[str, str]", refusal.value.detail)
@@ -1095,11 +1106,13 @@ def test_blotter_reads_one_named_date_exactly_and_never_substitutes_another(
     )
     db_session.commit()
 
-    current = regulatory_credit.list_credit_loans(db_session, CTX, SAMPLE_BANK_ID, limit=500)
+    current = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, limit=500
+    )
     assert current.as_of == FIXTURE_AS_OF.isoformat()
 
     may = regulatory_credit.list_credit_loans(
-        db_session, CTX, SAMPLE_BANK_ID, as_of=may_end, limit=500
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, as_of=may_end, limit=500
     )
     assert may.as_of == may_end.isoformat()
     assert {row.source_reference for row in may.rows} == {"LOAN/1", "LOAN/6", "MAY-ONLY"}
@@ -1115,7 +1128,11 @@ def test_blotter_refuses_a_date_with_no_computed_position(db_session: Session) -
 
     with pytest.raises(HTTPException) as refusal:
         regulatory_credit.list_credit_loans(
-            db_session, CTX, SAMPLE_BANK_ID, as_of=date_type(2026, 7, 31)
+            db_session,
+            CTX,
+            SAMPLE_BANK_ID,
+            data_scope=ALL_INSTITUTION_DATA,
+            as_of=date_type(2026, 7, 31),
         )
     assert refusal.value.status_code == 409
     detail = cast("dict[str, str]", refusal.value.detail)

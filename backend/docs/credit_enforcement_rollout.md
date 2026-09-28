@@ -7,10 +7,13 @@ this one document is the contract for both:
 - **Phase 1 (enforced now, 2026-09-22):** `Module.CREDIT` exists, a mirror
   migration widens the database to match it, and the credit rows of the SHARED
   live surfaces are gated the way liquidity, IRRBB, FX and FTP rows already were.
-- **Phase 4 (NOT YET ENFORCED):** the direct `/credit/*` routes move from the
-  scalar `Tenant` / `MutationTenant` gates onto scoped bindings. The route table
-  below is the decision record for that cutover; nothing in it is live until the
-  Phase 4 release record is attached.
+- **Phase 4 (enforced in code, 2026-09-27):** the direct `/credit/*` routes have
+  moved from the scalar `Tenant` / `MutationTenant` gates onto per-route scoped
+  bindings, and the loan blotter, its facets and the activity grid apply the
+  reader's `data_scope`. The code, the tests and the grants are described below.
+  **Nothing is deployed until the release record at the end of the Phase 4 section
+  is attached**, and two migrations (`202609270073`, `202609270074`) must be
+  applied before the gate script can even run — see the deployment order there.
 
 Run the inventory against each target deployment immediately before each
 release. Store the dated output with the deployment record. Do not copy
@@ -313,110 +316,325 @@ Before deployment, attach:
    lasts exactly as long as the gap between the backend deploy and the migration.
 6. Confirmation that every mirrored user (whose `authv` changed) signed in again.
 
-## Phase 4: direct credit route cutover (NOT YET ENFORCED)
+## Phase 4: direct credit route cutover (enforced in code 2026-09-27)
 
-> **Status: not enforced.** Every `/credit/*` route still runs on `Tenant`
-> (reads) and `MutationTenant` (run) plus the `require_module_access("credit")`
-> entitlement gate. This section records the sentences the cutover will require
-> so the grants can be inventoried and created before the enforcing release.
+> **Status: enforced in code, not yet released.** Every `/credit/*` route now runs
+> on a named `_require_institution_permission` dependency over `Module.CREDIT`,
+> and the three row-level surfaces apply the reader's data scope. The scalar
+> `Tenant` / `MutationTenant` gates are gone from this router. `require_module_access("credit")`
+> stays, because per-tenant entitlement is a different question from authority.
 
-### Affected surfaces (planned)
+### What was wrong
 
-Sensitivity is declared per catalogue member, not per route (decision D-028):
-any member that exposes a single obligor is `restricted`; record-level grids are
-`confidential`; every aggregate is `aggregated`. Applied to today's routes:
+Before this release, the entire direct credit surface was served to any
+authenticated tenant user:
 
-| Route                                                   | Module / sensitivity / permission | Basis                                                                   |
-| ------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
-| `POST /api/v1/banks/{bank_id}/credit/run-all-scenarios` | CREDIT / `confidential` / `run`   | D-028 names `run`; `confidential` matches every other engine's run gate |
-| `GET /api/v1/banks/{bank_id}/credit/dashboard`          | CREDIT / `aggregated` / `view`    | D-028                                                                   |
-| `GET /api/v1/banks/{bank_id}/credit/loans`              | CREDIT / `restricted` / `view`    | D-028 — the blotter carries `counterparty_name`                         |
-| `GET /api/v1/banks/{bank_id}/credit/loans/facets`       | CREDIT / `restricted` / `view`    | D-028 — facets are the blotter's own filter counts                      |
-| `GET /api/v1/banks/{bank_id}/credit/concentration`      | CREDIT / `aggregated` / `view`    | D-028 — **see open decision 1**                                         |
-| `GET /api/v1/banks/{bank_id}/credit/activity`           | **undecided**                     | Not in D-028 — **see open decision 2**                                  |
-| `GET /api/v1/banks/{bank_id}/credit/migration`          | CREDIT / `aggregated` / `view`    | D-028                                                                   |
-| `GET /api/v1/banks/{bank_id}/credit/vintages`           | CREDIT / `aggregated` / `view`    | D-028                                                                   |
-| `GET /api/v1/banks/{bank_id}/credit/pd`                 | CREDIT / `aggregated` / `view`    | D-028 (advisory designation is unchanged by authorization)              |
+| Route                           | Gate BEFORE                                | What that admitted                                                    |
+| ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
+| every `GET /credit/*`           | `Tenant` + `require_module_access("credit")` | Any authenticated user of the tenant — including the loan blotter, which returns `counterparty_name` per row |
+| `POST /credit/run-all-scenarios` | `MutationTenant` + the same entitlement    | Any token carrying the scalar `analyst` role or higher; it mints immutable `RegulatoryRun` rows |
 
-The cutover replaces the scalar dependencies with `_require_institution_permission`
-dependencies on `Module.CREDIT` (named `require_credit_aggregated_view`,
-`require_credit_restricted_view`, `require_credit_run`, registered in
-`MUTATION_ROLE_DEPENDENCY_NAMES`), keeps `require_module_access("credit")`
-(entitlement is orthogonal to authority), and moves `_get_bank_or_404` in
-`app/services/regulatory_credit.py` onto the `scoped_authorization.resolve_bank`
-404 path so a sibling-tenant bank stays hidden before any permission check. A
-denied request must start no engine, create no run and write no audit event.
-Impersonated examiners and machine principals are denied on every credit route,
-consistent with every other scoped-binding module (D-026).
+`require_module_access` is a per-tenant CONFIGURATION gate: it asks whether this
+institution's licence class is entitled to the module, never whether this person
+holds a credit sentence for this institution. And the blotter's `total` counted
+the whole institution's book, so `branch` was a client's suggestion rather than a
+boundary.
 
-An architecture pin (`tests/architecture/test_credit_authorization.py`, pattern
-`test_fx_authorization.py`) must assert each route's named dependency and the
-absence of `get_mutation_tenant_context` and `require_role_*`. Route behaviour
-lives in `tests/api/test_credit_authorization.py`, which already holds the
-Phase 1 shared-surface matrix.
+### The authority table (enforced)
 
-The credit registers (`manage_credit_params.py`: thresholds, concentration
-limits, classification grids — `Tenant` reads, `ApproverTenant` writes) are NOT
-in this table. They stay on the scalar gates in Phase 4 unless a decision moves
-them; recording that here is what stops the omission from reading as an oversight.
+Sensitivity is declared from what the RESPONSE discloses, per route, not once for
+the module. Two orthogonal axes are decided per route: the permission tuple, and
+whether the surface refuses a narrowed data scope or applies it.
 
-### Open decisions before Phase 4 (do not guess)
+| Route                                                   | Module / sensitivity / permission | Data scope    | Dependency                          |
+| ------------------------------------------------------- | --------------------------------- | ------------- | ----------------------------------- |
+| `GET /api/v1/banks/{bank_id}/credit/dashboard`          | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/migration`          | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/vintages`           | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/pd`                 | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/concentration`      | CREDIT / `restricted` / `view`     | whole institution | `require_credit_concentration_view` |
+| `GET /api/v1/banks/{bank_id}/credit/loans`              | CREDIT / `restricted` / `view`     | **applied**   | `require_credit_blotter_view`       |
+| `GET /api/v1/banks/{bank_id}/credit/loans/facets`       | CREDIT / `restricted` / `view`     | **applied**   | `require_credit_blotter_view`       |
+| `GET /api/v1/banks/{bank_id}/credit/activity`           | CREDIT / `confidential` / `view`   | **applied**   | `require_credit_activity_view`      |
+| `POST /api/v1/banks/{bank_id}/credit/run-all-scenarios` | CREDIT / `confidential` / `run`    | whole institution | `require_credit_run`                |
 
-1. **Concentration exposes single obligors.** The `single_name` dimension
-   buckets on `cp:<counterparty name>` / `group:<reference>` and the `breaches`
-   list carries those keys. D-028's route line says `aggregated`; D-028's own
-   member rule says a single obligor is `restricted`. Either the route becomes
-   CREDIT/`restricted`, or the `single_name` buckets and single-name breaches
-   are projected out for `aggregated` viewers (the way FX projects its charge
-   out of enterprise results). The same keys reach the ALERTS feed as
-   `concentration_limit_single_name` finding messages ("cp:<name> is above its
-   Board concentration limit"), which Phase 1 now serves at CREDIT/`aggregated`
-   — strictly narrower than the everyone-can-read state before, but still a
-   name at aggregated sensitivity. Decide once, per member, in the catalogue.
-2. **Activity is record-level without names.** `/credit/activity` lists
-   restructures, write-offs and recoveries per facility (`source_reference`,
-   `position_source_reference`, amounts) with no counterparty name. By the
-   D-028 rule a record-level grid is `confidential`; D-028 did not name the
-   route. Confirm `confidential` or fold it into the blotter's `restricted`.
-3. **Official runs and activation.** FX, FTP and IRRBB require their
-   `confidential`/`run` sentence on `POST /official-runs` and on data activation
-   with calculations when `module_scope.runs_module` includes them. Whether the
-   credit engine's official run acquires the same requirement (and therefore
-   whether the scheduler's actor selection must also hold CREDIT/`confidential`/`run`)
-   is undecided. Capital does not carry it today either.
-4. **Summary-vs-record export.** Only the `analyst` bundle carries `export`.
-   Record-level credit export (blotter CSV) would require CREDIT/`restricted`
-   `export`, which Viewers, Auditors and Approvers cannot hold without a bundle
-   change. Do not widen a bundle silently; decide and record it here.
+The reasoning, route by route:
 
-### Dashboard access (planned)
+- **Dashboard, migration, vintages, PD — `aggregated`.** None of them names a
+  counterparty or lists a facility: the dashboard is grade buckets, one NPL ratio
+  and the resolved prudential limit; migration is a transition matrix and roll
+  rates; vintages are cohort PAR30+ curves; PD is a pooled hazard. Aggregate
+  figures are `aggregated`.
+- **Concentration — `restricted`, and it resolves Phase 4 open decision 1.** The
+  `single_name` dimension buckets on `cp:<counterparty name>` /
+  `group:<reference>` (`credit_concentration._group_key`) and the `breaches` list
+  carries those keys, so the payload names obligors. The platform's own member
+  rule says a single obligor is `restricted`; the older route line said
+  `aggregated`. **Decided: `restricted`** — the narrower of the two, taken because
+  the alternative (projecting `single_name` buckets and single-name breaches out
+  for aggregated viewers) changes the numbers on a supervisory screen, which is a
+  product decision and not one an authorization cutover may make silently. The
+  consequence is stated plainly: **a reader holding only CREDIT/`aggregated`
+  loses the concentration monitor** and needs the blotter sentence for it. If the
+  institution wants an obligor-free aggregated monitor, that is a catalogue change
+  to design, not a sensitivity to widen.
+- **Blotter and facets — `restricted`.** The rows carry `counterparty_name`. The
+  facets are the blotter's own filter counts over the same rows, so they carry the
+  same sensitivity: a facet at a lower sensitivity would be a count of names.
+- **Activity — `confidential`, resolving Phase 4 open decision 2.** It is a
+  record-level grid — one row per restructure, write-off and recovery, with
+  `source_reference`, `position_source_reference` and the amount — and it carries
+  no counterparty name. The member rule makes a record-level grid without an
+  obligor identity `confidential`. **Decided: `confidential`, not folded into the
+  blotter's `restricted`.** Sensitivity is exact-or-`all`, never a ladder, so this
+  is a deliberate third sentence rather than a convenience: neither the blotter
+  reader nor the dashboard reader gets activity, and the activity reader gets
+  neither of the others. That is the cost of naming the disclosure honestly.
+- **`run-all-scenarios` — `run`, not `view`.** It mints `RegulatoryRun` rows — the
+  provenance a filed credit figure cites. `run` is the permission the other
+  engines' run gates use and only the `analyst` bundle carries it, so a Viewer,
+  Auditor or Approver cannot seal a baseline.
 
-Credit navigation and deep links follow the effective-authority projection: an
-entitled institution without CREDIT/`aggregated` `view` shows the link disabled
-with a tooltip naming the grant; the blotter tab additionally requires
-CREDIT/`restricted` `view` and hides itself otherwise; the run action requires
-CREDIT/`confidential` `run`. Command Center, Risk and Board Pack request credit
-data only when the aggregated capability is present.
+### Why four surfaces refuse a narrowed data scope
 
-### Exact binding rows (planned)
+`require_whole_institution` on a dependency is a REFUSAL, not a narrowing, and it
+answers 403 with `institution_grain_requires_whole_institution` — the same reason
+string the BI plane uses for its institution-grain measures, so one telemetry
+query covers both.
 
-| Need                                                     | `principal_type` | `role_bundle`                                              | `institution_scope`                      | `institution_id`       | `module_scope` | `sensitivity_scope` |
-| -------------------------------------------------------- | ---------------- | ---------------------------------------------------------- | ---------------------------------------- | ---------------------- | -------------- | ------------------- |
-| Credit dashboard, concentration, migration, vintages, PD | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` | `credit`       | `aggregated`        |
-| Loan blotter and its facets (counterparty names)         | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` | `credit`       | `restricted`        |
-| Run the credit scenario batch                            | `human`          | `analyst`                                                  | `institution` or explicit `organization` | exact `BK-*` or `NULL` | `credit`       | `confidential`      |
+The rule is: **a route that presents a figure as the institution's requires a
+binding covering the whole institution.** The dashboard measures its NPL ratio
+against the resolved prudential ceiling and the concentration monitor measures
+each bucket against a Board limit expressed as a share of the institution's
+capital; a branch slice compared to an institution limit is a wrong number with a
+right-looking name. Migration, vintage and PD rates carry no statement in their
+payload of the population they were computed over, so a silently sliced curve
+would read as the institution's. And a sealed run over one branch would be an
+immutable filing record claiming to be the institution's book.
 
-An Analyst CREDIT/`confidential` row grants `view`, `create`, `edit` and `run`
-at `confidential` only; it does not grant the aggregated dashboard or the
-restricted blotter. The common least-privilege credit analyst therefore holds
-three independently complete rows. Do not combine fields across rows.
+The honest alternative — computing each of these over the branch subset and
+DISCLOSING the population in the payload — is a product decision about what a
+branch-level credit dashboard is, with its own limit set. It is deliberately not
+attempted here; refusing is the deny-by-default answer and it leaves the decision
+open rather than pre-empting it with a plausible-looking number.
 
-### Inventory and release record (planned)
+**`require_whole_institution` defaults to True, which changes every other module
+too.** This cutover is the first to consult a binding's data scope, and the gate
+it uses (`deps._require_institution_permission`) is shared with capital,
+liquidity, FX, FTP, ILAAP, capital-plan and the regulatory package surfaces. With
+the other default, the moment `202609270073` ships and the Members composer can
+set a branch, an Org Owner could compose a sentence restricting a reader to one
+branch and those surfaces would serve the whole book anyway — a grant that lies.
+They refuse instead, and for them refusing is not merely safe but correct: capital
+adequacy, liquidity coverage, an FX position, a funds-transfer price and a return
+addressed to the regulator are all institution figures. A module that later wants
+to APPLY a scope opts out explicitly and must then filter its rows AND every
+count; `tests/architecture/test_credit_route_authorization.py` pins the default and
+the exact number of opt-outs, so a third one is a visible decision rather than a
+quiet one.
 
-Repeat the Phase 1 gate: `authorization_access_impact.py` before and after,
-plus the inventory SQL extended with `credit_restricted_view` and
-`credit_confidential_run` columns on the same pattern. Attach the dated
-outputs, the exact denied-principal list per credit surface (human and
-machine), every institution-approved row, and the recorded answers to the four
-open decisions above. Nothing is backfilled at the route cutover: the mirror in
-Phase 1 is the only system-granted credit authority.
+### How the scope is applied where it IS applied
+
+- The scope is the reduction of the bindings that MATCHED the allowing decision
+  (`authorization.effective_data_scope` over `decision.matching_binding_ids`),
+  re-read from the database inside the same request. The caller's id list is a
+  selector, never the grant.
+- `ResolvedDataScope.branch_codes is None` is the ONLY value meaning "do not
+  filter". Every narrowed kind carries a concrete set, and an EMPTY set is a
+  legitimate answer that yields no rows — the two are different types so a reader
+  cannot fall from "no codes" into "no filter".
+- **A row stating no branch is outside every narrowed scope.** It is not
+  attributable to a granted branch, so serving it would be the fail-open.
+- **Region resolves through `business_units`, never `bi_dim_branch`.** The credit
+  module is in the calculation plane and must not read `bi_*`. The
+  `business_units` register is the only place a branch's region is declared (that
+  schema's module docstring is explicit that no other source exists and that
+  parsing an address would invent a board figure), and field names go through its
+  `normalise_row` alias seam. Matching is exact after whitespace stripping — the
+  same comparison the BI branch dimension stores, so one grant means one code set
+  in both planes; casefolding would be WIDER than the grant.
+- **A region no unit in the register belongs to yields no rows and says so.** The
+  response's `data_scope.unresolved_regions` names it, because zero rows for a
+  mis-typed or not-yet-declared region is a grant to correct, not a book to
+  report, and the two must not look the same.
+- **Every count is over the scoped set.** `total`, `filtered`, each facet tally
+  and the activity grid's `disbursement_count` / `repayment_count` /
+  `monthly_flows` are taken AFTER the filter. A total that counts rows the reader
+  cannot see discloses the size of the book outside their scope as surely as the
+  rows would; the `branches` facet would additionally enumerate every branch the
+  institution has.
+- **The client's `branch` filter intersects with the scope, never replaces it.** A
+  request for an out-of-scope branch answers an empty page. It answers
+  BYTE-IDENTICALLY to a request for a branch that does not exist, so a refusal
+  never confirms that a branch is real.
+- **The response discloses the scope.** `CreditLoansPageRead`,
+  `CreditLoanFacetsRead` and `CreditActivityRead` each carry a
+  `CreditDataScopeRead`. Without it, a scoped `total` reads as the institution's
+  book and an empty page reads as "this bank has no loans".
+
+#### Activity attribution, and its one real limitation
+
+A loan event carries no branch. It is attributed through the facility it names by
+its OWN `(source_system, position_source_reference)` — the identity D-018 fixes —
+and then through that facility's latest computed position **on or before the event
+date**, which is where the facility was when the event happened rather than where
+it is now. That matters: a facility written off eight months ago has no current
+position, and attributing its write-off to nothing would understate a branch's
+losses.
+
+Two events are therefore in NO narrowed scope, by design:
+
+1. an event naming a facility from a different source system (never a
+   cross-system guess on the bare reference); and
+2. an event that predates the institution's earliest computed book — which
+   includes every event before a bank's first ingested book, and the first
+   month's events for a bank that ingests only month-end books.
+
+Both are deny-by-default and both are invisible to the whole-institution reader,
+who still sees every event. Case 2 is a genuine limitation of a branch- or
+region-scoped activity view on a short history, not a fixture artefact; it is
+pinned by `test_an_event_predating_the_first_computed_book_is_in_no_branch_scope`.
+Closing it would mean attributing an event to a LATER snapshot's branch, which
+can name a branch the facility only moved to afterwards — a leak — so it is left
+refused rather than guessed.
+
+### Who loses access at the cutover, and why that is correct
+
+Measured read-only against the primary deployment on 2026-09-27
+(`.ai/bi_test_results/p4c_10_credit_route_inventory.txt`; that deployment is at
+`202609210066`, so neither the Phase 1 mirror `202609220067` nor the Phase 4
+migrations are applied there yet). 12 active principal × institution pairs:
+
+| Population                                                                | Pairs | Before                                     | After                         | Why correct                                                                                                          |
+| ------------------------------------------------------------------------- | ----- | ------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Holds an `all` / `all` operational row (scalar `admin` / `analyst`)        | 2     | every credit route                         | every credit route            | `all` covers `credit` and every sensitivity; unchanged                                                                |
+| Holds an `all` / `all` row but not `analyst` (`account_admin` scalar role) | 4     | every read; run already refused (see note) | every read                    | unchanged                                                                                                            |
+| `account_admin` with only an Account-plane row                             | 2     | every credit read                          | **nothing**                   | the defect being fixed: administering the account is not reading the loan book, and the blotter returns obligor names |
+| Service identities (`auth_provider = 'service'`)                          | 4     | nothing                                    | nothing                       | integration keys are confined to API Push at the auth boundary and never reached a credit route                       |
+
+Two facts worth stating precisely:
+
+- **Nobody loses `run-all-scenarios`.** The old gate needed the scalar `analyst`
+  rank or higher; `account_admin` is not in that ladder, so of the 8 human pairs
+  only the 2 with an `all` row could seal a baseline before, and both still can.
+  The route is nonetheless materially stricter: the 2 who keep it now keep it
+  because they hold an `analyst` CREDIT-or-`all` `confidential` binding, not
+  because of a role claim in a token.
+- **No tenant on this deployment holds a `credit`-scoped binding at all** (the
+  active distribution is in the same output). Every principal who keeps credit
+  access does so through an `all` / `all` row. The 2 who lose it are the
+  unowned-tenant compatibility population of `202609090051`, which was given
+  organization-wide ACCOUNT/restricted `account_admin` authority and deliberately
+  no product view.
+
+**Nothing is backfilled.** The Phase 1 mirror (`202609220067`) remains the only
+system-granted credit authority, and it grants `aggregated`-capable rows by
+copying whatever sensitivity the source `risk` row carried — it creates no
+`restricted` and no `confidential` row and no `analyst` bundle. So the blotter,
+the concentration monitor, the activity grid and the run route each require a
+grant an Org Owner makes deliberately. Backfilling them would re-encode exactly
+the defect this cutover fixes: it would hand obligor names to everyone who had
+them only because no route ever asked.
+
+**The pre-cutover population stays queryable**, because no `users` row and no
+binding row changed: the inventory SQL above reproduces it at any time.
+
+### How an Org Owner grants what is needed
+
+Settings → Members, one indivisible sentence per row. Sensitivity is mandatory and
+institution coverage is exact or explicitly organization-wide
+(`app/features/manage_authorization.py`).
+
+| Need                                                          | `role_bundle`                                              | `module_scope` | `sensitivity_scope` | `data_scope_kind`         |
+| ------------------------------------------------------------- | ---------------------------------------------------------- | -------------- | ------------------- | ------------------------- |
+| Credit dashboard, migration, vintages, PD                     | `viewer`, `auditor`, `analyst`, `approver`, or `validator`  | `credit`       | `aggregated`        | `all` (required)          |
+| Concentration monitor                                          | the same set                                               | `credit`       | `restricted`        | `all` (required)          |
+| Loan blotter and its facets, whole institution                 | the same set                                               | `credit`       | `restricted`        | `all`                     |
+| Loan blotter and its facets, one or more branches              | the same set                                               | `credit`       | `restricted`        | `branch` + branch codes   |
+| Loan blotter and its facets, one or more regions               | the same set                                               | `credit`       | `restricted`        | `region` + region names   |
+| Loan activity grid                                             | the same set                                               | `credit`       | `confidential`      | `all`, `branch` or `region` |
+| Seal the credit baseline                                       | `analyst`                                                  | `credit`       | `confidential`      | `all` (required)          |
+
+An `analyst` CREDIT/`confidential` row grants `view`, `create`, `edit`, `run`,
+`validate` and `export` at `confidential` ONLY: it opens the activity grid and the
+run route and neither the aggregated dashboard nor the restricted blotter. The
+least-privilege credit analyst who needs all four surfaces therefore holds three
+independently complete rows (`aggregated`, `restricted`, `confidential`). Do not
+combine fields across rows, and do not widen to `all` to save a row.
+
+A branch or region MUST now go in `data_scope_kind` / `data_scope_values`, never in
+the reason text. Before `202609270073` there was nowhere to put it and the Phase 1
+section of this document said so; there is now.
+
+### Executable verification
+
+| Property                                                                     | Pinned by                                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Each route names its dependency and carries no scalar gate                   | `tests/architecture/test_credit_route_authorization.py`                         |
+| **Every** `/credit/` route is in the authority table (a new one cannot ship ungated) | the same file, `test_every_credit_route_is_in_the_authority_table`      |
+| `require_credit_run` is a recognized mutation gate (impersonation boundary)   | the same file                                                                   |
+| The correct sentence is admitted, per route                                  | `tests/api/test_credit_route_authorization.py`                                  |
+| A scalar role alone is refused, per route, for five roles                    | the same file, `test_a_scalar_role_alone_is_refused`                            |
+| A `risk`, `liquidity` or `capital` binding is refused, per route             | the same file                                                                   |
+| Every OTHER sensitivity is refused, per route; `all` admits every route      | the same file                                                                   |
+| A sibling institution's sentence does not reach this one, and vice versa      | the same file (both directions, 403)                                            |
+| A bank of another tenant is 404, even with an organization-wide sentence      | the same file (plus the real cross-tenant case)                                  |
+| Institution-grain routes refuse a `branch` and a `region` scope              | the same file, `test_an_institution_figure_refuses_a_narrowed_scope`             |
+| A branch-scoped reader sees only their branch, and `total` is scoped         | the same file                                                                   |
+| An out-of-scope `branch` answers the intersection, byte-identically to a nonexistent one | the same file                                                        |
+| Pagination, facet counts and activity counts run over the scoped set         | the same file                                                                   |
+| A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                  |
+| `mixed` unions branches and regions; one `all` row beside a branch row wins  | the same file                                                                   |
+| Activity attribution follows D-018 and refuses a cross-system or pre-book event | the same file                                                                |
+| The blotter's pre-existing filter, date and refusal contract is unchanged     | `tests/services/test_regulatory_credit.py`, `tests/api/test_regulatory_credit.py` |
+| Object references under `/credit/*` are catalogued and refuse a foreign object | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
+
+### Deployment order and release record (Phase 4)
+
+The order is forced, because the gate script cannot run before the migration:
+
+1. Apply `202609220067` (the Phase 1 mirror) if the target is still behind it, then
+   `202609270073` and `202609270074`. Until `202609270073` is applied,
+   `scripts/authorization_access_impact.py` fails with
+   `column authorization_bindings.data_scope_kind does not exist` — the projection
+   selects the whole binding row.
+2. Run `scripts/authorization_access_impact.py` and keep the dated output.
+3. Run the route-level inventory (§Who loses access) BEFORE and AFTER. This is the
+   gate that answers THIS cutover: the access-impact script projects bindings to a
+   per-institution MODULE list and reports neither sensitivity nor data scope, so
+   it cannot distinguish a reader who keeps the dashboard from one who loses the
+   blotter. Both outputs belong in the record.
+4. Attach the exact list of principals who lose each credit surface.
+5. Attach every institution-approved CREDIT row created before release, per the
+   table above.
+6. Confirm that every principal whose `authv` changed signed in again.
+7. Regenerate the OpenAPI client (`mise run risk-service:openapi-client`) — the
+   three scoped payloads gained `data_scope`, so the generated package is stale
+   until it is regenerated, and the dashboard's credit surfaces should surface the
+   scope rather than silently show a scoped total as the institution's.
+
+### Still open after Phase 4 (named, not fixed)
+
+1. **`POST /banks/{bank_id}/official-runs` can still mint a credit official run
+   without the credit `run` sentence.** `live_view.mint_official_run` requires
+   CREDIT/`confidential`/`run`… for liquidity, IRRBB, FX and FTP only; its engine
+   tuple omits `credit` (and `capital`). `data_activation.activate_bank_data` has
+   the same tuple with the same omission. So after this cutover the direct route
+   is gated and the shared minting path is not. Both files are outside this
+   cutover's scope; the fix is one tuple entry each, and until it lands the credit
+   run sentence is not the only way to seal a credit run.
+2. **Credit export.** Only the `analyst` bundle carries `export`, so a
+   record-level blotter CSV would need CREDIT/`restricted` `export` and would be
+   unavailable to Viewers, Auditors and Approvers without a bundle change. There is
+   no credit export route today; decide before adding one.
+3. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
+   limits, classification grids) stay on `Tenant` reads and `ApproverTenant`
+   writes. They are recorded here so the omission does not read as an oversight.
+4. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
+   scope explains why a sliced dashboard, migration matrix, vintage curve or PD is
+   refused rather than computed. If a bank wants them, they need their own limit
+   set and their own payload statement of the population.
+5. **The access-impact script has no sensitivity or data-scope column.** It is the
+   standing cutover gate, and for a cutover whose whole content is sensitivity and
+   data scope it can only answer half the question. Extending it belongs with that
+   script.
