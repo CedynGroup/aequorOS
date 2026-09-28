@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast as python_ast
 import re
+import time
 from dataclasses import fields
 from decimal import Decimal
 from pathlib import Path
@@ -1113,3 +1114,85 @@ def test_the_parser_produces_no_sql_and_holds_no_text_that_looks_like_it() -> No
     source = Path(str(expr_module.__file__)).read_text(encoding="utf-8")
     for keyword in ("SELECT", "INSERT", "UPDATE", "DELETE", "FROM ", "WHERE", "JOIN"):
         assert keyword not in source, keyword
+
+
+# ---------------------------------------------------------------------------
+# A9-01: the formula language must not be a denial-of-service surface
+# ---------------------------------------------------------------------------
+
+
+def _nested_percent_change(depth: int) -> str:
+    text = "[m:loans.balance_rc]"
+    for _ in range(depth):
+        text = f"PCT_CHANGE({text}, MONTH)"
+    return text
+
+
+def test_a_deeply_nested_change_is_answered_in_bounded_time() -> None:
+    """Audit A9-01, a BLOCKER, demonstrated and fixed.
+
+    ``PCT_CHANGE`` reads its operand at two periods, so an unmemoised walk over a
+    chain of N nested ones explores 2^N paths. Measured before the fix: 0.33 s at
+    depth 20, 1.34 s at 22, 5.35 s at 24 — doubling per level — on a formula of
+    under 500 characters against a 2,000-character limit and a depth limit of 64.
+    A single authenticated reader could submit a formula the parser ACCEPTS and
+    burn a core for longer than the universe has existed, on a synchronous
+    handler, with the read budget unable to meter it because the validation route
+    writes no query-log row.
+
+    The bound here is deliberately generous. A tight one would be flaky on a busy
+    machine; anything in seconds proves the exponential is gone, because the
+    pre-fix cost at this depth was astronomically larger than any timeout.
+    """
+    source = _nested_percent_change(MAX_DEPTH - 1)
+    assert len(source) < MAX_EXPRESSION_LENGTH, "the hostile formula must be one the parser accepts"
+
+    started = time.perf_counter()
+    node = parse(source, retention_days=None)
+    offsets = period_offsets(node)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 2.0, f"period_offsets took {elapsed:.1f}s; the memo is gone"
+    # And the answer is still right: each nesting level adds one period back.
+    assert offsets == tuple(range(MAX_DEPTH)), offsets
+
+
+def test_memoising_did_not_change_which_periods_are_read() -> None:
+    """The memo is on the PAIR, so it cannot change the set of offsets.
+
+    Asserted against the unmemoised algorithm itself rather than against
+    hand-written expectations, over every shape that composes a period: a bare
+    figure, one change, a lag of a change, a lag beside a change, a condition, and
+    a nest shallow enough for the old algorithm to finish.
+    """
+
+    def unmemoised(node: Expr) -> tuple[int, ...]:
+        found = {0}
+        pending: list[tuple[Expr, int]] = [(node, 0)]
+        while pending:
+            current, offset = pending.pop()
+            if isinstance(current, Lag):
+                pending.append((current.operand, offset + current.periods))
+                continue
+            if isinstance(current, PercentChange):
+                pending.append((current.operand, offset))
+                pending.append((current.operand, offset + 1))
+                continue
+            if isinstance(current, MemberReference):
+                found.add(offset)
+                continue
+            pending.extend((child, offset) for child in current.children)
+        return tuple(sorted(found))
+
+    sources = (
+        "[m:loans.balance_rc]",
+        "PCT_CHANGE([m:loans.balance_rc], MONTH)",
+        "LAG(PCT_CHANGE([m:loans.balance_rc], MONTH), 2, MONTH)",
+        "SAFE_DIV(PCT_CHANGE([m:loans.balance_rc], MONTH), LAG([m:deposits.balance_rc], 3, MONTH))",
+        "IF(PCT_CHANGE([m:loans.balance_rc], QUARTER) > 0, "
+        "LAG([m:loans.balance_rc], 1, QUARTER), 0)",
+        _nested_percent_change(8),
+    )
+    for source in sources:
+        node = parse(source, retention_days=None)
+        assert period_offsets(node) == unmemoised(node), source

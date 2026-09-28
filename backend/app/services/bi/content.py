@@ -1523,6 +1523,32 @@ def load_measure(db: Session, *, organization_id: str, bank_id: str, measure_id:
     return measure
 
 
+def certified_measure_keys(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
+    """Every measure key this institution has CERTIFIED, for the canvas rule.
+
+    ``check_canvas_shape`` refuses a calculated measure on a saved dashboard
+    unless it is certified, and its ``certified_measures`` argument defaults to
+    EMPTY so a caller that forgets it refuses everything rather than admitting
+    one unchecked. That default is right, and it made a real defect quiet: the
+    only production caller omitted the argument, so a bank-certified measure was
+    refused on every saved canvas with production copy telling the author to
+    certify what was already certified (audit A9-04).
+
+    Deliberately NOT filtered by reader: this is the institution's certification
+    state, not an access question. Whether the author may READ the figures the
+    formula names is decided separately, and earlier, by ``authorize_canvas``.
+    """
+
+    rows = db.scalars(
+        select(BiMeasure.measure_key).where(
+            BiMeasure.organization_id == ctx.organization_id,
+            BiMeasure.bank_id == bank.id,
+            BiMeasure.state == "bank_certified",
+        )
+    )
+    return frozenset(str(key) for key in rows)
+
+
 def readable_measures(
     db: Session, ctx: TenantContext, bank: Bank, *, viewer_id: UUID, surface: str
 ) -> tuple[BiMeasure, ...]:

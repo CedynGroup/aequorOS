@@ -764,6 +764,75 @@ def test_the_measure_list_says_a_certified_measure_can_be_charted(
     assert payload["measures"][0]["badge"] == "personal"
 
 
+def test_a_certified_measure_is_accepted_on_a_saved_dashboard(
+    db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
+) -> None:
+    """Audit A9-04. The canvas rule must admit what the institution certified.
+
+    `check_canvas_shape`'s `certified_measures` defaults to EMPTY so a caller that
+    forgets it refuses every calculated measure rather than admitting one
+    unchecked. That default is right; omitting it at the only production call site
+    was not. The effect was a bank-certified measure refused on every saved canvas,
+    with production copy telling the author to certify what was already certified.
+
+    Both directions, because admitting everything would also pass the first half:
+    a CERTIFIED formula is accepted, and a PERSONAL one is still refused — a saved
+    dashboard is a document other people open, and a personal formula on one turns
+    a share into a way to make someone else compute the owner's arithmetic under
+    the owner's label.
+    """
+
+    _grant(
+        db_session,
+        OWNER_ROLE_USER,
+        module=ModuleScope.ALL,
+        sensitivity=SensitivityScope.ALL,
+        bundle=RoleBundle.APPROVER,
+    )
+    db_session.commit()
+    _ = plane
+    _create_measure(db_client, db_session, key="custom.personal_only")
+    certified = _create_measure(db_client, db_session, key="custom.certified_one")
+    db_client.post(
+        f"{BASE}/measures/{certified['id']}/proposal",
+        json={"reason": "For the board pack"},
+        headers=_headers(db_session, USER_1),
+    )
+    decided = db_client.post(
+        f"{BASE}/measures/{certified['id']}/decision",
+        json={
+            "decision": "approve",
+            "reason": "Reviewed against the register",
+            "expression_digest": _digest(db_client, db_session, certified["id"]),
+        },
+        headers=_headers(db_session, OWNER_ROLE_USER),
+    )
+    assert decided.status_code == 200, decided.text
+
+    def _canvas(measure_key: str) -> dict[str, Any]:
+        return {
+            "title": f"Canvas for {measure_key}",
+            "description": "A9-04",
+            "visibility": "private",
+            "spec": _spec(_widget("w1", "A figure", measure_key)),
+        }
+
+    accepted = db_client.post(
+        f"{BASE}/dashboards",
+        json=_canvas("custom.certified_one"),
+        headers=_headers(db_session, USER_1),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    refused = db_client.post(
+        f"{BASE}/dashboards",
+        json=_canvas("custom.personal_only"),
+        headers=_headers(db_session, USER_1),
+    )
+    assert refused.status_code == 422, refused.text
+    assert "bi_dashboard_widget_refused" in refused.text
+
+
 def test_a_certified_measure_can_be_charted_through_the_query_route(
     db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
 ) -> None:

@@ -75,6 +75,7 @@ from app.schemas.bi_content import (
 )
 from app.services import audit, grant_administration
 from app.services.bi import content, query_log
+from app.services.bi.authorization import UnknownMember
 
 router = APIRouter(tags=["bi"])
 
@@ -522,13 +523,7 @@ def create_bi_dashboard(
     else:
         assert payload.spec is not None  # noqa: S101 - the request model refuses neither
         spec, title, description = payload.spec, payload.title, payload.description
-    try:
-        content.authorize_canvas(
-            db, access.ctx, access.bank, spec, surface=content.DASHBOARD_SURFACE
-        )
-    except content.MembersDenied as exc:
-        raise _denied(cat, exc) from exc
-    _shaped(spec)
+    _authorized_canvas(db, access, cat, spec)
     try:
         dashboard, version = content.create_dashboard(
             db,
@@ -681,13 +676,7 @@ def update_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest 
         content.require_owner(dashboard, actor_user_id=access.principal_user_id)
     except content.NotTheOwner as exc:
         raise _forbidden(exc) from exc
-    try:
-        content.authorize_canvas(
-            db, access.ctx, access.bank, payload.spec, surface=content.DASHBOARD_SURFACE
-        )
-    except content.MembersDenied as exc:
-        raise _denied(cat, exc) from exc
-    _shaped(payload.spec)
+    _authorized_canvas(db, access, cat, payload.spec)
     try:
         version = content.update_dashboard(
             db,
@@ -927,16 +916,66 @@ def set_bi_dashboard_shares(  # noqa: PLR0913 - FastAPI injects db/access
     )
 
 
-def _shaped(spec: BiDashboardSpec) -> None:
+def _authorized_canvas(
+    db: Session, access: BiReadAccess, cat: Catalogue, spec: BiDashboardSpec
+) -> None:
+    """The access decision for a whole canvas, then the shape rules.
+
+    ``UnknownMember`` has to be caught here. The authorization walk resolves every
+    id, and a PERSONAL calculated measure is deliberately not resolvable — only
+    certified ones load, so a draft cannot be named to anyone. That is right, and
+    it meant an author saving a canvas that referenced their OWN uncertified
+    formula got a **500** rather than a refusal: the exception escaped the route
+    entirely (audit A9-04's neighbour, found while testing its fix).
+
+    The shape rules are asked FIRST in that case, because they carry the honest
+    answer — "certify it before putting it on a saved dashboard" — where a bare
+    unknown-member message would send the author looking for a typo. If the shape
+    rules are satisfied, the id really is unknown, and naming it discloses nothing
+    because the caller supplied it.
+    """
+
+    try:
+        content.authorize_canvas(
+            db, access.ctx, access.bank, spec, surface=content.DASHBOARD_SURFACE
+        )
+    except content.MembersDenied as exc:
+        raise _denied(cat, exc) from exc
+    except UnknownMember as exc:
+        _shaped(db, access, spec)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "bi_dashboard_unknown_member",
+                "message": (
+                    f"{exc.member_id} is not a figure this dashboard can show. "
+                    "Check the name, or certify the calculated measure first."
+                ),
+            },
+        ) from exc
+    _shaped(db, access, spec)
+
+
+def _shaped(db: Session, access: BiReadAccess, spec: BiDashboardSpec) -> None:
     """422 for a widget the query engine would refuse, AFTER the access decision.
 
     After, because a shape message names members: telling a principal that one
     figure cannot be broken down by another would name both to someone who may
     have been refused either.
+
+    The institution's certified measure keys MUST be supplied. That argument
+    defaults to empty so a forgetful caller refuses every calculated measure
+    rather than admitting one unchecked, which is the right default and is exactly
+    why omitting it here was quiet: a bank-certified measure was refused on every
+    saved canvas, with copy telling the author to certify what was already
+    certified (audit A9-04).
     """
 
     try:
-        content.check_canvas_shape(spec)
+        content.check_canvas_shape(
+            spec,
+            certified_measures=content.certified_measure_keys(db, access.ctx, access.bank),
+        )
     except content.CanvasRefused as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -859,11 +859,30 @@ def period_offsets(node: Expr) -> tuple[int, ...]:
     Iterative, like :func:`walk`, and it visits a shared operand once per offset
     rather than once per node — which is exactly the point: the same figure read
     at two periods is two aggregates.
+
+    **The ``seen`` set is a denial-of-service fix, not an optimisation (A9-01).**
+    ``PCT_CHANGE`` pushes its operand at two offsets, so a chain of N nested ones
+    reaches the same ``(node, offset)`` pair along many different paths and an
+    unmemoised walk explores 2^N of them. Measured before the fix: depth 20 took
+    0.33 s, depth 22 took 1.34 s and depth 24 took 5.35 s — a doubling per level,
+    on a formula of about 480 characters against a 2,000-character limit and a
+    depth limit of 64. A single authenticated reader could therefore submit a
+    formula the parser ACCEPTS and burn a core for longer than the universe has
+    existed, on a synchronous handler, and the read budget could not meter it
+    because the validation route writes no query-log row.
+    Memoising the PAIR cannot change the answer: the return value is the SET of
+    offsets, and re-reaching a pair can only re-derive offsets already derivable
+    from it.
     """
     found: set[int] = {0}
+    seen: set[tuple[int, int]] = set()
     pending: list[tuple[Expr, int]] = [(node, 0)]
     while pending:
         current, offset = pending.pop()
+        key = (id(current), offset)
+        if key in seen:
+            continue
+        seen.add(key)
         if isinstance(current, Lag):
             pending.append((current.operand, offset + current.periods))
             continue

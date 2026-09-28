@@ -112,25 +112,36 @@ def _revoke(table: str, privileges: str) -> None:
 
 
 def _install_append_only(table: str) -> None:
-    """The same three guards ``audit_events`` and ``bi_query_log`` carry.
+    """Append-only at the ARTIFACT-VERSION tier: UPDATE blocked, DELETE reachable.
 
-    Belt, braces and a third: the row trigger refuses per row, the revocation
-    refuses per statement, and the RESTRICTIVE policies refuse regardless of what
-    the tenant policy allows. Any one of them alone can be worked around by a role
-    with the wrong grant; together they cannot.
+    ``202607250027`` established TWO tiers and the difference is load-bearing.
+    ``audit_events`` and ``bi_query_log`` block UPDATE **and** DELETE, because
+    nothing may ever remove an audit record. The signature, identity and
+    artifact-version tables block UPDATE ONLY, because DELETE has to stay
+    reachable through the parent's ``ON DELETE CASCADE``.
+
+    A dashboard's version history is the second kind, and applying the first tier
+    here was a real defect (audit A9-02): with DELETE revoked from the owning role,
+    the parent's cascade cannot fire, so ``DELETE FROM bi_dashboards`` raises and
+    **no saved dashboard can ever be deleted** — which breaks the spec's "only the
+    owner can edit or delete" completely, and takes the audit event for the
+    deletion down with it in the same rolled-back transaction. The hermetic suite
+    could not see it because SQLite has no grants, and the Postgres test asserted
+    the opposite property without exercising the cascade.
+
+    So: the trigger fires on UPDATE only, TRUNCATE stays revoked because it
+    bypasses row triggers entirely, and there is no RESTRICTIVE delete policy. A
+    version can still never be REWRITTEN, which is what makes the history
+    evidence; it can only be destroyed with the dashboard it belongs to.
     """
     op.execute(
-        f"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE ON {table} "
+        f"CREATE TRIGGER {table}_append_only BEFORE UPDATE ON {table} "
         f"FOR EACH ROW EXECUTE FUNCTION {_GUARD_FUNCTION}()"
     )
-    _revoke(table, "UPDATE, DELETE, TRUNCATE")
+    _revoke(table, "UPDATE, TRUNCATE")
     op.execute(
         f"CREATE POLICY {table}_no_update ON {table} AS RESTRICTIVE FOR UPDATE TO PUBLIC "
         f"USING (false) WITH CHECK (false)"
-    )
-    op.execute(
-        f"CREATE POLICY {table}_no_delete ON {table} AS RESTRICTIVE FOR DELETE TO PUBLIC "
-        f"USING (false)"
     )
 
 
@@ -651,6 +662,7 @@ def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         for table in APPEND_ONLY_TABLES:
             op.execute(f"DROP TRIGGER IF EXISTS {table}_append_only ON {table}")
+            op.execute(f"DROP POLICY IF EXISTS {table}_no_update ON {table}")
         for table in TABLES:
             op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {table}")
     for table in reversed(TABLES):
