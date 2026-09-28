@@ -121,6 +121,7 @@ from app.schemas.bi import (
     BiCatalogueMeasureRead,
     BiCatalogueRead,
     BiCatalogueValueRead,
+    BiDataScopeRead,
     BiExplainComponentRead,
     BiExplainEngineRead,
     BiExplainRead,
@@ -148,12 +149,16 @@ from app.schemas.bi import (
     BiTrustStatus,
 )
 from app.services import institution_types
-from app.services.bi import grid_adapter, provenance, query_log, reconciliation
+from app.services.bi import data_scope, grid_adapter, provenance, query_log, reconciliation
 from app.services.bi.authorization import (
     ALL_INSTITUTION_DATA,
+    NO_INSTITUTION_DATA,
     REASON_ALLOWED,
+    REASON_DATA_SCOPE_CONFLICT,
     BiAuthorization,
+    BiDataScope,
     authorize_query,
+    branch_readable,
     query_members,
     scope_pairs,
 )
@@ -405,13 +410,48 @@ def _trust_badge(
     )
 
 
-def _check_read(check_id: str, row: BiReconciliationResult | None) -> BiTrustCheckRead:
+def _check_read(
+    check_id: str, row: BiReconciliationResult | None, *, whole_institution: bool = True
+) -> BiTrustCheckRead:
+    """One reconciliation check's verdict, with its operands only for a reader
+    whose grant covers the whole institution.
+
+    A check reconciles the WHOLE book — ``lhs``/``rhs``/``difference`` on R7 are
+    the institution's total loans against the ledger — so handing them to a
+    branch-scoped reader discloses precisely the figure their grant excludes.
+    That was a real leak on ``explain``, found by
+    ``tests/api/test_bi_data_scope.py::test_explain_cannot_be_used_to_read_outside_the_slice``:
+    the response carries no measure value by design, so the operands were the one
+    number on it, and they were the institution's.
+
+    The VERDICT is kept, deliberately. Whether the bank's book reconciles is not a
+    figure and is already shown to every BI reader through the trust badge (audit
+    A6-01 authorized that route over every member its checks disclose); withholding
+    it would tell a scoped reader nothing about whether the numbers they CAN see
+    are trustworthy, which is the question the badge exists to answer. So the
+    status, the label and ``evaluated_at`` stay, and the arithmetic goes.
+
+    ``detail`` goes too. It is documented as "never a row of the book", but it
+    carries counts and line references that are institution-wide in the same way
+    the operands are, and a check that cannot be assessed says so in ``status``.
+    The one exception is the ``not_assessed`` reason, which is about the check
+    rather than the book.
+    """
+
     if row is None:
         return BiTrustCheckRead(
             check_id=check_id,
             label=CHECK_LABELS.get(check_id, check_id),
             status=_trust_status(reconciliation.GREY),
             detail={"reason": "not_assessed"},
+        )
+    if not whole_institution:
+        return BiTrustCheckRead(
+            check_id=check_id,
+            label=CHECK_LABELS.get(check_id, check_id),
+            status=_trust_status(row.status),
+            detail={"reason": "withheld_outside_data_scope"},
+            evaluated_at=row.evaluated_at,
         )
     return BiTrustCheckRead(
         check_id=check_id,
@@ -511,6 +551,17 @@ class _Authorized:
     etag: str
     #: The log row with everything known before the statement ran.
     record: query_log.QueryRecord
+    #: The decision's declared scope, resolved against THIS institution's branch
+    #: dimension. Resolved once, here, because it enters the ETag as well as the
+    #: statement: re-resolving at compile time would read the same rows twice and
+    #: could disagree with the representation the ETag names.
+    scope: data_scope.ResolvedDataScope = data_scope.WHOLE_INSTITUTION
+
+    @property
+    def injected_filters(self) -> tuple[BiFilter, ...]:
+        """The caller's data scope as filters the request cannot remove (S18)."""
+
+        return self.scope.filters
 
 
 def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
@@ -535,13 +586,22 @@ def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
     The merge is conjunctive: allowed only if every pass allowed, denied members
     unioned in first-seen order, and the reason taken from the first refusal so
     the log names why rather than which pass.
+
+    **The SCOPE is merged conjunctively too, and a disagreement refuses.** A
+    conjunctive read can never be served wider than its narrowest sentence: if
+    ``view`` is granted over one branch and ``export`` over the institution, the
+    principal may export only what they may view. ``all`` is the universe, so any
+    narrower pass wins over it. Two DIFFERENT narrow scopes have no ordering
+    between them — ``{B1}`` and ``{B2}`` are not comparable — so the read is
+    refused rather than guessed at; guessing would either widen the grant or
+    silently drop half of it.
     """
 
     denied: list[str] = []
     matched: dict[UUID, None] = {}
     reason = REASON_ALLOWED
     member_ids: tuple[str, ...] = ()
-    scope = ALL_INSTITUTION_DATA
+    scopes: list[BiDataScope] = []
     for permission in permissions:
         decision = authorize_query(
             db, access.ctx, access.bank, cat, query, permission=permission, surface=surface
@@ -549,7 +609,7 @@ def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
         member_ids = decision.member_ids or member_ids
         if decision.allowed:
             matched.update(dict.fromkeys(decision.matching_binding_ids))
-            scope = decision.data_scope
+            scopes.append(decision.data_scope)
             continue
         if reason == REASON_ALLOWED:
             reason = decision.reason
@@ -561,15 +621,25 @@ def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
             # Nothing is served, so no binding authorized this and there is no
             # ETag to key on the pairs that did match.
             matching_binding_ids=(),
-            data_scope=ALL_INSTITUTION_DATA,
+            data_scope=NO_INSTITUTION_DATA,
             reason=reason,
+            member_ids=member_ids,
+        )
+    narrow = {scope for scope in scopes if not scope.whole_institution}
+    if len(narrow) > 1:
+        return BiAuthorization(
+            allowed=False,
+            denied_members=member_ids,
+            matching_binding_ids=(),
+            data_scope=NO_INSTITUTION_DATA,
+            reason=REASON_DATA_SCOPE_CONFLICT,
             member_ids=member_ids,
         )
     return BiAuthorization(
         allowed=True,
         denied_members=(),
         matching_binding_ids=tuple(matched),
-        data_scope=scope,
+        data_scope=next(iter(narrow), ALL_INSTITUTION_DATA),
         reason=REASON_ALLOWED,
         member_ids=member_ids,
     )
@@ -615,6 +685,18 @@ def _authorize(  # noqa: PLR0913 - the guarded pipeline's own inputs, all explic
         raise _query_error(exc) from exc
     window = _data_window(query.time)
     fingerprint = _build_fingerprint(db, access.ctx.organization_id, access.bank.id, window)
+    # Resolved BEFORE the ETag and only for an allowed decision: a denied decision
+    # carries ``kind="none"``, whose resolution refuses on purpose.
+    scope = (
+        data_scope.resolve(
+            db,
+            decision.data_scope,
+            organization_id=access.ctx.organization_id,
+            bank_id=access.bank.id,
+        )
+        if decision.allowed
+        else data_scope.ResolvedDataScope(kind="none")
+    )
     etag = _etag(
         surface,
         ",".join(permission.value for permission in permissions),
@@ -623,6 +705,10 @@ def _authorize(  # noqa: PLR0913 - the guarded pipeline's own inputs, all explic
         CATALOGUE_VERSION,
         access.principal_user_id,
         access.authorization_version,
+        # The RESOLVED scope, not just the bindings that named it: a region grant
+        # covers whatever the region holds now, so a branch ingested into it
+        # changes this answer without changing a binding id or ``authv``.
+        scope.fingerprint,
         *sorted(str(binding_id) for binding_id in decision.matching_binding_ids),
     )
     record = replace(attempt, member_ids=decision.member_ids, build_fingerprint=fingerprint)
@@ -637,49 +723,58 @@ def _authorize(  # noqa: PLR0913 - the guarded pipeline's own inputs, all explic
             ),
         )
         raise _denied(cat, decision)
-    if not decision.data_scope.whole_institution:
-        # Fail closed: a principal scoped to part of the institution needs the
-        # injected filters Phase 4 derives from the matched bindings, and
-        # serving the whole book instead would be the leak S18 names.
-        _append(
-            db,
-            replace(
-                record,
-                decision=query_log.DECISION_DENIED,
-                denied_members=decision.member_ids,
-                build_fingerprint=None,
-            ),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_code": "bi_data_scope_unsupported",
-                "message": (
-                    "Your access covers part of this institution, "
-                    "which this view cannot narrow to yet."
-                ),
-            },
-        )
     if _is_fresh(if_none_match, etag):
         _append(db, record)
         raise _NotModified(etag)
     return _Authorized(
-        decision=decision, window=window, build_fingerprint=fingerprint, etag=etag, record=record
+        decision=decision,
+        window=window,
+        build_fingerprint=fingerprint,
+        etag=etag,
+        record=record,
+        scope=scope,
     )
 
 
-def _injected_filters(decision: BiAuthorization) -> tuple[BiFilter, ...]:
+def _injected_filters(authorized: _Authorized) -> tuple[BiFilter, ...]:
     """The caller's data scope as filters the request cannot remove (S18, D-029).
 
-    Phase 1 has no branch or region scope to derive — ``authorization_bindings``
-    carries no data-scope columns yet — so an authorized principal reads the
-    whole institution and there is nothing to inject. ``_authorize`` has already
-    refused anything else, so this cannot silently serve a scoped principal the
-    whole book.
+    Exactly one filter for a scoped principal and none for an institution-wide
+    one, resolved by ``app/services/bi/data_scope.py``. It is unremovable because
+    it is handed to ``compile_query`` beside the ``BiQuery`` rather than inside
+    it: the client's own predicates cannot reach it, and the compiler ANDs the two
+    — a request naming a branch outside the grant is served the intersection,
+    which is nothing.
     """
 
-    assert decision.data_scope.whole_institution  # noqa: S101 - refused in _authorize
-    return ()
+    return authorized.injected_filters
+
+
+def _scope_read(scope: data_scope.ResolvedDataScope) -> BiDataScopeRead:
+    """The resolved slice, as the answer's own statement of what it covers.
+
+    Always emitted, ``all`` included, so a client never has to treat "absent" and
+    "the whole institution" as the same thing — a stale client that never learned
+    about scopes would otherwise read a narrowed answer as institution-wide
+    (audit A10-12).
+
+    ``unresolved_regions`` is filled only in the case this layer can actually
+    determine: every declared region resolving to NO branch at all. A partially
+    resolved set is not derivable from ``ResolvedDataScope``, which keeps the union
+    of codes rather than the per-region mapping, and guessing which region was the
+    empty one would be inventing evidence. The credit plane computes the exact set
+    because it resolves the register itself; this says less rather than more.
+    """
+
+    unresolved: list[str] = []
+    if scope.declared_regions and not scope.branch_codes:
+        unresolved = list(scope.declared_regions)
+    return BiDataScopeRead(
+        kind=scope.kind,
+        branches=list(scope.branch_codes),
+        regions=list(scope.declared_regions),
+        unresolved_regions=unresolved,
+    )
 
 
 def _logged_members(decision: BiAuthorization, compiled: CompiledQuery) -> tuple[str, ...]:
@@ -707,7 +802,7 @@ def _compile(
             query,
             organization_id=access.ctx.organization_id,
             bank_id=access.bank.id,
-            injected_filters=_injected_filters(authorized.decision),
+            injected_filters=_injected_filters(authorized),
         )
     except BiQueryError as exc:
         _append(db, replace(authorized.record, row_count=None, duration_ms=None))
@@ -812,9 +907,42 @@ def _representative(cat: Catalogue, member_ids: Sequence[str]) -> str:
     return member_ids[0]
 
 
+@dataclass(frozen=True, slots=True)
+class _Visibility:
+    """What one caller may be SHOWN: pair authority, narrowed by their slice."""
+
+    pairs: Mapping[tuple[str, str], bool]
+    #: False when the caller's bindings cover part of the institution, in which
+    #: case a figure the platform cannot attribute to a branch is not visible
+    #: however its pair was decided — the query path refuses exactly those, and
+    #: the catalogue must not advertise what the query path refuses.
+    whole_institution: bool = True
+
+    def allows(self, member: MemberDef) -> bool:
+        if not self.pairs.get((member.module, member.sensitivity), False):
+            return False
+        return self.whole_institution or branch_readable(member)
+
+
+def _probe(
+    db: Session, access: BiReadAccess, cat: Catalogue, ids: Sequence[str], *, surface: str
+) -> tuple[set[str], list[BiDataScope]]:
+    """Put a set of representative ids to the decision function, chunk by chunk."""
+
+    denied: set[str] = set()
+    scopes: list[BiDataScope] = []
+    for chunk in _chunks(ids, BI_MAX_MEASURES):
+        probe = BiQuery(measures=list(chunk), time=BiTime(as_of=utc_now().date()))
+        decision = authorize_query(db, access.ctx, access.bank, cat, probe, surface=surface)
+        denied.update(decision.denied_members)
+        if decision.allowed:
+            scopes.append(decision.data_scope)
+    return denied, scopes
+
+
 def _visible_pairs(
     db: Session, access: BiReadAccess, cat: Catalogue, *, surface: str = SURFACE_CATALOGUE
-) -> dict[tuple[str, str], bool]:
+) -> _Visibility:
     """Which ``(module, sensitivity)`` pairs this caller holds, by asking the
     query path's own decision function.
 
@@ -831,25 +959,58 @@ def _visible_pairs(
     by ``(module, sensitivity)``, which is the unit ``authorize_query`` decides
     in, so asking once per widget would give the same answer at twenty-four times
     the cost.
+
+    **A SECOND pass for a scoped caller, and why it is not optional.** The
+    preferred representative is a measure composed from nothing, which in four of
+    the twelve pairs is an ``grain="institution"`` engine figure — and a scoped
+    caller is refused those, so the first pass would mark the whole pair invisible
+    and take the pair's branch-readable portfolio measures down with it. The second
+    pass re-asks those pairs with a branch-readable representative, so a pair is
+    marked invisible only for a genuine AUTHORITY reason and the per-member slice
+    rule is applied by :meth:`_Visibility.allows` where it belongs.
     """
 
     pairs = scope_pairs(cat.members())
     by_representative = {
         _representative(cat, member_ids): pair for pair, member_ids in pairs.items()
     }
-    ids = list(by_representative)
-    allowed: dict[tuple[str, str], bool] = {}
-    for chunk in _chunks(ids, BI_MAX_MEASURES):
-        probe = BiQuery(measures=list(chunk), time=BiTime(as_of=utc_now().date()))
-        decision = authorize_query(db, access.ctx, access.bank, cat, probe, surface=surface)
-        denied = set(decision.denied_members)
-        for member_id in chunk:
-            allowed[by_representative[member_id]] = member_id not in denied
-    return allowed
+    denied, scopes = _probe(db, access, cat, list(by_representative), surface=surface)
+    allowed = {pair: member_id not in denied for member_id, pair in by_representative.items()}
+    if _whole_institution(scopes):
+        return _Visibility(pairs=allowed, whole_institution=True)
+    # NOT ``all(...)`` over a possibly EMPTY list: a scoped reader's preferred
+    # representatives are institution-grain in four of the twelve pairs, so the
+    # first pass can come back wholly denied — and a vacuous ``all(())`` would
+    # then read as "institution-wide", skip the retry AND stop ``allows`` from
+    # narrowing per member. An unknown scope has to fall through to the retry.
+    retry = {
+        _representative(cat, readable): pair
+        for pair, member_ids in pairs.items()
+        if not allowed[pair]
+        and (readable := tuple(m for m in member_ids if branch_readable(cat.member(m))))
+    }
+    if retry:
+        retried, retry_scopes = _probe(db, access, cat, list(retry), surface=surface)
+        for member_id, pair in retry.items():
+            allowed[pair] = member_id not in retried
+        scopes = [*scopes, *retry_scopes]
+    return _Visibility(pairs=allowed, whole_institution=_whole_institution(scopes))
 
 
-def _visible(member: MemberDef, allowed: Mapping[tuple[str, str], bool]) -> bool:
-    return allowed.get((member.module, member.sensitivity), False)
+def _whole_institution(scopes: Sequence[BiDataScope]) -> bool:
+    """Whether every scope that ALLOWED something covers the whole institution.
+
+    ``False`` for an empty list on purpose: no allowed decision means no scope was
+    established, and assuming the widest one is the fail-open this phase closes.
+    Where the list is empty because the reader holds nothing, every pair is
+    invisible anyway and the answer does not matter.
+    """
+
+    return bool(scopes) and all(scope.whole_institution for scope in scopes)
+
+
+def _visible(member: MemberDef, allowed: _Visibility) -> bool:
+    return allowed.allows(member)
 
 
 def _measure_read(measure: MeasureDef) -> BiCatalogueMeasureRead:
@@ -927,7 +1088,13 @@ def get_bi_catalogue(
         access.bank.id,
         access.principal_user_id,
         access.authorization_version,
-        *sorted(f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.items() if ok),
+        # The pair authority AND the slice: a scoped reader is shown fewer members
+        # of the same pairs, so an institution-wide representation must not revalidate
+        # for them (nor theirs for an institution-wide reader).
+        allowed.whole_institution,
+        *sorted(
+            f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
+        ),
     )
     if _is_fresh(if_none_match, etag):
         return _not_modified(etag)
@@ -982,6 +1149,7 @@ def run_bi_query(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         trust=_trust_badge(db, access.ctx.organization_id, access.bank.id, authorized.window),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
+        data_scope=_scope_read(authorized.scope),
     )
 
 
@@ -1240,7 +1408,12 @@ def explain_bi_measure(  # noqa: PLR0913 - FastAPI injects db/access/response/he
         compare_to=time.compare_to,
         engine=_engine_read(db, access, measure, authorized.window),
         checks=[
-            _check_read(check_id, rows.get(check_id)) for check_id in measure.reconciliation_checks
+            _check_read(
+                check_id,
+                rows.get(check_id),
+                whole_institution=authorized.decision.data_scope.whole_institution,
+            )
+            for check_id in measure.reconciliation_checks
         ],
         trust=_trust_badge(db, access.ctx.organization_id, access.bank.id, authorized.window),
         catalogue_version=CATALOGUE_VERSION,
@@ -1365,8 +1538,16 @@ def get_bi_trust(  # noqa: PLR0913 - FastAPI injects db/access/response/header
     return BiTrustRead(
         as_of=as_of,
         status=_trust_badge(db, access.ctx.organization_id, access.bank.id, window).status,
+        # The operands are institution-wide arithmetic, so a scoped reader gets
+        # the verdict without the numbers — see ``_check_read``. This route's
+        # docstring already says the payload is FIGURES, not metadata, which is
+        # exactly why the slice has to apply here too.
         checks=[
-            _check_read(check_id, rows.get(check_id))
+            _check_read(
+                check_id,
+                rows.get(check_id),
+                whole_institution=decision.data_scope.whole_institution,
+            )
             for check_id in reconciliation.STORABLE_CHECK_IDS
         ],
         builds=[
@@ -1522,7 +1703,7 @@ def _pack_widget_read(  # noqa: PLR0913 - one widget, its place, its date and it
     layout: BiLayoutItem,
     *,
     as_of: date,
-    allowed: Mapping[tuple[str, str], bool],
+    allowed: _Visibility,
     denied: list[str],
 ) -> BiPackWidgetRead:
     """One widget resolved for the date, or the refusal that replaced it.
@@ -1561,7 +1742,7 @@ def _pack_read(  # noqa: PLR0913 - one pack, its date, its reader and the two lo
     spec: BiPackSpec,
     *,
     as_of: date,
-    allowed: Mapping[tuple[str, str], bool],
+    allowed: _Visibility,
     denied: list[str],
     served: list[str],
 ) -> BiPackRead:
@@ -1684,7 +1865,13 @@ def list_bi_packs(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         access.principal_user_id,
         access.authorization_version,
         *(f"{spec.id}@{spec.version}" for spec in specs),
-        *sorted(f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.items() if ok),
+        # The pair authority AND the slice: a scoped reader is shown fewer members
+        # of the same pairs, so an institution-wide representation must not revalidate
+        # for them (nor theirs for an institution-wide reader).
+        allowed.whole_institution,
+        *sorted(
+            f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
+        ),
     )
     denied: list[str] = []
     served: list[str] = []
@@ -1754,7 +1941,13 @@ def get_bi_pack(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         access.principal_user_id,
         access.authorization_version,
         f"{spec.id}@{spec.version}",
-        *sorted(f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.items() if ok),
+        # The pair authority AND the slice: a scoped reader is shown fewer members
+        # of the same pairs, so an institution-wide representation must not revalidate
+        # for them (nor theirs for an institution-wide reader).
+        allowed.whole_institution,
+        *sorted(
+            f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
+        ),
     )
     denied: list[str] = []
     served: list[str] = []

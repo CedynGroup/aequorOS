@@ -140,6 +140,14 @@ ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ("GET", "/packs?as_of=2026-08-31", None),
     ("GET", "/packs/board?as_of=2026-08-31", None),
     ("GET", "/insights?as_of=2026-08-31", None),
+    # P4-F: AI commentary. It joins the sweeps for a reason none of the others
+    # carry — it is the one BI read that can send a bank's figures to a vendor, so
+    # the deployment flag's 404, the cross-tenant 404, the impersonated operator
+    # and the zero-binding human all have to answer here BEFORE any of that is
+    # considered. Its own behaviour is tested in
+    # ``tests/api/test_bi_commentary_routes.py``.
+    ("POST", "/commentary", {"as_of": "2026-08-31"}),
+    ("GET", "/commentary?as_of=2026-08-31", None),
 )
 
 BALANCE_BY_BRANCH_QUERY: dict[str, Any] = {
@@ -698,6 +706,10 @@ EXPECTED_UNSAFE_BI_ROUTES: frozenset[str] = frozenset(
         "/api/v1/banks/{bank_id}/bi/subscriptions",
         "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}",
         "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deactivation",
+        # AI commentary. In the unsafe set for the strongest reason of all: it is
+        # the only BI write that can make a bank's figures leave the platform to a
+        # vendor, so an unguarded one would do it for a principal nobody checked.
+        "/api/v1/banks/{bank_id}/bi/commentary",
     }
 )
 
@@ -856,6 +868,12 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
       for this reporting date" — a statement about the bank's figures made to a
       reader who was shown none of them.
 
+    ``commentary`` refuses the same way and for the same reason, in both
+    directions: even its platform-authored fallback is composed from those
+    insight statements, so a reader shown none of the figures may not be handed a
+    paragraph about them — and asking must not queue a model call over a sheet
+    this reader could not have read.
+
     Whatever the status, nothing in any answer may be a figure.
     """
     authv = grant_only(db_session, ())
@@ -898,6 +916,14 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
         details = response.json()["error"]["details"]
         assert details["error_code"] == "bi_insights_authorization_denied"
         assert "denied_members" not in details
+        return
+    if suffix.startswith("/commentary"):
+        assert response.status_code == 403, response.text
+        details = response.json()["error"]["details"]
+        assert details["error_code"] == "bi_commentary_authorization_denied"
+        assert "denied_members" not in details
+        # No commentary of any authorship reached this reader.
+        assert "paragraphs" not in response.text
         return
     assert response.status_code == 403, response.text
     details = response.json()["error"]["details"]

@@ -15,6 +15,13 @@ the same query, and refuses if the answer has changed. A refusal is a
 authority decision, and failing the row would bury the reason under three
 attempts. The file is never written in that case.
 
+**Including the DATA SCOPE.** A grant can narrow as well as vanish, and a
+narrowed grant must narrow the ARTIFACT — so the injected branch filter comes
+from the decision made here, resolved here, and the scope is printed on the file
+(``ExportContext.data_scope_label``). Nothing about the slice is read back off
+the queue payload: a spreadsheet of one region's book that says "Whole
+institution" is the exact misreading the provenance block exists to prevent.
+
 **The link is not stored.** The job records the object path; the presigned URL
 is minted when the owner asks for it, from the route, with its own short expiry.
 A URL persisted in ``jobs.progress`` would be a bearer credential sitting in a
@@ -50,7 +57,7 @@ from app.domain.bi.catalogue import CATALOGUE_VERSION, catalogue
 from app.models import Bank, Job, User
 from app.schemas.bi import BiQuery
 from app.services import job_queue
-from app.services.bi import exports, query_log
+from app.services.bi import data_scope, exports, query_log
 from app.services.bi.authorization import BiAuthorization, authorize_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.exports import policy, runner
@@ -296,7 +303,16 @@ def _context_for(job: Job, request: ExportJobRequest) -> TenantContext:
 def _decide(
     session: Session, ctx: TenantContext, request: ExportJobRequest
 ) -> BiAuthorization | None:
-    """Re-run the export's whole authorization sentence; ``None`` means denied."""
+    """Re-run the export's whole authorization sentence; ``None`` means denied.
+
+    The DATA SCOPE is part of what is re-run. A grant narrowed between the
+    request and the render must narrow the artifact, so the scope the file is
+    built from is the one this decision carries — never one stored on the payload
+    when the job was queued. Two narrow scopes that disagree across the
+    permissions of one conjunctive sentence refuse, for the reason
+    ``read_bi._merged_decision`` states: there is no ordering between two branch
+    sets, so serving either would be a guess.
+    """
 
     cat = catalogue()
     allowed: BiAuthorization | None = None
@@ -310,9 +326,17 @@ def _decide(
             permission=permission,
             surface=exports.QUERY_LOG_SURFACE,
         )
-        if not decision.allowed or not decision.data_scope.whole_institution:
+        if not decision.allowed:
             return None
-        allowed = decision
+        if (
+            allowed is not None
+            and not decision.data_scope.whole_institution
+            and not allowed.data_scope.whole_institution
+            and decision.data_scope != allowed.data_scope
+        ):
+            return None
+        if allowed is None or allowed.data_scope.whole_institution:
+            allowed = decision
     return allowed
 
 
@@ -407,6 +431,14 @@ def render_job(session: Session, job: Job, *, storage: StorageClient) -> ExportJ
         return replace(base, reason="authorization_revoked")
 
     cat = catalogue()
+    # Resolved HERE, at render time, from the decision this handler just made:
+    # the scope a narrowed grant now admits, not the one the request held.
+    scope = data_scope.resolve(
+        session,
+        decision.data_scope,
+        organization_id=job.organization_id,
+        bank_id=request.bank.id,
+    )
     try:
         run = runner.run_query(
             session,
@@ -414,7 +446,7 @@ def render_job(session: Session, job: Job, *, storage: StorageClient) -> ExportJ
             query=request.query,
             organization_id=job.organization_id,
             bank_id=request.bank.id,
-            injected_filters=(),
+            injected_filters=scope.filters,
             row_cap=settings.export_row_cap,
             timeout_ms=settings.export_timeout_ms,
         )
@@ -435,7 +467,7 @@ def render_job(session: Session, job: Job, *, storage: StorageClient) -> ExportJ
         bank=request.bank,
         query=request.query,
         cat=cat,
-        data_scope=decision.data_scope,
+        data_scope=scope,
         export_class=request.export_class,
         user_label=runner.principal_label(session, job.organization_id, request.user.id),
     )

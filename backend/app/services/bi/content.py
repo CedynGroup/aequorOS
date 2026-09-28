@@ -57,8 +57,10 @@ from app.core.authorization import (
     InstitutionScope,
     Module,
     Permission,
+    PrincipalType,
     RoleBundle,
     Sensitivity,
+    principal_bundle_compatible,
 )
 from app.core.config import get_settings
 from app.db.base import utc_now
@@ -809,11 +811,29 @@ def _append_version(  # noqa: PLR0913 - one row, stated explicitly
 
 
 def _validate_visibility(visibility: str, visibility_role: str | None) -> None:
-    """A ``role`` visibility must name a role the platform actually issues."""
+    """A ``role`` visibility must name a role a HUMAN can actually hold.
+
+    The check used to admit every ``RoleBundle`` value, which quietly included the
+    machine bundles. Sharing a dashboard with ``integration_writer`` — and, once
+    the Power BI feed landed, ``bi_reader`` — therefore succeeded and reached
+    nobody: no human can ever hold one, so the audience is empty and the owner is
+    told it worked. A share that silently reaches no one is the same shape as a
+    grant that lies, and the error message already claimed to be about what "this
+    organization can hold".
+
+    ``principal_bundle_compatible`` is the predicate that already answers this, so
+    the machine bundles are excluded by asking it rather than by a second list that
+    could fall out of step with ``MACHINE_ROLE_BUNDLES``.
+    """
 
     if visibility != "role":
         return
-    if visibility_role not in {bundle.value for bundle in RoleBundle}:
+    holdable = {
+        bundle.value
+        for bundle in RoleBundle
+        if principal_bundle_compatible(PrincipalType.HUMAN, bundle)
+    }
+    if visibility_role not in holdable:
         raise BiContentError("That is not a role this organization can hold.")
 
 
@@ -1445,16 +1465,22 @@ def decide_promotion(  # noqa: PLR0913 - the complete checker sentence
 ) -> tuple[BiMeasure, grant_administration.SodDecision]:
     """The checker's half: certify the measure for the institution, or send it back.
 
-    Four refusals, in this order, and none of them is skippable:
+    Five refusals, in this order, and none of them is skippable:
 
     1. the measure must be ``proposed``;
-    2. the formula must be the one that was reviewed — a decision taken against a
+    2. the stored TEXT must hash to the stored digest (audit A9-10). The digest
+       columns are what the checker's decision, the certification and the
+       compiler's read are all keyed on, and no portable CHECK can bind a digest
+       to the text it is a digest OF — so a row whose ``expression`` was rewritten
+       without its ``expression_digest`` would have the checker approve one formula
+       and the institution certify another. Refused, never repaired;
+    3. the formula must be the one that was reviewed — a decision taken against a
        version that has since moved is not a decision about what would be
        certified (:class:`ExpressionMoved`);
-    3. proposer ≠ approver, through
+    4. proposer ≠ approver, through
        :func:`promotion_sod_decision`, raising the platform's own
        ``SodPolicyBlocked``;
-    4. the approver's access must cover APPROVING every figure the formula names,
+    5. the approver's access must cover APPROVING every figure the formula names,
        not merely viewing them. Certifying a measure for the whole institution is
        an approval, so it needs approval authority over the same sentences the
        figures need — the conjunction the export surface already applies for
@@ -1463,6 +1489,8 @@ def decide_promotion(  # noqa: PLR0913 - the complete checker sentence
 
     if measure.state != "proposed":
         raise MeasureStateConflict("This measure is not waiting for a review.")
+    if expression_digest(measure.expression) != measure.expression_digest:
+        raise ExpressionMoved()
     if measure.expression_digest != expression_digest_reviewed:
         raise ExpressionMoved()
     sod = promotion_sod_decision(

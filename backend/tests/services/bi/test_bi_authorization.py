@@ -589,9 +589,17 @@ def test_permission_is_a_parameter_the_caller_chooses(db_session: Session, bank:
 # --- what an allowed decision carries ------------------------------------------------------
 
 
-def test_an_allowed_decision_names_the_bindings_and_the_phase_one_scope(
+def test_an_allowed_decision_names_the_bindings_and_its_data_scope(
     db_session: Session, bank: Bank
 ) -> None:
+    """An institution-wide binding still reads the whole institution.
+
+    The assertion on the scope's SHAPE moved with Phase 4: ``BiDataScope`` carried
+    one ``values`` tuple while the only storable kind was ``all``, and now mirrors
+    ``EffectiveDataScope`` with separate ``branches`` and ``regions``. The
+    PROPERTY under test is unchanged and is still asserted — an ``all`` grant
+    names no values at all, so nothing narrows the read.
+    """
     version = _grant(db_session, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.AGGREGATED)
     granted = tuple(
         db_session.scalars(
@@ -605,8 +613,10 @@ def test_an_allowed_decision_names_the_bindings_and_the_phase_one_scope(
     assert result.reason == REASON_ALLOWED
     assert result.matching_binding_ids == granted
     assert result.data_scope.kind == "all"
-    assert result.data_scope.values == ()
+    assert result.data_scope.branches == ()
+    assert result.data_scope.regions == ()
     assert result.data_scope.whole_institution is True
+    assert result.data_scope.serves_nothing is False
     assert result.member_ids == ("loans.balance_rc",)
 
 

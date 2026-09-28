@@ -192,7 +192,7 @@ def run_bi_export(  # noqa: PLR0913 - FastAPI injects db/access/storage
             query=query,
             organization_id=access.ctx.organization_id,
             bank_id=access.bank.id,
-            injected_filters=read_bi.injected_filters(authorized.decision),
+            injected_filters=read_bi.injected_filters(authorized),
             row_cap=probe_cap,
             timeout_ms=settings.export_timeout_ms,
         )
@@ -249,7 +249,7 @@ def _inline(  # noqa: PLR0913 - one delivery, spelled out
         bank=access.bank,
         query=query,
         cat=catalogue(),
-        data_scope=authorized.decision.data_scope,
+        data_scope=authorized.scope,
         export_class=export_class,
         user_label=runner.principal_label(db, access.ctx.organization_id, access.principal_user_id),
         window=authorized.window,

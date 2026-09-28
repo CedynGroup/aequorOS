@@ -96,6 +96,7 @@ from types import MappingProxyType
 from typing import Any, Literal, cast, get_args
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import (
     Boolean,
     CompoundSelect,
@@ -511,10 +512,30 @@ def _load_certified(
     * **Institution-scoped at the query.** Two banks of one organization share an
       RLS tenant, so organization scoping alone cannot isolate their rows
       (the by-id rule in ``AGENTS.md``).
-    * **The certified TEXT.** ``approved_expression`` is what a checker approved,
-      frozen at approval; the row's CHECK constraints guarantee it is present on
-      a certified row and equal in digest to ``expression``.
+    * **The certified TEXT is verified against its digest HERE, on every read**
+      (audit A9-10). The row's CHECK constraints guarantee that
+      ``approved_expression`` is present on a certified row and that
+      ``approved_expression_digest`` EQUALS ``expression_digest`` — but they bind
+      two digest COLUMNS to each other and nothing in the database binds either
+      one to the TEXT, because no portable CHECK can compute a SHA-256 (SQLite has
+      no such function, so the hermetic suite could not enforce a DB-level version
+      even where Postgres could). An UPDATE that rewrites ``approved_expression``
+      and leaves both digests alone therefore satisfies every constraint — and
+      since ``expand_calculated_measures`` authorizes a query as the figures the
+      TEXT names, a doctored formula would reach figures no checker approved. So
+      the digest of the text is recomputed on each read and a mismatch REFUSES:
+      the row is skipped, which makes the id resolve as unknown exactly like a
+      typo. It is never repaired — recomputing and storing the digest would
+      launder the tampering — and the refusal is the generic one, so a caller
+      cannot learn from the response that a tampered row exists.
     """
+    # Imported inside the call: ``content`` imports this module, so the dependency
+    # runs one way at module scope. ``expression_digest`` is the same function the
+    # certification path hashes with, not a second SHA-256 spelled here.
+    from app.services.bi.content import (  # noqa: PLC0415 - one-way dependency at run time
+        expression_digest,
+    )
+
     wanted = [member_id for member_id in dict.fromkeys(q.measures) if member_id not in cat]
     if not wanted:
         return {}
@@ -530,6 +551,22 @@ def _load_certified(
     for row in rows:
         text = row.approved_expression
         if text is None:  # pragma: no cover - refused by ck_bi_measures_approval_complete
+            continue
+        if expression_digest(text) != row.approved_expression_digest:
+            # Loud in the log, silent to the caller. Nothing about the row reaches
+            # the response, and the operator board is where a tampered
+            # certification has to become visible.
+            # ``loguru`` formats with ``{}``, not ``%s`` — written the printf way
+            # this logged the placeholders literally and dropped the three values
+            # (audit A10-09). It is the one line that says a certification was
+            # tampered with, so it has to carry the institution and the measure.
+            logger.error(
+                "bi.compiler.certified_expression_digest_mismatch "
+                "organization={} bank={} measure={}",
+                organization_id,
+                bank_id,
+                row.measure_key,
+            )
             continue
         found[row.measure_key] = _Certified(
             id=row.measure_key, label=row.label, value_type=row.value_type, expression=text

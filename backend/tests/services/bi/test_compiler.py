@@ -288,9 +288,13 @@ def cat() -> Catalogue:
     return catalogue()
 
 
-@pytest.fixture
-def mart(db_session: Session) -> Bank:
-    """One bank's mart plus a sibling tenant's, which must never show through."""
+def seed_compiler_mart(db_session: Session) -> Bank:
+    """One bank's mart plus a sibling tenant's, which must never show through.
+
+    A plain function as well as a fixture so another suite can reuse the same
+    hand-derived rows (``test_data_scope.py`` does) rather than build a second
+    mart whose numbers a reader would have to check against these.
+    """
     bank = _bank(db_session, ORG_1, "Mart Bank")
     other = _bank(db_session, ORG_2, "Other Bank")
     l1, l2, l3, l4 = uuid4(), uuid4(), uuid4(), uuid4()
@@ -522,6 +526,11 @@ def mart(db_session: Session) -> Bank:
     )
     db_session.flush()
     return bank
+
+
+@pytest.fixture
+def mart(db_session: Session) -> Bank:
+    return seed_compiler_mart(db_session)
 
 
 def _query(**overrides: Any) -> BiQuery:

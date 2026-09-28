@@ -26,8 +26,8 @@ from app.models import Bank, User
 from app.schemas.bi import BiFilter, BiQuery
 from app.services import jurisdictions
 from app.services.bi import provenance
-from app.services.bi.authorization import BiDataScope
 from app.services.bi.compiler import CompiledQuery, compile_query
+from app.services.bi.data_scope import ResolvedDataScope
 from app.services.bi.execution import QueryResult, execute
 from app.services.bi.exports.context import (
     ExportContext,
@@ -37,15 +37,6 @@ from app.services.bi.exports.context import (
     window_label,
 )
 from app.services.bi.exports.policy import ExportClass
-
-#: How a data scope reads on the artifact. Phase 1 authorizes only the whole
-#: institution (``authorization.BiDataScope``), and Phase 4's branch and region
-#: scopes are named here so a partial book can never print as the whole one.
-SCOPE_LABELS: dict[str, str] = {
-    "all": "Whole institution",
-    "branch": "Branches",
-    "region": "Regions",
-}
 
 #: What a principal is called on the artifact when the row has gone. Users are
 #: never physically deleted, so this is a fallback rather than an expectation.
@@ -63,13 +54,16 @@ def principal_label(db: Session, organization_id: str, principal_user_id: UUID) 
     return email or UNKNOWN_PRINCIPAL
 
 
-def scope_label(scope: BiDataScope) -> str:
-    """The caller's slice of the institution, in production copy."""
+def scope_label(scope: ResolvedDataScope) -> str:
+    """The caller's slice of the institution, in production copy.
 
-    heading = SCOPE_LABELS.get(scope.kind, scope.kind)
-    if scope.kind == "all" or not scope.values:
-        return heading
-    return f"{heading}: {', '.join(scope.values)}"
+    The RESOLVED scope, not the declared one: a spreadsheet covering one region's
+    book that reads "Whole institution" is exactly the misreading the provenance
+    block exists to prevent, and for a region grant the reader also needs to know
+    how many branches it came to — including none.
+    """
+
+    return scope.label
 
 
 def build_context(  # noqa: PLR0913 - the provenance block's own inputs, all explicit
@@ -78,7 +72,7 @@ def build_context(  # noqa: PLR0913 - the provenance block's own inputs, all exp
     bank: Bank,
     query: BiQuery,
     cat: Catalogue,
-    data_scope: BiDataScope,
+    data_scope: ResolvedDataScope,
     export_class: ExportClass,
     user_label: str,
     window: tuple[date, date] | None = None,
@@ -155,7 +149,6 @@ def to_table(run: ExportRun, ctx: ExportContext) -> ExportTable:
 
 
 __all__ = [
-    "SCOPE_LABELS",
     "UNKNOWN_PRINCIPAL",
     "ExportRun",
     "build_context",

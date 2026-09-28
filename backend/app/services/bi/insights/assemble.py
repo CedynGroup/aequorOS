@@ -71,13 +71,20 @@ from app.models import Bank
 from app.schemas.bi import (
     BI_MAX_MEASURES,
     BiDateRange,
+    BiFilter,
     BiQuery,
     BiTime,
     shift_months,
 )
 from app.services import institution_types
-from app.services.bi import provenance
-from app.services.bi.authorization import BiAuthorization, authorize_query, query_members
+from app.services.bi import data_scope, provenance
+from app.services.bi.authorization import (
+    ALL_INSTITUTION_DATA,
+    BiAuthorization,
+    BiDataScope,
+    authorize_query,
+    query_members,
+)
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.execution import execute
@@ -450,16 +457,27 @@ def _execute(  # noqa: PLR0913 - one read, its scope and its two server-side cap
     bank_id: str,
     row_cap: int,
     timeout_ms: int,
+    injected_filters: tuple[BiFilter, ...] = (),
 ) -> _Answer | None:
     """Run one catalogue query, or ``None`` when the platform refused it.
 
     A refusal is a refusal, not a zero: an unanswerable query yields no facts at
     all, so every measure it would have carried becomes a stated gap rather than
     a figure.
+
+    ``injected_filters`` is the reader's data scope. It is a REQUIRED input rather
+    than an optional garnish: a headline figure computed over the whole book and
+    stated to a branch-scoped reader is the leak S18 names, and the strip's
+    bridgeable portfolio ratios are exactly the family a branch DOES have.
     """
     try:
         compiled = compile_query(
-            db, cat, query, organization_id=organization_id, bank_id=bank_id, injected_filters=()
+            db,
+            cat,
+            query,
+            organization_id=organization_id,
+            bank_id=bank_id,
+            injected_filters=injected_filters,
         )
         result = execute(db, compiled, timeout_ms=timeout_ms, row_cap=row_cap)
     except BiQueryError:
@@ -521,6 +539,60 @@ def _readable(cat: Catalogue, measure: MeasureDef, denied: frozenset[str], as_of
     """Whether every member this one measure needs is covered for the reader."""
     probe = BiQuery(measures=[measure.id], time=BiTime(as_of=as_of))
     return not any(member.id in denied for member in query_members(cat, probe))
+
+
+def _scope_for(  # noqa: PLR0913 - the complete authorization sentence
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    cat: Catalogue,
+    *,
+    measures: Sequence[MeasureDef],
+    as_of: date,
+    surface: str,
+) -> data_scope.ResolvedDataScope | None:
+    """The slice the reader's grants admit over the measures that SURVIVED.
+
+    A second pass, and a deliberate one. The first pass evaluates the whole
+    candidate set to learn what is denied, and a chunk containing one refused
+    member comes back denied as a whole — carrying no binding ids and therefore no
+    scope — while the members beside it remain perfectly readable. So the scope is
+    asked of the surviving set, which is the set that will actually be compiled.
+
+    ``None`` means no figure may be read: the surviving set was refused after all,
+    or two chunks were authorized under different narrow scopes, which has no
+    ordering and so is refused rather than guessed (``read_bi._merged_decision``
+    states the same rule for the export sentence).
+    """
+    scopes: set[BiDataScope] = set()
+    for chunk in _chunks([measure.id for measure in measures], BI_MAX_MEASURES):
+        decision = authorize_query(
+            db,
+            ctx,
+            bank,
+            cat,
+            BiQuery(measures=list(chunk), time=BiTime(as_of=as_of)),
+            permission=Permission.VIEW,
+            surface=surface,
+        )
+        if not decision.allowed:
+            return None
+        scopes.add(decision.data_scope)
+    narrow = {scope for scope in scopes if not scope.whole_institution}
+    if len(narrow) > 1:
+        return None
+    declared = next(iter(narrow), ALL_INSTITUTION_DATA)
+    try:
+        resolved = data_scope.resolve(
+            db, declared, organization_id=ctx.organization_id, bank_id=bank.id
+        )
+        # Built here so a scope too wide to express as one filter refuses the
+        # strip rather than surfacing later as a per-group "refused" and a
+        # sentence that reads as if the bank had no figures.
+        _ = resolved.filters
+    except BiQueryError:
+        return None
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -711,6 +783,19 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
     )
     denied_set = frozenset(denied)
     allowed = [measure for measure in candidates if _readable(cat, measure, denied_set, as_of)]
+    scope = (
+        _scope_for(db, ctx, bank, cat, measures=allowed, as_of=as_of, surface=surface)
+        if allowed
+        else data_scope.WHOLE_INSTITUTION
+    )
+    if scope is None:
+        # Fail closed: nothing may be read, so every candidate is withheld and the
+        # route's "read nothing, withheld something" rule refuses the whole strip.
+        allowed = []
+        denied = tuple(dict.fromkeys((*denied, *(measure.id for measure in candidates))))
+        denied_set = frozenset(denied)
+        scope = data_scope.WHOLE_INSTITUTION
+    injected = scope.filters
     trends_allowed = TIME_DATE_DIMENSION not in denied_set
 
     window = provenance.data_window(BiTime(as_of=as_of, compare_to=prior))
@@ -737,6 +822,7 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
             bank_id=bank.id,
             row_cap=row_cap,
             timeout_ms=timeout_ms,
+            injected_filters=injected,
         )
         reads += 1
         touched.extend(member_id for member_id in group.measure_ids if member_id not in touched)
@@ -786,6 +872,7 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
             bank_id=bank.id,
             row_cap=row_cap,
             timeout_ms=timeout_ms,
+            injected_filters=injected,
         )
         reads += 1
         if TIME_DATE_DIMENSION not in touched:

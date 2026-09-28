@@ -42,15 +42,35 @@ Five rules, and each one is the answer to a way this feature goes wrong:
 notification COPY is composed here, because it states figures and the rules for
 stating a figure honestly live in the BI plane.
 
-**Where Phase 4's data scope plugs in.** ``authorize_query`` already returns
-``decision.data_scope``. Today Phase 1 admits only the whole institution, and an
-alert whose owner held a partial scope would be judging an institution-level
-threshold against part of the book — a different question. So
-:func:`_evaluate_one` REFUSES that case with ``data_scope_unsupported`` rather
-than faking a scope. When Phase 4 lands, that refusal becomes a call passing
-``injected_filters`` into :func:`_observed_value` and a per-recipient
-re-evaluation in :func:`_recipient_decisions`, because two recipients with
-different branch scopes then see different numbers.
+**The data scope (Phase 4).** An alert is judged over its OWNER's slice: their
+declared scope is resolved to branch codes and passed to :func:`_observed_value`
+as the same unremovable filter the read routes inject, so a branch manager's
+alert on gross loans is about their branches and nobody else's.
+
+Two consequences worth stating, because both look like bugs and are not.
+
+*The threshold does not mean the same thing over a slice, and that is the bank's
+call to make.* A ``stated`` threshold is a number the owner typed while looking
+at their own figures, so judging it against those same figures is exactly right.
+A ``governed_limit`` is a REGISTER value — a regulatory or board limit stated for
+the institution — and a branch's share of the book will sit under it almost by
+construction, so such an alert is close to unfireable for a scoped owner. It is
+still evaluated rather than refused: the platform's job here is to compare the
+number the bank named against the figure the owner may see, not to decide that
+their grant makes their own alert pointless. What it must never do is judge an
+institution limit against a branch figure while LABELLING it institution-wide,
+and it cannot: a ``grain="institution"`` measure is refused to a scoped principal
+by ``authorize_query`` before any threshold is looked up.
+
+*A recipient is admitted only when their slice is the owner's slice.* The event
+row holds ONE observed figure (and is unique on ``(alert, as_of,
+build_fingerprint)``), so the notification carries the owner's number. Sending it
+to someone whose grant covers a different slice would state a figure they may not
+see — or, if their slice is wider, a figure that is not theirs under a name that
+says it is. ``_recipient_decisions`` therefore compares the recipient's declared
+scope with the owner's and withholds on any difference, which reduces to today's
+behaviour when both are institution-wide. Per-recipient VERDICTS would need a
+per-recipient event row; that is named in the task report, not faked here.
 """
 
 from __future__ import annotations
@@ -73,8 +93,8 @@ from app.models import Bank, Job, User
 from app.models.bi_notifications import BiAlert, BiAlertEvent
 from app.schemas.bi import BiFilter, BiQuery, BiTime
 from app.services import job_queue
-from app.services.bi import limits, provenance
-from app.services.bi.authorization import authorize_query
+from app.services.bi import data_scope, limits, provenance
+from app.services.bi.authorization import BiDataScope, authorize_query
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.execution import execute
@@ -121,6 +141,10 @@ REASON_NO_GOVERNED_LIMIT = "no_governed_limit"
 REASON_NO_FIGURE = "no_figure"
 REASON_UNKNOWN_MEMBER = "unknown_member"
 REASON_QUERY_REFUSED = "query_refused"
+#: Kept in the vocabulary after Phase 4 made a scoped alert evaluable, because it
+#: still has one live cause — a grant covering more branches than one ``IN`` list
+#: may carry (``data_scope.DataScopeUnservable``) — and because historical rows
+#: written under the Phase 1 refusal must keep meaning what they said.
 REASON_DATA_SCOPE_UNSUPPORTED = "data_scope_unsupported"
 
 
@@ -390,10 +414,19 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_UNKNOWN_MEMBER)
     if not decision.allowed:
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_AUTHORIZATION_REVOKED)
-    if not decision.data_scope.whole_institution:
-        # Phase 4 plugs in here: an institution-level threshold judged against a
-        # branch slice is a different question, so it is refused rather than
-        # answered with part of the book.
+    # The owner's slice, resolved against this institution's branches. An
+    # institution-grain measure never reaches here under a scoped grant —
+    # ``authorize_query`` denies it — so what this filter narrows is a portfolio
+    # figure, which is a figure a branch HAS.
+    try:
+        scope = data_scope.resolve(
+            db,
+            decision.data_scope,
+            organization_id=alert.organization_id,
+            bank_id=alert.bank_id,
+        )
+        scope_filters = scope.filters
+    except BiQueryError:
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_DATA_SCOPE_UNSUPPORTED)
 
     threshold, limit_source, absence = _threshold_for(alert, measure, resolver, as_of)
@@ -402,7 +435,9 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
             db, alert, as_of, fingerprint, absence or REASON_NO_GOVERNED_LIMIT
         )
 
-    observed, refusal = _observed_value(db, cat, query, bank=bank, measure=measure)
+    observed, refusal = _observed_value(
+        db, cat, query, bank=bank, measure=measure, injected_filters=scope_filters
+    )
     if observed is None:
         return _record_not_evaluated(db, alert, as_of, fingerprint, refusal or REASON_NO_FIGURE)
 
@@ -415,7 +450,9 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
     else:
         return _no_row(alert, "unchanged", observed=observed, threshold=threshold)
 
-    admitted, withheld = _recipient_decisions(db, bank, cat, query, alert)
+    admitted, withheld = _recipient_decisions(
+        db, bank, cat, query, alert, owner_scope=decision.data_scope
+    )
     event = BiAlertEvent(
         organization_id=alert.organization_id,
         bank_id=alert.bank_id,
@@ -428,7 +465,14 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
         threshold_basis=alert.threshold_basis,
         limit_source=limit_source,
         reason=None,
-        member_ids=list(decision.member_ids),
+        # The scope's own members ride along, exactly as ``bi_query_log`` records
+        # them, so the event says the figure was narrowed — while carrying no
+        # branch CODE, which is a filter value and is never stored.
+        member_ids=list(
+            dict.fromkeys(
+                (*decision.member_ids, *(predicate.member for predicate in scope_filters))
+            )
+        ),
         notified_user_ids=[],
         withheld_user_ids=[str(user_id) for user_id in withheld],
         evaluated_at=utc_now(),
@@ -519,8 +563,14 @@ def _threshold_for(
     return None, None, REASON_NO_GOVERNED_LIMIT
 
 
-def _observed_value(
-    db: Session, cat: Catalogue, query: BiQuery, *, bank: Bank, measure: MeasureDef
+def _observed_value(  # noqa: PLR0913 - one figure and every input it is read from
+    db: Session,
+    cat: Catalogue,
+    query: BiQuery,
+    *,
+    bank: Bank,
+    measure: MeasureDef,
+    injected_filters: tuple[BiFilter, ...] = (),
 ) -> tuple[Decimal | None, str | None]:
     """``(figure, refusal)`` — exactly one of the two is set.
 
@@ -539,7 +589,7 @@ def _observed_value(
             query,
             organization_id=bank.organization_id,
             bank_id=bank.id,
-            injected_filters=(),
+            injected_filters=injected_filters,
         )
         result = execute(
             db, compiled, timeout_ms=settings.interactive_timeout_ms, row_cap=_SINGLE_ROW_CAP
@@ -584,15 +634,30 @@ def _as_decimal(value: object) -> Decimal | None:
         return None
 
 
-def _recipient_decisions(
-    db: Session, bank: Bank, cat: Catalogue, query: BiQuery, alert: BiAlert
+def _recipient_decisions(  # noqa: PLR0913 - the split and every input it is made from
+    db: Session,
+    bank: Bank,
+    cat: Catalogue,
+    query: BiQuery,
+    alert: BiAlert,
+    *,
+    owner_scope: BiDataScope,
 ) -> tuple[tuple[UUID, ...], tuple[UUID, ...]]:
-    """Split the distribution list by each recipient's OWN authority.
+    """Split the distribution list by each recipient's OWN authority and slice.
 
     The alert's owner may see the figure; that says nothing about the people the
     alert is addressed to. Each one is evaluated through the same
     ``authorize_query`` the read routes make, so a notification cannot carry a
     number its reader could not have asked for.
+
+    And it cannot carry a number about a DIFFERENT slice than the reader's own.
+    The event row holds one observed figure, computed over the owner's scope, so a
+    recipient whose declared scope differs is withheld: narrower, and the figure
+    states more of the book than they may see; wider, and the figure is not the
+    one its name promises them. Comparing the DECLARED scopes is deliberate —
+    equal declarations resolve to equal branch sets in the same transaction, and
+    comparing resolutions would cost one query per recipient to reach the same
+    answer. When both are institution-wide this is exactly the old rule.
     """
 
     admitted: list[UUID] = []
@@ -620,7 +685,7 @@ def _recipient_decisions(
         except BiQueryError:
             withheld.append(user_id)
             continue
-        if decision.allowed and decision.data_scope.whole_institution:
+        if decision.allowed and decision.data_scope == owner_scope:
             admitted.append(user_id)
         else:
             withheld.append(user_id)

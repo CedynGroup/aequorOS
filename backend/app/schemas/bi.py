@@ -614,6 +614,35 @@ class BiTrustBadge(BiClosedModel):
     failing_checks: list[str] = Field(default_factory=list)
 
 
+class BiDataScopeRead(BiClosedModel):
+    """What the rows in this answer were restricted to.
+
+    A branch- or region-scoped reader is served a smaller book than the
+    institution holds, and a figure over that smaller book is indistinguishable on
+    the wire from an institution with a smaller book. Without this the browser
+    could only say "some of what is shown here may be narrowed, and this page
+    cannot say which" — a hedge that is true and nearly useless. With it a surface
+    names the figure and the slice (audit A10-12).
+
+    Mirrors ``CreditDataScopeRead`` field for field on purpose: one grant means one
+    shape on the wire whichever plane answers, so a client needs one parser.
+
+    ``kind`` is the reduction of the reader's own bindings. ``branches`` is the
+    resolved code set the filter actually applied — for a region grant, the codes
+    the institution's own business-unit register places in that region.
+    ``unresolved_regions`` names a granted region no unit belongs to, because zero
+    rows for THAT reason is a grant to correct, not a book to report.
+    """
+
+    kind: Literal["all", "branch", "region", "mixed"]
+    #: Empty when ``kind`` is ``all`` — nothing was filtered out.
+    branches: list[str] = []
+    #: The regions the reader's bindings declare, verbatim.
+    regions: list[str] = []
+    #: Declared regions that match no business unit in the institution's register.
+    unresolved_regions: list[str] = []
+
+
 class BiQueryResult(BiClosedModel):
     columns: list[BiResultColumn]
     rows: list[list[Any]]
@@ -624,6 +653,13 @@ class BiQueryResult(BiClosedModel):
     catalogue_version: str
     #: The mart build fingerprint the rows were read from; wave 3 fills it.
     build_fingerprint: str | None = None
+    #: The slice these rows cover. Always present, including ``all``: a client
+    #: must not have to treat "absent" and "the whole institution" as the same
+    #: thing, because a stale client that never learned about scopes would then
+    #: read a narrowed answer as institution-wide.
+    data_scope: BiDataScopeRead = Field(
+        default_factory=lambda: BiDataScopeRead(kind="all")
+    )
 
 
 # --- route envelopes -------------------------------------------------------------------

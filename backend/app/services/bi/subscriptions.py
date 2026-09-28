@@ -38,15 +38,15 @@ says ``pending`` for ever — and that is the intended trade: a second copy of a
 board pack is a disclosure event, a missing one is a visible row somebody can
 act on.
 
-**Where Phase 4's data scope plugs in.** ``authorize_query`` already returns
-``decision.data_scope``; Phase 1 admits only the whole institution, so a
-recipient whose bindings cover part of it is refused here
-(``data_scope_unsupported``) rather than served the whole book or a faked slice.
-When Phase 4 lands, that refusal becomes ``injected_filters=scope_filters(
-decision.data_scope)`` in :func:`_render_for` — and because every recipient is
-already compiled and executed separately, two recipients with different branch
-scopes will then genuinely receive different figures with no further change to
-the shape of this module.
+**The data scope (Phase 4).** Each recipient's own declared scope is resolved to
+branch codes and passed to ``compile_query`` as the unremovable injected filter,
+in :func:`_render_for`. Because every recipient is already authorized, compiled,
+executed and rendered separately — nothing is computed once and reused, by
+construction, since the provenance block names the recipient — two recipients with
+different branch scopes genuinely receive different figures in the same run, and
+each artifact SAYS which slice it covers (``ExportContext.data_scope_label``).
+A recipient whose scope cannot be expressed as one filter (more branches than an
+``IN`` list may carry) is still refused with ``data_scope_unsupported``.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ from app.models.bi import MART_BUILD_SCOPES
 from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
 from app.schemas.bi import BiQuery, BiTime
 from app.services import job_queue, jurisdictions, mailer
-from app.services.bi import exports, provenance, query_log
+from app.services.bi import data_scope, exports, provenance, query_log
 from app.services.bi.authorization import authorize_query, query_members
 from app.services.bi.errors import BiQueryError
 from app.services.bi.exports import policy, runner
@@ -878,15 +878,6 @@ def _deliver_one(  # noqa: PLR0913, PLR0911 - one recipient, and every way it ca
                 member_ids=decision.member_ids,
                 denied_members=decision.denied_members,
             )
-        if not decision.data_scope.whole_institution:
-            query_log.record(db, _with(attempt, member_ids=decision.member_ids))
-            return _finish(
-                db,
-                row,
-                status="denied",
-                reason=REASON_DATA_SCOPE_UNSUPPORTED,
-                member_ids=decision.member_ids,
-            )
     assert decision is not None  # noqa: S101 - ``required`` is never empty
 
     if mode != "attachment":
@@ -899,7 +890,7 @@ def _deliver_one(  # noqa: PLR0913, PLR0911 - one recipient, and every way it ca
     if rendered.refusal is not None:
         query_log.record(db, _with(attempt, member_ids=decision.member_ids))
         status = "no_data" if rendered.refusal == REASON_NO_FIGURES else "failed"
-        if rendered.refusal in (REASON_DISCLOSURE_CLASS_CHANGED,):
+        if rendered.refusal in (REASON_DISCLOSURE_CLASS_CHANGED, REASON_DATA_SCOPE_UNSUPPORTED):
             status = "denied"
         return _finish(
             db, row, status=status, reason=rendered.refusal, member_ids=decision.member_ids
@@ -990,11 +981,24 @@ def _render_for(  # noqa: PLR0913 - one render and every input it is made from
     something a person reads, not a bulk extraction, and the run's stale-job
     window is set against this budget times the recipient cap.
 
-    Phase 4: ``injected_filters`` is where ``decision.data_scope`` becomes an
-    unremovable filter, which is what makes two recipients' bytes differ.
+    ``injected_filters`` is where THIS recipient's ``decision.data_scope`` becomes
+    an unremovable filter, and it is what makes two recipients' bytes differ. The
+    scope is resolved here rather than by the caller so it cannot be resolved once
+    and reused across recipients, and the same scope is handed to
+    ``build_context`` so the artifact states the slice it covers.
     """
 
     settings = get_settings().bi
+    try:
+        scope = data_scope.resolve(
+            db,
+            decision.data_scope,
+            organization_id=request.subscription.organization_id,
+            bank_id=request.bank.id,
+        )
+        injected = scope.filters
+    except BiQueryError:
+        return _Rendered(refusal=REASON_DATA_SCOPE_UNSUPPORTED)
     try:
         run = runner.run_query(
             db,
@@ -1002,7 +1006,7 @@ def _render_for(  # noqa: PLR0913 - one render and every input it is made from
             query=query,
             organization_id=request.subscription.organization_id,
             bank_id=request.bank.id,
-            injected_filters=(),
+            injected_filters=injected,
             row_cap=settings.ui_row_cap,
             timeout_ms=settings.interactive_timeout_ms,
         )
@@ -1023,7 +1027,7 @@ def _render_for(  # noqa: PLR0913 - one render and every input it is made from
         bank=request.bank,
         query=query,
         cat=cat,
-        data_scope=decision.data_scope,
+        data_scope=scope,
         export_class=policy.SUMMARY,
         user_label=recipient.email,
     )
