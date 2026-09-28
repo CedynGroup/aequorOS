@@ -17,6 +17,17 @@
  * then refused. Members the reader has no sentence for are returned as a COUNT
  * and never as ids.
  *
+ * HOW MUCH OF THE BOOK ANY OF IT COVERS. The statements and the checks are both
+ * computed over the reader's own data scope — `assemble_insights` takes the
+ * resolved scope as a REQUIRED input, and a scoped reader gets each check's
+ * verdict without its institution-wide operands — but neither payload discloses
+ * the scope it applied. So the coverage is derived from the only honest source in
+ * the browser, the per-capability scope on `/auth/me`, and it is stated at the
+ * precision that source supports: the reader's grants describe what this page
+ * COULD read, not which statement on it was narrowed, so the sentence says part
+ * of the page is narrowed and does not invent which part. It still never reads as
+ * the institution's whole book, and it fails closed.
+ *
  * WHAT THE PLATFORM WILL SAY. `GET …/bi/insights` composes the movements,
  * attributions, projections and data gaps server-side from typed facts, with
  * every figure already formatted in the institution's own unit and every
@@ -38,6 +49,7 @@ import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
+import CoverageNotice from "@/components/access/CoverageNotice";
 import { useBankContext } from "@/components/shell/BankContext";
 import FilterBar from "@/components/bi/FilterBar";
 import InsightStrip from "@/components/bi/InsightStrip";
@@ -53,6 +65,7 @@ import {
   useBiTrust,
 } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
+import { coverageFromCapabilities } from "@/lib/api/dataScope";
 import { fmtTimestamp, labelize } from "@/lib/api/values";
 import { fmtInt } from "@/lib/format";
 
@@ -66,7 +79,8 @@ function BiNotAvailable() {
 }
 
 export default function InsightsPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, institutionCapabilities, authorityPending } =
+    useBankContext();
   // The default follows the institution's latest computed snapshot until the
   // reader picks a date; a state initialiser would freeze today's date before
   // the bank payload had settled.
@@ -98,6 +112,20 @@ export default function InsightsPage() {
     );
   }, [catalogue.data]);
 
+  /**
+   * How much of the institution's book this page's figures cover.
+   *
+   * `surface` precision on purpose: `pairs` is every address the reader's
+   * catalogue holds, which is what this page COULD read — the insight statements
+   * and the reconciliation checks name no member on the wire, so claiming a
+   * specific statement is narrowed would be a fabricated specific. Every address
+   * being institution-wide is still a sound "nothing here is narrowed".
+   */
+  const coverage = coverageFromCapabilities(institutionCapabilities, pairs, {
+    pending: authorityPending || catalogue.isPending,
+    precision: "surface",
+  });
+
   if (isBiUnavailable(catalogue.error)) {
     return (
       <>
@@ -128,6 +156,9 @@ export default function InsightsPage() {
           filters={[]}
           onFiltersChange={() => undefined}
         />
+
+        {/* Above everything it qualifies: the strip AND the reconciliation card. */}
+        <CoverageNotice coverage={coverage} />
 
         <InsightStrip
           data={insights.data}

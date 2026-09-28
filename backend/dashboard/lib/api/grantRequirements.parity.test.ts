@@ -21,11 +21,21 @@ import { dirname, join } from "node:path";
 import {
   CHAIN_DECISION_MODULE,
   CHAIN_DECISION_SENSITIVITY,
+  dataScopeShortfall,
   grantShortfall,
   overlappingGrantNotice,
   type HeldGrant,
 } from "./grantRequirements";
-import type { GrantDraft } from "./grants";
+import {
+  BOOK_COVERAGE_OPTIONS,
+  DATA_SCOPE_KIND_FIELD,
+  DATA_SCOPE_VALUES_FIELD,
+  grantScopeDisplay,
+  grantScopeRefusal,
+  MAX_DATA_SCOPE_VALUES,
+  WHOLE_INSTITUTION_BOOK,
+  type GrantDraft,
+} from "./grants";
 
 let failures = 0;
 function test(name: string, fn: () => void): void {
@@ -59,6 +69,28 @@ const GATE_SOURCE = join(
   "family_access.py",
 );
 
+/**
+ * The migration that created the data-scope columns. The contract
+ * (`.ai/BI_PHASE4_CONTRACT.md`) names it authoritative and names its CHECK
+ * verbatim, so it — not a prose summary — is what this mirror is read against.
+ */
+const DATA_SCOPE_MIGRATION = join(
+  repoRoot(),
+  "backend",
+  "alembic",
+  "versions",
+  "202609270073_authorization_data_scopes.py",
+);
+
+/** The request and response contracts the composer posts to and reads from. */
+const AUTHORIZATION_SCHEMAS = join(
+  repoRoot(),
+  "backend",
+  "app",
+  "schemas",
+  "authorization.py",
+);
+
 function draft(over: Partial<GrantDraft>): GrantDraft {
   return {
     roleBundle: "approver" as GrantDraft["roleBundle"],
@@ -66,6 +98,7 @@ function draft(over: Partial<GrantDraft>): GrantDraft {
     institutionId: "BK-SAMP0001",
     moduleScope: "all" as GrantDraft["moduleScope"],
     sensitivityScope: "all" as GrantDraft["sensitivityScope"],
+    dataScope: WHOLE_INSTITUTION_BOOK,
     reason: "test",
     ...over,
   };
@@ -102,7 +135,9 @@ test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
 
 test("the case that cost a session: Approver at Confidential is inert", () => {
   const warning = grantShortfall(
-    draft({ sensitivityScope: "confidential" as GrantDraft["sensitivityScope"] }),
+    draft({
+      sensitivityScope: "confidential" as GrantDraft["sensitivityScope"],
+    }),
   );
   assert.ok(warning, "an Approver at Confidential must warn");
   assert.match(warning, /Restricted/);
@@ -113,7 +148,9 @@ test("a sound grant says nothing", () => {
   assert.equal(grantShortfall(draft({})), null);
   assert.equal(
     grantShortfall(
-      draft({ sensitivityScope: "restricted" as GrantDraft["sensitivityScope"] }),
+      draft({
+        sensitivityScope: "restricted" as GrantDraft["sensitivityScope"],
+      }),
     ),
     null,
   );
@@ -197,9 +234,7 @@ test("only same bundle on the same institution counts", () => {
     "a grant on a sibling institution is not this one",
   );
   assert.equal(
-    overlappingGrantNotice(draft({}), [
-      { ...heldApprover, status: "revoked" },
-    ]),
+    overlappingGrantNotice(draft({}), [{ ...heldApprover, status: "revoked" }]),
     null,
     "a revoked row allows nothing and must not be reported",
   );
@@ -216,7 +251,173 @@ test("an organization-wide draft compares against organization-wide rows", () =>
     "an institution row is not the same target as an organization-wide draft",
   );
   assert.ok(
-    overlappingGrantNotice(orgDraft, [{ ...heldApprover, institutionId: null }]),
+    overlappingGrantNotice(orgDraft, [
+      { ...heldApprover, institutionId: null },
+    ]),
+  );
+});
+
+// --- the data-scope mirror ---------------------------------------------------
+
+test("the wire field names are the migration's column names", () => {
+  assert.ok(
+    existsSync(DATA_SCOPE_MIGRATION),
+    `the data-scope migration is missing: ${DATA_SCOPE_MIGRATION}. The ` +
+      `composer cannot post a column nobody created.`,
+  );
+  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
+  for (const column of [DATA_SCOPE_KIND_FIELD, DATA_SCOPE_VALUES_FIELD]) {
+    assert.match(
+      source,
+      new RegExp(`sa\\.Column\\(\\s*\\n?\\s*"${column}"`),
+      `the composer posts '${column}', which the migration does not add. A ` +
+        `field name the server does not recognise is silently dropped by ` +
+        `Pydantic's extra="forbid" as a 422 — or worse, accepted and ignored.`,
+    );
+  }
+});
+
+test("the three choices are the three storable kinds", () => {
+  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
+  const kinds = source.match(/_KINDS\s*=\s*\(([^)]*)\)/);
+  assert.ok(kinds, "could not find the kind vocabulary in the migration");
+  const declared = [...kinds[1].matchAll(/"([a-z_]+)"/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(
+    [...BOOK_COVERAGE_OPTIONS.map(([kind]) => kind)].sort(),
+    [...declared].sort(),
+    "the composer offers a set of coverages that is not the set the column " +
+      "admits — either an unstorable choice is on screen, or a storable one " +
+      "cannot be granted at all",
+  );
+});
+
+test("the refusal mirrors the CHECK, both halves", () => {
+  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
+  // Half one: `all` carries no list. Half two: any other kind carries a
+  // non-empty one. Read from the migration so a reshaped CHECK is noticed here.
+  assert.match(source, /data_scope_kind = 'all' AND data_scope_values IS NULL/);
+  assert.match(source, /json_array_length\(data_scope_values\) > 0/);
+
+  // Half two, mirrored: a narrowing kind with nothing chosen is refused.
+  for (const kind of ["branch", "region"] as const) {
+    const refusal = grantScopeRefusal(
+      draft({ dataScope: { kind, values: [] } }),
+    );
+    assert.ok(
+      refusal,
+      `${kind} coverage with nothing chosen must be refused in the composer`,
+    );
+    assert.match(refusal, /at least one/);
+  }
+  assert.equal(
+    grantScopeRefusal(
+      draft({ dataScope: { kind: "branch", values: ["001"] } }),
+    ),
+    null,
+    "one chosen branch is a complete coverage",
+  );
+  // Half one, mirrored: `all` never carries a list, so it is never refused.
+  assert.equal(
+    grantScopeRefusal(draft({ dataScope: { kind: "all", values: ["001"] } })),
+    null,
+  );
+});
+
+test("the request contract names both fields, and the cap is mirrored", () => {
+  assert.ok(
+    existsSync(AUTHORIZATION_SCHEMAS),
+    `the grant contract is missing: ${AUTHORIZATION_SCHEMAS}`,
+  );
+  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
+  assert.match(
+    source,
+    new RegExp(`${DATA_SCOPE_KIND_FIELD}: DataScope`),
+    "ScopedGrantInput no longer takes the coverage kind the composer posts",
+  );
+  const values = source.match(
+    new RegExp(
+      `${DATA_SCOPE_VALUES_FIELD}: list\\[str\\][\\s\\S]{0,240}?max_length=(\\d+)`,
+    ),
+  );
+  assert.ok(values, "could not read the coverage value field and its cap");
+  assert.equal(
+    String(MAX_DATA_SCOPE_VALUES),
+    values[1],
+    "the composer's cap on how many branches one grant may name has drifted " +
+      "from the server's, so it either refuses a grant the server accepts or " +
+      "posts one it will not",
+  );
+});
+
+test("the branch directory is read by the response model's own field names", () => {
+  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
+  const entry = source.match(
+    /class BranchDirectoryEntryRead\(ClosedModel\):([\s\S]*?)\n\nclass /,
+  );
+  assert.ok(entry, "could not find BranchDirectoryEntryRead");
+  const fields = [...entry[1].matchAll(/^\s{4}([a-z_]+):/gm)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(
+    [...fields].sort(),
+    ["code", "name", "region"],
+    "the branch row's fields changed; `parseBranchDirectory` reads exactly " +
+      "these three and treats anything else as a protocol failure, so it would " +
+      "start reporting every institution as having no branch register",
+  );
+  const directory = source.match(
+    /class BranchDirectoryRead\(ClosedModel\):([\s\S]*?)(?:\nclass |$)/,
+  );
+  assert.ok(directory);
+  assert.match(directory[1], /branches: list\[BranchDirectoryEntryRead\]/);
+  assert.match(directory[1], /regions: list\[str\]/);
+});
+
+test("the stored-scope label the list shows is a field the server sends", () => {
+  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
+  // `grantScopeDisplay` prefers this over its own wording. If it were dropped
+  // the fallback would still describe every grant, but silently — so the
+  // preference is pinned rather than assumed.
+  assert.match(source, /data_scope_label: str/);
+  assert.equal(
+    grantScopeDisplay({
+      data_scope_kind: "region",
+      data_scope_values: ["Northern"],
+      data_scope_label: "Selected regions: Northern",
+    }).label,
+    "Selected regions: Northern",
+  );
+});
+
+test("a narrowed coverage warns about the figures it cannot answer", () => {
+  const warning = dataScopeShortfall(
+    draft({ dataScope: { kind: "branch", values: ["001"] } }),
+  );
+  assert.ok(warning, "a branch-scoped grant must say what it does not include");
+  assert.match(warning, /institution as a whole/);
+  assert.match(warning, /second grant/);
+  assert.ok(
+    dataScopeShortfall(
+      draft({ dataScope: { kind: "region", values: ["Northern"] } }),
+    ),
+  );
+});
+
+test("the whole book, and organization-wide coverage, warn about nothing", () => {
+  assert.equal(dataScopeShortfall(draft({})), null);
+  assert.equal(
+    dataScopeShortfall(
+      draft({
+        institutionScope: "organization" as GrantDraft["institutionScope"],
+        institutionId: undefined,
+        // Even if a stale draft still carries branch codes, an organization-wide
+        // sentence cannot state them — so there is nothing to warn about.
+        dataScope: { kind: "branch", values: ["001"] },
+      }),
+    ),
+    null,
   );
 });
 

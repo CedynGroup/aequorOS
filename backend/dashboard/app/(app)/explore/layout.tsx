@@ -1,7 +1,8 @@
 import ModuleTabs from "@/components/shell/ModuleTabs";
 
 /**
- * Explore and the two things a reader does with a question they have built.
+ * Explore, the figures this institution defined for itself, and the two things a
+ * reader does with a question they have built.
  *
  * WHY HERE. A threshold alert is one figure and a line; a scheduled report is a
  * question, a schedule and a distribution list. Both are a question plus an
@@ -16,9 +17,15 @@ import ModuleTabs from "@/components/shell/ModuleTabs";
  * limits. A threshold somebody set for themselves on a figure they chose is a
  * different object with a different owner, and putting the two on one page would
  * make a personal watch look like a supervisory one.
+ *
+ * Calculated measures sit here for the same reason. A formula is a figure this
+ * institution defined, and the only thing anyone does with a figure is ask a
+ * question with it — so the place to write one is beside the place the questions
+ * are built, and the certified ones appear in Explore's own measure list.
  */
 const tabs = [
   { href: "/explore", label: "Explore" },
+  { href: "/explore/measures", label: "Calculated measures" },
   { href: "/explore/alerts", label: "Threshold alerts" },
   { href: "/explore/subscriptions", label: "Scheduled reports" },
 ];

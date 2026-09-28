@@ -22,6 +22,7 @@ import type {
   BankRead,
   BankReadInstitutionTypeDetail,
   BankReportingPeriodRead,
+  EffectiveCapabilityRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
 import { useBiAvailability } from "@/lib/api/bi";
@@ -67,6 +68,26 @@ type BankContextValue = {
   setPeriodId: (periodId: string) => void;
   isLoading: boolean;
   isEmpty: boolean;
+  /**
+   * The server-evaluated capabilities for the SELECTED institution, exactly as
+   * `/auth/me` projected them — each one carrying its OWN data scope (the slice
+   * of the book that (institution, module, sensitivity, permission) reads).
+   *
+   * Exposed because the BI query, grid, insights and trust payloads disclose no
+   * scope even though the server resolves and applies one, so this projection is
+   * the only honest source in the browser for "does what is on screen cover the
+   * whole institution". Read it through `lib/api/dataScope.ts`, never by hand:
+   * one scope per institution would be wrong the moment an owner grants one
+   * module by branch and another institution-wide, and wrong in the dangerous
+   * direction.
+   */
+  institutionCapabilities: readonly EffectiveCapabilityRead[];
+  /**
+   * True until the projection has settled. An empty capability list means
+   * "nothing is granted" only once this is false — before that it means "not
+   * known yet", and the two must never be conflated by a coverage statement.
+   */
+  authorityPending: boolean;
 };
 
 const BankContext = createContext<BankContextValue | null>(null);
@@ -372,8 +393,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       setPeriodId: setSelectedPeriodId,
       isLoading,
       isEmpty,
+      institutionCapabilities,
+      authorityPending: profileQuery.isLoading || banksQuery.isLoading,
     }),
-    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty],
+    [
+      bank,
+      banksQuery.isLoading,
+      institutionCapabilities,
+      institutionType,
+      isEmpty,
+      isLoading,
+      moduleScope,
+      period,
+      periods,
+      profileQuery.isLoading,
+    ],
   );
 
   if (banksQuery.error || profileQuery.error) {

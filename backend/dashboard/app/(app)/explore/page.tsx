@@ -29,6 +29,26 @@
  * table shapes — a pivoted answer is a table, not a line. Switching views
  * therefore changes the question, which is why the toggle says so.
  *
+ * THE INSTITUTION'S OWN FIGURES ARE OFFERED BESIDE THE PLATFORM'S. A calculated
+ * measure certified by this bank (`/explore/measures`) is a figure like any other
+ * once two people have stood behind it, so it appears in the measure list under
+ * its own heading — and it is DERIVED into a catalogue entry from the figures its
+ * formula names (`components/bi/measures.ts::calculatedMeasureOffer`), so every
+ * rule about what a question may do with it is a rule about those figures. Only
+ * CERTIFIED ones are offered: the compiler resolves no other kind, so a draft in
+ * the list would be a guaranteed refusal wearing a checkbox.
+ *
+ * AND THE ANSWER SAYS HOW MUCH OF THE BOOK IT COVERS. A grant carries a data
+ * scope, and the server applies it to every figure, page and subtotal here — but
+ * the query payload discloses no scope, so the only honest source in the browser
+ * is the per-capability scope `/auth/me` projects. The question's own ids are
+ * resolved to the (module, sensitivity) addresses they read
+ * (`measures.questionAddresses` — a bank formula is resolved to the FIGURES its
+ * text names, never to itself, because that is what the server authorizes), and
+ * the coverage of those addresses is stated above the answer and on each figure's
+ * own label. It fails closed: an address that cannot be resolved, or a projection
+ * carrying no scope, is never read as the whole institution.
+ *
  * NOTHING IS EXPORTED FROM THE GRID ITSELF. AG Grid's own CSV export is
  * disabled in `components/bi/PivotGridCanvas.tsx`; every way out of this page
  * goes through the governed Export menu, which authorizes, audits and
@@ -48,6 +68,7 @@ import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
+import CoverageNotice from "@/components/access/CoverageNotice";
 import { useBankContext } from "@/components/shell/BankContext";
 import ExplainDrawer from "@/components/bi/ExplainDrawer";
 import ExportActions from "@/components/bi/ExportActions";
@@ -65,15 +86,27 @@ import {
   BI_DIMENSION_CAP,
   buildExploreQuery,
   EMPTY_SHAPE,
+  hasCalculatedMeasure,
+  incompatibleReason,
   measureIsCompatible,
   sliceableDimensions,
-  timeBehaviourLabel,
   type ExploreCatalogue,
   type ExploreShape,
 } from "@/components/bi/exploreQuery";
+import {
+  calculatedMeasureOffer,
+  questionAddresses,
+  unusableSentence,
+} from "@/components/bi/measures";
 import type { BiWidgetKind, BiWidgetSpec } from "@/components/bi/types";
-import { isBiUnavailable, useBiCatalogue, useBiQuery } from "@/lib/api/bi";
+import {
+  isBiUnavailable,
+  useBiCatalogue,
+  useBiMeasures,
+  useBiQuery,
+} from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
+import { coverageForFigures } from "@/lib/api/dataScope";
 import { fmtInt } from "@/lib/format";
 
 const CHART_KINDS: readonly { kind: BiWidgetKind; label: string }[] = [
@@ -107,8 +140,64 @@ function toggle(values: readonly string[], id: string): string[] {
     : [...values, id];
 }
 
+/**
+ * One figure in the picker — a platform member or one of this institution's own
+ * formulas, drawn identically because by this point they are the same kind of
+ * thing: a catalogue entry with allowed dimensions and a time behaviour.
+ *
+ * When it cannot be chosen, the REASON is the one that actually applies
+ * (`incompatibleReason`). It was a single hardcoded sentence about time behaviour
+ * while that was the only reason there was; a disabled option whose stated reason
+ * is the wrong one sends a reader to remove the wrong measure.
+ */
+function MeasureOption({
+  measure,
+  catalogue,
+  chosen,
+  onToggle,
+}: {
+  measure: BiCatalogueMeasureRead;
+  catalogue: ExploreCatalogue;
+  chosen: readonly string[];
+  onToggle: (id: string) => void;
+}) {
+  const selectable = measureIsCompatible(catalogue, chosen, measure.id);
+  const reason = incompatibleReason(catalogue, chosen, measure.id);
+  const designation = designationLabel(measure.advisoryDesignation ?? null);
+  return (
+    <label
+      className={`flex items-start gap-2 rounded px-1 py-1 ${
+        selectable ? "hover:bg-surface" : "opacity-60"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={chosen.includes(measure.id)}
+        disabled={!selectable}
+        onChange={() => onToggle(measure.id)}
+        className="mt-0.5"
+      />
+      <span className="min-w-0">
+        <span className="block text-body text-navy">{measure.label}</span>
+        <span className="block text-caption text-slate">
+          {measure.description}
+        </span>
+        {reason !== null && (
+          <span className="block text-caption text-slate">{reason}</span>
+        )}
+        {designation && (
+          <span className="mt-0.5 inline-block rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
+            {designation}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 export default function ExplorePage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, institutionCapabilities, authorityPending } =
+    useBankContext();
   const defaultDate = isoDay(period?.periodEnd) ?? isoDay(new Date()) ?? "";
   const [chosenDate, setChosenDate] = useState<string | null>(null);
   const asOf = chosenDate ?? defaultDate;
@@ -119,25 +208,57 @@ export default function ExplorePage() {
   const [explaining, setExplaining] = useState<string | null>(null);
 
   const catalogueQuery = useBiCatalogue(bank?.id);
+  const measuresQuery = useBiMeasures(bank?.id);
+
+  const published = useMemo(
+    () => catalogueQuery.data?.measures ?? [],
+    [catalogueQuery.data],
+  );
+
+  /**
+   * This institution's own certified formulas, turned into catalogue entries.
+   *
+   * Only the ones the derivation could complete honestly: a formula whose figures
+   * are not all in this reader's catalogue, or which mixes a position with a
+   * movement, is named with the reason rather than offered — see
+   * `calculatedMeasureOffer`. A draft is not here at all: the compiler resolves
+   * only certified measures, so an uncertified checkbox would guarantee a refusal.
+   */
+  const bankDefined = useMemo(() => {
+    const usable: BiCatalogueMeasureRead[] = [];
+    const withheld: { label: string; why: string }[] = [];
+    for (const measure of measuresQuery.data?.measures ?? []) {
+      const offer = calculatedMeasureOffer(measure, published);
+      if (offer.usable) {
+        usable.push(offer.entry);
+      } else if (offer.reason !== "not_certified") {
+        withheld.push({
+          label: measure.label,
+          why: unusableSentence(offer.reason),
+        });
+      }
+    }
+    return { usable, withheld };
+  }, [measuresQuery.data, published]);
 
   const catalogue: ExploreCatalogue = useMemo(
     () => ({
-      measures: catalogueQuery.data?.measures ?? [],
+      measures: [...published, ...bankDefined.usable],
       dimensions: catalogueQuery.data?.dimensions ?? [],
     }),
-    [catalogueQuery.data],
+    [bankDefined.usable, catalogueQuery.data, published],
   );
 
   const measureGroups = useMemo(() => {
     const groups = new Map<string, BiCatalogueMeasureRead[]>();
-    for (const measure of catalogue.measures) {
+    for (const measure of published) {
       const key = measure.module;
       groups.set(key, [...(groups.get(key) ?? []), measure]);
     }
     return [...groups.entries()].sort((left, right) =>
       moduleLabel(left[0]).localeCompare(moduleLabel(right[0])),
     );
-  }, [catalogue]);
+  }, [published]);
 
   /** Fields the chosen measures can actually be broken down by. */
   const availableDimensions = useMemo(
@@ -163,6 +284,42 @@ export default function ExplorePage() {
   const blocking = plan.problems.filter((problem) => problem.blocking);
   const advisory = plan.problems.filter((problem) => !problem.blocking);
 
+  /**
+   * How much of the institution's book THIS question's answer covers.
+   *
+   * Resolved from the question the reader built, not from the page: the measures,
+   * the fields it is broken down by and the fields it is filtered on are all
+   * reads, and the BI authorization path evaluates a sentence for each distinct
+   * (module, sensitivity) among them — a filter can itself disclose. The
+   * reduction then mirrors the server's: the narrowest sentence wins, and two
+   * narrow sentences that disagree are refused rather than guessed at.
+   */
+  const coverage = useMemo(() => {
+    const addresses = questionAddresses(
+      {
+        measures: shape.measures,
+        dimensions: shape.dimensions,
+        filterMembers: shape.filters.map((filter) => filter.member),
+      },
+      published,
+      catalogue.dimensions,
+      measuresQuery.data?.measures ?? [],
+    );
+    return coverageForFigures(institutionCapabilities, addresses, {
+      pending: authorityPending || catalogueQuery.isPending,
+    });
+  }, [
+    authorityPending,
+    catalogue.dimensions,
+    catalogueQuery.isPending,
+    institutionCapabilities,
+    measuresQuery.data,
+    published,
+    shape.dimensions,
+    shape.filters,
+    shape.measures,
+  ]);
+
   const summaryAnswer = useBiQuery(
     bank?.id,
     view === "summary" ? query : null,
@@ -173,15 +330,18 @@ export default function ExplorePage() {
     return {
       id: "explore",
       title: "Your question",
+      // The coverage rides on the answer's own caption as well as on the banner:
+      // a chart is the thing that gets screenshotted out of this page, and the
+      // caption travels with it where the banner does not.
       subtitle: `${fmtInt(query.measures.length)} ${
         query.measures.length === 1 ? "measure" : "measures"
-      } for ${asOf}`,
+      } for ${asOf}${coverage.suffix ? `, ${coverage.suffix}` : ""}`,
       kind,
       query,
       dataset: EXPLORE_DATASET,
       layout: { i: "explore", x: 0, y: 0, w: 12, h: 6 },
     };
-  }, [asOf, kind, query, view]);
+  }, [asOf, coverage.suffix, kind, query, view]);
 
   if (isBiUnavailable(catalogueQuery.error)) {
     return (
@@ -198,6 +358,7 @@ export default function ExplorePage() {
   }
 
   const hasMeasures = catalogue.measures.length > 0;
+  const explainWithheld = hasCalculatedMeasure(catalogue, shape.measures);
 
   return (
     <>
@@ -258,68 +419,66 @@ export default function ExplorePage() {
                       {moduleLabel(module)}
                     </p>
                     <ul className="space-y-0.5">
-                      {entries.map((measure) => {
-                        const selectable = measureIsCompatible(
-                          catalogue,
-                          shape.measures,
-                          measure.id,
-                        );
-                        return (
-                          <li key={measure.id}>
-                            <label
-                              className={`flex items-start gap-2 rounded px-1 py-1 ${
-                                selectable
-                                  ? "hover:bg-surface"
-                                  : "opacity-60"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={shape.measures.includes(measure.id)}
-                                disabled={!selectable}
-                                onChange={() =>
-                                  setShape((current) => ({
-                                    ...current,
-                                    measures: toggle(
-                                      current.measures,
-                                      measure.id,
-                                    ),
-                                  }))
-                                }
-                                className="mt-0.5"
-                              />
-                              <span className="min-w-0">
-                                <span className="block text-body text-navy">
-                                  {measure.label}
-                                </span>
-                                <span className="block text-caption text-slate">
-                                  {measure.description}
-                                </span>
-                                {!selectable && (
-                                  <span className="block text-caption text-slate">
-                                    Reported as a{" "}
-                                    {timeBehaviourLabel(measure.timeBehaviour)},
-                                    which cannot share an answer with what you
-                                    have already chosen.
-                                  </span>
-                                )}
-                                {designationLabel(
-                                  measure.advisoryDesignation ?? null,
-                                ) && (
-                                  <span className="mt-0.5 inline-block rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
-                                    {designationLabel(
-                                      measure.advisoryDesignation ?? null,
-                                    )}
-                                  </span>
-                                )}
-                              </span>
-                            </label>
-                          </li>
-                        );
-                      })}
+                      {entries.map((measure) => (
+                        <li key={measure.id}>
+                          <MeasureOption
+                            measure={measure}
+                            catalogue={catalogue}
+                            chosen={shape.measures}
+                            onToggle={(id) =>
+                              setShape((current) => ({
+                                ...current,
+                                measures: toggle(current.measures, id),
+                              }))
+                            }
+                          />
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 ))}
+
+                {/*
+                  This institution's own certified formulas. Their own heading
+                  rather than a module's, because a formula spans whatever modules
+                  its figures need — the server evaluates a sentence per pair, so
+                  filing it under one of them would understate what it reads.
+                */}
+                {bankDefined.usable.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-micro font-medium uppercase tracking-wider text-slate">
+                      Certified by this institution
+                    </p>
+                    <ul className="space-y-0.5">
+                      {bankDefined.usable.map((measure) => (
+                        <li key={measure.id}>
+                          <MeasureOption
+                            measure={measure}
+                            catalogue={catalogue}
+                            chosen={shape.measures}
+                            onToggle={(id) =>
+                              setShape((current) => ({
+                                ...current,
+                                measures: toggle(current.measures, id),
+                              }))
+                            }
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {bankDefined.withheld.length > 0 && (
+                  <ul className="space-y-1 border-t border-border-light pt-2">
+                    {bankDefined.withheld.map((entry) => (
+                      <li key={entry.label} className="text-caption text-slate">
+                        <span className="text-navy">{entry.label}</span> —{" "}
+                        {entry.why}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </SectionCard>
 
@@ -386,6 +545,13 @@ export default function ExplorePage() {
             </SectionCard>
           </div>
         )}
+
+        {/*
+          ABOVE THE ANSWER, and above the view toggle, because it qualifies BOTH
+          readings of the question: the summary's chart and the grid's subtotals
+          are the same figures over the same slice.
+        */}
+        <CoverageNotice coverage={coverage} />
 
         {hasMeasures && shape.measures.length > 0 && (
           <div className="space-y-3">
@@ -480,13 +646,31 @@ export default function ExplorePage() {
               ))}
             </div>
 
+            {/*
+              WHERE A FIGURE CAME FROM IS A QUESTION ABOUT A PUBLISHED FIGURE.
+              `POST …/bi/explain` resolves the measure against the STATIC
+              catalogue, so it has no answer for one of this institution's own
+              formulas — and the formula's own provenance is its text, which is on
+              `/explore/measures` in full with the figures it reads. The control is
+              therefore withheld for such a question, with the reason said out
+              loud, rather than offered and answered with an error.
+            */}
+            {explainWithheld && (
+              <p className="text-caption text-slate">
+                One of the figures in this answer is a formula your institution
+                defined. How it is worked out is its own formula — see it under
+                Calculated measures — so the per-figure provenance panel is not
+                offered for this question.
+              </p>
+            )}
+
             <WidgetRenderer
               spec={spec}
               result={summaryAnswer.data}
               isLoading={summaryAnswer.isPending}
               error={summaryAnswer.error}
               onRetry={() => void summaryAnswer.refetch()}
-              onExplain={setExplaining}
+              onExplain={explainWithheld ? undefined : setExplaining}
               actions={<ExportActions bankId={bank?.id} query={query} />}
               // The query AS SUBMITTED, which is what a drill-through needs: it
               // carries the reader's date and every filter they narrowed by, so
@@ -499,7 +683,9 @@ export default function ExplorePage() {
         {query && view === "grid" && (
           <SectionCard
             title="Your question, row by row"
-            subtitle="Each page is fetched and authorized on its own. Sorting is applied by the server to the whole answer, not to the page on screen."
+            subtitle={`Each page is fetched and authorized on its own. Sorting is applied by the server to the whole answer, not to the page on screen.${
+              coverage.hint ? ` ${coverage.hint}.` : ""
+            }`}
             actions={<ExportActions bankId={bank?.id} query={query} />}
             noPadding
           >

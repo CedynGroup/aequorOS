@@ -417,6 +417,42 @@ test("the bundle guard names a marker the installed library actually emits", () 
         "BI_RUNTIME_MARKERS.",
     );
   }
+
+  // The same parity for the saved-dashboard builder's grid. `react-grid-item` and
+  // `react-resizable-handle` are class names react-grid-layout writes onto the
+  // DOM and its own stylesheet keys off, so they survive minification wherever the
+  // library is bundled — but only the installed package can say whether they are
+  // still the ones it writes. A marker the library no longer emits is a guard that
+  // cannot fire, which is the defect `ag-theme-quartz` was.
+  const gridLayoutMarkers = markers.filter((entry) =>
+    entry.startsWith("react-"),
+  );
+  assert.deepEqual(
+    [...gridLayoutMarkers].sort(),
+    ["react-grid-item", "react-resizable-handle"],
+    "The guard must name react-grid-layout's own runtime class names.",
+  );
+  // Resolved through the package's own entry point rather than through
+  // `package.json`, which its `exports` map does not expose. The entry is
+  // `dist/index.js`, so its directory is the built bundle set.
+  const gridLayoutDist = dirname(
+    require.resolve("react-grid-layout", { paths: [ROOT] }),
+  );
+  const gridLayoutBundles = readdirSync(gridLayoutDist)
+    .filter((name) => name.endsWith(".mjs") || name.endsWith(".js"))
+    .map((name) => readFileSync(join(gridLayoutDist, name), "utf8"));
+  assert.ok(
+    gridLayoutBundles.length > 0,
+    "expected the installed react-grid-layout build output",
+  );
+  for (const marker of gridLayoutMarkers) {
+    assert.ok(
+      gridLayoutBundles.some((text) => text.includes(marker)),
+      `The guard names "${marker}", which the installed react-grid-layout ` +
+        "build does not contain. Check the new build output and update " +
+        "BI_RUNTIME_MARKERS.",
+    );
+  }
 });
 
 /**
@@ -431,7 +467,14 @@ test("the bundle guard names a marker the installed library actually emits", () 
  */
 function writeDistFixture(
   root: string,
-  options: Readonly<{ agGridInHome: boolean; agGridDeferred: boolean }>,
+  options: Readonly<{
+    agGridInHome: boolean;
+    agGridDeferred: boolean;
+    /** react-grid-layout reaching the Command Center's initial entry graph. */
+    gridLayoutInHome?: boolean;
+    /** react-grid-layout present in a deferred chunk of the builder route. */
+    gridLayoutDeferred?: boolean;
+  }>,
 ): void {
   const chunk = (name: string, body: string) => {
     const file = join("static", "chunks", name);
@@ -443,7 +486,9 @@ function writeDistFixture(
   const filler = "/* filler */\n".repeat(40);
   const homeChunk = chunk(
     "home.js",
-    filler + (options.agGridInHome ? 'cls="ag-root-wrapper";' : ""),
+    filler +
+      (options.agGridInHome ? 'cls="ag-root-wrapper";' : "") +
+      (options.gridLayoutInHome ? 'cls="react-grid-item";' : ""),
   );
   const rechartsChunk = chunk("recharts.js", filler + '"recharts-wrapper"');
   const editorChunk = chunk("editor.js", filler + '"ProseMirror-focused"');
@@ -451,6 +496,13 @@ function writeDistFixture(
   const gridChunk = chunk(
     "grid.js",
     filler + (options.agGridDeferred ? '"ag-root-wrapper";"ag-header-cell"' : ""),
+  );
+  const builderChunk = chunk(
+    "builder.js",
+    filler +
+      (options.gridLayoutDeferred !== false
+        ? '"react-grid-item";"react-resizable-handle"'
+        : ""),
   );
 
   const manifest = (route: string, entries: Record<string, string[]>) => {
@@ -483,6 +535,7 @@ function writeDistFixture(
   loadable("(app)/page", [rechartsChunk]);
   loadable("(app)/icaap/[cycleId]/sections/[sectionKey]/page", [editorChunk]);
   loadable("(app)/explore/page", [echartsChunk, gridChunk]);
+  loadable("(app)/dashboards/new/page", [builderChunk]);
 }
 
 function runBundleGuard(distDir: string): Readonly<{ code: number; text: string }> {
@@ -542,6 +595,77 @@ test("the bundle guard's AG Grid rule fires on both of its own violations", () =
   assert.ok(
     /AG Grid runtime marker/.test(deferred.text),
     `the guard failed without naming the missing AG Grid marker:\n${deferred.text}`,
+  );
+
+  rmSync(base, { recursive: true, force: true });
+});
+
+test("the bundle guard's react-grid-layout rule fires on both of its own violations", () => {
+  const base = mkdtempSync(join(tmpdir(), "aeq-bundle-guard-rgl-"));
+
+  // The control again, for the same reason: a correct build must pass, or the two
+  // convictions below prove only that the guard rejects everything.
+  const good = join(base, "good");
+  writeDistFixture(good, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    gridLayoutInHome: false,
+    gridLayoutDeferred: true,
+  });
+  const clean = runBundleGuard(good);
+  assert.equal(
+    clean.code,
+    0,
+    `the bundle guard rejected a correct build, so its verdicts mean nothing:\n${clean.text}`,
+  );
+
+  // Violation one, the negative half: the builder's grid reaches the Command
+  // Center. It has no chart and no grid on it, so the whole point of loading the
+  // library through `dynamic(..., { ssr: false })` is that it never ships there.
+  const inHome = join(base, "in-home");
+  writeDistFixture(inHome, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    gridLayoutInHome: true,
+    gridLayoutDeferred: true,
+  });
+  const home = runBundleGuard(inHome);
+  assert.notEqual(
+    home.code,
+    0,
+    "the bundle guard passed a build with a react-grid-layout runtime marker in " +
+      "the Command Center's initial entry graph",
+  );
+  assert.ok(
+    /react-grid-layout/.test(home.text),
+    `the guard failed without naming react-grid-layout:\n${home.text}`,
+  );
+
+  // Violation two, the positive half: react-grid-layout is in NO deferred chunk of
+  // the builder route — which is what a STATIC import looks like, and what the
+  // first draft of the builder actually did (one constant imported from the canvas
+  // module put the library in `/dashboards/new`'s initial bundle). The negative
+  // half above passes just as happily in that state, because it only watches the
+  // Command Center.
+  const notDeferred = join(base, "not-deferred");
+  writeDistFixture(notDeferred, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    gridLayoutInHome: false,
+    gridLayoutDeferred: false,
+  });
+  const deferred = runBundleGuard(notDeferred);
+  assert.notEqual(
+    deferred.code,
+    0,
+    "the bundle guard passed a build in which no deferred chunk of the builder " +
+      "route carries a react-grid-layout runtime marker. Its negative half " +
+      "cannot tell that from a clean build, so the rule would report clean " +
+      "forever.",
+  );
+  assert.ok(
+    /react-grid-layout runtime marker/.test(deferred.text),
+    `the guard failed without naming the missing react-grid-layout marker:\n${deferred.text}`,
   );
 
   rmSync(base, { recursive: true, force: true });

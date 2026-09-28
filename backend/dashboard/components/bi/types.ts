@@ -213,3 +213,84 @@ export type BiInsight = Readonly<{
 
 /** A measure as the explain drawer and the widget header need it. */
 export type BiMeasure = BiCatalogueMeasureRead;
+
+/**
+ * HOW A SAVED DASHBOARD IS REACHABLE — not who may read its figures.
+ *
+ * Mirrors `app/models/bi_content.py::DASHBOARD_VISIBILITIES`. Reachability only
+ * decides whether the document OPENS; every widget on it is authorized for
+ * whoever opened it, every time, so widening this can never widen what a reader
+ * is shown.
+ */
+export type BiDashboardVisibility = "private" | "users" | "role" | "org";
+
+/**
+ * ONE SAVED DASHBOARD IN A LIST.
+ *
+ * There is no widget here and no member id, because the LIST is read by everyone
+ * the document reaches and the figures it names are only disclosed once they have
+ * been authorized for that reader — which happens when it is opened.
+ *
+ * `certification` is the server's own `badge`, mapped; it is never inferred from
+ * who owns the document or from which list it arrived in.
+ */
+export type BiSavedDashboardSummary = Readonly<{
+  id: string;
+  title: string;
+  description: string;
+  certification: BiCertification;
+  ownerDisplayName: string | null;
+  /** Whether the reader is the owner, and therefore the only identity that may change it. */
+  ownedByCaller: boolean;
+  visibility: BiDashboardVisibility;
+  visibilityRole: string | null;
+  version: number;
+  widgetCount: number;
+  /** The certified pack this was copied from, when it was a copy. */
+  sourcePack: string | null;
+  updatedAt: Date;
+}>;
+
+/** A saved dashboard resolved for one reader and one reporting date. */
+export type BiSavedDashboardView = Readonly<{
+  id: string;
+  title: string;
+  description: string;
+  certification: BiCertification;
+  ownerDisplayName: string | null;
+  ownedByCaller: boolean;
+  visibility: BiDashboardVisibility;
+  visibilityRole: string | null;
+  version: number;
+  sourcePack: string | null;
+  /** The server's own sentence about what this reader is looking at. */
+  message: string;
+  /** True when every figure-bearing widget on the canvas was refused. */
+  everyFigureRefused: boolean;
+  restrictedWidgets: number;
+  /** Widgets in layout order, refusals included and carrying only geometry. */
+  widgets: readonly BiPackWidgetView[];
+}>;
+
+/**
+ * WHY THIS CLIENT CANNOT RESTATE A SAVED CANVAS, when it cannot.
+ *
+ * Saving a dashboard replaces its canvas as a whole, so the builder has to be
+ * able to write down every widget's authored definition exactly. Two things stop
+ * it, and neither may be guessed at:
+ *
+ * * `refused` — a widget this reader was refused arrives carrying its geometry
+ *   and nothing else, so its definition is not on the page to restate. Dropping
+ *   it would silently delete a view from somebody's dashboard.
+ * * `relative_window` — the read route returns each widget's query with the
+ *   reporting window already RESOLVED, and the relative window it was authored
+ *   with cannot be recovered from the result: on 31 January, month-to-date,
+ *   quarter-to-date and year-to-date all resolve to a window starting 1 January.
+ *   Picking one would turn a year's total into a month's under the title the
+ *   author wrote.
+ * * `incomplete` — a widget the server served as granted arrived without the
+ *   chart kind or the title its own definition requires. That is a malformed
+ *   read rather than a refusal, and substituting a kind would change what the
+ *   view draws under the author's heading.
+ */
+export type BiCanvasUnrestatable = "refused" | "relative_window" | "incomplete";

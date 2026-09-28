@@ -74,9 +74,20 @@ const EDITOR_MARKERS = ["ProseMirror-hideselection", "ProseMirror-focused"];
  * could not fail. `ag-header-cell` is written at runtime and is present in the
  * installed bundle, minified and not.
  *
+ * The react-grid-layout pair is the same kind of contract: `react-grid-item` is
+ * written onto every tile it places and `react-resizable-handle` onto every
+ * resize grip, and its own stylesheet keys off both. It arrived with the saved
+ * dashboard builder (Phase 3, `react-grid-layout` 2.2.4, whose peer range
+ * `>= 16.3.0` admits React 19), and it belongs here because the builder's grid
+ * is a client-only runtime reached through `components/bi/BuilderGrid.tsx`. This
+ * guard already earned its keep on it once: the first draft imported one
+ * CONSTANT from `BuilderGridCanvas.tsx` into the tile renderer, which put the
+ * whole library in `/dashboards/new`'s initial bundle — deferred in name only.
+ *
  * The home insight strip uses the lightweight SVG `components/ui/Sparkline`.
- * Any BI chart must be reached through `components/bi/EChart.tsx`, and the BI
- * grid through `components/bi/PivotGrid.tsx`; both load with
+ * Any BI chart must be reached through `components/bi/EChart.tsx`, the BI grid
+ * through `components/bi/PivotGrid.tsx`, and the builder's canvas through
+ * `components/bi/BuilderGrid.tsx`; all three load with
  * `dynamic(..., { ssr: false })`.
  */
 const BI_RUNTIME_MARKERS = [
@@ -84,11 +95,18 @@ const BI_RUNTIME_MARKERS = [
   ["zrender", "data-zr-dom-id"],
   ["AG Grid", "ag-root-wrapper"],
   ["AG Grid", "ag-header-cell"],
+  ["react-grid-layout", "react-grid-item"],
+  ["react-grid-layout", "react-resizable-handle"],
 ];
 
 /** The AG Grid markers, for the positive half of the rule. */
 const AG_GRID_MARKERS = BI_RUNTIME_MARKERS.filter(
   ([library]) => library === "AG Grid",
+).map(([, marker]) => marker);
+
+/** The react-grid-layout markers, for the positive half of the rule. */
+const GRID_LAYOUT_MARKERS = BI_RUNTIME_MARKERS.filter(
+  ([library]) => library === "react-grid-layout",
 ).map(([, marker]) => marker);
 
 for (const chunk of initialJavaScript) {
@@ -255,6 +273,47 @@ if (!deferredBiHasAgGrid) {
   );
 }
 
+// The same positive half for the saved-dashboard builder's grid. `/dashboards/new`
+// is the route that renders one, so the react-grid-layout runtime must live in one
+// of its DEFERRED chunks: if it stopped being deferred it would be in that route's
+// initial bundle instead, and the negative check above only watches the Command
+// Center. This is not a hypothetical — a single `import { CONST } from
+// "./BuilderGridCanvas"` in the tile renderer did exactly that, and this assertion
+// is what named it.
+const builderLoadableManifestPath = resolve(
+  distDir,
+  "server/app/(app)/dashboards/new/page",
+  "react-loadable-manifest.json",
+);
+const builderEntries = Object.values(
+  JSON.parse(readFileSync(builderLoadableManifestPath, "utf8")),
+);
+
+if (builderEntries.length === 0) {
+  throw new Error(
+    `Expected a deferred BI builder entry in ${builderLoadableManifestPath}; found none. components/bi/BuilderGrid.tsx must load the canvas with next/dynamic.`,
+  );
+}
+
+const deferredBuilderChunks = builderEntries
+  .flatMap((entry) => entry.files)
+  .filter((file) => file.endsWith(".js"));
+const deferredBuilderHasGridLayout = deferredBuilderChunks.some((chunk) => {
+  const text = readFileSync(resolve(distDir, chunk), "utf8");
+  return GRID_LAYOUT_MARKERS.some((marker) => text.includes(marker));
+});
+
+if (!deferredBuilderHasGridLayout) {
+  throw new Error(
+    "Deferred BI builder chunks no longer expose a react-grid-layout runtime " +
+      `marker (${GRID_LAYOUT_MARKERS.join(", ")}): ${deferredBuilderChunks.join(", ")}. ` +
+      "Either the markers changed in a react-grid-layout upgrade (update " +
+      "BI_RUNTIME_MARKERS after checking the new build output), or the grid is no " +
+      "longer loaded through components/bi/BuilderGrid.tsx with " +
+      "dynamic(..., { ssr: false }) and has moved into an initial bundle.",
+  );
+}
+
 console.log(
-  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts and AG Grid deferred to ${deferredBiChunks.join(", ")}.`,
+  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts and AG Grid deferred to ${deferredBiChunks.join(", ")}; the dashboard builder's grid deferred to ${deferredBuilderChunks.join(", ")}.`,
 );

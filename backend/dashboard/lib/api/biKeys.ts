@@ -385,3 +385,137 @@ export function biDeliveriesKey(
     subscriptionId,
   );
 }
+
+/**
+ * Saved dashboards: the list, one resolved document, its history, its shares.
+ *
+ * A saved dashboard is read per principal exactly as a certified pack is — the
+ * LIST is the set of documents this identity may open (its own, plus what
+ * reaches it by name, by role or organization-wide), and OPENING one authorizes
+ * every widget for the reader rather than for the owner. So both are keyed on
+ * the same five dimensions as a figure: two colleagues who may open the same
+ * document are served different widget sets, and a key that dropped the actor or
+ * the authorization generation would hand one of them the other's.
+ *
+ * The history and the share list carry no figure, and are keyed identically for
+ * the reason the notification keys are: the share list names the PEOPLE a
+ * document reaches and is the owner's alone, so a cache hit that crossed
+ * principals would disclose it without asking the server anything.
+ */
+export const BI_DASHBOARDS_PREFIX = "bi-dashboards";
+export const BI_DASHBOARD_PREFIX = "bi-dashboard";
+export const BI_DASHBOARD_VERSIONS_PREFIX = "bi-dashboard-versions";
+export const BI_DASHBOARD_SHARES_PREFIX = "bi-dashboard-shares";
+
+/** Every saved-dashboard prefix, as the unit of scoped invalidation after a save. */
+export const BI_SAVED_DASHBOARD_PREFIXES: readonly string[] = [
+  BI_DASHBOARDS_PREFIX,
+  BI_DASHBOARD_PREFIX,
+  BI_DASHBOARD_VERSIONS_PREFIX,
+  BI_DASHBOARD_SHARES_PREFIX,
+];
+
+/** `GET …/bi/dashboards` — every saved dashboard this identity may open. */
+export function biDashboardsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(BI_DASHBOARDS_PREFIX, scope, bankDimension(bankId));
+}
+
+/** `GET …/bi/dashboards/{id}` — one saved dashboard, resolved for one date. */
+export function biDashboardKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  dashboardId: string,
+  asOf: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(
+    BI_DASHBOARD_PREFIX,
+    scope,
+    bankDimension(bankId),
+    dashboardId,
+    isoDay(asOf) ?? "unset",
+  );
+}
+
+/** `GET …/bi/dashboards/{id}/versions` — who changed it, when, and what they said. */
+export function biDashboardVersionsKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  dashboardId: string,
+): QueryKey {
+  return scopedQueryKey(
+    BI_DASHBOARD_VERSIONS_PREFIX,
+    scope,
+    bankDimension(bankId),
+    dashboardId,
+  );
+}
+
+/** `GET …/bi/dashboards/{id}/shares` — who it reaches. Owner only. */
+export function biDashboardSharesKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  dashboardId: string,
+): QueryKey {
+  return scopedQueryKey(
+    BI_DASHBOARD_SHARES_PREFIX,
+    scope,
+    bankDimension(bankId),
+    dashboardId,
+  );
+}
+
+/**
+ * Calculated measures: the list, and one measure.
+ *
+ * A measure row carries no figure — it is a FORMULA plus catalogue member ids —
+ * and it is keyed on exactly the same five dimensions as a figure anyway, with no
+ * exception. Two reasons, and the first is the one that matters:
+ *
+ * * THE LIST IS DECIDED PER PRINCIPAL. `content.readable_measures` serves this
+ *   identity's own drafts, plus the institution's proposals and certified
+ *   measures, and then drops every one whose figures this identity's access does
+ *   not cover — a refused measure is ABSENT, not restricted, because its label is
+ *   authored text that can describe the very figure it was refused. So two
+ *   colleagues asking the same question get different lists, and a cache hit
+ *   answers without asking the server anything.
+ * * A FORMULA NAMES FIGURES. `expression` and `referencedMembers` are catalogue
+ *   member ids, and which ids an identity may be shown is the same decision the
+ *   query path makes.
+ *
+ * There is no reporting window: a formula is not read at a date. The measure is
+ * answered at a date when it is used in a query, and that read is keyed by
+ * `biQueryKey` like any other question.
+ */
+export const BI_MEASURES_PREFIX = "bi-measures";
+export const BI_MEASURE_PREFIX = "bi-measure";
+
+/** Every calculated-measure prefix, as the unit of scoped invalidation. */
+export const BI_MEASURE_PREFIXES: readonly string[] = [
+  BI_MEASURES_PREFIX,
+  BI_MEASURE_PREFIX,
+];
+
+/** `GET …/bi/measures` — every calculated measure this identity may read. */
+export function biMeasuresKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(BI_MEASURES_PREFIX, scope, bankDimension(bankId));
+}
+
+/** `GET …/bi/measures/{id}` — one calculated measure, if this identity may read it. */
+export function biMeasureKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  measureId: string,
+): QueryKey {
+  return scopedQueryKey(
+    BI_MEASURE_PREFIX,
+    scope,
+    bankDimension(bankId),
+    measureId,
+  );
+}

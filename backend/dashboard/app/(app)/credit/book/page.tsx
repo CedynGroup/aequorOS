@@ -14,6 +14,14 @@
  * A date the platform has computed no position for is refused by the server and
  * shown as a refusal here, never quietly replaced by the current book: a figure
  * measured on one date must not be explained with another date's loans.
+ *
+ * EVERY COUNT ON THIS PAGE IS OVER THE READER'S OWN SLICE. `/credit/loans` is one
+ * of only two surfaces that serve a branch- or region-scoped grant rather than
+ * refusing it, and it applies that scope to the rows, to `total`, to `filtered`
+ * and to every facet tally. So the payload's `data_scope` is stated on screen:
+ * without it "412 loans on book" reads as this bank's whole blotter, and an empty
+ * page reads as "this institution has no loans" rather than "your coverage holds
+ * none of them".
  */
 
 import PageContainer from "@/components/ui/PageContainer";
@@ -37,8 +45,13 @@ import PageHeader from "@/components/ui/PageHeader";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill from "@/components/ui/StatusPill";
+import CoverageNotice from "@/components/access/CoverageNotice";
 import { useBankContext } from "@/components/shell/BankContext";
 import { utcDay } from "@/lib/api/biKeys";
+import {
+  coverageFigureLabel,
+  coverageFromPayload,
+} from "@/lib/api/dataScope";
 import { isApiError, isModuleUnavailable } from "@/lib/api/client";
 import { useCreditLoanFacets, useCreditLoansPage } from "@/lib/api/hooks";
 import { fmtDateUTC, labelize, num } from "@/lib/api/values";
@@ -250,6 +263,12 @@ function LoanBookBody() {
   const rows = useMemo(() => page.data?.rows ?? [], [page.data]);
   const total = page.data?.total ?? 0;
   const filtered = page.data?.filtered ?? 0;
+  // The scope the SERVER applied to these very counts. Authoritative, so no
+  // derivation from the reader's projected authority can disagree with it — and
+  // absent means undeterminable, never the whole book.
+  const coverage = coverageFromPayload(page.data, {
+    pending: page.isLoading,
+  });
   const columns = useMemo(
     () => loanColumns(page.data?.asOf),
     [page.data?.asOf],
@@ -318,28 +337,46 @@ function LoanBookBody() {
         onRetry={() => page.refetch()}
       >
         {page.data && total === 0 ? (
-          <PageContainer className="py-6">
+          <PageContainer className="py-6 space-y-4">
+            {/*
+              AN EMPTY ANSWER UNDER A NARROWED SCOPE IS NOT AN EMPTY BOOK. The
+              count is computed over the reader's own slice, so zero means "your
+              coverage holds none" — and telling such a reader to ingest the loan
+              book sends them to fix a problem that is not theirs and asserts
+              something about the institution nobody measured.
+            */}
+            <CoverageNotice coverage={coverage} />
             <EmptyState
               Icon={BookOpenCheck}
-              title="No loans in the canonical book yet"
-              description="Ingest the loan book through the Data Engine to populate the classified blotter."
+              title={
+                coverage.qualified
+                  ? "No loans in the part of the book you can see"
+                  : "No loans in the canonical book yet"
+              }
+              description={
+                coverage.emptyMeaning ??
+                "Ingest the loan book through the Data Engine to populate the classified blotter."
+              }
               action={
-                <a href="/data-engine" className="btn-primary">
-                  Open the Data Engine
-                </a>
+                coverage.qualified ? undefined : (
+                  <a href="/data-engine" className="btn-primary">
+                    Open the Data Engine
+                  </a>
+                )
               }
             />
           </PageContainer>
         ) : page.data ? (
           <PageContainer className="py-6 space-y-6">
+            <CoverageNotice coverage={coverage} />
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
-                label="Loans on book"
+                label={coverageFigureLabel("Loans on book", coverage)}
                 value={fmtInt(total)}
-                hint="Current generation"
+                hint={coverage.hint ?? "Current generation"}
               />
               <KpiStat
-                label="Matching filters"
+                label={coverageFigureLabel("Matching filters", coverage)}
                 value={fmtInt(filtered)}
                 hint={
                   filtered === total ? "No filters applied" : "Server-filtered"
@@ -500,11 +537,29 @@ function LoanBookBody() {
               )}
             </div>
 
+            {/*
+              The facet lists and their tallies are computed over the same slice
+              as the blotter, so a scoped reader's branch list names only their
+              own branches and every count is over their own rows. "All grades"
+              therefore means all of the grades they can see, which is worth one
+              line rather than being left for them to infer.
+            */}
+            {coverage.qualified && (
+              <p className="text-caption text-slate">
+                These filter choices and their counts are drawn from the same part
+                of the book as the figures above, not from the whole institution.
+              </p>
+            )}
+
             {filtered === 0 ? (
               <EmptyState
                 Icon={SearchX}
                 title="No loans match these filters"
-                description="The book has loans, but none in this slice. Widen a filter or clear them to see the whole book."
+                description={
+                  coverage.qualified
+                    ? "There are loans in the part of the book you can see, but none of them match these filters. Widen a filter or clear them."
+                    : "The book has loans, but none in this slice. Widen a filter or clear them to see the whole book."
+                }
                 action={
                   <button
                     type="button"
@@ -538,6 +593,7 @@ function LoanBookBody() {
               <p className="text-caption text-slate">
                 Showing {fmtInt(windowStart)}–{fmtInt(windowEnd)} of{" "}
                 {fmtInt(filtered)} loans
+                {coverage.suffix ? ` ${coverage.suffix}` : ""}
               </p>
               <div className="flex items-center gap-2">
                 <select

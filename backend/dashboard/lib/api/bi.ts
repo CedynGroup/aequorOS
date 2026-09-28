@@ -43,6 +43,23 @@ import {
   type BiQuery,
   type BiQueryResult,
   type BiTrustRead,
+  // Saved dashboards: the eight routes are generated operations on this same
+  // `BiApi`, so nothing below is hand-rolled.
+  type BiDashboardCreateRequest,
+  type BiDashboardListRead,
+  type BiDashboardRead,
+  type BiDashboardShareListRead,
+  type BiDashboardSummaryRead,
+  type BiDashboardUpdateRequest,
+  type BiDashboardVersionListRead,
+  // Calculated measures: the eight routes are generated operations on the same
+  // `BiApi` too, so no fetch below is hand-rolled either.
+  type BiMeasureCreateRequest,
+  type BiMeasureDecisionRead,
+  type BiMeasureListRead,
+  type BiMeasureRead,
+  type BiMeasureUpdateRequest,
+  type BiMeasureValidationRead,
 } from "@aequoros/risk-service-api";
 import {
   ApiError,
@@ -64,13 +81,23 @@ import {
   BI_DELIVERIES_PREFIX,
   biAlertEventsKey,
   biAlertsKey,
+  BI_DASHBOARD_PREFIX,
+  BI_DASHBOARD_SHARES_PREFIX,
+  BI_DASHBOARD_VERSIONS_PREFIX,
   biCatalogueKey,
+  biDashboardKey,
+  biDashboardSharesKey,
+  biDashboardVersionsKey,
+  biDashboardsKey,
   biDeliveriesKey,
   biDrillKey,
   biExplainKey,
   biFeatureKey,
   biGridKey,
   biInsightsKey,
+  BI_MEASURE_PREFIX,
+  biMeasureKey,
+  biMeasuresKey,
   biPackKey,
   biPacksKey,
   biQueryKey,
@@ -80,6 +107,7 @@ import {
   isoDay,
   utcDay,
 } from "./biKeys";
+import { expressionDigest } from "@/components/bi/expressionDigest";
 
 const biApi = new BiApi(configuration);
 const featureFlagsApi = new FeatureFlagsApi(configuration);
@@ -559,6 +587,10 @@ export {
   biAlertEventsKey,
   biAlertsKey,
   biCatalogueKey,
+  biDashboardKey,
+  biDashboardSharesKey,
+  biDashboardVersionsKey,
+  biDashboardsKey,
   biDeliveriesKey,
   biDrillKey,
   biExplainKey,
@@ -1247,6 +1279,441 @@ export function useDeleteBiSubscription(bankId: string | undefined) {
             method: "DELETE",
           },
         ),
+      );
+    },
+    onSuccess: invalidate,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Saved dashboards
+// ---------------------------------------------------------------------------
+
+/**
+ * A dashboard a bank saved for itself, as opposed to one the platform certified.
+ *
+ * SHARING NEVER SHARES DATA, AND THAT IS ENFORCED ON EVERY READ. The list is the
+ * set of documents this identity may OPEN — its own, plus whatever reaches it by
+ * name, by role or organization-wide — and opening one authorizes every widget
+ * for the reader, never for the owner. So a document a broadly-authorized
+ * colleague shares resolves to refusal markers for a narrower reader, and the
+ * marker carries its place on the canvas and nothing else.
+ *
+ * ONLY THE OWNER MAY CHANGE ONE. The server decides that (`owned_by_caller` on
+ * every read says who), and a dashboard this identity may not reach is 404 —
+ * identical to one that does not exist, so a private document cannot be
+ * enumerated by id. The hooks below therefore offer no "edit anyway" path: a
+ * non-owner's PUT is refused, and the surface does not put the control on screen.
+ */
+export function useBiSavedDashboards(
+  bankId: string | undefined,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery<BiDashboardListRead>({
+    queryKey: biDashboardsKey(scope, bankId),
+    queryFn: () => apiCall(() => biApi.listBiDashboards({ bankId: bankId! })),
+    enabled: enabled && Boolean(bankId),
+    retry: false,
+  });
+}
+
+/**
+ * One saved dashboard, resolved for this reader and this reporting date.
+ *
+ * `as_of` is required by the route and is not defaulted here, for the reason the
+ * pack hook gives: a saved dashboard carries no date of its own, and a client
+ * that picked one would be choosing an institution's reporting date for it.
+ */
+export function useBiSavedDashboard(
+  bankId: string | undefined,
+  dashboardId: string | null,
+  asOf: string | null | undefined,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  const day = isoDay(asOf);
+  return useQuery<BiDashboardRead>({
+    queryKey: biDashboardKey(scope, bankId, dashboardId ?? "unset", day),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.getBiDashboard({
+          bankId: bankId!,
+          dashboardId: dashboardId!,
+          asOf: utcDay(day!),
+        }),
+      ),
+    enabled:
+      enabled &&
+      Boolean(bankId) &&
+      dashboardId !== null &&
+      dashboardId !== "" &&
+      day !== null,
+    retry: false,
+  });
+}
+
+/**
+ * A dashboard's history: who changed it, when, and what they said about it.
+ *
+ * Append-only in the database, so this list only ever grows. It carries no
+ * canvas: an old layout would have to be re-authorized widget by widget to be
+ * shown safely, and the route deliberately does not try.
+ */
+export function useBiDashboardVersions(
+  bankId: string | undefined,
+  dashboardId: string | null,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery<BiDashboardVersionListRead>({
+    queryKey: biDashboardVersionsKey(scope, bankId, dashboardId ?? "unset"),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.listBiDashboardVersions({
+          bankId: bankId!,
+          dashboardId: dashboardId!,
+        }),
+      ),
+    enabled: enabled && Boolean(bankId) && dashboardId !== null,
+    retry: false,
+  });
+}
+
+/**
+ * Who a dashboard is named to. The owner's alone.
+ *
+ * Owner-only because the list is a membership disclosure: being able to open a
+ * document is not being told who else can. A 403 here is therefore a normal
+ * answer for a reader who was shared the document, not a failure.
+ */
+export function useBiDashboardShares(
+  bankId: string | undefined,
+  dashboardId: string | null,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery<BiDashboardShareListRead>({
+    queryKey: biDashboardSharesKey(scope, bankId, dashboardId ?? "unset"),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.listBiDashboardShares({
+          bankId: bankId!,
+          dashboardId: dashboardId!,
+        }),
+      ),
+    enabled: enabled && Boolean(bankId) && dashboardId !== null,
+    retry: false,
+  });
+}
+
+/**
+ * Invalidate every saved-dashboard read for this institution after a change.
+ *
+ * Scoped to the four saved-dashboard prefixes: saving a canvas changes no
+ * figure, so the query, grid and drill caches are left alone — re-asking the
+ * server for answers that cannot have moved would make every open tile flicker.
+ */
+function useInvalidateSavedDashboards(
+  bankId: string | undefined,
+): () => Promise<void> {
+  const client = useQueryClient();
+  const scope = useQueryAuthorityScope();
+  return useCallback(async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: biDashboardsKey(scope, bankId) }),
+      client.invalidateQueries({ queryKey: [BI_DASHBOARD_PREFIX] }),
+      client.invalidateQueries({
+        queryKey: [BI_DASHBOARD_VERSIONS_PREFIX],
+      }),
+      client.invalidateQueries({ queryKey: [BI_DASHBOARD_SHARES_PREFIX] }),
+    ]);
+  }, [bankId, client, scope]);
+}
+
+/** Save a new dashboard: an authored canvas, or a copy of a certified pack. */
+export function useCreateBiSavedDashboard(bankId: string | undefined) {
+  const invalidate = useInvalidateSavedDashboards(bankId);
+  return useMutation<BiDashboardSummaryRead, unknown, BiDashboardCreateRequest>(
+    {
+      mutationFn: (body) =>
+        apiCall(() =>
+          biApi.createBiDashboard({
+            bankId: bankId!,
+            biDashboardCreateRequest: body,
+          }),
+        ),
+      onSuccess: invalidate,
+    },
+  );
+}
+
+/**
+ * Replace a dashboard's canvas, appending a version. Owner only — the SERVER
+ * decides that, not this hook.
+ */
+export function useUpdateBiSavedDashboard(bankId: string | undefined) {
+  const invalidate = useInvalidateSavedDashboards(bankId);
+  return useMutation<
+    BiDashboardSummaryRead,
+    unknown,
+    { dashboardId: string; body: BiDashboardUpdateRequest }
+  >({
+    mutationFn: ({ dashboardId, body }) =>
+      apiCall(() =>
+        biApi.updateBiDashboard({
+          bankId: bankId!,
+          dashboardId,
+          biDashboardUpdateRequest: body,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Delete a dashboard, its history and its shares. Owner only. */
+export function useDeleteBiSavedDashboard(bankId: string | undefined) {
+  const invalidate = useInvalidateSavedDashboards(bankId);
+  return useMutation<void, unknown, string>({
+    mutationFn: (dashboardId) =>
+      apiCall(() => biApi.deleteBiDashboard({ bankId: bankId!, dashboardId })),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Replace the complete set of identities a dashboard is named to. Owner only.
+ *
+ * The whole set rather than one at a time, because that makes revocation an
+ * ordinary save: an identity absent from the list loses reachability in the same
+ * transaction the rest keep it.
+ */
+export function useSetBiDashboardShares(bankId: string | undefined) {
+  const invalidate = useInvalidateSavedDashboards(bankId);
+  return useMutation<
+    BiDashboardShareListRead,
+    unknown,
+    { dashboardId: string; userIds: readonly string[] }
+  >({
+    mutationFn: ({ dashboardId, userIds }) =>
+      apiCall(() =>
+        biApi.setBiDashboardShares({
+          bankId: bankId!,
+          dashboardId,
+          biDashboardShareRequest: { userIds: [...userIds] },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Calculated measures
+// ---------------------------------------------------------------------------
+
+/**
+ * A formula a bank wrote for itself, over figures the catalogue already publishes.
+ *
+ * THE SERVER IS THE ONLY AUTHORITY ON WHAT A FORMULA MEANS, and these hooks are
+ * written so that nothing else can creep in. The text goes up; the figures it
+ * names, the module and sensitivity pairs it needs, and whether it is well formed
+ * all come back from the server's own parse — there is no parser in this client
+ * and `useValidateBiMeasureExpression` is how the editor asks
+ * (`POST …/bi/measures/validation`, which saves nothing).
+ *
+ * A MEASURE IS AUTHORIZED AS THE FIGURES ITS TEXT NAMES. So the list contains
+ * only measures whose figures this identity's access covers, a measure it does not
+ * cover is ABSENT rather than restricted, and one asked for by id answers 404
+ * exactly as one that does not exist — naming it would disclose the figure behind
+ * it. There is deliberately no "restricted measure" shape to render.
+ *
+ * PROMOTION IS TWO ROUTES BECAUSE IT IS TWO PEOPLE. The proposal and the decision
+ * are separate calls, the database refuses a row whose approver is its proposer,
+ * and the decision carries the digest of the formula the checker actually read —
+ * so a formula edited under a reviewer cannot be certified by a decision taken
+ * against the version they saw.
+ */
+export function useBiMeasures(bankId: string | undefined, enabled = true) {
+  const scope = useQueryAuthorityScope();
+  return useQuery<BiMeasureListRead>({
+    queryKey: biMeasuresKey(scope, bankId),
+    queryFn: () => apiCall(() => biApi.listBiMeasures({ bankId: bankId! })),
+    enabled: enabled && Boolean(bankId),
+    retry: false,
+  });
+}
+
+/** One calculated measure. 404 is "no such measure for you", never "forbidden". */
+export function useBiMeasure(
+  bankId: string | undefined,
+  measureId: string | null,
+  enabled = true,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery<BiMeasureRead>({
+    queryKey: biMeasureKey(scope, bankId, measureId ?? "unset"),
+    queryFn: () =>
+      apiCall(() =>
+        biApi.getBiMeasure({ bankId: bankId!, measureId: measureId! }),
+      ),
+    enabled: enabled && Boolean(bankId) && Boolean(measureId),
+    retry: false,
+  });
+}
+
+/**
+ * Invalidate every calculated-measure read for this institution.
+ *
+ * Scoped to the two measure prefixes. The catalogue is deliberately left alone:
+ * `GET …/bi/catalogue` serves the PLATFORM's members and knows nothing about a
+ * bank's formulas, so certifying one cannot change its answer. The figure caches
+ * are left alone for the same reason a canvas save leaves them alone — no figure
+ * moved, and re-asking would make every open tile flicker.
+ */
+function useInvalidateMeasures(bankId: string | undefined): () => Promise<void> {
+  const client = useQueryClient();
+  const scope = useQueryAuthorityScope();
+  return useCallback(async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: biMeasuresKey(scope, bankId) }),
+      client.invalidateQueries({ queryKey: [BI_MEASURE_PREFIX] }),
+    ]);
+  }, [bankId, client, scope]);
+}
+
+/**
+ * Ask the server whether a formula is well formed, and what it reads.
+ *
+ * A mutation rather than a query on purpose: it is a question about text a person
+ * is still typing, it saves nothing, and it must not be cached — a cached verdict
+ * keyed on the text would answer for a formula whose FIGURES the reader's access
+ * has since stopped covering.
+ */
+export function useValidateBiMeasureExpression(bankId: string | undefined) {
+  return useMutation<BiMeasureValidationRead, unknown, string>({
+    mutationFn: (expression) =>
+      apiCall(() =>
+        biApi.validateBiMeasureExpression({
+          bankId: bankId!,
+          biMeasureValidationRequest: { expression },
+        }),
+      ),
+  });
+}
+
+/** Save a new personal formula. The figures it names come from the server's parse. */
+export function useCreateBiMeasure(bankId: string | undefined) {
+  const invalidate = useInvalidateMeasures(bankId);
+  return useMutation<BiMeasureRead, unknown, BiMeasureCreateRequest>({
+    mutationFn: (body) =>
+      apiCall(() =>
+        biApi.createBiMeasure({
+          bankId: bankId!,
+          biMeasureCreateRequest: body,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Change a formula. Owner only, and a changed text DROPS any certification —
+ * an approver certified the exact wording, not the name.
+ */
+export function useUpdateBiMeasure(bankId: string | undefined) {
+  const invalidate = useInvalidateMeasures(bankId);
+  return useMutation<
+    BiMeasureRead,
+    unknown,
+    { measureId: string; body: BiMeasureUpdateRequest }
+  >({
+    mutationFn: ({ measureId, body }) =>
+      apiCall(() =>
+        biApi.updateBiMeasure({
+          bankId: bankId!,
+          measureId,
+          biMeasureUpdateRequest: body,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Delete a formula. Owner only.
+ *
+ * THE SURFACE OFFERS THIS FOR A DRAFT ONLY, and that is narrower than the route:
+ * `DELETE …/bi/measures/{id}` is unconditional in every state, certified
+ * included. Certifying a formula takes two identities and deleting it takes one —
+ * the maker — and the row's `approved_expression` IS the record of what was
+ * certified, so the delete destroys the evidence with it and anything naming the
+ * measure loses its definition. `components/bi/measures.ts::measureControls`
+ * withholds the control above `personal` and says why. Retiring a certified
+ * measure through its own review is the act that belongs there.
+ */
+export function useDeleteBiMeasure(bankId: string | undefined) {
+  const invalidate = useInvalidateMeasures(bankId);
+  return useMutation<void, unknown, string>({
+    mutationFn: (measureId) =>
+      apiCall(() => biApi.deleteBiMeasure({ bankId: bankId!, measureId })),
+    onSuccess: invalidate,
+  });
+}
+
+/** The maker's half: put a draft up for certification, with a reason. */
+export function useProposeBiMeasure(bankId: string | undefined) {
+  const invalidate = useInvalidateMeasures(bankId);
+  return useMutation<
+    BiMeasureRead,
+    unknown,
+    { measureId: string; reason: string }
+  >({
+    mutationFn: ({ measureId, reason }) =>
+      apiCall(() =>
+        biApi.proposeBiMeasurePromotion({
+          bankId: bankId!,
+          measureId,
+          biMeasureProposalRequest: { reason },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * The checker's half: certify the formula for the institution, or send it back.
+ *
+ * `expressionDigest` is the version the CHECKER READ, taken over the exact text
+ * the payload carried onto their screen. The server refuses the decision if the
+ * formula has moved since — which is the point, and why this is not optional.
+ * `DigestUnavailable` is raised rather than a digest being invented when the
+ * browser has no `crypto.subtle`: an unverifiable decision is not sent.
+ */
+export function useDecideBiMeasure(bankId: string | undefined) {
+  const invalidate = useInvalidateMeasures(bankId);
+  return useMutation<
+    BiMeasureDecisionRead,
+    unknown,
+    {
+      measureId: string;
+      /** The formula exactly as it was shown to this checker. */
+      reviewedExpression: string;
+      decision: "approve" | "reject";
+      reason: string;
+    }
+  >({
+    mutationFn: async ({ measureId, reviewedExpression, decision, reason }) => {
+      const digest = await expressionDigest(reviewedExpression);
+      return apiCall(() =>
+        biApi.decideBiMeasurePromotion({
+          bankId: bankId!,
+          measureId,
+          biMeasureDecisionRequest: {
+            decision,
+            reason,
+            expressionDigest: digest,
+          },
+        }),
       );
     },
     onSuccess: invalidate,

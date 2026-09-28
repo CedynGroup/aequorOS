@@ -93,6 +93,12 @@ const SCANNED_DIRS = [
   // a fabricated measurement on a board pack, which is exactly this guard's
   // subject — so the whole tree is in scope from the day it exists.
   'components/bi',
+  // The coverage notice is the only thing on a scoped reader's screen that says
+  // the totals beside it are not the institution's. It renders no figure itself,
+  // but it DECIDES how a figure is read — which is the half of the P0-19 finding
+  // that was outside the scan for the whole remediation programme — so it is in
+  // scope from the day it exists.
+  'components/access',
   'app/(app)',
 ];
 const SCANNED_FILES: string[] = [
@@ -120,6 +126,13 @@ const SCANNED_FILES: string[] = [
   // excellent answer for that figure.
   'lib/api/irrbbSfNormalize.ts',
   'lib/api/irrbbSf.ts',
+  // The reader-coverage adapter. Same reason a fifth time: it decides whether a
+  // total may be presented as the institution's own, and every fail-closed rule
+  // for that decision lives here — so a `?? "all"` or a silent whole-book
+  // default introduced HERE would present a branch-scoped slice as the bank's
+  // whole book on every surface at once. `lib/api/dataScope.test.ts` holds the
+  // behavioural half; this guard holds the shape.
+  'lib/api/dataScope.ts',
 ];
 
 type Rule = {

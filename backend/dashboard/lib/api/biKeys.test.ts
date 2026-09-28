@@ -17,9 +17,15 @@ import { queryAuthorityScope } from "./queryPolicy";
 import {
   BI_QUERY_PREFIX,
   biCatalogueKey,
+  biDashboardKey,
+  biDashboardSharesKey,
+  biDashboardVersionsKey,
+  biDashboardsKey,
   biDrillKey,
   biExplainKey,
   biGridKey,
+  biMeasureKey,
+  biMeasuresKey,
   biQueryFingerprint,
   biQueryKey,
   biTrustKey,
@@ -33,6 +39,10 @@ const TENANT_A = "OR-DEM00001";
 const TENANT_B = "OR-OTHER001";
 const BANK_A = "BK-SAMP0001";
 const BANK_B = "BK-SAMP0002";
+const DASHBOARD_A = "3f6b1d1e-4c5a-4f2b-9e7d-0a1b2c3d4e5f";
+const DASHBOARD_B = "7c2a8b90-1d3e-4a5b-8c6d-9e0f1a2b3c4d";
+const MEASURE_A = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+const MEASURE_B = "9f8e7d6c-5b4a-4938-8271-6f5e4d3c2b1a";
 
 const analyst = queryAuthorityScope(TENANT_A, "analyst@aequoros.example", 7);
 const otherTenantAnalyst = queryAuthorityScope(
@@ -235,11 +245,86 @@ for (const [surface, left, right] of [
     biExplainKey(analyst, BANK_A, "loans.npl_ratio_pct", nplQuery),
     biExplainKey(analyst, BANK_A, "loans.balance_rc", nplQuery),
   ],
+  // SAVED DASHBOARDS. The list is the set of documents this identity may open and
+  // one resolved document is the widget set this identity was granted, so both are
+  // decided per principal and per institution: a key that dropped either would
+  // hand one colleague the other's answer. The history and the share list carry no
+  // figure and are keyed identically — the share list names the PEOPLE a document
+  // reaches and is the owner's alone.
+  [
+    "saved dashboards",
+    biDashboardsKey(analyst, BANK_A),
+    biDashboardsKey(analyst, BANK_B),
+  ],
+  [
+    "one saved dashboard",
+    biDashboardKey(analyst, BANK_A, DASHBOARD_A, "2026-06-30"),
+    biDashboardKey(analyst, BANK_A, DASHBOARD_A, "2026-03-31"),
+  ],
+  [
+    "another saved dashboard",
+    biDashboardKey(analyst, BANK_A, DASHBOARD_A, "2026-06-30"),
+    biDashboardKey(analyst, BANK_A, DASHBOARD_B, "2026-06-30"),
+  ],
+  [
+    "dashboard history",
+    biDashboardVersionsKey(analyst, BANK_A, DASHBOARD_A),
+    biDashboardVersionsKey(analyst, BANK_A, DASHBOARD_B),
+  ],
+  [
+    "dashboard shares",
+    biDashboardSharesKey(analyst, BANK_A, DASHBOARD_A),
+    biDashboardSharesKey(analyst, BANK_A, DASHBOARD_B),
+  ],
+  // CALCULATED MEASURES. A measure row is a FORMULA, not a figure — and the list
+  // is still decided per principal: `content.readable_measures` serves this
+  // identity's own drafts plus the institution's proposals and certified
+  // measures, and then drops every one whose figures this identity's access does
+  // not cover. A refused measure is ABSENT, so a cache hit across principals
+  // would hand one colleague a formula the server would not have named to them.
+  // There is no window dimension: a formula is not read at a date.
+  [
+    "calculated measures",
+    biMeasuresKey(analyst, BANK_A),
+    biMeasuresKey(analyst, BANK_B),
+  ],
+  [
+    "one calculated measure",
+    biMeasureKey(analyst, BANK_A, MEASURE_A),
+    biMeasureKey(analyst, BANK_A, MEASURE_B),
+  ],
+  [
+    "the measure list and one measure are different questions",
+    biMeasuresKey(analyst, BANK_A),
+    biMeasureKey(analyst, BANK_A, MEASURE_A),
+  ],
 ] as const) {
   assertDistinct(
     surface,
     left as readonly unknown[],
     right as readonly unknown[],
+  );
+}
+
+// The measure surface, on every dimension in turn — not only the institution the
+// loop above varies. A formula names catalogue figures, and which figures an
+// identity may be shown is the same decision the query path makes, so a key that
+// dropped the actor or the authorization generation would serve a revoked reader
+// a list the server would no longer produce.
+for (const [dimension, other] of [
+  ["tenant", otherTenantAnalyst],
+  ["signed-in user", otherUser],
+  ["authorization generation", regranted],
+] as const) {
+  assertDistinct(
+    `calculated measures: ${dimension}`,
+    biMeasuresKey(analyst, BANK_A) as readonly unknown[],
+    biMeasuresKey(other, BANK_A) as readonly unknown[],
+  );
+  assertDistinct(
+    `one calculated measure: ${dimension}`,
+    biMeasureKey(analyst, BANK_A, MEASURE_A) as readonly unknown[],
+    biMeasureKey(other, BANK_A, MEASURE_A) as readonly unknown[],
   );
 }
 
@@ -250,6 +335,12 @@ for (const surfaceKey of [
   biGridKey(analyst, BANK_A, { query: nplQuery }),
   biDrillKey(analyst, BANK_A, { query: nplQuery }),
   biExplainKey(analyst, BANK_A, "loans.npl_ratio_pct", nplQuery),
+  biDashboardsKey(analyst, BANK_A),
+  biDashboardKey(analyst, BANK_A, DASHBOARD_A, "2026-06-30"),
+  biDashboardVersionsKey(analyst, BANK_A, DASHBOARD_A),
+  biDashboardSharesKey(analyst, BANK_A, DASHBOARD_A),
+  biMeasuresKey(analyst, BANK_A),
+  biMeasureKey(analyst, BANK_A, MEASURE_A),
 ] as readonly (readonly unknown[])[]) {
   assert.equal(
     surfaceKey[1],

@@ -124,6 +124,16 @@ export default defineConfig({
         // nothing here runs, and `BI_ALERTS_ENABLED` is evaluated by a succeeded
         // mart build that no worker will perform.
         BI_ENABLED: "1",
+        // The journeys ARE the script the BI budget exists to bound. They drive
+        // roughly thirty BI journeys as ONE identity inside the 60-second window,
+        // so the suite trips the product's own limit of 120 reads and the failure
+        // lands on whichever spec happens to run last — a red suite that says
+        // nothing about the code, and a different spec each time the order shifts.
+        // Raising the CEILING here cannot switch the budget off: the window is not
+        // configurable, every read is still metered and still recorded, and
+        // `test_bi_routes.py` / `test_bi_query_log.py` prove the refusal itself
+        // against the product figure rather than against this one.
+        BI_RATE_LIMIT_MAX_QUERIES: "5000",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: "",

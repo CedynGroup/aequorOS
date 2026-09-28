@@ -70,6 +70,16 @@ export const BI_PIVOT_COLUMN_CAP = 50;
 /** Aggregations that answer for a whole slice at once and cannot be pivoted. */
 const CONCENTRATION_AGGREGATIONS: readonly string[] = ["hhi", "top_n_share"];
 
+/**
+ * The marker a catalogue entry derived from one of this institution's own
+ * formulas carries (`components/bi/measures.ts::CALCULATED_AGGREGATION`).
+ *
+ * Declared here as a literal rather than imported so this module stays free of
+ * every dependency but the generated types, which is what lets the node suite
+ * exercise it; `measures.test.ts` pins the two spellings equal.
+ */
+const CALCULATED_AGGREGATION = "calculated";
+
 /** How a measure's time behaviour reads on screen. */
 const TIME_BEHAVIOUR_LABELS: Readonly<Record<string, string>> = {
   stock: "position on the date",
@@ -206,6 +216,16 @@ export function hasConcentrationMeasure(
   });
 }
 
+/** True when any chosen measure is one of this institution's own formulas. */
+export function hasCalculatedMeasure(
+  catalogue: ExploreCatalogue,
+  measures: readonly string[],
+): boolean {
+  return measures.some(
+    (id) => measureById(catalogue, id)?.aggregation === CALCULATED_AGGREGATION,
+  );
+}
+
 /**
  * The time behaviours the chosen measures span. One is required; more than one
  * is the "stock and flow cannot share a query" refusal, prevented here.
@@ -235,8 +255,54 @@ export function measureIsCompatible(
   if (measures.length >= BI_MEASURE_CAP) return false;
   const measure = measureById(catalogue, candidate);
   if (!measure) return false;
+  // A concentration figure is aggregated twice — once per obligor, then over the
+  // group — and a calculated measure's components are finalized at the outer
+  // level, so combining them would re-aggregate one inside the other. The
+  // compiler refuses the pair outright; the option is not offered rather than
+  // explained after the fact, in both directions.
+  const calculated = measure.aggregation === CALCULATED_AGGREGATION;
+  const concentration = CONCENTRATION_AGGREGATIONS.includes(measure.aggregation);
+  if (calculated && hasConcentrationMeasure(catalogue, measures)) return false;
+  if (concentration && hasCalculatedMeasure(catalogue, measures)) return false;
   const behaviours = timeBehavioursOf(catalogue, measures);
   return behaviours.length === 0 || behaviours[0] === measure.timeBehaviour;
+}
+
+/**
+ * WHY a measure cannot be added, or null when it can.
+ *
+ * One sentence per reason, and the reasons are not interchangeable: an option
+ * disabled for the wrong stated reason sends a reader to remove the wrong thing.
+ * This existed as a single hardcoded line about time behaviour, which was the only
+ * reason there was; a second reason arrived with the institution's own formulas,
+ * and the sentence had to stop being an assumption.
+ */
+export function incompatibleReason(
+  catalogue: ExploreCatalogue,
+  measures: readonly string[],
+  candidate: string,
+): string | null {
+  if (measureIsCompatible(catalogue, measures, candidate)) return null;
+  const measure = measureById(catalogue, candidate);
+  if (!measure) return null;
+  if (measures.length >= BI_MEASURE_CAP) {
+    return `One question can carry up to ${BI_MEASURE_CAP} measures.`;
+  }
+  if (
+    measure.aggregation === CALCULATED_AGGREGATION &&
+    hasConcentrationMeasure(catalogue, measures)
+  ) {
+    return "Cannot be read together with a concentration figure, which is worked out over a grouping of its own.";
+  }
+  if (
+    CONCENTRATION_AGGREGATIONS.includes(measure.aggregation) &&
+    hasCalculatedMeasure(catalogue, measures)
+  ) {
+    return "A concentration figure cannot be read together with one of your institution's own formulas.";
+  }
+  return `Reported as a ${timeBehaviourLabel(
+    measure.timeBehaviour,
+  )}, which cannot share an answer with what you have already chosen.`;
 }
 
 /**
@@ -344,6 +410,21 @@ export function buildExploreQuery(
     add(
       "pivot-concentration",
       "A concentration measure is one figure for the whole slice, so it cannot be spread across columns. Remove it, or remove the column field.",
+      true,
+    );
+  }
+
+  // `compiler.py`: "A concentration figure and a calculated measure cannot be read
+  // in one result." Prevented here as well as refused there, because the two
+  // controls that produce it are on the same list and the refusal arrives only
+  // after the question is sent.
+  if (
+    hasCalculatedMeasure(catalogue, measures) &&
+    hasConcentrationMeasure(catalogue, measures)
+  ) {
+    add(
+      "calculated-with-concentration",
+      "A concentration figure is worked out over a grouping of its own, and one of your institution's own formulas is worked out over the whole answer. They cannot be read together — remove one of them.",
       true,
     );
   }

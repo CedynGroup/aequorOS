@@ -19,20 +19,36 @@
  * one — not because this file remembers to omit it, but because there is nowhere
  * to put it.
  *
- * Saved dashboards (owner, visibility, version history) are a separate route and
- * are not bound here yet; when they are, they parse into the same view shape,
- * which is why `certification` is on it.
+ * Saved dashboards (owner, visibility, version history) are the other half of
+ * this module. They are a separate set of routes and a separate list, and they
+ * parse through the SAME `packWidgetView` into the SAME view shape — which is
+ * both why `certification` is on it and why the refusal property below holds for
+ * a shared document without a second implementation of it.
  */
 
-import type { BiPackRead, BiPackWidgetRead } from "@aequoros/risk-service-api";
-import { useBiPack, useBiPacks } from "@/lib/api/bi";
+import type {
+  BiDashboardListRead,
+  BiDashboardRead,
+  BiDashboardSummaryRead,
+  BiPackRead,
+  BiPackWidgetRead,
+} from "@aequoros/risk-service-api";
+import {
+  useBiPack,
+  useBiPacks,
+  useBiSavedDashboard,
+  useBiSavedDashboards,
+} from "@/lib/api/bi";
+import { savedCertification } from "./builder";
 import { datasetRequirement, panelSurface } from "./labels";
 import type {
-  BiCertification,
+  BiDashboardVisibility,
   BiGridItem,
   BiPackView,
   BiPackWidgetView,
   BiPendingCapability,
+  BiSavedDashboardSummary,
+  BiSavedDashboardView,
   BiWidgetKind,
 } from "./types";
 
@@ -209,21 +225,106 @@ export function useDashboard(
   };
 }
 
-/**
- * Whether this reader may change a dashboard's definition.
- *
- * A curated pack is never editable in place — an editable copy is a copy — and a
- * saved dashboard is editable only by its own owner. Nothing the pack routes
- * serve is editable, so this is false for everything on the surface today.
- */
-export function canEditDashboard(
-  certification: BiCertification | null | undefined,
-): boolean {
-  return certification === "personal";
-}
-
 export const CERTIFICATION_LABELS = {
   platform: "Platform-certified",
   bank: "Bank-certified",
   personal: "Personal",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Saved dashboards
+// ---------------------------------------------------------------------------
+
+/**
+ * The wire's reachability value as this client's own union.
+ *
+ * An identity at run time and a CHECK at compile time: the two vocabularies are
+ * declared separately — one generated from `bi_content.py`, one written in
+ * `types.ts` — and this is where they are required to agree. Widen either without
+ * the other and this stops compiling, which is the point.
+ */
+function visibilityOf(
+  value: BiDashboardSummaryRead["visibility"],
+): BiDashboardVisibility {
+  return value;
+}
+
+/** One saved dashboard as its tile needs it. */
+export function savedDashboardSummary(
+  row: BiDashboardSummaryRead,
+): BiSavedDashboardSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    certification: savedCertification(row.badge),
+    ownerDisplayName: row.ownerDisplayName,
+    ownedByCaller: row.ownedByCaller,
+    visibility: visibilityOf(row.visibility),
+    visibilityRole: row.visibilityRole,
+    version: row.version,
+    widgetCount: row.widgetCount,
+    sourcePack: row.sourcePack,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * A saved dashboard, resolved, as the canvas draws it.
+ *
+ * Every widget goes through `packWidgetView` — the same adapter a certified pack
+ * uses — so a refused widget on a SHARED document lands in the one variant of
+ * `BiPackWidgetView` that has no field for a title, a caption, a measure, a
+ * dimension, a filter or a figure. That is what makes "sharing never shares
+ * data" structural on the client as well as on the wire: there is nowhere for the
+ * owner's view of a refused tile to be put.
+ */
+export function savedDashboardView(
+  read: BiDashboardRead,
+): BiSavedDashboardView {
+  return {
+    id: read.id,
+    title: read.title,
+    description: read.description,
+    certification: savedCertification(read.badge),
+    ownerDisplayName: read.ownerDisplayName,
+    ownedByCaller: read.ownedByCaller,
+    visibility: visibilityOf(read.visibility),
+    visibilityRole: read.visibilityRole,
+    version: read.version,
+    sourcePack: read.sourcePack,
+    message: read.message,
+    everyFigureRefused: read.access === "restricted",
+    restrictedWidgets: read.restrictedWidgets ?? 0,
+    widgets: read.widgets.map(packWidgetView),
+  };
+}
+
+/** How many widgets of a saved dashboard will draw something other than a refusal. */
+export function shownBesideRefusalsOnSaved(view: BiSavedDashboardView): number {
+  return view.widgets.filter((widget) => widget.state !== "restricted").length;
+}
+
+/** Every saved dashboard of this institution this reader may open. */
+export function useSavedDashboardList(bankId: string | undefined) {
+  const saved = useBiSavedDashboards(bankId);
+  return {
+    ...saved,
+    dashboards: (
+      (saved.data as BiDashboardListRead | undefined)?.dashboards ?? []
+    ).map(savedDashboardSummary),
+  };
+}
+
+/** One saved dashboard, resolved for this reader and this reporting date. */
+export function useSavedDashboard(
+  bankId: string | undefined,
+  id: string | null,
+  asOf: string | null | undefined,
+) {
+  const saved = useBiSavedDashboard(bankId, id, asOf);
+  return {
+    ...saved,
+    dashboard: saved.data ? savedDashboardView(saved.data) : null,
+  };
+}

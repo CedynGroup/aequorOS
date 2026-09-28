@@ -26,6 +26,27 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type {
+  BiDashboardRead,
+  BiPackWidgetRead,
+} from "@aequoros/risk-service-api";
+import {
+  BUILDER_COLUMNS,
+  addWidget,
+  applyLayout,
+  authoredWidget,
+  draftFromDashboard,
+  draftProblems,
+  draftSpec,
+  emptyDraft,
+  figureWidget,
+  removeWidget,
+  savedCertification,
+  isSavedDashboardId,
+  layoutsEqual,
+  sizeWidget,
+  widgetIdFrom,
+} from "./builder";
 
 function dashboardRoot(): string {
   let dir = __dirname;
@@ -344,7 +365,563 @@ for (const surface of [
   );
 }
 
+// --- 8. a saved dashboard is a copy of a pack, and its badge is the server's ----
+//
+// The badge vocabulary is TOTAL over the three values the wire declares, so there
+// is no path on which a document is shown with a standing the server did not
+// state. `platform_certified` cannot be stored on a tenant row (the CHECK
+// constraint excludes it), but it is mapped rather than defaulted, because a
+// mapping with a fallback is how a personal dashboard would come to wear a
+// platform badge if the vocabulary ever widened.
+
+assert.equal(savedCertification("platform_certified"), "platform");
+assert.equal(savedCertification("bank_certified"), "bank");
+assert.equal(savedCertification("personal"), "personal");
+
+// The two surfaces are told apart by the two ROUTES' own path types, not by
+// content: a saved dashboard's id is a UUID, a certified pack's key is a slug.
+assert.equal(isSavedDashboardId("3f6b1d1e-4c5a-4f2b-9e7d-0a1b2c3d4e5f"), true);
+for (const packKey of ["alco", "board", "branch_network", "cro"]) {
+  assert.equal(
+    isSavedDashboardId(packKey),
+    false,
+    `${packKey} is a certified pack key and must not be asked of the saved-dashboard route`,
+  );
+}
+
+// --- 9. a canvas is saved as a whole, so it must be RESTATABLE as a whole ------
+//
+// `PUT …/bi/dashboards/{id}` replaces the canvas, so an edit has to write down
+// every view's authored definition — including the ones being left alone. Three
+// shapes cannot be written down from what the read route serves, and each must
+// REFUSE rather than approximate. Approximating any of them edits somebody's
+// document without telling them: dropping a refused view deletes it, and choosing
+// a relative window turns a year's total into a month's under the heading its
+// author wrote (on 31 January, month-to-date, quarter-to-date and year-to-date
+// all resolve to a window starting 1 January).
+
+const asOfWidget: BiPackWidgetRead = {
+  id: "deposits_by_product",
+  access: "granted",
+  kind: "bar",
+  title: "Deposits by product",
+  caption: "By balance",
+  layout: { i: "deposits_by_product", x: 0, y: 0, w: 6, h: 4 },
+  query: {
+    measures: ["deposits.balance_rc"],
+    dimensions: ["deposit.product"],
+    time: { asOf: "2026-08-31" },
+  },
+};
+
+const restatedWidget = authoredWidget(asOfWidget);
+assert.ok(
+  "widget" in restatedWidget,
+  "a granted view reading one reporting date must be restatable",
+);
+if ("widget" in restatedWidget) {
+  assert.equal(restatedWidget.widget.query?.window, "as_of");
+  assert.equal(restatedWidget.widget.query?.compare, "none");
+  assert.deepEqual(restatedWidget.widget.query?.measures, [
+    "deposits.balance_rc",
+  ]);
+  assert.equal(restatedWidget.widget.title, "Deposits by product");
+  // The resolved date must NOT survive into the authored definition: the window
+  // is relative to whoever opens the dashboard, so a date written here would
+  // freeze the view at the date one person happened to be reading.
+  assert.equal(
+    JSON.stringify(restatedWidget.widget).includes("2026-08-31"),
+    false,
+    "a restated view must carry no reporting date of its own",
+  );
+}
+
+assert.deepEqual(
+  authoredWidget({
+    id: "npl",
+    access: "restricted",
+    layout: { i: "npl", x: 0, y: 0, w: 6, h: 4 },
+  }),
+  { unrestatable: "refused" },
+  "a refused view carries no definition, so a canvas holding one cannot be restated",
+);
+
+assert.deepEqual(
+  authoredWidget({
+    ...asOfWidget,
+    query: {
+      measures: ["deposits.balance_rc"],
+      time: {
+        range: {
+          start: new Date("2026-01-01T00:00:00.000Z"),
+          end: new Date("2026-08-31T00:00:00.000Z"),
+        },
+      },
+    },
+  }),
+  { unrestatable: "relative_window" },
+  "a resolved period cannot be turned back into the relative window it was authored with",
+);
+
+assert.deepEqual(
+  authoredWidget({
+    ...asOfWidget,
+    query: {
+      measures: ["deposits.balance_rc"],
+      time: { asOf: "2026-08-31", compareTo: "2026-07-31" },
+    },
+  }),
+  { unrestatable: "relative_window" },
+  'a comparison arrives as a date, not as "the prior month", so it cannot be restated either',
+);
+
+assert.deepEqual(
+  authoredWidget({ ...asOfWidget, kind: undefined }),
+  { unrestatable: "incomplete" },
+  "substituting a chart kind would change what a view draws under its own heading",
+);
+
+// A whole canvas is all-or-nothing: one unrestatable view refuses the document.
+const storedDashboard: BiDashboardRead = {
+  id: "3f6b1d1e-4c5a-4f2b-9e7d-0a1b2c3d4e5f",
+  title: "Weekly funding review",
+  description: "",
+  ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  ownerDisplayName: null,
+  ownedByCaller: true,
+  visibility: "private",
+  visibilityRole: null,
+  badge: "personal",
+  version: 1,
+  sourcePack: null,
+  asOf: new Date("2026-08-31T00:00:00.000Z"),
+  access: "granted",
+  message: "Your access covers every figure this dashboard reads.",
+  widgets: [asOfWidget],
+  catalogueVersion: "1",
+  createdAt: new Date("2026-08-31T00:00:00.000Z"),
+  updatedAt: new Date("2026-08-31T00:00:00.000Z"),
+};
+
+const restatedCanvas = draftFromDashboard(storedDashboard);
+assert.ok(
+  "draft" in restatedCanvas,
+  "a canvas of as-of views must be restatable",
+);
+if ("draft" in restatedCanvas) {
+  assert.equal(restatedCanvas.draft.title, "Weekly funding review");
+  assert.deepEqual(restatedCanvas.draft.layout, [
+    { i: "deposits_by_product", x: 0, y: 0, w: 6, h: 4 },
+  ]);
+}
+assert.deepEqual(
+  draftFromDashboard({
+    ...storedDashboard,
+    widgets: [
+      asOfWidget,
+      {
+        id: "npl",
+        access: "restricted",
+        layout: { i: "npl", x: 6, y: 0, w: 6, h: 4 },
+      },
+    ],
+  }),
+  { unrestatable: "refused" },
+  "one refused view must refuse the whole canvas — a partial restatement is a dashboard with a view missing",
+);
+
+// --- 10. the draft's own rules ------------------------------------------------
+
+// A widget id is a KEY matching the server's `^[a-z][a-z0-9_]*$`, folded from the
+// heading and made unique against what is already placed.
+const KEY_SHAPE = /^[a-z][a-z0-9_]*$/;
+for (const heading of [
+  "Deposits by product",
+  "Loans — 90+ days",
+  "3-month gap",
+  "…",
+]) {
+  assert.match(
+    widgetIdFrom(heading, []),
+    KEY_SHAPE,
+    `"${heading}" must fold to a key the server accepts`,
+  );
+}
+assert.equal(widgetIdFrom("Deposits", ["deposits"]), "deposits_2");
+assert.equal(
+  widgetIdFrom("Deposits", ["deposits", "deposits_2"]),
+  "deposits_3",
+);
+
+// A view carries its authored definition, so editing the figures on one cannot
+// silently drop a filter it was published with and the reader never saw.
+const carried = figureWidget(
+  {
+    id: "top_depositors",
+    title: "Top depositors",
+    caption: "",
+    kind: "table",
+    measures: ["deposits.balance_rc"],
+    dimensions: ["deposit.product"],
+  },
+  {
+    id: "top_depositors",
+    kind: "table",
+    title: "Top depositors",
+    query: {
+      measures: ["deposits.balance_rc"],
+      window: "as_of",
+      subtotals: true,
+      filters: [{ member: "deposit.product", op: "in", values: ["term"] }],
+    },
+  },
+);
+assert.deepEqual(
+  carried.query?.filters,
+  [{ member: "deposit.product", op: "in", values: ["term"] }],
+  "editing a view's figures must carry its filters through — the form has no control for them",
+);
+assert.equal(carried.query?.subtotals, true);
+assert.equal(
+  carried.query?.window,
+  "as_of",
+  "this surface authors one reporting date and no other window",
+);
+
+// Adding, placing and removing keep the widget list and the layout in step,
+// because the server refuses a canvas whose layout does not position every
+// widget and nothing else.
+let draft = emptyDraft();
+assert.deepEqual(
+  draftProblems(draft).length > 0,
+  true,
+  "an unnamed, empty canvas cannot be saved",
+);
+draft = { ...draft, title: "Weekly funding review" };
+assert.ok(
+  draftProblems(draft).some((problem) => /at least one view/.test(problem)),
+  "a canvas with nothing on it must say so before the server does",
+);
+draft = addWidget(
+  draft,
+  figureWidget({
+    id: "a",
+    title: "A",
+    caption: "",
+    kind: "bar",
+    measures: ["deposits.balance_rc"],
+    dimensions: [],
+  }),
+);
+draft = addWidget(
+  draft,
+  figureWidget({
+    id: "b",
+    title: "B",
+    caption: "",
+    kind: "bar",
+    measures: ["deposits.balance_rc"],
+    dimensions: [],
+  }),
+);
+assert.deepEqual(draftProblems(draft), []);
+assert.equal(draft.layout.length, 2);
+assert.equal(draft.layout[1].y, 4, "a new view is placed below what is there");
+assert.deepEqual(
+  draftSpec(draft)
+    .layout.map((item) => item.i)
+    .sort(),
+  draftSpec(draft)
+    .widgets.map((widget) => widget.id)
+    .sort(),
+  "the layout must position every widget and nothing else",
+);
+draft = removeWidget(draft, "a");
+assert.deepEqual(
+  draft.layout.map((item) => item.i),
+  ["b"],
+);
+assert.deepEqual(
+  draft.widgets.map((widget) => widget.id),
+  ["b"],
+);
+
+// A size the server would refuse is clamped here rather than sent.
+draft = sizeWidget(draft, "b", { w: 99, h: 0 });
+assert.equal(draft.layout[0].w, BUILDER_COLUMNS);
+assert.equal(draft.layout[0].h, 1);
+
+// The grid reports a layout on mount as well as after a drag, so the geometry is
+// compared before state moves — otherwise the drag never settles. And a widget
+// the library did not report keeps the place it had, because dropping it would
+// delete the view.
+assert.equal(layoutsEqual(draft.layout, [...draft.layout]), true);
+assert.equal(
+  layoutsEqual(draft.layout, [{ i: "b", x: 1, y: 0, w: 12, h: 1 }]),
+  false,
+);
+const twoUp = applyLayout(
+  addWidget(
+    draft,
+    figureWidget({
+      id: "c",
+      title: "C",
+      caption: "",
+      kind: "bar",
+      measures: ["deposits.balance_rc"],
+      dimensions: [],
+    }),
+  ),
+  [{ i: "b", x: 3, y: 1, w: 4, h: 2 }],
+);
+assert.deepEqual(
+  twoUp.layout.map((item) => item.i).sort(),
+  ["b", "c"],
+  "a widget the grid did not report keeps its place rather than being dropped",
+);
+assert.equal(
+  applyLayout(draft, [{ i: "ghost", x: 0, y: 0, w: 1, h: 1 }]).layout.some(
+    (item) => item.i === "ghost",
+  ),
+  false,
+  "a layout item naming no widget must not be accepted",
+);
+
+// --- 11. the builder's grid runtime has exactly one entrance ------------------
+//
+// react-grid-layout must be reached only through the dynamic wrapper, or it lands
+// in an initial bundle. `scripts/assert-home-route-bundle.mjs` asserts both halves
+// of that against the real build output; these assertions catch the import before
+// a build does, because the failure mode is silent — a page that works, with the
+// library shipped to every reader of the Command Center.
+
+const builderSurfaces = [
+  "components/bi/DashboardBuilder.tsx",
+  "app/(app)/dashboards/new/page.tsx",
+  "app/(app)/dashboards/[id]/edit/page.tsx",
+];
+for (const file of builderSurfaces) {
+  assert.equal(
+    /from\s+["'][^"']*BuilderGridCanvas["']/.test(code(file)),
+    false,
+    `${file} must import ./BuilderGrid, never ./BuilderGridCanvas — the dynamic wrapper is what keeps react-grid-layout out of the initial bundles.`,
+  );
+  assert.equal(
+    /from\s+["']react-grid-layout/.test(code(file)),
+    false,
+    `${file} must not import react-grid-layout directly.`,
+  );
+}
+const builderWrapper = code("components/bi/BuilderGrid.tsx");
+assert.ok(
+  /dynamic\(\s*\(\)\s*=>\s*import\(["']\.\/BuilderGridCanvas["']\)/.test(
+    builderWrapper,
+  ),
+  "BuilderGrid must load the canvas through next/dynamic.",
+);
+assert.ok(
+  /ssr:\s*false/.test(builderWrapper),
+  "BuilderGrid must load the canvas with ssr:false.",
+);
+// The one file that may touch the library, and the only one.
+assert.ok(
+  /from\s+["']react-grid-layout["']/.test(
+    code("components/bi/BuilderGridCanvas.tsx"),
+  ),
+  "BuilderGridCanvas must be the file that imports react-grid-layout.",
+);
+
+// --- 12. a shared dashboard's refusal is the SAME component and the same words -
+//
+// A saved dashboard resolves through `packWidgetView`, so the `restricted`
+// variant asserted in section 3 covers a shared document too. These assertions
+// pin that there is no second adapter and no second refusal tile, because a
+// second one is where the title would come back.
+
+const dashboardsModule = code("components/bi/dashboards.ts");
+assert.ok(
+  /widgets:\s*read\.widgets\.map\(packWidgetView\)/.test(dashboardsModule),
+  "a saved dashboard's widgets must go through packWidgetView — the adapter whose refusal variant has nowhere to put a title.",
+);
+const savedScreen = code("components/bi/SavedDashboardScreen.tsx");
+assert.ok(
+  /<DashboardCanvas/.test(savedScreen),
+  "a saved dashboard must draw through DashboardCanvas, which passes RestrictedWidget only a height.",
+);
+assert.equal(
+  /RestrictedWidget/.test(savedScreen),
+  false,
+  "a saved dashboard must not render its own refusal tile: the canvas owns that decision.",
+);
+
+// --- 13. sharing is explained where it is done -------------------------------
+//
+// A reader who does not know that sharing grants no access will share a board
+// pack believing the recipient sees it. The sentence is on the panel that does
+// the sharing, not in a tooltip and not only in a doc comment.
+
+const sharePanel = code("components/bi/SharePanel.tsx");
+assert.ok(
+  /Sharing a dashboard does not share its figures\./.test(sharePanel),
+  "SharePanel must say, in production copy, that sharing does not share figures.",
+);
+assert.ok(
+  /authorized view by view when they open it/.test(sharePanel),
+  "SharePanel must say WHY: each view is authorized for the reader who opens it.",
+);
+assert.equal(
+  /\bdenied|deniedMembers|denied_member/.test(sharePanel),
+  false,
+  "SharePanel must not name a refused field: a denial that names what it hid is a disclosure.",
+);
+
+// --- 14. only the owner is offered the controls that only the owner may use ----
+//
+// The server decides this — reachability first, then ownership — so these
+// assertions are about not offering a colleague a button that answers 403.
+
+assert.ok(
+  /ownedByCaller/.test(savedScreen),
+  "the saved-dashboard screen must gate its owner controls on the server's own ownedByCaller.",
+);
+// AND THE OWNER'S OWN DELETE MUST NOT LAND ON A NOT-FOUND PAGE. The deleted
+// document answers 404 on the next read, which is correct, and that read races
+// the navigation away — so the screen has to decide the delete BEFORE it decides
+// not-found. Measured, not theoretical: it landed on "This page could not be
+// found" until it did.
+const deletedAt = savedScreen.indexOf("remove.isPending || remove.isSuccess");
+const notFoundAt = savedScreen.indexOf("isBiUnavailable(saved.error)");
+assert.ok(
+  deletedAt > 0 && notFoundAt > 0 && deletedAt < notFoundAt,
+  "the saved-dashboard screen must decide an in-flight or completed delete BEFORE " +
+    "it decides not-found, or the owner is shown a 404 for the act they asked " +
+    "for. The guard has to open when the delete is SENT: React Query settles the " +
+    "invalidation, and therefore the refetched 404, before it marks the mutation " +
+    "successful.",
+);
+const editPage = code("app/(app)/dashboards/[id]/edit/page.tsx");
+assert.ok(
+  /ownedByCaller === true/.test(editPage),
+  "the builder must only mount for the owner the server named.",
+);
+assert.ok(
+  /isSavedDashboardId/.test(editPage) && /notFound\(\)/.test(editPage),
+  "a certified pack key must be not-found on the edit route: a pack is never edited in place.",
+);
+
+// --- 15. a calculated measure's refusal names the FIGURE, not the formula -------
+//
+// A formula is authorized as the figures its text names, so the refusal a reader
+// sees has to be about a figure. Three ways that could go wrong, all source
+// properties:
+//
+// (a) the surface could name the measure instead of the figures — unactionable,
+//     and untrue about what was refused;
+// (b) the editor could decide validity itself, which is a second implementation
+//     of `app/domain/bi/expr.py` and is worse than no preview the moment the two
+//     disagree;
+// (c) the surface could show a REFUSED measure as restricted. It cannot: a
+//     measure whose figures a reader's access does not cover is ABSENT from the
+//     list (`content.readable_measures`), because its label is authored text that
+//     can describe the very figure they were refused. So there must be no refusal
+//     tile on this surface, and nothing that counts what was withheld.
+
+const measuresPage = code("app/(app)/explore/measures/page.tsx");
+const measureComposer = code("components/bi/MeasureComposer.tsx");
+const expressionEditor = code("components/bi/ExpressionEditor.tsx");
+const measureReview = code("components/bi/MeasureReview.tsx");
+const measuresModule = code("components/bi/measures.ts");
+
+// (a) The refusal goes through the helper that names figures.
+assert.ok(
+  /refusedFiguresSentence\(refusedFigures\(/.test(measuresPage),
+  "the measures surface must word a refusal from the FIGURES the server named, " +
+    "preferring its labels — never from the measure's own name.",
+);
+
+// (b) No parser anywhere on this surface, and the verdict is the server's.
+for (const [file, source] of [
+  ["app/(app)/explore/measures/page.tsx", measuresPage],
+  ["components/bi/MeasureComposer.tsx", measureComposer],
+  ["components/bi/ExpressionEditor.tsx", expressionEditor],
+  ["components/bi/measures.ts", measuresModule],
+] as const) {
+  for (const shape of [
+    /function\s+\w*[Tt]okeni[sz]e/,
+    /\bnew RegExp\(/,
+    /SAFE_DIV\s*\(\s*\[m:/,
+  ]) {
+    assert.equal(
+      shape.test(source),
+      false,
+      `${file} must not implement or evaluate the formula language (${shape}); ` +
+        "the server's own parse is the only verdict, and a client parser that " +
+        "disagreed would tell a reader their formula is fine and then refuse it.",
+    );
+  }
+}
+assert.ok(
+  /verdict\.read\.valid/.test(measuresModule) &&
+    /read\.valid/.test(expressionEditor),
+  "the editor's verdict must come from the validation route's own `valid`.",
+);
+assert.ok(
+  /useValidateBiMeasureExpression/.test(measuresPage),
+  "the measures surface must ask POST …/bi/measures/validation for the verdict.",
+);
+
+// (c) There is no refused-measure tile, and nothing counts what was withheld.
+for (const [file, source] of [
+  ["app/(app)/explore/measures/page.tsx", measuresPage],
+  ["components/bi/MeasureReview.tsx", measureReview],
+] as const) {
+  assert.equal(
+    /RestrictedWidget|Access restricted/.test(source),
+    false,
+    `${file} must not draw a refusal tile: a measure this reader may not read is ` +
+      "absent from the list, and a tile is where its name would come back.",
+  );
+  assert.equal(
+    /withheldMeasures|hiddenMeasures|withheld_members|measuresWithheld/.test(
+      source,
+    ),
+    false,
+    `${file} must not count what was withheld — the server does not say, and the ` +
+      "count itself would disclose that the institution has one.",
+  );
+}
+
+// AND THE DECISION IS NEVER OFFERED ON ANYTHING BUT THE SERVER'S OWN FLAG.
+assert.ok(
+  /canDecide:\s*measure\.awaitingCallerDecision === true/.test(measuresModule),
+  "the decision control must be gated on the server's `awaiting_caller_decision` " +
+    "and nothing else — not a role, not `!ownedByCaller`, not the state alone.",
+);
+assert.ok(
+  /controls\.canDecide &&/.test(measureReview),
+  "MeasureReview must gate the checker's half on that decision.",
+);
+// The proposer's control is absent WITH A REASON on screen, which is the repo's
+// convention: a control that vanishes silently reads as a fault.
+assert.ok(
+  /controls\.proposerNotice/.test(measureReview),
+  "the proposer must be told why the decision is not theirs to take.",
+);
+// A certified measure's delete is withheld WITH A REASON, and the reason is
+// rendered — not only computed.
+assert.ok(
+  /controls\.deleteWithheld !== null/.test(measuresPage),
+  "the measures surface must render the reason a delete control is withheld.",
+);
+assert.ok(
+  /controls\.canDelete &&/.test(measuresPage),
+  "the delete control must be gated on `canDelete`, which is false above a draft.",
+);
+
 console.log(
   "disclosure.test.ts: BI refusals name nothing, absences never render as zero, " +
-    "no pack is defined in the browser, and every way out is the governed one.",
+    "no pack is defined in the browser, every way out is the governed one, a saved " +
+    "canvas is restated exactly or not at all, the builder's grid runtime has " +
+    "one entrance, and a calculated measure's refusal names the figure rather " +
+    "than the formula.",
 );

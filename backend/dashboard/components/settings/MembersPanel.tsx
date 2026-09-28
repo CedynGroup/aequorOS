@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import type {
-  BindingCreateRequest,
   BindingCreateResponse,
   BindingRead,
   MemberRead,
@@ -22,7 +21,7 @@ import type {
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
-import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
+import { authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { avatarColor, initialsFrom } from "@/lib/api/identity";
@@ -32,18 +31,33 @@ import {
   useGrantableInstitutions,
 } from "@/lib/api/grantAdministration";
 import {
+  bookCoverageAvailability,
   canAddGrantToMember,
+  draftScopeLabel,
+  grantPreviewFingerprint,
+  grantScopeDisplay,
+  grantScopeRefusal,
   MODULE_OPTIONS,
   ROLE_OPTIONS,
   SENSITIVITY_OPTIONS,
   visibleGrantFragments,
+  WHOLE_INSTITUTION_BOOK,
+  type GrantDataScope,
   type GrantDraft,
 } from "@/lib/api/grants";
 import {
+  dataScopeShortfall,
   grantShortfall,
   overlappingGrantNotice,
 } from "@/lib/api/grantRequirements";
 import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
+import BookCoverageControl from "./BookCoverageControl";
+import {
+  approveSsoAccessWithScopedGrant,
+  createScopedGrant,
+  previewScopedGrant,
+  useInstitutionBranches,
+} from "./grantTransport";
 
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
@@ -389,6 +403,13 @@ function MemberDetail({
                   </StatusPill>
                 </div>
                 <dl className="mt-3 grid gap-3 text-caption text-slate sm:grid-cols-2">
+                  {/* Always shown, for every grant. A grant displayed without
+                      its coverage reads as the whole institution when it may
+                      be two branches. */}
+                  <DetailFact
+                    label="Book coverage"
+                    value={grantScopeDisplay(grant).label}
+                  />
                   <DetailFact label="Granted by" value={grantorLabel(grant)} />
                   <DetailFact
                     label="Granted"
@@ -472,6 +493,9 @@ function initialDraft(
     institutionId: bank?.id,
     moduleScope: "liq",
     sensitivityScope: "confidential",
+    // The widest coverage, which is what every grant meant before Phase 4.
+    // Narrowing is always an explicit act.
+    dataScope: WHOLE_INSTITUTION_BOOK,
     reason: "",
   };
 }
@@ -504,45 +528,50 @@ function GrantComposer({
   const name = memberName(member);
   const isPendingApproval = member.accessRequestState === "approval_needed";
 
-  const scope = {
-    roleBundle: draft.roleBundle,
+  // One institution's branch register. Scoped per organization, actor,
+  // authorization generation and institution — `institutionBranchesKey`.
+  const branchQuery = useInstitutionBranches(
+    draft.institutionScope === "institution"
+      ? (draft.institutionId ?? null)
+      : null,
+  );
+  const coverage = bookCoverageAvailability({
     institutionScope: draft.institutionScope,
-    institutionId:
-      draft.institutionScope === "institution"
-        ? draft.institutionId
-        : undefined,
-    moduleScope: draft.moduleScope,
-    sensitivityScope: draft.sensitivityScope,
-    reason: draft.reason.trim(),
-  };
-  const previewKey = [
-    member.userId,
-    draft.roleBundle,
-    draft.institutionScope,
-    draft.institutionScope === "institution" ? draft.institutionId : "",
-    draft.moduleScope,
-    draft.sensitivityScope,
-  ].join("|");
+    directory: branchQuery.data ?? null,
+    failed: branchQuery.isError,
+    // The FIRST load only. A background refetch must not blank the picker the
+    // Owner is in the middle of using; if that refetch fails, `isError` takes
+    // over and the control closes down with a reason.
+    loading: branchQuery.isLoading,
+  });
+  const scopeRefusal = grantScopeRefusal(draft);
+
+  const scope: GrantDraft = { ...draft, reason: draft.reason.trim() };
+  const previewKey = grantPreviewFingerprint(draft, member.userId);
   previewKeyRef.current = previewKey;
   const previewSentence =
     previewResult?.key === previewKey ? previewResult.sentence : null;
   const shortfall = grantShortfall(scope);
+  const coverageShortfall = dataScopeShortfall(scope);
   const overlap = overlappingGrantNotice(scope, member.grants);
 
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
-      authorizationApi.previewAuthorizationBinding({
-        bindingPreviewRequest: {
-          ...scope,
-          reason: scope.reason || "Authority sentence preview",
-          principalUserId: member.userId,
-        },
-      }),
+      previewScopedGrant(
+        { ...scope, reason: scope.reason || "Authority sentence preview" },
+        member.userId,
+      ),
   });
 
   useEffect(() => {
     if (step !== "define") return;
     setError(null);
+    // An incomplete coverage is refused by the server (its own validator, and
+    // the CHECK behind it, forbid a narrowing kind with no values), so asking
+    // would answer with an error about the shape rather than a sentence. The
+    // refusal is already on screen; leaving the sentence absent is what keeps
+    // Review unreachable.
+    if (scopeRefusal) return;
     const requestedKey = previewKey;
     const timeout = window.setTimeout(() => {
       previewAuthority(undefined, {
@@ -562,26 +591,18 @@ function GrantComposer({
       });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [previewAuthority, previewKey, step]);
+  }, [previewAuthority, previewKey, scopeRefusal, step]);
 
   const submit = useMutation({
     mutationFn: async () => {
       if (isPendingApproval) {
-        return authApi.authApproveSsoAccessRequest({
-          userId: member.userId,
-          ssoAccessRequestApprove: {
-            ...scope,
-            expectedAuthoritySentence: previewSentence!,
-          },
-        });
+        return approveSsoAccessWithScopedGrant(
+          member.userId,
+          scope,
+          previewSentence!,
+        );
       }
-      return authorizationApi.createAuthorizationBinding({
-        bindingCreateRequest: {
-          ...scope,
-          principalUserId: member.userId,
-          expectedAuthoritySentence: previewSentence!,
-        } satisfies BindingCreateRequest,
-      });
+      return createScopedGrant(scope, member.userId, previewSentence!);
     },
     onSuccess: (result) => {
       setSaved(result);
@@ -609,6 +630,10 @@ function GrantComposer({
         institutionId: undefined,
         moduleScope: "account",
         sensitivityScope: "all",
+        // Organization-wide coverage cannot name branches, so the chosen
+        // codes are dropped rather than carried silently into a sentence that
+        // cannot express them.
+        dataScope: WHOLE_INSTITUTION_BOOK,
       });
       return;
     }
@@ -667,7 +692,7 @@ function GrantComposer({
           className="space-y-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (draft.reason.trim() && previewSentence) {
+            if (draft.reason.trim() && previewSentence && !scopeRefusal) {
               setError(null);
               setStep("review");
             }
@@ -710,6 +735,11 @@ function GrantComposer({
                   ...draft,
                   institutionScope: bank ? "institution" : "organization",
                   institutionId: bank?.id,
+                  // A branch code belongs to one institution's register. Moving
+                  // the grant to a sibling bank must not carry the codes with
+                  // it: they would name nothing there, and the server would
+                  // store a scope that resolves to no rows.
+                  dataScope: WHOLE_INSTITUTION_BOOK,
                 });
               }}
             />
@@ -738,6 +768,16 @@ function GrantComposer({
               }
             />
           </div>
+          <BookCoverageControl
+            availability={coverage}
+            scope={draft.dataScope}
+            refusal={scopeRefusal}
+            disabled={draft.roleBundle === "account_admin"}
+            onChange={(dataScope: GrantDataScope) =>
+              setDraft({ ...draft, dataScope })
+            }
+            onRetry={() => void branchQuery.refetch()}
+          />
           <label className="block">
             <span className="mb-1.5 block text-caption font-medium text-navy">
               Reason
@@ -789,6 +829,17 @@ function GrantComposer({
               {shortfall}
             </p>
           )}
+          {coverageShortfall && (
+            <p
+              data-testid="grant-coverage-shortfall"
+              className="rounded-md border border-warning/30 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy/85"
+            >
+              <span className="font-medium text-navy">
+                Check this coverage.
+              </span>{" "}
+              {coverageShortfall}
+            </p>
+          )}
           {previewSentence && <SentencePreview sentence={previewSentence} />}
           <div className="flex justify-end gap-3">
             <button
@@ -800,7 +851,11 @@ function GrantComposer({
             </button>
             <button
               type="submit"
-              disabled={!draft.reason.trim() || !previewSentence}
+              disabled={
+                !draft.reason.trim() ||
+                !previewSentence ||
+                Boolean(scopeRefusal)
+              }
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
               {previewSentence ? "Review grant" : "Preparing review…"}
@@ -815,6 +870,15 @@ function GrantComposer({
             Review the exact authority before granting it.
           </p>
           <SentencePreview sentence={previewSentence} />
+          {/* The sentence above is the server's and is the authority. This is
+              the coverage chosen, shown as a field rather than prose so it is
+              visible even where the sentence words it differently. */}
+          <div className="rounded-md border border-border-light p-4">
+            <p className="text-micro font-medium uppercase tracking-wider text-slate">
+              Book coverage
+            </p>
+            <p className="mt-1 text-body text-navy">{draftScopeLabel(draft)}</p>
+          </div>
           <div className="rounded-md border border-border-light p-4">
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Reason
