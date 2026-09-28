@@ -249,10 +249,27 @@ class AiCommentaryDraft(Base):
     )
 
 
+#: The tenant tables this module owns, named explicitly BECAUSE the prefix does
+#: not name them (audit A9-08).
+#:
+#: This table is ``ai_``-prefixed on purpose: the BI plane-boundary guard derives
+#: the set of BI-WRITABLE tables from the ``bi_``-prefixed tables of
+#: ``Base.metadata``, and this row is AI EGRESS EVIDENCE written by the ``ai``
+#: lane, not a mart. Renaming it to ``bi_`` would make it writable by the BI
+#: plane, which is the opposite of what the guard is for.
+#:
+#: The cost of that correct naming was that every structural check keyed on the
+#: prefix silently stopped covering it — the Postgres parity suite among them, so
+#: its RLS, its composite foreign key and its indexes were unverified against the
+#: migrated schema. Any suite whose subject is "the BI plane's tables" must add
+#: this tuple to its subject rather than widen its prefix.
+BI_COMMENTARY_TABLES: tuple[str, ...] = ("ai_commentary_drafts",)
+
 __all__ = [
     "AI_COMMENTARY_DRAFT_NO_OUTPUT_STATUSES",
     "AI_COMMENTARY_DRAFT_STATUSES",
     "AI_COMMENTARY_DRAFT_TERMINAL_STATUSES",
     "AI_COMMENTARY_PAYLOAD_MODES",
+    "BI_COMMENTARY_TABLES",
     "AiCommentaryDraft",
 ]
