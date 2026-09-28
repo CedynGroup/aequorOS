@@ -335,6 +335,24 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `app__schemas__x__Name` component keys the generator cannot map back), and a
   `Decimal` form field (Pydantic types it `number | string`, and the alias lands in an
   operation request interface, not in `src/models/`).
+  **A STALE GENERATED CLIENT DROPS A NEW REQUEST FIELD SILENTLY, AND THE SERVER THEN
+  DEFAULTS IT (2026-09-27).** The two directions degrade differently, and only one of
+  them is visible. `<Model>FromJSON` opens with `...json`, so an unknown RESPONSE field
+  survives under its snake_case wire name — a frontend reading the camelCase property
+  gets `undefined`, which surfaces as an obvious bug. `<Model>ToJSON` has **no spread**:
+  it returns a hand-enumerated object literal of exactly the keys the generator knew
+  about, so a REQUEST field added to an existing schema is stripped in the browser, the
+  server applies its column default, and the API answers 201. That is not a type error
+  and no frontend test sees it. Caught on `BindingCreateRequest` while Phase 4 added
+  `data_scope_kind` / `data_scope_values` to `ScopedGrantInput`: posting through the
+  generated `authorizationApi` would have stored a grant an Org Owner narrowed to two
+  branches as **the whole institution, with a success dialog** — privilege widening
+  reported as success. So after adding a field to a schema an existing route already
+  accepts, either regenerate before the surface ships, or post through a hand-written
+  transport that reuses the generated `FromJSON` parsers plus `normalizeApiError`, and
+  pin a test that FAILS if the generated write operation is called again. Delete the
+  transport at regeneration; an interim one that outlives it is a second contract nobody
+  is checking.
 - Keep `packages/risk-service-api/src` excluded centrally from style linting and
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally

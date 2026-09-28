@@ -539,8 +539,9 @@ submit and poll routes, the Validator bundle, and the grants that must exist
 before any return can be transmitted — is owned by the
 [filing submit authority rollout](filing_submit_authority_rollout.md). Credit —
 the `credit` module, its `risk`-to-`credit` mirror migration, the credit rows
-of the shared live summary / alerts / window / snapshot surfaces (enforced),
-and the direct `/credit/*` route cutover (recorded, not yet enforced) — is
+of the shared live summary / alerts / window / snapshot surfaces, the direct
+`/credit/*` route cutover, and the first surfaces to apply a binding's
+branch/region `data_scope` to the rows AND to every count — is
 owned by the [credit rollout contract](credit_enforcement_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
