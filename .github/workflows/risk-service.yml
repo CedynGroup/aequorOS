@@ -365,6 +365,17 @@ jobs:
       # that exist to prove tenant isolation are the ones that go red, which
       # invites "fix" by relaxing the assertion. Never point this job at a
       # superuser connection, and never at the primary.
+      # CREATEROLE, and only CREATEROLE, was added 2026-09-27 (audit A9-06). The
+      # BI foundation suite proves that a NON-OWNER worker can drop and recreate
+      # partitions ONLY through the SECURITY DEFINER functions — the property that
+      # makes `bi_retention` possible at all — and to have a non-owner it must
+      # create a second role. Without CREATEROLE that one test skipped on every
+      # run, invisibly: the `--min-executed` guard below counts a suite, not a
+      # single abstention. CREATEROLE does NOT imply BYPASSRLS, so every
+      # tenant-isolation assertion this job exists for is exercised exactly as
+      # before, and on PostgreSQL 16+ a CREATEROLE role may administer only the
+      # roles it created itself, so it gains nothing over `postgres`. The test
+      # now FAILS rather than skips when POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.
       - name: Create restricted migration test role
         env:
           PGPASSWORD: postgres
@@ -372,12 +383,13 @@ jobs:
           psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE risk_service_test
             LOGIN PASSWORD 'risk_service_test'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+            NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
           SQL
       - name: Migration chain, RLS policies and schema defaults
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          POSTGRES_PRIVILEGE_TESTS_REQUIRED: "1"
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-schema.xml
         run: mise run risk-service:test-postgres-schema
       # tests/db self-skips wholesale when TEST_DATABASE_URL is unset, so a

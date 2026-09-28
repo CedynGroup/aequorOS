@@ -48,6 +48,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import PrincipalType
+from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models.bi import QUERY_LOG_DECISIONS, QUERY_LOG_SURFACES, BiQueryLog
 from app.schemas.bi import BiQuery
@@ -58,6 +59,9 @@ from app.services.bi import partitions
 #: user may walk several packs in a minute, so the budget is generous; what it
 #: bounds is a script, not a person.
 RATE_LIMIT_WINDOW_SECONDS = 60
+#: The DEFAULT ceiling. ``settings.bi.rate_limit_max_queries`` is the authority the
+#: budget actually reads, and it defaults to this; the constant stays as the
+#: documented figure and as what a test can compare against.
 RATE_LIMIT_MAX_QUERIES = 120
 
 DECISION_ALLOWED = "allowed"
@@ -174,6 +178,7 @@ def budget_for(
     """The principal's recorded BI reads inside the window, across every worker."""
 
     moment = now or utc_now()
+    limit = get_settings().bi.rate_limit_max_queries or RATE_LIMIT_MAX_QUERIES
     window_start = moment - dt.timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
     used, oldest = db.execute(
         select(func.count(), func.min(BiQueryLog.queried_at)).where(
@@ -189,7 +194,7 @@ def budget_for(
         retry_after = max(1, int(-(-(leaves_at - moment).total_seconds() // 1)))
     return RateBudget(
         used=int(used or 0),
-        limit=RATE_LIMIT_MAX_QUERIES,
+        limit=limit,
         window_seconds=RATE_LIMIT_WINDOW_SECONDS,
         retry_after_seconds=min(retry_after, RATE_LIMIT_WINDOW_SECONDS),
     )

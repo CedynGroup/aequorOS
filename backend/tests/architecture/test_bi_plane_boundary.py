@@ -91,6 +91,11 @@ BI_OWNED_GLOBS: tuple[str, ...] = (
     # obvious one. Named prefixes/suffixes only, and the resolved set is
     # asserted below rather than observed.
     "features/read_bi.py",
+    # Phase 4's machine feed is `read_bi_feeds.py`, which matches none of the
+    # three patterns below: it neither starts with the token, ends with it, nor
+    # equals `read_bi.py`. Named as its own prefix rather than loosened to
+    # `features/*bi*.py`, for the A6-09 reason recorded above.
+    "features/read_bi_*.py",
     "features/bi_*.py",
     "features/*_bi.py",
     # Phase 3 added `manage_bi_content.py`, which matches none of the three above:
@@ -176,7 +181,9 @@ BI_OWNED: frozenset[str] = _bi_owned()
 EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
     {
         "app/features/read_bi.py",
+        "app/features/read_bi_feeds.py",
         "app/features/export_bi.py",
+        "app/features/manage_bi_commentary.py",
         "app/features/manage_bi_content.py",
         "app/features/manage_bi_notifications.py",
     }

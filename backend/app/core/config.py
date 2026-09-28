@@ -932,6 +932,25 @@ class BiSettings(BaseSettings):
     enabled: bool = Field(default=False, alias="BI_ENABLED")
     mart_enqueue_enabled: bool = Field(default=False, alias="BI_MART_ENQUEUE_ENABLED")
     scheduler_enabled: bool = Field(default=False, alias="BI_SCHEDULER_ENABLED")
+    #: How many BI reads one principal may put inside the 60-second budget window.
+    #: The default is the product's own figure and production should not change it:
+    #: a dashboard pack opens about a dozen queries at once and a user may walk
+    #: several packs in a minute, so what it bounds is a script, not a person.
+    #:
+    #: It is configurable for exactly one reason. The Playwright journeys ARE a
+    #: script: they drive ~30 BI journeys as one identity inside a minute, so the
+    #: suite trips its own product limit and the failure lands on whichever spec
+    #: happens to run last — a red suite that says nothing about the code. The
+    #: window is deliberately NOT configurable, so raising this cannot turn the
+    #: budget off, only widen it.
+    #: ``None`` means "use the product's own figure",
+    #: ``query_log.RATE_LIMIT_MAX_QUERIES``. Left unset rather than mirroring 120
+    #: here so there is ONE place the default lives, and so the six tests that
+    #: monkeypatch that constant keep working — a second copy here would silently
+    #: win over the patch and make those tests assert nothing.
+    rate_limit_max_queries: int | None = Field(
+        default=None, ge=1, alias="BI_RATE_LIMIT_MAX_QUERIES"
+    )
     #: Threshold alerts (``docs/bi.md`` §Phase 3). Event-driven, not scheduled:
     #: an evaluation is enqueued by a SUCCEEDED ``bi_mart_refresh`` and by
     #: nothing else, which is why this flag is deliberately absent from

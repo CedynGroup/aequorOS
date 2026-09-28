@@ -26,16 +26,49 @@ specifications — the same resolved shape the certified packs return
 widget, where the same evaluator decides again. So a refusal here costs a reader
 nothing but the widget, and a bug here cannot leak a number: there is none in the
 response.
+
+**Every request leaves exactly one row, and the refusals are the point.** The
+read surface's rule is that ``packs`` and ``insights`` record one row per request
+*including the refusals, because the budget is counted over these rows and a
+probe loop must not be free* (``read_bi``'s module docstring). This module used
+to record one row on one route — the successful dashboard read — and nothing on
+any of the roughly two dozen paths that refuse. That made enumeration INSIDE a
+tenant unmetered: the three refusals are distinguishable (404 for a document this
+identity may not open, 403 for one they may open but do not own, 409 for a state
+clash), so the responses answer "which ids exist, and which of them can I read",
+and the rate limit that was supposed to bound the asking never counted a single
+ask. :func:`_metered` now wraps every route body, so the row is a property of the
+shape: a route cannot return or raise without writing one. The single exception is
+the 429 itself — see :func:`_budget` for why an over-budget principal is not
+charged again.
+
+**A served dashboard whose every widget was refused is still an ``allowed``
+row** (audit A9-09). ``decision`` is the authorization decision for the REQUEST
+and means "was this read served"; the dashboard WAS served — its canvas, its
+geometry, its count and its message — and the fields inside it that the reader
+could not have are in ``denied_members``, which is the certified-pack convention
+verbatim (``read_bi._pack_record``: a dashboard is a MIXED read by construction).
+All-refused is the limit case of mixed, not a different kind of event: ``packs``
+rows for a certified dashboard behave identically, and flipping this one would
+make ``denied`` mean two things — "the request was refused" and "the request
+succeeded and disclosed nothing" — so a reviewer counting refusals could no
+longer tell a probe loop from a reader opening a dashboard they hold nothing on.
+The discriminator for the second is already in the row and needs no new value:
+``member_ids`` empty with ``denied_members`` non-empty.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import hashlib
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -99,11 +132,26 @@ ENTITY_MEASURE = "bi_measure"
 AsOf = Annotated[date, Query(description="The reporting date to resolve the dashboard for.")]
 
 
-# --- refusals ----------------------------------------------------------------------------
+# --- metering ----------------------------------------------------------------------------
+#
+# The budget is COUNTED over ``bi_query_log`` rows, so a request that leaves no row
+# costs its principal nothing. Every route here therefore runs inside
+# :func:`_metered`, which writes exactly one row on the way out whatever the way
+# out was — 200, 204, 404, 403, 409 or 422. Nothing in this file may write that row
+# itself: one writer is what makes "one row per request" a property of the shape
+# rather than of twenty-odd correct call sites.
 
 
 def _budget(db: Session, access: BiReadAccess) -> None:
-    """Meter this principal against the same window every BI read is metered by."""
+    """Refuse a principal that has already spent the window, and record NOTHING.
+
+    The 429 is the one outcome that leaves no row, and it is deliberate: the
+    budget is the count of rows in the window, so charging a refusal-for-being-
+    over-budget would let a principal deepen their own deficit without limit and
+    push their recovery out indefinitely. ``read_bi._require_budget`` is called
+    before every ``_append`` on that surface for the same reason; this is the same
+    rule stated in one place instead of by call order.
+    """
 
     budget = query_log.budget_for(
         db,
@@ -121,6 +169,172 @@ def _budget(db: Session, access: BiReadAccess) -> None:
             },
             headers={"Retry-After": str(budget.retry_after_seconds)},
         )
+
+
+#: The separator and the domain label the question material is joined with. The
+#: label is what stops a row of this surface from colliding with a certified-pack
+#: row of the same ``packs`` surface: both hash a date and an id, and two
+#: different questions must not produce one digest.
+_MATERIAL_SEPARATOR = "\x1f"
+_QUESTION_DOMAIN = "bi_content"
+
+
+def _question_digest(route: str, *parts: object) -> str:
+    """A one-way digest of the question one request asked.
+
+    Deliberately the same shape as ``read_bi._surface_digest``
+    (``app/features/read_bi.py``, line 1639): a separator-joined material string
+    and one SHA-256, so two identical questions hash alike and nothing in the
+    column can be read back as a value. It is duplicated rather than imported
+    because that helper is private to the read surface; merging the two is a
+    refactor for whoever owns both files.
+
+    **The requested id is never the only material.** A bare UUID's digest is the
+    same 64 characters in every context, so one appearing in two rows would link
+    them across surfaces and across tenants; the route label and the rest of the
+    request are what stop that. What this does NOT do is hide the id from a reader
+    who can already enumerate this institution's dashboard and measure ids — a
+    digest over an enumerable space is a commitment, not a secret, and hiding it
+    would need a keyed HMAC under a deployment pepper. That is the honest residue,
+    and it is the right trade here: the enumerable ids live in ``bi_dashboards``
+    and ``bi_measures`` in the same database as this log and under the same
+    tenant policy, and the one thing the digest lets a reviewer do — see that a
+    principal asked for an object they were refused, over and over — is exactly
+    why the row is written at all.
+    """
+
+    material = _MATERIAL_SEPARATOR.join(
+        (_QUESTION_DOMAIN, route, *("" if part is None else str(part) for part in parts))
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _payload_digest(payload: BaseModel) -> str:
+    """The request body as material for :func:`_question_digest`.
+
+    A validated model's own JSON, which is field-ordered by the model, so two
+    equal requests produce one digest — ``query_log.query_digest`` says the same
+    thing about a ``BiQuery``. A body is a question here: two saves of two
+    different canvases are two questions, and a column that could not tell them
+    apart would not mean what it says.
+    """
+
+    return hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()
+
+
+@dataclass(slots=True)
+class _Meter:
+    """The one ``bi_query_log`` row a request will leave, as it becomes known.
+
+    Only the members are open to the route: a request may discover that it served
+    some figures and was refused others, and that pair is the whole reason an
+    operator reads this table. Everything else about the row is decided by
+    :func:`_metered`, including the decision — a route cannot mark its own refusal
+    ``allowed`` by forgetting something.
+    """
+
+    query_hash: str
+    served: tuple[str, ...] = ()
+    denied: tuple[str, ...] = ()
+
+    def members(self, *, served: Sequence[str] = (), denied: Sequence[str] = ()) -> None:
+        """Name the catalogue members this request served, and those it refused."""
+
+        self.served = tuple(served)
+        self.denied = tuple(denied)
+
+
+def _refused_members(exc: BaseException) -> tuple[str, ...]:
+    """The members a refusal already named to its caller, for the row.
+
+    :func:`_denied` is the only refusal of this surface that names any, and it
+    puts them in the response envelope. Reading them back out of it is what keeps
+    the row and the answer in agreement: a second channel could disagree, and the
+    one that a reviewer would then trust is the one nobody checked.
+    """
+
+    if not isinstance(exc, HTTPException) or not isinstance(exc.detail, dict):
+        return ()
+    named = exc.detail.get("denied_members")
+    if not isinstance(named, list):
+        return ()
+    return tuple(str(member_id) for member_id in named)
+
+
+def _row(access: BiReadAccess, meter: _Meter, *, decision: str) -> query_log.QueryRecord:
+    """One row of this surface.
+
+    ``surface`` is ``content.DASHBOARD_SURFACE`` for the measure routes as well as
+    the dashboard ones: it is the single surface every authorization decision in
+    this module is already made under, so the log and the evaluator name the same
+    thing. ``row_count`` stays NULL because nothing here serves a figure — a
+    dashboard read returns widget specifications and the client then asks
+    ``/bi/query`` for each one, which writes its own row.
+    """
+
+    return query_log.QueryRecord(
+        organization_id=access.ctx.organization_id,
+        bank_id=access.bank.id,
+        principal_user_id=access.principal_user_id,
+        surface=content.DASHBOARD_SURFACE,
+        query_hash=meter.query_hash,
+        decision=decision,
+        catalogue_version=CATALOGUE_VERSION,
+        member_ids=meter.served,
+        denied_members=meter.denied,
+    )
+
+
+def _append(db: Session, record: query_log.QueryRecord) -> None:
+    """Record one decision and commit it. Never guarded.
+
+    ``read_bi._append`` says the same thing and for the same reason: a read that
+    cannot be recorded is not served, and the caller gets the failure rather than
+    the data.
+    """
+
+    query_log.record(db, record)
+    db.commit()
+
+
+@contextmanager
+def _metered(db: Session, access: BiReadAccess, route: str, *question: object) -> Iterator[_Meter]:
+    """Meter one request, and leave exactly one ``bi_query_log`` row behind it.
+
+    The budget is spent by ROWS, so a request that raised before writing one was
+    free — and the refusals are precisely the requests a probe loop makes. Every
+    route of this module runs inside this block for that reason: a dashboard id
+    this identity may not open is 404, one they may open but do not own is 403 on a
+    mutation, and a state clash is 409, so the responses tell an attacker which
+    ids exist and which of them they can read. Metering does not remove that
+    difference; it bounds how many times it can be asked.
+
+    **The row survives the raise, and nothing else does.** A refusal can be raised
+    with a mutation already staged — ``content.create_dashboard`` flushes before it
+    refuses a duplicate — so the session is rolled back BEFORE the row is written:
+    the commit that lands the meter must never carry a half-applied write, and a
+    row that the raise rolled back would meter nothing.
+
+    The decision is this function's alone. ``allowed`` means the request was
+    SERVED, which is what ``bi_query_log.decision`` means everywhere (it is the
+    authorization decision, never a description of the HTTP status); the members a
+    served request was refused ride along in ``denied_members``, exactly as they do
+    on a certified-pack row.
+    """
+
+    _budget(db, access)
+    meter = _Meter(query_hash=_question_digest(route, *question))
+    try:
+        yield meter
+    except BaseException as exc:
+        db.rollback()
+        meter.members(denied=_refused_members(exc) or meter.denied)
+        _append(db, _row(access, meter, decision=query_log.DECISION_DENIED))
+        raise
+    _append(db, _row(access, meter, decision=query_log.DECISION_ALLOWED))
+
+
+# --- refusals ----------------------------------------------------------------------------
 
 
 def _denied(cat: Catalogue, exc: content.MembersDenied) -> HTTPException:
@@ -455,29 +669,29 @@ def list_bi_dashboards(bank_id: str, db: DbSession, access: BiRead) -> BiDashboa
     """
 
     _ = bank_id
-    _budget(db, access)
-    dashboards = content.reachable_dashboards(
-        db,
-        organization_id=access.ctx.organization_id,
-        bank_id=access.bank.id,
-        viewer_id=access.principal_user_id,
-    )
-    identities = _identities(
-        db,
-        access.ctx.organization_id,
-        [dashboard.owner_user_id for dashboard in dashboards],
-    )
-    live = content.current_versions(db, dashboards)
-    summaries = [
-        _summary(
-            dashboard,
-            widget_count=_widget_count(live.get(dashboard.id)),
-            identities=identities,
-            caller=access.principal_user_id,
+    with _metered(db, access, "dashboards.list"):
+        dashboards = content.reachable_dashboards(
+            db,
+            organization_id=access.ctx.organization_id,
+            bank_id=access.bank.id,
+            viewer_id=access.principal_user_id,
         )
-        for dashboard in dashboards
-    ]
-    return BiDashboardListRead(dashboards=summaries)
+        identities = _identities(
+            db,
+            access.ctx.organization_id,
+            [dashboard.owner_user_id for dashboard in dashboards],
+        )
+        live = content.current_versions(db, dashboards)
+        summaries = [
+            _summary(
+                dashboard,
+                widget_count=_widget_count(live.get(dashboard.id)),
+                identities=identities,
+                caller=access.principal_user_id,
+            )
+            for dashboard in dashboards
+        ]
+        return BiDashboardListRead(dashboards=summaries)
 
 
 def _widget_count(version: BiDashboardVersion | None) -> int:
@@ -509,62 +723,62 @@ def create_bi_dashboard(
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    if payload.from_pack is not None:
+    with _metered(db, access, "dashboards.create", _payload_digest(payload)):
+        cat = catalogue()
+        if payload.from_pack is not None:
+            try:
+                spec, pack_description = content.spec_from_pack(payload.from_pack)
+            except content.PackNotAvailable as exc:
+                raise _not_found(exc) from exc
+            # The caller names their own copy; the pack's description stands in when
+            # they said nothing, because a copy with no description is harder to tell
+            # apart from the six others on the list than one carrying the original's.
+            title, description = payload.title, payload.description or pack_description
+        else:
+            assert payload.spec is not None  # noqa: S101 - the request model refuses neither
+            spec, title, description = payload.spec, payload.title, payload.description
+        _authorized_canvas(db, access, cat, spec)
         try:
-            spec, pack_description = content.spec_from_pack(payload.from_pack)
-        except content.PackNotAvailable as exc:
-            raise _not_found(exc) from exc
-        # The caller names their own copy; the pack's description stands in when
-        # they said nothing, because a copy with no description is harder to tell
-        # apart from the six others on the list than one carrying the original's.
-        title, description = payload.title, payload.description or pack_description
-    else:
-        assert payload.spec is not None  # noqa: S101 - the request model refuses neither
-        spec, title, description = payload.spec, payload.title, payload.description
-    _authorized_canvas(db, access, cat, spec)
-    try:
-        dashboard, version = content.create_dashboard(
+            dashboard, version = content.create_dashboard(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                owner_user_id=access.principal_user_id,
+                title=title,
+                description=description,
+                visibility=payload.visibility,
+                visibility_role=payload.visibility_role,
+                spec=spec,
+                source_pack=payload.from_pack,
+            )
+        except content.BiContentError as exc:
+            raise _conflict("bi_dashboard_refused", exc) from exc
+        audit.record_event(
             db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            owner_user_id=access.principal_user_id,
-            title=title,
-            description=description,
-            visibility=payload.visibility,
-            visibility_role=payload.visibility_role,
-            spec=spec,
-            source_pack=payload.from_pack,
+            access.ctx,
+            event_type=EVENT_DASHBOARD_CREATED,
+            entity_type=ENTITY_DASHBOARD,
+            entity_id=dashboard.id,
+            details={
+                "bank_id": access.bank.id,
+                "title": title,
+                "visibility": payload.visibility,
+                "visibility_role": payload.visibility_role,
+                "source_pack": payload.from_pack,
+                "widgets": len(spec.widgets),
+                "spec_digest": version.spec_digest,
+                "catalogue_version": CATALOGUE_VERSION,
+            },
         )
-    except content.BiContentError as exc:
-        raise _conflict("bi_dashboard_refused", exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_DASHBOARD_CREATED,
-        entity_type=ENTITY_DASHBOARD,
-        entity_id=dashboard.id,
-        details={
-            "bank_id": access.bank.id,
-            "title": title,
-            "visibility": payload.visibility,
-            "visibility_role": payload.visibility_role,
-            "source_pack": payload.from_pack,
-            "widgets": len(spec.widgets),
-            "spec_digest": version.spec_digest,
-            "catalogue_version": CATALOGUE_VERSION,
-        },
-    )
-    db.commit()
-    db.refresh(dashboard)
-    identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
-    return _summary(
-        dashboard,
-        widget_count=len(spec.widgets),
-        identities=identities,
-        caller=access.principal_user_id,
-    )
+        db.commit()
+        db.refresh(dashboard)
+        identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
+        return _summary(
+            dashboard,
+            widget_count=len(spec.widgets),
+            identities=identities,
+            caller=access.principal_user_id,
+        )
 
 
 @router.get(
@@ -589,55 +803,42 @@ def get_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest is 
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    try:
-        dashboard = content.load_dashboard(
-            db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            dashboard_id=dashboard_id,
-            viewer_id=access.principal_user_id,
-        )
-    except content.DashboardNotFound as exc:
-        raise _not_found(exc) from exc
-    version = content.current_version(db, dashboard)
-    spec = _stored_spec(version)
-    authority = content.ViewerAuthority(
-        db=db,
-        ctx=access.ctx,
-        bank=access.bank,
-        cat=cat,
-        surface=content.DASHBOARD_SURFACE,
-    )
-    canvas = content.resolve_widgets(spec, as_of=as_of, authority=authority)
-    # The read is recorded before it is served, like every other BI read, and the
-    # members this reader was refused go in the row and NOT in the response: that
-    # is where an operator sees which grant is missing.
-    query_log.record(
-        db,
-        query_log.QueryRecord(
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            principal_user_id=access.principal_user_id,
+    with _metered(db, access, "dashboards.read", dashboard_id, as_of) as meter:
+        cat = catalogue()
+        try:
+            dashboard = content.load_dashboard(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                dashboard_id=dashboard_id,
+                viewer_id=access.principal_user_id,
+            )
+        except content.DashboardNotFound as exc:
+            raise _not_found(exc) from exc
+        version = content.current_version(db, dashboard)
+        spec = _stored_spec(version)
+        authority = content.ViewerAuthority(
+            db=db,
+            ctx=access.ctx,
+            bank=access.bank,
+            cat=cat,
             surface=content.DASHBOARD_SURFACE,
-            query_hash=content.dashboard_digest(dashboard, as_of=as_of),
-            decision=query_log.DECISION_ALLOWED,
-            catalogue_version=CATALOGUE_VERSION,
-            member_ids=canvas.served_members,
-            denied_members=canvas.denied_members,
-        ),
-    )
-    db.commit()
-    identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
-    return _dashboard_read(
-        dashboard,
-        spec,
-        canvas,
-        as_of=as_of,
-        identities=identities,
-        caller=access.principal_user_id,
-    )
+        )
+        canvas = content.resolve_widgets(spec, as_of=as_of, authority=authority)
+        # The members this reader was refused go in the row and NOT in the response:
+        # that is where an operator sees which grant is missing. The row itself is
+        # written by ``_metered`` on the way out, so there is exactly one of it
+        # whatever this request turned out to be.
+        meter.members(served=canvas.served_members, denied=canvas.denied_members)
+        identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
+        return _dashboard_read(
+            dashboard,
+            spec,
+            canvas,
+            as_of=as_of,
+            identities=identities,
+            caller=access.principal_user_id,
+        )
 
 
 @router.put(
@@ -660,66 +861,66 @@ def update_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest 
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    try:
-        dashboard = content.load_dashboard(
+    with _metered(db, access, "dashboards.update", dashboard_id, _payload_digest(payload)):
+        cat = catalogue()
+        try:
+            dashboard = content.load_dashboard(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                dashboard_id=dashboard_id,
+                viewer_id=access.principal_user_id,
+            )
+        except content.DashboardNotFound as exc:
+            raise _not_found(exc) from exc
+        try:
+            content.require_owner(dashboard, actor_user_id=access.principal_user_id)
+        except content.NotTheOwner as exc:
+            raise _forbidden(exc) from exc
+        _authorized_canvas(db, access, cat, payload.spec)
+        try:
+            version = content.update_dashboard(
+                db,
+                dashboard,
+                actor_user_id=access.principal_user_id,
+                title=payload.title,
+                description=payload.description,
+                visibility=payload.visibility,
+                visibility_role=payload.visibility_role,
+                spec=payload.spec,
+                change_note=payload.change_note,
+            )
+        except content.NotTheOwner as exc:
+            raise _forbidden(exc) from exc
+        except content.BiContentError as exc:
+            raise _conflict("bi_dashboard_refused", exc) from exc
+        audit.record_event(
             db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            dashboard_id=dashboard_id,
-            viewer_id=access.principal_user_id,
+            access.ctx,
+            event_type=EVENT_DASHBOARD_UPDATED,
+            entity_type=ENTITY_DASHBOARD,
+            entity_id=dashboard.id,
+            details={
+                "bank_id": access.bank.id,
+                "version": version.version,
+                "title": payload.title,
+                "visibility": payload.visibility,
+                "visibility_role": payload.visibility_role,
+                "change_note": payload.change_note,
+                "widgets": len(payload.spec.widgets),
+                "spec_digest": version.spec_digest,
+                "catalogue_version": CATALOGUE_VERSION,
+            },
         )
-    except content.DashboardNotFound as exc:
-        raise _not_found(exc) from exc
-    try:
-        content.require_owner(dashboard, actor_user_id=access.principal_user_id)
-    except content.NotTheOwner as exc:
-        raise _forbidden(exc) from exc
-    _authorized_canvas(db, access, cat, payload.spec)
-    try:
-        version = content.update_dashboard(
-            db,
+        db.commit()
+        db.refresh(dashboard)
+        identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
+        return _summary(
             dashboard,
-            actor_user_id=access.principal_user_id,
-            title=payload.title,
-            description=payload.description,
-            visibility=payload.visibility,
-            visibility_role=payload.visibility_role,
-            spec=payload.spec,
-            change_note=payload.change_note,
+            widget_count=len(payload.spec.widgets),
+            identities=identities,
+            caller=access.principal_user_id,
         )
-    except content.NotTheOwner as exc:
-        raise _forbidden(exc) from exc
-    except content.BiContentError as exc:
-        raise _conflict("bi_dashboard_refused", exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_DASHBOARD_UPDATED,
-        entity_type=ENTITY_DASHBOARD,
-        entity_id=dashboard.id,
-        details={
-            "bank_id": access.bank.id,
-            "version": version.version,
-            "title": payload.title,
-            "visibility": payload.visibility,
-            "visibility_role": payload.visibility_role,
-            "change_note": payload.change_note,
-            "widgets": len(payload.spec.widgets),
-            "spec_digest": version.spec_digest,
-            "catalogue_version": CATALOGUE_VERSION,
-        },
-    )
-    db.commit()
-    db.refresh(dashboard)
-    identities = _identities(db, access.ctx.organization_id, [dashboard.owner_user_id])
-    return _summary(
-        dashboard,
-        widget_count=len(payload.spec.widgets),
-        identities=identities,
-        caller=access.principal_user_id,
-    )
 
 
 @router.delete(
@@ -733,46 +934,46 @@ def delete_bi_dashboard(
     """Delete a dashboard, its history and its shares. Owner only."""
 
     _ = bank_id
-    _budget(db, access)
-    try:
-        dashboard = content.load_dashboard(
+    with _metered(db, access, "dashboards.delete", dashboard_id):
+        try:
+            dashboard = content.load_dashboard(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                dashboard_id=dashboard_id,
+                viewer_id=access.principal_user_id,
+            )
+        except content.DashboardNotFound as exc:
+            raise _not_found(exc) from exc
+        try:
+            content.require_owner(dashboard, actor_user_id=access.principal_user_id)
+        except content.NotTheOwner as exc:
+            raise _forbidden(exc) from exc
+        audit.record_event(
             db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            dashboard_id=dashboard_id,
-            viewer_id=access.principal_user_id,
+            access.ctx,
+            event_type=EVENT_DASHBOARD_DELETED,
+            entity_type=ENTITY_DASHBOARD,
+            entity_id=dashboard.id,
+            details={
+                "bank_id": access.bank.id,
+                "title": dashboard.title,
+                "versions": dashboard.current_version,
+            },
         )
-    except content.DashboardNotFound as exc:
-        raise _not_found(exc) from exc
-    try:
-        content.require_owner(dashboard, actor_user_id=access.principal_user_id)
-    except content.NotTheOwner as exc:
-        raise _forbidden(exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_DASHBOARD_DELETED,
-        entity_type=ENTITY_DASHBOARD,
-        entity_id=dashboard.id,
-        details={
-            "bank_id": access.bank.id,
-            "title": dashboard.title,
-            "versions": dashboard.current_version,
-        },
-    )
-    # A Core delete naming its table: the plane guard resolves a write's TARGET
-    # statically, and the database's own ``ON DELETE CASCADE`` takes the versions
-    # and the shares with it (no ORM relationship is configured, so this is what
-    # ``db.delete(dashboard)`` did too).
-    db.execute(
-        delete(BiDashboard).where(
-            BiDashboard.id == dashboard.id,
-            BiDashboard.organization_id == access.ctx.organization_id,
-            BiDashboard.bank_id == access.bank.id,
+        # A Core delete naming its table: the plane guard resolves a write's TARGET
+        # statically, and the database's own ``ON DELETE CASCADE`` takes the versions
+        # and the shares with it (no ORM relationship is configured, so this is what
+        # ``db.delete(dashboard)`` did too).
+        db.execute(
+            delete(BiDashboard).where(
+                BiDashboard.id == dashboard.id,
+                BiDashboard.organization_id == access.ctx.organization_id,
+                BiDashboard.bank_id == access.bank.id,
+            )
         )
-    )
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -791,39 +992,39 @@ def list_bi_dashboard_versions(
     """
 
     _ = bank_id
-    _budget(db, access)
-    try:
-        dashboard = content.load_dashboard(
-            db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            dashboard_id=dashboard_id,
-            viewer_id=access.principal_user_id,
-        )
-    except content.DashboardNotFound as exc:
-        raise _not_found(exc) from exc
-    rows = content.versions(db, dashboard)
-    identities = _identities(
-        db, access.ctx.organization_id, [row.created_by_user_id for row in rows]
-    )
-    return BiDashboardVersionListRead(
-        dashboard_id=dashboard.id,
-        versions=[
-            BiDashboardVersionRead(
-                version=row.version,
-                title=row.title,
-                description=row.description,
-                change_note=row.change_note,
-                widget_count=len(_stored_spec(row).widgets),
-                spec_digest=row.spec_digest,
-                created_by_user_id=row.created_by_user_id,
-                created_by_display_name=_display_name(identities, row.created_by_user_id),
-                created_at=row.created_at,
-                current=row.version == dashboard.current_version,
+    with _metered(db, access, "dashboards.versions", dashboard_id):
+        try:
+            dashboard = content.load_dashboard(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                dashboard_id=dashboard_id,
+                viewer_id=access.principal_user_id,
             )
-            for row in rows
-        ],
-    )
+        except content.DashboardNotFound as exc:
+            raise _not_found(exc) from exc
+        rows = content.versions(db, dashboard)
+        identities = _identities(
+            db, access.ctx.organization_id, [row.created_by_user_id for row in rows]
+        )
+        return BiDashboardVersionListRead(
+            dashboard_id=dashboard.id,
+            versions=[
+                BiDashboardVersionRead(
+                    version=row.version,
+                    title=row.title,
+                    description=row.description,
+                    change_note=row.change_note,
+                    widget_count=len(_stored_spec(row).widgets),
+                    spec_digest=row.spec_digest,
+                    created_by_user_id=row.created_by_user_id,
+                    created_by_display_name=_display_name(identities, row.created_by_user_id),
+                    created_at=row.created_at,
+                    current=row.version == dashboard.current_version,
+                )
+                for row in rows
+            ],
+        )
 
 
 @router.get(
@@ -841,19 +1042,19 @@ def list_bi_dashboard_shares(
     """
 
     _ = bank_id
-    _budget(db, access)
-    dashboard = _owned_dashboard(db, access, dashboard_id)
-    return BiDashboardShareListRead(
-        shares=[
-            BiDashboardShareRead(
-                user_id=user.id,
-                display_name=user.display_name,
-                email=user.email,
-                shared_at=share.created_at,
-            )
-            for share, user in content.shares(db, dashboard)
-        ]
-    )
+    with _metered(db, access, "dashboards.shares.read", dashboard_id):
+        dashboard = _owned_dashboard(db, access, dashboard_id)
+        return BiDashboardShareListRead(
+            shares=[
+                BiDashboardShareRead(
+                    user_id=user.id,
+                    display_name=user.display_name,
+                    email=user.email,
+                    shared_at=share.created_at,
+                )
+                for share, user in content.shares(db, dashboard)
+            ]
+        )
 
 
 @router.put(
@@ -876,44 +1077,44 @@ def set_bi_dashboard_shares(  # noqa: PLR0913 - FastAPI injects db/access
     """
 
     _ = bank_id
-    _budget(db, access)
-    dashboard = _owned_dashboard(db, access, dashboard_id)
-    try:
-        added, removed = content.set_shares(
-            db,
-            dashboard,
-            actor_user_id=access.principal_user_id,
-            user_ids=payload.user_ids,
-        )
-    except content.NotTheOwner as exc:
-        raise _forbidden(exc) from exc
-    except content.BiContentError as exc:
-        raise _conflict("bi_dashboard_share_refused", exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_DASHBOARD_SHARED,
-        entity_type=ENTITY_DASHBOARD,
-        entity_id=dashboard.id,
-        details={
-            "bank_id": access.bank.id,
-            "added": [str(user_id) for user_id in added],
-            "removed": [str(user_id) for user_id in removed],
-            "reaches": len(payload.user_ids),
-        },
-    )
-    db.commit()
-    return BiDashboardShareListRead(
-        shares=[
-            BiDashboardShareRead(
-                user_id=user.id,
-                display_name=user.display_name,
-                email=user.email,
-                shared_at=share.created_at,
+    with _metered(db, access, "dashboards.shares.set", dashboard_id, _payload_digest(payload)):
+        dashboard = _owned_dashboard(db, access, dashboard_id)
+        try:
+            added, removed = content.set_shares(
+                db,
+                dashboard,
+                actor_user_id=access.principal_user_id,
+                user_ids=payload.user_ids,
             )
-            for share, user in content.shares(db, dashboard)
-        ]
-    )
+        except content.NotTheOwner as exc:
+            raise _forbidden(exc) from exc
+        except content.BiContentError as exc:
+            raise _conflict("bi_dashboard_share_refused", exc) from exc
+        audit.record_event(
+            db,
+            access.ctx,
+            event_type=EVENT_DASHBOARD_SHARED,
+            entity_type=ENTITY_DASHBOARD,
+            entity_id=dashboard.id,
+            details={
+                "bank_id": access.bank.id,
+                "added": [str(user_id) for user_id in added],
+                "removed": [str(user_id) for user_id in removed],
+                "reaches": len(payload.user_ids),
+            },
+        )
+        db.commit()
+        return BiDashboardShareListRead(
+            shares=[
+                BiDashboardShareRead(
+                    user_id=user.id,
+                    display_name=user.display_name,
+                    email=user.email,
+                    shared_at=share.created_at,
+                )
+                for share, user in content.shares(db, dashboard)
+            ]
+        )
 
 
 def _authorized_canvas(
@@ -1023,32 +1224,38 @@ def validate_bi_measure_expression(
     """
 
     _ = bank_id
-    _budget(db, access)
-    try:
-        compiled = content.compile_expression(
-            db,
-            access.ctx,
-            access.bank,
-            payload.expression,
-            surface=content.DASHBOARD_SURFACE,
-        )
-    except content.ExpressionRefused as exc:
-        return BiMeasureValidationRead(valid=False, message=str(exc), position=exc.position)
-    except content.MembersDenied as exc:
+    with _metered(db, access, "measures.validate", _payload_digest(payload)) as meter:
+        try:
+            compiled = content.compile_expression(
+                db,
+                access.ctx,
+                access.bank,
+                payload.expression,
+                surface=content.DASHBOARD_SURFACE,
+            )
+        except content.ExpressionRefused as exc:
+            return BiMeasureValidationRead(valid=False, message=str(exc), position=exc.position)
+        except content.MembersDenied as exc:
+            # A verdict, not a refusal: the caller asked whether this formula is
+            # theirs to use and was ANSWERED, so the row stays ``allowed`` and
+            # carries the members — the same mixed-read convention a dashboard row
+            # follows. ``_metered`` cannot see this one, because no exception
+            # leaves the route, so the route names them itself.
+            meter.members(denied=exc.denied_members)
+            return BiMeasureValidationRead(
+                valid=False,
+                message=(
+                    "Your access does not cover every figure this formula uses. "
+                    "An Org Owner can grant the ones listed here."
+                ),
+                denied_members=list(exc.denied_members),
+            )
         return BiMeasureValidationRead(
-            valid=False,
-            message=(
-                "Your access does not cover every figure this formula uses. "
-                "An Org Owner can grant the ones listed here."
-            ),
-            denied_members=list(exc.denied_members),
+            valid=True,
+            message=content.EXPRESSION_ACCEPTED,
+            referenced_members=list(compiled.referenced_members),
+            referenced_member_labels=list(compiled.labels),
         )
-    return BiMeasureValidationRead(
-        valid=True,
-        message=content.EXPRESSION_ACCEPTED,
-        referenced_members=list(compiled.referenced_members),
-        referenced_member_labels=list(compiled.labels),
-    )
 
 
 @router.get(
@@ -1066,37 +1273,39 @@ def list_bi_measures(bank_id: str, db: DbSession, access: BiRead) -> BiMeasureLi
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    measures = content.readable_measures(
-        db,
-        access.ctx,
-        access.bank,
-        viewer_id=access.principal_user_id,
-        surface=content.DASHBOARD_SURFACE,
-    )
-    identities = _identities(
-        db,
-        access.ctx.organization_id,
-        [
-            user_id
-            for measure in measures
-            for user_id in (
-                measure.owner_user_id,
-                measure.proposed_by_user_id,
-                measure.approved_by_user_id,
-            )
-            if user_id is not None
-        ],
-    )
-    return BiMeasureListRead(
-        measures=[
-            _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
-            for measure in measures
-        ],
-        available_in_queries=True,
-        message=content.MEASURES_QUERYABLE,
-    )
+    with _metered(db, access, "measures.list"):
+        cat = catalogue()
+        measures = content.readable_measures(
+            db,
+            access.ctx,
+            access.bank,
+            viewer_id=access.principal_user_id,
+            surface=content.DASHBOARD_SURFACE,
+        )
+        identities = _identities(
+            db,
+            access.ctx.organization_id,
+            [
+                user_id
+                for measure in measures
+                for user_id in (
+                    measure.owner_user_id,
+                    measure.proposed_by_user_id,
+                    measure.approved_by_user_id,
+                )
+                if user_id is not None
+            ],
+        )
+        return BiMeasureListRead(
+            measures=[
+                _measure_read(
+                    measure, cat=cat, identities=identities, caller=access.principal_user_id
+                )
+                for measure in measures
+            ],
+            available_in_queries=True,
+            message=content.MEASURES_QUERYABLE,
+        )
 
 
 @router.post(
@@ -1116,42 +1325,44 @@ def create_bi_measure(
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    compiled = _compiled(db, access, payload.expression)
-    try:
-        measure = content.create_measure(
+    with _metered(db, access, "measures.create", _payload_digest(payload)):
+        cat = catalogue()
+        compiled = _compiled(db, access, payload.expression)
+        try:
+            measure = content.create_measure(
+                db,
+                organization_id=access.ctx.organization_id,
+                bank_id=access.bank.id,
+                owner_user_id=access.principal_user_id,
+                measure_key=payload.measure_key,
+                label=payload.label,
+                description=payload.description,
+                compiled=compiled,
+                value_type=payload.value_type,
+                favourable_direction=payload.favourable_direction,
+            )
+        except content.MeasureKeyUnavailable as exc:
+            raise _conflict("bi_measure_key_unavailable", exc) from exc
+        audit.record_event(
             db,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            owner_user_id=access.principal_user_id,
-            measure_key=payload.measure_key,
-            label=payload.label,
-            description=payload.description,
-            compiled=compiled,
-            value_type=payload.value_type,
-            favourable_direction=payload.favourable_direction,
+            access.ctx,
+            event_type=EVENT_MEASURE_CREATED,
+            entity_type=ENTITY_MEASURE,
+            entity_id=measure.id,
+            details={
+                "bank_id": access.bank.id,
+                "measure_key": measure.measure_key,
+                "expression_digest": measure.expression_digest,
+                "referenced_members": list(compiled.referenced_members),
+                "catalogue_version": CATALOGUE_VERSION,
+            },
         )
-    except content.MeasureKeyUnavailable as exc:
-        raise _conflict("bi_measure_key_unavailable", exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_MEASURE_CREATED,
-        entity_type=ENTITY_MEASURE,
-        entity_id=measure.id,
-        details={
-            "bank_id": access.bank.id,
-            "measure_key": measure.measure_key,
-            "expression_digest": measure.expression_digest,
-            "referenced_members": list(compiled.referenced_members),
-            "catalogue_version": CATALOGUE_VERSION,
-        },
-    )
-    db.commit()
-    db.refresh(measure)
-    identities = _identities(db, access.ctx.organization_id, [measure.owner_user_id])
-    return _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
+        db.commit()
+        db.refresh(measure)
+        identities = _identities(db, access.ctx.organization_id, [measure.owner_user_id])
+        return _measure_read(
+            measure, cat=cat, identities=identities, caller=access.principal_user_id
+        )
 
 
 @router.get(
@@ -1163,23 +1374,25 @@ def get_bi_measure(bank_id: str, measure_id: UUID, db: DbSession, access: BiRead
     """One calculated measure, if this identity may read it."""
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    measure = _readable_measure(db, access, measure_id)
-    identities = _identities(
-        db,
-        access.ctx.organization_id,
-        [
-            user_id
-            for user_id in (
-                measure.owner_user_id,
-                measure.proposed_by_user_id,
-                measure.approved_by_user_id,
-            )
-            if user_id is not None
-        ],
-    )
-    return _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
+    with _metered(db, access, "measures.read", measure_id):
+        cat = catalogue()
+        measure = _readable_measure(db, access, measure_id)
+        identities = _identities(
+            db,
+            access.ctx.organization_id,
+            [
+                user_id
+                for user_id in (
+                    measure.owner_user_id,
+                    measure.proposed_by_user_id,
+                    measure.approved_by_user_id,
+                )
+                if user_id is not None
+            ],
+        )
+        return _measure_read(
+            measure, cat=cat, identities=identities, caller=access.principal_user_id
+        )
 
 
 @router.put(
@@ -1202,41 +1415,43 @@ def update_bi_measure(  # noqa: PLR0913 - FastAPI injects db/access
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    measure = _readable_measure(db, access, measure_id)
-    if measure.owner_user_id != access.principal_user_id:
-        raise _forbidden(content.NotTheOwner("calculated measure"))
-    compiled = _compiled(db, access, payload.expression)
-    was_certified = measure.state == "bank_certified"
-    content.update_measure(
-        db,
-        measure,
-        actor_user_id=access.principal_user_id,
-        label=payload.label,
-        description=payload.description,
-        compiled=compiled,
-        value_type=payload.value_type,
-        favourable_direction=payload.favourable_direction,
-    )
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_MEASURE_UPDATED,
-        entity_type=ENTITY_MEASURE,
-        entity_id=measure.id,
-        details={
-            "bank_id": access.bank.id,
-            "measure_key": measure.measure_key,
-            "expression_digest": measure.expression_digest,
-            "referenced_members": list(compiled.referenced_members),
-            "certification_cleared": was_certified and measure.state != "bank_certified",
-        },
-    )
-    db.commit()
-    db.refresh(measure)
-    identities = _identities(db, access.ctx.organization_id, [measure.owner_user_id])
-    return _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
+    with _metered(db, access, "measures.update", measure_id, _payload_digest(payload)):
+        cat = catalogue()
+        measure = _readable_measure(db, access, measure_id)
+        if measure.owner_user_id != access.principal_user_id:
+            raise _forbidden(content.NotTheOwner("calculated measure"))
+        compiled = _compiled(db, access, payload.expression)
+        was_certified = measure.state == "bank_certified"
+        content.update_measure(
+            db,
+            measure,
+            actor_user_id=access.principal_user_id,
+            label=payload.label,
+            description=payload.description,
+            compiled=compiled,
+            value_type=payload.value_type,
+            favourable_direction=payload.favourable_direction,
+        )
+        audit.record_event(
+            db,
+            access.ctx,
+            event_type=EVENT_MEASURE_UPDATED,
+            entity_type=ENTITY_MEASURE,
+            entity_id=measure.id,
+            details={
+                "bank_id": access.bank.id,
+                "measure_key": measure.measure_key,
+                "expression_digest": measure.expression_digest,
+                "referenced_members": list(compiled.referenced_members),
+                "certification_cleared": was_certified and measure.state != "bank_certified",
+            },
+        )
+        db.commit()
+        db.refresh(measure)
+        identities = _identities(db, access.ctx.organization_id, [measure.owner_user_id])
+        return _measure_read(
+            measure, cat=cat, identities=identities, caller=access.principal_user_id
+        )
 
 
 @router.delete(
@@ -1248,31 +1463,31 @@ def delete_bi_measure(bank_id: str, measure_id: UUID, db: DbSession, access: BiR
     """Delete a calculated measure. Owner only."""
 
     _ = bank_id
-    _budget(db, access)
-    measure = _readable_measure(db, access, measure_id)
-    if measure.owner_user_id != access.principal_user_id:
-        raise _forbidden(content.NotTheOwner("calculated measure"))
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_MEASURE_DELETED,
-        entity_type=ENTITY_MEASURE,
-        entity_id=measure.id,
-        details={
-            "bank_id": access.bank.id,
-            "measure_key": measure.measure_key,
-            "state": measure.state,
-        },
-    )
-    db.execute(
-        delete(BiMeasure).where(
-            BiMeasure.id == measure.id,
-            BiMeasure.organization_id == access.ctx.organization_id,
-            BiMeasure.bank_id == access.bank.id,
+    with _metered(db, access, "measures.delete", measure_id):
+        measure = _readable_measure(db, access, measure_id)
+        if measure.owner_user_id != access.principal_user_id:
+            raise _forbidden(content.NotTheOwner("calculated measure"))
+        audit.record_event(
+            db,
+            access.ctx,
+            event_type=EVENT_MEASURE_DELETED,
+            entity_type=ENTITY_MEASURE,
+            entity_id=measure.id,
+            details={
+                "bank_id": access.bank.id,
+                "measure_key": measure.measure_key,
+                "state": measure.state,
+            },
         )
-    )
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+        db.execute(
+            delete(BiMeasure).where(
+                BiMeasure.id == measure.id,
+                BiMeasure.organization_id == access.ctx.organization_id,
+                BiMeasure.bank_id == access.bank.id,
+            )
+        )
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -1290,38 +1505,40 @@ def propose_bi_measure_promotion(  # noqa: PLR0913 - FastAPI injects db/access
     """The maker's half of a promotion: put a personal measure up for certification."""
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    measure = _readable_measure(db, access, measure_id)
-    try:
-        content.propose_measure(
-            db, measure, actor_user_id=access.principal_user_id, reason=payload.reason
+    with _metered(db, access, "measures.propose", measure_id, _payload_digest(payload)):
+        cat = catalogue()
+        measure = _readable_measure(db, access, measure_id)
+        try:
+            content.propose_measure(
+                db, measure, actor_user_id=access.principal_user_id, reason=payload.reason
+            )
+        except content.NotTheOwner as exc:
+            raise _forbidden(exc) from exc
+        except content.MeasureStateConflict as exc:
+            raise _conflict("bi_measure_state_conflict", exc) from exc
+        audit.record_event(
+            db,
+            access.ctx,
+            event_type=EVENT_MEASURE_PROPOSED,
+            entity_type=ENTITY_MEASURE,
+            entity_id=measure.id,
+            details={
+                "bank_id": access.bank.id,
+                "measure_key": measure.measure_key,
+                "expression_digest": measure.expression_digest,
+                "reason": payload.reason,
+            },
         )
-    except content.NotTheOwner as exc:
-        raise _forbidden(exc) from exc
-    except content.MeasureStateConflict as exc:
-        raise _conflict("bi_measure_state_conflict", exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=EVENT_MEASURE_PROPOSED,
-        entity_type=ENTITY_MEASURE,
-        entity_id=measure.id,
-        details={
-            "bank_id": access.bank.id,
-            "measure_key": measure.measure_key,
-            "expression_digest": measure.expression_digest,
-            "reason": payload.reason,
-        },
-    )
-    db.commit()
-    db.refresh(measure)
-    identities = _identities(
-        db,
-        access.ctx.organization_id,
-        [measure.owner_user_id, access.principal_user_id],
-    )
-    return _measure_read(measure, cat=cat, identities=identities, caller=access.principal_user_id)
+        db.commit()
+        db.refresh(measure)
+        identities = _identities(
+            db,
+            access.ctx.organization_id,
+            [measure.owner_user_id, access.principal_user_id],
+        )
+        return _measure_read(
+            measure, cat=cat, identities=identities, caller=access.principal_user_id
+        )
 
 
 @router.post(
@@ -1345,72 +1562,72 @@ def decide_bi_measure_promotion(  # noqa: PLR0913 - FastAPI injects db/access
     """
 
     _ = bank_id
-    _budget(db, access)
-    cat = catalogue()
-    measure = _readable_measure(db, access, measure_id)
-    try:
-        _, sod = content.decide_promotion(
+    with _metered(db, access, "measures.decide", measure_id, _payload_digest(payload)):
+        cat = catalogue()
+        measure = _readable_measure(db, access, measure_id)
+        try:
+            _, sod = content.decide_promotion(
+                db,
+                access.ctx,
+                access.bank,
+                measure,
+                actor_user_id=access.principal_user_id,
+                decision=payload.decision,
+                reason=payload.reason,
+                expression_digest_reviewed=payload.expression_digest,
+                surface=content.DASHBOARD_SURFACE,
+            )
+        except grant_administration.SodPolicyBlocked as exc:
+            raise _sod_blocked(exc) from exc
+        except content.MeasureStateConflict as exc:
+            raise _conflict("bi_measure_state_conflict", exc) from exc
+        except content.ExpressionMoved as exc:
+            raise _conflict("bi_measure_expression_moved", exc) from exc
+        except content.MembersDenied as exc:
+            raise _denied(cat, exc) from exc
+        except content.ExpressionRefused as exc:
+            raise _unprocessable(exc) from exc
+        audit.record_event(
             db,
             access.ctx,
-            access.bank,
-            measure,
-            actor_user_id=access.principal_user_id,
-            decision=payload.decision,
-            reason=payload.reason,
-            expression_digest_reviewed=payload.expression_digest,
-            surface=content.DASHBOARD_SURFACE,
+            event_type=(
+                EVENT_MEASURE_CERTIFIED if payload.decision == "approve" else EVENT_MEASURE_REJECTED
+            ),
+            entity_type=ENTITY_MEASURE,
+            entity_id=measure.id,
+            details={
+                "bank_id": access.bank.id,
+                "measure_key": measure.measure_key,
+                "decision": payload.decision,
+                "reason": payload.reason,
+                "reviewed_expression_digest": payload.expression_digest,
+                "approved_expression_digest": measure.approved_expression_digest,
+                "sod_outcome": sod.outcome.value,
+                "sod_findings": [finding.code for finding in sod.findings],
+            },
         )
-    except grant_administration.SodPolicyBlocked as exc:
-        raise _sod_blocked(exc) from exc
-    except content.MeasureStateConflict as exc:
-        raise _conflict("bi_measure_state_conflict", exc) from exc
-    except content.ExpressionMoved as exc:
-        raise _conflict("bi_measure_expression_moved", exc) from exc
-    except content.MembersDenied as exc:
-        raise _denied(cat, exc) from exc
-    except content.ExpressionRefused as exc:
-        raise _unprocessable(exc) from exc
-    audit.record_event(
-        db,
-        access.ctx,
-        event_type=(
-            EVENT_MEASURE_CERTIFIED if payload.decision == "approve" else EVENT_MEASURE_REJECTED
-        ),
-        entity_type=ENTITY_MEASURE,
-        entity_id=measure.id,
-        details={
-            "bank_id": access.bank.id,
-            "measure_key": measure.measure_key,
-            "decision": payload.decision,
-            "reason": payload.reason,
-            "reviewed_expression_digest": payload.expression_digest,
-            "approved_expression_digest": measure.approved_expression_digest,
-            "sod_outcome": sod.outcome.value,
-            "sod_findings": [finding.code for finding in sod.findings],
-        },
-    )
-    db.commit()
-    db.refresh(measure)
-    identities = _identities(
-        db,
-        access.ctx.organization_id,
-        [
-            user_id
-            for user_id in (
-                measure.owner_user_id,
-                measure.proposed_by_user_id,
-                measure.approved_by_user_id,
-                access.principal_user_id,
-            )
-            if user_id is not None
-        ],
-    )
-    return BiMeasureDecisionRead(
-        measure=_measure_read(
-            measure, cat=cat, identities=identities, caller=access.principal_user_id
-        ),
-        sod_decision=_sod_read(sod),
-    )
+        db.commit()
+        db.refresh(measure)
+        identities = _identities(
+            db,
+            access.ctx.organization_id,
+            [
+                user_id
+                for user_id in (
+                    measure.owner_user_id,
+                    measure.proposed_by_user_id,
+                    measure.approved_by_user_id,
+                    access.principal_user_id,
+                )
+                if user_id is not None
+            ],
+        )
+        return BiMeasureDecisionRead(
+            measure=_measure_read(
+                measure, cat=cat, identities=identities, caller=access.principal_user_id
+            ),
+            sod_decision=_sod_read(sod),
+        )
 
 
 def _compiled(db: Session, access: BiReadAccess, expression: str) -> content.CompiledExpression:

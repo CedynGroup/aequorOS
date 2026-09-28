@@ -1475,7 +1475,16 @@ _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 #: covenant its obligation).  ``path_prefixes`` bind path identifiers; body and
 #: query identifiers resolve through :data:`REFERENCE_FIELDS`.
 OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
-    ObjectKind("bank", _bank, bank_scoped=False),
+    # The account-plane institution directory addresses a bank by
+    # ``{institution_id}``, so that path prefix resolves to the bank identity
+    # kind — the same object ``bank_id`` names elsewhere, reached under a
+    # different parameter name.
+    ObjectKind(
+        "bank",
+        _bank,
+        ("/api/v1/organization/institutions/{institution_id}",),
+        bank_scoped=False,
+    ),
     ObjectKind("user", _user, bank_scoped=False),
     ObjectKind("period", _period, (f"{_BANK_PREFIX}/reporting-periods/{{period_id}}",)),
     ObjectKind(

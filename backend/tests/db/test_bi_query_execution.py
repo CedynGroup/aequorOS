@@ -35,6 +35,7 @@ from app.models.bi_content import BiMeasure
 from app.schemas.bi import BiQuery
 from app.services.bi import execution
 from app.services.bi.compiler import compile_query
+from app.services.bi.content import expression_digest
 from app.services.bi.errors import BiQueryTimeout, InvalidQuery
 from app.services.bi.execution import execute, run_select
 from tests.api.helpers import ORG_1, USER_1
@@ -340,7 +341,14 @@ def calculated(db_session: Session, bank: Bank) -> Bank:
             )
         )
     expression = "PCT_CHANGE([m:loans.balance_rc], MONTH)"
-    digest = "0" * 64
+    # The REAL digest of the expression, not a placeholder. It was ``"0" * 64``,
+    # which stopped being loadable when ``compiler._certified_measures`` began
+    # recomputing the digest of ``approved_expression`` on read and refusing on
+    # mismatch (audit A9-10 — the stored digest could previously be doctored
+    # while both digest COLUMNS still agreed with each other). The production
+    # behaviour is right and the fixture was wrong; the hermetic twin of this
+    # test always computed a real digest, which is why only Postgres went red.
+    digest = expression_digest(expression)
     db_session.add(
         BiMeasure(
             organization_id=ORG_1,

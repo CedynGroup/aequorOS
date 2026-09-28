@@ -19,6 +19,7 @@ from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_authorization import router as authorization_router
 from app.features.manage_banks import router as banks_router
+from app.features.manage_bi_commentary import router as bi_commentary_router
 from app.features.manage_bi_content import router as bi_content_router
 from app.features.manage_bi_notifications import router as bi_notifications_router
 from app.features.manage_capital import router as capital_router
@@ -72,6 +73,7 @@ from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
 from app.features.read_bi import require_bi_enabled
 from app.features.read_bi import router as bi_read_router
+from app.features.read_bi_feeds import router as bi_feeds_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_feature_flags import router as feature_flags_router
@@ -252,6 +254,25 @@ v1_router.include_router(
 # created: it would keep sending after the feature was switched off.
 v1_router.include_router(
     bi_notifications_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# AI commentary on a reader's own insights, on the same two dependencies and in
+# the same order. The commentary engine shipped complete — job type, exclusive
+# ``ai`` lane, handler, model, migration, service package, 105 tests — and with
+# NO ROUTE, so no user could ask for a draft and ``request_commentary`` was
+# called by nobody. ``tests/architecture/test_job_enqueue_reachability.py`` is
+# what convicted it and is what keeps this mount honest: a job type whose only
+# enqueue site sits in a function no route reaches fails that guard by design.
+v1_router.include_router(
+    bi_commentary_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# The Power BI Stage B feed, on the same two dependencies and in the same order.
+# A feed is a BI read pulled by a machine, so it may never be reachable where an
+# interactive BI read is not: a deployment that switched BI off must not keep
+# serving a report server that was configured while it was on.
+v1_router.include_router(
+    bi_feeds_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
 )
 # ICAAP draft exports. No ``require_module_access``: that dependency answers

@@ -35,6 +35,7 @@ from sqlalchemy import inspect
 
 from app.db.base import Base
 from app.models.bi import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
+from app.models.bi_commentary import BI_COMMENTARY_TABLES
 from app.models.bi_content import BI_CONTENT_TABLES
 from app.models.bi_notifications import BI_NOTIFICATION_TABLES
 from tests.db.test_postgres_migrations import (
@@ -53,16 +54,52 @@ pytestmark = [
     ),
 ]
 
-ALL_BI_TABLES: tuple[str, ...] = (*BI_TABLES, *BI_CONTENT_TABLES, *BI_NOTIFICATION_TABLES)
+#: Every tenant table of the BI plane. ``BI_COMMENTARY_TABLES`` is listed
+#: separately from the rest because it is the one that is NOT ``bi_``-prefixed
+#: (see that constant's own comment for why the name is correct), and a subject
+#: derived from the prefix therefore left ``ai_commentary_drafts`` — its RLS, its
+#: composite parent key and its indexes — unverified against the migrated schema
+#: (audit A9-08).
+ALL_BI_TABLES: tuple[str, ...] = (
+    *BI_TABLES,
+    *BI_CONTENT_TABLES,
+    *BI_NOTIFICATION_TABLES,
+    *BI_COMMENTARY_TABLES,
+)
+
+#: The half of the subject the prefix rule governs. Kept separate so the
+#: completeness check below stays exact instead of becoming a ``>=``.
+PREFIXED_BI_TABLES: frozenset[str] = frozenset(ALL_BI_TABLES) - frozenset(BI_COMMENTARY_TABLES)
 PARTITIONED: frozenset[str] = frozenset((*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES))
 
 
 def test_the_subject_is_every_registered_bi_table() -> None:
     """A parity suite over a short list quietly stops covering the plane."""
     assert len(ALL_BI_TABLES) == len(set(ALL_BI_TABLES)), "a table is registered twice"
-    assert len(ALL_BI_TABLES) >= 23, ALL_BI_TABLES
+    assert len(ALL_BI_TABLES) >= 24, ALL_BI_TABLES
     declared = {name for name in Base.metadata.tables if name.startswith("bi_")}
-    assert set(ALL_BI_TABLES) == declared, sorted(set(ALL_BI_TABLES) ^ declared)
+    assert declared == PREFIXED_BI_TABLES, sorted(PREFIXED_BI_TABLES ^ declared)
+
+
+def test_the_subject_is_not_derived_from_the_bi_prefix_alone() -> None:
+    """The unprefixed BI table must be IN the subject, and really be unprefixed.
+
+    ``ai_commentary_drafts`` is deliberately not ``bi_``-named: the plane-boundary
+    guard derives the BI-writable set from that prefix, and this row is AI egress
+    evidence, not a mart. The correct name cost it every structural check keyed on
+    the prefix, this suite included (audit A9-08). This test fails in both
+    directions — if the table is dropped from the subject, and if someone
+    "tidies" it into the prefix, which would make the BI plane able to write it.
+    """
+
+    assert BI_COMMENTARY_TABLES, "the unprefixed BI table list is empty"
+    for name in BI_COMMENTARY_TABLES:
+        assert name in ALL_BI_TABLES, f"{name} is not in this suite's subject"
+        assert not name.startswith("bi_"), (
+            f"{name} is now bi_-prefixed, which makes it writable by the BI plane; "
+            "if that is intended, move it out of BI_COMMENTARY_TABLES deliberately"
+        )
+        assert name in Base.metadata.tables, f"{name} is not a mapped table"
 
 
 def test_primary_key_columns_and_their_ORDER_match_the_model(

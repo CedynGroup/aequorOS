@@ -367,6 +367,39 @@ def test_ensure_partition_functions_are_idempotent_and_install_rls(
     assert set(state) == {first, yearly}, "a cross-cadence child was created or one was dropped"
 
 
+#: Set in CI. When set, a privilege test may not SKIP for want of ``CREATEROLE``
+#: — it must run or fail. Audit finding A9-06: the one test that proves the
+#: ``SECURITY DEFINER`` partition functions work for a NON-OWNER worker skipped
+#: itself on every CI run, because the restricted migration role was created
+#: ``NOCREATEROLE`` and the test needs a second role to be a non-owner OF. The
+#: wholesale guard (``.github/scripts/assert_pytest_ran.py --min-executed``)
+#: cannot see one test abstaining inside a suite of hundreds that ran. A skip is
+#: the right behaviour on a developer's restricted connection and the wrong
+#: behaviour in the gate; this variable is how the two are told apart.
+_PRIVILEGE_TESTS_REQUIRED = "POSTGRES_PRIVILEGE_TESTS_REQUIRED"
+
+
+def _require_or_skip_privileges(reason: str) -> None:
+    """Skip locally, FAIL in the gate.
+
+    ``CREATEROLE`` does not imply ``BYPASSRLS``, so granting it to the CI test
+    role leaves every tenant-isolation assertion in this suite exercised exactly
+    as before — which is the property the workflow's own comment says must never
+    be weakened. On PostgreSQL 16 and later a ``CREATEROLE`` role may administer
+    only the roles it created itself, so the grant confers nothing over the
+    roles that already exist.
+    """
+
+    if os.getenv(_PRIVILEGE_TESTS_REQUIRED):
+        pytest.fail(
+            f"{reason} — but {_PRIVILEGE_TESTS_REQUIRED} is set, so this "
+            "environment is required to be able to run privilege tests. Grant "
+            "CREATEROLE to the test role (it does not confer BYPASSRLS) rather "
+            "than letting this proof abstain."
+        )
+    pytest.skip(reason)
+
+
 def _temporary_non_owner_role(admin: Connection, name: str) -> bool:
     """Create a NOLOGIN role the test connection can ``SET ROLE`` to.
 
@@ -413,7 +446,10 @@ def test_a_non_owner_worker_drops_and_recreates_children_only_through_the_functi
 
     with engine.connect() as admin:
         if not _temporary_non_owner_role(admin, role):
-            pytest.skip("TEST_DATABASE_URL role cannot create a second role (CREATEROLE).")
+            _require_or_skip_privileges(
+                "the TEST_DATABASE_URL role cannot create a second role (CREATEROLE), "
+                "so there is no non-owner to prove the definer functions for"
+            )
     try:
         # The documented path for a worker role created AFTER the migration:
         # the owner grants USAGE and EXECUTE; it never owns a table.

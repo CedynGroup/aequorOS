@@ -40,12 +40,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import MUTATION_ROLE_DEPENDENCY_NAMES
 from app.core.authorization import (
+    MACHINE_ROLE_BUNDLES,
     GrantorType,
     InstitutionScope,
     ModuleScope,
     PrincipalType,
     RoleBundle,
     SensitivityScope,
+    principal_bundle_compatible,
 )
 from app.core.config import get_settings
 from app.models import AuditEvent, AuthorizationBinding, Bank, Organization, User
@@ -1250,3 +1252,60 @@ def test_every_content_mutation_is_credited_as_guarded(db_client: TestClient) ->
         assert "require_bi_read" in names, route.path
         assert "resolve_tenant_bank" in names, route.path
         assert "require_bi_enabled" in names, route.path
+
+
+def test_a_dashboard_cannot_be_shared_with_a_machine_only_role(
+    db_client: TestClient, db_session: Session, plane: Bank, bi_on: None
+) -> None:
+    """A share whose audience no human can join reaches nobody and says it worked.
+
+    ``_validate_visibility`` admitted every ``RoleBundle`` value, which quietly
+    included the machine bundles. Sharing with ``integration_writer`` — and, once
+    the Power BI feed landed, ``bi_reader`` — therefore succeeded while the
+    audience was necessarily empty: no human can hold either, and a machine
+    principal cannot reach a dashboard route at all. The owner was told the share
+    worked, which is the same shape as a grant that lies, and the refusal message
+    already claimed to be about what "this organization can hold".
+
+    Both directions are asserted, because refusing the machine bundles is only
+    correct if the human ones still work. Every human bundle is walked rather
+    than a sample, so a bundle added later is covered the day it lands.
+    """
+
+    assert MACHINE_ROLE_BUNDLES, "there are no machine bundles, so this proves nothing"
+
+    for bundle in MACHINE_ROLE_BUNDLES:
+        refused = db_client.post(
+            f"{BASE}/dashboards",
+            json={
+                "title": f"Shared with {bundle.value}",
+                "visibility": "role",
+                "visibility_role": bundle.value,
+                "spec": MIXED_SPEC,
+            },
+            headers=_headers(db_session, USER_1),
+        )
+        # 409 ``bi_dashboard_refused``: ``BiContentError`` is how this module
+        # states a refusal, and the share is a conflict with what roles exist
+        # rather than a malformed request body.
+        assert refused.status_code == 409, (bundle.value, refused.text)
+        assert refused.json()["error"]["details"]["error_code"] == "bi_dashboard_refused"
+
+        # The message must not name the bundle: a caller learning that
+        # ``bi_reader`` exists learns that a machine read surface exists.
+        assert bundle.value not in refused.text, refused.text
+
+    # The positive half. Without it, a change that refused EVERY role would pass.
+    human_bundles = [
+        bundle for bundle in RoleBundle if principal_bundle_compatible(PrincipalType.HUMAN, bundle)
+    ]
+    assert len(human_bundles) >= 5, human_bundles
+    for bundle in human_bundles:
+        created = _create(
+            db_client,
+            db_session,
+            visibility="role",
+            role=bundle.value,
+            title=f"Shared with {bundle.value}",
+        )
+        assert created["visibility_role"] == bundle.value, created
