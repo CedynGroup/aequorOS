@@ -21,7 +21,9 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.authorization import (
+    MACHINE_ROLE_BUNDLES,
     BindingStatus,
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -36,6 +38,10 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
 def _values(values: tuple[str, ...]) -> str:
     return ", ".join(f"'{value}'" for value in values)
+
+
+def _machine_bundles() -> str:
+    return _values(tuple(bundle.value for bundle in MACHINE_ROLE_BUNDLES))
 
 
 class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
@@ -69,9 +75,15 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             f"role_bundle IN ({_values(tuple(RoleBundle))})",
             name="ck_authorization_bindings_role_bundle",
         ),
+        # Machine bundles are a SET on both sides, matching migration
+        # 202609270074 verbatim.  The load-bearing half is the second: a human
+        # identity holding a machine bundle would be a person authenticating
+        # with a long-lived bearer key against a route that logs every call as a
+        # machine call, so their reads would be attributed to an integration and
+        # their leaving the bank would not revoke them.
         CheckConstraint(
-            "(principal_type = 'machine' AND role_bundle = 'integration_writer') OR "
-            "(principal_type = 'human' AND role_bundle <> 'integration_writer')",
+            f"(principal_type = 'machine' AND role_bundle IN ({_machine_bundles()})) OR "
+            f"(principal_type = 'human' AND role_bundle NOT IN ({_machine_bundles()}))",
             name="ck_authorization_bindings_principal_bundle",
         ),
         CheckConstraint(
@@ -90,6 +102,23 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             f"sensitivity_scope IN ({_values(tuple(SensitivityScope))})",
             name="ck_authorization_bindings_sensitivity_scope",
+        ),
+        CheckConstraint(
+            f"data_scope_kind IN ({_values(tuple(DataScope))})",
+            name="ck_authorization_bindings_data_scope_kind",
+        ),
+        # Verbatim from migration 202609270073, so a freshly created schema
+        # enforces the identical invariant a migrated one does.  Both halves
+        # matter and the second is the safety: without it a ``branch`` binding
+        # could store ``[]`` or NULL, and the natural way to write the reader
+        # (``if values: inject a filter``) would then serve that principal THE
+        # WHOLE BOOK.  A scope meaning "no branches" must be unstorable.
+        # ``json_array_length`` exists in both dialects.
+        CheckConstraint(
+            "(data_scope_kind = 'all' AND data_scope_values IS NULL) OR "
+            "(data_scope_kind <> 'all' AND data_scope_values IS NOT NULL AND "
+            "json_array_length(data_scope_values) > 0)",
+            name="ck_authorization_bindings_data_scope_values",
         ),
         CheckConstraint(
             f"status IN ({_values(tuple(BindingStatus))})",
@@ -165,6 +194,29 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     institution_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     module_scope: Mapped[str] = mapped_column(String(32), nullable=False)
     sensitivity_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # WHICH SLICE of the institution's book the sentence admits.  The server
+    # default is kept rather than dropped after backfill: a binding written by
+    # any path that has not been taught about data scopes must mean the whole
+    # institution, because the alternative — NULL — is a kind no evaluator
+    # recognises, and an unrecognised kind is exactly the ambiguity
+    # ``ResourceLocator`` already refuses elsewhere.
+    data_scope_kind: Mapped[str] = mapped_column(
+        String(16), default=DataScope.ALL.value, server_default="all", nullable=False
+    )
+    #: Untyped text deliberately: branch codes and region names are an OPEN
+    #: vocabulary with no enum to constrain against and no FK to hang on — a
+    #: binding may legitimately name a branch that has not been ingested yet,
+    #: which must scope the reader to nothing rather than fail their sign-in.
+    #:
+    #: ``none_as_null`` is LOAD-BEARING, not tidiness. By default SQLAlchemy
+    #: serialises ``None`` into this column as the JSON literal ``null``, which
+    #: is a value and not SQL NULL — so every whole-institution binding would
+    #: fail ``ck_authorization_bindings_data_scope_values`` (its first half
+    #: requires ``data_scope_values IS NULL``) in both dialects.
+    data_scope_values: Mapped[list[str] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
 
     granted_by_type: Mapped[str] = mapped_column(String(16), nullable=False)
     granted_by_id: Mapped[str] = mapped_column(String(255), nullable=False)

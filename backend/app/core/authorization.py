@@ -103,6 +103,44 @@ class InstitutionScope(StrEnum):
     INSTITUTION = "institution"
 
 
+class DataScope(StrEnum):
+    """Which slice of an institution's book ONE binding row admits.
+
+    This is the stored column vocabulary of ``data_scope_kind`` and nothing
+    else. The DERIVED union of several bindings' scopes is
+    ``services.authorization.EffectiveDataScope``, whose ``kind`` additionally
+    admits ``mixed`` and ``none`` — neither of which any row may carry, because
+    a row states one declared slice and only a reduction can be mixed or empty.
+    """
+
+    ALL = "all"
+    BRANCH = "branch"
+    REGION = "region"
+
+
+#: A branch code or region name longer than this can never match the branch
+#: dimension the BI compiler resolves the scope against (``bi_dim_branch``
+#: stores both ``branch_code`` and ``region`` as ``VARCHAR(120)``), so a longer
+#: value is refused at the boundary rather than stored as a grant that silently
+#: matches nothing. Restated here rather than imported: the account plane must
+#: not depend on the BI plane, and ``tests/core/test_data_scopes.py`` pins the
+#: two numbers together so the restatement cannot drift.
+DATA_SCOPE_VALUE_MAX_LENGTH: Final = 120
+
+
+def normalise_data_scope_values(values: Sequence[str]) -> tuple[str, ...]:
+    """Trim, drop blanks, de-duplicate and order the declared scope values.
+
+    One authority for the stored shape, so two spellings of the same grant —
+    ``["ACC-001", " TEM-002 "]`` and ``["TEM-002", "ACC-001", "ACC-001"]`` —
+    produce one row, one authority sentence and one duplicate-grant refusal.
+    Case is PRESERVED: a branch code is the core banking system's own token and
+    folding it would make two genuinely different branches collide.
+    """
+
+    return tuple(sorted({value.strip() for value in values if value.strip()}))
+
+
 class PrincipalType(StrEnum):
     HUMAN = "human"
     MACHINE = "machine"
@@ -148,6 +186,22 @@ class RoleBundle(StrEnum):
     ACCOUNT_ADMIN = "account_admin"
     ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
+    #: The credential a report server PULLS the curated analytics feed with
+    #: (docs/bi.md §Phase 4). Deliberately disjoint from INTEGRATION_WRITER:
+    #: giving the push bundle a read permission would widen every push key in
+    #: the estate, and giving this bundle INGEST would hand every reporting
+    #: gateway the authority to write canonical facts.
+    BI_READER = "bi_reader"
+
+
+#: Bundles a MACHINE principal may hold; equivalently, the bundles a human may
+#: not. A TUPLE, not a set, because ``models.AuthorizationBinding`` renders it
+#: into ``ck_authorization_bindings_principal_bundle`` and that text must match
+#: migration ``202609270074`` exactly.
+MACHINE_ROLE_BUNDLES: Final[tuple[RoleBundle, ...]] = (
+    RoleBundle.INTEGRATION_WRITER,
+    RoleBundle.BI_READER,
+)
 
 
 ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingProxyType(
@@ -194,14 +248,23 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
         # Machine principals do not inherit a human Analyst preset or seat.
         RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
+        # Read, and only read. The feed serves curated datasets; a pull may not
+        # create, edit, run, export a signed artifact or configure anything.
+        RoleBundle.BI_READER: frozenset({Permission.VIEW}),
     }
 )
 
 
 def principal_bundle_compatible(principal_type: PrincipalType, role_bundle: RoleBundle) -> bool:
-    return (principal_type is PrincipalType.MACHINE) == (
-        role_bundle is RoleBundle.INTEGRATION_WRITER
-    )
+    """Whether the bundle belongs to that KIND of principal.
+
+    A set on both sides (2026-09-27). The invariant is unchanged and stays
+    complete — a machine principal holds a machine bundle and a human holds a
+    human one, with no row able to straddle — but it no longer reads as "the
+    machine bundle", a shape that could not hold a second one.
+    """
+
+    return (principal_type is PrincipalType.MACHINE) == (role_bundle in MACHINE_ROLE_BUNDLES)
 
 
 class ConditionKind(StrEnum):
@@ -265,6 +328,14 @@ class BindingGrant:
     valid_from: datetime
     valid_until: datetime | None
     revoked_at: datetime | None
+    #: The declared slice of the institution's book, carried so that one load of
+    #: a principal's bindings can answer both "may they?" and "over what?".  It
+    #: deliberately takes no part in :func:`evaluate_permission`: a branch-scoped
+    #: binding GRANTS its permission in full and the scope narrows the ROWS,
+    #: which the BI compiler applies.  Defaulted so every existing construction
+    #: site keeps meaning the whole institution.
+    data_scope: DataScope = DataScope.ALL
+    data_scope_values: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

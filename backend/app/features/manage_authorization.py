@@ -7,20 +7,23 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import DbSession, GrantAdminTenant, TenantContext
 from app.core.authorization import (
     ROLE_PERMISSIONS,
     BindingStatus,
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
     RoleBundle,
     SensitivityScope,
 )
-from app.models import AuthorizationBinding, Bank, Organization, User
+from app.domain.ingestion.reference_schemas import business_units
+from app.models import AuthorizationBinding, Bank, CanonicalReferenceRow, Organization, User
 from app.schemas.authorization import (
+    DATA_SCOPE_LABELS,
     BindingCreateRequest,
     BindingCreateResponse,
     BindingListRead,
@@ -28,6 +31,9 @@ from app.schemas.authorization import (
     BindingPreviewRequest,
     BindingRead,
     BindingRevokeRequest,
+    BranchDirectoryEntryRead,
+    BranchDirectoryRead,
+    DataScopeOptionRead,
     InstitutionDirectoryEntryRead,
     InstitutionDirectoryRead,
     MemberListRead,
@@ -102,6 +108,8 @@ def _binding_read(
 ) -> BindingRead:
     principal = users.get(binding.principal_user_id)
     role_bundle = RoleBundle(binding.role_bundle)
+    data_scope = DataScope(binding.data_scope_kind)
+    data_scope_values = list(binding.data_scope_values or ())
     effective = bool(
         principal and principal.is_active
     ) and grant_administration.binding_is_effective(binding)
@@ -119,6 +127,9 @@ def _binding_read(
         ),
         module_scope=ModuleScope(binding.module_scope),
         sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+        data_scope_kind=data_scope,
+        data_scope_values=data_scope_values,
+        data_scope_label=grant_administration.data_scope_label(data_scope, data_scope_values),
         status=BindingStatus(binding.status),
         effective=effective,
         authority_sentence=(
@@ -135,6 +146,8 @@ def _binding_read(
                 ),
                 module_scope=ModuleScope(binding.module_scope),
                 sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+                data_scope=data_scope,
+                data_scope_values=data_scope_values,
             )
         ),
         effective_permissions=sorted(
@@ -199,6 +212,8 @@ def binding_scope(payload: ScopedGrantInput) -> authorization.BindingScope:
         institution_id=payload.institution_id,
         module_scope=payload.module_scope,
         sensitivity_scope=payload.sensitivity_scope,
+        data_scope=payload.data_scope_kind,
+        data_scope_values=tuple(payload.data_scope_values),
     )
 
 
@@ -390,6 +405,111 @@ def list_organization_institutions(
             for bank in banks
         ]
     )
+
+
+#: The composer's scope control, with the server owning its copy so the choice
+#: is never labelled with a stored enum value.
+_SCOPE_OPTIONS = [
+    DataScopeOptionRead(
+        kind=kind,
+        label=label,
+        requires_values=kind is not DataScope.ALL,
+    )
+    for kind, label in DATA_SCOPE_LABELS.items()
+]
+
+
+@router.get(
+    "/organization/institutions/{institution_id}/branches",
+    response_model=BranchDirectoryRead,
+    operation_id="listOrganizationInstitutionBranches",
+)
+def list_organization_institution_branches(
+    institution_id: str,
+    db: DbSession,
+    ctx: GrantAdminTenant,
+) -> BranchDirectoryRead:
+    """One institution's declared branches and regions, for scoping a grant.
+
+    Reads the CANONICAL ``business_units`` register — the bank's own declaration
+    of its reporting hierarchy — and not the BI branch dimension: BI is a
+    dispatch plane, so the account plane must neither import nor query ``bi_*``.
+    The register's documented field aliases (``unit_id``, ``name``) are resolved
+    through ``business_units.normalise_row``, the one place that is done, so a
+    bank pushing either spelling is read correctly.
+
+    Bank-scoped at the QUERY, not merely organization-scoped: two banks of one
+    organization share an RLS tenant, so organization scoping alone cannot
+    isolate their child objects. An institution outside the caller's
+    organization is indistinguishable from one that does not exist.
+
+    An institution that has ingested no register yet returns empty lists. There
+    is no fabricated branch and no inferred region: ``region`` is optional on
+    the register and is the only place a region can come from.
+    """
+
+    institution = db.scalar(
+        select(Bank.id).where(
+            Bank.id == institution_id,
+            Bank.organization_id == ctx.organization_id,
+        )
+    )
+    if institution is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Institution not found.")
+    branches = _declared_branches(db, ctx.organization_id, institution)
+    return BranchDirectoryRead(
+        institution_id=institution,
+        branches=branches,
+        regions=sorted({branch.region for branch in branches if branch.region}),
+        scope_options=_SCOPE_OPTIONS,
+    )
+
+
+def _declared_branches(
+    db: DbSession, organization_id: str, institution_id: str
+) -> list[BranchDirectoryEntryRead]:
+    """The latest accepted ``business_units`` push for exactly this institution.
+
+    Reference rows are batch-scoped with no supersession chain, so "latest" is
+    the newest as-of date and, within it, the most recently ingested batch — a
+    corrected re-push of the register REPLACES the earlier one rather than being
+    added to it, which is the same rule every other reader of this dataset uses.
+    """
+
+    scope = (
+        CanonicalReferenceRow.organization_id == organization_id,
+        CanonicalReferenceRow.bank_id == institution_id,
+        CanonicalReferenceRow.dataset_kind == business_units.SCHEMA.kind,
+    )
+    latest = db.scalar(select(func.max(CanonicalReferenceRow.as_of_date)).where(*scope))
+    if latest is None:
+        return []
+    latest_batch = db.scalar(
+        select(CanonicalReferenceRow.ingestion_batch_id)
+        .where(*scope, CanonicalReferenceRow.as_of_date == latest)
+        .order_by(CanonicalReferenceRow.created_at.desc(), CanonicalReferenceRow.id.desc())
+        .limit(1)
+    )
+    if latest_batch is None:
+        return []
+    entries: dict[str, BranchDirectoryEntryRead] = {}
+    for payload in db.scalars(
+        select(CanonicalReferenceRow.payload)
+        .where(
+            *scope,
+            CanonicalReferenceRow.as_of_date == latest,
+            CanonicalReferenceRow.ingestion_batch_id == latest_batch,
+        )
+        .order_by(CanonicalReferenceRow.row_index)
+    ):
+        row = business_units.normalise_row(dict(payload or {}))
+        code = str(row.get("business_unit_id") or "").strip()
+        name = str(row.get("business_unit_name") or "").strip()
+        if not code or not name:
+            continue
+        region = str(row.get("region") or "").strip()
+        entries[code] = BranchDirectoryEntryRead(code=code, name=name, region=region or None)
+    return sorted(entries.values(), key=lambda entry: (entry.name.casefold(), entry.code))
 
 
 @router.get(

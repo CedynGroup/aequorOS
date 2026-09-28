@@ -253,11 +253,16 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
         assert audit.actor_user_id == USER_1
         assert audit.details["grantee_user_id"] == str(GRANTEE)
         assert audit.details["role_bundle"] == "analyst"
+        # The audit carries the COMPLETE scope, the data scope included: an
+        # exact dict, so a dimension added to the binding without being audited
+        # fails here rather than going unrecorded.
         assert audit.details["scope"] == {
             "institution_scope": "institution",
             "institution_id": BANK_A,
             "module_scope": "liq",
             "sensitivity_scope": "confidential",
+            "data_scope_kind": "all",
+            "data_scope_values": [],
         }
         assert audit.details["reason"] == _payload()["reason"]
 
@@ -886,9 +891,7 @@ def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClie
     approver = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_reviewed_payload(
-            grant_client, role="approver", reason="Independent checker duties"
-        ),
+        json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
     )
     assert approver.status_code == 201, approver.text
 
