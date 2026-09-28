@@ -29,15 +29,35 @@ select the bank when issuing the key. It is shown exactly once at generation
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
+**A key is issued for one purpose, and the two purposes cannot substitute for
+one another.**
+
+| Purpose | Authority | Used by |
+|---|---|---|
+| `writer` (the default) | `DATA` / `restricted` / `ingest` | API Push, §2 below |
+| `reader` | every module at `aggregated`, `view` only | the analytics feed, §8 below |
+
+A `writer` key presented to the feed is refused, and a `reader` key presented to
+any push route is refused. Neither refusal depends on configuration: the two
+authorities carry disjoint permissions, so a push route asking for `ingest` and a
+feed asking for `view` each refuse the other's credential structurally. Issue one
+key per purpose; do not try to make one credential do both.
+
+A `reader` key may additionally be limited to selected branches or regions at
+issuance. It then serves only those branches on every dataset, and
+institution-wide ratios are refused to it outright.
+
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
 The platform does not infer a bank or backfill authority. A key used against a
 different bank returns `404` so the machine principal cannot probe which sibling
 institutions exist.
 
-Integration keys are accepted only on the four push-batch routes in §2; ordinary
-tenant reads and human-session endpoints return `401`. Human access tokens
-cannot call API Push (`403`). Use an authorized human session for mapping
+Integration keys are accepted only on the four push-batch routes in §2 and the
+analytics feed route in §8; every other tenant read and human-session endpoint
+returns `401`. Human access tokens cannot call API Push (`403`), and cannot call
+the feed either (`403`) — a feed is a machine surface even for a person who could
+run the same query in the dashboard. Use an authorized human session for mapping
 configuration and ingestion diagnostics.
 
 > **Production note.** Deployments may additionally front these endpoints
@@ -526,3 +546,82 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
     gl_account → gl_account   40 extracted / 40 accepted
     product    → product      12 extracted / 12 accepted
 ```
+
+---
+
+## 8. Pulling analytics out: the Stage B feed
+
+The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
+**curated** analytics dataset, streamed, so a report server (Power BI Report
+Server, or any HTTP-capable BI tool) can build a model on the same numbers the
+platform files — without a database login, which is not offered and cannot be
+made safe (`backend/docs/powerbi_stage_b.md` §1 explains why).
+
+**Your BI team should read `backend/docs/powerbi_stage_b.md`**, not this section:
+it carries the dataset columns, the loader contract, a worked Power Query
+example, and the data-residency caveat your institution signs off on. What is
+here is the wire contract.
+
+### Request
+
+```
+GET /api/v1/banks/{bank_id}/bi/feeds/{dataset}?format=ndjson&cursor=<token>
+Authorization: Bearer aeq_live_…        # a `reader` key for THIS bank
+```
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `dataset` (path) | `loan_book`, `deposit_book`, `regulatory_metrics` | One of the curated datasets. Anything else is `404`. |
+| `format` | `ndjson` (default), `csv` | One JSON object per line, or a header row then data rows. |
+| `cursor` | a token a previous pull returned | Omit it for a full synchronisation. |
+
+There is no way to name a table, a column, a filter, a row limit or an as-of
+date. The dataset declaration decides all of them, which is what makes the
+surface safe to expose to a machine at all.
+
+### Response
+
+`200` with the payload as the body. Column names are AequorOS catalogue member
+ids (`loans.balance_rc`); amounts are exact decimals in the institution's
+reporting currency; **an empty cell or a JSON `null` means "nothing to measure",
+never zero.** Provenance travels in headers, never in the payload:
+
+| Header | Meaning |
+|---|---|
+| `X-Bi-Feed-Dataset` / `X-Bi-Feed-Grain` | Which dataset, and what one row is. |
+| `X-Bi-Feed-Columns` | The column list, in payload order. Validate against this. |
+| `X-Bi-Feed-Cursor` / `X-Bi-Feed-Next-Cursor` | The cursor you sent, and the one to send next. `none` means **do not advance**. |
+| `X-Bi-Feed-More-Available` | `true` when older reporting dates remain unserved: pull again at once. |
+| `X-Bi-Feed-Reporting-Dates` / `-Reporting-Date-Count` | Exactly which reporting dates the payload covers. |
+| `X-Bi-Feed-Data-Scope` | The slice of the institution this credential covers. A change here means your dataset changed shape. |
+| `X-Bi-Feed-Trust` | The reconciliation verdict over those dates: `green` / `amber` / `red` / `grey` (not assessed). |
+| `X-Bi-Feed-Build` / `X-Bi-Feed-Catalogue-Version` | Which analytics build and which measure definitions produced the rows. |
+| `X-Bi-Feed-Unit` | The reporting currency. It is deliberately not in any column name. |
+
+### The cursor, and the one thing your loader must do
+
+The cursor is a position in **build** time, not a business date, because a bank's
+book is restated: a correction to March arrives in September and the platform
+rebuilds March. So:
+
+> **Replace by reporting date.** For every date in `X-Bi-Feed-Reporting-Dates`,
+> delete your rows for that date and insert the payload's. Never append.
+
+That is what makes a restatement land. Because replacement is idempotent, the
+feed errs towards re-sending: `X-Bi-Feed-Next-Cursor: none` means send the same
+cursor again next time, and a date may legitimately arrive twice. Only reporting
+dates whose analytics build fully succeeded are served — a partial date is absent,
+never present with zeros.
+
+### Refusals
+
+| Status | When |
+|---|---|
+| `401` | The credential is missing, unknown or revoked. |
+| `403` | A human token; a `writer` key; a `reader` key without the authority the dataset's figures need; a branch-scoped key asking for institution-wide ratios. |
+| `404` | BI is not enabled for the deployment; the institution belongs to another tenant; the key names a different institution; the dataset is not in the registry. |
+| `422` | The cursor is not a token this feed issued. It is never treated as "start from the beginning". |
+
+**Every pull is recorded** — the credential, the dataset, the cursor in and out,
+the reporting dates, the row count and whether it was allowed or refused. Ask
+your AequorOS administrator for that record whenever you need it.
