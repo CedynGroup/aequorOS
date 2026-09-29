@@ -18,6 +18,11 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import RatioTrendChart from "@/components/liquidity/charts/RatioTrendChart";
 import NetOutflowChart from "@/components/liquidity/charts/NetOutflowChart";
 import SdiLiquidityView from "@/components/liquidity/SdiLiquidityView";
+import {
+  LandingInsightStrip,
+  useKpiExplain,
+} from "@/components/bi/InsightStrip";
+import { ReconciliationTrustBadge } from "@/components/bi/TrustBadge";
 import { runComputedAt, runThresholds } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
@@ -118,6 +123,10 @@ export default function LiquidityCockpit() {
 
   const data = dashboard.data;
   const run = latestRun.data;
+  // The reporting date every BI surface on this page speaks about: the period
+  // the figures on screen were computed for, never today's date.
+  const asOf = data?.period.periodEnd ?? null;
+  const explain = useKpiExplain(bankId, asOf);
 
   const thresholds = runThresholds(
     moduleScope.liquidityConfidentialView ? run : undefined,
@@ -200,6 +209,8 @@ export default function LiquidityCockpit() {
       >
         {data && (
           <PageContainer className="py-6 space-y-6">
+            <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
             <SectionCard
               title="Liquidity posture"
               subtitle="Current compliance headroom, buffer concentration, early-warning state, and contingency readiness."
@@ -411,6 +422,7 @@ export default function LiquidityCockpit() {
                   <KpiStat
                     label="Liquidity Coverage Ratio"
                     value={fmtPct(num(data.metrics.lcrPct), 2)}
+                    explain={explain.explainFor("lcr_pct")}
                   />
                 )}
               </div>
@@ -427,11 +439,13 @@ export default function LiquidityCockpit() {
                 delta={lcrDelta}
                 deltaSuffix=" pts LCR"
                 hint="Post-haircut weighted"
+                explain={explain.explainFor("hqla_total_ghs")}
               />
               <KpiStat
                 label="30-day net outflows"
                 value={fmtCurrency(num(data.metrics.netOutflows30dGhs))}
                 hint="Outflows − capped inflows"
+                explain={explain.explainFor("net_outflows_30d_ghs")}
               />
             </div>
 
@@ -449,6 +463,7 @@ export default function LiquidityCockpit() {
                   <KpiStat
                     label="Net Stable Funding Ratio"
                     value={fmtPct(num(data.metrics.nsfrPct), 2)}
+                    explain={explain.explainFor("nsfr_pct")}
                   />
                 )}
               </div>
@@ -458,11 +473,13 @@ export default function LiquidityCockpit() {
                 delta={nsfrDelta}
                 deltaSuffix=" pts NSFR"
                 hint="Liability-side weighting"
+                explain={explain.explainFor("asf_total_ghs")}
               />
               <KpiStat
                 label="Required stable funding"
                 value={fmtCurrency(num(data.metrics.rsfTotalGhs))}
                 hint="Asset-side weighting"
+                explain={explain.explainFor("rsf_total_ghs")}
               />
             </div>
 
@@ -523,6 +540,7 @@ export default function LiquidityCockpit() {
                 title="LCR & NSFR — reporting-period trend"
                 subtitle={`Ratios across ${data.trend.length} reporting periods`}
                 height={260}
+                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 actions={
                   lcrMin !== null ? (
                     <StatusPill tone="success">
@@ -564,6 +582,7 @@ export default function LiquidityCockpit() {
                 title="Net-outflow decomposition"
                 subtitle="Weighted 30-day outflows by category vs capped inflows"
                 height={260}
+                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 footer={capNote ? <span>{capNote.message}</span> : undefined}
               >
                 <NetOutflowChart
@@ -678,6 +697,8 @@ export default function LiquidityCockpit() {
               </span>
               .
             </p>
+
+            {explain.drawer}
           </PageContainer>
         )}
       </QueryBoundary>

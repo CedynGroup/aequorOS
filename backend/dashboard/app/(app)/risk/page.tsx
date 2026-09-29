@@ -19,6 +19,7 @@ import ValidationList from "@/components/ui/ValidationList";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { PageSkeleton } from "@/components/ui/QueryBoundary";
+import { LandingInsightStrip } from "@/components/bi/InsightStrip";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
   useSdiCapitalChecks,
@@ -56,7 +57,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function RiskLimitMonitorPage() {
-  const { bank } = useBankContext();
+  const { bank, period } = useBankContext();
   const bankId = bank?.id;
 
   // Scope the limit wall to the tenant's modules (docs/sdi.md §3.2): only fetch a
@@ -248,6 +249,8 @@ export default function RiskLimitMonitorPage() {
         <PageSkeleton />
       ) : (
         <PageContainer className="py-6 space-y-6">
+          <LandingInsightStrip bankId={bankId} asOf={period?.periodEnd} />
+
           {/* Summary KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <KpiStat

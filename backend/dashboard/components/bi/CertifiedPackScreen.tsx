@@ -60,6 +60,7 @@ import {
 import { DASHBOARD_TITLE_MAX } from "@/components/bi/builder";
 import { mergeAddresses, questionAddresses } from "@/components/bi/measures";
 import {
+  biRefusalSentence,
   isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
@@ -243,6 +244,15 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
               className="rounded-md border border-border bg-surface px-4 py-3 text-caption leading-relaxed text-navy"
             >
               {COPY_REFUSED}
+            </p>
+          ) : biRefusalSentence(copy.error) !== null ? (
+            // Any other refusal — a read-only staff session, for one — is the
+            // server's own decision and is shown in the server's own words.
+            <p
+              role="status"
+              className="rounded-md border border-border bg-surface px-4 py-3 text-caption leading-relaxed text-navy"
+            >
+              {biRefusalSentence(copy.error)}
             </p>
           ) : (
             <ErrorPanel error={copy.error} title="No copy was made" />

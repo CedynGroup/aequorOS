@@ -110,7 +110,6 @@ const SCANNED_FILES: string[] = [
   // becoming a zero is precisely this guard's subject.
   "lib/api/ask.ts",
   "lib/api/askTransport.ts",
-  "lib/api/featureFlags.ts",
   // P2's risk & capital hooks and the declared contract types. Same reason
   // as P1's: the display types and every figure's nullability live there, so
   // a `?? 0` introduced on the transport would never be seen by a scan of
@@ -157,6 +156,76 @@ type Rule = {
   allow?: Record<string, string>;
 };
 
+function walk(dir: string, out: string[]): void {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      walk(full, out);
+      continue;
+    }
+    if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+  }
+}
+
+const files: string[] = [];
+for (const dir of SCANNED_DIRS) walk(join(ROOT, dir), files);
+for (const file of SCANNED_FILES) files.push(join(ROOT, file));
+
+/**
+ * Every field the scanned surfaces DECLARE as nullable.
+ *
+ * P0-23 used to carry a hand-written list of eleven field names, which meant the
+ * rule policed exactly those eleven and nothing else. That is how
+ * `total_regulatory_capital` reached the stress board as `value == null ? 0 :
+ * num(value)` — a null final-year capital figure drawing the headroom bridge to a
+ * fabricated wipe-out (audit A360-6). The list was not wrong; it was a list.
+ *
+ * So the field set is now READ from the type declarations in the same tree the
+ * rule scans: anything declared `foo: … | null` is, by the payload's own
+ * admission, a figure that can be absent. A new nullable field is policed the day
+ * it is declared, with nobody remembering to add it here.
+ */
+function nullableFieldNames(sources: readonly string[]): ReadonlySet<string> {
+  const found = new Set<string>();
+  for (const file of sources) {
+    const text = readFileSync(file, "utf8");
+    for (const match of text.matchAll(
+      /^\s*([a-z][A-Za-z0-9_]*)\??\s*:\s*[^;\n]*\|\s*null/gm,
+    )) {
+      // SNAKE_CASE only, deliberately. These are the server's wire field names,
+      // and they are specific enough to be unambiguous inside an expression. A
+      // camelCase declaration is as likely to be a local or a view-model field —
+      // `value`, `net`, `run` — and matching those turns the rule into noise that
+      // buries its own findings. Narrow and true beats broad and ignored.
+      if (match[1].includes("_")) found.add(match[1]);
+    }
+  }
+  return found;
+}
+
+/**
+ * The eleven P0-23 was born with. Kept as a FLOOR, not as the rule: if a type
+ * moves out of the scanned tree the rule must not quietly stop covering the
+ * figure that caused the original finding.
+ */
+const P0_23_FLOOR: readonly string[] = [
+  "stressed_lcr_pct",
+  "baseline_lcr_pct",
+  "cet1_ratio_pct",
+  "car_min_pct",
+  "lcr_min_pct",
+  "car_target_pct",
+  "cumulative_mismatch_ghs",
+  "pct_total_deposits",
+  "top_five_pct",
+  "value_pct",
+  "car_pct",
+];
+
+const NULLABLE_FIELDS: readonly string[] = [
+  ...new Set([...P0_23_FLOOR, ...nullableFieldNames(files)]),
+].sort();
+
 const RULES: Rule[] = [
   {
     id: "P0-21 hardcoded regulatory floor",
@@ -192,8 +261,12 @@ const RULES: Rule[] = [
   },
   {
     id: "P0-23 num() applied to a nullable regulatory figure",
-    pattern:
-      /\bnum\(\s*[A-Za-z0-9_.?!\[\]]*\b(?:stressed_lcr_pct|baseline_lcr_pct|cet1_ratio_pct|car_min_pct|lcr_min_pct|car_target_pct|cumulative_mismatch_ghs|pct_total_deposits|top_five_pct|value_pct|car_pct)\b/g,
+    pattern: new RegExp(
+      String.raw`\bnum\(\s*[A-Za-z0-9_.?!\[\]]*\b(?:` +
+        NULLABLE_FIELDS.join("|") +
+        String.raw`)\b`,
+      "g",
+    ),
     message:
       "`num()` maps null to 0, and this field is nullable — a missing ratio would plot and compare as a real 0%. Use `numOrNull`, or test the field for null on the same expression and render the absence.",
     acceptExplicitNullGuard: true,
@@ -282,26 +355,36 @@ function hasNullGuard(lines: string[], source: string, hit: Hit): boolean {
   const line = lineOf(source, hit.index) - 1;
   const window = lines.slice(Math.max(0, line - 5), line + 3).join("\n");
   return (
-    new RegExp(`${field}\\s*(?:===|!==)\\s*null`).test(window) ||
+    // `!= null` / `== null` too: the loose form is the idiomatic JS test for
+    // "null or undefined" and is exactly as correct as the strict one. Accepting
+    // only `!==` reported `classification.data?.npl_ratio != null ? … : "—"` as a
+    // fail-open when it is the very shape this rule asks for.
+    new RegExp(`${field}\\s*(?:===|!==|==|!=)\\s*null`).test(window) ||
     new RegExp(`${field}\\s*!==\\s*undefined`).test(window) ||
     new RegExp(`numOrNull\\([^)]*${field}`).test(window)
   );
 }
 
-function walk(dir: string, out: string[]): void {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
-  }
+// P0-23's derived field set must be real. If the declaration scan ever returns
+// nothing, the rule silently narrows to the eleven names it was born with and the
+// whole point of deriving it is lost — so require that it found meaningfully more,
+// and that it found the figure whose absence the original finding was about.
+assert.ok(
+  NULLABLE_FIELDS.length > P0_23_FLOOR.length + 20,
+  `P0-23 derived only ${NULLABLE_FIELDS.length} nullable fields from the scanned ` +
+    `types (floor is ${P0_23_FLOOR.length}). The declaration scan has stopped ` +
+    `finding them — fix the scan, do not lower this number.`,
+);
+for (const proof of [
+  "total_regulatory_capital",
+  "total_rwa",
+]) {
+  assert.ok(
+    NULLABLE_FIELDS.includes(proof),
+    `P0-23 does not cover ${proof}, the field that reached the stress board as a ` +
+      `fabricated zero (audit A360-6). The derivation is not reading its types.`,
+  );
 }
-
-const files: string[] = [];
-for (const dir of SCANNED_DIRS) walk(join(ROOT, dir), files);
-for (const file of SCANNED_FILES) files.push(join(ROOT, file));
 
 const failures: string[] = [];
 

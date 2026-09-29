@@ -63,8 +63,15 @@ import type {
 } from "@aequoros/risk-service-api";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { isBiAccessDenied, useBiGrid, useBiGridPages } from "@/lib/api/bi";
+import {
+  biRefusalSentence,
+  isBiAccessDenied,
+  useBiGrid,
+  useBiGridPages,
+} from "@/lib/api/bi";
+import type { ReaderCoverage } from "@/lib/api/dataScope";
 import NeedsDataWidget from "./NeedsDataWidget";
+import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
 import { useChartTheme } from "./echartsTheme";
@@ -241,8 +248,14 @@ export type PivotGridCanvasProps = {
   bankId: string | undefined;
   /** The question. It carries no paging of its own — the grid supplies that. */
   query: BiQuery | null;
-  /** Where a reader with no rows is sent to supply the book. */
-  dataset: BiDatasetRequirement;
+  /**
+   * The dataset the question's author NAMED as the one it degrades without, or
+   * null when none was named — in which case the empty state says it does not
+   * know why, rather than sending the reader to a template it cannot vouch for.
+   */
+  dataset: BiDatasetRequirement | null;
+  /** How much of the book the reader's access covers, when the caller knows. */
+  coverage?: ReaderCoverage;
   /** Grid viewport height in pixels. */
   height?: number;
 };
@@ -251,6 +264,7 @@ export default function PivotGridCanvas({
   bankId,
   query,
   dataset,
+  coverage,
   height = 520,
 }: PivotGridCanvasProps) {
   const fetchPage = useBiGridPages(bankId);
@@ -330,6 +344,11 @@ export default function PivotGridCanvas({
     return <RestrictedWidget height={height} />;
   }
 
+  const refusal = biRefusalSentence(probe.error);
+  if (refusal !== null) {
+    return <RefusedWidget sentence={refusal} height={height} />;
+  }
+
   if (probe.error) {
     return (
       <ErrorPanel
@@ -352,7 +371,9 @@ export default function PivotGridCanvas({
   }
 
   if (page.rows.length === 0) {
-    return <NeedsDataWidget dataset={dataset} height={height} />;
+    return (
+      <NeedsDataWidget dataset={dataset} coverage={coverage} height={height} />
+    );
   }
 
   return (

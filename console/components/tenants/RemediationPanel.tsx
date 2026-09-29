@@ -4,20 +4,24 @@ import { useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Gavel,
+  History,
   RefreshCw,
   RotateCcw,
   SlidersHorizontal,
 } from 'lucide-react';
 import {
+  fixBiBackfill,
   fixConfig,
   fixOfficialRun,
   fixRecompute,
   fixRerunIngestion,
+  type BiBackfillRequest,
   type TenantConfigResponse,
   type TenantFixConfigKind,
   type TenantFixJob,
   type TenantIngestionBatch,
 } from '@/lib/api';
+import { backfillWindowProblem, biBackfillRequest, oldestAsOfDate } from '@/lib/bi-backfill';
 import { useInspector } from '@/lib/inspector';
 import { useMutation } from '@/lib/use-api';
 import { fmtDate, shortId } from '@/lib/format';
@@ -553,26 +557,163 @@ function FixConfigAction({
   );
 }
 
+// ---- BI mart backfill -----------------------------------------------------
+
+function BiBackfillAction({
+  orgId,
+  bankId,
+  batches,
+  onDone,
+}: {
+  orgId: string;
+  bankId: string | null;
+  batches: TenantIngestionBatch[];
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [untilDate, setUntilDate] = useState('');
+  const toaster = useToast();
+
+  const mut = useMutation((body: BiBackfillRequest) => fixBiBackfill(orgId, body), {
+    errorContext: 'Mart backfill',
+    // No successMessage: the toast names the window the chain will walk, which
+    // is the one thing the operator wants confirmed (the server resolved the
+    // from-date when it was left blank).
+    onSuccess: (job) => {
+      toaster.success(`Backfill queued · job ${shortId(job.job_id, 10)}`, {
+        description: `Walks ${job.bank_id} from ${fmtDate(job.cursor_date)} back to ${fmtDate(job.until_date)}, one reporting date per hop.`,
+      });
+      setOpen(false);
+      setNote('');
+      setFromDate('');
+      setUntilDate('');
+      onDone();
+    },
+  });
+
+  const oldestIngested = oldestAsOfDate(batches);
+  const windowProblem = backfillWindowProblem({ fromDate, untilDate });
+  const canConfirm = bankId !== null && noteValid(note) && windowProblem === null;
+
+  return (
+    <ActionRow
+      icon={<History size={15} aria-hidden />}
+      title="Backfill analytics history"
+      description="Builds this bank's BI marts for past reporting dates, newest-first, as a chain of bi_mart_backfill jobs on the bi worker lane. Without it only the live date is ever built, so every twelve-month widget and trend pack answers needs-data — and after three terminal failures this is the only way back."
+    >
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<History size={14} aria-hidden />}
+        onClick={() => setOpen(true)}
+        disabled={bankId === null}
+        title={bankId === null ? 'This tenant has no institution to build for yet.' : undefined}
+      >
+        Backfill history
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Backfill analytics history"
+        description="Queues a mart history walk on this tenant's behalf. Audited to the inspection session."
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={mut.loading}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={mut.loading}
+              disabled={!canConfirm}
+              onClick={() =>
+                void mut.mutate(
+                  biBackfillRequest({ bankId: bankId ?? '', fromDate, untilDate, note }),
+                )
+              }
+            >
+              Queue backfill
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-caption text-slate">
+            One <span className="font-mono">bi_mart_backfill</span> job is queued and re-queues
+            itself hop by hop from the newest date back to the oldest, inclusive. The server
+            refuses (409) if BI mart builds are switched off in this deployment, if a chain for
+            this bank is already queued or running, or if the bank has no canonical snapshot to
+            start from and no from-date is given.
+          </p>
+          <Field label="Institution" hint="The bank whose marts are built. Fixed to this tenant.">
+            <Input value={bankId ?? ''} readOnly disabled />
+          </Field>
+          <Field
+            label="From date"
+            hint="Optional — the newest date to build. Blank means the bank's latest canonical snapshot."
+          >
+            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </Field>
+          <Field
+            label="Until date"
+            required
+            hint={
+              oldestIngested
+                ? `The oldest date to build, inclusive. The oldest ingested batch is as of ${fmtDate(oldestIngested)}.`
+                : 'The oldest date to build, inclusive.'
+            }
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={untilDate}
+                onChange={(e) => setUntilDate(e.target.value)}
+                invalid={untilDate.length > 0 && windowProblem !== null}
+              />
+              {oldestIngested && untilDate !== oldestIngested && (
+                <Button variant="ghost" size="sm" onClick={() => setUntilDate(oldestIngested)}>
+                  Use oldest batch
+                </Button>
+              )}
+            </div>
+          </Field>
+          {windowProblem && (untilDate.length > 0 || fromDate.length > 0) && (
+            <p className="text-caption text-critical">{windowProblem}</p>
+          )}
+          <NoteField note={note} setNote={setNote} />
+        </div>
+      </Modal>
+    </ActionRow>
+  );
+}
+
 // ---- Panel ----------------------------------------------------------------
 
 export function RemediationPanel({
   orgId,
   orgLabel,
+  bankId,
   ingestionBatches,
   config,
   onRecomputed,
   onOfficialRun,
   onReran,
   onConfigChanged,
+  onBackfill,
 }: {
   orgId: string;
   orgLabel?: string;
+  /** The tenant's institution (`OperatorTenant.bank_id`); null for a half-provisioned tenant. */
+  bankId: string | null;
   ingestionBatches: TenantIngestionBatch[];
   config: TenantConfigResponse | null;
   onRecomputed: () => void;
   onOfficialRun: () => void;
   onReran: () => void;
   onConfigChanged: () => void;
+  onBackfill: () => void;
 }) {
   const { active } = useInspector();
   // Same gate the deep-read sections use: an ACTIVE session for THIS org.
@@ -606,6 +747,12 @@ export function RemediationPanel({
       <OfficialRunAction orgId={orgId} onDone={onOfficialRun} />
       <RerunIngestionAction orgId={orgId} batches={ingestionBatches} onDone={onReran} />
       <FixConfigAction orgId={orgId} config={config} onDone={onConfigChanged} />
+      <BiBackfillAction
+        orgId={orgId}
+        bankId={bankId}
+        batches={ingestionBatches}
+        onDone={onBackfill}
+      />
     </SectionCard>
   );
 }

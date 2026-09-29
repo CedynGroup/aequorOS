@@ -15,7 +15,7 @@ import {
   type ModuleScope,
   type ModuleKey as ModuleKeyForTest,
 } from "./modules";
-import { existsSync as fileExists } from "node:fs";
+import { existsSync as fileExists, readFileSync } from "node:fs";
 import { join as joinPath, resolve as resolvePath } from "node:path";
 import { ICAAP_CYCLE_TABS, icaapTabHrefs } from "../components/icaap/tabs";
 
@@ -1116,6 +1116,150 @@ assert.match(
   /Business Intelligence/,
 );
 assert.equal(hubRedirectFor("/insights", baselineBi), "/");
+
+// ---------------------------------------------------------------------------
+// Deployment flags for alerts and scheduled reports (audit A360-2 M3).
+//
+// The pages may claim the platform is "waiting for figures" ONLY when the
+// deployment has said it evaluates alerts. Anything else — a shut flag, a
+// backend that does not project the flag, a body that is not an object — must
+// read as "not said" or "no", never as the bank's data being late.
+// ---------------------------------------------------------------------------
+
+// The reader that used to take these off the raw body is RETIRED — the client
+// carries `biAlertsEnabled` / `biSubscriptionsEnabled` now, so the hook reads the
+// typed fields and there is no parsing left to unit-test. What still matters is
+// the three-valued RULE, which is a property of the hook, so it is asserted where
+// the hook expresses it: an explicit `false` is the only thing that may make a
+// page say "not judged here", and an error must fail closed.
+const hooks = readFileSync(joinPath(dashboardRoot, "lib/api/hooks.ts"), "utf8");
+assert.match(
+  hooks,
+  /alerts:\s*query\.data\?\.biAlertsEnabled/,
+  "useBiNotificationCapabilities must read the typed alert flag",
+);
+assert.match(
+  hooks,
+  /subscriptions:\s*query\.data\?\.biSubscriptionsEnabled/,
+  "useBiNotificationCapabilities must read the typed subscription flag",
+);
+assert.match(
+  hooks,
+  /if\s*\(query\.isError\)\s*\{\s*return\s*\{\s*alerts:\s*false,\s*subscriptions:\s*false/,
+  "a failed flag read must fail CLOSED — an unreadable flag is not a capability",
+);
+// The generated client carries both fields since the 2026-09-29 regeneration,
+// which is what retired the reader. Pinned so a schema change that drops either
+// one fails HERE rather than as a page silently reading `undefined` forever.
+{
+  // Compiled to dashboard/.test-out/lib, so the repository root is four up.
+  const generated = resolvePath(
+    __dirname,
+    "..",
+    "..",
+    "..",
+    "..",
+    "packages",
+    "risk-service-api",
+    "src",
+    "models",
+    "FeatureFlagsRead.ts",
+  );
+  assert.ok(fileExists(generated), `generated model not found: ${generated}`);
+  const source = readFileSync(generated, "utf8");
+  // INVERTED at the regeneration (AGENTS.md): the reader existed only because
+  // `FeatureFlagsRead` predated the two flags. It now carries them, the reader is
+  // deleted, and the hook reads the typed fields — so this asserts the typed
+  // fields EXIST and the reader has not come back.
+  assert.equal(
+    source.includes("biAlertsEnabled"),
+    true,
+    "FeatureFlagsRead no longer carries biAlertsEnabled, so the typed read in " +
+      "useBiNotificationCapabilities is reading a field that does not exist",
+  );
+  assert.ok(
+    source.includes("biSubscriptionsEnabled"),
+    "FeatureFlagsRead no longer carries biSubscriptionsEnabled",
+  );
+  const modules = readFileSync(joinPath(dashboardRoot, "lib/modules.ts"), "utf8");
+  assert.equal(
+    modules.includes("notificationCapabilitiesFromFeatureFlags"),
+    false,
+    "the raw-body flag reader is back in lib/modules.ts. The generated client " +
+      "carries both flags now, so a hand-written reader beside it is a second, " +
+      "unchecked copy (AGENTS.md: delete the interim reader at regeneration).",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The two notification pages never render a deployment switch as the bank's
+// late data, nor a refusal as an absence. Read from source, like the fail-open
+// guard: these are `"use client"` pages and cannot be executed here.
+// ---------------------------------------------------------------------------
+{
+  const dashboardRoot = resolvePath(__dirname, "..", "..");
+  const alerts = readFileSync(
+    joinPath(dashboardRoot, "app", "(app)", "explore", "alerts", "page.tsx"),
+    "utf8",
+  );
+  const subscriptions = readFileSync(
+    joinPath(dashboardRoot, "app", "(app)", "explore", "subscriptions", "page.tsx"),
+    "utf8",
+  );
+
+  // Both pages read the deployment flags.
+  assert.ok(alerts.includes("useBiNotificationCapabilities("), "alerts page reads the flags");
+  assert.ok(
+    subscriptions.includes("useBiNotificationCapabilities("),
+    "subscriptions page reads the flags",
+  );
+  // "Waiting for figures" is claimed ONLY on a definite yes from the deployment.
+  const waiting = [...alerts.matchAll(/"Waiting for figures"/g)];
+  assert.equal(waiting.length, 1, "one site decides the 'waiting' copy");
+  assert.ok(
+    alerts.includes('if (evaluationEnabled === true) return "Waiting for figures";'),
+    "'Waiting for figures' must be gated on the deployment saying it evaluates alerts",
+  );
+  assert.ok(
+    alerts.includes('if (evaluationEnabled === false) return "Not judged here";'),
+    "a shut flag must read as the deployment's, not the bank's",
+  );
+  // "Sending" likewise.
+  assert.ok(
+    subscriptions.includes('if (deliveryEnabled === true) return { label: "Sending"'),
+    "'Sending' must be gated on the deployment saying it delivers reports",
+  );
+  assert.ok(
+    subscriptions.includes('if (deliveryEnabled === false) return { label: "Not sending here"'),
+    "a shut flag must read as the deployment's, not the bank's",
+  );
+  assert.doesNotMatch(
+    subscriptions,
+    /subscription\.isActive \? "Sending" : "Stopped"/,
+    "the pill no longer claims 'Sending' from the row alone",
+  );
+
+  // A refusal is never an absence: the server's own sentence is consulted FIRST,
+  // the grant paraphrase second, and a failed read is named as a failed read.
+  for (const [name, source, errorExpr] of [
+    ["alerts", alerts, "events.error"],
+    ["subscriptions", subscriptions, "deliveries.error"],
+  ] as const) {
+    const refusal = source.indexOf(`biRefusalSentence(${errorExpr}) ??`);
+    const grant = source.indexOf(`isBiAccessDenied(${errorExpr})`);
+    assert.ok(refusal >= 0, `${name}: the history must consult biRefusalSentence`);
+    assert.ok(grant >= 0, `${name}: the history must keep the grant paraphrase`);
+    assert.ok(
+      refusal < grant,
+      `${name}: the server's sentence must be consulted before the grant paraphrase, ` +
+        `so a non-grant 403 is never paraphrased as a grant to ask an owner for`,
+    );
+    assert.ok(
+      source.includes(`${errorExpr.split(".")[0]}.isError`),
+      `${name}: a failed history read must be named, not shown as an empty history`,
+    );
+  }
+}
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

@@ -90,7 +90,12 @@ export default function ScenarioComparison({
   const sdiFloor = numOrNull(sdiCapitalFloor);
 
   const ordered = [...runs].sort(
-    (a, b) => num(b.summary.car_erosion_pp) - num(a.summary.car_erosion_pp)
+    // A run whose erosion was never computed must not sort as "eroded by 0" and
+    // sink to the bottom of a worst-first list as though it were the safest
+    // scenario. Uncomputed sorts LAST explicitly, and is labelled below.
+    (a, b) =>
+      (numOrNull(b.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY) -
+      (numOrNull(a.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY)
   );
 
   const perRun = ordered.map((run) => {
@@ -114,7 +119,8 @@ export default function ScenarioComparison({
       liquidityAssessed,
       lcr: liquidityAssessed ? numOrNull(run.summary.stressed_lcr_pct) : null,
       lcrFloor: numOrNull(coupling?.lcr_min_pct),
-      gap: num(run.summary.capital_gap),
+      // null, not 0: an uncomputed gap is not the absence of a shortfall.
+      gap: numOrNull(run.summary.capital_gap),
     };
   });
 
@@ -187,8 +193,13 @@ export default function ScenarioComparison({
               : 'This run carries no Basel liquidity leg — the coverage ratio was not measured.',
           },
       gap: {
-        display: r.gap.toLocaleString(undefined, { maximumFractionDigits: 0 }),
-        intensity: r.gap > 0 ? 0.6 : 0.1,
+        // An uncomputed gap is not a gap of zero, and must not be shaded as the
+        // mildest cell in the column (audit A360-6).
+        display:
+          r.gap === null
+            ? "—"
+            : r.gap.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+        intensity: r.gap === null ? 0 : r.gap > 0 ? 0.6 : 0.1,
         breach: false,
       },
     },

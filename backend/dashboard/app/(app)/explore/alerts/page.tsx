@@ -15,7 +15,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { BellRing, Pencil, Plus, Trash2 } from "lucide-react";
+import { BellOff, BellRing, Pencil, Plus, Trash2 } from "lucide-react";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -27,6 +27,7 @@ import AlertComposer from "@/components/bi/AlertComposer";
 import AlertHistory from "@/components/bi/AlertHistory";
 import { valueTypeLabel } from "@/components/bi/notifications";
 import {
+  biRefusalSentence,
   isBiAccessDenied,
   isBiUnavailable,
   unknownRecipients,
@@ -40,6 +41,16 @@ import {
   type BiAlertRead,
   type BiAlertUpsert,
 } from "@/lib/api/bi";
+import { useBiNotificationCapabilities } from "@/lib/api/hooks";
+
+/**
+ * Copy for the deployment switch, used wherever the page would otherwise imply
+ * the platform is waiting on the bank. `BI_ALERTS_ENABLED` is the operator's,
+ * not the bank's, so the sentence names the deployment and says what happens
+ * to an alert created meanwhile (it is kept, not judged).
+ */
+const EVALUATION_OFF =
+  "Alert evaluation is not enabled in this deployment. Alerts you create are kept, but none is judged until your platform operator enables it.";
 
 function stateTone(alert: BiAlertRead): StatusTone {
   if (!alert.isActive) return "slate";
@@ -48,16 +59,31 @@ function stateTone(alert: BiAlertRead): StatusTone {
   return "pending";
 }
 
-function stateLabel(alert: BiAlertRead): string {
+/**
+ * The pill on a row. An alert with no verdict yet is said to be waiting for the
+ * bank's figures ONLY when the deployment has said it evaluates alerts: with
+ * the switch off, the platform is not waiting on the bank's book, and saying so
+ * blamed the bank's data for the operator's switch (audit A360-2 M3). When the
+ * platform has not said either way, the pill claims nothing about who is
+ * waiting.
+ */
+function stateLabel(
+  alert: BiAlertRead,
+  evaluationEnabled: boolean | undefined,
+): string {
   if (!alert.isActive) return "Stopped";
   if (alert.latestState === "breached") return "Past its threshold";
   if (alert.latestState === "cleared") return "Within its threshold";
   if (alert.latestState === "not_evaluated") return "Not judged";
-  return "Waiting for figures";
+  if (evaluationEnabled === true) return "Waiting for figures";
+  if (evaluationEnabled === false) return "Not judged here";
+  return "No verdict yet";
 }
 
 export default function BiAlertsPage() {
   const { bank } = useBankContext();
+  const capability = useBiNotificationCapabilities();
+  const evaluationEnabled = capability.alerts;
   const alerts = useBiAlerts(bank?.id);
   const catalogue = useBiCatalogue(bank?.id);
   const create = useCreateBiAlert(bank?.id);
@@ -137,10 +163,27 @@ export default function BiAlertsPage() {
       />
 
       <PageContainer className="flex flex-col gap-6 py-6">
+        {evaluationEnabled === false && (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-4 py-3 text-caption text-navy"
+          >
+            <BellOff size={15} className="mt-0.5 shrink-0 text-slate" aria-hidden />
+            <p>
+              <span className="font-medium">Not judging alerts here.</span>{" "}
+              {EVALUATION_OFF}
+            </p>
+          </div>
+        )}
+
         {composing && (
           <SectionCard
             title={editing ? "Change this alert" : "New threshold alert"}
-            subtitle="Only figures your own access covers are offered."
+            subtitle={
+              evaluationEnabled === false
+                ? `Only figures your own access covers are offered. ${EVALUATION_OFF}`
+                : "Only figures your own access covers are offered."
+            }
           >
             <AlertComposer
               measures={catalogue.data?.measures ?? []}
@@ -179,7 +222,11 @@ export default function BiAlertsPage() {
           <EmptyState
             Icon={BellRing}
             title="No alerts yet"
-            description="Nothing is being watched for you. An alert names one figure, a direction and a line — either a number you set or the limit already governed for that figure — and it is judged every time this institution's figures are rebuilt."
+            description={
+              evaluationEnabled === false
+                ? `Nothing is being watched for you. An alert names one figure, a direction and a line — either a number you set or the limit already governed for that figure. ${EVALUATION_OFF}`
+                : "Nothing is being watched for you. An alert names one figure, a direction and a line — either a number you set or the limit already governed for that figure — and it is judged every time this institution's figures are rebuilt."
+            }
           />
         ) : (
           <ul className="flex flex-col gap-3">
@@ -190,7 +237,7 @@ export default function BiAlertsPage() {
                     <span className="flex flex-wrap items-center gap-2">
                       {alert.name}
                       <StatusPill tone={stateTone(alert)}>
-                        {stateLabel(alert)}
+                        {stateLabel(alert, evaluationEnabled)}
                       </StatusPill>
                       {!alert.ownedByCaller && (
                         <span className="text-micro font-normal text-slate">
@@ -306,11 +353,21 @@ export default function BiAlertsPage() {
                       <AlertHistory
                         events={events.data ?? []}
                         loading={events.isPending}
+                        // A refusal is never rendered as "nothing recorded". A
+                        // 403 that is not a grant denial (a read-only staff
+                        // session, an impersonated principal) shows the
+                        // server's own sentence; a grant denial keeps the
+                        // paraphrase the disclosure rule requires; any other
+                        // failure says the read failed rather than that there
+                        // is nothing to read.
                         withheldMessage={
-                          isBiAccessDenied(events.error)
+                          biRefusalSentence(events.error) ??
+                          (isBiAccessDenied(events.error)
                             ? (openedAlert?.latestDetail ??
                               "Your access does not cover the figure this alert watches.")
-                            : null
+                            : events.isError
+                              ? "What was recorded for this alert could not be read just now."
+                              : null)
                         }
                       />
                     </div>

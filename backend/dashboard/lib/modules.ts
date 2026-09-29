@@ -252,6 +252,28 @@ export type ModuleScope = {
   isResolved: boolean;
 };
 
+/**
+ * Whether THIS DEPLOYMENT evaluates alerts and sends subscriptions.
+ *
+ * Three-valued, and the middle value carries the design: `undefined` means the
+ * platform has not answered yet, `false` means it answered no. A page may say
+ * "Not judged here" only on an explicit `false` — saying it while the answer is
+ * still in flight would blame a deployment decision for a loading state, which
+ * is a smaller version of the defect this exists to fix (audit A360-2 M3: the
+ * alerts page read "Waiting for figures" about a shut flag, blaming the bank's
+ * data).
+ *
+ * Read from the GENERATED `FeatureFlagsRead` fields since the client was
+ * regenerated against the projection (2026-09-29). It was briefly read off the
+ * raw response body under the wire names, because the generated model predated
+ * the two flags; that reader is retired, and `modules.test.ts` now fails if it
+ * comes back.
+ */
+export type NotificationCapabilities = {
+  alerts: boolean | undefined;
+  subscriptions: boolean | undefined;
+};
+
 export function isBaselineOnlyScope(scope: ModuleScope): boolean {
   return (
     scope.isResolved &&

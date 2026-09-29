@@ -43,6 +43,7 @@ import type { BiQueryResult, BiResultColumn } from "@aequoros/risk-service-api";
 // Relative, not the `@/` alias: this module is compiled and run under node by
 // `pnpm --filter @aequoros/dashboard test`, which cannot resolve the alias.
 import { currencyCode, fmtCurrency, fmtInt, fmtNum, fmtPct } from "../../lib/format";
+import { hasAnyValue, type SeriesValue } from "../../lib/echartsOptions";
 
 /** The display for a value the platform did not measure. */
 export const NOT_MEASURED = "—";
@@ -172,4 +173,21 @@ export function hasNoMeasuredValue(result: BiQueryResult): boolean {
   return result.rows.every((row) =>
     indices.every((index) => absent(row[index])),
   );
+}
+
+/**
+ * A series' legend name, qualified when the series measured NOTHING.
+ *
+ * On a multi-measure chart one measure can be absent for every group while its
+ * neighbours have values. `WidgetRenderer` refuses to draw only when EVERY
+ * measure is absent, so such a series reaches the chart — and with
+ * `connectNulls: false` it draws no line, which is the honest gap. The legend
+ * still names it as if it had been drawn. Saying "(not measured)" there is what
+ * separates a series that is absent from one that is hidden behind another.
+ */
+export function unmeasuredSeriesLabel(
+  label: string,
+  values: readonly SeriesValue[],
+): string {
+  return hasAnyValue(values) ? label : `${label} (not measured)`;
 }

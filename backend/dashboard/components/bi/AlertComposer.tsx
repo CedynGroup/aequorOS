@@ -125,6 +125,13 @@ export default function AlertComposer({
       thresholdBasis: threshold.basis,
       threshold: threshold.threshold,
       notifyEmails: parseRecipients(draft.recipients),
+      // Carried through unchanged. This form edits EMAIL recipients; an alert may
+      // also name users by id (added through the API), and the server replaces its
+      // stored list from the request — so not sending them here deleted them
+      // silently on every edit. The owner is the only principal who may edit an
+      // alert and `notify_user_ids` is the complete list for an owner, so this is
+      // faithful rather than lossy.
+      notifyUserIds: editing?.notifyUserIds ?? [],
       isActive: editing?.isActive ?? true,
       reason: draft.reason.trim(),
     });

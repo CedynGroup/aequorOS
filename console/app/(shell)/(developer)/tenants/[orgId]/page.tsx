@@ -647,6 +647,7 @@ export default function TenantDetailPage() {
           <RemediationPanel
             orgId={orgId}
             orgLabel={orgLabel}
+            bankId={t?.bank_id ?? null}
             ingestionBatches={ingestion.data?.batches ?? []}
             config={config.data}
             onRecomputed={() => {
@@ -662,6 +663,9 @@ export default function TenantDetailPage() {
               activity.reload();
             }}
             onConfigChanged={() => config.reload()}
+            // The chain shows up in the activity feed as it hops; the marts
+            // themselves have no console read section yet.
+            onBackfill={() => activity.reload()}
           />
         </>
       ) : (

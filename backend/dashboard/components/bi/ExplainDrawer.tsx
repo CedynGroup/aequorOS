@@ -14,6 +14,15 @@
  *
  * Absent evidence is shown as absent. A blank input hash means the figure is
  * not an engine copy, not that it has one and we did not look.
+ *
+ * And no wire token is shown as prose. The aggregation, a component's role, the
+ * engine module, tier and regime are closed server vocabularies, and each is
+ * rendered through its label in `./labels` — this drawer once read "advisory
+ * internal · Aggregation ratio_of_sums · Module liq · role over" to a reviewer
+ * who had clicked Explain on the net interest margin. The one identifier that
+ * IS shown raw, the engine metric code, is labelled as a code and set in
+ * monospace, like the input hash beside it: an identifier presented as an
+ * identifier is evidence; an identifier dressed as a sentence is noise.
  */
 
 import { useEffect } from "react";
@@ -21,9 +30,18 @@ import { X } from "lucide-react";
 import type { BiQuery, BiTrustCheckRead } from "@aequoros/risk-service-api";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { useBiExplain, isBiAccessDenied } from "@/lib/api/bi";
+import { biRefusalSentence, isBiAccessDenied, useBiExplain } from "@/lib/api/bi";
+import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
+import {
+  aggregationLabel,
+  componentRoleLabel,
+  designationLabel,
+  engineTierLabel,
+  moduleLabel,
+  regimeLabel,
+} from "./labels";
 import { NOT_MEASURED } from "./result";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -87,6 +105,7 @@ export default function ExplainDrawer({
 
   const data = explain.data;
   const engine = data?.engine;
+  const refusal = biRefusalSentence(explain.error);
 
   return (
     <div
@@ -132,7 +151,9 @@ export default function ExplainDrawer({
 
           {isBiAccessDenied(explain.error) && <RestrictedWidget />}
 
-          {explain.error && !isBiAccessDenied(explain.error) && (
+          {refusal !== null && <RefusedWidget sentence={refusal} />}
+
+          {explain.error && !isBiAccessDenied(explain.error) && refusal === null && (
             <ErrorPanel
               error={explain.error}
               onRetry={() => void explain.refetch()}
@@ -159,7 +180,7 @@ export default function ExplainDrawer({
                   )}
                   {data.measure.advisoryDesignation && (
                     <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      {data.measure.advisoryDesignation.replace(/_/g, " ")}
+                      {designationLabel(data.measure.advisoryDesignation)}
                     </span>
                   )}
                 </div>
@@ -179,7 +200,10 @@ export default function ExplainDrawer({
                         : "The fact grain"
                     }
                   />
-                  <Row label="Aggregation" value={data.measure.aggregation} />
+                  <Row
+                    label="How it is computed"
+                    value={aggregationLabel(data.measure.aggregation)}
+                  />
                   <Row label="Currency conversion" value={text(data.fxRule)} />
                   <Row
                     label="Window"
@@ -212,7 +236,7 @@ export default function ExplainDrawer({
                         className="flex items-baseline justify-between gap-3 text-caption"
                       >
                         <span className="text-slate">
-                          {component.role.replace(/_/g, " ")}
+                          {componentRoleLabel(component.role)}
                         </span>
                         <span className="text-navy">{component.label}</span>
                       </li>
@@ -227,10 +251,20 @@ export default function ExplainDrawer({
                     The engine row this is a copy of
                   </h3>
                   <dl className="divide-y divide-border-light">
-                    <Row label="Metric" value={engine.metricId} />
-                    <Row label="Module" value={engine.module} />
-                    <Row label="Tier" value={engine.tier} />
-                    <Row label="Basis" value={text(engine.regime)} />
+                    <Row
+                      label="Engine metric code"
+                      value={
+                        <code className="font-mono text-micro">
+                          {engine.metricId}
+                        </code>
+                      }
+                    />
+                    <Row label="Module" value={moduleLabel(engine.module)} />
+                    <Row label="Tier" value={engineTierLabel(engine.tier)} />
+                    <Row
+                      label="Capital regime"
+                      value={regimeLabel(engine.regime) ?? NOT_MEASURED}
+                    />
                     <Row label="Reporting date" value={text(engine.asOf)} />
                     <Row
                       label="Figure"

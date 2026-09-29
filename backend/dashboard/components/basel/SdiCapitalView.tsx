@@ -130,7 +130,9 @@ export default function SdiCapitalView({
   const assuranceHistory = (assurance.data?.history ?? []).map((point) => ({
     asOf: point.as_of,
     carPct: point.car_pct === null ? null : num(point.car_pct),
-    nplPct: num(point.npl_ratio) * 100,
+    // A null NPL ratio plotted as 0% — the best possible reading of a figure
+    // that was never computed. Null keeps the point off the line instead.
+    nplPct: numOrNull(point.npl_ratio) === null ? null : numOrNull(point.npl_ratio)! * 100,
   }));
   const currentAssurance = assurance.data?.current;
 

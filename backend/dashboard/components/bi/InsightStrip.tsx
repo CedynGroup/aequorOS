@@ -30,16 +30,42 @@
  * The strip is meant to sit under the page header on landing pages including
  * the Command Center, and `scripts/assert-home-route-bundle.mjs` keeps the
  * charting runtime out of that route's initial bundle.
+ *
+ * THIS FILE ALSO HOSTS WHAT A LANDING PAGE MOUNTS. `docs/bi.md` §Insights layer
+ * names three seams a module page carries, and two of them live here so that
+ * every landing page wires them the same way and none can get the gating wrong
+ * on its own: `LandingInsightStrip` (the strip, connected to the route and to
+ * the feature flag) and `useKpiExplain` (the provenance drawer a `KpiStat`'s
+ * `explain` prop opens). The third, the chart badge, is
+ * `./TrustBadge.tsx::ReconciliationTrustBadge`. `landingSurfaces.test.ts` pins
+ * that every landing page reaches all three — "built and never mounted" is the
+ * defect this build has shipped repeatedly (audit A360-7 S3).
  */
 
+import { useCallback, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { BiInsightsRead } from "@aequoros/risk-service-api";
 import Sparkline from "@/components/ui/Sparkline";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
-import { isBiAccessDenied } from "@/lib/api/bi";
+import {
+  kpiExplainQuery,
+  liveEngineMeasureId,
+  type KpiExplainTarget,
+} from "@/components/ui/KpiStat";
+import { useBankContext } from "@/components/shell/BankContext";
+import {
+  biRefusalSentence,
+  isBiAccessDenied,
+  isBiUnavailable,
+  useBiAvailability,
+  useBiCatalogue,
+  useBiInsights,
+} from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
+import ExplainDrawer from "./ExplainDrawer";
+import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
 import type { BiFavourability, BiInsight } from "./types";
@@ -176,6 +202,13 @@ export default function InsightStrip({
   // none of the headline measures, and it names none of them in doing so.
   if (isBiAccessDenied(error)) return <RestrictedWidget />;
 
+  // Every other refusal — an impersonated staff session, for one — arrives with
+  // the server's own sentence and nothing to hide. It is rendered verbatim: "an
+  // organization owner can grant it" would state a decision the server never
+  // made, and an instruction the reader could not act on.
+  const refusal = biRefusalSentence(error);
+  if (refusal !== null) return <RefusedWidget sentence={refusal} />;
+
   if (error) {
     return (
       <ErrorPanel
@@ -208,4 +241,126 @@ export default function InsightStrip({
       ))}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// What a landing page mounts
+// ---------------------------------------------------------------------------
+
+/**
+ * THE STRIP, CONNECTED. A landing page hands it the institution and the page's
+ * own reporting date and mounts it directly under `PageHeader`; nothing else is
+ * decided on the page. Three absences are rendered as absences, and the two
+ * that mean "this surface is not here" render NOTHING rather than an error:
+ *
+ *  * `BI_ENABLED` is off, or not yet known to be on — `useBiAvailability`
+ *    answers `false` on a failed flag read and `undefined` while loading, and
+ *    both are treated as off so a module page never flashes a BI surface at a
+ *    deployment that does not serve one.
+ *  * The route answered 404 — the flag is off after all, or the institution is
+ *    another tenant's. A feature that is off is not "forbidden"; it is not there.
+ *  * No reporting date — nothing to speak about, so nothing is asked.
+ *
+ * A 403 is NOT one of those, and `InsightStrip` renders it as a refusal in one
+ * of two shapes: a GRANT denial (the reader holds none of the headline measures)
+ * is paraphrased, because its body names what was refused; every other refusal
+ * (an impersonated staff session, say) is shown in the server's own sentence. A
+ * date with nothing computed says so in words, never as an empty strip and never
+ * as a figure. The insights hub (`app/(app)/insights/page.tsx`) mounts the raw
+ * `InsightStrip` itself because it owns a date picker and a catalogue read of
+ * its own; this is the shape every OTHER landing page uses.
+ */
+export function LandingInsightStrip({
+  bankId,
+  asOf,
+  className = "",
+}: {
+  bankId: string | undefined;
+  /** The page's reporting date, ISO day or `Date`. */
+  asOf: Date | string | null | undefined;
+  className?: string;
+}) {
+  const availability = useBiAvailability();
+  const enabled = availability.biEnabled === true;
+  const day = isoDay(asOf);
+  const insights = useBiInsights(bankId, day, undefined, enabled);
+
+  if (!enabled || !bankId || day === null) return null;
+  if (isBiUnavailable(insights.error)) return null;
+
+  const strip = (
+    <InsightStrip
+      data={insights.data}
+      isLoading={insights.isPending}
+      error={insights.error}
+      onRetry={() => void insights.refetch()}
+    />
+  );
+  return className ? <div className={className}>{strip}</div> : strip;
+}
+
+/**
+ * THE PROVENANCE DRAWER A MODULE KPI OPENS.
+ *
+ * A module landing page shows the live engine's figures, and BI keeps a copy of
+ * each as a `certified_engine` measure. `explainFor(metricId)` returns the
+ * click handler for the KPI that shows the registry metric `metricId` — or
+ * `undefined`, in which case `KpiStat` renders exactly as it always has —
+ * and `drawer` is the one `ExplainDrawer` the page renders (anywhere in its
+ * tree, once). Opening it asks `POST …/bi/explain` for that measure in a
+ * point-in-time query at the page's reporting date, and the drawer shows the
+ * measure's declaration, the engine row it is a copy of, and the current
+ * status of every reconciliation check that governs it.
+ *
+ * `undefined` is returned, and no button is drawn, whenever the affordance would
+ * not be honest:
+ *
+ *  * BI is off or not yet known to be on;
+ *  * no institution or no reporting date;
+ *  * the catalogue has not answered, or refused — the catalogue is filtered to
+ *    what THIS reader may query, so a measure absent from it is one the drawer
+ *    would 403 on, and offering the button would be offering a refusal;
+ *  * the metric has no live copy in the catalogue, or has several and none of
+ *    them is under the institution's own capital regime
+ *    (`components/ui/KpiStat.tsx::liveEngineMeasureId`).
+ */
+export function useKpiExplain(
+  bankId: string | undefined,
+  asOf: Date | string | null | undefined,
+): {
+  explainFor: (metricId: string) => (() => void) | undefined;
+  drawer: ReactNode;
+} {
+  const { institutionType } = useBankContext();
+  const availability = useBiAvailability();
+  const enabled = availability.biEnabled === true;
+  const day = isoDay(asOf);
+  const catalogue = useBiCatalogue(bankId, enabled);
+  const [explaining, setExplaining] = useState<KpiExplainTarget | null>(null);
+
+  const measures = catalogue.data?.measures;
+  const capitalRegime = institutionType?.detail?.capitalRegime ?? null;
+
+  const explainFor = useCallback(
+    (metricId: string): (() => void) | undefined => {
+      if (!enabled || !bankId || day === null || !measures) return undefined;
+      const measure = liveEngineMeasureId(measures, metricId, capitalRegime);
+      if (measure === null) return undefined;
+      return () =>
+        setExplaining({ measure, query: kpiExplainQuery(measure, day) });
+    },
+    [enabled, bankId, day, measures, capitalRegime],
+  );
+
+  const drawer =
+    enabled && bankId ? (
+      <ExplainDrawer
+        bankId={bankId}
+        measure={explaining?.measure ?? null}
+        query={explaining?.query ?? null}
+        onClose={() => setExplaining(null)}
+      />
+    ) : null;
+
+  return { explainFor, drawer };
 }

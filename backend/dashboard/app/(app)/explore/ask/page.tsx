@@ -92,7 +92,12 @@ export default function AskPage() {
     );
   }
 
-  if (isBiUnavailable(failure)) {
+  // Only the ASK itself can say the surface is not here. A 404 from the poll or
+  // the run is "Question not found" — the proposal expired, or belongs to another
+  // reader — and the question had already been accepted by then; rendering it as
+  // "Business intelligence is not available here" would tell a reader the whole
+  // workspace had gone. Those two fall through to the platform's own sentence.
+  if (isBiUnavailable(ask.error)) {
     return (
       <>
         <PageHeader title="Ask a question" />

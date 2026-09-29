@@ -43,7 +43,6 @@ import {
   parseAskProposal,
   type AskClauseKind,
 } from "./ask";
-import { nlqEnabledFromFeatureFlags } from "./featureFlags";
 
 let failures = 0;
 function test(name: string, fn: () => void): void {
@@ -542,18 +541,45 @@ test("the answer states the absence BEFORE it could draw a table", () => {
 
 // --- 5. the deployment flag is three-valued ---------------------------------
 
-test("the NLQ flag is yes, no, or not yet known", () => {
-  assert.equal(nlqEnabledFromFeatureFlags({ bi_nlq_enabled: true }), true);
-  assert.equal(nlqEnabledFromFeatureFlags({ bi_nlq_enabled: false }), false);
-  // A backend that does not project the flag yet: unknown, which HIDES the
-  // surface and does not 404 a deep link.
-  assert.equal(nlqEnabledFromFeatureFlags({ bi_enabled: true }), undefined);
+test("the NLQ flag is read from the typed field, not off the raw body", () => {
+  // INVERTED at the regeneration, per AGENTS.md: an interim reader that outlives
+  // the client it worked around is a second contract nobody is checking.
+  // `nlqEnabledFromFeatureFlags` existed because `FeatureFlagsRead` predated the
+  // flag, so the value had to be read off the spread-through wire name. The
+  // client now carries `biNlqEnabled` and the reader is deleted; this asserts it
+  // does not come back, and that the three-valued behaviour it protected is
+  // still what ships.
   assert.equal(
-    nlqEnabledFromFeatureFlags({ bi_nlq_enabled: "yes" }),
-    undefined,
+    existsSync(join(ROOT, "lib/api/featureFlags.ts")),
+    false,
+    "lib/api/featureFlags.ts is back. FeatureFlagsRead carries biNlqEnabled now, " +
+      "so a hand-written reader beside it is a second, unchecked copy of the flag.",
   );
-  assert.equal(nlqEnabledFromFeatureFlags(null), undefined);
-  assert.equal(nlqEnabledFromFeatureFlags(undefined), undefined);
+  const bi = source("lib/api/bi.ts");
+  assert.equal(
+    /nlqEnabledFromFeatureFlags\s*\(/.test(bi),
+    false,
+    "lib/api/bi.ts still calls the retired raw-body reader",
+  );
+  // THREE-VALUED, still: `query.data?.biNlqEnabled` is undefined until the flags
+  // answer (nav hides, deep link does not 404), and undefined again on a backend
+  // that does not project it — `FromJSON` simply leaves the field absent.
+  assert.match(
+    bi,
+    /nlqEnabled:\s*query\.isError\s*\?\s*false\s*:\s*query\.data\?\.biNlqEnabled/,
+    "the NLQ flag must fail closed on an error and stay undefined until answered",
+  );
+  const generated = join(
+    dirname(dirname(ROOT)),
+    "packages/risk-service-api/src/models/FeatureFlagsRead.ts",
+  );
+  assert.ok(existsSync(generated), `generated model not found: ${generated}`);
+  assert.match(
+    readFileSync(generated, "utf8"),
+    /biNlqEnabled:\s*boolean/,
+    "FeatureFlagsRead no longer carries biNlqEnabled — the typed read above is " +
+      "reading a field that does not exist",
+  );
 });
 
 // --- 6. the surface is reached ----------------------------------------------

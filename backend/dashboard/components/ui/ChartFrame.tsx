@@ -10,10 +10,21 @@ import { SkeletonLine } from "./Skeleton";
  * Pass the SAME `height` to the chart inside it — `components/bi/EChart` sizes a
  * canvas in pixels rather than to its container, so the two numbers agreeing is
  * what keeps the card from clipping or leaving a gap.
+ *
+ * `trust` is the actions slot's FIRST occupant, reserved for the reconciliation
+ * verdict (`components/bi/TrustBadge.tsx::ReconciliationTrustBadge`) —
+ * `docs/bi.md` §Insights layer: "`TrustBadge` goes in the `ChartFrame` actions
+ * slot". It is its own prop rather than something callers splice into
+ * `actions` so a page that already fills the slot cannot drop the badge by
+ * accident. It belongs on a chart whose figures ARE the institution's computed
+ * position at the page's reporting date — the thing the checks compare; a
+ * projection path or a market curve is not one, and carries none. Absent, the
+ * header renders exactly as before.
  */
 export default function ChartFrame({
   title,
   subtitle,
+  trust,
   actions,
   height = 280,
   loading = false,
@@ -23,6 +34,8 @@ export default function ChartFrame({
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
+  /** The reconciliation verdict for the figures drawn. See above. */
+  trust?: ReactNode;
   actions?: ReactNode;
   /** Pixel height of the chart body (the ResponsiveContainer viewport). */
   height?: number;
@@ -42,8 +55,11 @@ export default function ChartFrame({
             <p className="mt-0.5 text-caption text-slate">{subtitle}</p>
           )}
         </div>
-        {actions && (
-          <div className="shrink-0 flex items-center gap-2">{actions}</div>
+        {(trust || actions) && (
+          <div className="shrink-0 flex items-center gap-2">
+            {trust}
+            {actions}
+          </div>
         )}
       </div>
 

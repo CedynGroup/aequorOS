@@ -104,7 +104,7 @@ type PathPoint = {
   lcrPct: number | null;
   nsfrPct: number | null;
   netIncome: number | null;
-  totalAssets: number;
+  totalAssets: number | null;
 };
 
 type DeltaRow = {
@@ -216,7 +216,9 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
     lcrPct: numOrNull(p.lcr_pct as string | null),
     nsfrPct: numOrNull(p.nsfr_pct as string | null),
     netIncome: p.year === 0 ? null : num(p.net_income as string),
-    totalAssets: num(p.total_assets as string),
+    // The `as string` cast hid that this is nullable; `num()` then made an
+    // absent projection read as assets of zero.
+    totalAssets: numOrNull(p.total_assets),
   });
   const comparison = (key: string): Comparison => {
     const c = metrics.year5?.[key];

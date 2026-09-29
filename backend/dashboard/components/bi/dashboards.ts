@@ -40,7 +40,8 @@ import {
   useBiSavedDashboards,
 } from "@/lib/api/bi";
 import { savedCertification } from "./builder";
-import { datasetRequirement, panelSurface } from "./labels";
+import { namedDataset, panelSurface } from "./labels";
+import { restrictedWidgetCount } from "./refusal";
 import type {
   BiDashboardVisibility,
   BiGridItem,
@@ -52,13 +53,15 @@ import type {
   BiWidgetKind,
 } from "./types";
 
-/**
- * The Data Engine dataset a figure-bearing widget names when its answer is
- * empty, for a widget whose pack file names none. The marts are built from the
- * canonical position book, so that is the dataset to supply — the same answer
- * Explore gives for the same reason.
+/*
+ * THERE IS NO DEFAULT DATASET. A query widget whose pack file names no
+ * `needs_data` gets `dataset: null`, and its empty state says it does not know
+ * why it is empty. This module used to default to `positions`, and 26 pack
+ * widgets — the Board pack's capital adequacy, liquidity coverage and net
+ * interest margin among them — then told a reader on a date with no minted
+ * official run that the institution had not uploaded its positions. The
+ * decision lives in `labels.ts::namedDataset`, once.
  */
-const DEFAULT_DATASET_KEY = "positions";
 
 /**
  * Shapes this client draws. A pack may author a shape the browser has no
@@ -104,9 +107,10 @@ function pendingCapability(
  * The order of the branches is the order the properties depend on:
  *
  *  1. a REFUSAL is decided first and carries only geometry;
- *  2. a widget with a resolved QUERY is a figure, and its `needs_data` key
- *     becomes the dataset its empty state names — the answer is still asked for,
- *     because a bank that has supplied the data must see the figure;
+ *  2. a widget with a resolved QUERY is a figure, and its `needs_data` key —
+ *     when it carries one — becomes the dataset its empty state names; the
+ *     answer is still asked for, because a bank that has supplied the data must
+ *     see the figure. Without a key the empty state names no cause;
  *  3. a PANEL embeds a platform surface, which authorizes its own reader;
  *  4. PLATFORM WORK outstanding is stated as platform work. It is never
  *     collapsed into "needs data": telling a bank it has not supplied something
@@ -133,7 +137,7 @@ export function packWidgetView(widget: BiPackWidgetRead): BiPackWidgetView {
         subtitle: caption.length > 0 ? caption : undefined,
         kind: widgetKind(widget.kind),
         query: widget.query,
-        dataset: datasetRequirement(widget.needsData ?? DEFAULT_DATASET_KEY),
+        dataset: namedDataset(widget.needsData),
         layout,
       },
     };
@@ -164,12 +168,13 @@ export function packWidgetView(widget: BiPackWidgetRead): BiPackWidgetView {
     layout,
     title,
     caption,
-    dataset: datasetRequirement(widget.needsData ?? DEFAULT_DATASET_KEY),
+    dataset: namedDataset(widget.needsData),
   };
 }
 
 /** A resolved pack, as the dashboard surface renders it. */
 export function packView(pack: BiPackRead): BiPackView {
+  const widgets = pack.widgets.map(packWidgetView);
   return {
     id: pack.id,
     title: pack.title,
@@ -181,8 +186,10 @@ export function packView(pack: BiPackRead): BiPackView {
     certification: "platform",
     message: pack.message,
     everyFigureRefused: pack.access === "restricted",
-    restrictedWidgets: pack.restrictedWidgets ?? 0,
-    widgets: pack.widgets.map(packWidgetView),
+    // Counted from the refusals actually in the payload when the server's own
+    // count is absent: `?? 0` hid the refusal notice over a canvas of locks.
+    restrictedWidgets: restrictedWidgetCount(pack.restrictedWidgets, widgets),
+    widgets,
   };
 }
 
@@ -282,6 +289,7 @@ export function savedDashboardSummary(
 export function savedDashboardView(
   read: BiDashboardRead,
 ): BiSavedDashboardView {
+  const widgets = read.widgets.map(packWidgetView);
   return {
     id: read.id,
     title: read.title,
@@ -295,8 +303,8 @@ export function savedDashboardView(
     sourcePack: read.sourcePack,
     message: read.message,
     everyFigureRefused: read.access === "restricted",
-    restrictedWidgets: read.restrictedWidgets ?? 0,
-    widgets: read.widgets.map(packWidgetView),
+    restrictedWidgets: restrictedWidgetCount(read.restrictedWidgets, widgets),
+    widgets,
   };
 }
 

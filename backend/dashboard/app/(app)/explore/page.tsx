@@ -125,15 +125,6 @@ const ANSWER_VIEWS: readonly { view: AnswerView; label: string }[] = [
   { view: "grid", label: "Full grid" },
 ];
 
-/**
- * The Data Engine route a reader is sent to when the answer is empty. The marts
- * are built from the canonical position book, so that is the dataset to supply.
- */
-const EXPLORE_DATASET = {
-  label: "Positions and balances for this date",
-  href: "/data-engine/positions",
-};
-
 function toggle(values: readonly string[], id: string): string[] {
   return values.includes(id)
     ? values.filter((value) => value !== id)
@@ -338,7 +329,12 @@ export default function ExplorePage() {
       } for ${asOf}${coverage.suffix ? `, ${coverage.suffix}` : ""}`,
       kind,
       query,
-      dataset: EXPLORE_DATASET,
+      // No dataset is NAMED for a question a reader composed: its measures may
+      // be engine copies, mart computations or a bank formula, and an empty
+      // answer says nothing about which input is missing. This page used to
+      // send every empty answer to the positions template — a false cause for a
+      // capital ratio whose official run had simply not been minted.
+      dataset: null,
       layout: { i: "explore", x: 0, y: 0, w: 12, h: 6 },
     };
   }, [asOf, coverage.suffix, kind, query, view]);
@@ -672,6 +668,9 @@ export default function ExplorePage() {
               onRetry={() => void summaryAnswer.refetch()}
               onExplain={explainWithheld ? undefined : setExplaining}
               actions={<ExportActions bankId={bank?.id} query={query} />}
+              // An empty answer under a narrowed scope is not an empty book;
+              // the coverage carries the sentence that says so.
+              coverage={coverage}
               // The query AS SUBMITTED, which is what a drill-through needs: it
               // carries the reader's date and every filter they narrowed by, so
               // the rows behind a figure are the figure's own rows.
@@ -693,7 +692,8 @@ export default function ExplorePage() {
               <PivotGrid
                 bankId={bank?.id}
                 query={query}
-                dataset={EXPLORE_DATASET}
+                dataset={null}
+                coverage={coverage}
               />
             </div>
           </SectionCard>

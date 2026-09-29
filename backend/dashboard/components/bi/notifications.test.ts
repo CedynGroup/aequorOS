@@ -330,6 +330,48 @@ test("something that cannot be an address at all is named back to the reader", (
   assert.deepEqual(malformedRecipients("cfo@example.test"), []);
 });
 
+// --- the payload states every field the contract carries ----------------------
+
+test("every field the notification contracts carry is one the payload states", () => {
+  // THE PIN THAT WAS MISSING. `lib/api/bi.ts` posts alerts and subscriptions
+  // through a hand-written transport, so no compiler checks its request shape
+  // against the contract — and it omitted `notify_user_ids` and
+  // `recipient_user_ids`. The server REPLACES both from the request, where the
+  // schema defaults them to an empty list, so every dashboard edit of an alert
+  // silently deleted the user recipients an Org Owner had added through the API,
+  // and answered 200 (verification auditor V2).
+  //
+  // The generated serializers are the contract. Read from the package source
+  // rather than imported, because this suite runs as plain Node.
+  const generated = join(repoRoot(), "packages", "risk-service-api", "src", "models");
+  const transport = readFileSync(join(repoRoot(), "backend", "dashboard", "lib", "api", "bi.ts"), "utf8");
+  for (const [model, builder] of [
+    ["BiAlertUpsert", "alertPayload"],
+    ["BiSubscriptionUpsert", "subscriptionPayload"],
+  ] as const) {
+    const modelPath = join(generated, `${model}.ts`);
+    assert.ok(existsSync(modelPath), `generated model not found: ${modelPath}`);
+    const body =
+      new RegExp(`export function ${model}ToJSONTyped[\\s\\S]*?return \\{([\\s\\S]*?)\\n  \\};`).exec(
+        readFileSync(modelPath, "utf8"),
+      );
+    assert.ok(body, `could not read the generated ${model} serializer`);
+    const wireKeys = [...body[1].matchAll(/^\s{4}([a-z_0-9]+):/gm)].map((m) => m[1]);
+    assert.ok(wireKeys.length >= 8, `read only ${wireKeys.length} keys from ${model}`);
+
+    const fn = new RegExp(`function ${builder}\\(([\\s\\S]*?)\\n\\}`).exec(transport);
+    assert.ok(fn, `could not read ${builder} in lib/api/bi.ts`);
+    const missing = wireKeys.filter((key) => !new RegExp(`\\b${key}:`).test(fn[1]));
+    assert.deepEqual(
+      missing,
+      [],
+      `${builder} does not state ${missing.join(", ")}. The server replaces what ` +
+        `the request omits, so an omitted field DELETES what is stored — which is ` +
+        `how every dashboard edit wiped an alert's user recipients.`,
+    );
+  }
+});
+
 if (failures > 0) {
   console.error(`${failures} test(s) failed`);
   process.exit(1);

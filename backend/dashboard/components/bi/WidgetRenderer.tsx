@@ -3,15 +3,16 @@
 /**
  * One widget, from one catalogue answer.
  *
- * The renderer decides between four outcomes and nothing else, in this order,
+ * The renderer decides between five outcomes and nothing else, in this order,
  * because the order carries the properties:
  *
- *   1. the server refused it        → `RestrictedWidget`, which names nothing;
- *   2. the server could not answer  → the failure, in words, with a retry;
- *   3. it answered with no figures  → `NeedsDataWidget`, never a zero;
- *   4. it answered                  → the chart or table the pack asked for.
+ *   1. the evaluator denied a grant → `RestrictedWidget`, which names nothing;
+ *   2. the server refused otherwise → `RefusedWidget`, the server's own sentence;
+ *   3. the server could not answer  → the failure, in words, with a retry;
+ *   4. it answered with no figures  → `NeedsDataWidget`, never a zero;
+ *   5. it answered                  → the chart or table the pack asked for.
  *
- * Step 3 comes before step 4 on purpose. A chart handed an empty series draws a
+ * Step 4 comes before step 5 on purpose. A chart handed an empty series draws a
  * flat line on the baseline, which is a picture of a measurement that never
  * happened; a board reader cannot tell it from a real run of zeros.
  *
@@ -30,9 +31,11 @@ import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import DrillAction from "./DrillAction";
 import EChart, { type BiEChartsOption } from "./EChart";
 import NeedsDataWidget from "./NeedsDataWidget";
+import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import TrustBadge from "./TrustBadge";
-import { isBiAccessDenied } from "@/lib/api/bi";
+import { biRefusalSentence, isBiAccessDenied } from "@/lib/api/bi";
+import type { ReaderCoverage } from "@/lib/api/dataScope";
 import { drillDestinations } from "./drill";
 import {
   formatCell,
@@ -41,6 +44,7 @@ import {
   isEmptyResult,
   measureColumns,
   rowLabel,
+  unmeasuredSeriesLabel,
 } from "./result";
 import type { BiWidgetKind, BiWidgetSpec } from "./types";
 
@@ -98,16 +102,21 @@ function chartOption(
       measures.length > 1 ? { bottom: 0, type: "scroll" } : { show: false },
     xAxis: { type: "category", data: categories },
     yAxis: { type: "value" },
-    series: measureIndices.map((entry) => ({
-      name: entry.column.label,
-      type: line ? "line" : "bar",
-      areaStyle: kind === "area" ? {} : undefined,
-      stack: stacked ? "total" : undefined,
+    series: measureIndices.map((entry) => {
       // A null cell stays null: ECharts leaves a gap, which is what an
       // unmeasured point is. Substituting 0 would draw a measurement.
-      data: result.rows.map((row) => cellNumber(row[entry.index])),
-      connectNulls: false,
-    })),
+      const data = result.rows.map((row) => cellNumber(row[entry.index]));
+      return {
+        // A series with no reading draws nothing, and its legend entry says so
+        // rather than standing beside the others as if it had been drawn.
+        name: unmeasuredSeriesLabel(entry.column.label, data),
+        type: line ? "line" : "bar",
+        areaStyle: kind === "area" ? {} : undefined,
+        stack: stacked ? "total" : undefined,
+        data,
+        connectNulls: false,
+      };
+    }),
   } as BiEChartsOption;
 }
 
@@ -155,6 +164,7 @@ export default function WidgetRenderer({
   onExplain,
   actions,
   query,
+  coverage,
 }: {
   spec: BiWidgetSpec;
   result: BiQueryResult | null | undefined;
@@ -174,6 +184,12 @@ export default function WidgetRenderer({
    * Omitted, no drill action is offered at all.
    */
   query?: BiQuery;
+  /**
+   * How much of the book the reader's access covers, when the caller has
+   * resolved it for THIS question. An empty answer under a narrowed scope is
+   * not an empty book, and the empty state has to say so.
+   */
+  coverage?: ReaderCoverage;
 }) {
   const height = widgetBodyHeight(spec.layout.h);
 
@@ -201,6 +217,13 @@ export default function WidgetRenderer({
     return <RestrictedWidget height={height + WIDGET_CHROME_HEIGHT} />;
   }
 
+  const refusal = biRefusalSentence(error);
+  if (refusal !== null) {
+    return (
+      <RefusedWidget sentence={refusal} height={height + WIDGET_CHROME_HEIGHT} />
+    );
+  }
+
   if (error) {
     return (
       <section className="card p-5">
@@ -218,6 +241,7 @@ export default function WidgetRenderer({
         // was granted; a refusal is the branch above and names nothing.
         title={spec.title}
         caption={spec.subtitle}
+        coverage={coverage}
         height={height + WIDGET_CHROME_HEIGHT}
       />
     );

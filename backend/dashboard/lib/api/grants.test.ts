@@ -820,61 +820,75 @@ test("the interim transport is gone, and the generated operations are used", () 
   }
 });
 
-test("every field the grant contract carries is one the composer decides", () => {
-  // THE PERMANENT FORM OF THE STALE-CLIENT TRIPWIRE. `BindingCreateRequestToJSON`
+test("every field each grant contract carries is one the composer decides", () => {
+  // THE PERMANENT FORM OF THE STALE-CLIENT TRIPWIRE. Each generated `ToJSON`
   // hand-enumerates its keys with no spread, so a field the builder leaves out
   // is dropped in the browser and the server's column default decides it
   // instead — silently, with a 201. That is exactly how Phase 4's coverage pair
   // would have widened a two-branch grant to the whole book. So: every property
-  // the generated serializer reads must be one `grantCreateRequest` states.
+  // a generated serializer reads must be one the matching builder states.
   //
-  // The serializer's source is read from disk rather than imported, because this
+  // ALL THREE request contracts, not the create request alone. The tripwire
+  // pinned `BindingCreateRequest` only, so `SsoAccessRequestApprove` — the path
+  // that admits a NEW SSO user with their first grant — and
+  // `BindingPreviewRequest` could each have gained a column the composer never
+  // set, and the first person to find out would have been the one whose grant
+  // was wider than the Owner composed.
+  //
+  // The serializers' source is read from disk rather than imported, because this
   // suite runs as plain Node and the package ships TypeScript.
-  const model = join(
+  const modelsDir = join(
     dirname(dirname(dashboardRoot())),
     "packages",
     "risk-service-api",
     "src",
     "models",
-    "BindingCreateRequest.ts",
   );
-  assert.ok(existsSync(model), `generated model not found: ${model}`);
-  const source = readFileSync(model, "utf8");
-  const body = source.match(
-    /export function BindingCreateRequestToJSONTyped[\s\S]*?return \{([\s\S]*?)\n  \};/,
-  );
-  assert.ok(body, "could not read the generated serializer");
-  // Both coverage columns first, and by name: a client regenerated against a
-  // schema that dropped either one would stop sending it, and this is the
-  // failure whose cause is worth naming outright.
-  for (const wireName of [DATA_SCOPE_KIND_FIELD, DATA_SCOPE_VALUES_FIELD]) {
-    assert.match(
-      body[1],
-      new RegExp(`${wireName}: `),
-      `the generated serializer no longer emits ${wireName}, so the composer ` +
-        `cannot post the coverage and every grant would be the whole book`,
+  const contracts: readonly (readonly [string, object])[] = [
+    ["BindingCreateRequest", grantCreateRequest(draft(), MEMBER, "sentence")],
+    ["BindingPreviewRequest", grantPreviewRequest(draft(), MEMBER)],
+    ["SsoAccessRequestApprove", ssoApprovalRequest(draft(), "sentence")],
+  ];
+  for (const [modelName, request] of contracts) {
+    const model = join(modelsDir, `${modelName}.ts`);
+    assert.ok(existsSync(model), `generated model not found: ${model}`);
+    const source = readFileSync(model, "utf8");
+    const body = source.match(
+      new RegExp(
+        `export function ${modelName}ToJSONTyped[\\s\\S]*?return \\{([\\s\\S]*?)\\n  \\};`,
+      ),
+    );
+    assert.ok(body, `could not read the generated serializer for ${modelName}`);
+    // Both coverage columns first, and by name: a client regenerated against a
+    // schema that dropped either one would stop sending it, and this is the
+    // failure whose cause is worth naming outright.
+    for (const wireName of [DATA_SCOPE_KIND_FIELD, DATA_SCOPE_VALUES_FIELD]) {
+      assert.match(
+        body[1],
+        new RegExp(`${wireName}: `),
+        `${modelName}'s generated serializer no longer emits ${wireName}, so the ` +
+          `composer cannot post the coverage and every grant would be the whole book`,
+      );
+    }
+    const serialized = [...body[1].matchAll(/value\["([A-Za-z]+)"\]/g)]
+      .map((match) => match[1])
+      .sort();
+    assert.ok(
+      serialized.length >= 9,
+      `read only ${serialized.length} fields from ${modelName}'s serializer — ` +
+        `the shape it is parsed out of has changed, so this test is no longer ` +
+        `reading the contract. Fix the reader, never the assertion.`,
+    );
+    const stated = Object.keys(request).sort();
+    assert.deepEqual(
+      stated,
+      serialized,
+      `${modelName} and what the composer states have diverged. A field the ` +
+        "contract carries and the composer does not set is decided by the " +
+        "server default, which for a scope column means a WIDER grant than " +
+        "the Owner composed.",
     );
   }
-  const serialized = [...body[1].matchAll(/value\["([A-Za-z]+)"\]/g)]
-    .map((match) => match[1])
-    .sort();
-  assert.ok(
-    serialized.length >= 10,
-    `read only ${serialized.length} fields from the generated serializer — ` +
-      `the shape it is parsed out of has changed, so this test is no longer ` +
-      `reading the contract. Fix the reader, never the assertion.`,
-  );
-  const stated = Object.keys(
-    grantCreateRequest(draft(), MEMBER, "sentence"),
-  ).sort();
-  assert.deepEqual(
-    stated,
-    serialized,
-    "the grant request contract and what the composer states have diverged. A " +
-      "field the contract carries and the composer does not set is decided by " +
-      "the server default, which for a scope column means a WIDER grant than " +
-      "the Owner composed.",
-  );
 });
 
 if (failures > 0) {

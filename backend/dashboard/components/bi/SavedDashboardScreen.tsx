@@ -59,6 +59,7 @@ import {
 } from "@/components/bi/dashboards";
 import { mergeAddresses, questionAddresses } from "@/components/bi/measures";
 import {
+  biRefusalSentence,
   isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
@@ -351,9 +352,19 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
               </p>
             </div>
             {Boolean(remove.error) &&
-              (isBiAccessDenied(remove.error) ? (
+              (biRefusalSentence(remove.error) !== null ? (
+                // The owner-only refusal (`bi_content_owner_only`) and a
+                // read-only staff session both arrive as the server's own
+                // sentence; it is shown verbatim rather than restated here,
+                // where a local sentence once described every 403 as an
+                // ownership problem.
                 <p role="status" className="text-caption text-critical">
-                  Only the person who saved this dashboard can delete it.
+                  {biRefusalSentence(remove.error)}
+                </p>
+              ) : isBiAccessDenied(remove.error) ? (
+                <p role="status" className="text-caption text-critical">
+                  Your access does not cover this dashboard. An organization
+                  owner can grant it.
                 </p>
               ) : (
                 <ErrorPanel

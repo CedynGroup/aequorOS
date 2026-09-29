@@ -278,7 +278,9 @@ export function SdiCapitalControlsChart({
 export type SdiCapitalTrendPoint = {
   asOf: string;
   carPct: number | null;
-  nplPct: number;
+  /** null when the ratio was not computed for the date — never 0, which would
+   *  plot the best possible reading of an absent figure (audit A360-6). */
+  nplPct: number | null;
 };
 
 export function SdiCapitalTrendChart({

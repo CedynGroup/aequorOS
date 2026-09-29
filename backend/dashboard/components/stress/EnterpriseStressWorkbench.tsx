@@ -184,7 +184,10 @@ export default function EnterpriseStressWorkbench({
     const runs = registry.data ?? [];
     if (runs.length === 0) return null;
     return [...runs].sort(
-      (a, b) => num(b.summary.car_erosion_pp) - num(a.summary.car_erosion_pp),
+      // Uncomputed erosion sorts last rather than as zero — see ScenarioComparison.
+      (a, b) =>
+        (numOrNull(b.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY) -
+        (numOrNull(a.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY),
     )[0];
   }, [focusedRun, registry.data]);
 
@@ -586,7 +589,8 @@ function ResultsView({
   const lcrFloor = numOrNull(coupling?.lcr_min_pct);
   const carAssessment = assessAgainstFloor(stressedCar, carFloor);
   const lcrAssessment = assessAgainstFloor(stressedLcr, lcrFloor);
-  const capitalGap = num(s.capital_gap);
+  // null, not 0: an uncomputed gap is not "no shortfall" (audit A360-6).
+  const capitalGap = numOrNull(s.capital_gap);
   const carPathLabel = isSdiTenant
     ? "Section 29 capital adequacy path"
     : "Capital adequacy path";
@@ -652,9 +656,17 @@ function ResultsView({
         />
         <KpiStat
           label="Capital gap"
-          value={`${currencyCode()}'000 ${fmtInt(capitalGap)}`}
-          status={capitalGap > 0 ? "warn" : "ok"}
-          hint="Worst-year, pre-action"
+          value={
+            capitalGap === null
+              ? "Not computed"
+              : `${currencyCode()}'000 ${fmtInt(capitalGap)}`
+          }
+          status={capitalGap === null ? undefined : capitalGap > 0 ? "warn" : "ok"}
+          hint={
+            capitalGap === null
+              ? "This run reported no capital gap figure."
+              : "Worst-year, pre-action"
+          }
         />
         {isSdiTenant ? (
           <KpiStat

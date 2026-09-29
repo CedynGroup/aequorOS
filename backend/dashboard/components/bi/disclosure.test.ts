@@ -15,6 +15,16 @@
  *    reaches a chart, because a chart handed an empty series draws a flat line
  *    on the baseline and a reader cannot tell that from a real run of zeros.
  *
+ * Audit A360-6 added three more (sections 16–18 below):
+ *
+ * 16. A WIDGET THAT DOES NOT KNOW WHY IT IS EMPTY SAYS SO. Every empty answer
+ *     used to be blamed on a positions upload through a default dataset key.
+ * 17. A REFUSAL IS THE SERVER'S DECISION. Only a grant denial is paraphrased;
+ *     every other 403 renders the server's own sentence, and the provenance
+ *     drawer prints no wire token as prose.
+ * 18. A NULL IS NEVER A ZERO OFF THE BI SURFACE EITHER: the stress board's
+ *     headroom bridge, which the fail-open guard's field list does not cover.
+ *
  * Source inspection rather than rendering: this package has no component-test
  * harness, and both properties are about what a file is ALLOWED to reference —
  * which is exactly what a source scan can decide. Comments are stripped first,
@@ -30,6 +40,14 @@ import type {
   BiDashboardRead,
   BiPackWidgetRead,
 } from "@aequoros/risk-service-api";
+import { namedDataset } from "./labels";
+import {
+  BI_GRANT_DENIAL_CODES,
+  isGrantDenial,
+  refusalSentence,
+  restrictedWidgetCount,
+} from "./refusal";
+import { unmeasuredSeriesLabel } from "./result";
 import {
   BUILDER_COLUMNS,
   addWidget,
@@ -142,10 +160,11 @@ for (const required of [
 const needsDataAt = renderer.indexOf("<NeedsDataWidget");
 const chartAt = renderer.indexOf("<EChart");
 const restrictedAt = renderer.indexOf("<RestrictedWidget");
-assert.ok(needsDataAt > 0 && chartAt > 0 && restrictedAt > 0);
+const refusedAt = renderer.indexOf("<RefusedWidget");
+assert.ok(needsDataAt > 0 && chartAt > 0 && restrictedAt > 0 && refusedAt > 0);
 assert.ok(
-  restrictedAt < needsDataAt,
-  "WidgetRenderer must decide a refusal before it decides a data gap.",
+  restrictedAt < refusedAt && refusedAt < needsDataAt,
+  "WidgetRenderer must decide a grant denial, then any other refusal, before it decides a data gap.",
 );
 assert.ok(
   needsDataAt < chartAt,
@@ -740,7 +759,7 @@ assert.ok(
 
 const dashboardsModule = code("components/bi/dashboards.ts");
 assert.ok(
-  /widgets:\s*read\.widgets\.map\(packWidgetView\)/.test(dashboardsModule),
+  /widgets\s*[:=]\s*read\.widgets\.map\(packWidgetView\)/.test(dashboardsModule),
   "a saved dashboard's widgets must go through packWidgetView — the adapter whose refusal variant has nowhere to put a title.",
 );
 const savedScreen = code("components/bi/SavedDashboardScreen.tsx");
@@ -918,10 +937,287 @@ assert.ok(
   "the delete control must be gated on `canDelete`, which is false above a draft.",
 );
 
+// --- 16. a widget that does not know why it is empty says so ------------------
+//
+// Audit A360 H7. `packWidgetView` gave every query widget whose pack file named
+// no `needs_data` the dataset "positions", and `NeedsDataWidget` then asserted a
+// CAUSE — "this institution has not supplied positions and balances" — with a
+// link to the positions template. Twenty-six pack widgets carry no key,
+// including the Board pack's capital adequacy, liquidity coverage and net
+// interest margin; a board member opening it on a date with no minted official
+// run was told the bank had failed to upload positions it pushes nightly. The
+// same default lived in Explore under another name.
+
+// The decision is pure and executable: an absent key names NO dataset.
+assert.equal(namedDataset(undefined), null);
+assert.equal(namedDataset(null), null);
+assert.notEqual(namedDataset("positions"), null);
+
+const dashboardsSource = code("components/bi/dashboards.ts");
+assert.equal(
+  /DEFAULT_DATASET_KEY|\?\?\s*["'`]positions["'`]/.test(dashboardsSource),
+  false,
+  "components/bi/dashboards.ts must carry no default dataset: a widget that names " +
+    "none does not know why it is empty, and a default asserts a cause.",
+);
+assert.ok(
+  /namedDataset\(widget\.needsData\)/.test(dashboardsSource),
+  "components/bi/dashboards.ts must resolve the dataset through namedDataset, the one " +
+    "place an absent key is decided.",
+);
+const exploreSource = code("app/(app)/explore/page.tsx");
+assert.equal(
+  /EXPLORE_DATASET|data-engine\/positions/.test(exploreSource),
+  false,
+  "Explore must not send every empty answer to the positions template: a composed " +
+    "question's measures may be engine copies or a bank formula.",
+);
+assert.ok(
+  /dataset:\s*null/.test(exploreSource) && /dataset=\{null\}/.test(exploreSource),
+  "Explore must state that it names no dataset, on both the summary and the grid.",
+);
+
+const needsDataSource = code("components/bi/NeedsDataWidget.tsx");
+assert.ok(
+  /dataset:\s*BiDatasetRequirement \| null/.test(needsDataSource),
+  "NeedsDataWidget must accept a null dataset — the unknown case is a real state.",
+);
+assert.equal(
+  /has not supplied/.test(needsDataSource),
+  false,
+  "NeedsDataWidget must not assert that the institution has not supplied something: " +
+    "the platform cannot know that, and the pack's key only names a dependency.",
+);
+assert.ok(
+  /cannot say why/.test(needsDataSource),
+  "NeedsDataWidget must say it does not know why, when no dataset was named.",
+);
+// The Data Engine template link is offered ONLY under a named dataset.
+const templateLinkAt = needsDataSource.indexOf("Open the Data Engine template");
+const namedBranchAt = needsDataSource.indexOf("{dataset ? (");
+assert.ok(
+  namedBranchAt > 0 && templateLinkAt > namedBranchAt,
+  "the template link must sit inside the named-dataset branch, never under the unknown case.",
+);
+
+// The scoped-reader qualification is WIRED, not merely defined: an empty answer
+// under a narrowed scope is not an empty book, and `CoverageEmptyMeaning` had
+// zero consumers.
+assert.ok(
+  /CoverageEmptyMeaning/.test(needsDataSource),
+  "NeedsDataWidget must render CoverageEmptyMeaning for a scoped reader's empty answer.",
+);
+for (const surface of [
+  ["app/(app)/explore/page.tsx", /<WidgetRenderer\b([\s\S]*?)\n\s*\/>/],
+  ["app/(app)/explore/page.tsx", /<PivotGrid\b([\s\S]*?)\n\s*\/>/],
+] as const) {
+  const tag = surface[1].exec(code(surface[0]))?.[1] ?? "";
+  assert.ok(
+    tag.split("\n").some((line) => line.trim().startsWith("coverage={")),
+    `${surface[0]} must pass the question's coverage to ${surface[1].source.slice(1, 12)} so its empty state can say what an empty answer means.`,
+  );
+}
+
+// --- 17. a refusal is the server's decision -----------------------------------
+//
+// Audit A360-6 M1. `isBiAccessDenied` keyed on `status === 403`, so EVERY refusal
+// rendered as "Access restricted — an organization owner can grant it": a staff
+// act-as-examiner session, refused read-only, was told to go and ask for a grant.
+// The paraphrase is justified for a grant denial alone, whose body names the
+// refused members; every other 403 carries the server's own sentence.
+
+assert.deepEqual(
+  [...BI_GRANT_DENIAL_CODES].sort(),
+  ["bi_authorization_denied", "bi_export_denied", "bi_insights_authorization_denied"],
+  "the paraphrased family is exactly the routes that re-run the grant decision",
+);
+assert.equal(isGrantDenial({ status: 403, errorCode: "bi_authorization_denied" }), true);
+assert.equal(
+  isGrantDenial({ status: 403, errorCode: "bi_human_principal_required" }),
+  false,
+  "an impersonated session's refusal is not a grant denial",
+);
+assert.equal(
+  isGrantDenial({ status: 403, errorCode: null, message: "Impersonation sessions are read-only." }),
+  false,
+  "a plain-string 403 (deps.py) is not a grant denial",
+);
+assert.equal(isGrantDenial({ status: 404, errorCode: "bi_authorization_denied" }), false);
+assert.equal(isGrantDenial({ status: 403, errorCode: "bi_data_scope_unsupported" }), false);
+assert.equal(isGrantDenial({ status: 403, errorCode: "bi_content_owner_only" }), false);
+
+// The server's sentence travels for every other 403, and for nothing else.
+const impersonated = {
+  status: 403,
+  errorCode: "bi_human_principal_required",
+  message: "Business intelligence is not available in an impersonated session.",
+};
+assert.equal(refusalSentence(impersonated), impersonated.message);
+assert.equal(
+  refusalSentence({ status: 403, errorCode: null, message: "Impersonation sessions are read-only; this action is not permitted." }),
+  "Impersonation sessions are read-only; this action is not permitted.",
+);
+assert.equal(
+  refusalSentence({ status: 403, errorCode: "bi_authorization_denied", message: "Your access does not cover every field this view needs. An Org Owner can grant the fields listed here." }),
+  null,
+  "a grant denial's sentence must NOT travel — its body names the refused members",
+);
+assert.equal(refusalSentence({ status: 500, message: "boom" }), null);
+assert.equal(
+  refusalSentence({ status: 403, errorCode: "bi_data_scope_unsupported", message: "  " }),
+  null,
+  "a 403 with no sentence falls to the ordinary failure panel, never to one composed here",
+);
+
+// And the wrapper in lib/api/bi.ts no longer keys on the status alone.
+const biClient = code("lib/api/bi.ts");
+const accessDeniedBody =
+  /export function isBiAccessDenied\([\s\S]*?\n\}/.exec(biClient)?.[0] ?? "";
+assert.ok(accessDeniedBody.length > 0, "could not read isBiAccessDenied");
+assert.ok(
+  /isGrantDenial\(/.test(accessDeniedBody),
+  "isBiAccessDenied must decide through isGrantDenial, by code",
+);
+assert.equal(
+  /status === 403/.test(accessDeniedBody),
+  false,
+  "isBiAccessDenied must not key on the status alone: a 403 is any refusal, and " +
+    "only a grant denial may be paraphrased as one.",
+);
+assert.ok(
+  /export function biRefusalSentence\(/.test(biClient),
+  "lib/api/bi.ts must expose the server's sentence for a non-grant 403",
+);
+
+// Every surface that paraphrases a grant denial also renders the other kind.
+for (const file of [
+  "components/bi/WidgetRenderer.tsx",
+  "components/bi/PivotGridCanvas.tsx",
+  "components/bi/ExplainDrawer.tsx",
+  "app/(app)/insights/page.tsx",
+]) {
+  const source = code(file);
+  assert.ok(
+    /biRefusalSentence\(/.test(source) && /<RefusedWidget\b/.test(source),
+    `${file} paraphrases a grant denial and must therefore also render the server's ` +
+      "sentence for every other refusal through RefusedWidget.",
+  );
+}
+// RefusedWidget composes nothing: it renders the sentence it is given.
+const refused = code("components/bi/RefusedWidget.tsx");
+assert.ok(
+  /\{sentence\}/.test(refused),
+  "RefusedWidget must render the server's sentence verbatim",
+);
+assert.equal(
+  /organization owner can grant/i.test(refused),
+  false,
+  "RefusedWidget must not compose a grant instruction — that is the paraphrase for a " +
+    "different decision.",
+);
+
+// The ask page tells the two 404s apart by WHICH request failed. Only the ask
+// itself can say the surface is not here; a poll or run 404 is "Question not
+// found", after the question was accepted.
+const askPage = code("app/(app)/explore/ask/page.tsx");
+assert.equal(
+  /isBiUnavailable\(failure\)/.test(askPage),
+  false,
+  "the ask page must not read every 404 as 'Business intelligence is not available'",
+);
+assert.ok(
+  /isBiUnavailable\(ask\.error\)/.test(askPage),
+  "the ask page must key BI availability on the ask request alone",
+);
+
+// THE PROVENANCE DRAWER PRINTS NO WIRE TOKEN AS PROSE. It read "advisory
+// internal · Aggregation ratio_of_sums · Module liq · role over" to a reviewer.
+const drawer = code("components/bi/ExplainDrawer.tsx");
+assert.equal(
+  /\.replace\(\/_\/g/.test(drawer),
+  false,
+  "ExplainDrawer must not de-underscore a token into prose; every vocabulary has copy in labels.ts",
+);
+for (const raw of [
+  /value=\{data\.measure\.aggregation\}/,
+  /value=\{engine\.module\}/,
+  /value=\{engine\.tier\}/,
+  /value=\{text\(engine\.regime\)\}/,
+  /^\s*\{component\.role(?:\.replace\([^)]*\))?\}\s*$/m,
+  /\{data\.measure\.advisoryDesignation\}/,
+]) {
+  assert.equal(
+    raw.test(drawer),
+    false,
+    `ExplainDrawer renders a wire token raw: ${raw.source}`,
+  );
+}
+for (const label of [
+  "aggregationLabel(",
+  "componentRoleLabel(",
+  "engineTierLabel(",
+  "moduleLabel(",
+  "regimeLabel(",
+  "designationLabel(",
+]) {
+  assert.ok(drawer.includes(label), `ExplainDrawer must render through ${label}`);
+}
+// The one identifier that IS shown raw is labelled as one and set as code.
+assert.ok(
+  /Engine metric code[\s\S]*?<code[^>]*>[\s\S]*?\{engine\.metricId\}/.test(drawer),
+  "the engine metric id may be shown only as a labelled code, never as a sentence",
+);
+
+// A series that measured nothing says so in the legend, executable.
+assert.equal(unmeasuredSeriesLabel("Net interest margin", [null, undefined]), "Net interest margin (not measured)");
+assert.equal(unmeasuredSeriesLabel("Net interest margin", [null, 0]), "Net interest margin", "0 IS a reading");
+assert.ok(
+  /unmeasuredSeriesLabel\(/.test(renderer),
+  "WidgetRenderer must name an unmeasured series as such in the legend",
+);
+
+// The refusal count never hides the notice when the server's count is absent.
+const locked = { state: "restricted" } as const;
+const figure = { state: "panel" } as const;
+assert.equal(restrictedWidgetCount(undefined, [locked, figure, locked]), 2);
+assert.equal(restrictedWidgetCount(null, [figure]), 0);
+assert.equal(restrictedWidgetCount(3, [locked]), 3, "the server's count wins when it is the larger");
+assert.equal(restrictedWidgetCount(0, [locked]), 1, "a payload refusal is counted even against a reported 0");
+assert.equal(
+  /restrictedWidgets\s*\?\?\s*0/.test(dashboardsSource),
+  false,
+  "components/bi/dashboards.ts must not default the refusal count to 0 — it hides the notice over a canvas of locks",
+);
+
+// --- 18. a null is never a zero on the stress board either ---------------------
+//
+// Audit A360-6 M5. `DriverWaterfall` mapped every nullable input to 0 before
+// subtracting, so a null final-year post-adverse capital drew the headroom bridge
+// to −(CAR target × RWA): a fabricated wipe-out. The fail-open guard's rule P0-23
+// lists ten field names and knows none of these, so this is pinned here until
+// that rule learns them.
+
+const waterfall = code("components/stress/charts/DriverWaterfall.tsx");
+assert.equal(
+  /==\s*null\s*\?\s*0|\?\?\s*0\b|\bnum\(/.test(waterfall),
+  false,
+  "DriverWaterfall must not map a null figure to 0: use numOrNull and refuse the bridge.",
+);
+assert.ok(
+  /numOrNull\(\s*lastStress\.total_regulatory_capital\s*\)/.test(waterfall) &&
+    /numOrNull\(\s*lastBase\.total_rwa\s*\)/.test(waterfall),
+  "DriverWaterfall must read capital and RWA with numOrNull",
+);
+assert.ok(
+  /cannot be derived for this run/.test(waterfall),
+  "DriverWaterfall must say, in words, that a bridge with a missing input is not drawn.",
+);
+
 console.log(
   "disclosure.test.ts: BI refusals name nothing, absences never render as zero, " +
     "no pack is defined in the browser, every way out is the governed one, a saved " +
     "canvas is restated exactly or not at all, the builder's grid runtime has " +
-    "one entrance, and a calculated measure's refusal names the figure rather " +
-    "than the formula.",
+    "one entrance, a calculated measure's refusal names the figure rather " +
+    "than the formula, an unexplained gap says it is unexplained, a refusal is the " +
+    "server's own decision, and the stress bridge draws no null as a zero.",
 );

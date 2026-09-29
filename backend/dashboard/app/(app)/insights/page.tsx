@@ -54,10 +54,12 @@ import { useBankContext } from "@/components/shell/BankContext";
 import FilterBar from "@/components/bi/FilterBar";
 import InsightStrip from "@/components/bi/InsightStrip";
 import TrustBadge from "@/components/bi/TrustBadge";
+import RefusedWidget from "@/components/bi/RefusedWidget";
 import RestrictedWidget from "@/components/bi/RestrictedWidget";
 import { moduleLabel, sensitivityLabel } from "@/components/bi/labels";
 import { NOT_MEASURED } from "@/components/bi/result";
 import {
+  biRefusalSentence,
   isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
@@ -139,6 +141,10 @@ export default function InsightsPage() {
 
   const checks = trust.data?.checks ?? [];
   const builds = trust.data?.builds ?? [];
+  // The badge is one verdict over the whole institution, so a reader scoped to
+  // part of it is refused with the server's own sentence
+  // (`bi_data_scope_unsupported`) — not a grant denial, and not a fault.
+  const trustRefusal = biRefusalSentence(trust.error);
 
   return (
     <>
@@ -191,7 +197,9 @@ export default function InsightsPage() {
 
           {isBiAccessDenied(trust.error) && <RestrictedWidget />}
 
-          {trust.error && !isBiAccessDenied(trust.error) && (
+          {trustRefusal !== null && <RefusedWidget sentence={trustRefusal} />}
+
+          {trust.error && !isBiAccessDenied(trust.error) && trustRefusal === null && (
             <ErrorPanel
               error={trust.error}
               onRetry={() => void trust.refetch()}

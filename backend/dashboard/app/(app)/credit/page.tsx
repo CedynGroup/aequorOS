@@ -7,11 +7,16 @@
  * the platform's own class-aware grid (bank 5-grade / SDI 4-grade), the NPL
  * ceiling resolves from the governed parameter register, and absence renders as
  * absence ("—" / "Not assessed"), never as zero.
+ *
+ * The body is a component rather than an inline render prop (the FX and FTP
+ * landing pages' shape) so it may call hooks: the BI insight strip and the
+ * provenance drawer behind each headline KPI both need one.
  */
 
 import type { Column } from '@/components/ui/DataTable';
 import type { CreditValidationRead, LoanGradeBucketRead } from '@aequoros/risk-service-api';
-import CreditWorkspace from '@/components/credit/CreditWorkspace';
+import CreditWorkspace, { type CreditTabContext } from '@/components/credit/CreditWorkspace';
+import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
 import DataTable from '@/components/ui/DataTable';
 import KpiStat from '@/components/ui/KpiStat';
 import LimitBar from '@/components/ui/LimitBar';
@@ -76,184 +81,202 @@ export default function CreditOverviewPage() {
   return (
     <CreditWorkspace
     >
-      {({ data, metrics }) => {
-        const par = Object.fromEntries(data.portfolioAtRisk.map((m) => [m.code, m]));
-        const par30 = 'par_30' in par ? par['par_30'] : undefined;
-        const par90 = 'par_90' in par ? par['par_90'] : undefined;
-        const nplPct = num(metrics.nplRatioPct);
-        const isSdi = data.institutionClass === 'sdi';
-        return (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-              <KpiStat
-                label="Gross loan book"
-                value={fmtCurrency(num(metrics.grossLoansGhs))}
-                hint={`${fmtInt(metrics.loanCount)} loans`}
-              />
-              <KpiStat
-                label="NPL ratio"
-                value={`${nplPct.toFixed(2)}%`}
-                status={kpiStatus(metrics.nplStatus ?? 'na')}
-                hint={
-                  metrics.nplLimitPct != null
-                    ? `${regShort()} prudential limit ${num(metrics.nplLimitPct).toFixed(0)}%`
-                    : 'Prudential limit not assessed'
-                }
-              />
-              <KpiStat
-                label="NPL exposure"
-                value={fmtCurrency(num(metrics.nplExposureGhs))}
-                status={kpiStatus(metrics.nplStatus ?? 'na')}
-              />
-              <KpiStat
-                label="Provision required"
-                value={fmtCurrency(num(metrics.totalProvisionRequiredGhs))}
-                hint="Active classification grid"
-              />
-              <KpiStat
-                label="Provision coverage"
-                value={
-                  metrics.provisionCoveragePct != null
-                    ? `${num(metrics.provisionCoveragePct).toFixed(1)}%`
-                    : metrics.provisionsHeld != null
-                      ? 'Not applicable'
-                      : '—'
-                }
-                status={
-                  metrics.provisionCoveragePct != null && num(metrics.provisionCoveragePct) < 100
-                    ? 'warn'
-                    : undefined
-                }
-                hint={
-                  metrics.provisionsHeld != null
-                    ? 'Specific provisions held ÷ NPL exposure'
-                    : 'No loan states a held provision; coverage is unavailable, not zero'
-                }
-              />
-              <KpiStat
-                label="PAR 30+"
-                value={par30 ? `${(num(par30.ratio) * 100).toFixed(2)}%` : '—'}
-                status={par30 && num(par30.ratio) > 0 ? 'warn' : undefined}
-                hint="Raw DPD exposure ÷ gross loan book"
-              />
-              <KpiStat
-                label="PAR 90+"
-                value={par90 ? `${(num(par90.ratio) * 100).toFixed(2)}%` : '—'}
-                status={par90 && num(par90.ratio) > 0 ? 'crit' : undefined}
-                hint="Raw DPD exposure ÷ gross loan book"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SectionCard
-                title={`NPL ratio against the ${regShort()} limit`}
-                subtitle="Notice on regulatory measures to reduce non-performing loans."
-              >
-                {metrics.nplLimitPct != null ? (
-                  <LimitBar
-                    label="NPL ratio"
-                    value={nplPct}
-                    limit={num(metrics.nplLimitPct)}
-                    warnAt={num(metrics.nplLimitPct) * 0.8}
-                    direction="below"
-                    unit="%"
-                  />
-                ) : (
-                  <p className="text-body text-slate">
-                    The prudential NPL limit is not configured for this institution class, so the
-                    ratio is reported without a compliance status.
-                  </p>
-                )}
-                {metrics.nplRestrictionLevelPct != null ? (
-                  <p className="mt-3 text-micro text-slate leading-relaxed">
-                    At {num(metrics.nplRestrictionLevelPct).toFixed(0)}% and above, dividend,
-                    bonus and loan-growth restrictions apply immediately.
-                  </p>
-                ) : null}
-              </SectionCard>
-              <SectionCard
-                title="Loan quality and provision burden"
-                subtitle="Exposure and required provision by the active classification grid."
-              >
-                <SdiLoanQualityChart
-                  data={data.grades.map((bucket) => ({
-                    grade: labelize(bucket.grade),
-                    exposure: num(bucket.exposureGhs),
-                    provision: num(bucket.provisionRequiredGhs),
-                  }))}
-                />
-              </SectionCard>
-            </div>
-
-            <SectionCard
-              title="Classification and provisioning"
-              subtitle={
-                isSdi
-                  ? 'NBFI 4-grade classification: Standard, Sub-standard, Doubtful and Loss; non-performing at 90 days past due.'
-                  : `${regShort()} 5-grade classification including OLEM; non-performing at 90 days past due.`
-              }
-              noPadding
-            >
-              <DataTable columns={gradeColumns} rows={data.grades} density="compact" />
-            </SectionCard>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SectionCard
-                title="Delinquency distribution"
-                subtitle="Raw days-past-due bands across loans with a stated DPD."
-              >
-                <SdiDelinquencyChart
-                  data={data.delinquencyBuckets.map((bucket) => ({
-                    label: bucket.label,
-                    exposure: num(bucket.exposureGhs),
-                    count: bucket.count,
-                    severity: delinquencySeverity(bucket.code),
-                  }))}
-                />
-              </SectionCard>
-              <SectionCard title="Engine findings" subtitle="Validation rules from the credit engine." noPadding>
-                <ValidationList
-                  validations={data.validations.map((row: CreditValidationRead) => ({
-                    ruleCode: row.ruleCode,
-                    passed: row.passed,
-                    severity: row.severity,
-                    message: row.message,
-                  }))}
-                />
-              </SectionCard>
-            </div>
-
-            {(metrics.unclassifiedCount > 0 ||
-              metrics.stageProxyCount > 0 ||
-              data.pendingParameters.length > 0) && (
-              <SectionCard title="Data and parameter notes">
-                <div className="space-y-1.5">
-                  {metrics.unclassifiedCount > 0 && (
-                    <p className="text-micro text-slate leading-relaxed">
-                      {fmtInt(metrics.unclassifiedCount)} loan(s) carry neither a days-past-due
-                      nor an IFRS 9 stage ({fmtCurrency(num(metrics.unclassifiedExposureGhs))} in
-                      exposure); they are excluded from both the performing and the NPL legs —
-                      never booked performing.
-                    </p>
-                  )}
-                  {metrics.stageProxyCount > 0 && (
-                    <p className="text-micro text-slate leading-relaxed">
-                      {fmtInt(metrics.stageProxyCount)} loan(s) classified via the IFRS 9 stage
-                      proxy (no stated days-past-due).
-                    </p>
-                  )}
-                  {data.pendingParameters.length > 0 && (
-                    <p className="text-micro text-slate leading-relaxed">
-                      Parameters awaiting confirmation:{' '}
-                      {data.pendingParameters.map((code) => labelize(code)).join(', ')}.
-                    </p>
-                  )}
-                </div>
-              </SectionCard>
-            )}
-          </>
-        );
-      }}
+      {(ctx) => <OverviewBody ctx={ctx} />}
     </CreditWorkspace>
+  );
+}
+
+function OverviewBody({ ctx }: { ctx: CreditTabContext }) {
+  const { data, metrics, bankId } = ctx;
+  // The reporting date every BI surface on this page speaks about.
+  const asOf = data.period.periodEnd;
+  const explain = useKpiExplain(bankId, asOf);
+
+  const par = Object.fromEntries(data.portfolioAtRisk.map((m) => [m.code, m]));
+  const par30 = 'par_30' in par ? par['par_30'] : undefined;
+  const par90 = 'par_90' in par ? par['par_90'] : undefined;
+  const nplPct = num(metrics.nplRatioPct);
+  const isSdi = data.institutionClass === 'sdi';
+  return (
+    <>
+      <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <KpiStat
+          label="Gross loan book"
+          value={fmtCurrency(num(metrics.grossLoansGhs))}
+          hint={`${fmtInt(metrics.loanCount)} loans`}
+          explain={explain.explainFor('gross_loans_ghs')}
+        />
+        <KpiStat
+          label="NPL ratio"
+          value={`${nplPct.toFixed(2)}%`}
+          status={kpiStatus(metrics.nplStatus ?? 'na')}
+          hint={
+            metrics.nplLimitPct != null
+              ? `${regShort()} prudential limit ${num(metrics.nplLimitPct).toFixed(0)}%`
+              : 'Prudential limit not assessed'
+          }
+          explain={explain.explainFor('npl_ratio_pct')}
+        />
+        <KpiStat
+          label="NPL exposure"
+          value={fmtCurrency(num(metrics.nplExposureGhs))}
+          status={kpiStatus(metrics.nplStatus ?? 'na')}
+          explain={explain.explainFor('npl_exposure_ghs')}
+        />
+        <KpiStat
+          label="Provision required"
+          value={fmtCurrency(num(metrics.totalProvisionRequiredGhs))}
+          hint="Active classification grid"
+          explain={explain.explainFor('total_provision_required_ghs')}
+        />
+        <KpiStat
+          label="Provision coverage"
+          value={
+            metrics.provisionCoveragePct != null
+              ? `${num(metrics.provisionCoveragePct).toFixed(1)}%`
+              : metrics.provisionsHeld != null
+                ? 'Not applicable'
+                : '—'
+          }
+          status={
+            metrics.provisionCoveragePct != null && num(metrics.provisionCoveragePct) < 100
+              ? 'warn'
+              : undefined
+          }
+          hint={
+            metrics.provisionsHeld != null
+              ? 'Specific provisions held ÷ NPL exposure'
+              : 'No loan states a held provision; coverage is unavailable, not zero'
+          }
+          explain={explain.explainFor('provision_coverage_pct')}
+        />
+        <KpiStat
+          label="PAR 30+"
+          value={par30 ? `${(num(par30.ratio) * 100).toFixed(2)}%` : '—'}
+          status={par30 && num(par30.ratio) > 0 ? 'warn' : undefined}
+          hint="Raw DPD exposure ÷ gross loan book"
+          explain={explain.explainFor('par_30_pct')}
+        />
+        <KpiStat
+          label="PAR 90+"
+          value={par90 ? `${(num(par90.ratio) * 100).toFixed(2)}%` : '—'}
+          status={par90 && num(par90.ratio) > 0 ? 'crit' : undefined}
+          hint="Raw DPD exposure ÷ gross loan book"
+          explain={explain.explainFor('par_90_pct')}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard
+          title={`NPL ratio against the ${regShort()} limit`}
+          subtitle="Notice on regulatory measures to reduce non-performing loans."
+        >
+          {metrics.nplLimitPct != null ? (
+            <LimitBar
+              label="NPL ratio"
+              value={nplPct}
+              limit={num(metrics.nplLimitPct)}
+              warnAt={num(metrics.nplLimitPct) * 0.8}
+              direction="below"
+              unit="%"
+            />
+          ) : (
+            <p className="text-body text-slate">
+              The prudential NPL limit is not configured for this institution class, so the
+              ratio is reported without a compliance status.
+            </p>
+          )}
+          {metrics.nplRestrictionLevelPct != null ? (
+            <p className="mt-3 text-micro text-slate leading-relaxed">
+              At {num(metrics.nplRestrictionLevelPct).toFixed(0)}% and above, dividend,
+              bonus and loan-growth restrictions apply immediately.
+            </p>
+          ) : null}
+        </SectionCard>
+        <SectionCard
+          title="Loan quality and provision burden"
+          subtitle="Exposure and required provision by the active classification grid."
+        >
+          <SdiLoanQualityChart
+            data={data.grades.map((bucket) => ({
+              grade: labelize(bucket.grade),
+              exposure: num(bucket.exposureGhs),
+              provision: num(bucket.provisionRequiredGhs),
+            }))}
+          />
+        </SectionCard>
+      </div>
+
+      <SectionCard
+        title="Classification and provisioning"
+        subtitle={
+          isSdi
+            ? 'NBFI 4-grade classification: Standard, Sub-standard, Doubtful and Loss; non-performing at 90 days past due.'
+            : `${regShort()} 5-grade classification including OLEM; non-performing at 90 days past due.`
+        }
+        noPadding
+      >
+        <DataTable columns={gradeColumns} rows={data.grades} density="compact" />
+      </SectionCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard
+          title="Delinquency distribution"
+          subtitle="Raw days-past-due bands across loans with a stated DPD."
+        >
+          <SdiDelinquencyChart
+            data={data.delinquencyBuckets.map((bucket) => ({
+              label: bucket.label,
+              exposure: num(bucket.exposureGhs),
+              count: bucket.count,
+              severity: delinquencySeverity(bucket.code),
+            }))}
+          />
+        </SectionCard>
+        <SectionCard title="Engine findings" subtitle="Validation rules from the credit engine." noPadding>
+          <ValidationList
+            validations={data.validations.map((row: CreditValidationRead) => ({
+              ruleCode: row.ruleCode,
+              passed: row.passed,
+              severity: row.severity,
+              message: row.message,
+            }))}
+          />
+        </SectionCard>
+      </div>
+
+      {(metrics.unclassifiedCount > 0 ||
+        metrics.stageProxyCount > 0 ||
+        data.pendingParameters.length > 0) && (
+        <SectionCard title="Data and parameter notes">
+          <div className="space-y-1.5">
+            {metrics.unclassifiedCount > 0 && (
+              <p className="text-micro text-slate leading-relaxed">
+                {fmtInt(metrics.unclassifiedCount)} loan(s) carry neither a days-past-due
+                nor an IFRS 9 stage ({fmtCurrency(num(metrics.unclassifiedExposureGhs))} in
+                exposure); they are excluded from both the performing and the NPL legs —
+                never booked performing.
+              </p>
+            )}
+            {metrics.stageProxyCount > 0 && (
+              <p className="text-micro text-slate leading-relaxed">
+                {fmtInt(metrics.stageProxyCount)} loan(s) classified via the IFRS 9 stage
+                proxy (no stated days-past-due).
+              </p>
+            )}
+            {data.pendingParameters.length > 0 && (
+              <p className="text-micro text-slate leading-relaxed">
+                Parameters awaiting confirmation:{' '}
+                {data.pendingParameters.map((code) => labelize(code)).join(', ')}.
+              </p>
+            )}
+          </div>
+        </SectionCard>
+      )}
+
+      {explain.drawer}
+    </>
   );
 }

@@ -18,7 +18,14 @@
  */
 
 import { useState } from "react";
-import { CalendarClock, Link2, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarOff,
+  Link2,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -33,6 +40,8 @@ import {
   scheduleSentence,
 } from "@/components/bi/notifications";
 import {
+  biRefusalSentence,
+  isBiAccessDenied,
   isBiUnavailable,
   isoDay,
   unknownRecipients,
@@ -46,13 +55,40 @@ import {
   type BiSubscriptionRead,
   type BiSubscriptionUpsert,
 } from "@/lib/api/bi";
+import { useBiNotificationCapabilities } from "@/lib/api/hooks";
+import type { StatusTone } from "@/components/ui/StatusPill";
+
+/**
+ * Copy for the deployment switch. `BI_SUBSCRIPTIONS_ENABLED` is the operator's,
+ * not the bank's: with it off the scheduler never picks a report up, so a row
+ * must not read "Sending" and the page must say whose switch it is.
+ */
+const DELIVERY_OFF =
+  "Scheduled report delivery is not enabled in this deployment. Reports you create are kept, but none goes out until your platform operator enables it.";
 
 function formatLabel(code: string): string {
   return FORMAT_OPTIONS.find((option) => option.value === code)?.label ?? code;
 }
 
+/**
+ * The pill on a row. "Sending" is claimed ONLY when the deployment has said it
+ * delivers reports; with the switch off the row says so, and when the platform
+ * has not said either way the pill states the schedule and nothing more.
+ */
+function sendingState(
+  subscription: BiSubscriptionRead,
+  deliveryEnabled: boolean | undefined,
+): { label: string; tone: StatusTone } {
+  if (!subscription.isActive) return { label: "Stopped", tone: "slate" };
+  if (deliveryEnabled === true) return { label: "Sending", tone: "compliant" };
+  if (deliveryEnabled === false) return { label: "Not sending here", tone: "pending" };
+  return { label: "Scheduled", tone: "pending" };
+}
+
 export default function BiSubscriptionsPage() {
   const { bank, period } = useBankContext();
+  const capability = useBiNotificationCapabilities();
+  const deliveryEnabled = capability.subscriptions;
   const subscriptions = useBiSubscriptions(bank?.id);
   const catalogue = useBiCatalogue(bank?.id);
   const create = useCreateBiSubscription(bank?.id);
@@ -143,10 +179,27 @@ export default function BiSubscriptionsPage() {
       />
 
       <PageContainer className="flex flex-col gap-6 py-6">
+        {deliveryEnabled === false && (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-4 py-3 text-caption text-navy"
+          >
+            <CalendarOff size={15} className="mt-0.5 shrink-0 text-slate" aria-hidden />
+            <p>
+              <span className="font-medium">Not sending reports here.</span>{" "}
+              {DELIVERY_OFF}
+            </p>
+          </div>
+        )}
+
         {composing && (
           <SectionCard
             title={editing ? "Change this report" : "New scheduled report"}
-            subtitle="Only figures your own access covers are offered."
+            subtitle={
+              deliveryEnabled === false
+                ? `Only figures your own access covers are offered. ${DELIVERY_OFF}`
+                : "Only figures your own access covers are offered."
+            }
           >
             <SubscriptionComposer
               catalogue={catalogue.data}
@@ -189,7 +242,11 @@ export default function BiSubscriptionsPage() {
           <EmptyState
             Icon={CalendarClock}
             title="No scheduled reports yet"
-            description="Nothing is being sent for you. A report names the figures to include, how often to send them and who receives them — and each person's copy is prepared under their own access when it goes out."
+            description={
+              deliveryEnabled === false
+                ? `Nothing is being sent for you. A report names the figures to include, how often to send them and who receives them. ${DELIVERY_OFF}`
+                : "Nothing is being sent for you. A report names the figures to include, how often to send them and who receives them — and each person's copy is prepared under their own access when it goes out."
+            }
           />
         ) : (
           <ul className="flex flex-col gap-3">
@@ -200,9 +257,9 @@ export default function BiSubscriptionsPage() {
                     <span className="flex flex-wrap items-center gap-2">
                       {subscription.name}
                       <StatusPill
-                        tone={subscription.isActive ? "compliant" : "slate"}
+                        tone={sendingState(subscription, deliveryEnabled).tone}
                       >
-                        {subscription.isActive ? "Sending" : "Stopped"}
+                        {sendingState(subscription, deliveryEnabled).label}
                       </StatusPill>
                       {subscription.disclosureClass === "record_level" && (
                         <span className="inline-flex items-center gap-1 text-micro text-slate">
@@ -307,10 +364,25 @@ export default function BiSubscriptionsPage() {
                       </button>
                       {opened === subscription.id && (
                         <div className="mt-3 border-t border-border-light pt-3">
-                          <DeliveryHistory
-                            deliveries={deliveries.data ?? []}
-                            loading={deliveries.isPending}
-                          />
+                          {(() => {
+                            // Same rule as the alert history: a refusal or a
+                            // failed read is never shown as "nothing sent yet".
+                            const withheld =
+                              biRefusalSentence(deliveries.error) ??
+                              (isBiAccessDenied(deliveries.error)
+                                ? "Your access does not cover the figures this report sends, so its send history is not shown."
+                                : deliveries.isError
+                                  ? "The send history for this report could not be read just now."
+                                  : null);
+                            return withheld ? (
+                              <p className="text-caption text-slate">{withheld}</p>
+                            ) : (
+                              <DeliveryHistory
+                                deliveries={deliveries.data ?? []}
+                                loading={deliveries.isPending}
+                              />
+                            );
+                          })()}
                         </div>
                       )}
                     </>

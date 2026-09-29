@@ -15,6 +15,11 @@ import RatioTrendChart from "@/components/liquidity/charts/RatioTrendChart";
 import CapitalWaterfallChart from "@/components/basel/charts/CapitalWaterfallChart";
 import SdiCapitalView from "@/components/basel/SdiCapitalView";
 import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
+import {
+  LandingInsightStrip,
+  useKpiExplain,
+} from "@/components/bi/InsightStrip";
+import { ReconciliationTrustBadge } from "@/components/bi/TrustBadge";
 import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
@@ -91,6 +96,10 @@ export default function BaselOverview() {
 
   const data = dashboard.data;
   const run = latestRun.data;
+  // The reporting date every BI surface on this page speaks about: the period
+  // the figures on screen were computed for, never today's date.
+  const asOf = data?.period.periodEnd ?? null;
+  const explain = useKpiExplain(bankId, asOf);
   // NEW-51. The CAR buffer ladder is tenant data: the capital service resolves
   // `car_min`, `car_early_warning` and `car_critical` from the institution's
   // regulatory parameter set and this endpoint refuses with 409
@@ -269,6 +278,8 @@ export default function BaselOverview() {
       >
         {data && (
           <PageContainer className="py-6 space-y-6">
+            <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
             {/* Headline ratios */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
@@ -283,6 +294,7 @@ export default function BaselOverview() {
                     ? "No capital adequacy minimum on file — compliance not assessed"
                     : `${regShort()} minimum ${fmtFloorPct(carMin)}`
                 }
+                explain={explain.explainFor("car_pct")}
               />
               <KpiStat
                 label="Tier 1 ratio"
@@ -298,6 +310,7 @@ export default function BaselOverview() {
                   tier1Min,
                   "No Tier 1 minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("tier1_ratio_pct")}
               />
               <KpiStat
                 label="CET1 ratio"
@@ -310,6 +323,7 @@ export default function BaselOverview() {
                   cet1Min,
                   "No CET1 minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("cet1_ratio_pct")}
               />
               <KpiStat
                 label="Leverage ratio"
@@ -323,6 +337,7 @@ export default function BaselOverview() {
                   leverageMin,
                   "No leverage-ratio minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("leverage_ratio_pct")}
               />
             </div>
 
@@ -436,6 +451,7 @@ export default function BaselOverview() {
                 title="CAR — reporting-period trend"
                 subtitle={`CAR and Tier 1 across ${carTrend.length} reporting periods`}
                 height={260}
+                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 actions={
                   compliantCount === null ? (
                     <StatusPill tone="pending">
@@ -526,6 +542,7 @@ export default function BaselOverview() {
                 title="Capital waterfall"
                 subtitle="CET1 components → deductions → AT1 → Tier 2 → total qualifying capital"
                 height={280}
+                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 footer={
                   <span>
                     CET1 {fmtCurrency(num(structure.cet1CapitalGhs))} · Tier 1{" "}
@@ -611,6 +628,8 @@ export default function BaselOverview() {
             >
               <ValidationList validations={validations} />
             </SectionCard>
+
+            {explain.drawer}
           </PageContainer>
         )}
       </QueryBoundary>

@@ -68,7 +68,6 @@ import {
   configuration,
   isApiError,
 } from "./client";
-import { nlqEnabledFromFeatureFlags } from "./featureFlags";
 import { useQueryAuthorityScope } from "./useQueryScope";
 import type {
   AlertDirection,
@@ -109,6 +108,7 @@ import {
   utcDay,
 } from "./biKeys";
 import { expressionDigest } from "@/components/bi/expressionDigest";
+import { isGrantDenial, refusalSentence } from "@/components/bi/refusal";
 
 const biApi = new BiApi(configuration);
 const featureFlagsApi = new FeatureFlagsApi(configuration);
@@ -119,10 +119,26 @@ const featureFlagsApi = new FeatureFlagsApi(configuration);
  * There is no partial answer: one denied member denies the whole query, and the
  * response carries no rows. The 403 body names the members, and the UI
  * deliberately does not show them — see `components/bi/RestrictedWidget.tsx`.
+ *
+ * Keyed on the GRANT-DENIAL codes, not on the status: a 403 is any refusal the
+ * server makes, and an impersonated staff session, an unsupported data scope or
+ * a non-owner's delete are all 403s with their own sentence and nothing to hide.
+ * Rendering those as "an organization owner can grant it" stated a decision the
+ * server never made. `biRefusalSentence` carries them instead.
  */
 export function isBiAccessDenied(error: unknown): boolean {
   if (!isApiError(error)) return false;
-  return error.status === 403;
+  return isGrantDenial(error);
+}
+
+/**
+ * The server's own sentence for a 403 that is NOT a grant denial, or `null`.
+ * See `components/bi/refusal.ts` for the two kinds and why only one is
+ * paraphrased. Rendered verbatim by `components/bi/RefusedWidget.tsx`.
+ */
+export function biRefusalSentence(error: unknown): string | null {
+  if (!isApiError(error)) return null;
+  return refusalSentence(error);
 }
 
 /**
@@ -149,7 +165,8 @@ export function useBiAvailability(enabled = true): {
    * with it off the ask routes answer 409 rather than 404 — so the nav is the only
    * thing that can decline to offer that door. `undefined` until the flags
    * answer, and `undefined` too on a backend that does not project the field yet;
-   * both hide the surface. See `nlqEnabledFromFeatureFlags`.
+   * both hide the surface. `undefined` also covers a backend that does not
+   * project the flag yet: the field is simply absent, which is fail-closed.
    */
   nlqEnabled: boolean | undefined;
   isLoading: boolean;
@@ -165,9 +182,7 @@ export function useBiAvailability(enabled = true): {
   return {
     // A failed flag read is not an entitlement. Fail closed.
     biEnabled: query.isError ? false : query.data?.biEnabled,
-    nlqEnabled: query.isError
-      ? false
-      : nlqEnabledFromFeatureFlags(query.data ?? null),
+    nlqEnabled: query.isError ? false : query.data?.biNlqEnabled,
     isLoading: query.isPending,
   };
 }
@@ -623,18 +638,30 @@ export {
 // ---------------------------------------------------------------------------
 
 /**
- * THE GENERATED CLIENT DOES NOT CARRY THESE OPERATIONS YET.
+ * AN INTERIM TRANSPORT THAT HAS OUTLIVED ITS REASON. RETIRE IT.
  *
- * `/banks/{bankId}/bi/alerts` and `/banks/{bankId}/bi/subscriptions` landed after
- * the last `mise run risk-service:openapi-client`, so — like the market-data
- * source-selection surface before them (`lib/api/marketDataSources.ts`) — they are
- * called directly here against the wire contract, which is frozen by
- * `app/schemas/bi_notifications.py`. The transport reuses `client.ts`'s bearer
- * resolution and its `ApiError` envelope, so a refusal surfaces identically to
- * every generated-client call, and the types below are the same shape the
- * generated models will have. When the client is regenerated the swap is
- * `biNotificationsFetch` → `biApi.<operation>` in the seven callers below and
- * nothing else; the hooks, the cache keys and the components need no change.
+ * It was written because `/banks/{bankId}/bi/alerts` and `.../bi/subscriptions`
+ * landed after a client regeneration. **The generated client has carried
+ * `listBiAlerts`, `createBiAlert`, `listBiSubscriptions` and the rest since before
+ * this sentence was written** — so the premise above (which said the client "does
+ * not carry these operations yet") was already false, and this is exactly the
+ * second-contract-nobody-checks hazard AGENTS.md describes.
+ *
+ * It has already cost something real. `alertPayload` omitted `notify_user_ids`
+ * and `subscriptionPayload` omitted `recipient_user_ids`; the server REPLACES
+ * both from the request, where the schema defaults them to an empty list. So a
+ * dashboard edit of an alert's threshold silently deleted every user recipient an
+ * Org Owner had added through the API, and answered 200. A generated serializer
+ * would have made those fields part of the shape the compiler checks. Both are
+ * now stated by hand, and `components/bi/notifications.test.ts` pins the field
+ * lists against the generated serializers so the next omission fails there —
+ * but the honest fix is the swap, not the pin.
+ *
+ * THE SWAP: `biNotificationsFetch` → `biApi.<operation>` in the callers below,
+ * passing the generated request models so their `ToJSON` enumerates every field.
+ * The hooks, the cache keys and the components need no change. Recorded as owed
+ * in `.ai/BI_AUDIT_LOG.md` rather than done here, because it is a behaviour-
+ * touching change across thirteen operations and this surface is under audit.
  *
  * The wire is snake_case and the app is camelCase, so each read is parsed rather
  * than cast: a payload the server changed shape on becomes a missing field the
@@ -736,6 +763,9 @@ export type BiAlertUpsert = Readonly<{
   thresholdBasis: ThresholdBasis;
   threshold: string | null;
   notifyEmails: readonly string[];
+  /** Carried through unchanged: the composer manages emails, and omitting this
+   *  field made the server replace the stored ids with nothing. */
+  notifyUserIds?: readonly string[];
   isActive: boolean;
   reason: string;
 }>;
@@ -751,6 +781,8 @@ export type BiSubscriptionUpsert = Readonly<{
   dayOfWeek: number | null;
   dayOfMonth: number | null;
   recipientEmails: readonly string[];
+  /** Carried through unchanged — see `notifyUserIds`. */
+  recipientUserIds?: readonly string[];
   isActive: boolean;
   reason: string;
 }>;
@@ -955,6 +987,14 @@ function alertPayload(body: BiAlertUpsert): Record<string, unknown> {
     threshold_basis: body.thresholdBasis,
     threshold: body.threshold,
     notify_emails: body.notifyEmails,
+    // STATED, not omitted. This field was missing, and `update_bi_alert` REPLACES
+    // `alert.notify_user_ids` from the request — where the schema defaults it to
+    // an empty list. So an Org Owner who had added user recipients through the API
+    // and then changed this alert's threshold in the dashboard had those recipients
+    // silently deleted, with a 200 (found by verification auditor V2). The composer
+    // manages emails only, so the ids are carried through unchanged rather than
+    // re-entered: the dashboard must not destroy what it does not offer to edit.
+    notify_user_ids: [...(body.notifyUserIds ?? [])],
     is_active: body.isActive,
     reason: body.reason,
   };
@@ -977,6 +1017,9 @@ function subscriptionPayload(
     day_of_week: body.dayOfWeek,
     day_of_month: body.dayOfMonth,
     recipient_emails: body.recipientEmails,
+    // Stated for the same reason as `notify_user_ids` above: omitted, it was
+    // replaced with an empty list on every dashboard edit.
+    recipient_user_ids: [...(body.recipientUserIds ?? [])],
     is_active: body.isActive,
     reason: body.reason,
   };

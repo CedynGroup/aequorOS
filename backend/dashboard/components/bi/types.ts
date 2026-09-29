@@ -65,7 +65,13 @@ export type BiWidgetSpec = Readonly<{
   subtitle?: string;
   kind: BiWidgetKind;
   query: BiQuery;
-  dataset: BiDatasetRequirement;
+  /**
+   * The dataset the widget's author NAMED as the one its figure degrades
+   * without, or `null` when none was named. Null is a real state, not a
+   * default waiting to be filled: a widget that does not know why it is empty
+   * must say so, and every default this used to carry asserted a cause.
+   */
+  dataset: BiDatasetRequirement | null;
   layout: BiGridItem;
 }>;
 
@@ -142,7 +148,8 @@ export type BiPackWidgetView =
       layout: BiGridItem;
       title: string;
       caption: string;
-      dataset: BiDatasetRequirement;
+      /** Null when the pack named no dataset — an unmapped panel key, for one. */
+      dataset: BiDatasetRequirement | null;
     }>
   | Readonly<{
       state: "pending";

@@ -7,13 +7,23 @@
  * because they are the values the authorization evaluator decides on. A reader
  * must never see them: "liq" is not a word, and an unfamiliar code in a grant
  * sentence is the difference between an owner issuing the right binding and
- * issuing the wrong one. The names below are the SAME ones the rest of the
- * product uses for those modules, so a sentence read here matches the sentence
- * an Org Owner composes in Settings.
+ * issuing the wrong one. The names are the SAME ones the rest of the product
+ * uses for those modules — they are READ from the grant composer's own option
+ * lists in `lib/api/grants.ts` rather than restated here, so a sentence read on
+ * a BI surface cannot word a module differently from the sentence an Org Owner
+ * composes in Settings. (They did: this file said "Internal Audit" — the name of
+ * persona #13 in `docs/rbac.md` — for a module the composer and the RBAC module
+ * list both call "Audit".)
  *
  * An unmapped code degrades to a readable form rather than being hidden: a new
  * module must be visible in the UI the day it is added to the catalogue, even
  * before this map learns its name.
+ *
+ * The same rule covers every other token the provenance drawer shows — an
+ * aggregation, a component's role, an engine tier, a capital regime. Each is a
+ * closed server vocabulary; each has its copy here; `labels.test.ts` reads the
+ * server's own source for the vocabularies and fails when one of them gains a
+ * value this file has not named.
  */
 
 // Relative on purpose: `labels.test.ts` runs this module under plain Node via
@@ -21,32 +31,22 @@
 // through it resolves to nothing at runtime and the suite dies before its first
 // assertion. Type-only `@/` imports are fine (they are erased); a VALUE import in
 // the Node-runnable set must be relative.
+import { MODULE_OPTIONS, SENSITIVITY_OPTIONS } from "../../lib/api/grants";
 import { labelize } from "../../lib/api/values";
 import type { BiDatasetRequirement, BiPanelKey, BiPanelSurface } from "./types";
 
-const MODULE_LABELS: Readonly<Record<string, string>> = {
-  credit: "Credit",
-  risk: "Risk & Limits",
-  cap: "Basel Capital",
-  liq: "Liquidity Monitoring",
-  irrbb: "IRRBB",
-  markets: "Markets",
-  fcst: "Forecasting",
-  fx: "Foreign Exchange",
-  ftp: "Funds Transfer Pricing",
-  beh: "Behavioral Models",
-  data: "Data Engine",
-  reg: "Regulatory Reporting",
-  account: "Account Administration",
-  audit: "Internal Audit",
-};
+function fromOptions(
+  options: readonly (readonly [string, string])[],
+): Readonly<Record<string, string>> {
+  return Object.fromEntries(options.map(([code, label]) => [code, label]));
+}
 
-const SENSITIVITY_LABELS: Readonly<Record<string, string>> = {
-  published: "Published",
-  aggregated: "Aggregated",
-  confidential: "Confidential",
-  restricted: "Restricted",
-};
+/** One source of module names: the grant composer's own list. */
+const MODULE_LABELS: Readonly<Record<string, string>> =
+  fromOptions(MODULE_OPTIONS);
+
+const SENSITIVITY_LABELS: Readonly<Record<string, string>> =
+  fromOptions(SENSITIVITY_OPTIONS);
 
 export function moduleLabel(code: string): string {
   return MODULE_LABELS[code] ?? labelize(code);
@@ -72,6 +72,74 @@ export function designationLabel(designation: string | null): string | null {
   if (designation === "supervisory_monitoring") return "Supervisory monitoring";
   if (designation === "unregistered") return "Not a registered return figure";
   return labelize(designation);
+}
+
+/**
+ * How a measure is computed, in words (`BiMeasureRead.aggregation`).
+ *
+ * The vocabulary is the catalogue's (`app/domain/bi/catalogue/*.py`); the
+ * drawer printed the token itself — "Aggregation ratio_of_sums" — and a
+ * reviewer opening Explain on the net interest margin was handed an identifier
+ * where the one sentence that explains the figure belongs.
+ */
+export const AGGREGATION_LABELS: Readonly<Record<string, string>> = {
+  count: "Count of records",
+  flow_sum: "Sum of the movements in the window",
+  hhi: "Herfindahl-Hirschman concentration index",
+  last_value: "Latest value in the window",
+  ratio_of_sums: "Ratio of two sums",
+  share: "Share of the total",
+  top_n_share: "Share held by the largest groups",
+  weighted_avg: "Weighted average",
+};
+
+export function aggregationLabel(code: string): string {
+  return AGGREGATION_LABELS[code] ?? labelize(code);
+}
+
+/**
+ * The part a component measure plays in a composed figure
+ * (`BiExplainComponentRead.role`). `over` is the dimension a share is taken
+ * across, which "over" alone does not say.
+ */
+export const COMPONENT_ROLE_LABELS: Readonly<Record<string, string>> = {
+  numerator: "Numerator",
+  denominator: "Denominator",
+  weight: "Weighted by",
+  over: "Share taken across",
+};
+
+export function componentRoleLabel(role: string): string {
+  return COMPONENT_ROLE_LABELS[role] ?? labelize(role);
+}
+
+/**
+ * Which engine tier a certified figure was copied from
+ * (`BiExplainEngineRead.tier`; ARCHITECTURE.md §3b).
+ */
+export const ENGINE_TIER_LABELS: Readonly<Record<string, string>> = {
+  live: "Live tier — recomputed as data arrives",
+  official: "Official tier — a sealed filing run",
+};
+
+export function engineTierLabel(tier: string): string {
+  return ENGINE_TIER_LABELS[tier] ?? labelize(tier);
+}
+
+/**
+ * The capital regime an engine row was computed under
+ * (`BiExplainEngineRead.regime`, from `institution_types.capital_regime`).
+ * Named by the institution class it applies to, not by the jurisdiction's
+ * instrument: display code carries no regulator or statute literal.
+ */
+export const REGIME_LABELS: Readonly<Record<string, string>> = {
+  crd: "Universal bank capital regime",
+  s29: "Specialised deposit-taker capital regime",
+};
+
+export function regimeLabel(regime: string | null | undefined): string | null {
+  if (!regime) return null;
+  return REGIME_LABELS[regime] ?? labelize(regime);
 }
 
 /**
@@ -121,6 +189,25 @@ export function datasetRequirement(key: string): BiDatasetRequirement {
       href: GENERIC_UPLOAD_HREF,
     }
   );
+}
+
+/**
+ * The dataset a widget NAMED, or null when it named none.
+ *
+ * This is the one place an absent `needs_data` is decided, and it is decided as
+ * "unknown" rather than as a default. It used to default to `positions`, and
+ * every query widget whose pack file names no dataset — the Board pack's capital
+ * adequacy, liquidity coverage and net interest margin among 26 others — then
+ * told a reader, on a date with no minted official run, that the institution
+ * had not uploaded its positions. Positions are pushed nightly; what was missing
+ * was the run. A widget that does not know why it is empty must say it does not
+ * know, and `NeedsDataWidget` renders exactly that for `null`.
+ */
+export function namedDataset(
+  key: string | null | undefined,
+): BiDatasetRequirement | null {
+  if (typeof key !== "string" || key.trim().length === 0) return null;
+  return datasetRequirement(key);
 }
 
 /**

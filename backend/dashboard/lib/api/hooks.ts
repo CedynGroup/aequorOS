@@ -69,10 +69,12 @@ import type {
   TemenosConnectionUpdate,
   WhatIfShockCode,
 } from "@aequoros/risk-service-api";
+import { FeatureFlagsApi } from "@aequoros/risk-service-api";
 import {
   ApiError,
   apiCall,
   attestationApi,
+  configuration,
   banksApi,
   behavioralModelsApi,
   capitalPlanApi,
@@ -103,8 +105,13 @@ import {
   regulatoryReportingApi,
   temenosApi,
 } from "./client";
-import { utcDay } from "./biKeys";
+import { biFeatureKey, utcDay } from "./biKeys";
 import { ingestionApi } from "./ingestion";
+import {
+  integrationKeyIssueRequest,
+  type IntegrationKeyDraft,
+} from "./integrationKeys";
+import type { NotificationCapabilities } from "../modules";
 import {
   getForwardGrid,
   getMarketDataPlanes,
@@ -3364,6 +3371,47 @@ export function useMarkAllNotificationsRead() {
 // middleware (account-admin-only surface; the raw key is returned exactly once).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Deployment capability for threshold alerts and scheduled reports.
+// ---------------------------------------------------------------------------
+
+const featureFlagsApi = new FeatureFlagsApi(configuration);
+
+/**
+ * Whether THIS deployment evaluates alerts and delivers scheduled reports.
+ *
+ * Same query key and fetch as `useBiAvailability` (`lib/api/bi.ts`), so the two
+ * share one cache entry and one request; this hook only reads two more flags
+ * off the same body — under their wire names, because the generated client
+ * predates them (see `notificationCapabilitiesFromFeatureFlags`). A failed read
+ * is `false` on both: the pages then say the platform has not enabled the
+ * capability rather than claim it is waiting for the bank's figures, which is
+ * the fail-closed direction for copy that attributes an absence.
+ */
+export function useBiNotificationCapabilities(
+  enabled = true,
+): NotificationCapabilities & { isLoading: boolean } {
+  const scope = useQueryAuthorityScope();
+  const query = useQuery({
+    queryKey: biFeatureKey(scope),
+    queryFn: () => apiCall(() => featureFlagsApi.readFeatureFlags()),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  if (query.isError) {
+    return { alerts: false, subscriptions: false, isLoading: false };
+  }
+  return {
+    // Typed fields, since the client was regenerated against the projection
+    // (2026-09-29). `undefined` while the answer has not arrived — three-valued
+    // on purpose: the pages say "Not judged here" only on an explicit `false`.
+    alerts: query.data?.biAlertsEnabled,
+    subscriptions: query.data?.biSubscriptionsEnabled,
+    isLoading: query.isPending,
+  };
+}
+
 export function useIntegrationKeys(enabled: boolean) {
   return useQuery({
     queryKey: ["integration-keys"],
@@ -3372,13 +3420,20 @@ export function useIntegrationKeys(enabled: boolean) {
   });
 }
 
+/**
+ * Issue one key for one purpose. The request is built by
+ * `integrationKeyIssueRequest`, never inline: it states every field the
+ * generated contract carries, including the purpose — the field this hook once
+ * omitted, which let the server default every key to a data push credential
+ * that the analytics feed then refused (audit A360-2 H4).
+ */
 export function useIssueIntegrationKey() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ bankId, label }: { bankId: string; label: string }) =>
+    mutationFn: (draft: IntegrationKeyDraft) =>
       apiCall(() =>
         integrationKeysApi.issueIntegrationKey({
-          integrationKeyIssueRequest: { bankId, label },
+          integrationKeyIssueRequest: integrationKeyIssueRequest(draft),
         }),
       ),
     onSuccess: () => {

@@ -179,6 +179,10 @@ export default function SubscriptionComposer({
       dayOfWeek: schedule.dayOfWeek,
       dayOfMonth: schedule.dayOfMonth,
       recipientEmails: parseRecipients(recipients),
+      // Carried through unchanged — see `AlertComposer`. This form edits email
+      // recipients; the server replaces its stored id list from the request, so
+      // omitting them deleted them on every edit.
+      recipientUserIds: editing?.recipientUserIds ?? [],
       isActive: editing?.isActive ?? true,
       reason: reason.trim(),
     });

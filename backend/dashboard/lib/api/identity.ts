@@ -3,6 +3,9 @@
  * initials) consistently across the shell header and settings.
  */
 
+import { ROLE_OPTIONS } from './grants';
+import { labelize } from './values';
+
 /** Initials from a display name (or the email local-part as a fallback). */
 export function initialsFrom(nameOrEmail: string): string {
   const base = nameOrEmail.includes('@') ? nameOrEmail.split('@')[0] : nameOrEmail;
@@ -11,16 +14,29 @@ export function initialsFrom(nameOrEmail: string): string {
   return base.slice(0, 2).toUpperCase();
 }
 
-/** Backend role code → human label. Unknown roles fall back to capitalization. */
+/**
+ * The scalar `users.role` values (`app/core/security.py::ROLES`, plus the
+ * `account_admin` that migration `202608280046` converted every `admin` to)
+ * and the role bundles, in production copy.
+ *
+ * The bundle names are READ from the grant composer's own list so the avatar
+ * menu and Settings → Members cannot call one authority two things. The
+ * scalar-only roles are named here. Anything else degrades through `labelize`,
+ * which never leaves an underscore on screen — the previous fallback
+ * capitalised the first letter only, so every account administrator saw
+ * "Account_admin" under their name on every page.
+ */
+const ROLE_LABELS: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(ROLE_OPTIONS.map(([code, label]) => [code, label])),
+  admin: 'Administrator',
+  examiner: 'Examiner',
+  org_owner: 'Organization Owner',
+};
+
+/** Backend role code → human label. Unknown roles fall back to readable words. */
 export function roleLabel(role: string | undefined | null): string {
   if (!role) return 'Signed in';
-  const labels: Record<string, string> = {
-    admin: 'Administrator',
-    approver: 'Approver',
-    analyst: 'Analyst',
-    viewer: 'Viewer',
-  };
-  return labels[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
+  return ROLE_LABELS[role] ?? labelize(role);
 }
 
 /**

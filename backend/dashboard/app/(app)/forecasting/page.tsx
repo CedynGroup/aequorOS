@@ -38,6 +38,10 @@ import WaterfallChart, {
   type WaterfallStep,
 } from "@/components/forecasting/charts/WaterfallChart";
 import RatioPathChart from "@/components/forecasting/charts/RatioPathChart";
+import {
+  LandingInsightStrip,
+  useKpiExplain,
+} from "@/components/bi/InsightStrip";
 import { useScenarioRunSet } from "@/components/forecasting/hooks";
 import {
   liabilitiesOf,
@@ -241,13 +245,21 @@ function BalanceSheetWorkspace() {
         onRetry={() => runsQuery.refetch()}
       >
         <PageContainer className="py-6 space-y-6">
+          {/* The institution's reporting date: the statements are about the
+              book the projection starts from, not about a saved run. */}
+          <LandingInsightStrip bankId={bankId} asOf={period?.periodEnd} />
+
           {createRun.error && (
             <ErrorPanel error={createRun.error} title="Forecast run failed" />
           )}
 
           {!activeRunId ? (
             liveForecast && liveForecast.status !== "na" ? (
-              <LiveForecastBaseline forecast={liveForecast} />
+              <LiveForecastBaseline
+                forecast={liveForecast}
+                bankId={bankId}
+                asOf={period?.periodEnd}
+              />
             ) : (
               <EmptyState
                 Icon={PlayCircle}
@@ -281,15 +293,27 @@ function BalanceSheetWorkspace() {
   );
 }
 
+/**
+ * The LIVE forecast module's headline figures. These four are the engine's own
+ * `live_metrics` rows, which BI copies as `certified_engine` measures — so they
+ * carry the provenance affordance. A SAVED run's KPIs (`RunDashboard`) do not:
+ * a saved run is its own object, and explaining the live copy under a saved
+ * figure would name the wrong source.
+ */
 function LiveForecastBaseline({
   forecast,
+  bankId,
+  asOf,
 }: {
   forecast: {
     metrics: Record<string, unknown>;
     computedAt: Date;
     status: string;
   };
+  bankId: string | undefined;
+  asOf: Date | null | undefined;
 }) {
+  const explain = useKpiExplain(bankId, asOf);
   const metrics = forecast.metrics;
   const metric = (key: string) => metrics[key] as string | number | undefined;
   return (
@@ -303,18 +327,22 @@ function LiveForecastBaseline({
           <KpiStat
             label="Year-5 CAR"
             value={fmtPct(num(metric("year5_car_pct")), 2)}
+            explain={explain.explainFor("year5_car_pct")}
           />
           <KpiStat
             label="Year-5 LCR"
             value={fmtPct(num(metric("year5_lcr_pct")), 2)}
+            explain={explain.explainFor("year5_lcr_pct")}
           />
           <KpiStat
             label="Year-5 NSFR"
             value={fmtPct(num(metric("year5_nsfr_pct")), 2)}
+            explain={explain.explainFor("year5_nsfr_pct")}
           />
           <KpiStat
             label="Average ROE"
             value={fmtPct(num(metric("avg_roe_pct")), 2)}
+            explain={explain.explainFor("avg_roe_pct")}
           />
         </div>
       </SectionCard>
@@ -322,6 +350,7 @@ function LiveForecastBaseline({
         Select a saved run through a direct run link, or create a scenario above
         to preserve an explicit projection snapshot.
       </p>
+      {explain.drawer}
     </>
   );
 }
