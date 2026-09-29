@@ -96,8 +96,11 @@ services:
       WORKER_JOB_TYPES: "lane:core"
       WORKER_ID: "risk-worker"
 
-  # The BI mart worker: the ONLY process that claims the bi lane
-  # (bi_mart_refresh, bi_mart_backfill, bi_retention). It lives in this file
+  # The BI mart worker: the ONLY process that claims the bi lane — seven job
+  # types per job_queue.JOB_LANES: bi_mart_refresh, bi_mart_backfill,
+  # bi_retention, bi_export, bi_alert_evaluate, bi_subscription_scan,
+  # bi_subscription_run (bi_commentary and bi_nlq_translate are AI-lane types
+  # and run in docker-compose.ai.prod.yml, never here). It lives in this file
   # rather than its own Coolify app because it needs no secret the others lack
   # — the AI worker is separate to isolate a credential; this one is separate
   # to keep heavy mart builds out of the core worker's FIFO and out of the API.

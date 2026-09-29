@@ -70,29 +70,36 @@ different module, a different sensitivity, or two partial bindings combined.
 
 ### The pairs the catalogue declares today
 
-Catalogue version 1.0.0 — 288 members over twelve pairs. A grant covers a pair,
-so this table is what an institution is actually choosing between.
+Catalogue version 2.1.0 — 1,525 members (1,456 measures, 69 dimensions, 13
+hierarchies) over thirteen pairs, counted from `catalogue()` on 2026-09-29. The
+measure count is dominated by target variants: 174 certified engine measures,
+48 portfolio base measures, and 1,234 `.actual` / `.target` / `.variance` /
+`.variance_pct` / `.attainment_pct` variants, each inheriting its base's pair.
+A grant covers a pair, so this table is what an institution is actually choosing
+between.
 
 | Module scope | Sensitivity scope | Members | Entitlement slug | Examples |
 | --- | --- | --- | --- | --- |
-| `credit` | `aggregated` | 94 | `credit` | `loans.npl_ratio_pct`, `engine.npl_ratio_pct.crd.official` |
+| `credit` | `aggregated` | 562 | `credit` | `loans.npl_ratio_pct`, `loans.arrears_share_pct`, `engine.npl_ratio_pct.crd.official` |
 | `credit` | `confidential` | 2 | `credit` | `loan.employer`, `event.position_id` |
 | `credit` | `restricted` | 5 | `credit` | `counterparty.name`, `counterparty.group`, `loans.largest_single_name_share_pct` |
-| `risk` | `aggregated` | 43 | `risk` | `positions.balance_rc`, `branch.region`, `time.date` |
+| `risk` | `aggregated` | 129 | `risk` | `positions.balance_rc`, `branch.region`, `time.date`, `gl.branch_ytd_rc` |
 | `risk` | `confidential` | 2 | `risk` | `position.id`, `position.source_reference` |
-| `cap` | `aggregated` | 36 | `capital` | `engine.car_pct.crd.official` |
-| `liq` | `aggregated` | 27 | `liquidity` | `engine.lcr_pct.crd.official`, `deposits.balance_rc` |
-| `irrbb` | `aggregated` | 23 | `irrbb` | `engine.eve_base_ghs.crd.official` |
-| `markets` | `aggregated` | 20 | `markets` | `engine.pit_pd_point_pct.advisory_internal.official` |
-| `fcst` | `aggregated` | 16 | `forecasting` | `engine.year5_car_pct.advisory_internal.official` |
-| `fx` | `aggregated` | 10 | `fx` | `engine.nop_ghs.crd.official` |
-| `ftp` | `aggregated` | 10 | `ftp` | `engine.portfolio_nim_pct.advisory_internal.official` |
+| `risk` | `restricted` | 1 | `risk` | `position.officer_code` (Phase 5 optional field) |
+| `cap` | `aggregated` | 200 | `capital` | `engine.car_pct.crd.official` |
+| `liq` | `aggregated` | 175 | `liquidity` | `engine.lcr_pct.crd.official`, `deposits.balance_rc` |
+| `irrbb` | `aggregated` | 123 | `irrbb` | `engine.eve_base_ghs.crd.official` |
+| `markets` | `aggregated` | 120 | `markets` | `engine.pit_pd_point_pct.advisory_internal.official` |
+| `fcst` | `aggregated` | 96 | `forecasting` | `engine.year5_car_pct.advisory_internal.official` |
+| `ftp` | `aggregated` | 60 | `ftp` | `engine.portfolio_nim_pct.advisory_internal.official` |
+| `fx` | `aggregated` | 50 | `fx` | `engine.nop_ghs.crd.official` |
 
 Two notes on this table. **`restricted` is exactly the members that name a single
-obligor** — the counterparty id, name, source reference and group, and the
-largest-single-name share, which is a ratio you can invert into one exposure. It
-is the smallest set the spec's own rule allows and it must not be widened by
-moving a name into `confidential` to make a screen easier to reach.
+person** — the counterparty id, name, source reference and group, the
+largest-single-name share (a ratio you can invert into one exposure) and, since
+Phase 5, the officer code. It is the smallest set the spec's own rule allows and
+it must not be widened by moving a name into `confidential` to make a screen
+easier to reach.
 **Designation is not authority** (D-022): an `advisory_only` or
 `supervisory_monitoring` engine measure is authorized exactly like a filed one
 and is merely badged differently in the UI. A grant never turns an advisory
@@ -127,13 +134,12 @@ and each is now implemented and pinned by `tests/api/test_bi_routes.py` /
    response and never swallowed (a read that cannot be recorded is not served).
    The log stores member ids and a one-way query hash, never a filter value for a
    restricted member. A request refused as malformed is recorded too, naming no
-   member, so the read budget bounds that path as well (audit A6-06). Two
-   surfaces write NO row — `catalogue` and `trust` — because the table's
-   `surface` CHECK names only the six data surfaces and recording them under
-   another surface would put an event in an append-only audit table that did not
-   happen; both are authorized and both are subject to the budget, and widening
-   the vocabulary (`app/models/bi.py` + migration `202609220066`) is the
-   follow-up that lets them refill it.
+   member, so the read budget bounds that path as well (audit A6-06). Every
+   surface now writes its own row: the `surface` CHECK (widened by migrations
+   `202609270070` and `202609280077`) names `query`, `grid`, `drill`,
+   `explain`, `export`, `feed`, `trust`, `catalogue`, `packs`, `insights` and
+   `nlq`, so `catalogue` and `trust` — which at Phase 1 could not be recorded
+   without misnaming them — are metered and logged like the data surfaces.
 3. **ETag** = hash(query, build fingerprint, principal id,
    `matching_binding_ids`, `authv`). A revoked or re-scoped grant bumps `authv`
    in the same transaction, so old tokens 401 and cached responses miss.
@@ -165,14 +171,18 @@ change the user must sign in again to obtain the new authorization version.
 cd backend && uv run python scripts/authorization_access_impact.py --organization OR-XXXXXXXX
 ```
 
-The script projects every active human through the same evaluator the API uses
-and flags `no_bindings | no_product_view | account_plane_only`. Mounting the BI
-routes grants nobody anything, so **both runs must be identical**: a diff means
-something else changed in the release. Keep both outputs with the record. The
+The script projects every active human through the same evaluator the API uses,
+reports per institution which modules they may view and WHICH SLICE each view
+capability reads (the `data scope` column, added 2026-09-29), and flags
+`no_bindings | no_product_view | account_plane_only | scoped_reader`. Mounting
+the BI routes grants nobody anything, so **both runs must be identical**,
+`data scope` column included: a diff means something else changed in the
+release. Keep both outputs with the record (`--json` for a machine diff). The
 script takes a database URL (`WORKER_DATABASE_URL` then `DATABASE_URL`), has no
 hermetic mode, and excludes service users — machine principals are covered by
 the SQL below instead. Hermetic coverage:
-`tests/scripts/test_authorization_access_impact.py`.
+`tests/scripts/test_authorization_access_impact.py` (the data-scope column is
+not yet asserted there).
 
 ### 2. Per-pair inventory (read-only)
 
@@ -188,6 +198,7 @@ WITH bi_pairs (module_scope, sensitivity_scope) AS (
         ('credit', 'restricted'),
         ('risk', 'aggregated'),
         ('risk', 'confidential'),
+        ('risk', 'restricted'),
         ('cap', 'aggregated'),
         ('liq', 'aggregated'),
         ('irrbb', 'aggregated'),
@@ -309,8 +320,14 @@ what lets the column sit in the `GROUP BY`). The `CASE` maps the three
 authorization module values whose entitlement slug differs from the module name. Review the output with each institution and list every
 human and machine principal that will be denied on each pair. Machine principals
 are included so the release record proves no integration was assumed to have BI
-read authority: the Power BI feed of Phase 4 is a separate route with its own
-machine dependency and its own bundle, and it does not exist yet.
+read authority on the INTERACTIVE routes, which refuse every machine credential.
+The Power BI Stage B feed (`GET …/bi/feeds/{dataset}`, `app/features/read_bi_feeds.py`,
+built 2026-09-27) is the one machine-facing BI route: it requires a `bi_reader`
+binding (migration `202609270074`; `{view}` only, disjoint from
+`integration_writer`'s `{ingest}`, machine-only by CHECK) issued through the
+integration-key flow with `purpose=reader`, and it is inventoried by its own
+contract, `backend/docs/powerbi_stage_b.md`. The SQL above still reports every
+machine principal as denied, which is correct for the surfaces it inventories.
 
 ## Exact binding rows
 
@@ -321,12 +338,14 @@ under that row. Anything further is an institution decision made through
 `grant_administration.create_scoped_grant`, so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
-| Need | `principal_type` | `role_bundle` | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Aggregate BI for one engine (dashboards, trends, Explore aggregates) | `human` | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated` |
-| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human` | same | same | same | `risk` | `confidential` |
-| Named obligors: counterparty name / group / reference, largest-single-name share | `human` | same | same | same | `credit` | `restricted` |
-| Record-level BI export | `human` | `analyst` (the only bundle carrying `export`) | same | same | the member's module | the member's sensitivity |
+| Need | `principal_type` | `role_bundle` | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` | `data_scope_kind` / `data_scope_values` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Aggregate BI for one engine (dashboards, trends, Explore aggregates) | `human` | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated` | `all` / NULL — institution-grain figures (ratios, bank-wide totals) are refused to any narrower scope |
+| The same, for one branch network or region only (portfolio slices; a branch manager) | `human` | same | `institution` | exact `BK-*` | `credit` or `risk` | `aggregated` | `branch` / `["B001", …]` or `region` / `["Northern", …]` — a non-empty list, or the row is refused |
+| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human` | same | same | same | `risk` | `confidential` | `all`, or the same slice as the aggregate row |
+| Named obligors: counterparty name / group / reference, largest-single-name share | `human` | same | same | same | `credit` | `restricted` | `all`, or the same slice as the aggregate row |
+| Record-level BI export | `human` | `analyst` (the only bundle carrying `export`) | same | same | the member's module | the member's sensitivity | same as the read row it accompanies |
+| Power BI Stage B feed pull | `machine` | `bi_reader` (issued with the integration key, `purpose=reader`) | `institution` | exact `BK-*` | the dataset's module | `aggregated` | `all`, or a branch / region slice; a scoped key is refused every institution-ratio dataset |
 
 The common least-privilege credit analyst therefore needs two independently
 complete rows — the aggregate portfolio and the named obligors are separate
@@ -362,17 +381,82 @@ production users into code, or widen a scope to `all` to compensate for a missin
 decision. An `all`/`all` row makes every BI member in every entitled module
 queryable, obligor names included.
 
-### Branch, region and desk scope is NOT enforced
+### Branch and region scope IS enforced; desk and currency are not
 
-`authorization_bindings` carries no data-scope columns, so a BI grant cannot be
-narrowed to one branch, region, desk or currency: an authorized principal reads
-the whole institution. `BiAuthorization.data_scope` is always `all` in Phase 1
-and exists only so the Phase 4 dimension (D-029: derived from the matched
-bindings and injected as an unremovable filter, security row S18) lands without
-changing the decision's shape. **Do not name a branch or a region in a grant
-reason as if it were enforced scope** — the same prohibition every rollout since
-FX has carried. When data scope does land, `scripts/authorization_access_impact.py`
-must be extended to report it before the cutover.
+> Corrected 2026-09-29 (audit A360-7 S1). Until then this section said the
+> opposite — that the binding carried no data-scope columns and that a branch
+> named in a grant was decorative. That was true for Phase 1 and false from
+> migration `202609270073` (2026-09-27) on. An operator who read the old text
+> would have granted wider than intended or refused a narrowing that works.
+
+Since `202609270073` a binding carries `data_scope_kind` (`all | branch |
+region`, server default `all`) and `data_scope_values`, and the row is refused
+by CHECK unless `all` carries NULL and a `branch`/`region` row carries a
+NON-EMPTY list — so "no branches" is storable only as a scope that returns no
+rows, never as an absent filter. Three places make that sentence enforcement
+rather than annotation:
+
+1. **Reduction.** `authorize_query` (`app/services/bi/authorization.py`) loads
+   the effective grants that matched EACH (module, sensitivity) pair through
+   `authorization.load_effective_grants` and reduces each pair with
+   `reduce_data_scope` — no grants → nothing; any `all` → the whole
+   institution; otherwise the union of the branch and region lists — then
+   combines the pairs narrowest-wins. Reducing the ids of DIFFERENT pairs in
+   one pass was audit blocker A10-01 (an `all` on liquidity would have erased a
+   branch restriction on credit). The machine feed's authorizer
+   (`services/bi/feeds/authorization.py`) carried the same union until audit
+   A360 H8 (latent — no tenant route mints a second `view` binding on a machine
+   principal); the 2026-09-29 remediation moves it onto the shared
+   `authorization.combine_pair_scopes`, the helper `authorize_query` uses, so
+   both surfaces reduce per pair through one function (in the working tree,
+   uncommitted at the time of writing).
+2. **Resolution.** `app/services/bi/data_scope.py::resolve` turns the declared
+   scope into the ONE filter for this institution: the declared branch codes
+   plus every `bi_dim_branch` row in a declared region, scoped to the exact
+   `(organization, bank)`. A region no ingested branch belongs to, or a code the
+   Data Engine has never seen, resolves to a filter that matches no row — never
+   to `()`.
+3. **Injection.** The filter is handed to `compile_query` BESIDE the `BiQuery`
+   (`read_bi.injected_filters`), so the compiler ANDs it with the client's own
+   predicates and no request can reach, remove or widen it; a request filtering
+   `branch.code = 'B2'` under a `B1` grant is served the intersection. Seven
+   modules call `resolve`: `features/read_bi.py` (the read routes and packs),
+   `services/bi/insights/assemble.py`, `exports/runner.py` and `exports/jobs.py`,
+   `alerts.py`, `subscriptions.py` and `feeds/authorization.py`. An
+   institution-grain measure (a capital ratio, a bank-wide figure) is refused to
+   a scoped principal outright (`REASON_INSTITUTION_GRAIN`,
+   `REASON_BANK_WIDE_FIGURE`) rather than served as a wrong number with a
+   right-looking name.
+
+The scope is part of the answer's identity: `ResolvedDataScope.fingerprint`
+enters the ETag, `data_scope` rides every `BiQueryResult`, the export
+provenance block prints the slice (`Branches: B001, B002`; `Regions: Northern ·
+4 branches in scope`), the feed states it in `X-Bi-Feed-Data-Scope`, and
+`/auth/me` projects it per capability (`EffectiveCapabilityRead.data_scope`) so
+the dashboard's coverage notice can say what a figure covers.
+
+**Grant it as scope, never as prose.** The Members composer's book-coverage
+control writes `data_scope_kind` / `data_scope_values`; a branch named only in
+`grant_reason` is NOT enforced and never was. Desk, portfolio and currency
+remain absent from the vocabulary (`docs/rbac.md` §7.3) — do not promise them.
+
+**The gate reports it.** `scripts/authorization_access_impact.py` carries a
+`data scope` column and a `scoped_reader` flag per principal (added 2026-09-29;
+audit A360-7 S2 found the Phase 4 cutover had shipped without it). The JSON
+output lists every `view` capability's kind and values, reduced per capability
+from the bindings that matched it — the same reduction as above, never a union
+across pairs — so a before/after diff shows a slice that widened (a
+disclosure) or narrowed (a lost figure). Run it before and after any release
+that touches bindings, the evaluator or the resolver. Its hermetic test does
+not yet assert the new column (owed).
+
+Pinned by: `tests/services/bi/test_data_scope.py`, `tests/api/test_bi_data_scope.py`,
+`tests/api/test_data_scope_grants.py`, the A10-01 cases in
+`tests/services/bi/test_bi_authorization.py`, `tests/api/test_bi_feeds.py` and,
+for the credit blotter, `tests/api/test_credit_route_authorization.py`.
+
+Turning BI on in production is an ordered sequence with its own hazards; it is
+recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).
 
 ## Release record
 
@@ -384,11 +468,15 @@ Before the deployment that mounts the BI routes, attach:
 3. The exact list of human and machine principals denied on each pair, and the
    confirmation that the denial set is what the institution intends.
 4. Every institution-approved binding row created for BI before release, with its
-   reason and the server's authority sentence.
-5. Confirmation that no branch, region, desk or currency scope was promised.
-6. Confirmation that the routes deny machine and impersonated credentials, write
-   `bi_query_log` for allowed and denied queries alike, and key the ETag on
-   `authv`.
+   reason, its `data_scope_kind` / `data_scope_values`, and the server's
+   authority sentence.
+5. Confirmation that every branch or region the institution was promised is a
+   STORED scope on a binding (it appears in the `data scope` column of the
+   projection diff), and that no desk, portfolio or currency scope was promised.
+6. Confirmation that the interactive routes deny machine and impersonated
+   credentials, that the feed accepts only `bi_reader` keys, that every surface
+   writes `bi_query_log` for allowed and denied reads alike, and that the ETag is
+   keyed on `authv` and the resolved scope's fingerprint.
 7. Confirmation that every user whose `authv` changed signed in again.
 
 ## Pinned by

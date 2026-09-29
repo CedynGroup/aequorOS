@@ -359,6 +359,25 @@ expressed by presets, add a **clone-a-role → toggle permissions** editor
 (Datadog pattern) with **sensitive permissions visibly flagged**, and cap the
 count (Okta caps at 100/org) to prevent proliferation.
 
+### 6.4 Machine bundles (built)
+
+Two bundles exist for `principal_type = machine` and neither is grantable to a
+human — the CHECK on `authorization_bindings` (generalised by migration
+`202609270074`) admits a machine bundle only on a machine principal and a human
+bundle only on a human. They carry **disjoint** permission sets by construction,
+so neither route has to name the other's bundle to refuse it:
+
+| Bundle | Permissions | Issued by | What it reaches |
+| --- | --- | --- | --- |
+| `integration_writer` | `{ingest}` | an integration key (Data Engine → API Push, `purpose=writer`) | the push routes for ONE exact `BK-*`; never a read |
+| `bi_reader` (2026-09-27) | `{view}` | the same integration-key flow with `purpose=reader` | the Power BI Stage B feed `GET …/bi/feeds/{dataset}` for one exact `BK-*`; never a push, never the interactive BI routes, which refuse every machine credential |
+
+A `bi_reader` binding may carry a branch or region data scope (§7.3), in which
+case the feed states the slice in `X-Bi-Feed-Data-Scope` and refuses every
+institution-ratio dataset. Contracts:
+[integration keys](../backend/docs/integration_key_machine_principal_rollout.md),
+[the feed](../backend/docs/powerbi_stage_b.md).
+
 ---
 
 ## 7. Permission model
@@ -467,7 +486,8 @@ Every grant is evaluated within a scope. Default-deny outside it.
 | **Organization**                | the security tenant/account (`OR-*`)                                                           | binding `organization_id` + forced RLS                                                                        |
 | **Institution**                 | one bank/legal entity (`BK-*`) beneath the organization                                        | exact `institution_id`, or explicit `institution_scope=organization`                                          |
 | **Module**                      | LIQ/CAP/…                                                                                      | exact `module_scope`, or explicit `all`                                                                       |
-| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | future scoped extension; absent from rollout v1                                                               |
+| **Data scope (branch / region)** | which SLICE of the institution's book the sentence admits — built 2026-09-27 (migration `202609270073`) | `data_scope_kind` `all\|branch\|region` + a NON-EMPTY `data_scope_values` list, CHECK-enforced (an empty list is unstorable, so "no branches" can only mean no rows, never no filter); reduced per capability by `services/authorization.reduce_data_scope` (never across resources — A10-01), resolved against the ingested branches by `services/bi/data_scope.py`, injected as a filter the reader cannot remove on BI, the credit blotter and the Stage B feed; projected per capability in `/auth/me`; reported by `scripts/authorization_access_impact.py` |
+| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | future scoped extension; absent from the vocabulary — do not promise it                                                               |
 | **Data sensitivity**            | published, aggregated, confidential, or restricted                                             | exact `sensitivity_scope`, or explicit `all`                                                                  |
 | **Environment**                 | live vs **demo**                                                                               | global condition veto, not a role or binding dimension                                                        |
 | **Approval tier**               | numeric ceiling on `approve` (deal size / exception magnitude); above → escalate               | attach to the `approve` grant per preset                                                                      |
@@ -885,7 +905,8 @@ than adding a second session-generation field.
 `organization_id, principal_user_id, principal_type, role_bundle,
 institution_scope, institution_id, module_scope, sensitivity_scope,
 granted_by_type, granted_by_id, grant_reason, granted_at, status, valid_from,
-valid_until, revoked_at, revoked_by_type, revoked_by_id, revoked_reason`.
+valid_until, revoked_at, revoked_by_type, revoked_by_id, revoked_reason,
+data_scope_kind, data_scope_values`.
 Composite principal/institution tenant
 foreign keys, checks, and FORCE RLS enforce the shape. This table supersedes the
 independent `user_roles`/`user_scopes` proposal, whose arrays could accidentally
@@ -893,7 +914,10 @@ create cross-product authority. The column list is unchanged by the `credit`
 module (2026-09-22): migration `202609220067` widens the `module_scope` CHECK to
 the enum and MIRRORS each active human `risk` row into an identical `credit` row
 (system-granted, audited, `authv` bumped) rather than rewriting or aliasing
-anything — the evaluator never reads one module as another.
+anything — the evaluator never reads one module as another. Migration
+`202609270073` (2026-09-27) added the two data-scope columns (§7.3), backfilling
+every existing row to `all` by server default with no data step; `202609270074`
+widened the bundle CHECK to admit `bi_reader` for machine principals only (§6.4).
 
 **`invitations`** _(new)_:
 `id, org_id, email, role_presets[], scope, token_hash, invited_by, expires_at,
@@ -1027,14 +1051,20 @@ for enforcing product surfaces; each cutover has one contract there
 (liquidity, capital, IRRBB, FX, FTP, ICAAP, account administration, filing
 submit, integration keys, and — 2026-09-22 —
 [credit](../backend/docs/credit_enforcement_rollout.md): the module, its mirror
-migration and the shared live surfaces are enforced; the direct `/credit/*`
-route cutover is recorded there as not yet enforced). Remaining
-Phase-0 work is further endpoint cutovers, their matching module-action controls, and
-per-persona default landings (the root already routes to the first authorized surface)
+migration and the shared live surfaces are enforced, and since 2026-09-27 the
+direct `/credit/*` routes sit on per-route scoped bindings
+(`app/api/deps.py::require_credit_*`) with the blotter applying the reader's
+data scope; and — 2026-09-23 — [BI](../backend/docs/bi_enforcement_rollout.md),
+where the sentence is declared on the catalogue member rather than the route).
+Remaining Phase-0 work is further endpoint cutovers, their matching
+module-action controls, and per-persona default landings (the root already
+routes to the first authorized surface)
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
 Before each cutover run `backend/scripts/authorization_access_impact.py` against the
-target deployment: it projects every active user through the evaluator and flags who
-would see no module afterwards.
+target deployment: it projects every active user through the evaluator, flags who
+would see no module afterwards and — since 2026-09-29 — reports which slice
+(branch / region / whole institution) each view capability reads, which is the
+gate for any change touching `data_scope_*`.
 Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
 the scalar `account_admin` role. Initial Owner assignment is built only for the
 exactly-one-candidate migration/onboarding cases; explicit designation and

@@ -392,8 +392,9 @@ when it was assumed away:
    `importlib` dispatch (the family package imports the generic plane, so a
    module-level import would close the cycle), a no-op default for every hook,
    and deliberately not `if package.return_family == "icaap"` in five services.
-3. **The `ai` job lane exists.** `icaap_ai_draft` is its only member, the
-   default lane excludes it by construction, and
+3. **The `ai` job lane exists.** `icaap_ai_draft`, `bi_commentary` and
+   `bi_nlq_translate` are its members (`job_queue.JOB_LANES`), the
+   default lane excludes them by construction, and
    `app/worker.py::resolve_job_types` refuses a process that mixes lanes. The
    reason is the model credential: the process holding `ANTHROPIC_API_KEY` runs
    nothing else, and it deploys from its own compose file.
@@ -420,8 +421,19 @@ mounted until `BI_ENABLED`.
 
 **The plane boundary is the whole design.** BI is a DISPATCH plane: it reads
 canonical rows (through `is_current_generation` only), `live_metrics`,
-`regulatory_runs` and the registers, and it writes **`bi_*` tables and nothing
-else**. The regulatory plane never imports BI, with exactly two exceptions —
+`regulatory_runs` and the registers, and it writes **the `bi_*` tables** (the
+guard derives the writable set from the model registry by prefix, so a new mart
+is covered on the day it is written) **plus `ai_commentary_drafts`** — the one
+non-`bi_` table a BI-owned module writes, by decision D-191, from
+`app/jobs/bi_commentary.py`. Stated precisely because audit A360-1 M1 found the
+older "nothing else" wording false: the write scan then covered `app/services/bi`
+and `app/domain/bi` only, while `app/jobs/bi_*.py` and `app/features/*bi*.py`
+were exempt from the import rule and unscanned. The 2026-09-29 remediation makes
+the exemption set and the scan set the SAME set and names `ai_commentary_drafts`
+as the one permitted non-`bi_` write
+(`test_every_bi_owned_module_is_in_the_write_scan`; in the working tree at the
+time of writing). The regulatory plane never imports BI, with exactly two
+exceptions —
 `app/services/bi/enqueue.py` and `app/services/bi/versions.py`, the enqueue
 seam the hook sites call, which themselves import no BI model, builder,
 catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins all
@@ -443,12 +455,15 @@ of it, including that BI never calls `derive_facts`.
   both (`classification_exposure_rc` beside `balance_rc` + `fx_unconverted`) so
   portfolio NPL reconciles exactly to the engine's, and each measure declares
   which rule it follows.
-- **Reconciliation R1–R10 drives a trust badge** (`green | amber | red | grey`).
+- **Reconciliation R1–R12 drives a trust badge** (`green | amber | red | grey`).
   A check that cannot run is grey — never a pass. R10 (`dpd_completeness`)
   exists because a bank that never supplied `days_past_due` would otherwise
   render PAR-90 as a confident `0.00 %`; the compiler returns NULL when a
   selecting column is NULL across the whole population, and R10 makes the
-  badge say why.
+  badge say why. R11 (`gl_branch_identity`, Phase 5) is exact: the branch
+  ledger's `ytd_rc` summed per (account, month, currency) must equal the
+  institution ledger's, on the SAME Decimal figures. R12
+  (`arrears_completeness`) is R10's twin over `arrears_amount_rc`.
 
 **Partition RLS is the sharp edge.** Postgres does not inherit row-level
 security onto partitions, so the marts' monthly and yearly children are created
@@ -564,6 +579,71 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   triggers idempotent without a second mechanism. This is worth stating because
   the absence of that one call left both features inert — registered, handled,
   tested and never invoked — in a way nothing reported.
+
+### Phase 4 and Phase 5 additions (2026-09-27..28)
+
+- **A binding is now a five-dimension sentence.** `authorization_bindings`
+  carries `data_scope_kind` (`all | branch | region`) and `data_scope_values`
+  (migration `202609270073`; a non-`all` row must carry a NON-EMPTY list, by
+  CHECK, so "no branches" is storable only as no rows). The scope is reduced
+  PER CAPABILITY — `authorization.reduce_data_scope` over the bindings that
+  matched that exact resource; unioning ids matched against different
+  resources was audit blocker A10-01 — resolved against the ingested branch
+  dimension by `app/services/bi/data_scope.py` (a region grant covers whatever
+  the region contains NOW; an unknown code matches nothing, never everything),
+  and handed to `compile_query` BESIDE the `BiQuery`, so no client predicate can
+  reach or remove it. Institution-grain measures are refused to a scoped
+  principal rather than sliced. The same filter is applied by the credit
+  blotter and by the feed; `/auth/me` projects the scope per capability, and
+  `scripts/authorization_access_impact.py` reports it — the gate for any
+  cutover that touches it.
+- **`bi_reader` is the second machine bundle** (`{view}`, disjoint from
+  `integration_writer`'s `{ingest}`, machine-only by CHECK; `202609270074`),
+  minted with an integration key (`purpose=reader`) for the **Power BI Stage B
+  feed** — `GET …/bi/feeds/{dataset}`, curated aggregated datasets only, NDJSON
+  or CSV, a cursor anchored on the MART BUILD rather than the business date so
+  a restated month re-arrives, every pull logged (`backend/docs/powerbi_stage_b.md`).
+  Stage A (governed file exports into Power BI Desktop) is
+  `backend/docs/powerbi_stage_a.md`.
+- **Credit routes moved onto scoped bindings** (`app/api/deps.py::require_credit_*`,
+  per-route sensitivity), and the blotter, facets and activity grid apply the
+  reader's data scope with every count computed AFTER the filter.
+- **Two more marts.** `bi_fact_gl_branch_monthly` (`202609280075`) is the branch
+  ledger from the NEW `gl_segment_balances` reference dataset — a separate table
+  rather than a `branch_code` column on the institution ledger, because
+  `authorization.branch_attributable` reads the branch key off the TABLE and a
+  branch key on the institution ledger would make the institution's own P&L
+  readable by a branch-scoped principal (argument: `docs/data_engine/datasets/gl_segment_balances.md`).
+  Four optional position columns (`officer_id`, `channel`, `account_status`,
+  `arrears_amount`; `202609280076`) land on both position facts; a catalogue
+  member binds to a mart COLUMN, so an ingestion-only field is not analysable.
+- **Natural-language questions** (`202609280077` adds the `nlq` log surface).
+  The model emits a `BiQuery` over the members the reader can already see, never
+  SQL; the proposal is shown, confirmed by digest (a changed or re-ordered
+  proposal is 409) and logged; `bi_nlq_translate` runs on the exclusive `ai`
+  lane beside `icaap_ai_draft` and `bi_commentary`. **Consent text amended
+  2026-09-29** (`ai-consent-2026-09-v2`, the shipped default): it describes the
+  question surface in its own section — what is sent (the typed question plus a
+  catalogue of permitted figure NAMES), what never is (any figure, any answer,
+  anything the asker may not see), and, stated plainly, that the screening cannot
+  catch a customer name it has never been told. `bi_nlq` is consequently in
+  `CONSENT_COVERED_FEATURES`. The rule that made this necessary is now ENFORCED
+  rather than assumed: `gates.evaluate` refuses any feature the shipped consent
+  text does not describe (`consent_not_covered`), at BOTH enqueue and run, so a
+  database row cannot out-rank the document (audit A360-5 M2). Raising the
+  version switches AI assistance off until each Owner accepts the new text.
+- **One chart library.** Every Recharts importer in `backend/dashboard` was
+  converted to ECharts (39 files at the time; 0 remain) and the dependency left
+  the dashboard manifest; the staff `console/` still imports it in 3 files and
+  is outside the BI spec's scope.
+- **Six flags, all six projected.** `BiSettings` carries `BI_ENABLED`,
+  `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`, `BI_ALERTS_ENABLED`,
+  `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`, all default off;
+  `GET /feature-flags` serves all six. The alert and subscription flags were
+  added to the projection by audit A360-2 M3: without them the screen said
+  "Waiting for figures" about a shut flag, blaming the bank's data for a
+  deployment decision. The production
+  turn-on order is `backend/docs/bi_turn_on_runbook.md`.
 
 ---
 

@@ -255,8 +255,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   gates itself. **`family_hooks` is the one seam a family may use** — lazy
   `importlib` dispatch, a no-op default per hook, deliberately not
   `if return_family == "icaap"` in five services. **The `ai` job lane exists**
-  (`icaap_ai_draft` its only member; the default lane excludes it by construction
-  and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
+  (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them by
+  construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
   process holding the model key must run nothing else. **Jurisdiction is data
   under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and
   the Nigeria and Kenya manifests were built WITHOUT reading their primary texts
@@ -659,16 +659,20 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
 - **BI plane (built from 2026-09-21; spec `docs/bi.md`, shape ARCHITECTURE.md §3e, ledger the
   gitignored `.ai/BI_*.md`).** Governed analytics over the same numbers the platform files, so a bank can
   drop its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows (current
-  generation only), `live_metrics`, `regulatory_runs` and the registers, and writes **`bi_*` tables and
-  nothing else**; the regulatory plane never imports BI except the two enqueue-seam modules
+  generation only), `live_metrics`, `regulatory_runs` and the registers, and writes **the `bi_*` tables
+  plus `ai_commentary_drafts`** (D-191, from `app/jobs/bi_commentary.py`; A360-1 M1 found the write scan
+  covered `services/bi` + `domain/bi` only — the guard now scans every BI-owned module and names that one
+  permitted write); the regulatory plane never imports BI except the two enqueue-seam modules
   (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder, catalogue or
   compiler. `tests/architecture/test_bi_plane_boundary.py` pins it, `derive_facts` included.
   **Engine metrics are COPIED, never recomputed**, and portfolio measures reuse the engines' own pure
   functions out of `app/domain/` — one definition, not a BI copy. **Nothing is mounted by default:**
-  `BI_ENABLED`, `BI_MART_ENQUEUE_ENABLED` and `BI_SCHEDULER_ENABLED` all ship off and are set in no
-  deployment, so every BI route 404s today; turning it on is ordered, and `risk-worker-bi` must be
-  DEPLOYED before the enqueue flag flips or every job it produces strands in `queued` (the shared
-  `jobs` table hazard). **`CATALOGUE_VERSION` and `BUILDER_VERSION` both enter the build fingerprint**,
+  all six `BiSettings` booleans (`BI_ENABLED`, `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`,
+  `BI_ALERTS_ENABLED`, `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`) ship off and are set in no
+  deployment file, so every BI route 404s today; `GET /feature-flags` projects all six. Turning it on is
+  the ten-step ORDERED sequence in `backend/docs/bi_turn_on_runbook.md`, and `risk-worker-bi` (seven `bi`-lane job
+  types) must be DEPLOYED before the enqueue flag flips or every job it produces strands in `queued`
+  (the shared `jobs` table hazard). **`CATALOGUE_VERSION` and `BUILDER_VERSION` both enter the build fingerprint**,
   so bumping either forces a full mart rebuild per tenant — bump deliberately.
   Four things here are easy to assume away:
   **(1) Postgres does not inherit RLS onto partitions.** The marts' monthly and yearly children are
@@ -714,6 +718,26 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   and on-new-data triggers live in the `bi_mart_refresh` HANDLER, not in `refresh_bank_as_of`**: the backfill
   calls the builder once per date, so a hook inside it would mail a bank a thousand board packs, and the
   builder's `skipped` outcome is what makes both triggers idempotent.
+  **Phase 4/5 (2026-09-27..28) made the binding a five-dimension sentence — and the spec lagged the code
+  in a dozen places (audit A360-7).** Data scope is REAL: `authorization_bindings.data_scope_kind/values`
+  (migration `202609270073`), reduced PER CAPABILITY by `authorization.reduce_data_scope` — never union ids
+  matched against different resources (audit blocker A10-01 in `authorize_query`; A360 H8 found the same
+  union in `services/bi/feeds/authorization.py`, moved onto the shared `combine_pair_scopes` 2026-09-29) — resolved by `services/bi/data_scope.py` and injected
+  BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py` reports it
+  (`data scope` column, `scoped_reader` flag) and is the gate for any change that touches it. `bi_reader`
+  is the second machine bundle (`{view}`, disjoint from `integration_writer`'s `{ingest}`, `202609270074`)
+  for the Stage B feed (`backend/docs/powerbi_stage_b.md`); Stage A is `powerbi_stage_a.md`.
+  Reconciliation is R1–R12. NLQ (`ask` routes, `bi_nlq_translate` on the `ai` lane) is built, and the
+  consent text was amended on 2026-09-29 (`ai-consent-2026-09-v2`) so `bi_nlq` is now in
+  `CONSENT_COVERED_FEATURES`. **The rule it exists for is enforced at the EGRESS gate, not in a
+  request schema**: `gates.evaluate` refuses any feature the shipped consent text does not describe,
+  at enqueue AND run, so a settings row written by any other path cannot out-rank the document
+  (audit A360-5 M2). Adding a feature to that tuple without a consent section covering it is the
+  defect. Reaching a tenant still needs the deployment flags, `risk-worker-ai`, a non-empty
+  `approved_configurations.json` and the Owner's consent. Recharts is gone from `backend/dashboard`
+  (0 importers; `console/` keeps 3, out of scope). When a BI document and the code disagree, check the
+  dated as-built notes in `docs/bi.md` before trusting a mechanism the prose describes — the code won
+  every time in A360-7.
 - **A REGISTERED JOB WITH NO ENQUEUE SITE IS AN INERT FEATURE, AND NOTHING REPORTS IT (2026-09-27).** BI's
   threshold alerts shipped with a job type, a worker lane, a reclaim-window decision, a handler and passing
   handler tests — and no caller anywhere. No alert was ever evaluated; `on_new_data` reports never fired.
