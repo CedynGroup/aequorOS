@@ -17,6 +17,20 @@ in ``AI_PROVIDER_TIER`` has a reviewed configuration for this environment, and t
 tier itself skips the individual vendors that do not. A deployment that has
 reviewed one provider must be able to use it without waiting for the other two,
 and an unreviewed provider must never be reachable.
+
+**The consent TEXT is a gate here too, not only in the settings schema (audit
+A360-5 M2).** ``features.CONSENT_COVERED_FEATURES`` names the surfaces the shipped
+consent document actually describes, and ``schemas/ai.py`` refuses to store any
+other feature on ``PUT /organization/ai-settings``. That was the ONLY enforcement,
+and a request schema is not a defence: ``ai_commentary_settings`` is a mutable row
+with other writers — ``psql`` on the primary, a data migration, a future staff fix
+endpoint — and a row that names an undescribed surface used to pass this function
+on ``feature in row.enabled_features`` alone. The row would then have out-ranked
+the document the tenant signed. So ``evaluate`` refuses an undescribed feature
+itself, at both phases, with its own code (``consent_not_covered``), and it does so
+at the DEPLOYMENT tier: which surfaces the text describes is a property of the
+text this deployment ships, not of any tenant, so a tenant is never told to
+"switch it on in Settings" for a surface Settings will refuse.
 """
 
 from __future__ import annotations
@@ -31,13 +45,14 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings, is_undeployed_environment
 from app.models.ai import AiCommentarySettings
 from app.services.ai import approvals
-from app.services.ai.features import AiFeature
+from app.services.ai.features import AiFeature, is_consentable
 
 GateCode = Literal[
     "allowed",
     "deployment_disabled",
     "deployment_not_approved",
     "configuration_not_approved",
+    "consent_not_covered",
     "tenant_disabled",
     "feature_disabled",
     "consent_outdated",
@@ -64,6 +79,10 @@ GATE_MESSAGES: dict[GateCode, str] = {
     ),
     "configuration_not_approved": (
         "AI assistance has not been approved for use in this environment yet."
+    ),
+    "consent_not_covered": (
+        "The terms for AI assistance on this platform do not cover this part of the "
+        "product yet, so it cannot be used here."
     ),
     "tenant_disabled": (
         "AI assistance is switched off for your organisation. An Organisation Owner "
@@ -181,6 +200,11 @@ def evaluate(  # noqa: PLR0911, PLR0913 - one return per refusal reads better th
 
     if not approved_vendors(feature, prompt_version, settings=settings):
         return _refuse("configuration_not_approved")
+    if not is_consentable(feature):
+        # Deployment tier, before the tenant row is even read: no row can consent
+        # to a surface the shipped consent text does not describe, however it was
+        # written. See the module docstring.
+        return _refuse("consent_not_covered")
 
     row = tenant_row(db, organization_id)
     if row is None or not row.enabled:

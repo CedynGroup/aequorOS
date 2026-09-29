@@ -19,11 +19,17 @@
 # field leaves it unpopulated; it is optional, never required.
 #
 # The three domains left supported:false are argued per domain at the foot of
-# ofs_catalog.yaml (the OFS file is the reasoned original; this one is derived).
-# Every reason is destination-level rather than field-level, so none of them
-# closes by writing a field name here either. The loader refuses a supported
-# reference entry whose dataset_key is unregistered or whose register's required
-# fields go unpopulated, so LIMITS cannot be flipped on quietly.
+# ofs_catalog.yaml (the OFS file is the reasoned original; this one is derived)
+# and summarised in one line above each entry below. Every reason is
+# destination-level rather than field-level, so none of them closes by writing
+# a field name here either. The loader refuses a supported reference entry
+# whose dataset_key is unregistered or whose register's required fields go
+# unpopulated, so LIMITS cannot be flipped on quietly.
+#
+# The reasons are COMMENTS rather than a `reason:` key because
+# catalog.py::_parse_entry refuses any key outside _META_KEYS; giving the
+# reason a parsed field (the market-data catalogs' `verification:` shape)
+# needs that tuple widened, with a test, in the same change.
 
 GL_BALANCES:
   supported: true
@@ -400,6 +406,11 @@ OFF_BALANCE_COMMITMENTS:
   constants:
     position_type: COMMITMENT_UNDRAWN
     credit_conversion_factor: '0.5'
+# Unsupported: its DESTINATION does not exist. `limits` is not a registered
+# reference dataset kind and no module consumes a limit utilisation figure; the
+# loader would refuse this entry the moment it were flipped on. Closing it needs
+# a `limits` dataset kind (migration), a consuming module, then the bank's own
+# LIMIT.REFERENCE field names. Not closed by Phase 5 (2026-09-28).
 LIMITS:
   supported: false
   endpoint: iris/v1/limits/utilisation
@@ -408,6 +419,13 @@ LIMITS:
     coCode: '{company}'
   field_map: {}
   dataset_key: limits
+# Unsupported: the destination is the WRONG ONE, which no field map can fix.
+# AA payment schedules are forward-looking contractual amounts per arrangement;
+# `historical_cashflows` is a realised bank-level daily deposit inflow/outflow
+# series that fact derivation sums and the cash-flow model trains on. Feeding
+# schedules there would report loan repayments due as deposit inflows that
+# happened. Closing it needs a dataset for contractual schedules, which has no
+# register today. Not closed by Phase 5 (2026-09-28).
 CASHFLOWS_SCHEDULED:
   supported: false
   endpoint: iris/v1/arrangements/payment-schedules
@@ -416,6 +434,14 @@ CASHFLOWS_SCHEDULED:
     coCode: '{company}'
   field_map: {}
   dataset_key: historical_cashflows
+# Unsupported: the destination needs CLASSIFICATION and AGGREGATION a rename
+# cannot do. `historical_financials` wants a monthly P&L (net interest income,
+# non-interest income, net income, operating expenses, provisions per period
+# end); GL balance history is per-account and cumulative, so getting there needs
+# the bank's own chart-of-accounts mapping and a monthly roll-up, and summing
+# twelve cumulative balances double-counts. Closing it means shaping it in the
+# extractor against a bank-supplied CoA register (as `gl_mapping_bsd7` is), not
+# in `field_map`. Not closed by Phase 5 (2026-09-28).
 HISTORICAL_BALANCES:
   supported: false
   endpoint: iris/v1/general-ledger/balance-history

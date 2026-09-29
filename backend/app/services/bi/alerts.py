@@ -305,7 +305,19 @@ def evaluate_bank(
         db, organization_id=organization_id, bank_id=bank_id, window=(as_of, as_of)
     )
     alerts = active_alerts(db, organization_id=organization_id, bank_id=bank_id)
-    if fingerprint is None or not alerts:
+    # A date whose latest build FAILED is not a state to judge either. The builder
+    # rolls a failed rebuild back to the previous rows, so figures are still
+    # served — and since audit A360 H2 `build_fingerprint` returns a digest for
+    # that state rather than ``None``, so the ``fingerprint is None`` test below
+    # no longer catches it on its own. Without this an alert would be raised, and
+    # recipients notified, about a figure that describes a book the bank has
+    # already moved past: a false signal, which for a threshold alert is worse
+    # than silence. Same rule as the badge — no judgement is earned from rows a
+    # later build has disowned.
+    stale = provenance.stale_dates(
+        db, organization_id=organization_id, bank_id=bank_id, window=(as_of, as_of)
+    )
+    if fingerprint is None or stale or not alerts:
         # Nothing built for the date means there is no state to judge — an alert
         # is about the bank's position, not about the absence of one.
         return BankAlertEvaluation(

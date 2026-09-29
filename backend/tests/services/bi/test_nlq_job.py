@@ -33,7 +33,7 @@ from app.jobs import bi_nlq
 from app.models import Bank, Job, Organization, User
 from app.models.ai import AiCommentarySettings
 from app.services.ai import client as ai_client
-from app.services.ai import gates, quota
+from app.services.ai import features, gates, quota
 from app.services.bi import nlq
 from app.services.bi.nlq import candidates
 from app.services.bi.nlq.schema import NlqDraft, NlqQueryDraft, NlqTimeDraft
@@ -76,13 +76,35 @@ def switches_on(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 @pytest.fixture
-def consented(db_session: Session) -> AiCommentarySettings:
-    existing = gates.tenant_row(db_session, ORG_1)
+def question_surface_consentable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A consent text that DESCRIBES the question surface — the product's future state.
+
+    Since audit A360-5 M2 ``gates.evaluate`` refuses any feature the shipped consent text
+    does not describe, at both phases, however the tenant row was written. The text was
+    amended on 2026-09-29 so ``bi_nlq`` IS covered, making this fixture a no-op in the
+    common case; it stays so the handler tests do not depend on that list.
+    ``test_the_handler_cancels_a_question_the_consent_text_does_not_cover`` constructs the
+    uncovered state synthetically instead.
+    """
+
+    # Idempotent: consent text v2 (2026-09-29) covers questions, so this fixture is
+    # usually a no-op now. It stays because the tests that use it are about the
+    # HANDLER, not about which surfaces the shipped text happens to describe — they
+    # must keep working whichever way that list moves.
+    monkeypatch.setattr(
+        features,
+        "CONSENT_COVERED_FEATURES",
+        tuple(dict.fromkeys((*features.CONSENT_COVERED_FEATURES, bi_nlq.FEATURE))),
+    )
+
+
+def _write_consent_row(db: Session) -> AiCommentarySettings:
+    existing = gates.tenant_row(db, ORG_1)
     if existing is not None:
         existing.enabled = True
         existing.enabled_features = [bi_nlq.FEATURE]
         existing.consent_version = get_settings().ai.consent_version
-        db_session.commit()
+        db.commit()
         return existing
     row = AiCommentarySettings(
         organization_id=ORG_1,
@@ -94,9 +116,15 @@ def consented(db_session: Session) -> AiCommentarySettings:
         consented_at=utc_now(),
         updated_by=READER,
     )
-    db_session.add(row)
-    db_session.commit()
+    db.add(row)
+    db.commit()
     return row
+
+
+@pytest.fixture
+def consented(db_session: Session, question_surface_consentable: None) -> AiCommentarySettings:
+    _ = question_surface_consentable
+    return _write_consent_row(db_session)
 
 
 def _built(question: str = "gross loans by branch") -> Any:
@@ -238,7 +266,7 @@ def test_a_switch_pulled_after_the_request_cancels_instead_of_sending(
     assert model.requests == [], "a cancelled request must make no model call"
 
 
-@pytest.mark.usefixtures("switches_on")
+@pytest.mark.usefixtures("switches_on", "question_surface_consentable")
 def test_a_tenant_that_has_not_switched_the_feature_on_is_cancelled(
     db_session: Session, bank: Bank
 ) -> None:
@@ -255,6 +283,111 @@ def test_a_tenant_that_has_not_switched_the_feature_on_is_cancelled(
 
     assert (job.progress or {})["status"] == bi_nlq.STATUS_CANCELLED
     assert (job.progress or {})["reason"] == "tenant_disabled"
+    assert model.requests == []
+
+
+@pytest.mark.usefixtures("switches_on")
+def test_the_handler_cancels_a_question_the_consent_text_does_not_cover(
+    db_session: Session, bank: Bank, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit A360-5 M2, at the process that holds the key.
+
+    A tenant row naming ``bi_nlq`` — written directly, as ``psql`` or a migration
+    would — used to pass ``gates.evaluate`` on ``feature in enabled_features`` alone,
+    and the handler then sent the reader's words to a vendor under a consent text that
+    does not describe the surface. Under the REAL constants the gate refuses with its
+    own code at BOTH phases, the handler records a withdrawal (not a fault), and no
+    model call is made.
+    """
+
+    # SYNTHETIC: v2 of the consent text covers questions, so the uncovered state is
+    # constructed rather than waited for. What is being proven is not a fact about
+    # `bi_nlq` — it is that the HANDLER refuses a surface the shipped consent text
+    # does not describe, records it as a withdrawal rather than a fault, and makes
+    # no model call. That rule must hold for whatever surface is added next.
+    monkeypatch.setattr(
+        features,
+        "CONSENT_COVERED_FEATURES",
+        tuple(f for f in features.CONSENT_COVERED_FEATURES if f != bi_nlq.FEATURE),
+    )
+    assert bi_nlq.FEATURE not in features.CONSENT_COVERED_FEATURES, (
+        "the synthetic withholding did not take effect"
+    )
+    _write_consent_row(db_session)
+    job = _job(db_session, bank, _built())
+    model = ai_client.RecordedModel([])
+    with ai_client.use_model(model):
+        bi_nlq.run_bi_nlq_translate(db_session, job)
+
+    assert (job.progress or {})["status"] == bi_nlq.STATUS_CANCELLED
+    assert (job.progress or {})["reason"] == "consent_not_covered"
+    assert (job.progress or {})["message"] == gates.GATE_MESSAGES["consent_not_covered"]
+    assert model.requests == [], "a row cannot out-rank the consent document"
+
+    # And at ENQUEUE, through the site the route calls: nothing is queued either.
+    from app.api.deps import TenantContext  # noqa: PLC0415
+
+    outcome = bi_nlq.request_translation(
+        db_session,
+        ctx=TenantContext(organization_id=ORG_1, actor_user_id=READER),
+        bank=bank,
+        requested_by=READER,
+        as_of=AS_OF,
+        built=_built(),
+        catalogue_version=CATALOGUE_VERSION,
+    )
+    assert outcome.job is None
+    assert outcome.reason == "consent_not_covered"
+
+
+# --- a proposal is confirmed once, and not forever -----------------------------------------
+
+
+@pytest.mark.usefixtures("switches_on", "consented")
+def test_a_proposal_s_confirmation_window_is_anchored_on_when_it_was_proposed(
+    db_session: Session, bank: Bank
+) -> None:
+    """Audit A360-5 L4. The handler stamps ``proposed_at`` beside the query; the
+    window is the queue's own expiry measured from THAT, not from the question; a
+    record predating the stamp falls back to the queue's own timestamps, which can only
+    shorten the window; and spending the confirmation is visible on the row and never
+    revisited by a reclaimed handler."""
+
+    job = _run(db_session, _job(db_session, bank, _built()), _result(_ok_draft()))
+    progress = job.progress or {}
+    proposed_at = dt.datetime.fromisoformat(progress[bi_nlq.PROGRESS_PROPOSED_AT])
+    assert proposed_at.tzinfo is not None
+    window = dt.timedelta(seconds=get_settings().ai.queue_expiry_seconds)
+
+    assert bi_nlq.proposal_expired(job, now=proposed_at + window - dt.timedelta(seconds=1)) is False
+    assert bi_nlq.proposal_expired(job, now=proposed_at + window + dt.timedelta(seconds=1)) is True
+    # The question may have waited most of the window in the queue: the proposal
+    # still gets a whole window of its own from when it was written.
+    job.queued_at = proposed_at - window + dt.timedelta(seconds=30)
+    db_session.flush()
+    assert bi_nlq.proposal_expired(job, now=proposed_at + dt.timedelta(minutes=5)) is False
+
+    # A record from before the stamp existed: the queue's own clock, never later.
+    legacy = _job(db_session, bank, _built())
+    legacy.progress = {"status": bi_nlq.STATUS_PROPOSED, "query": progress["query"]}
+    legacy.queued_at = utc_now() - window - dt.timedelta(minutes=1)
+    legacy.completed_at = None
+    db_session.flush()
+    assert bi_nlq.proposal_expired(legacy) is True
+    legacy.completed_at = utc_now()
+    db_session.flush()
+    assert bi_nlq.proposal_expired(legacy) is False, "completed_at is the worker's stamp"
+
+    # Spending it.
+    assert bi_nlq.is_confirmed(job) is False
+    bi_nlq.mark_confirmed(job)
+    assert bi_nlq.is_confirmed(job) is True
+    assert (job.progress or {})["status"] == bi_nlq.STATUS_PROPOSED, "the record is kept"
+    spent = dict(job.progress or {})
+    model = ai_client.RecordedModel([])
+    with ai_client.use_model(model):
+        bi_nlq.run_bi_nlq_translate(db_session, job)
+    assert job.progress == spent, "a reclaimed handler leaves a spent proposal alone"
     assert model.requests == []
 
 
@@ -325,7 +458,7 @@ def test_a_model_naming_a_member_the_request_did_not_offer_is_refused(
     needs no authority of its own to refuse — and it must not repair the query."""
 
     built = _built()
-    # A real catalogue measure this question was NOT shown. Forty of 1,416 measures are
+    # A real catalogue measure this question was NOT shown. Forty of 1,456 measures are
     # offered, so there is always one — and picking it at run time keeps the test from
     # depending on which id the retrieval happened to rank.
     hidden = next(

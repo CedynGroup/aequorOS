@@ -14,6 +14,10 @@
 * **and logged** — exactly ONE ``bi_query_log`` row per question, allowed and denied,
   plus exactly one more for the read when the reader confirms. The counts are asserted,
   because a log this feature silently stopped writing would look identical from the UI.
+  And the row tells the truth about egress (audit A360-5 M1): a question the platform
+  never sent — withheld, gated or capped — is logged with NO member ids, so it can
+  never read like one a model was shown; the confirmed read is logged under ``nlq``, so
+  "which reads came from a model" is answerable from the one table.
 
 Two adversarial cases carry the most weight and both construct a bad state on purpose:
 
@@ -21,6 +25,14 @@ Two adversarial cases carry the most weight and both construct a bad state on pu
   because the model's output is a request and ``authorize_query`` is the authority;
 * the refusals for "that figure does not exist" and "your grants hide that figure" are
   compared byte for byte.
+
+**The consent text is modelled explicitly.** Since audit A360-5 M2 the egress gate
+refuses any feature the shipped consent text does not describe, at both phases, however
+the tenant row was written. The text was amended on 2026-09-29
+(``ai-consent-2026-09-v2``) so ``bi_nlq`` IS covered now — which is why the test for the
+refusal withholds a covered feature synthetically rather than relying on one happening to
+be uncovered. ``consented`` therefore means what it says: a tenant that consented under a
+text describing the surface.
 
 The deployment flag's 404, the cross-tenant 404, the impersonated operator and the
 zero-binding human are covered for all three routes by the shared sweeps in
@@ -56,7 +68,7 @@ from app.models.ai import AiCommentarySettings
 from app.models.bi import BiQueryLog
 from app.services import authorization
 from app.services.ai import client as ai_client
-from app.services.ai import gates
+from app.services.ai import features, gates
 from app.services.bi import nlq
 from app.services.bi.nlq.schema import NlqDraft, NlqQueryDraft, NlqTimeDraft
 from tests.api.helpers import ORG_1, headers
@@ -138,8 +150,27 @@ def plane(db_session: Session) -> Bank:
 
 
 @pytest.fixture
-def consented(db_session: Session) -> AiCommentarySettings:
-    row = gates.tenant_row(db_session, ORG_1)
+def question_surface_consentable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A consent text that DESCRIBES the question surface.
+
+    Idempotent, and usually a no-op since 2026-09-29: ``ai-consent-2026-09-v2`` describes
+    the question surface and ``bi_nlq`` is in ``features.CONSENT_COVERED_FEATURES``. It
+    stays because these tests are about the ROUTES, not about which surfaces the shipped
+    text happens to describe — they must keep working whichever way that list moves.
+    The happy-path tests model the amended text; the smuggled-row test below does not.
+    """
+
+    monkeypatch.setattr(
+        features,
+        "CONSENT_COVERED_FEATURES",
+        (*features.CONSENT_COVERED_FEATURES, bi_nlq.FEATURE),
+    )
+
+
+def _write_consent_row(db: Session) -> AiCommentarySettings:
+    """A tenant row naming the question surface, written directly — no schema in the way."""
+
+    row = gates.tenant_row(db, ORG_1)
     if row is None:
         row = AiCommentarySettings(
             organization_id=ORG_1,
@@ -151,13 +182,21 @@ def consented(db_session: Session) -> AiCommentarySettings:
             consented_at=utc_now(),
             updated_by=READER,
         )
-        db_session.add(row)
+        db.add(row)
     else:
         row.enabled = True
         row.enabled_features = [bi_nlq.FEATURE]
         row.consent_version = get_settings().ai.consent_version
-    db_session.commit()
+    db.commit()
     return row
+
+
+@pytest.fixture
+def consented(db_session: Session, question_surface_consentable: None) -> AiCommentarySettings:
+    """A tenant that switched questions on under a consent text that covers them."""
+
+    _ = question_surface_consentable
+    return _write_consent_row(db_session)
 
 
 # --- helpers -----------------------------------------------------------------------------
@@ -205,6 +244,10 @@ def _log_rows(db: Session) -> list[BiQueryLog]:
 
 def _jobs(db: Session) -> list[Job]:
     return list(db.scalars(select(Job).where(Job.job_type == bi_nlq.JOB_TYPE)).all())
+
+
+def _events(db: Session, event_type: str) -> list[AuditEvent]:
+    return list(db.scalars(select(AuditEvent).where(AuditEvent.event_type == event_type)).all())
 
 
 def _draft(measures: list[str], dimensions: list[str] | None = None) -> NlqDraft:
@@ -357,7 +400,7 @@ def test_a_question_naming_the_institution_is_never_sent(
     assert _jobs(db_session) == []
 
 
-@pytest.mark.usefixtures("surfaces_on", "plane")
+@pytest.mark.usefixtures("surfaces_on", "plane", "question_surface_consentable")
 def test_a_tenant_that_has_not_consented_gets_an_understandable_refusal(
     db_client: TestClient, db_session: Session
 ) -> None:
@@ -375,8 +418,107 @@ def test_a_tenant_that_has_not_consented_gets_an_understandable_refusal(
     assert "Organisation Owner" in detail["message"]
     assert _jobs(db_session) == []
     # The READ still happened, so it is still one row — the decision column is the
-    # authorization decision, never a description of the HTTP status.
-    assert len(_log_rows(db_session)[before:]) == 1
+    # authorization decision, never a description of the HTTP status — and it names
+    # no member, because the model was given none.
+    rows = _log_rows(db_session)[before:]
+    assert len(rows) == 1
+    assert rows[0].decision == "allowed"
+    assert rows[0].member_ids == []
+
+
+@pytest.mark.usefixtures("surfaces_on", "plane")
+def test_a_tenant_row_that_smuggles_the_question_surface_is_refused_at_the_gate(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit A360-5 M2. The consent-coverage rule lived ONLY in the PUT schema.
+
+    Any other writer of ``ai_commentary_settings`` — ``psql``, a data migration, a
+    future staff fix endpoint — could produce a row naming ``bi_nlq``, and the egress
+    gate admitted it on ``feature in enabled_features`` alone: readers' questions then
+    went to a vendor under a consent text promising no customer name or amount ever
+    leaves. Under the REAL constants (no consent-text patch here) the gate itself must
+    refuse, at the enqueue phase, with its own code — and the log must show the model
+    was given nothing.
+    """
+
+    # SYNTHETIC: the consent text was amended to v2 on 2026-09-29 and now DOES
+    # describe questions, so `bi_nlq` is covered. The rule this test protects is
+    # not about `bi_nlq` in particular — it is that a tenant row naming a surface
+    # the shipped consent text does not describe is refused at the ROUTE, however
+    # the row was written. Hold the feature out of the covered set and require it.
+    monkeypatch.setattr(
+        features,
+        "CONSENT_COVERED_FEATURES",
+        tuple(f for f in features.CONSENT_COVERED_FEATURES if f != bi_nlq.FEATURE),
+    )
+    assert bi_nlq.FEATURE not in features.CONSENT_COVERED_FEATURES, (
+        "retire it deliberately rather than let it pass vacuously"
+    )
+    _write_consent_row(db_session)
+    before = len(_log_rows(db_session))
+    response = _ask(db_client, db_session)
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["error"]["details"]
+    assert detail["error_code"] == "bi_ask_unavailable"
+    assert detail["reason"] == "consent_not_covered"
+    assert detail["message"] == gates.GATE_MESSAGES["consent_not_covered"]
+    assert _jobs(db_session) == [], "a row cannot out-rank the consent document"
+    assert _events(db_session, bi_nlq.EVENT_REQUESTED) == []
+    rows = _log_rows(db_session)[before:]
+    assert len(rows) == 1
+    assert rows[0].decision == "allowed"
+    assert rows[0].member_ids == []
+
+
+@pytest.mark.usefixtures("surfaces_on")
+@pytest.mark.parametrize("path", ["withheld", "no_consent_row", "allowance_spent"])
+def test_a_question_that_never_left_the_platform_names_no_member_in_the_log(  # noqa: PLR0913 - one fixture per lever
+    db_client: TestClient,
+    db_session: Session,
+    plane: Bank,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    path: str,
+) -> None:
+    """Audit A360-5 M1. The row used to be written BEFORE the screen, the gate and the
+    quota, ``allowed`` over the whole candidate list — so a question that was withheld
+    left a row claiming a model had been shown 109 figures. ``surface='nlq'`` exists so
+    "which reads came from a model" is answerable from this table; that needs the row
+    to name what the model was GIVEN, which for these three paths is nothing. The row
+    itself must still exist: losing the refusal would be worse."""
+
+    question = QUESTION
+    if path == "withheld":
+        request.getfixturevalue("consented")
+        question = f"gross loans for {plane.name}"
+        expected = "question_withheld"
+    elif path == "no_consent_row":
+        request.getfixturevalue("question_surface_consentable")
+        db_session.execute(delete(AiCommentarySettings))
+        db_session.commit()
+        expected = "tenant_disabled"
+    else:
+        request.getfixturevalue("consented")
+        monkeypatch.setenv("AI_DAILY_REQUESTS_PER_ORG", "0")
+        get_settings.cache_clear()
+        expected = "org_requests"
+    before = len(_log_rows(db_session))
+    response = _ask(db_client, db_session, question=question)
+    get_settings.cache_clear()
+
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["reason"] == expected
+    assert _jobs(db_session) == []
+    assert _events(db_session, bi_nlq.EVENT_REQUESTED) == []
+    rows = _log_rows(db_session)[before:]
+    assert len(rows) == 1, "a refused question is still logged"
+    assert rows[0].surface == "nlq"
+    # The AUTHORIZATION decision: the reader's grants admitted the question.
+    assert rows[0].decision == "allowed"
+    # What the model was given: nothing. This is the whole fix.
+    assert rows[0].member_ids == []
+    assert rows[0].row_count is None
 
 
 @pytest.mark.usefixtures("surfaces_on", "consented", "plane")
@@ -492,17 +634,25 @@ def test_a_confirmed_proposal_runs_and_writes_exactly_one_more_log_row(
 
     rows = _log_rows(db_session)[before:]
     assert len(rows) == 1, "the read's own row, and only that"
-    assert rows[0].surface == "query", "it is a query read, logged like any other"
+    # Audit A360-5 L7: the read a model proposed says so. ``202609280077`` added the
+    # value to answer "which reads came from a model proposing a query", and under
+    # ``query`` this row was indistinguishable from a hand-built one.
+    assert rows[0].surface == "nlq"
     assert rows[0].decision == "allowed"
     assert rows[0].row_count is not None
     assert MEASURE in rows[0].member_ids
+    assert len(_events(db_session, bi_nlq.EVENT_CONFIRMED)) == 1
 
-    events = list(
-        db_session.scalars(
-            select(AuditEvent).where(AuditEvent.event_type == bi_nlq.EVENT_CONFIRMED)
-        ).all()
+    # The SAME query built by hand is logged as ``query``: the surface alone tells
+    # the two apart, with no join to ``audit_events``.
+    by_hand = db_client.post(
+        f"{BASE}/query", json=read.json()["query"], headers=_as(db_session, READER)
     )
-    assert len(events) == 1
+    assert by_hand.status_code == 200, by_hand.text
+    assert _log_rows(db_session)[-1].surface == "query"
+    assert _log_rows(db_session)[-1].query_hash == rows[0].query_hash, (
+        "one question, two surfaces: the hash says same query, the surface says who wrote it"
+    )
 
 
 @pytest.mark.usefixtures("surfaces_on", "consented", "plane")
@@ -606,6 +756,167 @@ def test_a_proposal_naming_a_member_the_reader_may_not_see_is_refused_at_run_tim
     assert len(rows) == 1
     assert rows[0].decision == "denied"
     assert rows[0].row_count is None
+
+
+@pytest.mark.usefixtures("surfaces_on", "consented", "plane")
+def test_the_question_switch_pulled_after_a_proposal_stops_reading_and_running_it(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit A360-5 L3. ``BI_NLQ_ENABLED=0`` stopped new questions and nothing else:
+    an existing proposal could still be read back and CONFIRMED, writing
+    ``bi.ask.confirmed`` events during the very vendor incident the flag was pulled
+    for. A kill switch stops the feature, all three routes of it."""
+
+    job_id, read = _proposed(db_client, db_session)
+    before = len(_log_rows(db_session))
+    monkeypatch.setenv("BI_NLQ_ENABLED", "0")
+    get_settings.cache_clear()
+    shown = _get(db_client, db_session, job_id)
+    ran = _run(db_client, db_session, job_id, read.json()["query"])
+    get_settings.cache_clear()
+
+    for response in (shown, ran):
+        assert response.status_code == 409, response.text
+        detail = response.json()["error"]["details"]
+        assert detail["error_code"] == "bi_ask_unavailable"
+        assert detail["reason"] == "nlq_disabled"
+    assert MEASURE not in shown.text, "a switched-off surface shows no proposal either"
+    assert _log_rows(db_session)[before:] == []
+    assert _events(db_session, bi_nlq.EVENT_CONFIRMED) == []
+
+
+@pytest.mark.usefixtures("surfaces_on", "consented", "plane")
+def test_a_confirmation_is_spent_by_running_it_once(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """Audit A360-5 L4. Three identical runs were 3×200 and three ``bi.ask.confirmed``
+    events for a question confirmed once, and the id was a permanent re-runnable
+    handle. Each run re-authorizes anyway, so this is about the audit trail meaning
+    what it says — and about a replayed request reading nothing."""
+
+    job_id, read = _proposed(db_client, db_session)
+    query = read.json()["query"]
+    first = _run(db_client, db_session, job_id, query)
+    assert first.status_code == 200, first.text
+    before = len(_log_rows(db_session))
+
+    for _attempt in range(2):
+        again = _run(db_client, db_session, job_id, query)
+        assert again.status_code == 409, again.text
+        detail = again.json()["error"]["details"]
+        assert detail["error_code"] == "bi_ask_unavailable"
+        assert detail["reason"] == "already_run"
+        assert "already been run" in detail["message"]
+    assert _log_rows(db_session)[before:] == [], "a refused replay reads nothing"
+    assert len(_events(db_session, bi_nlq.EVENT_CONFIRMED)) == 1
+
+    shown = _get(db_client, db_session, job_id).json()
+    assert shown["state"] == "stopped", "nothing left to confirm"
+    assert shown["query"] is None
+    assert "already been run" in shown["message"]
+
+
+@pytest.mark.usefixtures("surfaces_on", "consented", "plane")
+def test_a_proposal_nobody_ran_in_time_can_no_longer_be_confirmed(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """Audit A360-5 L4, the other half. ``is_expired`` was consulted only for a row
+    still translating, so a ``proposed`` row 400 days old still read ``proposed`` and
+    still ran. A proposal gets the hour the queue gives the request, from when it was
+    written — and the read route and the run route agree it is over."""
+
+    job_id, read = _proposed(db_client, db_session)
+    job = db_session.get(Job, UUID(job_id))
+    assert job is not None
+    long_ago = utc_now() - dt.timedelta(days=400)
+    job.progress = {**job.progress, bi_nlq.PROGRESS_PROPOSED_AT: long_ago.isoformat()}
+    job.queued_at = long_ago
+    db_session.flush()
+
+    shown = _get(db_client, db_session, job_id).json()
+    assert shown["state"] == "stopped"
+    assert shown["query"] is None
+    assert "waited too long" in shown["message"]
+
+    before = len(_log_rows(db_session))
+    ran = _run(db_client, db_session, job_id, read.json()["query"])
+    assert ran.status_code == 409, ran.text
+    assert ran.json()["error"]["details"]["reason"] == "proposal_expired"
+    assert _log_rows(db_session)[before:] == []
+    assert _events(db_session, bi_nlq.EVENT_CONFIRMED) == []
+
+
+@pytest.mark.usefixtures("surfaces_on", "consented", "plane")
+@pytest.mark.parametrize(
+    "reported",
+    [
+        pytest.param(bi_nlq.STATUS_REFUSED, id="refused"),
+        pytest.param(bi_nlq.STATUS_CANCELLED, id="cancelled"),
+        pytest.param(bi_nlq.STATUS_FAILED, id="failed"),
+        pytest.param(bi_nlq.STATUS_RATE_LIMITED, id="rate_limited"),
+        pytest.param(None, id="translating"),
+    ],
+)
+def test_a_record_that_is_not_a_proposal_does_not_run_whatever_it_carries(
+    db_client: TestClient, db_session: Session, reported: str | None
+) -> None:
+    """Audit A360-5 L5. The run route read ``progress["query"]`` unconditionally while
+    the read route surfaced it only for ``status == "proposed"``, so a record shown as
+    refused on GET RAN on POST. Reachable only by a direct write today; the point is
+    that two routes may not disagree about what a proposal is."""
+
+    asked = _ask(db_client, db_session)
+    job_id = asked.json()["question_id"]
+    job = db_session.get(Job, UUID(job_id))
+    assert job is not None
+    carried = {
+        "measures": [MEASURE],
+        "dimensions": [DIMENSION],
+        "time": {"as_of": AS_OF.isoformat()},
+    }
+    progress: dict[str, Any] = {"message": "Nothing to see here.", "query": carried}
+    if reported is not None:
+        progress["status"] = reported
+    job.progress = progress
+    db_session.flush()
+
+    shown = _get(db_client, db_session, job_id).json()
+    assert shown["state"] != "proposed"
+    assert shown["query"] is None
+    before = len(_log_rows(db_session))
+    ran = _run(db_client, db_session, job_id, carried)
+    assert ran.status_code == 409, ran.text
+    assert ran.json()["error"]["details"]["reason"] == "not_proposed"
+    assert _log_rows(db_session)[before:] == []
+    assert _events(db_session, bi_nlq.EVENT_CONFIRMED) == []
+
+
+@pytest.mark.usefixtures("surfaces_on", "consented", "plane")
+def test_watching_your_own_question_is_not_metered_but_running_it_is(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit A360-5 L6, the decision written down. ``GET /ask/{id}`` is an own-row
+    lookup with no egress and no mart read, and the dashboard polls it every two
+    seconds while a question is worked out — metering it would let a reader exhaust
+    their own budget by waiting. So it answers under an exhausted budget and writes no
+    row; the RUN is a real read and is refused like any other. A pin, not a fix: the
+    code already did this and the module docstring did not say so."""
+
+    job_id, read = _proposed(db_client, db_session)  # the question's own row: one read used
+    before = len(_log_rows(db_session))
+    monkeypatch.setenv("BI_RATE_LIMIT_MAX_QUERIES", "1")
+    get_settings.cache_clear()
+    shown = _get(db_client, db_session, job_id)
+    ran = _run(db_client, db_session, job_id, read.json()["query"])
+    get_settings.cache_clear()
+
+    assert shown.status_code == 200, shown.text
+    assert shown.json()["state"] == "proposed"
+    assert ran.status_code == 429, ran.text
+    assert ran.json()["error"]["details"]["error_code"] == "bi_rate_limited"
+    assert _log_rows(db_session)[before:] == [], (
+        "neither wrote a row: GET by design, the run because the budget refuses first"
+    )
 
 
 @pytest.mark.usefixtures("surfaces_on", "consented", "plane")

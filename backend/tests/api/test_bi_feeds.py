@@ -47,8 +47,12 @@ from app.api.deps import BANK_ROUTE_DEPENDENCIES, TenantContext
 from app.core.authorization import (
     BindingStatus,
     DataScope,
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
     PrincipalType,
     RoleBundle,
+    SensitivityScope,
 )
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
@@ -62,7 +66,8 @@ from app.models.bi import (
     BiMartBuild,
     BiQueryLog,
 )
-from app.services import integration_keys
+from app.services import authorization, integration_keys
+from app.services.bi.authorization import REASON_DATA_SCOPE_CONFLICT
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, runner
@@ -398,7 +403,12 @@ def test_a_data_push_key_is_refused_the_feed(
     details = response.json()["error"]["details"]
     assert details["error_code"] == read_bi_feeds.ERROR_AUTHORIZATION_DENIED
     assert details["denied_members"]
-    assert str(B1_AUGUST) not in response.text
+    # The refusal must disclose no FIGURE — checked against the error DETAILS
+    # rather than `response.text`, which also carries a random request id. A
+    # three-digit figure like 400 lands inside a UUID often enough to fail at
+    # random, and did: `…a00aeb4002f5` contains "4002". The details are where a
+    # leak would actually live, so this is the assertion that means something.
+    assert str(B1_AUGUST) not in json.dumps(details)
     logged = _log_rows(db_session)
     assert len(logged) == 1
     assert logged[0].decision == "denied"
@@ -604,6 +614,149 @@ def test_the_cursor_is_opaque_to_the_caller_and_round_trips_through_the_route(
 
 
 # --- the data scope -------------------------------------------------------------------------
+
+
+def _service_identity(reader: dict[str, str]) -> Any:
+    """The machine principal behind an issued key, found the way the route finds it."""
+
+    raw = reader["Authorization"].removeprefix("Bearer ")
+    with get_sessionmaker()() as db:
+        db.info["organization_id"] = ORG_1
+        key = db.scalar(
+            select(IntegrationKey).where(
+                IntegrationKey.key_hash == integration_keys.hash_key(raw),
+                IntegrationKey.organization_id == ORG_1,
+            )
+        )
+        assert key is not None
+        return key.service_user_id
+
+
+def _add_reader_sentence(  # noqa: PLR0913 - one keyword per binding dimension
+    reader: dict[str, str],
+    *,
+    module: ModuleScope,
+    sensitivity: SensitivityScope = SensitivityScope.AGGREGATED,
+    data_scope: DataScope = DataScope.ALL,
+    values: tuple[str, ...] = (),
+    bank_id: str = BANK_ID,
+) -> None:
+    """A SECOND ``bi_reader`` sentence on the SAME service identity.
+
+    No tenant route mints one today — issuance writes exactly one binding per key
+    — which is why every earlier scope test in this file created exactly one, and
+    why the A360-1 H8 leak sat unobserved: the misuse only shows when two
+    sentences match DIFFERENT pairs of one dataset. This helper is the shape a
+    future "widen this key" route would take, written here so the test exists
+    before the route does.
+    """
+
+    with get_sessionmaker()() as db:
+        db.info["organization_id"] = ORG_1
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=_service_identity(reader),
+            principal_type=PrincipalType.MACHINE,
+            role_bundle=RoleBundle.BI_READER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION, bank_id, module, sensitivity, data_scope, values
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="A second analytics-feed sentence on one report-server identity.",
+        )
+
+
+def test_an_institution_wide_sentence_on_another_pair_does_not_widen_a_branch_scoped_pull(
+    db_client: TestClient, mart: Bank, bi_on: None
+) -> None:
+    """Audit A360-1 H8, reproduced exactly.
+
+    The loan book touches two pairs: ``credit/aggregated`` (the loan measures)
+    and ``risk/aggregated`` (the date, branch and product dimensions). The key's
+    own sentence is ``all/aggregated`` over ``branch=["B2"]`` and matches both.
+    A second sentence ``risk/aggregated`` over the WHOLE institution matches
+    only the dimension pair — and yet, reduced as one union, "any ``all`` wins"
+    discarded the B2 restriction that still applied to the credit pair, and the
+    pull served B1's balances under a header reading "Whole institution".
+
+    Reduced per pair, the credit pair says B2, the risk pair says everything, and
+    the read — which needs both at once — is served under B2.
+    """
+
+    reader = _reader(data_scope=DataScope.BRANCH, values=("B2",))
+    before = _pull(db_client, reader)
+    assert before.status_code == 200, before.text
+    assert {row["branch.code"] for row in _rows(before)} == {"B2"}
+
+    _add_reader_sentence(reader, module=ModuleScope.RISK, data_scope=DataScope.ALL)
+
+    after = _pull(db_client, reader)
+    assert after.status_code == 200, after.text
+    rows = _rows(after)
+    assert {row["branch.code"] for row in rows} == {"B2"}, rows
+    assert [Decimal(str(row["loans.balance_rc"])) for row in rows] == [B2_AUGUST]
+    assert str(B1_AUGUST) not in after.text
+    assert str(PRIOR_BALANCE) not in after.text
+    assert after.headers["x-bi-feed-data-scope"] == "Branches: B2"
+
+
+def test_two_sentences_on_the_same_pair_serve_their_union(
+    db_client: TestClient, mart: Bank, bi_on: None
+) -> None:
+    """The converse, so the fix cannot be an over-refusal: WITHIN one pair
+    bindings OR, and the widest of them wins. Two branch sentences that both
+    match every pair of the dataset serve both branches, as the Org Owner meant."""
+
+    reader = _reader(data_scope=DataScope.BRANCH, values=("B1",))
+    _add_reader_sentence(
+        reader, module=ModuleScope.ALL, data_scope=DataScope.BRANCH, values=("B2",)
+    )
+
+    response = _pull(db_client, reader)
+    assert response.status_code == 200, response.text
+    assert {row["branch.code"] for row in _rows(response)} == {"B1", "B2"}
+    assert response.headers["x-bi-feed-data-scope"] == "Branches: B1, B2"
+
+
+def test_two_different_narrow_sentences_across_pairs_refuse_the_pull(
+    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
+) -> None:
+    """Identical-or-refuse across pairs, on the machine surface too.
+
+    The key's sentence covers B1 on every pair. A second ``credit/aggregated``
+    sentence over a REGION widens the credit pair to ``mixed`` (B1 plus the
+    region's branches) while the risk pair still says ``branch [B1]``. Those are
+    two different narrow slices with no ordering between them, and the feed
+    refuses rather than guessing — the same ``data_scope_conflict`` the
+    interactive path returns — instead of serving the union it once served.
+    """
+
+    reader = _reader(data_scope=DataScope.BRANCH, values=("B1",))
+    _add_reader_sentence(
+        reader,
+        module=ModuleScope.CREDIT,
+        data_scope=DataScope.REGION,
+        values=("Unassigned region",),
+    )
+
+    response = _pull(db_client, reader)
+    assert response.status_code == 403, response.text
+    details = response.json()["error"]["details"]
+    assert details["error_code"] == read_bi_feeds.ERROR_AUTHORIZATION_DENIED
+    assert str(B1_AUGUST) not in response.text
+    assert str(B2_AUGUST) not in response.text
+    # The reason travels on the refusal's audit row (the 403 body names only the
+    # error code and the refused members), and it is the interactive path's own
+    # string, not a feed restatement.
+    refusals = list(
+        db_session.scalars(
+            select(AuditEvent).where(AuditEvent.event_type == read_bi_feeds.EVENT_REFUSED)
+        )
+    )
+    assert [event.details["reason"] for event in refusals] == [REASON_DATA_SCOPE_CONFLICT]
+    logged = _log_rows(db_session)
+    assert logged and logged[-1].decision == "denied"
 
 
 def test_a_branch_scoped_credential_serves_only_its_branch(

@@ -22,6 +22,12 @@ export interface FeatureFlagsRead {
    * @type {boolean}
    * @memberof FeatureFlagsRead
    */
+  biAlertsEnabled: boolean;
+  /**
+   *
+   * @type {boolean}
+   * @memberof FeatureFlagsRead
+   */
   biEnabled: boolean;
   /**
    *
@@ -41,6 +47,12 @@ export interface FeatureFlagsRead {
    * @memberof FeatureFlagsRead
    */
   biSchedulerEnabled: boolean;
+  /**
+   *
+   * @type {boolean}
+   * @memberof FeatureFlagsRead
+   */
+  biSubscriptionsEnabled: boolean;
 }
 
 /**
@@ -49,6 +61,8 @@ export interface FeatureFlagsRead {
 export function instanceOfFeatureFlagsRead(
   value: object,
 ): value is FeatureFlagsRead {
+  if (!("biAlertsEnabled" in value) || value["biAlertsEnabled"] === undefined)
+    return false;
   if (!("biEnabled" in value) || value["biEnabled"] === undefined) return false;
   if (
     !("biMartEnqueueEnabled" in value) ||
@@ -60,6 +74,11 @@ export function instanceOfFeatureFlagsRead(
   if (
     !("biSchedulerEnabled" in value) ||
     value["biSchedulerEnabled"] === undefined
+  )
+    return false;
+  if (
+    !("biSubscriptionsEnabled" in value) ||
+    value["biSubscriptionsEnabled"] === undefined
   )
     return false;
   return true;
@@ -78,10 +97,12 @@ export function FeatureFlagsReadFromJSONTyped(
   }
   return {
     ...json,
+    biAlertsEnabled: json["bi_alerts_enabled"],
     biEnabled: json["bi_enabled"],
     biMartEnqueueEnabled: json["bi_mart_enqueue_enabled"],
     biNlqEnabled: json["bi_nlq_enabled"],
     biSchedulerEnabled: json["bi_scheduler_enabled"],
+    biSubscriptionsEnabled: json["bi_subscriptions_enabled"],
   };
 }
 
@@ -98,9 +119,11 @@ export function FeatureFlagsReadToJSONTyped(
   }
 
   return {
+    bi_alerts_enabled: value["biAlertsEnabled"],
     bi_enabled: value["biEnabled"],
     bi_mart_enqueue_enabled: value["biMartEnqueueEnabled"],
     bi_nlq_enabled: value["biNlqEnabled"],
     bi_scheduler_enabled: value["biSchedulerEnabled"],
+    bi_subscriptions_enabled: value["biSubscriptionsEnabled"],
   };
 }

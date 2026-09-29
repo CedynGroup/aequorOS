@@ -26,9 +26,10 @@ from pathlib import Path
 import pytest
 
 from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
-from app.domain.ingestion.reference_schemas import schema_for
+from app.domain.ingestion.reference_schemas import gl_segment_balances, schema_for
 from app.domain.ingestion.reference_schemas.business_units import (
     ALIASES,
+    UNIT_FIELD_MAX_LENGTHS,
     normalise_row,
     validate_business_unit_row,
 )
@@ -385,3 +386,86 @@ def test_an_over_long_target_scope_value_is_refused_by_name() -> None:
 
     row["scope_value"] = "x" * SCOPE_VALUE_MAX_LENGTH
     assert not [p for p in validate_target_row(row) if "scope_value" in p]
+
+
+# ---------------------------------------------------------------------------
+# 5. audit A360 H3 — the two registers the branch marts copy verbatim are bounded
+#    at the door, at the marts' own widths
+# ---------------------------------------------------------------------------
+
+
+def _width(model: type, column: str) -> int:
+    length = model.__table__.c[column].type.length  # type: ignore[attr-defined]
+    assert isinstance(length, int)
+    return length
+
+
+def test_the_unit_register_bounds_are_the_branch_dimensions_own_widths() -> None:
+    """``business_units`` → ``bi_dim_branch``: ``business_unit_id`` is the primary
+    key ``branch_code``, so a longer value is not a warning but a dimension row
+    that cannot be written — and a TRUNCATED one is a different branch. The two
+    constants are asserted equal rather than imported because the schema module
+    deliberately stays free of ``app.models``."""
+    from app.models.bi import BiDimBranch  # noqa: PLC0415
+
+    assert UNITS.max_lengths == UNIT_FIELD_MAX_LENGTHS
+    assert {
+        "business_unit_id": _width(BiDimBranch, "branch_code"),
+        "business_unit_name": _width(BiDimBranch, "name"),
+        "region": _width(BiDimBranch, "region"),
+    } == UNIT_FIELD_MAX_LENGTHS
+    assert UNIT_FIELD_MAX_LENGTHS["business_unit_id"] == 120
+
+
+def test_an_over_long_unit_field_is_refused_by_name_with_the_limit_stated() -> None:
+    problems = validate_business_unit_row({**GOOD_UNIT, "business_unit_id": "x" * 121})
+    assert problems == [
+        "field 'business_unit_id' is 121 characters long, above the 120-character limit "
+        "the platform can store; send the identifier or name as your system holds it"
+    ]
+    assert validate_business_unit_row({**GOOD_UNIT, "business_unit_id": "x" * 120}) == []
+    # Surrounding whitespace is not the identifier: the dimension trims it, so the
+    # door measures what the dimension would store.
+    assert validate_business_unit_row({**GOOD_UNIT, "business_unit_id": " " + "x" * 120}) == []
+    (name_problem,) = validate_business_unit_row({**GOOD_UNIT, "business_unit_name": "n" * 256})
+    assert "'business_unit_name' is 256 characters long, above the 255-character" in name_problem
+    (region_problem,) = validate_business_unit_row({**GOOD_UNIT, "region": "r" * 121})
+    assert "'region' is 121 characters long, above the 120-character" in region_problem
+    # The documented alias spelling is bounded through the same canonical field.
+    (alias_problem,) = validate_business_unit_row({"unit_id": "x" * 121, "name": "Accra Main"})
+    assert "'business_unit_id' is 121 characters long" in alias_problem
+
+
+def test_the_segment_register_bounds_are_the_branch_ledgers_own_widths() -> None:
+    """``gl_segment_balances.branch_id`` → ``bi_fact_gl_branch_monthly.branch_code``
+    (a PRIMARY KEY column) and ``bi_dim_branch.branch_code``; ``gl_account_code``
+    → the ledger's account key."""
+    from app.models.bi import BiDimBranch, BiFactGlBranchMonthly  # noqa: PLC0415
+
+    assert gl_segment_balances.SCHEMA.max_lengths == gl_segment_balances.SEGMENT_FIELD_MAX_LENGTHS
+    assert {
+        "branch_id": _width(BiFactGlBranchMonthly, "branch_code"),
+        "gl_account_code": _width(BiFactGlBranchMonthly, "gl_account_code"),
+    } == gl_segment_balances.SEGMENT_FIELD_MAX_LENGTHS
+    assert _width(BiFactGlBranchMonthly, "branch_code") == _width(BiDimBranch, "branch_code")
+
+
+def test_an_over_long_segment_branch_or_account_is_refused_by_name() -> None:
+    good = {
+        "as_of_date": "2026-06-30",
+        "gl_account_code": "4001",
+        "branch_id": "BR-101",
+        "ytd_balance": "1000",
+    }
+    assert gl_segment_balances.SCHEMA.problems_for(good) == []
+    assert gl_segment_balances.SCHEMA.problems_for({**good, "branch_id": "b" * 120}) == []
+    (problem,) = gl_segment_balances.SCHEMA.problems_for({**good, "branch_id": "b" * 121})
+    assert "'branch_id' is 121 characters long, above the 120-character limit" in problem
+    (problem,) = gl_segment_balances.SCHEMA.problems_for({**good, "gl_account_code": "a" * 81})
+    assert "'gl_account_code' is 81 characters long, above the 80-character limit" in problem
+
+
+def test_a_register_with_no_declared_bounds_checks_none() -> None:
+    """The bound is opt-in per register: ``performance_targets`` bounds its scope
+    value through its own rule, and the older registers declare nothing."""
+    assert TARGETS.max_lengths == {}

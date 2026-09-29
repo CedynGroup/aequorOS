@@ -148,6 +148,60 @@ ACCOUNT_STATUS_ALIASES: dict[str, str] = {
 #: the width the mart column would take (``branch_code`` is ``String(120)``).
 OFFICER_ID_MAX_LENGTH = 120
 
+#: The free-text ``attributes`` keys the analytics marts carry VERBATIM into a
+#: bounded column, and the width of that column (audit A360 H3). The bag itself
+#: is unbounded by design — a bank's payload is preserved as sent — but
+#: ``bi_fact_position_daily`` / ``bi_fact_position_eom`` / ``bi_agg_position_daily``
+#: / ``bi_fact_loan_event`` store these as ``VARCHAR(n)``, and Postgres refuses a
+#: longer value with ``value too long for type character varying(n)``. One such
+#: value used to fail the tenant's WHOLE nightly mart build (every scope rolls
+#: back in one savepoint), every night, and the surface then served the previous
+#: build's figures. The hermetic suite could not see it: SQLite ignores VARCHAR
+#: lengths.
+#:
+#: Two consumers read this table and MUST agree, which is why it lives once, here,
+#: upstream of both: ``validation.py`` reports an over-long value at ingestion
+#: (rule ``position_attribute_text_bounds``), and ``app/domain/bi/extract.py``
+#: refuses to carry it — the mart column is NULL, never a truncation, because a
+#: branch code cut to 120 characters is a DIFFERENT branch, and an identifier that
+#: is nearly right is worse than one that is absent and labelled. A test pins each
+#: width here against the mart model's own ``String(n)`` so neither side can drift.
+#:
+#: Alias keys (``crm_collateral_class`` for ``collateral_type``, ``industry`` for
+#: ``sector``) carry the width of the column they fall back into.
+POSITION_ATTRIBUTE_TEXT_LIMITS: dict[str, int] = {
+    "branch_id": 120,
+    "officer_id": OFFICER_ID_MAX_LENGTH,
+    "hqla_level": 16,
+    "collateral_type": 80,
+    "crm_collateral_class": 80,
+    "sector": 120,
+    "industry": 120,
+    "employer": 255,
+    "channel": 32,
+    "account_status": 16,
+}
+
+
+def over_long_text_attributes(attributes: Mapping[str, Any]) -> tuple[tuple[str, int, int], ...]:
+    """``(key, length, limit)`` for every bounded text key whose value is too long.
+
+    Blank and absent values are never over-long. The length measured is that of
+    the value as text, VERBATIM — the extractor stores it unmodified
+    (``extract._text`` neither strips nor folds), so what is measured here is
+    exactly what the mart column would have to hold.
+    """
+    found: list[tuple[str, int, int]] = []
+    for key, limit in POSITION_ATTRIBUTE_TEXT_LIMITS.items():
+        value = attributes.get(key)
+        if value is None:
+            continue
+        text = str(value)
+        if text.strip() and len(text) > limit:
+            found.append((key, len(text), limit))
+    return tuple(found)
+
+
 #: The recognised keys, in the spelling they are stored under.
 OPTIONAL_POSITION_ATTRIBUTE_KEYS: tuple[str, ...] = (
     "officer_id",

@@ -367,6 +367,30 @@ def test_the_none_scope_refuses_loudly_instead_of_returning_no_filters(
     assert not issubclass(data_scope.DataScopeServesNothing, BiQueryError)
 
 
+def test_a_narrow_scope_naming_no_value_refuses_as_the_typed_invariant_violation(
+    db_session: Session, mart: Bank
+) -> None:
+    """Fail-closed by design, not by accident (audit A360-1).
+
+    Unreachable through the database — the column CHECK and the binding writer
+    both refuse an empty value list — so before this it was ``BiFilter`` that
+    refused, with a pydantic ``ValidationError`` about an ``in`` list needing a
+    value. The platform's own invariant violation is the answer, at both seams:
+    the declared scope arriving at ``resolve`` and a ``ResolvedDataScope`` built
+    by hand and asked for its filters.
+    """
+    for kind in ("branch", "region", "mixed"):
+        with pytest.raises(data_scope.DataScopeServesNothing):
+            _ = data_scope.ResolvedDataScope(kind=kind).filters
+        with pytest.raises(data_scope.DataScopeServesNothing):
+            data_scope.resolve(
+                db_session, BiDataScope(kind=kind), organization_id=ORG_1, bank_id=mart.id
+            )
+    # And the refusal is the invariant kind, never a client error the surfaces
+    # would file as "the query was refused" and move on from.
+    assert not issubclass(data_scope.DataScopeServesNothing, BiQueryError)
+
+
 def test_a_scope_wider_than_one_filter_list_refuses_rather_than_truncating(
     db_session: Session, mart: Bank
 ) -> None:

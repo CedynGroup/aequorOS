@@ -27,23 +27,54 @@ rather than a client's promise. Then the query goes through ``read_bi.authorize`
 hand-built ``POST /bi/query`` takes. There is no path here where "the model chose it"
 substitutes for a decision.
 
-**Logged.** ``POST /bi/ask`` writes exactly ONE ``bi_query_log`` row per question,
-before any of the AI machinery is consulted: ``allowed`` with the candidate ids the
-model was given, or ``denied`` when the reader's authority admits nothing.
-``row_count`` is NULL because no row was served, which is what that column already
-means. Confirming adds exactly one more row — the READ's own row, written by the
-shared pipeline, indistinguishable from a hand-built query's because it is one.
+**Logged — and the log tells the truth about what left the platform (audit A360-5
+M1).** ``POST /bi/ask`` writes exactly ONE ``bi_query_log`` row per question, under
+surface ``nlq``, and writes it AFTER the screen, the AI gate and the quota have
+decided, because those three are what determine whether anything reached a model.
+``decision`` is the reader's AUTHORIZATION decision, as on every surface: ``denied``
+when their grants admit no figure at all, ``allowed`` otherwise — never a description
+of the HTTP status. ``member_ids`` is what the model was GIVEN: the offered set when a
+translation was queued, and NOTHING when the question was withheld by the screen,
+refused by a gate or capped by the daily allowance. Those questions are still logged
+(a refused question is metered, and an auditor must be able to find it) but name no
+member, so a question that reached a model and one that did not can never read alike.
+It used to be written first, ``allowed`` over the whole candidate list, and a reader
+whose question was withheld then left a row claiming a model had been shown 109
+figures. ``row_count`` is NULL on a question row because no row was served.
 
-**Why the log row says ``catalogue``.** ``bi_query_log.surface`` admits ten values
-and ``nlq`` is not one of them (``app/models/bi.py::QUERY_LOG_SURFACES``, a CHECK in
-the database, and a migration is not this track's to write). The read these routes
-perform IS a catalogue read — the identical pair probe over the identical members —
-so it is recorded as one rather than as nothing, and the read budget counts it like
-any other. ``query_hash`` is what distinguishes it: :func:`_digest` hashes the ACTION
-beside the question's own digest, so asking a question and fetching the catalogue do
-not hash alike, and the column still holds nothing that can be read back. This is the
-decision ``app/features/manage_bi_commentary.py`` already records for its ``insights``
-rows.
+Confirming adds exactly one more row: the READ's own, written by the shared pipeline
+with the same authorization and the same caps as a hand-built ``POST /bi/query`` —
+under surface ``nlq``, not ``query``, because that is the question migration
+``202609280077`` added the value to answer: *which reads came from a model proposing
+a query rather than a person composing one*. Under ``query`` the two were
+indistinguishable and the answer needed a join to ``audit_events``. The two ``nlq``
+rows of one question are told apart by ``query_hash`` (an action digest for the
+question, a ``BiQuery`` digest for the read) and, for a served read, by ``row_count``.
+:func:`_digest` hashes the ACTION beside the question's own digest, so a question and
+a catalogue fetch never hash alike, and the column still holds nothing readable.
+
+**``GET /bi/ask/{job_id}`` is deliberately unmetered and writes no log row.** It is a
+lookup of the reader's own queue row: it reads no mart, touches no figure, sends
+nothing anywhere, and the dashboard polls it every two seconds while a question is
+being worked out. Counting it against the read budget would let a reader exhaust
+their own allowance by waiting for their own question. The budget bounds what a read
+costs; this costs nothing the budget exists to bound.
+
+**A confirmation is spent once, and a proposal expires.** Running a proposal stamps
+``confirmed_at`` on its queue row in the same transaction as the ``bi.ask.confirmed``
+audit event; a second run of the same id is refused, so the audit trail holds one
+confirmation per confirmation rather than N. A proposal nobody ran within
+``AI_QUEUE_EXPIRY_SECONDS`` of being written is refused too, and reads as ``stopped``.
+Each run still re-authorizes under the reader's CURRENT grants and re-checks the
+catalogue version — the bound is about the audit trail and about a question id not
+being a permanent handle, not about privilege. And the run route decides what a
+proposal IS the same way the read route does (:func:`_state`), so a record whose
+status is ``refused`` cannot show as refused on GET and run on POST.
+
+**The kill switch stops the whole surface.** ``BI_NLQ_ENABLED=0`` refuses all three
+routes, not only new questions: an operator who pulls the flag during a vendor
+incident must not still see model-proposed queries being confirmed and
+``bi.ask.confirmed`` events being written.
 
 **A refusal never names a member the caller was not entitled to know exists.** Three
 different internal facts — an id the catalogue does not hold, an id this reader's
@@ -121,6 +152,14 @@ _EXPIRED_MESSAGE = (
     "That question waited too long and was cancelled. Nothing was sent and nothing "
     "was read. Ask it again."
 )
+_ALREADY_RUN_MESSAGE = "That question has already been run. Ask it again to run it afresh."
+_PROPOSAL_EXPIRED_MESSAGE = (
+    "That question waited too long to be run and can no longer be confirmed. Ask it again."
+)
+_NOT_PROPOSED_MESSAGE = (
+    "There is no question to run here yet. Ask again, or wait for this one to finish."
+)
+_SWITCHED_OFF_MESSAGE = "Asking questions in words is not switched on for this platform."
 
 #: Every reason the platform itself declined to send a question, as ONE refusal the
 #: reader can act on. A 409 rather than a 403: nothing about the reader's authority is
@@ -175,6 +214,21 @@ def _unavailable(message: str, *, reason: str) -> HTTPException:
     )
 
 
+def _require_switched_on() -> None:
+    """``BI_NLQ_ENABLED``, checked on EVERY route of the surface.
+
+    A deployment with BI on but this surface off. Not a 404: every BI path is 404
+    when BI itself is off, and answering 404 here too would make a configured
+    surface indistinguishable from an absent one for the ONE flag a tenant's Org
+    Owner may be waiting on. Checked on the read and run routes as well as the ask,
+    because a kill switch that stopped new questions while existing proposals were
+    still read back and confirmed would not have stopped the feature.
+    """
+
+    if not get_settings().bi.nlq_enabled:
+        raise _unavailable(_SWITCHED_OFF_MESSAGE, reason="nlq_disabled")
+
+
 def _suggestions(member_ids: tuple[str, ...]) -> list[BiAskSuggestionRead]:
     """Suggested members, with the PLATFORM's label for each id the model named."""
 
@@ -202,7 +256,11 @@ def _state(job: Job) -> BiAskState:
 
     reported = str((job.progress or {}).get("status") or "")
     if reported == bi_nlq.STATUS_PROPOSED:
-        return "proposed"
+        # A proposal the reader already ran, or one nobody ran in time, is no
+        # longer a proposal: there is nothing left to confirm. Decided HERE, once,
+        # so the read route and the run route agree about what a proposal is.
+        spent = bi_nlq.is_confirmed(job) or bi_nlq.proposal_expired(job)
+        return "stopped" if spent else "proposed"
     if reported == bi_nlq.STATUS_REFUSED:
         return "refused"
     if reported in bi_nlq.TERMINAL_STATUSES:
@@ -239,11 +297,17 @@ def _read(job: Job, *, figures_offered: int) -> BiAskRead:
 
     payload = job.payload or {}
     progress = job.progress or {}
+    reported = str(progress.get("status") or "")
     state = _state(job)
     query = _proposed_query(job) if state == "proposed" else None
+    message = str(progress.get("message") or "") or _STATE_MESSAGES[state]
+    if state == "stopped" and reported == bi_nlq.STATUS_PROPOSED:
+        # A proposal with nothing left to confirm. Its record carries no message of
+        # its own, so say which of the two it is.
+        message = _ALREADY_RUN_MESSAGE if bi_nlq.is_confirmed(job) else _PROPOSAL_EXPIRED_MESSAGE
     if state == "proposed" and query is None:  # pragma: no cover - defensive
         state = "stopped"
-    message = str(progress.get("message") or "") or _STATE_MESSAGES[state]
+        message = bi_nlq.MODEL_FAILURE_MESSAGES["schema_invalid"]
     if state == "translating" and bi_nlq.is_expired(job):  # pragma: no cover - time-dependent
         message = _EXPIRED_MESSAGE
     if state == "stopped" and not message:
@@ -289,16 +353,7 @@ def ask_bi_question(
     """Ask one question in words. Proposes a query; executes nothing."""
 
     _ = bank_id  # resolved by the router's dependency
-    settings = get_settings()
-    if not settings.bi.nlq_enabled:
-        # A deployment with BI on but this surface off. Not a 404: every BI path is
-        # 404 when BI itself is off, and answering 404 here too would make a
-        # configured surface indistinguishable from an absent one for the ONE flag a
-        # tenant's Org Owner may be waiting on.
-        raise _unavailable(
-            "Asking questions in words is not switched on for this platform.",
-            reason="nlq_disabled",
-        )
+    _require_switched_on()
     cat = catalogue()
     read_bi.require_budget(db, access)
 
@@ -326,15 +381,6 @@ def ask_bi_question(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error_code": _NO_FIGURES_CODE, "message": _NO_FIGURES_MESSAGE},
         )
-    # The one row for this question, written BEFORE anything leaves the platform and
-    # naming exactly what the model may name.
-    _record(
-        db,
-        access,
-        question_digest=question_digest,
-        decision=query_log.DECISION_ALLOWED,
-        member_ids=candidates.member_ids,
-    )
 
     try:
         question = nlq.screen_question(
@@ -344,6 +390,15 @@ def ask_bi_question(
             question=request.question,
         )
     except nlq.QuestionWithheld as withheld:
+        # Withheld by the platform's own screen. The reader's authority was fine
+        # (``allowed``), but nothing left the platform, so the row names no member.
+        _record(
+            db,
+            access,
+            question_digest=question_digest,
+            decision=query_log.DECISION_ALLOWED,
+            member_ids=(),
+        )
         raise _unavailable(withheld.message, reason=withheld.code) from withheld
 
     built = nlq.build_payload(candidates, question=question)
@@ -355,6 +410,16 @@ def ask_bi_question(
         as_of=request.as_of,
         built=built,
         catalogue_version=CATALOGUE_VERSION,
+    )
+    # The one row for this question, written once it is KNOWN whether anything left
+    # the platform, and naming exactly what the model was given: the offered set when
+    # a translation was queued, nothing when the gate or the allowance refused.
+    _record(
+        db,
+        access,
+        question_digest=question_digest,
+        decision=query_log.DECISION_ALLOWED,
+        member_ids=built.offered_member_ids if outcome.job is not None else (),
     )
     if outcome.job is None:
         raise _unavailable(outcome.message, reason=outcome.reason or "unavailable")
@@ -375,9 +440,13 @@ def get_bi_question(
     access: BiRead,
     response: Response,
 ) -> BiAskRead:
-    """One of your OWN questions, and whatever the platform proposes for it."""
+    """One of your OWN questions, and whatever the platform proposes for it.
+
+    Unmetered and unlogged on purpose: see the module docstring.
+    """
 
     _ = bank_id
+    _require_switched_on()
     job = bi_nlq.find_question(
         db,
         job_id=job_id,
@@ -408,6 +477,7 @@ def run_bi_question(  # noqa: PLR0913 - FastAPI injects db/access/response
     """Run a proposal the reader has confirmed, under the ordinary read authority."""
 
     _ = bank_id
+    _require_switched_on()
     job = bi_nlq.find_question(
         db,
         job_id=job_id,
@@ -417,12 +487,19 @@ def run_bi_question(  # noqa: PLR0913 - FastAPI injects db/access/response
     )
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.")
+    if _state(job) != "proposed":
+        # The SAME decision the read route makes, so a record the reader is shown
+        # as refused, cancelled, failed or still translating cannot run here
+        # whatever else it carries — and a proposal that was already run, or that
+        # nobody ran in time, is refused by name.
+        if bi_nlq.is_confirmed(job):
+            raise _unavailable(_ALREADY_RUN_MESSAGE, reason="already_run")
+        if str((job.progress or {}).get("status") or "") == bi_nlq.STATUS_PROPOSED:
+            raise _unavailable(_PROPOSAL_EXPIRED_MESSAGE, reason="proposal_expired")
+        raise _unavailable(_NOT_PROPOSED_MESSAGE, reason="not_proposed")
     proposed = _proposed_query(job)
-    if proposed is None:
-        raise _unavailable(
-            "There is no question to run here yet. Ask again, or wait for this one to finish.",
-            reason="not_proposed",
-        )
+    if proposed is None:  # pragma: no cover - a proposed record carries a valid query
+        raise _unavailable(_NOT_PROPOSED_MESSAGE, reason="not_proposed")
     if str((job.payload or {}).get("catalogue_version") or "") != CATALOGUE_VERSION:
         # The figures were redefined between the proposal and the confirmation, so the
         # sentence the reader confirmed may no longer mean what it said.
@@ -448,10 +525,11 @@ def run_bi_question(  # noqa: PLR0913 - FastAPI injects db/access/response
     settings = get_settings().bi
     # From here it is an ordinary BI read: the same budget, the same
     # ``authorize_query``, the same log row, the same caps. Nothing about the query
-    # having been written by a model changes what it is allowed to return.
-    authorized = read_bi.authorize(
-        db, access, proposed, surface=read_bi.SURFACE_QUERY, if_none_match=None
-    )
+    # having been written by a model changes what it is allowed to return. The
+    # surface on ITS log row is ``nlq`` rather than ``query`` so the row says a
+    # model proposed this read (module docstring); ``surface`` reaches only the
+    # decision telemetry and the ETag, never the decision itself.
+    authorized = read_bi.authorize(db, access, proposed, surface=_SURFACE, if_none_match=None)
     _, result = read_bi.run_query(
         db,
         access,
@@ -460,6 +538,8 @@ def run_bi_question(  # noqa: PLR0913 - FastAPI injects db/access/response
         row_cap=settings.ui_row_cap,
         timeout_ms=settings.interactive_timeout_ms,
     )
+    # Spent. Committed below with the audit event, so the two cannot disagree.
+    bi_nlq.mark_confirmed(job)
     audit.record_event(
         db,
         access.ctx,

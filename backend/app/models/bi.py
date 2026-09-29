@@ -375,6 +375,19 @@ class BiAggPositionDaily(_TenantKeys, _BuilderStamp, Base):
     grain; ratios are ``sum(numerator) / nullif(sum(denominator), 0)`` over it.
     Grain columns may be NULL (the fact carries NULL), so the unique index
     below coalesces them.
+
+    **A per-cell sum is NULL when no row in the cell carries the value** (audit
+    A360 H1). Each ``*_sum`` is ``SUM(column)`` over the cell's fact rows, and SQL's
+    ``SUM`` of nothing but NULLs is NULL — so a cell whose whole book is
+    unconverted foreign currency has ``balance_rc_sum IS NULL``, exactly as
+    ``SUM(balance_rc)`` over the same rows would, and a bank that states no
+    collateral has ``collateral_rc_sum IS NULL`` rather than a collateral of 0.
+    Storing 0 there made the aggregate path answer a no-dimension KPI with a
+    measured zero while the fact path answered NULL for the same rows, and every
+    downstream consumer (alerts, target attainment, insights, the dashboard's
+    needs-data check) then treated the zero as a figure. Only the two COUNTS
+    (``row_count``, ``fx_unconverted_count``) are NOT NULL: a cell exists only
+    because rows do, so its row count is never absent.
     """
 
     __tablename__ = "bi_agg_position_daily"
@@ -401,14 +414,23 @@ class BiAggPositionDaily(_TenantKeys, _BuilderStamp, Base):
     grade: Mapped[str | None] = mapped_column(String(32), nullable=True)
     deposit_account_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    balance_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    classification_exposure_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    non_performing_exposure_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    provision_required_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    provision_held_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    collateral_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
-    #: ``sum(interest_rate * balance_rc)`` — the numerator of a weighted average.
-    rate_x_balance_rc_sum: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
+    balance_rc_sum: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    classification_exposure_rc_sum: Mapped[Decimal | None] = mapped_column(
+        Numeric(28, 6), nullable=True
+    )
+    #: ``sum(CASE WHEN non_performing THEN classification_exposure_rc ELSE 0 END)``:
+    #: a performing row contributes 0 (the selection did not hold), so the sum is
+    #: NULL only when every row is non-performing with no exposure — the same
+    #: rows-to-value rule the compiler's ``_summed`` applies on the fact path.
+    non_performing_exposure_rc_sum: Mapped[Decimal | None] = mapped_column(
+        Numeric(28, 6), nullable=True
+    )
+    provision_required_rc_sum: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    provision_held_rc_sum: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    collateral_rc_sum: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    #: ``sum(interest_rate * balance_rc)`` — the numerator of a weighted average;
+    #: NULL when no row carries both a rate and a reporting-currency balance.
+    rate_x_balance_rc_sum: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
     fx_unconverted_count: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
@@ -864,7 +886,7 @@ class BiMartBuild(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
 
 
 class BiReconciliationResult(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
-    """The R1–R10 outcome for a (bank, as-of) that the trust badge is read from."""
+    """The R1–R12 outcome for a (bank, as-of) that the trust badge is read from."""
 
     __tablename__ = "bi_reconciliation_results"
     __table_args__ = (

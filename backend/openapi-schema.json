@@ -20047,6 +20047,10 @@
       "FeatureFlagsRead": {
         "additionalProperties": false,
         "properties": {
+          "bi_alerts_enabled": {
+            "title": "Bi Alerts Enabled",
+            "type": "boolean"
+          },
           "bi_enabled": {
             "title": "Bi Enabled",
             "type": "boolean"
@@ -20062,13 +20066,19 @@
           "bi_scheduler_enabled": {
             "title": "Bi Scheduler Enabled",
             "type": "boolean"
+          },
+          "bi_subscriptions_enabled": {
+            "title": "Bi Subscriptions Enabled",
+            "type": "boolean"
           }
         },
         "required": [
           "bi_enabled",
           "bi_mart_enqueue_enabled",
           "bi_scheduler_enabled",
-          "bi_nlq_enabled"
+          "bi_nlq_enabled",
+          "bi_alerts_enabled",
+          "bi_subscriptions_enabled"
         ],
         "title": "FeatureFlagsRead",
         "type": "object"
@@ -64527,7 +64537,7 @@
     },
     "/api/v1/banks/{bank_id}/bi/ask/{job_id}": {
       "get": {
-        "description": "One of your OWN questions, and whatever the platform proposes for it.",
+        "description": "One of your OWN questions, and whatever the platform proposes for it.\n\nUnmetered and unlogged on purpose: see the module docstring.",
         "operationId": "getBiQuestion",
         "parameters": [
           {

@@ -234,11 +234,11 @@ def test_bi_domain_imports_no_service_model_or_sql() -> None:
     assert not offenders, "\n".join(offenders)
 
 
-def test_bi_domain_uses_no_text_sql() -> None:
-    for path in sorted(BI_DOMAIN.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
-                assert name != "text", f"{path.relative_to(BACKEND)} calls text()"
+# ``test_bi_domain_uses_no_text_sql`` was deleted 2026-09-29 (audit A360-1). It
+# matched the call name ``text`` only — ``from sqlalchemy import text as
+# sql_text; sql_text(...)`` walked straight through it — and it carried no
+# self-proof, so nobody could show it firing. The SQL-text rule for BOTH BI
+# roots lives in ``tests/architecture/test_bi_compiler_injection.py``, which
+# forbids the aliased import as well as the call, covers the assembly shapes, and
+# proves every rule against a planted violation. A guard nobody can show firing
+# is worse than none: the next reader trusts it and stops looking.

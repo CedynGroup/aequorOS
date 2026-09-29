@@ -151,13 +151,10 @@ from app.schemas.bi import (
 from app.services import institution_types
 from app.services.bi import data_scope, grid_adapter, provenance, query_log, reconciliation
 from app.services.bi.authorization import (
-    ALL_INSTITUTION_DATA,
-    NO_INSTITUTION_DATA,
-    REASON_ALLOWED,
-    REASON_DATA_SCOPE_CONFLICT,
     BiAuthorization,
     BiDataScope,
     authorize_query,
+    authorize_query_conjunctive,
     branch_readable,
     query_members,
     scope_pairs,
@@ -583,73 +580,30 @@ def _merged_decision(  # noqa: PLR0913 - the complete authorization sentence
 ) -> BiAuthorization:
     """Require EVERY permission in ``permissions`` over the query, as one decision.
 
-    A read needs ``view`` and nothing else, so the common case is one evaluator
-    pass. A record-level or confidential EXPORT needs ``export`` **as well as**
-    ``view`` (D-066): the two are different sentences and a bundle that carried
-    one without the other would otherwise let an export return a member its
-    holder could not have queried interactively — or the reverse. Requiring both
-    is deny-by-default in the only direction that matters, and it collapses to
-    ONE ``bi_query_log`` row because the caller sees a single decision.
+    A thin binding of the admitted reader to
+    :func:`~app.services.bi.authorization.authorize_query_conjunctive`, which
+    owns the rule: allowed only if every pass allowed, denied members unioned,
+    the reason from the first refusal, and the SCOPE combined identical-or-refuse
+    across the passes — ``all`` yields to a narrow pass, two identical narrow
+    passes serve that slice, two DIFFERENT narrow passes (``{B1}`` beside
+    ``{B2}``, which have no ordering) refuse as ``data_scope_conflict`` rather
+    than being guessed between or intersected. An EMPTY ``permissions`` is
+    refused too: a read that asked for no sentence was authorized by nothing,
+    and the deny-by-default answer is the only honest one (audit A360-1 found
+    this function returning the whole institution for that case).
 
-    The merge is conjunctive: allowed only if every pass allowed, denied members
-    unioned in first-seen order, and the reason taken from the first refusal so
-    the log names why rather than which pass.
-
-    **The SCOPE is merged conjunctively too, and a disagreement refuses.** A
-    conjunctive read can never be served wider than its narrowest sentence: if
-    ``view`` is granted over one branch and ``export`` over the institution, the
-    principal may export only what they may view. ``all`` is the universe, so any
-    narrower pass wins over it. Two DIFFERENT narrow scopes have no ordering
-    between them — ``{B1}`` and ``{B2}`` are not comparable — so the read is
-    refused rather than guessed at; guessing would either widen the grant or
-    silently drop half of it.
+    Kept as a named seam so the routes read as "one decision"; the same helper
+    renders a subscription as its recipient, so the two cannot drift.
     """
 
-    denied: list[str] = []
-    matched: dict[UUID, None] = {}
-    reason = REASON_ALLOWED
-    member_ids: tuple[str, ...] = ()
-    scopes: list[BiDataScope] = []
-    for permission in permissions:
-        decision = authorize_query(
-            db, access.ctx, access.bank, cat, query, permission=permission, surface=surface
-        )
-        member_ids = decision.member_ids or member_ids
-        if decision.allowed:
-            matched.update(dict.fromkeys(decision.matching_binding_ids))
-            scopes.append(decision.data_scope)
-            continue
-        if reason == REASON_ALLOWED:
-            reason = decision.reason
-        denied.extend(member_id for member_id in decision.denied_members if member_id not in denied)
-    if denied:
-        return BiAuthorization(
-            allowed=False,
-            denied_members=tuple(denied),
-            # Nothing is served, so no binding authorized this and there is no
-            # ETag to key on the pairs that did match.
-            matching_binding_ids=(),
-            data_scope=NO_INSTITUTION_DATA,
-            reason=reason,
-            member_ids=member_ids,
-        )
-    narrow = {scope for scope in scopes if not scope.whole_institution}
-    if len(narrow) > 1:
-        return BiAuthorization(
-            allowed=False,
-            denied_members=member_ids,
-            matching_binding_ids=(),
-            data_scope=NO_INSTITUTION_DATA,
-            reason=REASON_DATA_SCOPE_CONFLICT,
-            member_ids=member_ids,
-        )
-    return BiAuthorization(
-        allowed=True,
-        denied_members=(),
-        matching_binding_ids=tuple(matched),
-        data_scope=next(iter(narrow), ALL_INSTITUTION_DATA),
-        reason=REASON_ALLOWED,
-        member_ids=member_ids,
+    return authorize_query_conjunctive(
+        db,
+        access.ctx,
+        access.bank,
+        cat,
+        query,
+        permissions=permissions,
+        surface=surface,
     )
 
 
@@ -774,6 +728,11 @@ def _scope_read(scope: data_scope.ResolvedDataScope) -> BiDataScopeRead:
     because it resolves the register itself; this says less rather than more.
     """
 
+    if scope.kind == "none":
+        # A refused read has no slice to describe; every caller builds this read
+        # model for an ALLOWED decision only. Refused as the platform's own
+        # invariant violation rather than as the read model's validation error.
+        raise data_scope.DataScopeServesNothing("A refused read has no data scope to describe.")
     unresolved: list[str] = []
     if scope.declared_regions and not scope.branch_codes:
         unresolved = list(scope.declared_regions)

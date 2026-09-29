@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,6 +34,10 @@ from app.services.bi import reconciliation
 #: Separator for digest material. A unit separator cannot occur in a build
 #: fingerprint, a scope name or an ISO date, so the digest is unambiguous.
 _SEPARATOR = "\x1f"
+
+#: The one ``bi_mart_builds.status`` under which the rows on file and the
+#: reconciliation results on file describe the same book.
+MART_BUILD_SUCCEEDED = "succeeded"
 
 
 def data_window(time: BiTime) -> tuple[date, date]:
@@ -64,31 +69,27 @@ def build_fingerprint(
     One successful build stamps every scope of a date with the SAME value-based
     fingerprint, so the common case — one date, fully built — returns that value
     verbatim and an ETag can be compared against the builder's own record. A
-    window over several dates, or a date whose scopes did not all succeed, has
-    no single fingerprint: those return one deterministic digest over the build
-    state instead, which changes whenever any part of it does. Nothing built at
-    all returns ``None``, and the ETag then rests on the catalogue version and
-    the principal.
+    window over several dates, or a date whose scopes did not all succeed — or
+    whose latest build FAILED outright — has no single fingerprint: those return
+    one deterministic digest over the build state instead, which changes whenever
+    any part of it does. Only a window with no build record at all returns
+    ``None``, and the ETag then rests on the catalogue version and the principal.
+
+    The failed case used to return ``None`` too (audit A360 H2), which made a
+    stale serve unattributable: the builder rolls a failed rebuild back to the
+    previous rows, so figures ARE served, and the query log recorded them against
+    no build at all. The digest over ``date:scope:failed:<attempted fingerprint>``
+    identifies that state exactly — it joins back to the failed
+    ``bi_mart_builds`` rows and their error — and it differs from every
+    fingerprint a successful build ever stamped, so a cached answer from before
+    the failure cannot be mistaken for one served after it.
     """
 
-    rows = db.execute(
-        select(
-            BiMartBuild.as_of_date, BiMartBuild.scope, BiMartBuild.status, BiMartBuild.fingerprint
-        )
-        .where(
-            BiMartBuild.organization_id == organization_id,
-            BiMartBuild.bank_id == bank_id,
-            BiMartBuild.as_of_date >= window[0],
-            BiMartBuild.as_of_date <= window[1],
-        )
-        .order_by(BiMartBuild.as_of_date, BiMartBuild.scope)
-    ).all()
+    rows = _build_rows(db, organization_id=organization_id, bank_id=bank_id, window=window)
     if not rows:
         return None
-    fingerprints = {row.fingerprint for row in rows if row.status == "succeeded"}
-    if not fingerprints:
-        return None
-    if len(fingerprints) == 1 and all(row.status == "succeeded" for row in rows):
+    fingerprints = {row.fingerprint for row in rows if row.status == MART_BUILD_SUCCEEDED}
+    if len(fingerprints) == 1 and all(row.status == MART_BUILD_SUCCEEDED for row in rows):
         return fingerprints.pop()
     material = _SEPARATOR.join(
         f"{row.as_of_date.isoformat()}:{row.scope}:{row.status}:{row.fingerprint}" for row in rows
@@ -96,12 +97,64 @@ def build_fingerprint(
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def _build_rows(
+    db: Session, *, organization_id: str, bank_id: str, window: tuple[date, date]
+) -> list[Any]:
+    """Every ``bi_mart_builds`` record inside the window, in a stable order."""
+    return list(
+        db.execute(
+            select(
+                BiMartBuild.as_of_date,
+                BiMartBuild.scope,
+                BiMartBuild.status,
+                BiMartBuild.fingerprint,
+            )
+            .where(
+                BiMartBuild.organization_id == organization_id,
+                BiMartBuild.bank_id == bank_id,
+                BiMartBuild.as_of_date >= window[0],
+                BiMartBuild.as_of_date <= window[1],
+            )
+            .order_by(BiMartBuild.as_of_date, BiMartBuild.scope)
+        ).all()
+    )
+
+
+def stale_dates(
+    db: Session, *, organization_id: str, bank_id: str, window: tuple[date, date]
+) -> tuple[date, ...]:
+    """Dates in the window whose LATEST build did not succeed, in order.
+
+    For such a date the rows being served (if any) were written by an earlier
+    build — the builder rolls a failed rebuild back to them — and the stored
+    reconciliation results were evaluated against a canonical book that has since
+    moved. Nothing about that state is described by the results on file, so no
+    badge may be earned from them (audit A360 H2). A ``running`` record counts
+    too: it is never visible from another session in practice (the builder
+    commits only on success or failure), but "not succeeded" is the rule, and a
+    record left mid-flight by a dead process would otherwise read as trusted.
+    """
+    rows = _build_rows(db, organization_id=organization_id, bank_id=bank_id, window=window)
+    return tuple(sorted({row.as_of_date for row in rows if row.status != MART_BUILD_SUCCEEDED}))
+
+
 @dataclass(frozen=True, slots=True)
 class TrustVerdict:
-    """The reconciliation verdict for one window, and what is failing in it."""
+    """The reconciliation verdict for one window, and what is failing in it.
+
+    ``stale_dates`` names the dates in the window whose latest mart build did
+    not succeed (:func:`stale_dates`). Each such date is graded ``grey`` and
+    contributes no failing checks, whatever results are on file for it: those
+    results were earned by an earlier build against an earlier book, and the
+    badge on a served figure must be the badge of THAT figure's build, never one
+    inherited from a build that no longer describes the data (audit A360 H2). A
+    consumer that wants to say WHY a badge is grey reads this field; the wire
+    badge itself stays ``status`` + ``failing_checks``.
+    """
 
     status: str
     failing_checks: tuple[str, ...]
+    stale_dates: tuple[date, ...] = ()
 
 
 def stored_checks(
@@ -128,21 +181,37 @@ def trust_verdict(
 ) -> TrustVerdict:
     """The verdict for everything the window covers; a missing check is grey.
 
-    For a single date this is ``reconciliation.trust_for`` (pinned by a test).
-    For a window it is the worst verdict in it — a badge may understate
-    confidence, never overstate it — which is also why a date in the window with
-    no stored result greys the whole badge rather than being skipped.
+    For a single date whose latest build succeeded this is
+    ``reconciliation.trust_for`` (pinned by a test). For a window it is the worst
+    verdict in it — a badge may understate confidence, never overstate it — which
+    is also why a date in the window with no stored result greys the whole badge
+    rather than being skipped.
+
+    **A date whose latest build did not succeed is grey regardless of what is on
+    file for it** (audit A360 H2). The builder rolls a failed rebuild back to the
+    previous rows and leaves the previous reconciliation results committed, so
+    without this rule a reader was shown last night's figures under a badge that
+    a different build earned against a book that has since changed — verified as
+    a mart 7 loans / 84.85M behind a canonical book of 8 / 91.85M, badge
+    unchanged, every scope ``failed``. The stored per-check rows stay readable
+    (``stored_checks``) for the detail view; only the badge refuses to inherit.
     """
 
     rows = stored_checks(db, organization_id=organization_id, bank_id=bank_id, window=window)
+    stale = stale_dates(db, organization_id=organization_id, bank_id=bank_id, window=window)
     by_date: dict[date, dict[str, str]] = {}
     for row in rows:
         by_date.setdefault(row.as_of_date, {})[row.check_id] = row.status
+    for day in stale:
+        by_date.setdefault(day, {})
     if not by_date:
-        return TrustVerdict(status=reconciliation.GREY, failing_checks=())
+        return TrustVerdict(status=reconciliation.GREY, failing_checks=(), stale_dates=stale)
     overalls: list[str] = []
     failing: set[str] = set()
-    for stored in by_date.values():
+    for day, stored in by_date.items():
+        if day in stale:
+            overalls.append(reconciliation.GREY)
+            continue
         statuses = {
             check_id: stored.get(check_id, reconciliation.GREY)
             for check_id in reconciliation.STORABLE_CHECK_IDS
@@ -154,14 +223,18 @@ def trust_verdict(
             if value in {reconciliation.RED, reconciliation.AMBER}
         )
     return TrustVerdict(
-        status=reconciliation.overall_trust(overalls), failing_checks=tuple(sorted(failing))
+        status=reconciliation.overall_trust(overalls),
+        failing_checks=tuple(sorted(failing)),
+        stale_dates=stale,
     )
 
 
 __all__ = [
+    "MART_BUILD_SUCCEEDED",
     "TrustVerdict",
     "build_fingerprint",
     "data_window",
+    "stale_dates",
     "stored_checks",
     "trust_verdict",
 ]

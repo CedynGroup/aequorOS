@@ -127,7 +127,9 @@ logger = logging.getLogger(__name__)
 GREEN, AMBER, RED, GREY = "green", "amber", "red", "grey"
 OVERALL = "overall"
 
-#: The completeness check D-042 adds beside the model's R1–R9.
+#: The completeness check D-042 added beside R1–R9, which is what the model
+#: carried at the time. It now runs R1–R12 (R11 GL branch identity, R12 arrears
+#: completeness).
 DPD_COMPLETENESS = "R10"
 
 #: The general-ledger-by-branch identity (P5-B). Its own id rather than a second
@@ -273,8 +275,9 @@ def _live_facts(
 
 
 def check_r1_npl(db: Session, organization_id: str, bank_id: str, as_of: date) -> CheckResult:
-    exposure, non_performing = db.execute(
+    loan_rows, exposure, non_performing = db.execute(
         select(
+            func.count(),
             func.coalesce(func.sum(BiFactPositionDaily.classification_exposure_rc), 0),
             func.coalesce(
                 func.sum(
@@ -305,6 +308,16 @@ def check_r1_npl(db: Session, organization_id: str, bank_id: str, as_of: date) -
     )
     if engine is None:
         return _grey("R1", "The live credit engine has no NPL ratio at this date.")
+    if int(loan_rows or 0) == 0:
+        # Absence is not agreement (audit A360): an empty loan mart and an engine
+        # ratio of 0 are not two measurements that match, they are one
+        # measurement and nothing. R5 grades a mart that lost its rows.
+        return _grey(
+            "R1",
+            "The mart carries no loan rows at this date, so there is no NPL ratio to "
+            "reconcile to the engine's.",
+            engine_npl_ratio_pct=str(_dec(engine)),
+        )
     total = _dec(exposure)
     ratio = (
         (_dec(non_performing) / total).quantize(ENGINE_RATIO_QUANTUM) * _HUNDRED
@@ -531,7 +544,16 @@ def check_r5_completeness(
             CanonicalPositionSnapshot.as_of_date == as_of,
         )
     )
-    return _compare("R5", Decimal(int(mart or 0)), Decimal(int(canonical or 0)))
+    mart_rows, canonical_rows = int(mart or 0), int(canonical or 0)
+    if mart_rows == 0 and canonical_rows == 0:
+        # ``0 == 0`` is not completeness (audit A360): nothing was projected
+        # because nothing was there, and a pass here would badge an empty date.
+        return _grey(
+            "R5",
+            "No included snapshot and no mart row exist at this date; there is nothing "
+            "to reconcile, and an empty match is not a pass.",
+        )
+    return _compare("R5", Decimal(mart_rows), Decimal(canonical_rows))
 
 
 def check_r6_unconverted(
@@ -623,13 +645,28 @@ _R9_STATUS = {"within_tolerance": GREEN, "exception_applied": AMBER, "blocked": 
 
 
 def check_r9_balance_identity(db: Session, ctx: TenantContext, bank_id: str) -> CheckResult:
-    live_date, _lines = _live_facts(db, ctx.organization_id, bank_id)
+    live_date, lines = _live_facts(db, ctx.organization_id, bank_id)
     record = fact_derivation.current_reconciliation_record(db, ctx, bank_id)
     if record is None:
         if live_date is None:
             return _grey("R9", "No live plane exists for this bank.")
+        if not lines:
+            # The derivation stamps its record on a BALANCE-SHEET line; with no
+            # such lines there is no book that could have balanced, and reading
+            # the absent stamp as "balanced exactly" is absence read as agreement
+            # (audit A360).
+            return _grey(
+                "R9",
+                "The live plane carries no balance-sheet lines, so there is no book to "
+                "have balanced.",
+            )
         return CheckResult(
-            "R9", GREEN, detail={"reason": "The live book balanced exactly; no plug was recorded."}
+            "R9",
+            GREEN,
+            detail={
+                "reason": "The live book balanced exactly; no plug was recorded.",
+                "balance_sheet_lines": len(lines),
+            },
         )
     status = _R9_STATUS.get(str(record.get("status")), GREY)
     assets = record.get("assets")
@@ -835,6 +872,7 @@ def check_r11_gl_branch_identity(
         )
 
     mismatches: list[dict[str, Any]] = []
+    inverted: list[dict[str, Any]] = []
     lhs_total = _ZERO
     rhs_total = _ZERO
     unattributed_abs = _ZERO
@@ -843,6 +881,23 @@ def check_r11_gl_branch_identity(
         expected = institution.get(key)
         lhs_total += total
         unattributed_abs += abs(residual)
+        if expected is not None and abs(residual) > abs(expected):
+            # PER ACCOUNT (audit A360 R11): the branch rows for this account pull
+            # AWAY from its ledger figure — a residual larger than the ledger it
+            # completes, which a partial breakdown of the right sign cannot
+            # produce. The aggregate share below cannot see this: one inverted
+            # account beside a fully allocated large one dilutes to an ordinary
+            # amber, and a ZERO ledger against non-zero branch rows leaves the
+            # share at zero. So the rule is evaluated where the fault is.
+            inverted.append(
+                {
+                    "account": key[0],
+                    "currency": key[1],
+                    "ledger": str(expected),
+                    "branch_total": str(total),
+                    "residual": str(residual),
+                }
+            )
         if expected is None:
             mismatches.append(
                 {
@@ -877,6 +932,24 @@ def check_r11_gl_branch_identity(
     detail["ledger_abs_rc"] = str(ledger_abs)
     if mismatches:
         detail["mismatches"] = mismatches
+        return CheckResult(
+            GL_BRANCH_IDENTITY,
+            RED,
+            lhs_total,
+            rhs_total,
+            lhs_total - rhs_total,
+            TOLERANCES[GL_BRANCH_IDENTITY],
+            detail,
+        )
+    if inverted:
+        detail["sign_convention"] = inverted
+        detail["reason"] = (
+            "the branch figures for "
+            + ", ".join(f"{item['account']}" for item in inverted)
+            + " move further from the ledger than the ledger's own size, which a partial "
+            "breakdown cannot do — check the register's sign convention against the "
+            "ledger's for these accounts"
+        )
         return CheckResult(
             GL_BRANCH_IDENTITY,
             RED,

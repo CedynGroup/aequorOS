@@ -30,6 +30,17 @@ was already registered before the test body began.
 A question about what ONE import pulls in can therefore only be answered by an
 interpreter that has imported nothing else. Hence ``subprocess``: it is slower and
 it is the only honest way to ask.
+
+Why the "everything" probe walks RECURSIVELY (audit A360-2)
+-----------------------------------------------------------
+Its first form used ``pkgutil.iter_modules``, which lists a package's direct
+children only. A model defined in a SUBPACKAGE of ``app/models`` would have been
+invisible to the probe — so both sides of the comparison would have lacked it, the
+difference would have been empty, and the guard would have acquitted exactly the
+shape it exists to catch, one directory deeper. No subpackage exists today; the
+self-proof below builds one and shows the shallow walk missing it and the
+recursive walk seeing it, so the blind spot stays closed by evidence rather than
+by the absence of the case.
 """
 
 from __future__ import annotations
@@ -41,35 +52,53 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
-#: Import ``app.models`` and NOTHING else, then report what that registered. Run in
+#: Import the package and NOTHING else, then report what that registered. Run in
 #: a fresh interpreter with the worker disabled and no database configured, because
 #: importing ``app.main`` would start a worker thread against the primary.
 _PACKAGE_ONLY = """
-import json
-import app.models  # noqa: F401 - imported for the registration side effect
+import importlib, json
+importlib.import_module("{package}")
 from app.db.base import Base
 print(json.dumps(sorted(Base.metadata.tables)))
 """
 
-#: The same, after also importing every module in the package, which is the set a
-#: correct ``__init__`` would already have produced.
+#: The same, after also importing every module in the package — RECURSIVELY, so a
+#: subpackage's models count — which is the set a correct ``__init__`` would already
+#: have produced.
 _EVERY_MODULE = """
 import importlib, json, pkgutil
-import app.models
-for info in pkgutil.iter_modules(app.models.__path__):
-    importlib.import_module(f"app.models.{info.name}")
+package = importlib.import_module("{package}")
+for info in pkgutil.walk_packages(package.__path__, prefix="{package}."):
+    importlib.import_module(info.name)
+from app.db.base import Base
+print(json.dumps(sorted(Base.metadata.tables)))
+"""
+
+#: The probe's FIRST form, kept ONLY as the negative control for the self-proof
+#: below: ``iter_modules`` lists direct children, so a subpackage's models never
+#: enter the comparison. Never use this for the real check.
+_EVERY_MODULE_SHALLOW = """
+import importlib, json, pkgutil
+package = importlib.import_module("{package}")
+for info in pkgutil.iter_modules(package.__path__):
+    importlib.import_module(f"{package}.{{info.name}}")
 from app.db.base import Base
 print(json.dumps(sorted(Base.metadata.tables)))
 """
 
 
-def _tables(script: str) -> list[str]:
+def _tables(
+    script: str, *, package: str = "app.models", extra_path: Path | None = None
+) -> list[str]:
+    env = {"PATH": "/usr/bin:/bin", "RUN_INPROCESS_WORKER": "0", "DATABASE_URL": ""}
+    if extra_path is not None:
+        env["PYTHONPATH"] = str(extra_path)
     result = subprocess.run(
-        [sys.executable, "-c", script],
+        [sys.executable, "-c", script.format(package=package)],
         cwd=BACKEND_ROOT,
         capture_output=True,
         text=True,
-        env={"PATH": "/usr/bin:/bin", "RUN_INPROCESS_WORKER": "0", "DATABASE_URL": ""},
+        env=env,
         check=False,
     )
     assert result.returncode == 0, f"probe failed:\n{result.stderr[-2000:]}"
@@ -99,3 +128,51 @@ def test_the_subject_is_the_whole_model_layer_and_not_a_handful() -> None:
     assert len(from_package) >= 150, f"only {len(from_package)} tables registered"
     # The one that motivated this file, named so a regression is unmistakable.
     assert "ai_commentary_drafts" in from_package
+
+
+def _synthetic_models_package(root: Path) -> None:
+    """A package whose ``__init__`` imports nothing, with one model a level down."""
+
+    package = root / "probe_models"
+    (package / "nested").mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "nested" / "__init__.py").write_text("")
+    (package / "nested" / "child.py").write_text(
+        "from sqlalchemy import Column, Integer\n"
+        "from app.db.base import Base\n"
+        "class ProbeChild(Base):\n"
+        "    __tablename__ = 'probe_child_table'\n"
+        "    id = Column(Integer, primary_key=True)\n"
+    )
+
+
+def test_the_probe_sees_a_model_one_directory_down_and_the_shallow_walk_did_not(
+    tmp_path: Path,
+) -> None:
+    """The self-proving case for the recursive walk.
+
+    Builds a package with an EMPTY ``__init__`` and one mapped class in a
+    subpackage, then asks all three probes. The package-only probe must not see
+    the table (nothing imports it — the defect shape); the recursive probe MUST,
+    which is what lets the main test convict it; and the shallow walk the first
+    version of this file used must NOT, which is the blind spot being closed. If
+    the last assertion ever fails, ``iter_modules`` has started recursing and the
+    negative control is no longer a control.
+    """
+
+    _synthetic_models_package(tmp_path)
+    package_only = set(_tables(_PACKAGE_ONLY, package="probe_models", extra_path=tmp_path))
+    everything = set(_tables(_EVERY_MODULE, package="probe_models", extra_path=tmp_path))
+    shallow = set(_tables(_EVERY_MODULE_SHALLOW, package="probe_models", extra_path=tmp_path))
+
+    assert "probe_child_table" not in package_only, "the synthetic __init__ must import nothing"
+    assert "probe_child_table" in everything, (
+        "the recursive probe did not see a model one directory down, so the main "
+        "test cannot convict an unregistered subpackage model"
+    )
+    assert "probe_child_table" not in shallow, (
+        "the shallow probe now sees the nested model, so it is no longer the negative "
+        "control this self-proof relies on"
+    )
+    # And the main test's arithmetic convicts it.
+    assert sorted(everything - package_only) == ["probe_child_table"]

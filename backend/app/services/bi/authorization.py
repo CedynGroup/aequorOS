@@ -124,12 +124,19 @@ REASON_BANK_WIDE_FIGURE = "bank_wide_figure_requires_whole_institution"
 #: loop (an allowed pair always names its bindings) and refused rather than
 #: assumed, because the assumption would be "the whole institution".
 REASON_NO_AUTHORIZING_BINDING = "no_authorizing_binding"
-#: Two permissions of one conjunctive read (``view`` AND ``export``) were
+#: Two RESOURCES of one read — two ``(module, sensitivity)`` pairs, or two
+#: permissions of one conjunctive sentence (``view`` AND ``export``) — were
 #: satisfied by bindings whose scopes are narrow and DIFFERENT. There is no
 #: ordering between two branch sets, so the read is refused rather than served
-#: under a guess. Raised by ``read_bi._merged_decision``, not by this function,
-#: which only ever evaluates one permission.
+#: under a guess. Produced by :func:`combine_resource_scopes`, which is the one
+#: place that rule is written; ``authorize_query`` reaches it across pairs and
+#: :func:`authorize_query_conjunctive` across permissions.
 REASON_DATA_SCOPE_CONFLICT = "data_scope_conflict"
+#: A conjunctive read that named NO permission at all. Nothing was evaluated,
+#: so nothing authorized the read, and a deny-by-default plane refuses it rather
+#: than treating "no sentence required" as "every sentence held" (audit A360-1:
+#: the pre-fix shape returned ``allowed=True`` over the whole institution).
+REASON_NO_PERMISSION_EVALUATED = "no_permission_evaluated"
 
 #: Mirrors ``services.authorization.DataScopeKind``: the three storable column
 #: values plus the two a REDUCTION can produce and no row may carry.
@@ -185,6 +192,104 @@ def bi_data_scope(scope: account_authorization.EffectiveDataScope) -> BiDataScop
     """
 
     return BiDataScope(kind=scope.kind, branches=scope.branches, regions=scope.regions)
+
+
+@dataclass(frozen=True, slots=True)
+class CombinedDataScope:
+    """The one slice several resources of a read admit together, or why none does.
+
+    ``reason`` is :data:`REASON_ALLOWED` when ``scope`` may be served, otherwise
+    one of :data:`REASON_DATA_SCOPE_CONFLICT` / :data:`REASON_NO_AUTHORIZING_BINDING`
+    and ``scope`` is :data:`NO_INSTITUTION_DATA` — never ``all`` on a refusal, so
+    a caller that forgets to check ``reason`` falls into the scoped path that
+    serves nothing rather than into the whole book.
+    """
+
+    scope: BiDataScope
+    reason: str
+
+    @property
+    def allowed(self) -> bool:
+        return self.reason == REASON_ALLOWED
+
+
+def combine_resource_scopes(scopes: Sequence[BiDataScope]) -> CombinedDataScope:
+    """Combine the scopes of several RESOURCES one read needs at the same time.
+
+    A resource is anything the evaluator answered separately: one ``(module,
+    sensitivity)`` pair of a query, one permission of a conjunctive sentence, one
+    chunk of a strip. The read needs every one of them at once, so it can only be
+    served under a slice every one of them admits. The asymmetry with
+    ``services.authorization.reduce_data_scope`` is deliberate and worth stating,
+    because the two rules look contradictory side by side: WITHIN one resource the
+    widest binding wins, because bindings OR and narrowing them would revoke
+    authority the Org Owner granted; ACROSS resources ``all`` yields to any
+    narrower slice, because ``all`` is the universe and the other resource's
+    restriction still applies to the rows the read returns.
+
+    **What this does with two narrow scopes is identical-or-refuse, not a true
+    narrowest-wins.** ``branch ["B1"]`` beside ``branch ["B1"]`` serves B1;
+    ``branch ["B1"]`` beside ``region ["North"]`` is refused; and so is
+    ``branch ["B1", "B2"]`` beside ``branch ["B1"]``, although a set intersection
+    would have served B1. That over-refusal is chosen: an intersection of a
+    branch set with a region set needs the branch dimension resolved first, and
+    guessing which sentence the reader meant would be inventing authority. A
+    reader who holds two different narrow sentences over one figure is told so
+    (``data_scope_conflict``) and an Org Owner reconciles the grants. Do not
+    "improve" this into an intersection without a test for every mixed case.
+
+    A resource nothing authorized (``kind="none"``, or an empty list of
+    resources) refuses as :data:`REASON_NO_AUTHORIZING_BINDING`: the assumption
+    would otherwise be "the whole institution".
+    """
+
+    if not scopes or any(scope.serves_nothing for scope in scopes):
+        return CombinedDataScope(NO_INSTITUTION_DATA, REASON_NO_AUTHORIZING_BINDING)
+    narrow = {scope for scope in scopes if not scope.whole_institution}
+    if len(narrow) > 1:
+        return CombinedDataScope(NO_INSTITUTION_DATA, REASON_DATA_SCOPE_CONFLICT)
+    return CombinedDataScope(next(iter(narrow), ALL_INSTITUTION_DATA), REASON_ALLOWED)
+
+
+def combine_pair_scopes(
+    db: Session,
+    *,
+    organization_id: str,
+    per_pair: Sequence[Sequence[UUID]],
+) -> CombinedDataScope:
+    """Reduce each pair's matched bindings separately, then combine across pairs.
+
+    ``per_pair`` holds, for every ``(module, sensitivity)`` pair the read
+    touched, the binding ids that authorized THAT pair — kept apart. Unioning
+    them and reducing once was audit finding A10-01 in ``authorize_query`` and
+    again A360-1 H8 in the machine feed: ``reduce_data_scope``'s "any binding
+    of kind ``all`` wins" is sound only WITHIN one resource's matches, so an
+    ``all`` binding that authorized ``risk``/``aggregated`` silently discarded
+    the branch restriction that applied to the credit pair. Because 34 of the
+    catalogue's 69 dimensions are ``risk``/``aggregated``, a reader triggered the
+    widening themselves just by breaking a figure down by date. This function is
+    the ONE place both callers reduce, so the misuse cannot be re-introduced in
+    one of them without the other.
+
+    The id lists are SELECTORS, never authority: the loader re-reads the rows,
+    scoped to this organization and to an active, in-window status, so a stale
+    or foreign id contributes nothing and a pair whose every id fell away is a
+    pair nothing authorized.
+    """
+
+    matched = {binding_id for ids in per_pair for binding_id in ids}
+    grants = account_authorization.load_effective_grants(
+        db, organization_id=organization_id, binding_ids=tuple(matched)
+    )
+    pair_scopes = [
+        bi_data_scope(
+            account_authorization.reduce_data_scope(
+                [grants[binding_id] for binding_id in ids if binding_id in grants]
+            )
+        )
+        for ids in per_pair
+    ]
+    return combine_resource_scopes(pair_scopes)
 
 
 #: The column a fact carries when its rows can be attributed to one branch, and
@@ -524,36 +629,17 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
 
     # Every pair allowed. WHICH SLICE follows from the same bindings that allowed
     # it, reduced by the one authority (``services.authorization``) rather than
-    # by a second reading of the columns here. The id sets are selectors: the
-    # loader re-reads the rows, scoped to this organization and to an active,
-    # in-window status, so a stale id contributes nothing.
-    #
-    # Reduced PER PAIR and then combined narrowest-wins (A10-01). The asymmetry
-    # is deliberate and worth stating, because the two rules look contradictory
-    # side by side: WITHIN one resource the widest binding wins, because bindings
-    # OR and narrowing them would revoke authority the Org Owner granted; ACROSS
-    # resources the narrowest wins, because the query needs every pair at once
-    # and serving it means reading all of them — so the answer can only be the
-    # intersection of what each pair admits. Two irreconcilable narrow slices are
-    # refused rather than intersected: ``branch ["B1"]`` on one pair and
-    # ``region ["North"]`` on another is a sentence the platform cannot answer
-    # honestly, and guessing which the reader meant would be inventing authority.
-    # ``read_bi._merged_decision`` applies the identical rule across PERMISSIONS.
-    grants = account_authorization.load_effective_grants(
-        db, organization_id=ctx.organization_id, binding_ids=tuple(matched)
-    )
-    pair_scopes = [
-        bi_data_scope(
-            account_authorization.reduce_data_scope(
-                [grants[binding_id] for binding_id in ids if binding_id in grants]
-            )
-        )
-        for ids in per_pair
-    ]
-    narrow = {scope for scope in pair_scopes if not scope.whole_institution}
-    if len(narrow) > 1:
+    # by a second reading of the columns here, and reduced PER PAIR (A10-01)
+    # through the one helper the machine feed uses too, so the two surfaces
+    # cannot answer differently about the same figure. Across pairs the rule is
+    # identical-or-refuse — ``all`` yields to a narrow slice, two DIFFERENT
+    # narrow slices are refused, never intersected — and the reasons why are
+    # written once, on ``combine_resource_scopes``. ``authorize_query_conjunctive``
+    # applies the same helper across PERMISSIONS.
+    combined = combine_pair_scopes(db, organization_id=ctx.organization_id, per_pair=per_pair)
+    if not combined.allowed:
         authorization_denied(
-            reason=REASON_DATA_SCOPE_CONFLICT,
+            reason=combined.reason,
             organization_id=ctx.organization_id,
             bank_id=bank.id,
             surface=telemetry_surface,
@@ -564,26 +650,10 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
             denied_members=member_ids,
             matching_binding_ids=(),
             data_scope=NO_INSTITUTION_DATA,
-            reason=REASON_DATA_SCOPE_CONFLICT,
+            reason=combined.reason,
             member_ids=member_ids,
         )
-    data_scope = next(iter(narrow), ALL_INSTITUTION_DATA if pair_scopes else NO_INSTITUTION_DATA)
-    if data_scope.serves_nothing:
-        authorization_denied(
-            reason=REASON_NO_AUTHORIZING_BINDING,
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
-            surface=telemetry_surface,
-            permission=permission.value,
-        )
-        return BiAuthorization(
-            allowed=False,
-            denied_members=member_ids,
-            matching_binding_ids=(),
-            data_scope=NO_INSTITUTION_DATA,
-            reason=REASON_NO_AUTHORIZING_BINDING,
-            member_ids=member_ids,
-        )
+    data_scope = combined.scope
     if not data_scope.whole_institution:
         unattributable, scope_reason = _unattributable_measures(members)
         if unattributable:
@@ -608,6 +678,116 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
         denied_members=(),
         matching_binding_ids=tuple(matched),
         data_scope=data_scope,
+        reason=REASON_ALLOWED,
+        member_ids=member_ids,
+    )
+
+
+def authorize_query_conjunctive(  # noqa: PLR0913 - the complete authorization sentence
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    cat: Catalogue,
+    q: BiQuery,
+    *,
+    permissions: Sequence[Permission],
+    surface: str,
+) -> BiAuthorization:
+    """Require EVERY permission in ``permissions`` over the query, as ONE decision.
+
+    A read needs ``view`` and nothing else, so the common case is one pass of
+    :func:`authorize_query`. A record-level or confidential EXPORT needs
+    ``export`` **as well as** ``view`` (D-066): the two are different sentences,
+    and a bundle that carried one without the other would otherwise let an
+    export return a member its holder could not have queried interactively — or
+    the reverse. Requiring both is deny-by-default in the only direction that
+    matters, and the caller sees a single decision, so it collapses to ONE
+    ``bi_query_log`` row.
+
+    The merge is conjunctive: allowed only if every pass allowed, denied members
+    unioned in first-seen order, and the reason taken from the first refusal so
+    the log names why rather than which pass. **The SCOPE is combined through
+    :func:`combine_resource_scopes`, exactly as ``authorize_query`` combines its
+    pairs:** ``all`` yields to a narrow pass, two identical narrow passes serve
+    that slice, two DIFFERENT narrow passes refuse as ``data_scope_conflict``.
+    It is never the LAST pass's scope — that shape (audit A360-1) would have
+    rendered a subscription over the whole institution when ``view`` was granted
+    over one branch and ``export`` over the book.
+
+    An EMPTY ``permissions`` is a caller defect and is refused
+    (:data:`REASON_NO_PERMISSION_EVALUATED`) rather than treated as "nothing to
+    check": with no evaluator call there is no binding, no scope and no
+    authority, and the only honest decision is the denied one.
+
+    Every surface that authorizes more than one permission over one query goes
+    through here; ``tests/services/bi/test_bi_authorization.py`` pins that
+    ``read_bi`` and ``subscriptions`` reach ``authorize_query`` only this way.
+    Raises exactly what :func:`authorize_query` raises.
+    """
+
+    if not permissions:
+        authorization_denied(
+            reason=REASON_NO_PERMISSION_EVALUATED,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            surface=f"bi_{surface}",
+        )
+        return BiAuthorization(
+            allowed=False,
+            denied_members=(),
+            matching_binding_ids=(),
+            data_scope=NO_INSTITUTION_DATA,
+            reason=REASON_NO_PERMISSION_EVALUATED,
+        )
+
+    denied: list[str] = []
+    matched: dict[UUID, None] = {}
+    reason = REASON_ALLOWED
+    member_ids: tuple[str, ...] = ()
+    scopes: list[BiDataScope] = []
+    for permission in permissions:
+        decision = authorize_query(db, ctx, bank, cat, q, permission=permission, surface=surface)
+        member_ids = decision.member_ids or member_ids
+        if decision.allowed:
+            matched.update(dict.fromkeys(decision.matching_binding_ids))
+            scopes.append(decision.data_scope)
+            continue
+        if reason == REASON_ALLOWED:
+            reason = decision.reason
+        denied.extend(member_id for member_id in decision.denied_members if member_id not in denied)
+    if denied:
+        return BiAuthorization(
+            allowed=False,
+            denied_members=tuple(denied),
+            # Nothing is served, so no binding authorized this and there is no
+            # ETag to key on the passes that did match.
+            matching_binding_ids=(),
+            data_scope=NO_INSTITUTION_DATA,
+            reason=reason,
+            member_ids=member_ids,
+        )
+    combined = combine_resource_scopes(scopes)
+    if not combined.allowed:
+        authorization_denied(
+            reason=combined.reason,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            surface=f"bi_{surface}",
+            permissions=",".join(permission.value for permission in permissions),
+        )
+        return BiAuthorization(
+            allowed=False,
+            denied_members=member_ids,
+            matching_binding_ids=(),
+            data_scope=NO_INSTITUTION_DATA,
+            reason=combined.reason,
+            member_ids=member_ids,
+        )
+    return BiAuthorization(
+        allowed=True,
+        denied_members=(),
+        matching_binding_ids=tuple(matched),
+        data_scope=combined.scope,
         reason=REASON_ALLOWED,
         member_ids=member_ids,
     )

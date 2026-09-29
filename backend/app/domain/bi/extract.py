@@ -60,6 +60,10 @@ from app.domain.bi.authority import (
 from app.domain.capital.loan_classification import ClassifiedLoan
 from app.domain.credit.dpd_bands import dpd_band
 from app.domain.gl import pl_mapping
+from app.domain.ingestion.optional_position_fields import (
+    POSITION_ATTRIBUTE_TEXT_LIMITS,
+    over_long_text_attributes,
+)
 from app.domain.irr.buckets import repricing_bucket
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.domain.positions.families import (
@@ -518,6 +522,68 @@ def _text(value: Any) -> str | None:
     return text if text.strip() else None
 
 
+def _bounded_text(attributes: Mapping[str, Any], key: str) -> str | None:
+    """``_text`` of ``attributes[key]``, or ``None`` when it is longer than the
+    mart column it is copied into (``POSITION_ATTRIBUTE_TEXT_LIMITS``).
+
+    Never truncated (audit A360 H3): a branch code cut to 120 characters is a
+    DIFFERENT branch, and a code the platform cannot carry is reported as
+    absent — the row keeps its place with the column NULL, exactly like an
+    unstated attribute — rather than as a near-miss. Written verbatim it would
+    fail the whole tenant's build on Postgres (``value too long for type
+    character varying``), which SQLite never shows. The builder counts and logs
+    the keys it refused (``attribute_text_overflows``); ingestion reports the
+    same values at the door (rule ``position_attribute_text_bounds``).
+    """
+    text = _text(attributes.get(key))
+    if text is None or len(text) > POSITION_ATTRIBUTE_TEXT_LIMITS[key]:
+        return None
+    return text
+
+
+def attribute_text_overflows(attributes: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """The attribute keys of one snapshot whose text the mart columns cannot hold."""
+    return tuple(key for key, _length, _limit in over_long_text_attributes(attributes or {}))
+
+
+#: The scale of every ``*_rc`` money column (``Numeric(28, 6)``).
+_RC_QUANTUM = Decimal("0.000001")
+
+
+def arrears_amount_rc(
+    stated: Decimal | None,
+    *,
+    in_base: bool,
+    balance_native: Decimal,
+    balance_rc: Decimal | None,
+) -> Decimal | None:
+    """The stated arrears in the reporting currency, under the position's OWN
+    conversion (audit A360 R12).
+
+    A reporting-currency position states arrears in the reporting currency
+    already. A foreign-currency position states them in its own currency
+    (``docs/API_INTEGRATION.md`` §3.4 gives no converted key) beside a
+    ``balance`` in that currency and — when the bank converted it — a
+    ``balance_ghs``. Arrears are a SLICE of that same balance at that same date,
+    so ``stated × balance_rc / balance_native`` is the bank's own rate applied to
+    the bank's own figure, not a rate the platform inferred from anywhere else:
+    ``arrears_rc / balance_rc`` equals ``stated / balance`` EXACTLY, which is
+    what makes ``loans.arrears_share_pct`` right, and the amount is off by at
+    most the rounding the bank applied to ``balance_ghs`` itself. Dropping it
+    instead (the previous rule) made R12 report "no loan states an arrears
+    amount" for a loan that did, and understated the share by that loan's whole
+    balance. An UNCONVERTED position still yields ``None``: there is no rate of
+    the bank's to apply, and ``fx_unconverted`` already says why.
+    """
+    if stated is None:
+        return None
+    if in_base:
+        return stated
+    if balance_rc is None or balance_native == 0:
+        return None
+    return (stated * balance_rc / balance_native).quantize(_RC_QUANTUM)
+
+
 def _flag(value: Any) -> bool | None:
     """The ingestion contract's boolean spellings; ``None`` when unstated."""
     if value is None or value == "":
@@ -699,26 +765,28 @@ def position_row(  # noqa: PLR0913 - the contract's signature: one argument per 
         interest_in_suspense_rc=_dec_or_none(attributes.get("interest_in_suspense_ghs")),
         collateral_rc=_dec_or_none(attributes.get("crm_collateral_ghs")),
         collateral_type=(
-            _text(attributes.get("collateral_type"))
-            or _text(attributes.get("crm_collateral_class"))
+            _bounded_text(attributes, "collateral_type")
+            or _bounded_text(attributes, "crm_collateral_class")
         ),
         restructured=_flag(attributes.get("restructured")),
         deposit_account_type=snapshot.deposit_account_type,
         behavioral_maturity_months=Decimal(months) if months is not None else None,
         encumbered=snapshot.encumbered,
-        hqla_level=_text(attributes.get("hqla_level")),
-        branch_code=_text(attributes.get("branch_id")),
-        officer_id=_text(attributes.get("officer_id")),
-        channel=_text(attributes.get("channel")),
-        account_status=_text(attributes.get("account_status")),
-        # Reporting-currency arrears under the DERIVATION rule, the same rule
-        # ``balance_rc`` above uses: the bank supplies a converted BALANCE
-        # (``attributes.balance_ghs``) but there is no converted-arrears key, so a
-        # foreign-currency facility's arrears stay NULL and ``fx_unconverted``
-        # already says why. Deriving them from the implied rate
-        # (balance_rc / balance_native) is deliberately refused: an inferred money
-        # figure that is nearly right is worse than one that is absent and labelled.
-        arrears_amount_rc=(_dec_or_none(attributes.get("arrears_amount")) if in_base else None),
+        hqla_level=_bounded_text(attributes, "hqla_level"),
+        branch_code=_bounded_text(attributes, "branch_id"),
+        officer_id=_bounded_text(attributes, "officer_id"),
+        channel=_bounded_text(attributes, "channel"),
+        account_status=_bounded_text(attributes, "account_status"),
+        # Reporting-currency arrears under the position's OWN conversion: the
+        # stated figure as-is in the reporting currency, scaled by the bank's own
+        # ``balance_ghs / balance`` for a converted foreign-currency facility, and
+        # NULL for an unconverted one (``arrears_amount_rc`` says why).
+        arrears_amount_rc=arrears_amount_rc(
+            _dec_or_none(attributes.get("arrears_amount")),
+            in_base=in_base,
+            balance_native=balance_native,
+            balance_rc=balance_rc,
+        ),
         product_code=product.product_code if product is not None else None,
         product_family=product_family(
             position_type,
@@ -729,8 +797,8 @@ def position_row(  # noqa: PLR0913 - the contract's signature: one argument per 
         counterparty_id=snapshot.counterparty_id,
         counterparty_type=counterparty.counterparty_type if counterparty is not None else None,
         counterparty_group=counterparty.group_reference if counterparty is not None else None,
-        sector=_text(attributes.get("sector")) or _text(attributes.get("industry")),
-        employer=_text(attributes.get("employer")),
+        sector=_bounded_text(attributes, "sector") or _bounded_text(attributes, "industry"),
+        employer=_bounded_text(attributes, "employer"),
         gl_account_code=gl_account.account_code if gl_account is not None else None,
         ingestion_batch_id=snapshot.ingestion_batch_id,
     )

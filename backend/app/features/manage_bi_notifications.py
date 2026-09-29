@@ -70,6 +70,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.core.authorization import Permission
+from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, MeasureDef, catalogue
 from app.features.read_bi import BiRead, BiReadAccess
@@ -155,6 +156,17 @@ VERDICT_WITHHELD = (
     "not shown. An Org Owner can grant it."
 )
 ALERT_INACTIVE = "This alert is stopped, so it is no longer being judged."
+#: The deployment, not the data. ``BI_ALERTS_ENABLED`` ships off and is set by
+#: the platform operator; while it is off an alert is admitted and kept — a bank
+#: may prepare its watch list ahead of the switch — but ``NEVER_EVALUATED``'s
+#: "each time the figures are rebuilt" would be a promise nothing keeps, and the
+#: dashboard's reading of it ("Waiting for figures") blamed the bank's book for
+#: the operator's switch (audit A360-2 M3). So the row says which it is.
+ALERTS_NOT_ENABLED = (
+    "This alert is not being judged: alert evaluation is not enabled in this "
+    "deployment. The alert is kept and will be evaluated once your platform "
+    "operator enables it."
+)
 
 #: How each alert state reads on a row.
 _STATE_COPY: Mapping[str, str] = {
@@ -219,6 +231,10 @@ _DELIVERY_REASON_COPY: Mapping[str, str] = {
     ),
     "no_figures_for_date": "The institution's figures held nothing for this reporting date.",
     "no_build_for_institution": "The institution's figures had not been built yet.",
+    "latest_build_did_not_succeed": (
+        "The figures for this date were not rebuilt successfully, so this report was "
+        "not sent. The figures still on file describe an earlier book."
+    ),
     "unsupported_time_window": "This report's reporting window can no longer be filled in.",
     "recipient_cap_exceeded": (
         "This subscription names more recipients than one run may deliver to."
@@ -241,6 +257,15 @@ DELIVERY_NOTE_ATTACHED = (
 DELIVERY_NOTE_LINK = (
     "This report identifies individual records, so it is never attached. Each "
     "recipient is emailed a sign-in link instead."
+)
+#: Appended to either note while ``BI_SUBSCRIPTIONS_ENABLED`` is off: the
+#: disclosure sentence stays (it is true of the report whenever it goes out) and
+#: the deployment fact follows it, so "Sending" is never shown for a report the
+#: scheduler will not pick up. See ``ALERTS_NOT_ENABLED``.
+SUBSCRIPTIONS_NOT_ENABLED = (
+    "Nothing is sent from this deployment yet: scheduled report delivery is not "
+    "enabled here. The report is kept and will go out once your platform "
+    "operator enables it."
 )
 
 AsOf = Annotated[
@@ -870,7 +895,13 @@ def _alert_detail(alert: BiAlert, event: BiAlertEvent | None, *, visible: bool) 
     if not visible:
         return VERDICT_WITHHELD
     if event is None:
-        return ALERT_INACTIVE if not alert.is_active else NEVER_EVALUATED
+        if not alert.is_active:
+            return ALERT_INACTIVE
+        # Consulted only when there is no verdict to report: a verdict recorded
+        # while the switch was on stays the truest sentence about the row.
+        if not get_settings().bi.alerts_enabled:
+            return ALERTS_NOT_ENABLED
+        return NEVER_EVALUATED
     if event.state == "not_evaluated":
         reason = event.reason or ""
         return _EVENT_REASON_COPY.get(reason, _EVENT_REASON_FALLBACK)
@@ -983,6 +1014,11 @@ def _subscription_read(  # noqa: PLR0913 - one subscription and everything it st
     own = subscription.owner_user_id == caller
     stored = _stored_ids(subscription.recipient_user_ids)
     visible_ids = stored if own else [caller]
+    delivery_note = (
+        DELIVERY_NOTE_LINK if disclosure == policy.RECORD_LEVEL else DELIVERY_NOTE_ATTACHED
+    )
+    if subscription.is_active and not get_settings().bi.subscriptions_enabled:
+        delivery_note = f"{delivery_note} {SUBSCRIPTIONS_NOT_ENABLED}"
     return BiSubscriptionRead(
         id=subscription.id,
         bank_id=subscription.bank_id,
@@ -1004,9 +1040,7 @@ def _subscription_read(  # noqa: PLR0913 - one subscription and everything it st
         created_at=subscription.created_at,
         updated_at=subscription.updated_at,
         disclosure_class=disclosure,
-        delivery_note=(
-            DELIVERY_NOTE_LINK if disclosure == policy.RECORD_LEVEL else DELIVERY_NOTE_ATTACHED
-        ),
+        delivery_note=delivery_note,
     )
 
 

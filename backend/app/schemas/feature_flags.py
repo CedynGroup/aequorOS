@@ -26,3 +26,13 @@ class FeatureFlagsRead(BaseModel):
     #: that can decline the door, and makes projecting this flag the difference
     #: between a built surface and an invisible one.
     bi_nlq_enabled: bool
+    #: Threshold alerts are EVALUATED after a mart build (``BI_ALERTS_ENABLED``).
+    #: Projected because the create route refuses (409) when it is off and the
+    #: page must say WHY an alert shows no verdict: without this flag the only
+    #: honest reading of "no verdict yet" was "waiting for figures", which blamed
+    #: the bank's data for a deployment switch (audit A360-2 M3).
+    bi_alerts_enabled: bool
+    #: Scheduled reports are DELIVERED by the scheduler tick
+    #: (``BI_SUBSCRIPTIONS_ENABLED``). Same reason: creation is refused when it is
+    #: off, and a listed report that says "Sending" while nothing sends is a lie.
+    bi_subscriptions_enabled: bool

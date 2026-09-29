@@ -40,6 +40,16 @@ from . import ReferenceSchema, register
 #: teaches the canonical names only.
 ALIASES: dict[str, str] = {"unit_id": "business_unit_id", "name": "business_unit_name"}
 
+#: The longest value each register field may carry: the width of the
+#: ``bi_dim_branch`` column it is copied into verbatim (``branch_code`` /
+#: ``name`` / ``region``). Asserted equal to the model by test rather than
+#: imported, because this module deliberately stays free of ``app.models``.
+UNIT_FIELD_MAX_LENGTHS: dict[str, int] = {
+    "business_unit_id": 120,
+    "business_unit_name": 255,
+    "region": 120,
+}
+
 SCHEMA = register(
     ReferenceSchema(
         kind="business_units",
@@ -50,6 +60,10 @@ SCHEMA = register(
         grain="one row per business unit; the whole register per push (latest as-of wins)",
         required=("business_unit_id", "business_unit_name"),
         optional=("region", "parent_unit_id", "outlet_number", "cost_centre", "notes"),
+        # The widths of ``bi_dim_branch.branch_code`` / ``name`` / ``region``, which
+        # carry these three verbatim (pinned by test against the model). A longer
+        # value is refused here rather than failing the whole mart build on Postgres.
+        max_lengths=UNIT_FIELD_MAX_LENGTHS,
     )
 )
 

@@ -1,6 +1,6 @@
 """Which members the model is shown, and the two properties that must survive.
 
-The catalogue holds 1,416 measures, so a question is answered over a subset — and a
+The catalogue holds 1,456 measures, so a question is answered over a subset — and a
 subset is exactly where an authorization property goes quietly wrong. Two things are
 asserted here and nothing else matters as much:
 

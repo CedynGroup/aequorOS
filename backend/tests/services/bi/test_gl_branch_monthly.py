@@ -41,6 +41,7 @@ from app.models import (
     BiFactGlMonthly,
     CanonicalReferenceRow,
 )
+from app.models.canonical import CanonicalGlAccount
 from app.services.bi import authorization, compiler, reconciliation
 from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
@@ -545,3 +546,159 @@ def test_a_partial_breakdown_of_the_RIGHT_sign_is_still_only_amber(
     assert Decimal("0") < share < Decimal("100"), share
     assert outcome.status == reconciliation.AMBER, outcome.detail
     assert "reason" not in outcome.detail or "sign convention" not in outcome.detail["reason"]
+
+
+# --- audit A360 R11: the sign-convention rule is evaluated PER ACCOUNT ----------------------------
+#
+# The two tests above prove the aggregate share rule. The audit's two cases are the
+# ones it cannot see: one inverted account beside a large fully-allocated one
+# dilutes the share to an ordinary amber, and a ZERO ledger against non-zero branch
+# rows leaves the share at 0 — green. The fault is per account, so the rule now is.
+
+
+def _seed_income_ledger(db: Session, balances: dict[str, int]) -> None:
+    """A June P&L ledger of INCOME accounts at the given balances (× M), mapped to
+    no return line — the identity does not need one."""
+    common = new_batch(db, JUN)
+    for code, balance in balances.items():
+        db.add(
+            CanonicalGlAccount(
+                **common,
+                source_reference=f"GL/{code}/{JUN.isoformat()}",
+                account_code=code,
+                name=f"P&L {code}",
+                account_class="INCOME",
+                currency="GHS",
+                balance=Decimal(balance * M),
+                attributes={},
+            )
+        )
+    db.flush()
+
+
+def test_r11_catches_a_per_account_sign_inversion_that_the_aggregate_share_dilutes(
+    db_session: Session,
+) -> None:
+    """The auditor's numbers: account 4100 is −1,000 in the ledger and the register
+    sends +900 (residual −1,900, i.e. 190 % of THAT account); beside it 4200 is
+    10,000 and fully allocated. The aggregate share is 1,900 / 11,000 = 17.27 %,
+    which the old rule graded AMBER — "send more of the register" — for a fault
+    that needs the register already sent to be fixed."""
+    seed_book(db_session, live=False)
+    _seed_income_ledger(db_session, {"4100": -1000, "4200": 10000})
+    push_units(db_session, {"BR-101": "Osu"})
+    push_segments(
+        db_session, JUN, [segment("4100", "BR-101", 900), segment("4200", "BR-101", 10000)]
+    )
+    db_session.commit()
+    build(db_session)
+
+    rows = {(row.gl_account_code, row.branch_code): row.ytd_rc for row in branch_rows(db_session)}
+    assert rows[("4100", RESIDUAL)] == Decimal(-1900 * M)  # the identity holds by construction
+    assert ("4200", RESIDUAL) not in rows  # fully allocated: no remainder row
+
+    check = r11(db_session)
+    share = Decimal(check.detail["unattributed_share_pct"])
+    assert Decimal("17.27") < share < Decimal("17.28"), share  # the share the old rule read
+    assert check.status == reconciliation.RED, check.detail
+    assert "sign convention" in check.detail["reason"]
+    assert [item["account"] for item in check.detail["sign_convention"]] == ["4100"]
+    (inverted,) = check.detail["sign_convention"]
+    assert Decimal(inverted["ledger"]) == Decimal(-1000 * M)
+    assert Decimal(inverted["residual"]) == Decimal(-1900 * M)
+    # ``branch_total`` is Σ over every branch row INCLUDING the remainder — the
+    # reconciled total, so it equals the ledger by construction (same meaning as
+    # in ``mismatches``); the reported branches alone are total − residual = +900.
+    assert Decimal(inverted["branch_total"]) == Decimal(-1000 * M)
+    assert Decimal(inverted["branch_total"]) - Decimal(inverted["residual"]) == Decimal(900 * M)
+    # Not a broken identity — lhs equals rhs — and 4200 is not accused.
+    assert check.difference == Decimal(0)
+    assert "mismatches" not in check.detail
+
+
+def test_r11_is_not_green_when_a_zero_ledger_account_carries_branch_figures(
+    db_session: Session,
+) -> None:
+    """Ledger 0, branch +500, residual −500: the share is 0 / 0 and reads 0 %, so the
+    old rule called it GREEN — a fully attributed breakdown of nothing."""
+    seed_book(db_session, live=False)
+    _seed_income_ledger(db_session, {"4100": 0})
+    push_units(db_session, {"BR-101": "Osu"})
+    push_segments(db_session, JUN, [segment("4100", "BR-101", 500)])
+    db_session.commit()
+    build(db_session)
+
+    rows = {row.branch_code: row.ytd_rc for row in branch_rows(db_session)}
+    assert rows == {"BR-101": Decimal(500 * M), RESIDUAL: Decimal(-500 * M)}
+
+    check = r11(db_session)
+    assert Decimal(check.detail["unattributed_share_pct"]) == Decimal(0)  # the share is blind
+    assert check.status == reconciliation.RED, check.detail
+    assert "sign convention" in check.detail["reason"]
+    assert [item["account"] for item in check.detail["sign_convention"]] == ["4100"]
+
+
+def test_a_correctly_signed_negative_ledger_account_is_still_only_amber(
+    db_session: Session,
+) -> None:
+    """The control for the per-account rule: a NEGATIVE ledger account partially
+    broken down with the RIGHT sign (−1,000 with −600 allocated, residual −400) is
+    incomplete, not inverted. Without this a rule that reddened every negative
+    account would pass the two tests above."""
+    seed_book(db_session, live=False)
+    _seed_income_ledger(db_session, {"4100": -1000, "4200": 10000})
+    push_units(db_session, {"BR-101": "Osu"})
+    push_segments(
+        db_session, JUN, [segment("4100", "BR-101", -600), segment("4200", "BR-101", 10000)]
+    )
+    db_session.commit()
+    build(db_session)
+
+    check = r11(db_session)
+    assert check.status == reconciliation.AMBER, check.detail
+    assert "sign_convention" not in check.detail
+    assert "reason" not in check.detail
+
+
+# --- audit A360 H3: a branch id the mart cannot store is skipped, never truncated --------------
+
+
+def test_a_segment_row_whose_branch_id_is_wider_than_the_mart_is_skipped_not_truncated(
+    db_session: Session,
+) -> None:
+    """``bi_fact_gl_branch_monthly.branch_code`` is a 120-character PRIMARY KEY
+    column. A wider ``branch_id`` used to reach the insert verbatim and, on
+    Postgres, fail the whole build; SQLite would have stored it. Neither is the
+    branch the bank named: the row is skipped like any malformed register row, the
+    residual absorbs its amount so the total is still the ledger's, and no code of
+    exactly 120 characters — the truncation — appears anywhere."""
+    seed_book(db_session, live=False)
+    _seed_ledger(db_session)
+    push_units(db_session, {"BR-101": "Osu"})
+    wide = "BR-" + "W" * 118  # 121 characters
+    at_limit = "BR-" + "L" * 117  # 120 characters: storable, kept
+    push_segments(
+        db_session,
+        JUN,
+        [segment("4001", "BR-101", 200), segment("4001", wide, 50), segment("4001", at_limit, 30)],
+    )
+    db_session.commit()
+    outcome = build(db_session)
+    assert outcome.status == "succeeded"
+
+    rows = {row.branch_code: row for row in branch_rows(db_session)}
+    assert set(rows) == {"BR-101", at_limit, RESIDUAL}
+    assert rows[at_limit].ytd_rc == Decimal(30 * M)
+    # 330 − 200 − 30: the skipped 50 is unallocated, not lost.
+    assert rows[RESIDUAL].ytd_rc == Decimal(100 * M)
+    assert sum(row.ytd_rc for row in rows.values()) == Decimal(330 * M)
+    dimension_codes = {
+        row.branch_code
+        for row in db_session.scalars(
+            select(BiDimBranch).where(BiDimBranch.bank_id == SAMPLE_BANK_ID)
+        )
+    }
+    assert at_limit in dimension_codes
+    assert wide not in dimension_codes
+    assert wide[:120] not in dimension_codes
+    assert r11(db_session).status == reconciliation.AMBER  # partial, honestly

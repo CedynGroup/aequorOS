@@ -1977,7 +1977,7 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
-   * One of your OWN questions, and whatever the platform proposes for it.
+   * One of your OWN questions, and whatever the platform proposes for it.  Unmetered and unlogged on purpose: see the module docstring.
    * Get Bi Question
    */
   async getBiQuestionRaw(
@@ -2034,7 +2034,7 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
-   * One of your OWN questions, and whatever the platform proposes for it.
+   * One of your OWN questions, and whatever the platform proposes for it.  Unmetered and unlogged on purpose: see the module docstring.
    * Get Bi Question
    */
   async getBiQuestion(

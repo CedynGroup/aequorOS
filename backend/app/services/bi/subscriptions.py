@@ -77,7 +77,7 @@ from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
 from app.schemas.bi import BiQuery, BiTime
 from app.services import job_queue, jurisdictions, mailer
 from app.services.bi import data_scope, exports, provenance, query_log
-from app.services.bi.authorization import authorize_query, query_members
+from app.services.bi.authorization import authorize_query_conjunctive, query_members
 from app.services.bi.errors import BiQueryError
 from app.services.bi.exports import policy, runner
 from app.services.bi.versions import BUILDER_VERSION
@@ -111,6 +111,9 @@ REASON_DATA_SCOPE_UNSUPPORTED = "data_scope_unsupported"
 REASON_DISCLOSURE_CLASS_CHANGED = "disclosure_class_changed"
 REASON_NO_FIGURES = "no_figures_for_date"
 REASON_NO_BUILD = "no_build_for_institution"
+#: The date HAS rows, but its latest build did not succeed, so they were
+#: written by an earlier build against an earlier book (audit A360 H2).
+REASON_STALE_BUILD = "latest_build_did_not_succeed"
 REASON_UNSUPPORTED_TIME_WINDOW = "unsupported_time_window"
 REASON_RECIPIENT_CAP_EXCEEDED = "recipient_cap_exceeded"
 REASON_ATTACHMENT_OVER_SIZE_CAP = "attachment_over_size_cap"
@@ -627,8 +630,20 @@ def run_subscription(
     as_of = request.as_of_date or latest_built_as_of(
         db, organization_id=job.organization_id, bank_id=request.bank.id
     )
-    if as_of is None:
-        return _refused(base, REASON_NO_BUILD)
+    # Nothing to deliver, for either of the two reasons there can be none. The
+    # second is newer and easy to miss: a date whose latest build FAILED still
+    # HAS rows — the builder rolls a failed rebuild back to the previous ones —
+    # and since audit A360 H2 `build_fingerprint` answers with a digest for that
+    # state rather than ``None``, nothing downstream would have noticed. Mailing
+    # a board pack of figures the bank's own book has moved past is the worst
+    # form that defect takes: it leaves the building, it reaches people who will
+    # act on it, and its provenance line would name a build that did not succeed.
+    # A skipped run is recoverable; a delivered one is not. (`stale_dates` is
+    # only reached when `as_of` is known — `or` short-circuits.)
+    if as_of is None or provenance.stale_dates(
+        db, organization_id=job.organization_id, bank_id=request.bank.id, window=(as_of, as_of)
+    ):
+        return _refused(base, REASON_NO_BUILD if as_of is None else REASON_STALE_BUILD)
     try:
         query = _query_for(subscription, as_of)
     except SubscriptionError as exc:
@@ -844,7 +859,12 @@ def _deliver_one(  # noqa: PLR0913, PLR0911 - one recipient, and every way it ca
     # ``view`` alone; an ATTACHED artifact asks for the complete export sentence
     # the interactive path asks for. Record-level content is never attached, so
     # ``export`` is in practice never required of a subscription — the rule is
-    # written out anyway so a future attachable class cannot lose it.
+    # written out anyway so a future attachable class cannot lose it. And it is
+    # ONE conjunctive decision, not a loop keeping the last permission's answer:
+    # the loop this replaced (audit A360-1) would have rendered the whole
+    # institution for a recipient whose ``view`` covered one branch and whose
+    # ``export`` covered the book, because ``export`` came last. The shared
+    # helper combines the scopes identical-or-refuse, as ``read_bi`` does.
     required: Sequence[Permission] = (
         policy.permissions_for(export_class) if mode == "attachment" else (Permission.VIEW,)
     )
@@ -857,28 +877,25 @@ def _deliver_one(  # noqa: PLR0913, PLR0911 - one recipient, and every way it ca
         decision=query_log.DECISION_DENIED,
         catalogue_version=CATALOGUE_VERSION,
     )
-    decision = None
-    for permission in required:
-        try:
-            decision = authorize_query(
-                db, ctx, request.bank, cat, query, permission=permission, surface="subscription"
-            )
-        except BiQueryError as exc:
-            query_log.record(db, attempt)
-            return _finish(db, row, status="failed", reason=exc.code)
-        if not decision.allowed:
-            query_log.record(
-                db, _with(attempt, member_ids=decision.member_ids, denied=decision.denied_members)
-            )
-            return _finish(
-                db,
-                row,
-                status="denied",
-                reason=decision.reason,
-                member_ids=decision.member_ids,
-                denied_members=decision.denied_members,
-            )
-    assert decision is not None  # noqa: S101 - ``required`` is never empty
+    try:
+        decision = authorize_query_conjunctive(
+            db, ctx, request.bank, cat, query, permissions=required, surface="subscription"
+        )
+    except BiQueryError as exc:
+        query_log.record(db, attempt)
+        return _finish(db, row, status="failed", reason=exc.code)
+    if not decision.allowed:
+        query_log.record(
+            db, _with(attempt, member_ids=decision.member_ids, denied=decision.denied_members)
+        )
+        return _finish(
+            db,
+            row,
+            status="denied",
+            reason=decision.reason,
+            member_ids=decision.member_ids,
+            denied_members=decision.denied_members,
+        )
 
     if mode != "attachment":
         message = _compose_link(request, recipient, as_of=as_of)

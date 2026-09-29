@@ -391,8 +391,18 @@ def test_aggregate_grain_is_unique_with_nulls_coalesced() -> None:
         "coalesce(deposit_account_type, '')",
     ):
         assert expression in rendered, expression
-    for measure in (
-        "row_count",
+    # The two COUNTS are NOT NULL: a grain cell exists only because rows do, so
+    # its row count is never absent.
+    for counted in ("row_count", "fx_unconverted_count"):
+        assert not table.c[counted].nullable, counted
+    # The seven SUMS are nullable, and that is the invariant now (audit A360 H1,
+    # migration `202609290078`). `SUM` of nothing but NULLs is NULL in SQL, and a
+    # cell whose whole population is absent must answer the same on this
+    # pre-aggregated source as on the fact rows. When they were NOT NULL the
+    # builder filled them with `Decimal(0)`, so a bank that stated no collateral
+    # read "Collateral value: 0.00" on a board tile. Asserted POSITIVELY so a
+    # revert to NOT NULL fails here rather than silently restoring the defect.
+    for summed in (
         "balance_rc_sum",
         "classification_exposure_rc_sum",
         "non_performing_exposure_rc_sum",
@@ -400,9 +410,11 @@ def test_aggregate_grain_is_unique_with_nulls_coalesced() -> None:
         "provision_held_rc_sum",
         "collateral_rc_sum",
         "rate_x_balance_rc_sum",
-        "fx_unconverted_count",
     ):
-        assert not table.c[measure].nullable, measure
+        assert table.c[summed].nullable, (
+            f"{summed} is NOT NULL again — an absent figure would be stored and "
+            "served as a zero (audit A360 H1)"
+        )
 
 
 def test_control_tables_carry_the_contract_unique_keys() -> None:

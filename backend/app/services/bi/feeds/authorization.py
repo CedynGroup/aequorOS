@@ -18,15 +18,20 @@ the two cannot drift into different answers about the same figure:
    evaluated**, all-or-exact on both, with no ladder of its own — the pairs come
    from the catalogue's own declarations via ``query_members`` / ``scope_pairs``,
    so the dataset's columns and the sentences it needs cannot disagree.
-4. **The data scope applies, through the platform's ONE resolver.** The matched
-   bindings reduce to an
-   :class:`~app.services.authorization.EffectiveDataScope`, and
-   ``services/bi/data_scope.py`` turns that declared sentence into the single
-   unremovable filter the compiler ANDs in — the same seam the read routes, the
-   export job, a subscription render and an alert evaluation use, so there is one
-   answer to "what does this grant mean in SQL" rather than five. The ONE thing
-   the feed decides for itself is what to do when the scope resolves to no
-   branch: see :func:`authorize_feed`.
+4. **The data scope applies, through the platform's ONE resolver, reduced PER
+   PAIR.** The bindings that authorized each pair are kept apart and reduced
+   through ``authorization.combine_pair_scopes`` — the same helper
+   ``authorize_query`` uses — so an ``all`` sentence that authorized the
+   ``risk``/``aggregated`` date and branch dimensions cannot discard the branch
+   restriction that applies to the credit measures (audit A360-1 H8: this module
+   once unioned the ids across pairs and reduced once, and a second reader
+   binding scoped ``risk/aggregated/all`` widened a ``branch=["B2"]`` key to the
+   whole institution, header included). ``services/bi/data_scope.py`` then turns
+   the declared sentence into the single unremovable filter the compiler ANDs in
+   — the same seam the read routes, the export job, a subscription render and an
+   alert evaluation use, so there is one answer to "what does this grant mean in
+   SQL" rather than five. The ONE thing the feed decides for itself is what to
+   do when the scope resolves to no branch: see :func:`authorize_feed`.
 5. **An institution ratio needs the whole institution.** A branch slice of a
    capital ratio is a wrong number with a right-looking name, so a dataset naming
    an institution-grain measure is refused to a scoped credential outright.
@@ -42,6 +47,7 @@ that gets moved.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Final
 from uuid import UUID
@@ -64,19 +70,17 @@ from app.models import Bank
 from app.schemas.bi import BiFilter
 from app.services import authorization as authorization_service
 from app.services import institution_types
-from app.services.authorization import (
-    NO_INSTITUTION_DATA,
-    EffectiveDataScope,
-    effective_data_scope,
-)
 from app.services.bi import data_scope as scope_resolver
 from app.services.bi.authorization import (
     ENTITLEMENT_SLUGS,
+    NO_INSTITUTION_DATA,
     REASON_ALLOWED,
     REASON_EVALUATION_FAILED,
+    REASON_NO_AUTHORIZING_BINDING,
     REASON_NOT_ENTITLED,
     REASON_SCOPE_UNRECOGNIZED,
-    bi_data_scope,
+    BiDataScope,
+    combine_pair_scopes,
     query_members,
     scope_pairs,
 )
@@ -96,7 +100,11 @@ SURFACE_FEED: Final = "feed"
 REASON_MACHINE_REQUIRED: Final = "machine_feed_credential_required"
 REASON_INSTITUTION_GRAIN: Final = "institution_grain_requires_whole_institution"
 REASON_SCOPE_MATCHES_NO_BRANCH: Final = "data_scope_matches_no_branch"
-REASON_NO_DATA_SCOPE: Final = "no_effective_data_scope"
+#: Every pair allowed and yet no effective binding is left to serve under. The
+#: interactive path's own string, not a feed-specific restatement: the condition
+#: is decided by the shared ``combine_pair_scopes`` for both surfaces, so the
+#: telemetry filter that catches one must catch the other.
+REASON_NO_DATA_SCOPE: Final = REASON_NO_AUTHORIZING_BINDING
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +118,8 @@ class FeedAuthorization:
     #: The complete refused set — member IDS only, never a value or a row.
     denied_members: tuple[str, ...]
     matching_binding_ids: tuple[UUID, ...]
-    data_scope: EffectiveDataScope = NO_INSTITUTION_DATA
+    #: The DECLARED slice, combined across every pair the dataset touches.
+    data_scope: BiDataScope = NO_INSTITUTION_DATA
     #: The unremovable filter the compiler receives, separately from any client
     #: input, because the client sends no query at all.
     injected: tuple[BiFilter, ...] = field(default_factory=tuple)
@@ -162,45 +171,46 @@ def _deny(
     )
 
 
-def authorize_feed(
+@dataclass(frozen=True, slots=True)
+class _EvaluatedPairs:
+    """What the evaluator said about every pair, with the ids kept APART."""
+
+    denied: tuple[str, ...]
+    reasons: tuple[str, ...]
+    #: Every id that authorized anything, for the decision's audit trail and the
+    #: query log. NOT what the scope is reduced from.
+    matched: tuple[UUID, ...]
+    #: The ids that authorized EACH pair, one tuple per allowed pair, because the
+    #: reduction is sound only within one pair (A10-01 / A360-1 H8; see
+    #: ``authorization.combine_pair_scopes``).
+    per_pair: tuple[tuple[UUID, ...], ...]
+
+
+def _evaluate_pairs(  # noqa: PLR0913 - one telemetry keyword beside the sentence's parts
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    cat: Catalogue,
-    entry: FeedDataset,
-) -> FeedAuthorization:
-    """Require every sentence the dataset needs, for one already-resolved bank.
+    pairs: Mapping[tuple[str, str], tuple[str, ...]],
+    *,
+    telemetry_surface: str,
+) -> _EvaluatedPairs:
+    """Ask the evaluator for ``VIEW`` on every pair, as the machine principal.
 
-    ``bank`` must come from the tenant-scoped resolver, so a sibling tenant's
-    ``BK-*`` is 404 before this runs. Nothing here raises: the caller renders the
-    decision as a stream or as a refusal, and writes exactly one query-log row
-    either way.
+    Entitlement (the licence class carries the module) is checked before the
+    evaluator is asked, exactly as ``authorize_query`` does; an unrecognised
+    catalogue scope, an unentitled module, an evaluator failure and a plain
+    refusal each deny the pair's members with a named reason.
     """
 
-    members = query_members(cat, entry.query(SHAPE_DATE))
-    member_ids = tuple(member.id for member in members)
-    telemetry_surface = f"bi_{SURFACE_FEED}"
-
-    if not machine_credential(ctx, bank) or ctx.actor_user_id is None:
-        # ``machine_credential`` already requires an acting service identity; the
-        # second clause is what lets the locator below be typed, and it denies
-        # rather than asserting so a future context shape cannot crash the route.
-        authorization_denied(
-            reason=REASON_MACHINE_REQUIRED,
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
-            surface=telemetry_surface,
-            dataset=entry.id,
-        )
-        return _deny(REASON_MACHINE_REQUIRED, member_ids=member_ids)
-
+    assert ctx.actor_user_id is not None  # noqa: S101 - ``machine_credential`` required it
     entitled = frozenset(institution_types.get_type(db, bank).default_modules)
     denied: list[str] = []
     reasons: list[str] = []
     matched: dict[UUID, None] = {}
+    per_pair: list[tuple[UUID, ...]] = []
     principal = PrincipalLocator(ctx.organization_id, ctx.actor_user_id, PrincipalType.MACHINE)
 
-    for (module_value, sensitivity_value), pair_members in scope_pairs(members).items():
+    for (module_value, sensitivity_value), pair_members in pairs.items():
         slug = ENTITLEMENT_SLUGS.get(module_value)
         try:
             module, sensitivity = Module(module_value), Sensitivity(sensitivity_value)
@@ -255,25 +265,66 @@ def authorize_feed(
             reasons.append(decision.reason)
             continue
         matched.update(dict.fromkeys(decision.matching_binding_ids))
+        per_pair.append(tuple(decision.matching_binding_ids))
+    return _EvaluatedPairs(tuple(denied), tuple(reasons), tuple(matched), tuple(per_pair))
 
-    if denied:
-        return _deny(reasons[0], member_ids=member_ids, denied=tuple(denied))
 
-    scope = effective_data_scope(
-        db, organization_id=ctx.organization_id, binding_ids=tuple(matched)
-    )
-    if scope.serves_nothing:
-        # Unreachable from an allowed decision (something matched, or every pair
-        # would have been denied above) and refused loudly rather than treated as
-        # "no restriction", which is the fail-open this phase exists to close.
+def authorize_feed(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    cat: Catalogue,
+    entry: FeedDataset,
+) -> FeedAuthorization:
+    """Require every sentence the dataset needs, for one already-resolved bank.
+
+    ``bank`` must come from the tenant-scoped resolver, so a sibling tenant's
+    ``BK-*`` is 404 before this runs. Nothing here raises: the caller renders the
+    decision as a stream or as a refusal, and writes exactly one query-log row
+    either way.
+    """
+
+    members = query_members(cat, entry.query(SHAPE_DATE))
+    member_ids = tuple(member.id for member in members)
+    telemetry_surface = f"bi_{SURFACE_FEED}"
+
+    if not machine_credential(ctx, bank) or ctx.actor_user_id is None:
+        # ``machine_credential`` already requires an acting service identity; the
+        # second clause is what lets the locator below be typed, and it denies
+        # rather than asserting so a future context shape cannot crash the route.
         authorization_denied(
-            reason=REASON_NO_DATA_SCOPE,
+            reason=REASON_MACHINE_REQUIRED,
             organization_id=ctx.organization_id,
             bank_id=bank.id,
             surface=telemetry_surface,
             dataset=entry.id,
         )
-        return _deny(REASON_NO_DATA_SCOPE, member_ids=member_ids)
+        return _deny(REASON_MACHINE_REQUIRED, member_ids=member_ids)
+
+    evaluated = _evaluate_pairs(
+        db, ctx, bank, scope_pairs(members), telemetry_surface=telemetry_surface
+    )
+    if evaluated.denied:
+        return _deny(evaluated.reasons[0], member_ids=member_ids, denied=evaluated.denied)
+
+    # Reduced per pair and combined identical-or-refuse across pairs, by the ONE
+    # helper the interactive path uses. A pair nothing effective authorized is
+    # refused loudly rather than treated as "no restriction" (the fail-open this
+    # phase exists to close), and two different narrow slices across pairs are
+    # refused rather than guessed between (``data_scope_conflict``).
+    combined = combine_pair_scopes(
+        db, organization_id=ctx.organization_id, per_pair=evaluated.per_pair
+    )
+    if not combined.allowed:
+        authorization_denied(
+            reason=combined.reason,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            surface=telemetry_surface,
+            dataset=entry.id,
+        )
+        return _deny(combined.reason, member_ids=member_ids)
+    scope = combined.scope
 
     institution_grain = institution_grain_measures(cat, entry)
     if institution_grain and not scope.whole_institution:
@@ -291,7 +342,7 @@ def authorize_feed(
     # ``IN`` list (``DataScopeUnservable``, a 422 the route reports verbatim) and
     # the invariant violation of an allowed decision with no slice.
     resolved = scope_resolver.resolve(
-        db, bi_data_scope(scope), organization_id=ctx.organization_id, bank_id=bank.id
+        db, scope, organization_id=ctx.organization_id, bank_id=bank.id
     )
     if not resolved.whole_institution and not resolved.branch_codes:
         # The ONE place the feed departs from the interactive surfaces, and the
@@ -315,7 +366,7 @@ def authorize_feed(
         reason=REASON_ALLOWED,
         member_ids=member_ids,
         denied_members=(),
-        matching_binding_ids=tuple(matched),
+        matching_binding_ids=evaluated.matched,
         data_scope=scope,
         injected=resolved.filters,
         resolved=resolved,

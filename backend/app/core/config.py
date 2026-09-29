@@ -782,7 +782,12 @@ class AiSettings(BaseSettings):
     #: Served to the dashboard as ``poll_after_seconds`` so no interval literal
     #: lives in the browser bundle.
     client_poll_seconds: int = Field(default=5, alias="AI_CLIENT_POLL_SECONDS")
-    consent_version: str = Field(default="ai-consent-2026-09-v1", alias="AI_CONSENT_VERSION")
+    #: Bumping this SWITCHES AI ASSISTANCE OFF for every organisation until an
+    #: Owner accepts the new text — the consent document says so itself, and that
+    #: is the point. ``v2`` adds the natural-language question surface, which
+    #: sends a sentence a person typed; ``v1`` described only the drafting fact
+    #: sheet and could not honestly cover it.
+    consent_version: str = Field(default="ai-consent-2026-09-v2", alias="AI_CONSENT_VERSION")
     production_approval_ref: str | None = Field(default=None, alias="AI_PRODUCTION_APPROVAL_REF")
     #: ``tiered`` walks ``AI_PROVIDER_TIER``; ``anthropic`` pins every request to
     #: the one vendor (what counsel may require, and what the platform did before
@@ -895,10 +900,14 @@ class BiSettings(BaseSettings):
     EVERY switch here ships OFF and every limit ships at its safe value: a
     deployment that sets nothing has no BI routers mounted, enqueues no mart
     builds, runs no BI scheduler sweep, and serves nothing from a mart. Turning
-    BI on is three explicit, separately reviewable acts, in this order:
+    BI on is an ORDERED sequence — the operator runbook is
+    ``backend/docs/bi_turn_on_runbook.md`` — whose spine is three explicit,
+    separately reviewable acts:
 
     1. ``risk-worker-bi`` (``WORKER_JOB_TYPES=lane:bi``) is DEPLOYED and healthy.
-       The three BI job types live in the ``bi`` lane, which the core worker and
+       The seven BI job types (``job_queue.job_types_in_lane("bi")``: mart
+       refresh, backfill, retention, export, alert evaluation, subscription scan
+       and subscription run) live in the ``bi`` lane, which the core worker and
        the API's in-process thread never claim by construction. The API and
        every worker share one ``jobs`` table, so a BI enqueue flag that flips
        before that process exists orphans every job it produces in ``queued`` —
@@ -914,9 +923,12 @@ class BiSettings(BaseSettings):
        ``BI_ALERTS_ENABLED`` needs no tick at all: alerts are evaluated by a
        succeeded mart build.
 
-    ``GET /api/v1/feature-flags`` projects the three booleans to the dashboard;
-    nothing else in this class is served. There is deliberately no grid licence
-    key (D-030: AG Grid Community, grouping and pivot compiled server-side).
+    ``GET /api/v1/feature-flags`` projects four of this class's six booleans to
+    the dashboard (``enabled``, ``mart_enqueue_enabled``, ``scheduler_enabled``,
+    ``nlq_enabled``); ``alerts_enabled`` and ``subscriptions_enabled`` are not
+    served, and nothing else in this class is. There is deliberately no grid
+    licence key (D-030: AG Grid Community, grouping and pivot compiled
+    server-side).
 
     ``BI_DATABASE_URL`` is optional: when set, BI queries run on their own small
     pool; unset (the default, and "" reads as unset like every other URL here)
@@ -1066,9 +1078,10 @@ class WorkerSettings(BaseSettings):
     # listed in ``job_queue.STALE_AFTER_OVERRIDES_SECONDS`` completes inside 15
     # minutes: pipeline_refresh, official_run, market_data_pull, temenos_pull,
     # scheduled_tick, reporting_deadline_scan, notification_email_mirror,
-    # database_direct_health, bi_mart_refresh and bi_retention (desk_capture
-    # and etl_dedup have overrides; bi_mart_backfill derives its window from
-    # BI_BACKFILL_HOP_SECONDS; the AI lane derives its own from AI_*). A handler
+    # database_direct_health, bi_mart_refresh, bi_retention, bi_alert_evaluate
+    # and bi_subscription_scan (desk_capture, etl_dedup, bi_export and
+    # bi_subscription_run have overrides; bi_mart_backfill derives its window
+    # from BI_BACKFILL_HOP_SECONDS; the AI lane derives its own from AI_*). A handler
     # that outgrows that gets its own entry in the override map — NOT a bigger
     # global number, because
     # this value also governs how fast a genuinely dead worker's jobs come back,

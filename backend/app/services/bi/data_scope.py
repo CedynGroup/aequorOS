@@ -78,12 +78,18 @@ class DataScopeUnservable(BiQueryError):
 
 
 class DataScopeServesNothing(RuntimeError):
-    """An allowed decision carried ``kind="none"``, which cannot happen.
+    """An allowed decision carried NO slice, which cannot happen.
 
-    ``authorize_query`` denies that case explicitly, so reaching here means a
-    caller built a decision by hand or a new path skipped the check. It raises
-    rather than returning no filters, because returning ``()`` from here is
-    precisely "serve the whole institution".
+    Two shapes, one invariant. ``kind="none"``: ``authorize_query`` denies that
+    case explicitly, so reaching here means a caller built a decision by hand or
+    a new path skipped the check. A NARROW kind naming no value (``branch`` with
+    no code, ``region`` with no region): the stored column's CHECK and the
+    binding writer both refuse an empty value list (migration ``202609270073``),
+    so this too is a hand-built or corrupted scope — and before A360-1 it
+    surfaced as a pydantic error out of ``BiFilter`` rather than as this typed
+    refusal, fail-closed by accident. It raises rather than returning no
+    filters, because returning ``()`` from here is precisely "serve the whole
+    institution".
 
     Deliberately NOT a :class:`BiQueryError`: every serving surface turns one of
     those into a refusal it records and moves on from, and this is an invariant
@@ -125,6 +131,12 @@ class ResolvedDataScope:
         if self.serves_nothing:
             raise DataScopeServesNothing(
                 "This read was authorized under no binding, so there is no slice to serve."
+            )
+        if not self.branch_codes and not self.declared_regions:
+            # A narrow scope that names nothing. Refused HERE, by design, rather
+            # than by ``BiFilter`` rejecting an empty ``in`` list a line later.
+            raise DataScopeServesNothing(
+                f"A {self.kind} scope that names no value has no slice to serve."
             )
         if self.branch_codes:
             self._require_servable(self.branch_codes, "branches")
@@ -208,6 +220,12 @@ def resolve(
         return WHOLE_INSTITUTION
     if scope.serves_nothing:
         return ResolvedDataScope(kind="none")
+    if not scope.branches and not scope.regions:
+        # The earliest seam that can see a valueless narrow scope; ``filters``
+        # refuses it again for a ``ResolvedDataScope`` built by hand.
+        raise DataScopeServesNothing(
+            f"A declared {scope.kind} scope that names no value has no slice to serve."
+        )
     codes = set(scope.branches)
     if scope.regions:
         codes.update(

@@ -15,6 +15,8 @@ Every expected number is worked from the fixture's own amounts.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -25,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.bi.authority import designation_of, resolve_authority
+from app.domain.bi.catalogue import catalogue
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -50,10 +53,17 @@ from app.models import (
     Outlet,
     RegulatoryRun,
 )
-from app.models.bi import MART_BUILD_SCOPES, UNASSIGNED_REGION, UNMAPPED_BRANCH_NAME
+from app.models.bi import (
+    MART_BUILD_SCOPES,
+    RECONCILIATION_CHECK_IDS,
+    UNASSIGNED_REGION,
+    UNMAPPED_BRANCH_NAME,
+)
 from app.models.live import LIVE_MODULES
+from app.schemas.bi import BiQuery
 from app.services import pipeline
-from app.services.bi import mart_builder, partitions, reconciliation
+from app.services.bi import compiler, mart_builder, partitions, provenance, reconciliation
+from app.services.bi.compiler import compile_query
 from app.services.bi.mart_builder import BuildOutcome
 from app.services.bi.versions import BUILDER_VERSION
 from tests.api.helpers import ORG_1, USER_1
@@ -265,6 +275,14 @@ def build_records(db: Session, as_of: date = AS_OF) -> dict[str, BiMartBuild]:
     }
 
 
+def _cell_total(cells: Sequence[BiAggPositionDaily], column: str) -> Decimal:
+    """Σ of one aggregate column over cells that CARRY it. An all-NULL cell has
+    no value to add (audit A360 H1) — it is skipped, never read as 0."""
+    return sum(
+        (value for cell in cells if (value := getattr(cell, column)) is not None), Decimal(0)
+    )
+
+
 def _count(db: Session, model: type, **filters: Any) -> int:
     stmt = select(func.count()).select_from(model).where(model.bank_id == SAMPLE_BANK_ID)
     for column, value in filters.items():
@@ -373,8 +391,13 @@ def test_unconverted_loan_carries_both_fx_rules_and_withdrawn_rows_never_appear(
     ).all()
     assert sum(cell.fx_unconverted_count for cell in cells) == 1
     assert sum(cell.row_count for cell in cells) == 2  # LOAN/USD (converted) + LOAN/XFC
-    assert sum(cell.balance_rc_sum for cell in cells) == Decimal("12850000")
-    assert sum(cell.classification_exposure_rc_sum for cell in cells) == Decimal("12850000")
+    # Two USD loan cells: the converted one carries the balance, the unconverted
+    # one carries NO reporting-currency balance — its sum is absent, not zero
+    # (audit A360 H1) — while the classification rule puts it in the book at 0.
+    assert _cell_total(cells, "balance_rc_sum") == Decimal("12850000")
+    assert {cell.balance_rc_sum for cell in cells} == {Decimal("12850000"), None}
+    assert _cell_total(cells, "classification_exposure_rc_sum") == Decimal("12850000")
+    assert None not in {cell.classification_exposure_rc_sum for cell in cells}
 
 
 def test_daily_aggregates_are_additive_sums_over_the_inserted_rows(db_session: Session) -> None:
@@ -387,13 +410,13 @@ def test_daily_aggregates_are_additive_sums_over_the_inserted_rows(db_session: S
         )
     ).all()
     assert sum(cell.row_count for cell in cells) == FIXTURE_ROWS
-    assert sum(cell.balance_rc_sum for cell in cells) == sum(
+    assert _cell_total(cells, "balance_rc_sum") == sum(
         (row.balance_rc for row in rows if row.balance_rc is not None), Decimal(0)
     )
-    assert sum(cell.non_performing_exposure_rc_sum for cell in cells) == Decimal("3000000")
-    assert sum(cell.classification_exposure_rc_sum for cell in cells) == FIXTURE_LOANS_RC
+    assert _cell_total(cells, "non_performing_exposure_rc_sum") == Decimal("3000000")
+    assert _cell_total(cells, "classification_exposure_rc_sum") == FIXTURE_LOANS_RC
     assert sum(cell.fx_unconverted_count for cell in cells) == 1
-    assert sum(cell.provision_held_rc_sum for cell in cells) == Decimal("1560000")
+    assert _cell_total(cells, "provision_held_rc_sum") == Decimal("1560000")
     expected_rate_x = sum(
         (
             row.interest_rate * row.balance_rc
@@ -402,7 +425,7 @@ def test_daily_aggregates_are_additive_sums_over_the_inserted_rows(db_session: S
         ),
         Decimal(0),
     )
-    assert sum(cell.rate_x_balance_rc_sum for cell in cells) == expected_rate_x
+    assert _cell_total(cells, "rate_x_balance_rc_sum") == expected_rate_x
     # the grain is unique
     grain = [
         (
@@ -915,6 +938,390 @@ def test_a_failing_scope_rolls_every_mart_back_and_records_the_failure(
     outcome = build(db_session)  # a failed record never satisfies the skip
     assert outcome.status == "succeeded"
     assert all(row.status == "succeeded" for row in build_records(db_session).values())
+
+
+# --- audit A360 H1: the aggregate the builder writes says what the fact rows say ---------------
+
+
+def _kpi_on_both_paths(
+    db: Session, monkeypatch: pytest.MonkeyPatch, as_of: date, **overrides: Any
+) -> tuple[Any, Any]:
+    """One no-dimension figure read through the compiler twice: as the compiler
+    picks its source (the aggregate table, for these measures) and forced onto the
+    fact table. ``(aggregate, fact)``."""
+    query = BiQuery.model_validate({"time": {"as_of": as_of}, **overrides})
+    cat = catalogue()
+
+    def _read() -> Any:
+        compiled = compile_query(db, cat, query, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+        return compiled.used_aggregate, db.execute(compiled.select).one()[0]
+
+    used, on_aggregate = _read()
+    assert used is True, "the case must reach the aggregate source, or it proves nothing about it"
+    with monkeypatch.context() as patch:
+        patch.setattr(compiler, "aggregate_table_covers", lambda *_: False)
+        used, on_fact = _read()
+    assert used is False
+    return on_aggregate, on_fact
+
+
+def test_the_builders_aggregate_answers_an_absent_figure_exactly_as_the_fact_rows_do(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit A360 H1, on rows the BUILDER wrote. The fixture book states no
+    collateral anywhere, and the branch added here holds nothing but unconverted
+    foreign currency. Every no-dimension measure is served from
+    ``bi_agg_position_daily``; a cell that started at 0 there turned "no collateral
+    stated" into "collateral of 0" on every KPI tile while the fact path said
+    nothing — and the alerts, target attainment and insights read the 0 as a
+    figure."""
+    seed_book(db_session, live=False)
+    common = new_batch(db_session, AS_OF)
+    for index in range(2):
+        add_position(
+            db_session,
+            common,
+            f"LOAN/FXONLY{index}",
+            "LOAN",
+            "USD",
+            balance="500000",
+            product="LN.CORP.5Y",
+            stage=1,
+            branch="BR-FX",
+        )
+    db_session.commit()
+    build(db_session)
+
+    # A book that states no collateral has no collateral figure — on both paths.
+    assert _kpi_on_both_paths(db_session, monkeypatch, AS_OF, measures=["loans.collateral_rc"]) == (
+        None,
+        None,
+    )
+    # A branch whose whole book is unconverted has no reporting-currency balance…
+    fx_only = [{"member": "branch.code", "op": "in", "values": ["BR-FX"]}]
+    assert _kpi_on_both_paths(
+        db_session, monkeypatch, AS_OF, measures=["loans.balance_rc"], filters=fx_only
+    ) == (None, None)
+    # …and is not an empty population: both loans are counted, both unconverted.
+    assert _kpi_on_both_paths(
+        db_session, monkeypatch, AS_OF, measures=["loans.count"], filters=fx_only
+    ) == (2, 2)
+    assert _kpi_on_both_paths(
+        db_session, monkeypatch, AS_OF, measures=["loans.unconverted_count"], filters=fx_only
+    ) == (2, 2)
+    # The control: a figure the book does state agrees on both paths, as a number.
+    on_aggregate, on_fact = _kpi_on_both_paths(
+        db_session, monkeypatch, AS_OF, measures=["loans.balance_rc"]
+    )
+    assert Decimal(str(on_aggregate)) == Decimal(str(on_fact)) == FIXTURE_LOANS_RC
+
+    # And where the aggregate answer came from: the cells the builder wrote hold
+    # NULL, not 0, wherever no row carried the value.
+    cells = db_session.scalars(
+        select(BiAggPositionDaily).where(
+            BiAggPositionDaily.bank_id == SAMPLE_BANK_ID, BiAggPositionDaily.as_of_date == AS_OF
+        )
+    ).all()
+    assert cells and all(cell.collateral_rc_sum is None for cell in cells)
+    fx_cells = [cell for cell in cells if cell.branch_code == "BR-FX"]
+    assert fx_cells and all(
+        cell.balance_rc_sum is None and cell.row_count == 2 and cell.fx_unconverted_count == 2
+        for cell in fx_cells
+    )
+
+
+# --- audit A360 H2: a failed rebuild must not serve stale figures under the old badge -------------
+
+
+def _window_verdict(db: Session, *dates: date) -> provenance.TrustVerdict:
+    return provenance.trust_verdict(
+        db, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(min(dates), max(dates))
+    )
+
+
+def _window_fingerprint(db: Session, *dates: date) -> str | None:
+    return provenance.build_fingerprint(
+        db, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(min(dates), max(dates))
+    )
+
+
+def test_a_failed_rebuild_never_serves_the_previous_builds_trust_badge(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shape the auditor reproduced: a build succeeds, new data arrives, the
+    rebuild fails, and the mart still holds the old rows (the savepoint rolled the
+    new ones back) beside the old reconciliation results (never re-evaluated). A
+    reader is then served last night's figures — which is the design — but the
+    badge on them must be the badge of THIS state, and nothing on file describes
+    it: grey, with the date named, and a fingerprint that is not ``None`` and not
+    one any successful build stamped."""
+    seed_book(db_session)
+    first = build(db_session)
+    db_session.commit()
+    before = _window_verdict(db_session, AS_OF)
+    assert before.status == first.trust["overall"]
+    assert before.stale_dates == ()
+    assert _window_fingerprint(db_session, AS_OF) == first.fingerprint
+
+    # New data: one more deposit lands at AS_OF, which moves the fingerprint…
+    add_position(
+        db_session,
+        new_batch(db_session, AS_OF),
+        "DEP/NEW",
+        "DEPOSIT",
+        "GHS",
+        balance="1000",
+        balance_ghs="1000",
+        product="DEP.RET.CUR",
+    )
+    db_session.commit()
+
+    # …and the rebuild fails.
+    def explode(*_args: Any, **_kwargs: Any) -> int:
+        raise RuntimeError("engine copy exploded")
+
+    monkeypatch.setattr(mart_builder, "_build_engine", explode)
+    with pytest.raises(RuntimeError, match="engine copy exploded"):
+        build(db_session)
+    monkeypatch.undo()
+
+    # The mart still holds the OLD rows — the new deposit is not in it — and every
+    # scope's record says failed.
+    rows = daily_rows(db_session)
+    assert len(rows) == FIXTURE_ROWS
+    assert "DEP/NEW" not in rows
+    assert all(row.status == "failed" for row in build_records(db_session).values())
+    # The stored per-check rows are still readable for a detail view…
+    stored = provenance.stored_checks(
+        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(AS_OF, AS_OF)
+    )
+    assert {row.check_id for row in stored} == set(RECONCILIATION_CHECK_IDS)
+    # …but no badge may be earned from them.
+    after = _window_verdict(db_session, AS_OF)
+    assert after.status == reconciliation.GREY
+    assert after.failing_checks == ()
+    assert after.stale_dates == (AS_OF,)
+    assert provenance.stale_dates(
+        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(AS_OF, AS_OF)
+    ) == (AS_OF,)
+    # And the served state is attributable: a digest that joins back to the failed
+    # records, never ``None`` (which the query log read as "no build at all") and
+    # never the fingerprint a successful build stamped.
+    fingerprint = _window_fingerprint(db_session, AS_OF)
+    assert fingerprint is not None
+    assert len(fingerprint) == 64
+    assert fingerprint != first.fingerprint
+
+    # A successful rebuild earns a badge of its own again.
+    second = build(db_session)
+    assert second.status == "succeeded"
+    assert second.fingerprint != first.fingerprint
+    restored = _window_verdict(db_session, AS_OF)
+    assert restored.stale_dates == ()
+    assert restored.status == second.trust["overall"]
+    assert _window_fingerprint(db_session, AS_OF) == second.fingerprint
+    assert "DEP/NEW" in daily_rows(db_session)
+
+
+def test_a_build_record_left_running_greys_the_badge_too(db_session: Session) -> None:
+    """Not succeeded is the rule. A ``running`` record is never visible from another
+    session in practice (the builder commits only on success or failure), but one
+    left by a dead process would otherwise read as trusted."""
+    seed_book(db_session, live=False)
+    outcome = build(db_session)
+    assert _window_verdict(db_session, AS_OF).status == outcome.trust["overall"]
+    build_records(db_session)["engine"].status = "running"
+    db_session.flush()
+    verdict = _window_verdict(db_session, AS_OF)
+    assert verdict.status == reconciliation.GREY
+    assert verdict.stale_dates == (AS_OF,)
+    fingerprint = _window_fingerprint(db_session, AS_OF)
+    assert fingerprint is not None and fingerprint != outcome.fingerprint
+
+
+def test_one_stale_date_greys_a_window_that_also_holds_a_good_one(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A badge may understate confidence, never overstate it: the worst date in the
+    window decides, and the verdict names which date is stale so a surface can say
+    why."""
+    seed_book(db_session, live=False)
+    resnapshot_loan_1(db_session, MID_MONTH, balance="29000000")
+    db_session.commit()
+    good = build(db_session, AS_OF)
+    build(db_session, MID_MONTH)
+    db_session.commit()
+    assert _window_verdict(db_session, MID_MONTH, AS_OF).stale_dates == ()
+
+    add_position(
+        db_session,
+        new_batch(db_session, MID_MONTH),
+        "DEP/MID",
+        "DEPOSIT",
+        "GHS",
+        balance="5",
+        balance_ghs="5",
+        product="DEP.RET.CUR",
+    )
+    db_session.commit()
+
+    def explode(*_args: Any, **_kwargs: Any) -> int:
+        raise RuntimeError("engine copy exploded")
+
+    monkeypatch.setattr(mart_builder, "_build_engine", explode)
+    with pytest.raises(RuntimeError, match="engine copy exploded"):
+        build(db_session, MID_MONTH)
+    monkeypatch.undo()
+
+    verdict = _window_verdict(db_session, MID_MONTH, AS_OF)
+    assert verdict.stale_dates == (MID_MONTH,)
+    # The stale date is graded grey and contributes NO failing check, whatever is
+    # on file for it; the window then takes the worst verdict across its dates
+    # (``overall_trust``: red outranks grey, so a red good date still reads red).
+    alone = _window_verdict(db_session, AS_OF)
+    assert alone.stale_dates == ()
+    assert alone.status == good.trust["overall"]
+    assert verdict.status == reconciliation.overall_trust([reconciliation.GREY, alone.status])
+    assert verdict.failing_checks == alone.failing_checks
+    # The stale date alone earns nothing from its stored rows.
+    stale_alone = _window_verdict(db_session, MID_MONTH)
+    assert (stale_alone.status, stale_alone.failing_checks) == (reconciliation.GREY, ())
+
+
+# --- audit A360 H3: an attribute wider than its mart column never fails the build ---------------
+
+
+def test_an_over_wide_attribute_is_carried_as_absent_never_truncated_and_never_fails_the_build(
+    db_session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``bi_fact_position_daily.branch_code`` is ``String(120)``; the attributes bag
+    is unbounded. On Postgres a 121-character ``branch_id`` failed the tenant's
+    WHOLE nightly build inside the one savepoint, every night; SQLite stored it, so
+    no hermetic test saw either. The extractor now carries the value as absent: the
+    row lands, the column is NULL, the refusal is counted and logged once per build
+    — and no code of exactly 120 characters, the truncation, exists anywhere,
+    because that would be a different branch."""
+    seed_book(db_session, live=False)
+    common = new_batch(db_session, MID_MONTH)
+    wide = "BR-" + "W" * 118  # 121 characters
+    at_limit = "BR-" + "L" * 117  # 120 characters
+    add_position(
+        db_session,
+        common,
+        "LOAN/WIDE",
+        "LOAN",
+        "GHS",
+        balance="1000",
+        balance_ghs="1000",
+        product="LN.CORP.5Y",
+        stage=1,
+        branch=wide,
+        extra={"sector": "S" * 121, "employer": "E" * 255},
+    )
+    add_position(
+        db_session,
+        common,
+        "LOAN/NARROW",
+        "LOAN",
+        "GHS",
+        balance="2000",
+        balance_ghs="2000",
+        product="LN.CORP.5Y",
+        stage=1,
+        branch=at_limit,
+    )
+    db_session.commit()
+
+    with caplog.at_level(logging.WARNING, logger=mart_builder.logger.name):
+        outcome = build(db_session, MID_MONTH)
+    assert outcome.status == "succeeded"
+    assert outcome.row_counts["bi_fact_position_daily"] == 2
+
+    rows = daily_rows(db_session, MID_MONTH)
+    wide_row = rows["LOAN/WIDE"]
+    assert wide_row.balance_rc == Decimal("1000")  # the row itself landed
+    assert wide_row.branch_code is None
+    assert wide_row.sector is None
+    assert wide_row.employer == "E" * 255  # at the limit: verbatim
+    assert rows["LOAN/NARROW"].branch_code == at_limit
+
+    fact_codes = {row.branch_code for row in rows.values()}
+    aggregate_codes = {
+        cell.branch_code
+        for cell in db_session.scalars(
+            select(BiAggPositionDaily).where(
+                BiAggPositionDaily.bank_id == SAMPLE_BANK_ID,
+                BiAggPositionDaily.as_of_date == MID_MONTH,
+            )
+        )
+    }
+    dimension_codes = {
+        row.branch_code
+        for row in db_session.scalars(
+            select(BiDimBranch).where(BiDimBranch.bank_id == SAMPLE_BANK_ID)
+        )
+    }
+    for codes in (fact_codes, aggregate_codes, dimension_codes):
+        assert wide not in codes
+        assert wide[:120] not in codes, "a truncated branch code is a different branch"
+    assert at_limit in fact_codes and at_limit in aggregate_codes and at_limit in dimension_codes
+
+    # Logged once per build, per key, as a COUNT — never a value.
+    (record,) = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "bi.positions.attribute_text_overflow"
+    ]
+    assert record.__dict__["refused"] == {"branch_id": 1, "sector": 1}
+    assert record.__dict__["bank_id"] == SAMPLE_BANK_ID
+    assert wide not in repr(record.__dict__)
+
+
+def test_a_register_row_the_branch_dimension_cannot_store_is_rejected_not_truncated(
+    db_session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A ``business_units`` row stored before the kind was enforced (or around the
+    door) can carry a unit id wider than ``bi_dim_branch.branch_code``. It is
+    skipped and counted, exactly as a malformed row is — never written as its
+    120-character prefix, which would be a branch the bank did not declare."""
+    seed_book(db_session, live=False)
+    common = new_batch(db_session, AS_OF)
+    wide = "U" * 121
+    for index, (unit_id, name) in enumerate((("BR-001", "Accra Main"), (wide, "Too wide"))):
+        db_session.add(
+            CanonicalReferenceRow(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                ingestion_batch_id=common["ingestion_batch_id"],
+                as_of_date=AS_OF,
+                dataset_kind="business_units",
+                row_index=index,
+                payload={"business_unit_id": unit_id, "business_unit_name": name},
+                source_reference=f"bu#{index}",
+                lineage_id=common["lineage_id"],
+            )
+        )
+    db_session.commit()
+
+    with caplog.at_level(logging.WARNING, logger=mart_builder.logger.name):
+        outcome = build(db_session)
+    assert outcome.status == "succeeded"
+    branches = {
+        row.branch_code: row
+        for row in db_session.scalars(
+            select(BiDimBranch).where(BiDimBranch.bank_id == SAMPLE_BANK_ID)
+        )
+    }
+    assert branches["BR-001"].name == "Accra Main"
+    assert branches["BR-001"].mapped is True
+    assert wide not in branches
+    assert wide[:120] not in branches
+    (record,) = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "bi.dim_branch.register_rows_rejected"
+    ]
+    assert record.__dict__["rows"] == 1
 
 
 def test_build_records_carry_row_counts_and_timings_per_scope(db_session: Session) -> None:

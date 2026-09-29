@@ -199,8 +199,13 @@ def test_the_service_creates_the_month_child_and_routes_the_row_into_it(
             text(f"SELECT tableoid::regclass::text FROM {TABLE} WHERE id = :id"),
             {"id": str(row_id)},
         ).scalar_one()
+        # Resolved through this connection's search_path (the schema under test),
+        # not by bare name across the cluster: on a shared database another
+        # schema's child of the same name — a developer's disposable schema, or
+        # the primary's own ``public`` — would otherwise be counted too.
         child_exists = connection.scalar(
-            text("SELECT count(*) FROM pg_class WHERE relname = :child"), {"child": CHILD}
+            text("SELECT count(*) FROM pg_class WHERE oid = to_regclass(:child)"),
+            {"child": CHILD},
         )
     assert child_exists == 1
     # The row for this month sits in its own child, not in DEFAULT.

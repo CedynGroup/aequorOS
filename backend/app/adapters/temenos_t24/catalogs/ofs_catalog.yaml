@@ -511,8 +511,15 @@ OFF_BALANCE_COMMITMENTS:
 #     them double-counts. To close: shape it in the extractor against a supplied
 #     CoA mapping (the platform already treats that as a bank-supplied register
 #     — see `gl_mapping_bsd7`), not in a field_map.
+#
+# Phase 5 clause 5.6 ("fix the T24 mapping gaps", 2026-09-28) closed NONE of
+# these three. What it closed was the silently-dropped CO.CODE branch key on the
+# money-market and securities entries, plus the two loader rails named above.
+# The reasons live in comments rather than a `reason:` key because
+# catalog.py::_parse_entry refuses any key outside _META_KEYS.
 # ---------------------------------------------------------------------------
 
+# Unsupported: destination does not exist (see the LIMITS paragraph above).
 LIMITS:
   supported: false
   application: LIMIT.REFERENCE
@@ -523,6 +530,8 @@ LIMITS:
   dataset_key: limits
   field_map: {}
 
+# Unsupported: the destination is the wrong one (see the CASHFLOWS_SCHEDULED
+# paragraph above).
 CASHFLOWS_SCHEDULED:
   supported: false
   application: AA.ARRANGEMENT
@@ -533,6 +542,8 @@ CASHFLOWS_SCHEDULED:
   dataset_key: historical_cashflows
   field_map: {}
 
+# Unsupported: needs classification + aggregation a field_map cannot do (see
+# the HISTORICAL_BALANCES paragraph above).
 HISTORICAL_BALANCES:
   supported: false
   application: GENERAL.LEDGER

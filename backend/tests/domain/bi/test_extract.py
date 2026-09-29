@@ -33,6 +33,7 @@ from app.domain.bi.extract import (
     position_row,
 )
 from app.domain.capital.loan_classification import ClassifiedLoan
+from app.domain.ingestion.optional_position_fields import POSITION_ATTRIBUTE_TEXT_LIMITS
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS
 
 BASE = "XRC"  # the tenant's reporting currency (fictional)
@@ -577,6 +578,214 @@ def test_attribute_keys_are_the_wire_keys_read_verbatim() -> None:
     assert row.collateral_rc == Decimal("4")
     assert row.collateral_type == "CASH"  # the explicit key wins over the CRM class
     assert row.hqla_level == "L1"
+
+
+# --- audit A360 H3: a text attribute wider than its mart column is absent, never cut ---
+#
+# ``branch_id``, ``officer_id``, ``hqla_level``, ``collateral_type``, ``sector``,
+# ``employer``, ``channel`` and ``account_status`` ride the unbounded attributes
+# bag and are copied into ``VARCHAR(n)`` mart columns. Postgres refuses a longer
+# value and one such value used to fail the tenant's WHOLE nightly build (SQLite,
+# which ignores VARCHAR lengths, never showed it). The extractor now carries such a
+# value as ABSENT — the row keeps its place with the column NULL — and never as a
+# prefix: a branch code cut to 120 characters is a DIFFERENT branch.
+
+#: attribute key → the ``PositionFactRow`` field it is copied into.
+_BOUNDED_TEXT_FIELDS: dict[str, str] = {
+    "branch_id": "branch_code",
+    "officer_id": "officer_id",
+    "hqla_level": "hqla_level",
+    "collateral_type": "collateral_type",
+    "sector": "sector",
+    "employer": "employer",
+    "channel": "channel",
+    "account_status": "account_status",
+}
+
+
+def _row_with(attributes: dict[str, Any]) -> extract.PositionFactRow:
+    return position_row(
+        Snapshot(balance=Decimal("1"), attributes=attributes),
+        Position("LOAN", BASE),
+        None,
+        None,
+        None,
+        base_currency=BASE,
+        classified=None,
+    )
+
+
+@pytest.mark.parametrize(("key", "field_name"), sorted(_BOUNDED_TEXT_FIELDS.items()))
+def test_a_text_attribute_one_character_over_its_mart_column_is_absent_never_truncated(
+    key: str, field_name: str
+) -> None:
+    limit = POSITION_ATTRIBUTE_TEXT_LIMITS[key]
+    over = "x" * (limit + 1)
+    at_limit = "x" * limit
+    assert getattr(_row_with({key: over}), field_name) is None, (key, limit)
+    # The one value that would look right and be wrong: the column-width prefix.
+    assert getattr(_row_with({key: over}), field_name) != over[:limit]
+    # At the limit the value is carried verbatim — the bound is the column's, exactly.
+    assert getattr(_row_with({key: at_limit}), field_name) == at_limit
+    # And the builder is told which key it refused, so it can count and log it.
+    assert extract.attribute_text_overflows({key: over}) == (key,)
+    assert extract.attribute_text_overflows({key: at_limit}) == ()
+
+
+def test_the_six_columns_the_audit_named_are_bounded_at_the_widths_it_measured() -> None:
+    """H3 named ``branch_code``/``officer_id``/``hqla_level``/``collateral_type``/
+    ``sector``/``employer`` against 120/120/16/80/120/255."""
+    assert {
+        key: POSITION_ATTRIBUTE_TEXT_LIMITS[key]
+        for key in (
+            "branch_id",
+            "officer_id",
+            "hqla_level",
+            "collateral_type",
+            "sector",
+            "employer",
+        )
+    } == {
+        "branch_id": 120,
+        "officer_id": 120,
+        "hqla_level": 16,
+        "collateral_type": 80,
+        "sector": 120,
+        "employer": 255,
+    }
+
+
+def test_a_fallback_key_is_bounded_by_the_column_it_falls_into() -> None:
+    """``crm_collateral_class`` fills ``collateral_type`` and ``industry`` fills
+    ``sector`` when the primary key is unstated; each carries its target's width."""
+    row = _row_with({"crm_collateral_class": "c" * 81, "industry": "i" * 121})
+    assert (row.collateral_type, row.sector) == (None, None)
+    row = _row_with({"crm_collateral_class": "c" * 80, "industry": "i" * 120})
+    assert (row.collateral_type, row.sector) == ("c" * 80, "i" * 120)
+    assert set(extract.attribute_text_overflows({"crm_collateral_class": "c" * 81})) == {
+        "crm_collateral_class"
+    }
+    # An over-long primary value is "unstated", so the fallback applies exactly as
+    # it does for a blank one — the platform reads the CRM class it CAN carry.
+    row = _row_with({"collateral_type": "t" * 81, "crm_collateral_class": "RESIDENTIAL"})
+    assert row.collateral_type == "RESIDENTIAL"
+
+
+def test_the_over_long_value_does_not_disturb_the_rest_of_the_row() -> None:
+    """The row lands — only the one column is absent."""
+    row = _row_with(
+        {
+            "branch_id": "B" * 121,
+            "sector": "Agriculture",
+            "balance_ghs": "10",
+            "crm_collateral_ghs": "4",
+        }
+    )
+    assert row.branch_code is None
+    assert row.sector == "Agriculture"
+    assert row.balance_rc == Decimal("10")
+    assert row.collateral_rc == Decimal("4")
+    assert extract.attribute_text_overflows({"branch_id": "B" * 121}) == ("branch_id",)
+    assert extract.attribute_text_overflows(None) == ()
+    assert extract.attribute_text_overflows({}) == ()
+
+
+# --- audit A360 R12: a CONVERTED foreign-currency loan's stated arrears are carried -----
+
+
+def test_arrears_in_the_reporting_currency_are_carried_as_stated() -> None:
+    assert extract.arrears_amount_rc(
+        Decimal("10"), in_base=True, balance_native=Decimal("100"), balance_rc=Decimal("100")
+    ) == Decimal("10")
+    assert (
+        extract.arrears_amount_rc(
+            None, in_base=True, balance_native=Decimal("100"), balance_rc=Decimal("100")
+        )
+        is None
+    )
+
+
+def test_a_converted_foreign_currency_loans_arrears_follow_the_banks_own_conversion() -> None:
+    """400,000 XFC that the bank converted to 6,000,000 XRC, with 40,000 XFC in
+    arrears: the arrears are 600,000 XRC under the SAME rate, so the share
+    ``arrears_rc / balance_rc`` equals ``stated / balance`` exactly."""
+    converted = extract.arrears_amount_rc(
+        Decimal("40000"),
+        in_base=False,
+        balance_native=Decimal("400000"),
+        balance_rc=Decimal("6000000"),
+    )
+    assert converted == Decimal("600000")
+    assert converted is not None
+    assert converted / Decimal("6000000") == Decimal("40000") / Decimal("400000")
+    # Quantized to the money columns' scale, never carried at unbounded precision.
+    assert extract.arrears_amount_rc(
+        Decimal("1"), in_base=False, balance_native=Decimal("3"), balance_rc=Decimal("10")
+    ) == Decimal("3.333333")
+
+
+def test_an_unconverted_or_empty_foreign_currency_loan_still_has_no_arrears_figure() -> None:
+    """No conversion of the bank's to apply → nothing; ``fx_unconverted`` says why.
+    A zero native balance has no rate to read off it either."""
+    assert (
+        extract.arrears_amount_rc(
+            Decimal("1"), in_base=False, balance_native=Decimal("5"), balance_rc=None
+        )
+        is None
+    )
+    assert (
+        extract.arrears_amount_rc(
+            Decimal("1"), in_base=False, balance_native=Decimal("0"), balance_rc=Decimal("0")
+        )
+        is None
+    )
+
+
+def test_position_row_carries_a_converted_loans_stated_arrears_and_drops_an_unconverted_ones() -> (
+    None
+):
+    """End to end through ``position_row``: the same wire keys a real push carries.
+    Before this rule the converted loan's arrears were dropped with the
+    unconverted one's, so R12 reported "no loan states an arrears amount" for a
+    loan that did and ``loans.arrears_share_pct`` left the loan out."""
+    converted = position_row(
+        Snapshot(
+            balance=Decimal("400000"),
+            attributes={"balance_ghs": "6000000", "arrears_amount": "40000"},
+        ),
+        Position("LOAN", FOREIGN),
+        None,
+        None,
+        None,
+        base_currency=BASE,
+        classified=None,
+    )
+    assert converted.balance_rc == Decimal("6000000")
+    assert converted.fx_unconverted is False
+    assert converted.arrears_amount_rc == Decimal("600000")
+
+    unconverted = position_row(
+        Snapshot(balance=Decimal("400000"), attributes={"arrears_amount": "40000"}),
+        Position("LOAN", FOREIGN),
+        None,
+        None,
+        None,
+        base_currency=BASE,
+        classified=None,
+    )
+    assert unconverted.fx_unconverted is True
+    assert unconverted.arrears_amount_rc is None
+
+    domestic = position_row(
+        Snapshot(balance=Decimal("1000"), attributes={"arrears_amount": "25.5"}),
+        Position("LOAN", BASE),
+        None,
+        None,
+        None,
+        base_currency=BASE,
+        classified=None,
+    )
+    assert domestic.arrears_amount_rc == Decimal("25.5")
 
 
 # --- loan events (D-018) --------------------------------------------------------------

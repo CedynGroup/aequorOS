@@ -742,7 +742,7 @@ def test_an_institution_wide_grant_on_one_MODULE_does_not_widen_another(
     that applied to the credit pair.
 
     The reader triggered it themselves, which is what made it serious: 32 of the
-    catalogue's 66 dimensions are ``risk``/``aggregated``, so merely breaking a
+    catalogue's 69 dimensions are ``risk``/``aggregated``, so merely breaking a
     figure down BY DATE pulled in an institution-wide binding and widened the
     whole answer. No privileged action, no crafted request.
 

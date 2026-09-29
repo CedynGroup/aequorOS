@@ -28,6 +28,7 @@ from app.domain.ingestion.contracts import CanonicalRecords
 from app.domain.ingestion.optional_position_fields import (
     ARREARS_POSITION_TYPES,
     AttributeProblem,
+    over_long_text_attributes,
     stated_arrears_amount,
 )
 
@@ -109,6 +110,13 @@ def default_validation_config() -> ValidationConfig:
             # default states it without touching the record's status. A bank
             # reporting on arrears or dormancy raises it.
             RuleConfig(name="position_attribute_consistency", severity="INFO"),
+            # WARNING: the value is READABLE and is kept verbatim on the position,
+            # so nothing is lost from the book — but the analytics marts store it
+            # in a bounded column and will carry it as absent (audit A360 H3), so
+            # a branch code this long reads as "no branch" on every BI surface. The
+            # integration engineer is the one who can shorten it, and this is the
+            # message that reaches them.
+            RuleConfig(name="position_attribute_text_bounds", severity="WARNING"),
         ]
     )
 
@@ -716,6 +724,51 @@ def _rule_position_attribute_consistency(
     return findings
 
 
+def _rule_position_attribute_text_bounds(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Free-text attribute values longer than the analytics marts can store.
+
+    ``branch_id``, ``sector``, ``employer``, ``hqla_level``, ``collateral_type``
+    and their aliases ride the ``attributes`` bag unbounded and are copied
+    verbatim into ``VARCHAR(n)`` mart columns (``POSITION_ATTRIBUTE_TEXT_LIMITS``,
+    the one table both this rule and the extractor read). Postgres refuses a
+    longer value and, before this rule and the extractor's own bound, ONE such
+    value failed the tenant's whole nightly mart build every night. The position
+    itself still lands and its bag is preserved as sent; what the bank is told is
+    that analytics will carry the field as absent until it is shortened.
+    ``officer_id`` is bounded earlier by normalisation and so never reaches here
+    over-long; it is listed for completeness of the table, not because it fires.
+    """
+    _ = context, outcome
+    findings: list[Finding] = []
+    for position in records.positions:
+        if not position.attributes:
+            continue
+        for key, length, limit in over_long_text_attributes(position.attributes):
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="STRUCTURAL",
+                    severity=rule.severity,
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=(
+                        f"{key} is {length} characters long, above the {limit}-character "
+                        f"limit analytics can store. The value is kept on the position as "
+                        f"sent, but analytics will carry {key} as not stated for this "
+                        f"position until it is shortened; send the code or name as your "
+                        f"core system holds it."
+                    ),
+                )
+            )
+    return findings
+
+
 def _rule_loan_event_integrity(
     records: CanonicalRecords,
     rule: RuleConfig,
@@ -790,6 +843,7 @@ _RULES = {
     "lmtd_classification_coverage": _rule_lmtd_classification_coverage,
     "optional_position_attributes": _rule_optional_position_attributes,
     "position_attribute_consistency": _rule_position_attribute_consistency,
+    "position_attribute_text_bounds": _rule_position_attribute_text_bounds,
 }
 
 RULE_NAMES = tuple(sorted(_RULES))

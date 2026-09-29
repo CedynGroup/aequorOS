@@ -24,10 +24,20 @@ What it does
    argument through module-level string constants, across modules.
 3. Walks the graph from the platform's real entry points: route handlers
    (``@router.get`` … ``@router.post``), the worker module, and any function
-   named as a VALUE (a handler table entry, a ``Depends``, a callback) — since
-   those are how the platform actually invokes work.
+   named as a VALUE at module level (a handler table entry, a registry literal)
+   — since those are how the platform actually invokes work. A value mention
+   INSIDE a function (a ``Depends``, a callback appended to a list) is an edge
+   from that function, not an entry point: it reaches exactly as far as the
+   function making it does.
 4. Requires every job type to have at least one enqueue site inside a function
    the walk reaches.
+
+A cross-module reference counts only when the referencing function is itself
+reachable. The first version of this file got that wrong (audit A360-2 H5): the
+callee of every cross-module CALL was counted as a value mention and became an
+entry point, so the walk degraded to "is this referenced from any other module"
+and a dead function in another module calling ``alerts.enqueue_evaluation``
+acquitted the alerts job. The self-proof below carries that exact shape.
 
 The BI job modules bind their services through ``importlib`` rather than an
 ``import`` statement (the plane-boundary guard forbids the statement, so
@@ -304,31 +314,62 @@ def _route_entry_points(module: str, tree: ast.Module) -> set[str]:
     return found
 
 
-def _value_entry_points(index: _Index, module: str, tree: ast.Module) -> set[str]:
+def _value_mentions(
+    index: _Index, module: str, tree: ast.Module
+) -> tuple[set[str], dict[str, set[str]]]:
     """Functions named as a VALUE, which is how the platform invokes most work.
 
     ``HANDLERS["bi_export"] = bi_export.run_bi_export`` never CALLS the handler, and
     neither does ``Depends(require_bi_read)`` or a callback appended to a list. A
     call-graph walk that only followed calls would find the whole worker fleet
-    unreachable, so a mention as a value counts as an entry.
+    unreachable, so a mention as a value counts — but only as far as the code
+    that makes it is itself reached. Returns two things:
+
+    * mentions at MODULE level (a handler table, a class attribute, a registry
+      literal) — these are entry points, because importing the module is enough
+      to bind them and the platform imports everything;
+    * mentions INSIDE a function — these are edges from that function to the
+      mentioned one, exactly like a call, so a callback handed over by a routed
+      handler is reachable and one handed over by dead code is not.
+
+    The callee of a ``Call`` is excluded outright. It is already an edge through
+    :meth:`_Index.call_targets`, and counting it here as a "value" is the A360-2
+    H5 defect: ``ast.walk`` yields a ``Call``'s ``func`` child regardless of what
+    the caller does with the ``Call`` itself, so a ``continue`` on the ``Call``
+    left every cross-module callee counted as an entry point in its own right.
+    The walk then answered "is this function referenced from any other module",
+    and a dead function calling ``alerts.enqueue_evaluation`` acquitted it.
     """
 
     names, aliases = index.imports[module]
-    found: set[str] = set()
+    callees = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    entries: set[str] = set()
+    edges: dict[str, set[str]] = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
+        if id(node) in callees:
             continue
+        mentioned: list[str] = []
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if not isinstance(node.ctx, ast.Load):
+                continue
             for candidate in _alias_candidates(node.value.id, names, aliases):
-                qualname = f"{candidate}:{node.attr}"
-                if qualname in index.defs:
-                    found.add(qualname)
-        elif isinstance(node, ast.Name) and node.id in names:
-            source, original = names[node.id]
-            qualname = f"{source}:{original}"
-            if qualname in index.defs:
-                found.add(qualname)
-    return found
+                mentioned.append(f"{candidate}:{node.attr}")
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            mentioned.append(f"{module}:{node.id}")
+            if node.id in names:
+                source, original = names[node.id]
+                mentioned.append(f"{source}:{original}")
+        else:
+            continue
+        owner = index.owner.get(id(node))
+        for qualname in mentioned:
+            if qualname not in index.defs:
+                continue
+            if owner is None:
+                entries.add(qualname)
+            else:
+                edges.setdefault(owner, set()).add(qualname)
+    return entries, edges
 
 
 def _enqueue_argument(node: ast.Call) -> ast.expr | None:
@@ -353,7 +394,10 @@ def _analyse(root: Path = APP_ROOT) -> tuple[dict[str, set[str]], set[str], list
     for module, tree in index.trees.items():
         in_registry = index.rel[module] in _REGISTRY_FILES
         entry_points |= _route_entry_points(module, tree)
-        entry_points |= _value_entry_points(index, module, tree)
+        module_level, in_function = _value_mentions(index, module, tree)
+        entry_points |= module_level
+        for owner, targets in in_function.items():
+            graph.setdefault(owner, set()).update(targets)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -468,7 +512,8 @@ def _synthetic_app(root: Path) -> None:
     (root / "services" / "__init__.py").write_text("")
     (root / "jobs" / "__init__.py").write_text("")
     (root / "services" / "job_queue.py").write_text(
-        "JOB_TYPES = ('reachable_type', 'seam_type', 'orphan_type')\n"
+        "JOB_TYPES = ('reachable_type', 'seam_type', 'callback_type', "
+        "'orphan_type', 'deep_orphan_type')\n"
         "def enqueue(db, organization_id, job_type, **kw):\n"
         "    return None\n"
     )
@@ -476,23 +521,43 @@ def _synthetic_app(root: Path) -> None:
         "from app.services import job_queue\n"
         "REACHABLE = 'reachable_type'\n"
         "SEAM = 'seam_type'\n"
+        "CALLBACK = 'callback_type'\n"
         "ORPHAN = 'orphan_type'\n"
+        "DEEP_ORPHAN = 'deep_orphan_type'\n"
         "def enqueue_reachable(db, org):\n"
         "    return job_queue.enqueue(db, org, REACHABLE)\n"
         "def enqueue_through_the_seam(db, org):\n"
         "    return job_queue.enqueue(db, org, SEAM)\n"
+        "def enqueue_via_callback(db, org):\n"
+        "    return job_queue.enqueue(db, org, CALLBACK)\n"
         "def enqueue_orphan(db, org):\n"
         "    return job_queue.enqueue(db, org, ORPHAN)\n"
+        "def enqueue_deep_orphan(db, org):\n"
+        "    return job_queue.enqueue(db, org, DEEP_ORPHAN)\n"
     )
-    # The routed entry point, two calls deep, so the walk has to traverse.
+    # The routed entry point, two calls deep, so the walk has to traverse. It
+    # also hands a function over as a VALUE (never calling it), which is how a
+    # callback or a handler-table entry reaches work: a mention inside a
+    # reachable function must count.
     (root / "features.py").write_text(
         "from app.services import work\n"
         "router = object()\n"
         "@router.post('/x')\n"
-        "def handler(db, org):\n"
+        "def handler(db, org, callbacks):\n"
+        "    callbacks.append(work.enqueue_via_callback)\n"
         "    return _inner(db, org)\n"
         "def _inner(db, org):\n"
         "    return work.enqueue_reachable(db, org)\n"
+    )
+    # The two-level orphan (audit A360-2 H5): a function nobody calls, in ANOTHER
+    # module, calling the enqueue site. The reference crosses a module boundary,
+    # which is exactly the shape the first version of this guard mistook for an
+    # entry point — it counted the callee of every cross-module call as "named
+    # as a value" and so acquitted this on the real tree.
+    (root / "dead.py").write_text(
+        "from app.services import work\n"
+        "def nobody_calls_me(db, org):\n"
+        "    return work.enqueue_deep_orphan(db, org)\n"
     )
     # The importlib seam: a job module that may not import its service.
     (root / "jobs" / "runner.py").write_text(
@@ -525,7 +590,13 @@ def test_the_guard_convicts_an_unreachable_site_and_acquits_a_reachable_one(
     sites, reachable, unresolved = _analyse(root)
 
     assert unresolved == [], "the resolver failed to read a module-level constant"
-    assert set(sites) == {"reachable_type", "seam_type", "orphan_type"}, sites
+    assert set(sites) == {
+        "reachable_type",
+        "seam_type",
+        "callback_type",
+        "orphan_type",
+        "deep_orphan_type",
+    }, sites
 
     # ACQUITTED: reached from a route decorator, two calls deep.
     assert sites["reachable_type"] & reachable, (
@@ -537,8 +608,23 @@ def test_the_guard_convicts_an_unreachable_site_and_acquits_a_reachable_one(
         "a site reached only through the importlib seam was judged unreachable; "
         "without this the guard would have to be switched off for every BI job"
     )
+    # ACQUITTED: handed over as a value INSIDE a reachable function, never called.
+    assert sites["callback_type"] & reachable, (
+        "a function passed as a callback from a routed handler was judged "
+        "unreachable, so the fix for the cross-module defect over-corrected and "
+        "would convict every handler table and Depends() in the application"
+    )
     # CONVICTED: the whole point.
     assert not (sites["orphan_type"] & reachable), (
         "an enqueue site in a function NOTHING calls was judged reachable, so this "
         "guard cannot detect the defect it exists for"
+    )
+    # CONVICTED: the same defect one module away (A360-2 H5). The site IS called —
+    # by a function in another module that nothing reaches. A cross-module
+    # reference is only as reachable as the function that makes it.
+    assert not (sites["deep_orphan_type"] & reachable), (
+        "an enqueue site called only from a DEAD function in another module was "
+        "judged reachable: the walk is counting the callee of a cross-module call "
+        "as an entry point in its own right, which reduces this guard to 'is it "
+        "referenced anywhere' and is how the alerts defect would be missed again"
     )

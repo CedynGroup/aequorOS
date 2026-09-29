@@ -26,6 +26,15 @@ class ReferenceSchema:
     dates: tuple[str, ...] = ()
     enums: dict[str, tuple[str, ...]] = field(default_factory=dict)
     optional: tuple[str, ...] = ()
+    #: Field → the longest value the platform can STORE for it, for fields a
+    #: downstream mart carries verbatim into a bounded column (audit A360 H3 /
+    #: A8-01). Checked here, at the door, so an unstorable value is refused with a
+    #: message naming the limit rather than accepted and then failing the tenant's
+    #: whole nightly mart build on Postgres — which SQLite, ignoring VARCHAR
+    #: lengths, can never show. A test per register pins each width against the
+    #: mart model's own ``String(n)``; the schema module itself stays free of
+    #: ``app.models``.
+    max_lengths: dict[str, int] = field(default_factory=dict)
     #: one row per … (documentation)
     grain: str = ""
     #: The kind's own extra rules, when the declarative fields above cannot
@@ -54,6 +63,17 @@ class ReferenceSchema:
             value = row.get(name)
             if value not in (None, "") and str(value) not in allowed:
                 problems.append(f"field '{name}' must be one of {list(allowed)} (got {value!r})")
+        for name, limit in self.max_lengths.items():
+            value = row.get(name)
+            if value in (None, ""):
+                continue
+            length = len(str(value).strip())
+            if length > limit:
+                problems.append(
+                    f"field '{name}' is {length} characters long, above the {limit}-character "
+                    f"limit the platform can store; send the identifier or name as your "
+                    f"system holds it"
+                )
         return problems
 
     def problems_for(self, row: dict) -> list[str]:

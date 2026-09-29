@@ -77,6 +77,19 @@ TERMINAL_STATUSES: frozenset[str] = frozenset(
     {STATUS_PROPOSED, STATUS_REFUSED, STATUS_FAILED, STATUS_CANCELLED, STATUS_RATE_LIMITED}
 )
 
+#: Two timestamps on a PROPOSED record, both ISO-8601 UTC, and both the reason a
+#: question id is not a permanent re-runnable handle (audit A360-5 L4).
+#:
+#: ``proposed_at`` is written by the handler beside the query and anchors the
+#: confirmation window: a proposal is confirmed by a reader who was just shown it,
+#: so it is given the same ``AI_QUEUE_EXPIRY_SECONDS`` the queue gives the request
+#: itself and is refused after that (:func:`proposal_expired`). ``confirmed_at`` is
+#: written by the run route the ONE time the reader confirms (:func:`mark_confirmed`);
+#: a second run of the same proposal is refused, so ``bi.ask.confirmed`` in
+#: ``audit_events`` is written once per confirmation and means what it says.
+PROGRESS_PROPOSED_AT = "proposed_at"
+PROGRESS_CONFIRMED_AT = "confirmed_at"
+
 #: ``progress["reason"]`` when ``BI_ENABLED`` or ``BI_NLQ_ENABLED`` went off after
 #: the request. The AI gates cannot see either: they are the BI plane's own
 #: switches, and a deployment that switched the surface off must not still be
@@ -106,6 +119,10 @@ _WITHDRAWALS: frozenset[str] = frozenset(
         "deployment_disabled",
         "deployment_not_approved",
         "configuration_not_approved",
+        # The shipped consent text does not describe this surface, so no tenant row
+        # can admit it (``gates`` module docstring). A governance outcome, not a
+        # fault: the platform declined, nothing broke.
+        "consent_not_covered",
         "tenant_disabled",
         "feature_disabled",
         "consent_outdated",
@@ -352,14 +369,69 @@ def find_question(
     return job
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def is_expired(job: Job, *, now: datetime | None = None) -> bool:
     """Whether the run gate will cancel this queued question rather than send it."""
 
     settings = get_settings()
-    queued_at = job.queued_at
-    aware = queued_at if queued_at.tzinfo else queued_at.replace(tzinfo=UTC)
     moment = now or datetime.now(UTC)
-    return moment - aware > timedelta(seconds=settings.ai.queue_expiry_seconds)
+    return moment - _aware(job.queued_at) > timedelta(seconds=settings.ai.queue_expiry_seconds)
+
+
+def _proposal_anchor(job: Job) -> datetime:
+    """When the proposal was written, as best the row can say.
+
+    The handler's own ``proposed_at`` first; then the queue's ``completed_at``
+    (the worker stamps it as the handler returns, so on a real worker the two
+    agree to the millisecond); then ``queued_at`` for a row that predates either —
+    which can only make the window SHORTER, never longer.
+    """
+
+    recorded = (job.progress or {}).get(PROGRESS_PROPOSED_AT)
+    if isinstance(recorded, str):
+        try:
+            return _aware(datetime.fromisoformat(recorded))
+        except ValueError:  # pragma: no cover - the handler writes isoformat()
+            pass
+    if job.completed_at is not None:
+        return _aware(job.completed_at)
+    return _aware(job.queued_at)
+
+
+def proposal_expired(job: Job, *, now: datetime | None = None) -> bool:
+    """Whether a PROPOSED row is too old to confirm.
+
+    The same ``AI_QUEUE_EXPIRY_SECONDS`` the request itself gets, measured from the
+    proposal rather than from the question: a reader confirms what they were just
+    shown, and a proposal nobody confirmed within the hour is a question nobody is
+    looking at. Without a bound, a ``proposed`` row from a year ago would still
+    answer ``state=proposed`` and still run (audit A360-5 L4).
+    """
+
+    settings = get_settings()
+    moment = now or datetime.now(UTC)
+    return moment - _proposal_anchor(job) > timedelta(seconds=settings.ai.queue_expiry_seconds)
+
+
+def is_confirmed(job: Job) -> bool:
+    """Whether the reader has already run this proposal. A confirmation is spent once."""
+
+    return bool((job.progress or {}).get(PROGRESS_CONFIRMED_AT))
+
+
+def mark_confirmed(job: Job, *, now: datetime | None = None) -> None:
+    """Spend the confirmation. The caller commits, in the same transaction as the read.
+
+    The ONE write the run route makes to the queue row, and it lives here with every
+    other write this feature makes (module docstring). The handler never revisits a
+    terminal record, so nothing overwrites it.
+    """
+
+    moment = now or datetime.now(UTC)
+    _finish(job, {PROGRESS_CONFIRMED_AT: moment.isoformat()})
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +601,8 @@ def _record(session: Session, job: Job, result: ai_client.ModelResult[Any]) -> N
             "status": STATUS_PROPOSED,
             "query": translation.query.model_dump(mode="json"),
             "suggested_members": list(translation.suggested_members),
+            # Anchors the confirmation window (``proposal_expired``).
+            PROGRESS_PROPOSED_AT: datetime.now(UTC).isoformat(),
         },
     )
 
@@ -540,6 +614,8 @@ __all__ = [
     "FEATURE",
     "JOB_TYPE",
     "MODEL_FAILURE_MESSAGES",
+    "PROGRESS_CONFIRMED_AT",
+    "PROGRESS_PROPOSED_AT",
     "REASON_BI_DISABLED",
     "REASON_INTEGRITY",
     "REASON_NLQ_DISABLED",
@@ -551,8 +627,11 @@ __all__ = [
     "TERMINAL_STATUSES",
     "AskRequest",
     "find_question",
+    "is_confirmed",
     "is_expired",
     "load_nlq",
+    "mark_confirmed",
+    "proposal_expired",
     "request_translation",
     "run_bi_nlq_translate",
 ]

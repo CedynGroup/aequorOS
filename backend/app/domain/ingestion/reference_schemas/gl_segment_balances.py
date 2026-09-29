@@ -68,6 +68,10 @@ RESIDUAL_BRANCH_ID = "__UNALLOCATED__"
 #: branch, so it carries no region and no outlet.
 RESIDUAL_BRANCH_NAME = "Unallocated (not attributed to a branch)"
 
+#: The longest value each key field may carry: the width of the mart column it
+#: is copied into verbatim. Asserted equal to the model by test, not imported.
+SEGMENT_FIELD_MAX_LENGTHS: dict[str, int] = {"branch_id": 120, "gl_account_code": 80}
+
 SCHEMA = register(
     ReferenceSchema(
         kind="gl_segment_balances",
@@ -84,6 +88,12 @@ SCHEMA = register(
         optional=("currency", "gl_account_name", "branch_name", "notes"),
         numeric=("ytd_balance",),
         dates=("as_of_date",),
+        # The widths of ``bi_fact_gl_branch_monthly.branch_code`` (also
+        # ``bi_dim_branch.branch_code``) and ``gl_account_code``, which carry these
+        # two verbatim (pinned by test against the model). ``branch_code`` is part of
+        # that mart's PRIMARY KEY, so a longer value is not a warning but a build
+        # that cannot write its rows.
+        max_lengths=SEGMENT_FIELD_MAX_LENGTHS,
     )
 )
 

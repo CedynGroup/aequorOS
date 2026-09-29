@@ -1011,10 +1011,17 @@ def test_the_migration_is_reversible_and_leaves_nothing_behind(
             for table in TABLES
             if connection.scalar(text("SELECT to_regclass(:table)"), {"table": table}) is not None
         ]
+        # Scoped to the schema under test: ``pg_policies`` spans the cluster, so
+        # on a shared database the same tables' policies in another schema (a
+        # developer's disposable schema, or the primary's ``public``) would read
+        # as leftovers of THIS downgrade.
         leftover_policies = set(
             connection.scalars(
-                text("SELECT policyname FROM pg_policies WHERE tablename = ANY(:tables)"),
-                {"tables": list(TABLES)},
+                text(
+                    "SELECT policyname FROM pg_policies "
+                    "WHERE schemaname = :schema AND tablename = ANY(:tables)"
+                ),
+                {"schema": p2_schema.schema_name, "tables": list(TABLES)},
             )
         )
     assert remaining == []

@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ from app.domain.bi.catalogue import Catalogue, ColumnRef, MeasureDef, catalogue
 from app.domain.bi.catalogue.dimensions import POSITION_DIMENSION_IDS
 from app.models import Bank
 from app.models.bi import (
+    TARGET_BANK_WIDE_SCOPE,
     BiAggPositionDaily,
     BiDimBranch,
     BiDimCounterparty,
@@ -51,7 +53,7 @@ from app.schemas.bi import (
     BiTime,
     BiTopN,
 )
-from app.services.bi import compiler
+from app.services.bi import alerts, compiler, mart_builder, reconciliation
 from app.services.bi.compiler import CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError, InvalidQuery, UnknownMember, is_member_id
 from app.services.bi.execution import execute
@@ -241,8 +243,19 @@ def _aggregate_rows(facts: list[BiFactPositionDaily]) -> list[BiAggPositionDaily
         )
         groups[key].append(fact)
 
-    def _sum(rows: list[BiFactPositionDaily], attr: str) -> Decimal:
-        return sum((getattr(r, attr) or Decimal("0") for r in rows), Decimal("0"))
+    def _sql_sum(values: list[Decimal | None]) -> Decimal | None:
+        """SQL's ``SUM``: a NULL input is skipped, and a sum over nothing but
+        NULLs IS NULL. This used to be ``getattr(r, attr) or Decimal("0")``
+        (audit A360 H1): the fixture re-implemented the builder's zero-fill, so
+        an all-NULL cell could not exist in it and
+        ``test_aggregate_and_fact_paths_agree`` was blind to the one class of
+        disagreement the aggregate table can produce — a stored 0 where the
+        fact rows say nothing at all."""
+        present = [value for value in values if value is not None]
+        return sum(present, Decimal("0")) if present else None
+
+    def _sum(rows: list[BiFactPositionDaily], attr: str) -> Decimal | None:
+        return _sql_sum([getattr(r, attr) for r in rows])
 
     out: list[BiAggPositionDaily] = []
     for key, rows in groups.items():
@@ -257,23 +270,30 @@ def _aggregate_rows(facts: list[BiFactPositionDaily]) -> list[BiAggPositionDaily
                 row_count=len(rows),
                 balance_rc_sum=_sum(rows, "balance_rc"),
                 classification_exposure_rc_sum=_sum(rows, "classification_exposure_rc"),
-                non_performing_exposure_rc_sum=sum(
-                    (
-                        r.classification_exposure_rc or Decimal("0")
+                # ``SUM(CASE WHEN non_performing THEN exposure ELSE 0 END)``: a
+                # performing row contributes a literal 0 (the selection did not
+                # hold), so this is NULL only when every row is non-performing
+                # with no exposure — the compiler's own ``_summed`` rule.
+                non_performing_exposure_rc_sum=_sql_sum(
+                    [
+                        r.classification_exposure_rc if r.non_performing else Decimal("0")
                         for r in rows
-                        if r.non_performing
-                    ),
-                    Decimal("0"),
+                    ]
                 ),
                 provision_required_rc_sum=_sum(rows, "provision_required_rc"),
                 provision_held_rc_sum=_sum(rows, "provision_held_rc"),
                 collateral_rc_sum=_sum(rows, "collateral_rc"),
-                rate_x_balance_rc_sum=sum(
-                    (
-                        (r.interest_rate or Decimal("0")) * (r.balance_rc or Decimal("0"))
+                # ``SUM(interest_rate * balance_rc)``: NULL for a row missing
+                # either factor, so NULL when no row carries both.
+                rate_x_balance_rc_sum=_sql_sum(
+                    [
+                        (
+                            r.interest_rate * r.balance_rc
+                            if r.interest_rate is not None and r.balance_rc is not None
+                            else None
+                        )
                         for r in rows
-                    ),
-                    Decimal("0"),
+                    ]
                 ),
                 fx_unconverted_count=sum(1 for r in rows if r.fx_unconverted),
                 builder_version=1,
@@ -1104,6 +1124,19 @@ def test_anything_outside_the_grain_reads_the_fact(
             "dimensions": ["branch.code"],
             "subtotals": True,
             "time": {"as_of": SEP_18, "compare_to": AUG_31},
+        },
+        # Audit A360 H1 — the cases the zero-filling fixture could never hold.
+        # A KPI over a value NO row states: every loan's ``collateral_rc`` is
+        # NULL, so the whole aggregate cell is NULL, and the answer must be too.
+        {"measures": ["loans.collateral_rc"]},
+        # A grain cell whose whole population is unconverted FX: the USD loan is
+        # alone in its (LOAN, retail_loans, B2, USD, …) cell, so ``balance_rc_sum``
+        # is NULL there. By currency it is its own group; filtered to USD it is
+        # the whole KPI.
+        {"measures": ["loans.balance_rc", "loans.count"], "dimensions": ["position.currency"]},
+        {
+            "measures": ["loans.balance_rc", "loans.collateral_rc", "loans.count"],
+            "filters": [{"member": "position.currency", "op": "in", "values": ["USD"]}],
         },
     ],
 )
@@ -1966,3 +1999,410 @@ def test_the_echo_bound_is_the_schema_bound() -> None:
     assert not is_member_id("a" * (MEMBER_ID_MAX_LENGTH + 1))
     assert not is_member_id(_HOSTILE_ID)
     assert is_member_id("loans.balance_rc")
+
+
+# --- audit A360: missing data is never zero, on the KPI path too ----------------------------------
+#
+# Every measure that names no dimension is served from ``bi_agg_position_daily``,
+# so a KPI tile reads whatever the builder stored per grain cell. H1: the builder
+# stored 0 where the fact rows carry nothing, and the fixture above re-implemented
+# that zero-fill, so no test could see it. The bank below has two branches that
+# each leave a whole cell with NULL in a value column — and rows in it, so this
+# is not the empty-population case: HOME's loans state no collateral, and FX's
+# whole book is unconverted foreign currency. Both must read the SAME on the
+# aggregate path as on the fact path, and what they read must be nothing.
+
+
+def _h1_bank(db: Session) -> Bank:
+    bank = _bank(db, ORG_1, f"H1 {uuid4().hex[:6]}")
+    facts = [
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="HOME",
+            sector="agri",
+            balance=Decimal("400"),
+            non_performing=False,
+            counterparty=None,
+            rate=Decimal("0.10"),
+        ),
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="HOME",
+            sector="agri",
+            balance=Decimal("600"),
+            non_performing=True,
+            counterparty=None,
+            rate=None,
+            dpd_band="90_179",
+            grade="substandard",
+            stage=3,
+        ),
+        # FX: two loans, neither with a reporting-currency conversion.
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="FX",
+            sector="trade",
+            balance=None,
+            non_performing=False,
+            counterparty=None,
+            rate=Decimal("0.30"),
+            currency="USD",
+        ),
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="FX",
+            sector="trade",
+            balance=None,
+            non_performing=False,
+            counterparty=None,
+            rate=None,
+            currency="USD",
+        ),
+    ]
+    db.add_all(facts)
+    db.add_all(_aggregate_rows(facts))
+    db.add(_calendar(bank, SEP_18, has_data=True, last_in_month=True))
+    db.add_all(
+        [
+            BiDimBranch(
+                organization_id=bank.organization_id,
+                bank_id=bank.id,
+                branch_code=code,
+                name=name,
+                region="North",
+                mapped=True,
+                builder_version=1,
+                built_at=BUILT_AT,
+            )
+            for code, name in (("HOME", "Home branch"), ("FX", "Foreign-currency desk"))
+        ]
+    )
+    db.flush()
+    # The fixture must be ABLE to hold the state under test, or the tests below
+    # prove nothing: at least one aggregate cell is all-NULL in ``collateral_rc``
+    # and one in ``balance_rc``.
+    cells = db.scalars(
+        select(BiAggPositionDaily).where(BiAggPositionDaily.bank_id == bank.id)
+    ).all()
+    assert cells and all(cell.collateral_rc_sum is None for cell in cells)
+    assert any(cell.balance_rc_sum is None and cell.row_count > 0 for cell in cells)
+    return bank
+
+
+_FX_ONLY = {"member": "branch.code", "op": "in", "values": ["FX"]}
+
+
+def _kpi(  # noqa: PLR0913 - the path is asserted, not assumed
+    db: Session, cat: Catalogue, bank: Bank, member_id: str, path: str, **overrides: Any
+) -> Any:
+    compiled, rows = _run(db, cat, bank, _query(measures=[member_id], **overrides))
+    # A case that never reached the aggregate source would prove nothing about it.
+    assert compiled.used_aggregate is (path == "auto"), (member_id, path)
+    assert len(rows) == 1
+    return rows[0][0]
+
+
+def test_a_book_that_states_no_collateral_has_no_collateral_figure(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    bank = _h1_bank(db_session)
+    assert _kpi(db_session, cat, bank, "loans.collateral_rc", path) is None
+    # Not an empty population — the same book answers its other questions.
+    assert _num(_kpi(db_session, cat, bank, "loans.balance_rc", path)) == 1000.0
+    assert _kpi(db_session, cat, bank, "loans.count", path) == 4
+
+
+def test_a_branch_whose_whole_book_is_unconverted_has_no_reporting_currency_balance(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    bank = _h1_bank(db_session)
+    # As a KPI narrowed to the branch: nothing, never 0.00.
+    assert _kpi(db_session, cat, bank, "loans.balance_rc", path, filters=[_FX_ONLY]) is None
+    # It IS a population — both loans are there, both unconverted.
+    _, rows = _run(
+        db_session,
+        cat,
+        bank,
+        _query(measures=["loans.count", "loans.unconverted_count"], filters=[_FX_ONLY]),
+    )
+    assert rows == [(2, 2)]
+    # And as a group beside a branch that does carry a balance.
+    compiled, rows = _run(
+        db_session,
+        cat,
+        bank,
+        _query(measures=["loans.balance_rc", "loans.count"], dimensions=["branch.code"]),
+    )
+    assert compiled.used_aggregate is (path == "auto")
+    by_branch = {
+        row["branch.code"]: (_num(row["loans.balance_rc"]), row["loans.count"])
+        for row in _as_dict(compiled, rows)
+    }
+    assert by_branch == {"HOME": (1000.0, 2), "FX": (None, 2)}
+
+
+def test_an_absent_figure_is_no_figure_to_an_alert_never_a_breach_of_a_floor(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    """``alerts._observed_value`` is the one read an alert makes. A stored 0 here
+    would satisfy ``observed < threshold`` for every floor the bank has — a
+    "collateral below X" alert firing on a book that stated no collateral — so
+    the answer has to be the typed absence, which ``_evaluate_one`` records as
+    ``not_evaluated`` and never judges."""
+    bank = _h1_bank(db_session)
+    observed, refusal = alerts._observed_value(
+        db_session,
+        cat,
+        _query(measures=["loans.collateral_rc"]),
+        bank=bank,
+        measure=cat.measure("loans.collateral_rc"),
+    )
+    assert (observed, refusal) == (None, alerts.REASON_NO_FIGURE), path
+    # The same for a branch-scoped reader whose whole slice is unconverted: the
+    # data-scope filter is injected exactly as ``_evaluate_one`` injects it.
+    observed, refusal = alerts._observed_value(
+        db_session,
+        cat,
+        _query(measures=["loans.balance_rc"]),
+        bank=bank,
+        measure=cat.measure("loans.balance_rc"),
+        injected_filters=(BiFilter.model_validate(_FX_ONLY),),
+    )
+    assert (observed, refusal) == (None, alerts.REASON_NO_FIGURE), path
+
+
+def test_target_attainment_is_not_computed_against_an_absent_figure(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    """``mart_builder._measure_actuals`` is the builder's read of the actual a
+    target is compared with; a 0 there is "0 % attained" on the board pack.
+    ``_target_values`` leaves variance blank for a ``None`` actual, so the
+    absence has to arrive here as ``None``."""
+    bank = _h1_bank(db_session)
+    collateral = mart_builder._measure_actuals(
+        db_session,
+        bank.organization_id,
+        bank.id,
+        SEP_18,
+        cat.measure("loans.collateral_rc"),
+        scope_dimension="",
+        window_start=SEP_18,
+    )
+    assert collateral == {TARGET_BANK_WIDE_SCOPE: None}, path
+    by_branch = mart_builder._measure_actuals(
+        db_session,
+        bank.organization_id,
+        bank.id,
+        SEP_18,
+        cat.measure("loans.balance_rc"),
+        scope_dimension="branch.code",
+        window_start=SEP_18,
+    )
+    assert by_branch == {"HOME": Decimal(1000), "FX": None}, path
+
+
+# --- audit A360 M3: a count on a date that was never built is not a count of zero -----------------
+#
+# ``SUM`` over nothing is NULL and says "no data"; ``COUNT`` over nothing is 0 and
+# says "measured: none". A select with no row dimensions produces a row from no
+# input, so on a date with no mart rows its count was 0 — and the dashboard reads
+# 0 as a measurement. The compiler now gates an ungrouped COUNT on having seen a
+# row (``_when_any_row``); a grouped select needs no gate because a group exists
+# only where rows do, and its SQL is unchanged.
+
+#: No calendar row and no fact row.
+UNBUILT_DAY = date(2026, 9, 25)
+#: A calendar row (``has_data=False``) and no fact row.
+NO_DATA_DAY = date(2026, 9, 30)
+
+
+@pytest.mark.parametrize("day", [UNBUILT_DAY, NO_DATA_DAY])
+def test_a_count_on_a_date_that_was_never_built_is_null_not_zero(
+    db_session: Session, cat: Catalogue, mart: Bank, path: str, day: date
+) -> None:
+    compiled, rows = _run(
+        db_session,
+        cat,
+        mart,
+        _query(
+            measures=[
+                "loans.count",
+                "positions.count",
+                "positions.unconverted_count",
+                "loans.balance_rc",
+            ],
+            time={"as_of": day},
+        ),
+    )
+    assert compiled.used_aggregate is (path == "auto")
+    assert rows == [(None, None, None, None)], (day, path)
+
+
+def test_a_built_date_whose_book_has_no_loans_counts_zero_loans(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    """The control: rows were seen, the LOAN population is empty, and that is a
+    measured zero — the distinction the gate exists to draw."""
+    bank = _d042_bank(db_session, [("DEPOSIT", "deposit_account_type", "CURRENT", "1000")])
+    assert _value(db_session, cat, bank, "loans.count") == 0, path
+    assert _value(db_session, cat, bank, "positions.count") == 1, path
+    assert _value(db_session, cat, bank, "loans.balance_rc") is None, path
+
+
+def test_a_grouped_count_on_an_unbuilt_date_has_no_rows_and_its_rollup_total_is_null(
+    db_session: Session, cat: Catalogue, mart: Bank, path: str
+) -> None:
+    _, rows = _run(
+        db_session,
+        cat,
+        mart,
+        _query(measures=["loans.count"], dimensions=["branch.code"], time={"as_of": NO_DATA_DAY}),
+    )
+    assert rows == [], path
+    # The grand-total grouping set always yields a row, so it is gated like a KPI.
+    compiled, rows = _run(
+        db_session,
+        cat,
+        mart,
+        _query(
+            measures=["loans.count"],
+            dimensions=["branch.code"],
+            subtotals=True,
+            time={"as_of": NO_DATA_DAY},
+        ),
+    )
+    table = [
+        (row["branch.code"], row["__level"], row["loans.count"]) for row in _as_dict(compiled, rows)
+    ]
+    assert table == [(None, 0, None)], path
+
+
+def test_a_comparison_against_an_unbuilt_prior_date_has_no_prior_count(
+    db_session: Session, cat: Catalogue, mart: Bank, path: str
+) -> None:
+    """A prior period nobody built is not a prior count of 0 — and so not a
+    delta of +4 loans, which is what a 0 would have said."""
+    compiled, rows = _run(
+        db_session,
+        cat,
+        mart,
+        _query(measures=["loans.count"], time={"as_of": SEP_18, "compare_to": date(2026, 7, 31)}),
+    )
+    (row,) = _as_dict(compiled, rows)
+    assert row["loans.count"] == 4, path
+    assert row["loans.count|prior"] is None, path
+    assert row["loans.count|delta"] is None, path
+    assert row["loans.count|delta_pct"] is None, path
+
+
+def test_a_filter_that_matches_no_row_reads_as_no_data_exactly_as_a_sum_always_did(
+    db_session: Session, cat: Catalogue, mart: Bank, path: str
+) -> None:
+    """A COUNT under a filter nothing satisfies is 0 — a MEASUREMENT, not absence.
+
+    This test previously pinned the opposite, as a deliberate decision: a user
+    filter is a WHERE clause, so a filter no row satisfies leaves the select with
+    no row to see, and the count was made NULL beside the sum that is always NULL
+    there. **Verification (auditor V1) showed that decision was wrong**, because
+    the gate cannot tell an empty SELECTION from an unbuilt DATE, and it is the
+    same expression for both. What a reader got was the worse of the two readings:
+    "how many USD loans" on a bank that holds none rendered the needs-data panel —
+    "the figure may not have been computed… or the data behind it may not have
+    arrived" — for a bank whose book is complete and whose honest answer is none.
+    A branch-scoped reader whose branch was simply quiet that day was told the
+    platform had nothing for them.
+
+    So the gate now applies only to an UNFILTERED, unpivoted select (and a
+    rollup's grand total), where the filtered row count and the period's row count
+    are the same fact. A filter matching nothing answers 0 for the count and NULL
+    for the sum — which is not symmetry, but it is what each one means: nobody
+    matched, versus nothing was added up.
+
+    The unbuilt-date case the original finding was about is still covered, by
+    `test_a_count_on_a_date_that_was_never_built_is_null_not_zero`.
+    """
+    _, rows = _run(
+        db_session,
+        cat,
+        mart,
+        _query(
+            measures=["loans.count", "loans.balance_rc"],
+            filters=[{"member": "position.currency", "op": "in", "values": ["XXX"]}],
+        ),
+    )
+    assert rows == [(0, None)], path
+
+
+# --- audit A360 (low): a ratio is an unrounded float, and that is a decision ------------------
+
+
+def _npl_bank(db: Session, *, non_performing: str, performing: str) -> Bank:
+    bank = _bank(db, ORG_1, f"NPL {uuid4().hex[:6]}")
+    facts = [
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="B1",
+            sector="agri",
+            balance=Decimal(non_performing),
+            non_performing=True,
+            counterparty=None,
+            rate=None,
+            dpd_band="90_179",
+            grade="substandard",
+            stage=3,
+        ),
+        _loan(
+            bank,
+            SEP_18,
+            position_id=uuid4(),
+            branch="B1",
+            sector="agri",
+            balance=Decimal(performing),
+            non_performing=False,
+            counterparty=None,
+            rate=None,
+        ),
+    ]
+    db.add_all(facts)
+    db.add_all(_aggregate_rows(facts))
+    db.add(_calendar(bank, SEP_18, has_data=True, last_in_month=True))
+    db.flush()
+    return bank
+
+
+def test_a_ratio_is_the_unrounded_float_quotient_not_the_engines_quantized_decimal(
+    db_session: Session, cat: Catalogue, path: str
+) -> None:
+    """Audit A360-3 (low), left as it is on purpose and pinned so the choice is
+    visible: ``compiler._ratio`` casts to ``Float`` and divides, so
+    ``loans.npl_ratio_pct`` over 3,000,000 of 84,850,000 is ``3.5356511490866236``
+    where the credit engine's ``npl_ratio_pct`` is the fraction quantized to
+    ``ENGINE_RATIO_QUANTUM`` and scaled: ``Decimal('3.535700')``. Identical at
+    two decimals, different in a full-precision export cell. The compiler's
+    figure is a portfolio measure it computes; the engine's is the CERTIFIED
+    figure, copied into ``engine.*`` never recomputed, and R1 reconciles the two
+    at the engine's own quantum — so the export that needs the filed number
+    reads the engine copy. Changing ``_ratio`` to Decimal arithmetic would move
+    every ratio, share and HHI in the catalogue and every golden that reads
+    them; it is not done here.
+    """
+    bank = _npl_bank(db_session, non_performing="3000000", performing="81850000")
+    value = _value(db_session, cat, bank, "loans.npl_ratio_pct")
+    assert isinstance(value, float), path
+    assert value == pytest.approx(3_000_000 / 84_850_000 * 100, rel=1e-15), path
+    engine = (Decimal(3_000_000) / Decimal(84_850_000)).quantize(
+        reconciliation.ENGINE_RATIO_QUANTUM
+    ) * 100
+    assert engine == Decimal("3.535700")
+    assert Decimal(str(value)) != engine, "the two figures are not the same number"
+    assert Decimal(str(value)).quantize(Decimal("0.01")) == engine.quantize(Decimal("0.01"))

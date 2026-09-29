@@ -646,34 +646,65 @@ _AGG_GRAIN = (
 )
 
 
+def _accumulate(current: Decimal | None, contribution: Decimal | None) -> Decimal | None:
+    """``SUM`` semantics in Python: a NULL contribution is ignored, and a sum that
+    has seen nothing but NULLs IS NULL rather than 0."""
+    if contribution is None:
+        return current
+    return contribution if current is None else current + contribution
+
+
 @dataclass
 class _AggCell:
+    """One ``bi_agg_position_daily`` cell, accumulated row by row.
+
+    Every ``*_sum`` starts ABSENT and becomes a number the first time a row
+    carries the value (audit A360 H1). That is SQL's own ``SUM``: over rows that
+    are all NULL it returns NULL, and the compiler's aggregate path is only
+    equivalent to its fact path if the stored cell says the same thing the fact
+    rows would. A cell that started at 0 turned "no collateral stated anywhere"
+    into "collateral of 0", which the KPI surface, alerts, target attainment and
+    insights all read as a measurement. ``non_performing_exposure_rc_sum`` is the
+    sum of ``exposure if non_performing else 0`` — a performing row contributes a
+    literal 0, exactly as the compiler's ``_summed`` does when a selection does
+    not hold — so it is NULL only when every row is non-performing with no
+    exposure. The two counts are the only fields that start at 0: a cell exists
+    because rows do.
+    """
+
     row_count: int = 0
-    balance_rc_sum: Decimal = _ZERO
-    classification_exposure_rc_sum: Decimal = _ZERO
-    non_performing_exposure_rc_sum: Decimal = _ZERO
-    provision_required_rc_sum: Decimal = _ZERO
-    provision_held_rc_sum: Decimal = _ZERO
-    collateral_rc_sum: Decimal = _ZERO
-    rate_x_balance_rc_sum: Decimal = _ZERO
+    balance_rc_sum: Decimal | None = None
+    classification_exposure_rc_sum: Decimal | None = None
+    non_performing_exposure_rc_sum: Decimal | None = None
+    provision_required_rc_sum: Decimal | None = None
+    provision_held_rc_sum: Decimal | None = None
+    collateral_rc_sum: Decimal | None = None
+    rate_x_balance_rc_sum: Decimal | None = None
     fx_unconverted_count: int = 0
 
     def add(self, row: extract.PositionFactRow) -> None:
         self.row_count += 1
-        if row.balance_rc is not None:
-            self.balance_rc_sum += row.balance_rc
-            if row.interest_rate is not None:
-                self.rate_x_balance_rc_sum += row.interest_rate * row.balance_rc
-        if row.classification_exposure_rc is not None:
-            self.classification_exposure_rc_sum += row.classification_exposure_rc
-            if row.non_performing:
-                self.non_performing_exposure_rc_sum += row.classification_exposure_rc
-        if row.provision_required_rc is not None:
-            self.provision_required_rc_sum += row.provision_required_rc
-        if row.provision_held_rc is not None:
-            self.provision_held_rc_sum += row.provision_held_rc
-        if row.collateral_rc is not None:
-            self.collateral_rc_sum += row.collateral_rc
+        self.balance_rc_sum = _accumulate(self.balance_rc_sum, row.balance_rc)
+        self.rate_x_balance_rc_sum = _accumulate(
+            self.rate_x_balance_rc_sum,
+            (
+                row.interest_rate * row.balance_rc
+                if row.balance_rc is not None and row.interest_rate is not None
+                else None
+            ),
+        )
+        self.classification_exposure_rc_sum = _accumulate(
+            self.classification_exposure_rc_sum, row.classification_exposure_rc
+        )
+        self.non_performing_exposure_rc_sum = _accumulate(
+            self.non_performing_exposure_rc_sum,
+            row.classification_exposure_rc if row.non_performing else _ZERO,
+        )
+        self.provision_required_rc_sum = _accumulate(
+            self.provision_required_rc_sum, row.provision_required_rc
+        )
+        self.provision_held_rc_sum = _accumulate(self.provision_held_rc_sum, row.provision_held_rc)
+        self.collateral_rc_sum = _accumulate(self.collateral_rc_sum, row.collateral_rc)
         if row.fx_unconverted:
             self.fx_unconverted_count += 1
 
@@ -753,6 +784,29 @@ def _position_values(row: extract.PositionFactRow, built_at: datetime) -> dict[s
     return values
 
 
+def _count_attribute_overflows(overflows: dict[str, int], attributes: Any) -> None:
+    for key in extract.attribute_text_overflows(attributes):
+        overflows[key] += 1
+
+
+def _log_attribute_overflows(
+    overflows: Mapping[str, int], *, organization_id: str, bank_id: str, as_of: date
+) -> None:
+    """One warning per build naming the keys the extractor refused to carry and
+    how many snapshots each affected (audit A360 H3). Never a value."""
+    if not overflows:
+        return
+    logger.warning(
+        "bi.positions.attribute_text_overflow",
+        extra={
+            "organization_id": organization_id,
+            "bank_id": bank_id,
+            "as_of": as_of.isoformat(),
+            "refused": dict(sorted(overflows.items())),
+        },
+    )
+
+
 def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
     db: Session,
     ctx: TenantContext,
@@ -806,6 +860,10 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
     result = _PositionPass()
     pending: list[dict[str, Any]] = []
     eom_rows = 0
+    # Attribute values the extractor refused to carry because the mart column is
+    # narrower than the value (audit A360 H3): counted per key and logged once,
+    # never a value, never a build failure. The row lands with the column NULL.
+    overflows: dict[str, int] = defaultdict(int)
     for snapshot, position, counterparty, product, gl_account in _stream_snapshots(
         db, organization_id, bank_id, as_of
     ):
@@ -818,6 +876,7 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
             base_currency=base_currency,
             classified=classified.get(snapshot.id),
         )
+        _count_attribute_overflows(overflows, snapshot.attributes)
         pending.append(_position_values(row, built_at))
         result.rows += 1
         result.aggregates[tuple(getattr(row, column) for column in _AGG_GRAIN)].add(row)
@@ -861,6 +920,9 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
         for grain, cell in result.aggregates.items()
     ]
     _insert_chunks(db, BiAggPositionDaily, aggregate_rows)
+    _log_attribute_overflows(
+        overflows, organization_id=organization_id, bank_id=bank_id, as_of=as_of
+    )
 
     row_counts["bi_fact_position_daily"] = result.rows
     row_counts["bi_agg_position_daily"] = len(aggregate_rows)
@@ -1350,7 +1412,18 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
         )
     }
     rows: dict[str, dict[str, Any]] = {}
+    rejected = 0
     for payload in reference_rows(db, organization_id, bank_id, BUSINESS_UNITS_KIND, as_of):
+        # A row the register's own schema rejects is skipped and NOT guessed at,
+        # exactly as ``_gl_segment_allocations`` does: the schema is enforced at
+        # ingestion (``contracts.ENFORCED_REFERENCE_KINDS``), so a malformed row
+        # here is a payload stored before that enforcement — and a unit id or
+        # name wider than the dimension's column (audit A360 H3) would otherwise
+        # fail the whole build on Postgres, or be truncated into a different
+        # branch. Neither is a branch the bank declared.
+        if business_units.SCHEMA.problems_for(dict(payload)):
+            rejected += 1
+            continue
         # Normalise first, then read canonical keys only. The raw reference row
         # is preserved verbatim upstream; this is a read-time view of it.
         row = business_units.normalise_row(dict(payload))
@@ -1386,6 +1459,11 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
             "builder_version": BUILDER_VERSION,
             "built_at": built_at,
         }
+    if rejected:
+        logger.warning(
+            "bi.dim_branch.register_rows_rejected",
+            extra={"organization_id": organization_id, "bank_id": bank_id, "rows": rejected},
+        )
     if residual_branch:
         # The GL breakdown's unallocated remainder. Not a branch and not an
         # UNMAPPED one either — it is a computed line, so it gets its own name

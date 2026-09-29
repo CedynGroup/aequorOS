@@ -1,4 +1,4 @@
-"""``app.services.bi.reconciliation``: R1–R9 on the canonical fixture bank.
+"""``app.services.bi.reconciliation``: R1–R12 on the canonical fixture bank.
 
 Each check compares what the builder wrote against what the platform already
 computed: the live credit NPL, the live balance-sheet lines, the snapshot
@@ -17,20 +17,25 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.domain.bi.catalogue import catalogue
 from app.domain.capital import loan_classification as classification_engine
 from app.models import (
     Bank,
+    BiFactEngineMetric,
+    BiFactPositionDaily,
     BiReconciliationResult,
     CanonicalPositionSnapshot,
     CurrentFinancialFact,
     LiveMetric,
 )
 from app.models.bi import RECONCILIATION_CHECK_IDS
+from app.schemas.bi import BiQuery, BiTime
 from app.services import pipeline
 from app.services.bi import reconciliation
+from app.services.bi.compiler import compile_query
 from app.services.bi.reconciliation import (
     AMBER,
     ARREARS_COMPLETENESS,
@@ -54,6 +59,7 @@ from tests.services.bi.test_mart_builder import (
     MID_MONTH,
     add_position,
     build,
+    daily_rows,
     new_batch,
     seed_book,
 )
@@ -479,21 +485,27 @@ def _r12(db: Session, as_of: date) -> CheckResult:
     return result
 
 
-def _loan_with_arrears(
+def _loan_with_arrears(  # noqa: PLR0913 - one keyword per attribute the cases vary
     db: Session,
     reference: str,
     *,
     arrears: str | None,
     balance: str = "1000000",
     currency: str = "GHS",
+    balance_ghs: str | None = None,
 ) -> None:
     """One accepted LOAN at ``MID_MONTH``, with or without a stated arrears amount.
 
     The value goes in verbatim as the exact decimal STRING ingestion normalises it
     to, so the mart column is filled by the same path a real push fills it by.
+    ``balance_ghs`` defaults to the balance for a reporting-currency loan and to
+    nothing (UNCONVERTED) for a foreign one; pass it to state a CONVERTED
+    foreign-currency loan, the case audit A360 R12 found dropped.
     """
     common = new_batch(db, MID_MONTH)
     extra = {"arrears_amount": arrears} if arrears is not None else None
+    if balance_ghs is None and currency == "GHS":
+        balance_ghs = balance
     add_position(
         db,
         common,
@@ -501,7 +513,7 @@ def _loan_with_arrears(
         "LOAN",
         currency,
         balance=balance,
-        balance_ghs=balance if currency == "GHS" else None,
+        balance_ghs=balance_ghs,
         product="LN.CORP.5Y",
         stage=1,
         extra=extra,
@@ -672,3 +684,173 @@ def test_r12_is_evaluated_dispatched_and_stored_through_the_same_vocabulary(
     stored = _results(db_session)
     assert stored[ARREARS_COMPLETENESS].status == outcome.trust[ARREARS_COMPLETENESS]
     assert trust_for(db_session, ORG_1, SAMPLE_BANK_ID, AS_OF) == outcome.trust
+
+
+def test_r12_counts_a_converted_foreign_currency_loans_stated_arrears(db_session: Session) -> None:
+    """Audit A360 R12. A foreign-currency loan the bank DID convert (``balance_ghs``
+    stated) states its arrears in its own currency; the platform used to drop them
+    with the unconverted loans', so R12 reported "no loan states an arrears amount"
+    for a loan that did and ``loans.arrears_share_pct`` left the loan out. The
+    arrears are a slice of the same balance at the same date, so the bank's own
+    ``balance_ghs / balance`` is the rate — 40,000 of 400,000 XFC on a 6,000,000
+    conversion is 600,000 in the reporting currency, exactly one tenth either way.
+    """
+    seed_book(db_session, live=False)
+    _loan_with_arrears(db_session, "LOAN/ARR1", arrears="300000")  # 1,000,000, domestic
+    _loan_with_arrears(
+        db_session,
+        "LOAN/FXC",
+        arrears="40000",
+        balance="400000",
+        currency="USD",
+        balance_ghs="6000000",
+    )
+    db_session.commit()
+    outcome = build(db_session, MID_MONTH)
+
+    converted = daily_rows(db_session, MID_MONTH)["LOAN/FXC"]
+    assert converted.fx_unconverted is False
+    assert converted.balance_rc == Decimal("6000000")
+    assert converted.arrears_amount_rc == Decimal("600000")
+    assert converted.balance_rc is not None and converted.arrears_amount_rc is not None
+    assert converted.arrears_amount_rc / converted.balance_rc == Decimal("40000") / Decimal(
+        "400000"
+    )
+
+    r12 = _r12(db_session, MID_MONTH)
+    assert r12.status == GREEN, r12.detail
+    assert r12.detail["loan_rows"] == 2
+    assert r12.detail["loans_without_arrears_amount"] == 0
+    assert Decimal(r12.detail["stated_arrears_rc"]) == Decimal("900000")  # 300,000 + 600,000
+    assert "reason" not in r12.detail
+    assert outcome.trust[ARREARS_COMPLETENESS] == GREEN
+
+    # The figure R12 guards, read through the compiler as the surface reads it:
+    # 900,000 over the 7,000,000 both loans are part of, not 300,000 over 1,000,000.
+    compiled = compile_query(
+        db_session,
+        catalogue(),
+        BiQuery(
+            measures=["loans.arrears_amount_rc", "loans.arrears_share_pct"],
+            time=BiTime(as_of=MID_MONTH),
+        ),
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+    )
+    assert [column.id for column in compiled.columns] == [
+        "loans.arrears_amount_rc",
+        "loans.arrears_share_pct",
+    ]
+    amount, share = db_session.execute(compiled.select).one()
+    assert Decimal(str(amount)) == Decimal("900000")
+    assert float(share) == pytest.approx(900_000 / 7_000_000 * 100)
+
+
+# --- audit A360: absence is not agreement ------------------------------------------------------
+
+
+def test_r5_is_grey_not_green_when_there_is_nothing_on_either_side(db_session: Session) -> None:
+    """``0 == 0`` is not completeness: nothing was projected because nothing was
+    there, and a green here would badge an empty date."""
+    seed_book(db_session, live=False)
+    # The fixture has no snapshot at MID_MONTH and nothing has been built there.
+    check = reconciliation.check_r5_completeness(db_session, ORG_1, SAMPLE_BANK_ID, MID_MONTH)
+    assert check.status == GREY
+    assert "empty match is not a pass" in check.detail["reason"]
+    assert (check.lhs, check.rhs) == (None, None)
+    # A build over that date persists the same verdict — and the badge follows it.
+    outcome = build(db_session, MID_MONTH)
+    assert outcome.trust["R5"] == GREY
+    assert _results(db_session, MID_MONTH)["R5"].status == GREY
+    # The control: a date with a book is still compared, exactly.
+    build(db_session, AS_OF)
+    r5 = _results(db_session, AS_OF)["R5"]
+    assert (r5.status, r5.lhs, r5.rhs) == (GREEN, Decimal(FIXTURE_ROWS), Decimal(FIXTURE_ROWS))
+
+
+def test_r1_is_grey_when_the_mart_holds_no_loan_rows_even_if_the_engine_says_zero(
+    db_session: Session,
+) -> None:
+    """An empty loan mart and an engine ratio of 0 are one measurement and nothing,
+    not two measurements that match. The built slice is tampered into exactly the
+    shape the audit named: every loan row gone, the engine copy at 0."""
+    seed_book(db_session)  # the live plane gives the engine an NPL ratio to copy
+    build(db_session)
+    assert _results(db_session)["R1"].status == GREEN  # before the tamper, a real match
+    db_session.execute(
+        delete(BiFactPositionDaily).where(
+            BiFactPositionDaily.bank_id == SAMPLE_BANK_ID,
+            BiFactPositionDaily.position_type == reconciliation.LOAN_TYPE,
+        )
+    )
+    db_session.execute(
+        update(BiFactEngineMetric)
+        .where(
+            BiFactEngineMetric.bank_id == SAMPLE_BANK_ID,
+            BiFactEngineMetric.module == reconciliation.CREDIT_MODULE,
+            BiFactEngineMetric.metric_id == reconciliation.NPL_METRIC_ID,
+            BiFactEngineMetric.tier == "live",
+        )
+        .values(value=Decimal(0))
+    )
+    db_session.flush()
+    check = reconciliation.check_r1_npl(db_session, ORG_1, SAMPLE_BANK_ID, AS_OF)
+    assert check.status == GREY
+    assert "no loan rows" in check.detail["reason"]
+    assert Decimal(check.detail["engine_npl_ratio_pct"]) == Decimal(0)
+    assert (check.lhs, check.rhs) == (None, None)
+
+
+def test_r9_is_grey_when_the_live_plane_has_no_balance_sheet_lines_to_have_balanced(
+    db_session: Session,
+) -> None:
+    """The derivation stamps its control record on a BALANCE-SHEET line; with no
+    such line there is no book that could have balanced, and reading the absent
+    stamp as "balanced exactly" is absence read as agreement."""
+    seed_book(db_session, live=False)
+    # A live plane that carries no balance-sheet line at all.
+    db_session.add(
+        CurrentFinancialFact(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            source_as_of_date=AS_OF,
+            source_generation=1,
+            fact_group="off_balance",
+            category="guarantees",
+            amount=Decimal("1"),
+            currency="GHS",
+            attributes={},
+        )
+    )
+    db_session.flush()
+    check = reconciliation.check_r9_balance_identity(db_session, CTX, SAMPLE_BANK_ID)
+    assert check.status == GREY
+    assert "no balance-sheet lines" in check.detail["reason"]
+
+
+def test_r9_green_without_a_stamp_is_earned_only_where_balance_sheet_lines_exist(
+    db_session: Session,
+) -> None:
+    """The control, and why the rule is drawn where it is: ``fact_derivation.bs``
+    writes the ``reconciliation`` record ONLY when a plug was applied, so a live
+    balance sheet with lines and no stamp genuinely balanced exactly. That green
+    now states how many lines it rests on, so it can never be confused with the
+    no-lines case above."""
+    seed_book(db_session)  # the fixture's live plane balances under an exception → stamped
+    assert reconciliation.check_r9_balance_identity(db_session, CTX, SAMPLE_BANK_ID).status == AMBER
+    # Strip the stamp from every balance-sheet line: the shape of a book that
+    # never needed a plug.
+    for fact in db_session.scalars(
+        select(CurrentFinancialFact).where(
+            CurrentFinancialFact.bank_id == SAMPLE_BANK_ID,
+            CurrentFinancialFact.fact_group == reconciliation.BALANCE_SHEET_GROUP,
+        )
+    ):
+        fact.attributes = {
+            k: v for k, v in (fact.attributes or {}).items() if k != "reconciliation"
+        }
+    db_session.flush()
+    check = reconciliation.check_r9_balance_identity(db_session, CTX, SAMPLE_BANK_ID)
+    assert check.status == GREEN
+    assert check.detail["reason"] == "The live book balanced exactly; no plug was recorded."
+    assert check.detail["balance_sheet_lines"] > 0

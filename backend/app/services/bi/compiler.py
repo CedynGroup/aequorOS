@@ -1400,6 +1400,31 @@ def _when_answerable(
     return case((cols[alias] > 0, expr))
 
 
+def _rows_seen(alias: str, predicate: ColumnElement[Any] | None) -> _Component:
+    """How many fact rows the select saw inside ``predicate`` (the period and the
+    pivot cell), population or not — the thing a COUNT cannot tell apart from a
+    zero on its own."""
+    return _Component(alias, func.count(_present(literal(1, Integer), predicate)))
+
+
+def _when_any_row(
+    expr: ColumnElement[Any], cols: Mapping[str, ColumnElement[Any]], alias: str
+) -> ColumnElement[Any]:
+    """``expr``, or NULL when the select saw no row at all (audit A360 M3).
+
+    ``SUM`` over nothing is NULL and says "no data"; ``COUNT`` over nothing is 0
+    and says "measured: none" — and only one of those is true of a date that
+    was never built or a dataset the bank never supplied. An UNGROUPED select
+    (a KPI, a comparison period, a rollup's grand total) produces a row from no
+    input, so its count is gated on having seen a row; a grouped select never
+    needs the gate, because a group exists only where rows do, and it is omitted
+    there so the SQL stays what it was.
+    """
+    if alias not in cols:
+        return expr
+    return case((cols[alias] > 0, expr))
+
+
 def _ratio(numerator: ColumnElement[Any], denominator: ColumnElement[Any]) -> ColumnElement[Any]:
     """``num / nullif(den, 0)`` as a floating ratio: NULL for a NULL or zero denominator."""
     return sql_cast(numerator, Float) / func.nullif(denominator, 0)
@@ -1412,6 +1437,37 @@ def _scaled(measure: MeasureDef, value: ColumnElement[Any]) -> ColumnElement[Any
     return value
 
 
+def _plan_additive_measure(
+    source: _Source,
+    measure: MeasureDef,
+    prefix: str,
+    pivot_predicate: ColumnElement[Any] | None,
+    *,
+    guard_empty: bool,
+) -> _MeasurePlan:
+    """A ``sum`` / ``count`` / ``flow_sum``: one aggregate, the D-042 answerable
+    count when a selection column can be NULL, and — for a COUNT on a select
+    that can produce a row from no input — the rows-seen gate."""
+    kind = measure.aggregation
+    value = source.measure_value(measure)
+    alias = f"{prefix}v"
+    answer = f"{prefix}a"
+    seen = f"{prefix}z"
+    counted = _answerable_count(value, _all(value.population, pivot_predicate), answer)
+    aggregate = _plan_additive(value, kind, pivot_predicate)
+    present = _rows_seen(seen, pivot_predicate) if kind == "count" and guard_empty else None
+    return _MeasurePlan(
+        measure,
+        (
+            _Component(alias, aggregate),
+            *([counted] if counted else ()),
+            *([present] if present else ()),
+        ),
+        None,
+        lambda cols: _when_any_row(_when_answerable(cols[alias], cols, answer), cols, seen),
+    )
+
+
 def _plan_measure(  # noqa: PLR0911, PLR0913 - one return per aggregation kind
     cat: Catalogue,
     source: _Source,
@@ -1419,19 +1475,16 @@ def _plan_measure(  # noqa: PLR0911, PLR0913 - one return per aggregation kind
     prefix: str,
     pivot_predicate: ColumnElement[Any] | None,
     over_column: ColumnElement[Any] | None,
+    *,
+    guard_empty: bool = False,
 ) -> _MeasurePlan:
+    """One measure's components and finalizer. ``guard_empty`` is set by the
+    assembly site for a select that can produce a row from no input, and makes a
+    COUNT read NULL rather than 0 there (:func:`_when_any_row`)."""
     kind = measure.aggregation
     if kind in _ADDITIVE:
-        value = source.measure_value(measure)
-        alias = f"{prefix}v"
-        answer = f"{prefix}a"
-        counted = _answerable_count(value, _all(value.population, pivot_predicate), answer)
-        aggregate = _plan_additive(value, kind, pivot_predicate)
-        return _MeasurePlan(
-            measure,
-            (_Component(alias, aggregate), *([counted] if counted else ())),
-            None,
-            lambda cols: _when_answerable(cols[alias], cols, answer),
+        return _plan_additive_measure(
+            source, measure, prefix, pivot_predicate, guard_empty=guard_empty
         )
     if kind == "last_value":
         value = source.measure_value(measure)
@@ -1483,7 +1536,15 @@ def _plan_measure(  # noqa: PLR0911, PLR0913 - one return per aggregation kind
         # a rate over the measurable population rather than one that reads an
         # unrecorded arrears flag as "current".
         answerable = source.measure_value(numerator_measure).answerable
-        num = _plan_measure(cat, source, numerator_measure, f"{prefix}n", pivot_predicate, None)
+        num = _plan_measure(
+            cat,
+            source,
+            numerator_measure,
+            f"{prefix}n",
+            pivot_predicate,
+            None,
+            guard_empty=guard_empty,
+        )
         den = _plan_measure(
             cat,
             source,
@@ -1491,6 +1552,7 @@ def _plan_measure(  # noqa: PLR0911, PLR0913 - one return per aggregation kind
             f"{prefix}d",
             _all(pivot_predicate, answerable),
             None,
+            guard_empty=guard_empty,
         )
         return _MeasurePlan(
             measure,
@@ -1555,6 +1617,8 @@ def _plan_calculated(  # noqa: PLR0913 - one plan per figure per period, all exp
     prefix: str,
     pivot_predicate: ColumnElement[Any] | None,
     windows: Mapping[int, ColumnElement[Any] | None],
+    *,
+    guard_empty: bool = False,
 ) -> _MeasurePlan:
     """A calculated measure: one sub-plan per (figure it names × period it reads).
 
@@ -1578,6 +1642,7 @@ def _plan_calculated(  # noqa: PLR0913 - one plan per figure per period, all exp
                 f"{prefix}r{index}p{offset}",
                 _all(pivot_predicate, windows[offset]),
                 None,
+                guard_empty=guard_empty,
             )
             parts[(measure.id, offset)] = plan
             components.extend(plan.components)
@@ -1999,6 +2064,33 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
         lagged = dict(windows)
         in_window = or_(current_period, *windows.values())
 
+    # A select with no row dimensions produces output from no input, so its COUNTs
+    # are gated on having seen a row (``_when_any_row``); a plain grouped select is
+    # not, because a group exists only where rows do.
+    #
+    # NARROWED after verification (audit A360-3 M3's fix over-reached). The gate
+    # counts rows INSIDE this select, whose WHERE already carries every user and
+    # INJECTED filter — so wherever a filter is present it cannot tell "this date
+    # was never built" from "this selection is empty on a date that was". The
+    # over-reach was user-visible in the wrong direction: "how many USD loans" on a
+    # bank holding no USD loans answered "no data supplied" instead of 0, a
+    # branch-scoped reader whose branch was quiet that day was told the platform
+    # had nothing, and an alert on such a count went `not_evaluated` rather than
+    # breaching. A rollup was worse still: the same cell changed with `subtotals`,
+    # because the gate applied to every row of the rollup select rather than to the
+    # grand total alone.
+    #
+    # So the gate is kept ONLY where the filtered row count and the period's row
+    # count are the same thing — an unfiltered, unpivoted, non-rollup select, which
+    # is exactly the plain KPI the finding was about. Everywhere else a COUNT is 0,
+    # as it was before, and the honest fix (asking `bi_dim_date.has_data` whether
+    # the window was built at all, which is a property of the DATE and not of the
+    # selection) is recorded as owed rather than half-built here.
+    # A rollup's grand total is kept: it genuinely produces a row from no input.
+    # What is dropped is the FILTERED and PIVOTED cases, where the gate could not
+    # tell an empty selection from an unbuilt date.
+    guard_empty = (not dimensions or rollup) and not resolved.filters and pivot_column is None
+
     # Measure plans, one per (output, pivot value, period).
     plans: list[tuple[str, _Emitted, Any | None, str, _MeasurePlan]] = []
     for j, measure in enumerate(measures):
@@ -2020,6 +2112,7 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
                         f"{alias}{suffix}",
                         pivot_predicate,
                         lagged if measure.grain is not None else {0: period_predicate},
+                        guard_empty=guard_empty,
                     )
                 else:
                     plan = _plan_measure(
@@ -2029,6 +2122,7 @@ def _grouped(  # noqa: PLR0912, PLR0913, PLR0915 - the one assembly site, kept l
                         f"{alias}{suffix}",
                         _all(pivot_predicate, period_predicate),
                         over_column,
+                        guard_empty=guard_empty,
                     )
                 plans.append((alias, measure, value, suffix, plan))
 

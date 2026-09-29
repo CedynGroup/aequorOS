@@ -103,3 +103,32 @@ def test_every_enforced_kind_is_registered_and_carries_its_own_rules() -> None:
             f"{kind} is enforced but carries no row_validator, so problems_for "
             "would run the declarative checks only"
         )
+
+
+# --- audit A360 H3: the width the mart can store is enforced at the door ------------------
+
+
+def test_an_over_long_unit_id_is_refused_at_the_door_with_the_limit_named() -> None:
+    """A ``bi_dim_branch.branch_code`` is 120 characters wide. Accepted here, a
+    longer id used to fail the tenant's whole nightly mart build on Postgres;
+    the refusal now says which limit and never repeats the value."""
+    wide = "x" * 121
+    over: dict[str, str | None] = {**_VALID_UNIT, "business_unit_id": wide}
+    with pytest.raises(ValueError, match="120-character limit") as caught:
+        _row("business_units", over)
+    assert "business_unit_id" in str(caught.value)
+    assert "121 characters" in str(caught.value)
+    assert wide not in str(caught.value)
+    assert _row("business_units", {**_VALID_UNIT, "business_unit_id": "x" * 120})
+
+
+def test_an_over_long_segment_branch_is_refused_at_the_door() -> None:
+    row: dict[str, str | None] = {
+        "as_of_date": "2026-06-30",
+        "gl_account_code": "4001",
+        "branch_id": "b" * 121,
+        "ytd_balance": "1000",
+    }
+    with pytest.raises(ValueError, match="branch_id"):
+        _row("gl_segment_balances", row)
+    assert _row("gl_segment_balances", {**row, "branch_id": "b" * 120})

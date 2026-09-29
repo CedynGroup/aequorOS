@@ -30,7 +30,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -46,6 +46,7 @@ from app.db.base import utc_now
 from app.domain.bi.catalogue import catalogue
 from app.jobs import bi_alerts as alert_job
 from app.models import Bank, Job, Notification, User
+from app.models.bi import BiMartBuild
 from app.models.bi_notifications import BiAlert, BiAlertEvent
 from app.services import authorization, job_queue
 from app.services.bi import alerts, limits, provenance
@@ -671,3 +672,47 @@ def test_the_handler_emits_nothing_for_an_unevaluated_alert(
         )
         is None
     )
+
+
+# --- a failed rebuild is not a state to judge ----------------------------------
+
+
+def test_a_failed_rebuild_evaluates_no_alert_against_the_rows_it_rolled_back_to(
+    db_session: Session, bank: Bank, fingerprint: str
+) -> None:
+    """Audit A360 H2's second-order effect, caught by T1b rather than by the audit.
+
+    The builder rolls a failed rebuild back to the PREVIOUS rows, so figures are
+    still there to be read. Before H2, ``build_fingerprint`` answered ``None`` for
+    that state and ``evaluate_bank``'s ``fingerprint is None`` test skipped the
+    date by accident. H2 made the fingerprint a digest — correct, because a stale
+    serve must be attributable — and that silently turned the accident off: every
+    alert would then be judged against a book the bank has already moved past, and
+    recipients notified about it.
+
+    A false breach is worse than silence for a threshold alert: it is acted on.
+    So the date is skipped explicitly now, on `provenance.stale_dates`, which is
+    the same fact the trust badge greys itself on.
+    """
+
+    row = _alert(db_session, direction="below", threshold=Decimal("1"))
+    # It WOULD evaluate: same alert, same rows, before the build state changes.
+    assert _evaluate(db_session).outcomes, "the fixture must have something to judge"
+
+    db_session.execute(
+        update(BiMartBuild)
+        .where(
+            BiMartBuild.organization_id == ORG_1,
+            BiMartBuild.bank_id == bank.id,
+            BiMartBuild.as_of_date == AS_OF,
+        )
+        .values(status="failed")
+    )
+    db_session.flush()
+
+    evaluation = _evaluate(db_session)
+    assert evaluation.outcomes == (), (
+        "an alert was judged against rows whose latest build failed — the figure "
+        "describes a book the bank has moved past"
+    )
+    assert _events(db_session, row) == [], "and nobody was notified about it"

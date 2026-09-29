@@ -33,7 +33,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -47,7 +47,7 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.jobs import bi_subscriptions as subscription_job
 from app.models import AuditEvent, Bank, Job, User
-from app.models.bi import BiQueryLog
+from app.models.bi import BiMartBuild, BiQueryLog
 from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
 from app.services import authorization, job_queue, scheduler
 from app.services.bi import subscriptions
@@ -1010,3 +1010,38 @@ def test_the_tick_says_nothing_about_subscriptions_while_they_are_off(
     assert (
         db_session.scalar(select(Job.id).where(Job.job_type == subscriptions.JOB_TYPE_SCAN)) is None
     )
+
+
+def test_a_failed_rebuild_delivers_nothing_rather_than_mailing_stale_figures(
+    db_session: Session, bank: Bank, relay: _Relay
+) -> None:
+    """Audit A360 H2, at the surface where it leaves the building.
+
+    The builder rolls a failed rebuild back to the PREVIOUS rows, so an artifact can
+    still be rendered from them. Mailing it is the worst form of that defect: it
+    reaches people who will act on it, and its provenance line names a build that did
+    not succeed. The scheduled path was shielded by `latest_built_as_of` filtering to
+    `succeeded`; the EXPLICIT-date path (`enqueue_on_new_data`) never was, and
+    verification auditor V1's probe showed HEAD mailing the pack.
+    """
+
+    subscription = _subscription(db_session, recipients=[USER_1])
+    db_session.commit()
+    job = _run_job(db_session, subscription, payload={"as_of_date": AS_OF.isoformat()})
+
+    db_session.execute(
+        update(BiMartBuild)
+        .where(
+            BiMartBuild.organization_id == ORG_1,
+            BiMartBuild.bank_id == bank.id,
+            BiMartBuild.as_of_date == AS_OF,
+        )
+        .values(status="failed")
+    )
+    db_session.flush()
+
+    outcome = subscriptions.run_subscription(db_session, job)
+
+    assert outcome.reason == subscriptions.REASON_STALE_BUILD, outcome.reason
+    assert outcome.deliveries == ()
+    assert relay.sent == [], "a board pack was mailed from rows a later build disowned"

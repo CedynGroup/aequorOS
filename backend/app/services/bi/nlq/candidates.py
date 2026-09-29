@@ -1,8 +1,8 @@
 """Which catalogue members the model is allowed to name, for ONE question.
 
-The catalogue holds 1,416 measures — 984 of them ``engine.*`` regime, tier and
-target variants — and 66 dimensions: 363 KB of labels and descriptions, which is
-not a prompt. So a question is answered over a SUBSET, and how that subset is
+The catalogue holds 1,456 measures — 984 of them ``engine.*`` regime, tier and
+target variants — and 69 dimensions: on the order of a megabyte of labels and
+descriptions, which is not a prompt. So a question is answered over a SUBSET, and how that subset is
 chosen is a safety property rather than a performance trick.
 
 **It is a subset of what the caller can already see.** The input is the visible

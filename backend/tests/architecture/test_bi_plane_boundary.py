@@ -21,13 +21,25 @@ b. **BI never calls the official derivation.** ``derive_facts`` REFUSES a book
    is a read projection and must never hold that decision. Both halves are
    checked: no reference from BI, and no BI module smuggled into the
    derivation's own allow-list.
-c. **BI writes ``bi_*`` tables and nothing else.** Every ``add`` / ``add_all`` /
-   ``merge`` / bulk write and every ``insert()`` / ``update()`` / ``delete()``
-   target in the BI tree is resolved to a mapped class and checked against the
+c. **BI writes ``bi_*`` tables, plus exactly the platform seams named in
+   :data:`PERMITTED_DIRECT_WRITES` and :data:`PERMITTED_MEDIATED_WRITES`, and
+   nothing else.** Every ``add`` / ``add_all`` / ``merge`` / bulk write and every
+   ``insert()`` / ``update()`` / ``delete()`` target in EVERY BI-owned module —
+   the service and domain trees, the feature routes, the jobs, the operator
+   surface, the models — is resolved to a mapped class and checked against the
    ``bi_``-prefixed tables of ``Base.metadata`` — derived, not listed, so a new
    mart is covered the day its model lands. A write whose target cannot be read
    off the code is itself a violation: an unreadable write site is how the next
-   one hides.
+   one hides. A write MEDIATED by a helper imported from outside BI
+   (``audit.record_event`` writing ``audit_events``, ``job_queue.enqueue``
+   writing ``jobs``) is resolved through the helper's own body and convicted the
+   same way unless the ``(helper, table)`` pair is allow-listed with its reason.
+   Until audit A360-1 the scan covered ``app/services/bi`` and ``app/domain/bi``
+   only — 68 of the 90 exempt modules — and the one direct non-``bi_*`` write in
+   the tree (``ai_commentary_drafts``, from the AI job) had been placed in the
+   unscanned part precisely because the guard would have convicted it under
+   ``app/services/bi``; a ``db.add(CanonicalPosition(...))`` in any feature
+   route would have passed every guard.
 d. **``app/domain/bi/**`` imports no application state.** The BI-specific
    restatement of the pure-domain rule (``test_dependency_boundaries.py``), so
    the catalogue and the row extractors stay reusable and golden-testable.
@@ -48,9 +60,14 @@ AST guard. Rule (c) is flow-insensitive except for one deliberate concession —
 a local name resolves to its NEAREST PRECEDING assignment in the same function,
 which is what ``x = cache.get(k)`` / ``if x is None: x = Model(...)`` /
 ``db.add(x)`` requires — and it does not see an UPDATE produced by mutating an
-attribute of a row loaded from another plane. Rule (c) therefore proves what is
-written, not everything that could conceivably be flushed; the Postgres RLS
-policies and the read-only BI session are the other half.
+attribute of a row loaded from another plane. Mediated writes are followed ONE
+hop out of BI: the imported helper's body is scanned, and helpers it calls in
+its OWN module are followed two levels down; a helper that delegates to a third
+module's writer is not followed, and a helper reached through anything but a
+plain import alias (a callback, a registry lookup, a method on an object) is
+invisible. Rule (c) therefore proves what is written, not everything that could
+conceivably be flushed; the Postgres RLS policies and the read-only BI session
+are the other half.
 
 Every assertion names the offending ``path:line``, and every checker has a
 self-proving case: a guard that has never fired proves only that it is present.
@@ -232,8 +249,18 @@ def _bi_files(root: Path) -> list[Path]:
 
 
 def _bi_tree() -> list[Path]:
+    """The two roots rule (d)'s purity check and the seam rules reason about."""
     paths = _bi_files(BI_SERVICE_ROOT) + _bi_files(BI_DOMAIN_ROOT)
     assert paths, "no BI modules found — the scan would pass for the wrong reason"
+    return paths
+
+
+def _bi_owned_tree() -> list[Path]:
+    """EVERY module rule (a) exempts — which is therefore every module rules (b)
+    and (c) must scan. Exempting a file from the import ban while not scanning
+    its writes is how the A360-1 gap was made."""
+    paths = sorted(BACKEND / relative for relative in BI_OWNED)
+    assert len(paths) > len(_bi_tree()), "BI_OWNED must reach beyond the two service/domain roots"
     return paths
 
 
@@ -490,7 +517,7 @@ def derivation_references(path: Path) -> list[int]:
 def test_bi_never_reaches_for_the_official_derivation() -> None:
     offenders = [
         f"{_relative(path)}:{lineno}"
-        for path in _bi_tree()
+        for path in _bi_owned_tree()
         for lineno in derivation_references(path)
     ]
     assert offenders == [], (
@@ -580,6 +607,48 @@ ASSUMED_SESSION_NAMES: frozenset[str] = frozenset({"db", "session"})
 #: this is unreadable and therefore a violation.
 UNRESOLVED = "?"
 
+#: ``(BI module, table)`` → why that module may write that non-``bi_*`` table
+#: DIRECTLY. Every entry is a recorded decision, and
+#: ``test_every_permitted_write_is_live`` fails the day an entry stops being
+#: exercised, so the list cannot rot into a blanket permission.
+PERMITTED_DIRECT_WRITES: dict[tuple[str, str], str] = {
+    ("app/jobs/bi_commentary.py", "ai_commentary_drafts"): (
+        "The AI tier's own ledger (D-191). A commentary draft is model output "
+        "awaiting human review, not a mart figure, and it is keyed by the consent "
+        "and approval references the AI gates require; it lives outside the bi_* "
+        "family so the AI lane's retention and egress rules govern it rather than "
+        "the mart rebuild. Written ONLY by the `ai`-lane job that holds the model key."
+    ),
+}
+
+#: ``(imported helper, table)`` → why a BI module may write that table THROUGH
+#: that helper. These are the platform's own seams; BI calls them exactly as
+#: every other feature does and must never write the tables itself.
+PERMITTED_MEDIATED_WRITES: dict[tuple[str, str], str] = {
+    ("app.services.audit.record_event", "audit_events"): (
+        "Every tenant mutation and every disclosure lands in the append-only audit "
+        "trail through the one platform recorder; a BI route that saved a dashboard "
+        "or served a feed without an audit row would be the defect."
+    ),
+    ("app.services.job_queue.enqueue", "jobs"): (
+        "The one queue writer. BI enqueues its own job types (mart refresh, export, "
+        "alert evaluation, subscription runs, AI drafts) and may never insert a "
+        "`jobs` row by hand — the writer owns idempotency keys, lanes and reclaim."
+    ),
+    ("app.services.notifications.emit", "notifications"): (
+        "A threshold alert that breaches is delivered to the bank's notification "
+        "inbox through the platform's one emitter, beside every other platform "
+        "notice, so the inbox's read/acknowledge lifecycle is not re-implemented "
+        "for BI. Found by the A360-1 scan extension; not named in the audit."
+    ),
+    ("app.operator.deps.record_operator_action", "operator_audit_log"): (
+        "Every staff-plane mutation lands in the append-only operator audit log "
+        "(AGENTS.md, staff control plane); the operator backfill route is a staff "
+        "mutation and records itself like every other. Found by the A360-1 scan "
+        "extension; not named in the audit."
+    ),
+}
+
 
 class _WriteScanner:
     """Resolves the write targets of one BI module.
@@ -591,11 +660,18 @@ class _WriteScanner:
     through it either passes vacuously or convicts correct code).
     """
 
-    def __init__(self, path: Path, callsites: Mapping[str, list[ast.Call]] | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        callsites: Mapping[str, list[ast.Call]] | None = None,
+        *,
+        permitted: Mapping[tuple[str, str], str] | None = None,
+    ) -> None:
         self.path = path
         self.relative = _relative(path) if path.is_relative_to(BACKEND) else path.name
         self.tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         self.callsites = dict(callsites or {})
+        self.permitted = PERMITTED_DIRECT_WRITES if permitted is None else permitted
         self._functions: list[tuple[int, int, ast.FunctionDef | ast.AsyncFunctionDef]] = []
         for node in ast.walk(self.tree):
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -776,6 +852,18 @@ class _WriteScanner:
         return resolved
 
     # -- the rule ----------------------------------------------------------
+    def write_sites(self, scope: ast.AST | None = None) -> list[tuple[int, str, set[str]]]:
+        """``(lineno, method, table names or UNRESOLVED)`` for every write in ``scope``."""
+        sites: list[tuple[int, str, set[str]]] = []
+        for node in ast.walk(scope if scope is not None else self.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if self._is_session_write(node) or self._is_statement_write(node):
+                targets = self.resolve(node.args[0], lineno=node.lineno) if node.args else set()
+                tables = {MAPPED_TABLES.get(name, name) for name in targets} or {UNRESOLVED}
+                sites.append((node.lineno, _call_name(node) or "?", tables))
+        return sites
+
     def violations(self) -> list[str]:
         found: list[str] = []
         for node in ast.walk(self.tree):
@@ -795,7 +883,11 @@ class _WriteScanner:
         offending = sorted(
             name
             for name in targets
-            if name == UNRESOLVED or MAPPED_TABLES.get(name, name) not in BI_TABLES
+            if name == UNRESOLVED
+            or (
+                MAPPED_TABLES.get(name, name) not in BI_TABLES
+                and (self.relative, MAPPED_TABLES.get(name, name)) not in self.permitted
+            )
         )
         if not offending:
             return []
@@ -814,7 +906,7 @@ def _bi_callsites() -> dict[str, list[ast.Call]]:
     helper and its callers may live in different modules.
     """
     index: dict[str, list[ast.Call]] = defaultdict(list)
-    for path in _bi_tree():
+    for path in _bi_owned_tree():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and (name := _call_name(node)) is not None:
@@ -826,21 +918,264 @@ BI_CALLSITES: dict[str, list[ast.Call]] = _bi_callsites()
 
 
 def write_violations(
-    path: Path, *, callsites: Mapping[str, list[ast.Call]] | None = None
+    path: Path,
+    *,
+    callsites: Mapping[str, list[ast.Call]] | None = None,
+    permitted: Mapping[tuple[str, str], str] | None = None,
 ) -> list[str]:
-    return _WriteScanner(path, callsites).violations()
+    return _WriteScanner(path, callsites, permitted=permitted).violations()
 
 
-@pytest.mark.parametrize("path", _bi_tree(), ids=_relative)
+@pytest.mark.parametrize("path", _bi_owned_tree(), ids=_relative)
 def test_bi_writes_only_bi_tables(path: Path) -> None:
     offenders = write_violations(path, callsites=BI_CALLSITES)
     assert offenders == [], (
-        "BI may write only the bi_* marts (D-041). Canonical, regulatory and live "
-        "rows are written by ingestion, the pipelines and the governed registers; a "
-        "mart that writes back makes an ingestion-traced row untraceable and a "
-        f"sealed run unreproducible. Writable tables: {sorted(BI_TABLES)}\n  "
-        + "\n  ".join(offenders)
+        "BI may write only the bi_* marts (D-041), plus the named seams in "
+        "PERMITTED_DIRECT_WRITES. Canonical, regulatory and live rows are written by "
+        "ingestion, the pipelines and the governed registers; a mart that writes back "
+        "makes an ingestion-traced row untraceable and a sealed run unreproducible. "
+        f"Writable tables: {sorted(BI_TABLES)}\n  " + "\n  ".join(offenders)
     )
+
+
+# -- mediated writes: a helper imported from outside BI that writes for it -----------------
+
+
+def _module_file(dotted: str) -> Path | None:
+    relative = Path(*dotted.split("."))
+    for candidate in (BACKEND / relative.with_suffix(".py"), BACKEND / relative / "__init__.py"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _import_aliases(tree: ast.Module) -> dict[str, str]:
+    """Local name → dotted target, for plain ``import`` / ``from … import``."""
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                aliases[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            for alias in node.names:
+                aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return aliases
+
+
+def _dotted_callee(node: ast.Call, aliases: Mapping[str, str]) -> str | None:
+    func = node.func
+    if isinstance(func, ast.Name) and func.id in aliases:
+        return aliases[func.id]
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id in aliases
+    ):
+        return f"{aliases[func.value.id]}.{func.attr}"
+    return None
+
+
+def helper_write_targets(
+    path: Path, function: str, *, depth: int = 0, seen: set[tuple[Path, str]] | None = None
+) -> set[str]:
+    """Tables ``function`` in ``path`` writes, following its own module's helpers.
+
+    Two levels of same-module delegation are followed (``emit`` → ``_insert`` →
+    ``db.add``); a delegation into a THIRD module is not, which the module
+    docstring records as a scanning limit.
+    """
+    seen = set() if seen is None else seen
+    if (path, function) in seen or depth > 2:
+        return set()
+    seen.add((path, function))
+    scanner = _WriteScanner(path)
+    definition = next(
+        (
+            node
+            for node in ast.walk(scanner.tree)
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == function
+        ),
+        None,
+    )
+    if definition is None:
+        return set()
+    local_functions = {
+        node.name
+        for node in ast.walk(scanner.tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    tables: set[str] = set()
+    for _, _, written in scanner.write_sites(definition):
+        tables |= written
+    for node in ast.walk(definition):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in local_functions
+            and node.func.id != function
+        ):
+            tables |= helper_write_targets(path, node.func.id, depth=depth + 1, seen=seen)
+    return tables
+
+
+def mediated_write_sites(path: Path) -> list[tuple[int, str, set[str]]]:
+    """``(lineno, dotted helper, foreign tables)`` for every call in ``path`` to a
+    helper imported from a non-BI ``app.*`` module whose body writes a table."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    aliases = _import_aliases(tree)
+    found: list[tuple[int, str, set[str]]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        dotted = _dotted_callee(node, aliases)
+        if dotted is None or not dotted.startswith("app."):
+            continue
+        if any(_names_a_module(dotted, prefix) for prefix in BI_MODULE_PREFIXES):
+            continue
+        module, _, function = dotted.rpartition(".")
+        target = _module_file(module)
+        if target is None or _relative(target) in BI_OWNED:
+            continue
+        written = helper_write_targets(target, function)
+        if written:
+            found.append((node.lineno, dotted, written))
+    return found
+
+
+def mediated_write_violations(
+    path: Path, *, permitted: Mapping[tuple[str, str], str] = PERMITTED_MEDIATED_WRITES
+) -> list[str]:
+    relative = _relative(path) if path.is_relative_to(BACKEND) else path.name
+    violations: list[str] = []
+    for lineno, dotted, written in mediated_write_sites(path):
+        offending = sorted(
+            table
+            for table in written
+            if table not in BI_TABLES and (dotted, table) not in permitted
+        )
+        if offending:
+            named = ", ".join(
+                "an unreadable target" if table == UNRESOLVED else table for table in offending
+            )
+            violations.append(f"{relative}:{lineno} {dotted}() writes {named}")
+    return violations
+
+
+@pytest.mark.parametrize("path", _bi_owned_tree(), ids=_relative)
+def test_bi_writes_through_no_unlisted_helper(path: Path) -> None:
+    offenders = mediated_write_violations(path)
+    assert offenders == [], (
+        "A BI module reaches a non-bi_* table through an imported helper that is not "
+        "in PERMITTED_MEDIATED_WRITES. Relocating a write behind a helper is not a "
+        "way round rule (c): either the write belongs to a platform seam every "
+        "feature uses (name the (helper, table) pair with its reason) or it does not "
+        "belong in BI:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_every_permitted_write_is_live() -> None:
+    """A stale allow-list entry is a permission nobody is checking; fail it loudly.
+
+    Both directions: every DIRECT entry names a module that actually writes that
+    table, and every MEDIATED entry names a helper that actually writes that
+    table AND is actually called from some BI module.
+    """
+    stale: list[str] = []
+    for (relative, table), _ in PERMITTED_DIRECT_WRITES.items():
+        written = {
+            name
+            for _, _, tables in _WriteScanner(BACKEND / relative, BI_CALLSITES).write_sites()
+            for name in tables
+        }
+        if table not in written:
+            stale.append(f"direct {relative} no longer writes {table}")
+    reached: dict[str, set[str]] = defaultdict(set)
+    for path in _bi_owned_tree():
+        for _, dotted, written in mediated_write_sites(path):
+            reached[dotted] |= written
+    for (dotted, table), _ in PERMITTED_MEDIATED_WRITES.items():
+        if table not in reached.get(dotted, set()):
+            stale.append(f"mediated {dotted} is not called from BI or no longer writes {table}")
+    assert stale == [], stale
+    assert all(reason.strip() for reason in PERMITTED_DIRECT_WRITES.values())
+    assert all(reason.strip() for reason in PERMITTED_MEDIATED_WRITES.values())
+
+
+def test_every_bi_owned_module_is_in_the_write_scan() -> None:
+    """The A360-1 gap, pinned structurally: rule (a)'s exemption set and rule (c)'s
+    scan set are the SAME set. Exempting a module from the import ban without
+    scanning its writes is how a non-bi_* write hides."""
+    scanned = {_relative(path) for path in _bi_owned_tree()}
+    assert scanned == BI_OWNED
+    assert "app/features/read_bi.py" in scanned
+    assert "app/jobs/bi_commentary.py" in scanned
+    assert "app/operator/features/bi_backfill.py" in scanned
+
+
+def test_a_planted_canonical_write_in_a_feature_module_is_convicted(tmp_path: Path) -> None:
+    """The defect the audit named, planted: a canonical write appended to a copy
+    of a real feature-plane BI module must be convicted by the same scanner the
+    parametrised rule runs, and that module must be in the scanned set."""
+    source = (BACKEND / "app/features/read_bi.py").read_text(encoding="utf-8")
+    probe = tmp_path / "read_bi.py"
+    probe.write_text(
+        source + "\n\ndef _write_back(db: Session) -> None:\n"
+        "    db.add(CanonicalPosition(balance=1))\n",
+        encoding="utf-8",
+    )
+    found = write_violations(probe, callsites=BI_CALLSITES)
+    assert any("CanonicalPosition" in message for message in found), found
+    assert BACKEND / "app/features/read_bi.py" in _bi_owned_tree()
+
+
+def test_the_mediated_write_guard_catches_a_deliberate_violation(tmp_path: Path) -> None:
+    """Fired three ways: the real audit recorder with the allow-list emptied; the
+    real queue writer reached through a module alias; and a helper whose table
+    the allow-list names for a DIFFERENT helper."""
+    samples = {
+        "audit recorder, unlisted": (
+            "from app.services.audit import record_event\n\n\n"
+            "def f(db, ctx):\n"
+            "    record_event(db, ctx, event_type='x', entity_type='y', entity_id='z')\n",
+            {},
+            "audit_events",
+        ),
+        "queue writer through a module alias, unlisted": (
+            "from app.services import job_queue\n\n\n"
+            "def f(db):\n    job_queue.enqueue(db, 'bi_export', {})\n",
+            {},
+            "jobs",
+        ),
+        "table permitted for another helper only": (
+            "from app.services import job_queue\n\n\n"
+            "def f(db):\n    job_queue.enqueue(db, 'bi_export', {})\n",
+            {("app.services.audit.record_event", "jobs"): "wrong helper"},
+            "jobs",
+        ),
+    }
+    missed = []
+    for label, (body, permitted, table) in samples.items():
+        probe = tmp_path / "probe.py"
+        probe.write_text(body, encoding="utf-8")
+        found = mediated_write_violations(probe, permitted=permitted)
+        if not found or not any(table in message for message in found):
+            missed.append(f"{label}: {found}")
+    assert missed == [], f"These mediated writes walk through the guard: {missed}"
+
+
+def test_the_mediated_write_guard_admits_the_listed_seams(tmp_path: Path) -> None:
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "from app.services import job_queue\n"
+        "from app.services.audit import record_event\n\n\n"
+        "def f(db, ctx):\n"
+        "    record_event(db, ctx, event_type='x', entity_type='y', entity_id='z')\n"
+        "    job_queue.enqueue(db, 'bi_export', {})\n",
+        encoding="utf-8",
+    )
+    assert mediated_write_violations(probe) == []
 
 
 def test_the_writable_table_set_is_derived_from_the_bi_models() -> None:
@@ -910,6 +1245,17 @@ def test_the_write_guard_catches_a_deliberate_violation(tmp_path: Path) -> None:
         if not found or not any(expected in message for message in found):
             missed.append(f"{label}: {found}")
     assert missed == [], f"These writes walk through the guard: {missed}"
+
+
+def test_the_direct_allow_list_admits_only_its_own_module(tmp_path: Path) -> None:
+    """``ai_commentary_drafts`` is writable from the AI job and from nowhere else."""
+    body = "def f(db):\n    db.add(AiCommentaryDraft(mode='x'))\n"
+    elsewhere = tmp_path / "probe.py"
+    elsewhere.write_text(body, encoding="utf-8")
+    assert write_violations(elsewhere), "the AI ledger is writable from an unlisted module"
+    real = _WriteScanner(BACKEND / "app/jobs/bi_commentary.py", BI_CALLSITES)
+    assert real.violations() == []
+    assert any("ai_commentary_drafts" in tables for _, _, tables in real.write_sites())
 
 
 def test_the_write_guard_does_not_convict_a_set_or_a_dict(tmp_path: Path) -> None:
