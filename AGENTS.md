@@ -352,7 +352,25 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   transport that reuses the generated `FromJSON` parsers plus `normalizeApiError`, and
   pin a test that FAILS if the generated write operation is called again. Delete the
   transport at regeneration; an interim one that outlives it is a second contract nobody
-  is checking.
+  is checking. **When you delete it, invert the tripwire rather than dropping it**
+  (2026-09-28, `grantTransport.ts` retired): the test that forbade the generated
+  operation becomes one asserting the transport is gone AND that every field the
+  generated serializer emits is one the caller states — a field the contract carries and
+  the caller leaves unset is still decided by the server's column default, so the same
+  widening returns the next time the schema grows. Give the builders the generated
+  request-model TYPES; then the compiler checks the shape instead of a second literal.
+  **But not every hand-written transport is the interim kind.** `lib/api/askTransport.ts`
+  is permanent, and its docstring told the next reader to delete it — which would have
+  broken the feature. The test is which way the serializer hurts you. An INTERIM
+  transport exists because the client does not yet know a FIELD, and a fresh client
+  retires it. A PERMANENT one exists because a value must travel **unmodified** through a
+  layer that rewrites every value it understands, and no generation changes that: BI's
+  confirm-what-you-were-shown contract digests the proposal on both sides, `ToJSON` drops
+  what it does not know (digest mismatch) and `FromJSON` spreads the raw JSON and then
+  re-adds known fields under camelCase (so `top_n` returns as `top_n` AND `topN`, and
+  `BiQuery` is `extra="forbid"` — a 422 on a question the reader confirmed). Carry such a
+  value as opaque JSON end to end, and pin BOTH directions against the generated
+  package's own source.
 - Keep `packages/risk-service-api/src` excluded centrally from style linting and
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally
