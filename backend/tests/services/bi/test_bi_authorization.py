@@ -666,3 +666,130 @@ def test_authorize_query_does_not_re_check_the_token_version(
     stale = _authorize(db_session, bank, _query(), authorization_version=version - 1)
 
     assert stale.allowed is True
+
+
+# --- the Phase 5 members' own sentences ------------------------------------------------------
+
+
+def test_the_officer_dimension_needs_a_restricted_sentence_to_read_or_to_filter(
+    db_session: Session, bank: Bank
+) -> None:
+    """``position.officer_code`` names one member of STAFF, so it sits a step above
+    its two neighbours over the same new columns.
+
+    Both directions are asserted, because D-028 is the reason for the level: a
+    filter on it discloses that individual's whole book just as much as grouping by
+    it does, and an officer-level export inherits the same authority.
+    """
+    version = _grant(db_session, module=ModuleScope.ALL, sensitivity=SensitivityScope.AGGREGATED)
+
+    grouped = _authorize(
+        db_session,
+        bank,
+        _query(dimensions=["position.officer_code"]),
+        authorization_version=version,
+    )
+    assert grouped.allowed is False
+    assert grouped.denied_members == ("position.officer_code",)
+
+    filtered = _authorize(
+        db_session,
+        bank,
+        _query(filters=[BiFilter(member="position.officer_code", op="eq", values=["RM-014"])]),
+        authorization_version=version,
+    )
+    assert filtered.allowed is False
+    assert filtered.denied_members == ("position.officer_code",)
+    assert "RM-014" not in " ".join((*filtered.denied_members, filtered.reason))
+
+    with_sentence = _grant(
+        db_session, module=ModuleScope.ALL, sensitivity=SensitivityScope.RESTRICTED
+    )
+    allowed = _authorize(
+        db_session,
+        bank,
+        _query(dimensions=["position.officer_code"]),
+        authorization_version=with_sentence,
+    )
+    assert allowed.allowed is True
+
+
+def test_the_channel_and_status_dimensions_read_on_an_aggregated_sentence(
+    db_session: Session, bank: Bank
+) -> None:
+    """Their contrast with the officer code is the decision, so it is asserted.
+
+    A channel and an account status are attributes of an ACCOUNT, at the same level
+    as ``position.type``; requiring a restricted sentence for them would gate a
+    business attribute behind the control that protects a person.
+    """
+    version = _grant(db_session, module=ModuleScope.ALL, sensitivity=SensitivityScope.AGGREGATED)
+
+    for member_id in ("position.channel", "position.account_status"):
+        result = _authorize(
+            db_session, bank, _query(dimensions=[member_id]), authorization_version=version
+        )
+        assert result.allowed is True, member_id
+
+
+def test_the_arrears_measures_need_the_credit_sentence(db_session: Session, bank: Bank) -> None:
+    """They are credit figures, so a liquidity-only reader is refused both."""
+    version = _grant(
+        db_session, module=ModuleScope.LIQUIDITY, sensitivity=SensitivityScope.AGGREGATED
+    )
+
+    for member_id in ("loans.arrears_amount_rc", "loans.arrears_share_pct"):
+        result = _authorize(
+            db_session, bank, _query(measures=[member_id]), authorization_version=version
+        )
+        assert result.allowed is False, member_id
+        assert member_id in result.denied_members
+
+    credit = _grant(db_session, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.AGGREGATED)
+    for member_id in ("loans.arrears_amount_rc", "loans.arrears_share_pct"):
+        result = _authorize(
+            db_session, bank, _query(measures=[member_id]), authorization_version=credit
+        )
+        assert result.allowed is True, member_id
+
+
+def test_the_branch_ledger_measures_need_the_risk_sentence_and_an_sdi_may_hold_it(
+    db_session: Session,
+) -> None:
+    """The module decision, asserted from both sides.
+
+    ``risk`` rather than a bank-only module because a chart of accounts split by
+    branch is the institution's own bookkeeping and depends on no capital regime —
+    so an SDI keeps its own ledger, which is what ``ENTITLEMENT_BY_MODULE[RISK]``
+    being in both licence classes' module sets means. A credit-only reader is still
+    refused: the entitlement is the licence's, the sentence is the reader's.
+    """
+    sdi = _ensure_bank(db_session, "BK-BIAUTH02", institution_type=SDI_CLASS)
+    assert ENTITLEMENT_BY_MODULE["risk"] in institution_types.default_modules(db_session, sdi)
+
+    credit_only = _grant(
+        db_session,
+        module=ModuleScope.CREDIT,
+        sensitivity=SensitivityScope.AGGREGATED,
+        institution=InstitutionScope.ORGANIZATION,
+    )
+    refused = _authorize(
+        db_session,
+        sdi,
+        _query(measures=["gl.branch_ytd_rc"]),
+        authorization_version=credit_only,
+    )
+    assert refused.allowed is False
+    assert refused.denied_members == ("gl.branch_ytd_rc",)
+
+    risk = _grant(
+        db_session,
+        module=ModuleScope.RISK,
+        sensitivity=SensitivityScope.AGGREGATED,
+        institution=InstitutionScope.ORGANIZATION,
+    )
+    for member_id in ("gl.branch_ytd_rc", "gl.branch_movement_rc"):
+        allowed = _authorize(
+            db_session, sdi, _query(measures=[member_id]), authorization_version=risk
+        )
+        assert allowed.allowed is True, member_id

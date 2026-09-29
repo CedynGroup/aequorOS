@@ -1,9 +1,9 @@
-"""Reconciliation of the BI marts to the figures the platform already files (R1–R10).
+"""Reconciliation of the BI marts to the figures the platform already files (R1–R12).
 
 Every check compares something the mart builder WROTE against something the
 platform COMPUTED elsewhere, and grades it ``green`` / ``amber`` / ``red`` /
 ``grey``. ``grey`` means "could not be assessed" — no engine figure at this
-date, no live plane, no ledger — and is never read as a pass. The ten checks
+date, no live plane, no ledger — and is never read as a pass. The twelve checks
 (``.ai/BI_ARCHITECTURE.md`` §Reconciliation → trust; R10 is D-042):
 
 =====  ===================================================  ===============================
@@ -22,6 +22,10 @@ R8     the build's as-of                                    the live plane's dat
 R9     the balance-sheet identity control's own record      ``current_reconciliation_record``
 R10    worse of the LOAN rows / exposure with no             (completeness; no platform twin)
        days-past-due band
+R11    Σ ``ytd_rc`` per (account, month, currency) over      ``bi_fact_gl_monthly.ytd_rc``
+       ``bi_fact_gl_branch_monthly``'s branches
+R12    worse of the LOAN rows / exposure with no stated      (completeness; no platform twin)
+       ``arrears_amount_rc``
 =====  ===================================================  ===============================
 
 Tolerances (:data:`TOLERANCES`) are stated once, per check, in the unit of
@@ -53,14 +57,31 @@ the comparison, and each has a reason:
   a small count of loans carrying the whole book's exposure scores, because the
   guarded ratio is exposure-weighted. Grey when the day has no LOAN rows
   (nothing to be complete about).
+* **R11** exact — both sides are the SAME Decimal ledger figures, and the branch
+  rows are written with a residual that makes the identity hold by construction
+  (``domain/bi/extract.gl_branch_monthly_rows``), so any difference at all is a
+  defect in the writing, not a rounding. Amber carries the second, softer
+  statement: the identity holds but part of the ledger sits on the unallocated
+  remainder, so the breakdown is incomplete even though its total is right.
+  ``green`` with ``accounts_compared: 0`` is a month with NO branch rows — the
+  mart makes no branch claim, so there is no figure whose trust went unassessed;
+  the absence is reported where absences belong, as the dataset the surface needs.
+* **R12** a completeness threshold, R10's twin over ``arrears_amount_rc`` — the
+  figure the bank STATES rather than the band the platform derives. Same
+  WORSE-of-two shares and same gradings, on a DIFFERENT population: only loans
+  with a positive classified exposure, because ``arrears_amount_rc`` is NULL for
+  an unconverted foreign-currency loan whatever the bank stated, and a gap the
+  bank cannot close by stating arrears is R6's message rather than this one.
+  Grey when nothing is left to assess.
 
 Storage vs evaluation
 ---------------------
 :data:`CHECK_IDS` is what this module EVALUATES and :data:`STORABLE_CHECK_IDS`
 what ``bi_reconciliation_results`` can hold; both are the model's own vocabulary
 (``app/models/bi.RECONCILIATION_CHECK_IDS``, mirrored by migration
-``202609220066``'s CHECK literal), so the live badge (:func:`trust_of`) and the
-stored one (:func:`trust_for`) now carry the same ten checks. They stay separate
+``202609220066``'s CHECK literal, widened for R11 by ``202609280075`` and for R12
+by ``202609280076``), so the live badge (:func:`trust_of`) and the
+stored one (:func:`trust_for`) carry the same checks. They stay separate
 names because a check can be written here before that vocabulary admits it — R10
 was, for one wave — and :func:`persist` must then skip it with a log instead of
 failing the whole build on the CHECK, while :func:`trust_for` must not report a
@@ -84,11 +105,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.domain.ingestion.reference_schemas import gl_segment_balances
 from app.models import (
     Bank,
     BankReportingPeriod,
     BiDimBranch,
     BiFactEngineMetric,
+    BiFactGlBranchMonthly,
     BiFactGlMonthly,
     BiFactPositionDaily,
     BiReconciliationResult,
@@ -106,6 +129,18 @@ OVERALL = "overall"
 
 #: The completeness check D-042 adds beside the model's R1–R9.
 DPD_COMPLETENESS = "R10"
+
+#: The general-ledger-by-branch identity (P5-B). Its own id rather than a second
+#: comparison folded into R4: a branch split that does not sum is a different
+#: fault from a mart that disagrees with the filed return, and one check per
+#: comparison is what makes either diagnosable.
+GL_BRANCH_IDENTITY = "R11"
+
+#: The arrears completeness share (P5-A) — R10's argument on the field the bank
+#: STATES rather than the band the platform derives. A bank that supplies
+#: ``arrears_amount`` for half its book would show a sum reading as the whole
+#: book's arrears and a share silently understated, with no visible defect.
+ARREARS_COMPLETENESS = "R12"
 
 #: Every check this module evaluates, in order.
 CHECK_IDS: tuple[str, ...] = RECONCILIATION_CHECK_IDS
@@ -131,6 +166,8 @@ TOLERANCES: dict[str, Decimal | None] = {
     "R8": Decimal("0"),
     "R9": None,
     DPD_COMPLETENESS: None,
+    GL_BRANCH_IDENTITY: Decimal("0"),
+    ARREARS_COMPLETENESS: None,
 }
 
 #: The balance-sheet lines R2 / R3 read (``fact_derivation._derive_balance_sheet_block``).
@@ -708,6 +745,298 @@ def check_r10_dpd_completeness(
     return CheckResult(DPD_COMPLETENESS, status, lhs=worst, detail=detail)
 
 
+def check_r11_gl_branch_identity(
+    db: Session, organization_id: str, bank_id: str, as_of: date
+) -> CheckResult:
+    """The branch breakdown of the ledger sums to the ledger, per account.
+
+    The left-hand side is ``Σ ytd_rc`` over ``bi_fact_gl_branch_monthly``'s
+    branches — the reported branches AND the computed unallocated remainder — per
+    (account, month, currency); the right-hand side is the institution row in
+    ``bi_fact_gl_monthly``, which R4 has separately reconciled to BSD7A's own
+    resolver. So a green R4 and a green R11 together say the branch figures add up
+    to the figures the return files.
+
+    The identity holds BY CONSTRUCTION when the rows are written
+    (``extract.gl_branch_monthly_rows`` derives the residual from exactly this
+    subtraction), which is the point: this check exists so the construction is
+    PROVEN on the stored rows rather than asserted in the module that wrote them.
+    Any difference is therefore a defect in the writing, not a rounding — hence an
+    exact tolerance.
+
+    Three gradings, one subject:
+
+    * ``red`` — an account's branch rows do not sum to its institution row, or the
+      branch mart carries an account the institution mart does not (which would
+      make a branch total exceed the ledger).
+    * ``amber`` — the identity holds, but part of the month's ledger is not
+      attributed to any branch: either on the unallocated remainder, or on an
+      account the register did not mention at all. The total is right and the
+      breakdown is incomplete, and those are different statements.
+    * ``green`` — the identity holds and every account's whole balance sits on a
+      real branch. Also the answer for a month with no branch rows at all
+      (``accounts_compared: 0``): the mart makes no branch claim, so nothing went
+      unassessed. Which dataset would produce one is the surface's business, not
+      this badge's.
+    """
+    calendar_month = as_of.replace(day=1)
+    institution = {
+        (str(code), str(currency)): _dec(ytd)
+        for code, currency, ytd in db.execute(
+            select(
+                BiFactGlMonthly.gl_account_code,
+                BiFactGlMonthly.currency,
+                BiFactGlMonthly.ytd_rc,
+            ).where(
+                BiFactGlMonthly.organization_id == organization_id,
+                BiFactGlMonthly.bank_id == bank_id,
+                BiFactGlMonthly.calendar_month == calendar_month,
+            )
+        )
+    }
+    residual_id = gl_segment_balances.RESIDUAL_BRANCH_ID
+    branch = {
+        (str(code), str(currency)): (_dec(total), _dec(residual))
+        for code, currency, total, residual in db.execute(
+            select(
+                BiFactGlBranchMonthly.gl_account_code,
+                BiFactGlBranchMonthly.currency,
+                func.sum(BiFactGlBranchMonthly.ytd_rc),
+                func.sum(
+                    case(
+                        (
+                            BiFactGlBranchMonthly.branch_code == residual_id,
+                            BiFactGlBranchMonthly.ytd_rc,
+                        ),
+                        else_=0,
+                    )
+                ),
+            )
+            .where(
+                BiFactGlBranchMonthly.organization_id == organization_id,
+                BiFactGlBranchMonthly.bank_id == bank_id,
+                BiFactGlBranchMonthly.calendar_month == calendar_month,
+            )
+            .group_by(BiFactGlBranchMonthly.gl_account_code, BiFactGlBranchMonthly.currency)
+        )
+    }
+    detail: dict[str, Any] = {
+        "month": calendar_month.isoformat(),
+        "accounts_compared": len(branch),
+        "accounts_in_ledger": len(institution),
+    }
+    if not branch:
+        detail["reason"] = (
+            "The ledger carries no branch breakdown for this month, so no branch figure is shown "
+            "and none is claimed."
+        )
+        return CheckResult(
+            GL_BRANCH_IDENTITY, GREEN, tolerance=TOLERANCES[GL_BRANCH_IDENTITY], detail=detail
+        )
+
+    mismatches: list[dict[str, Any]] = []
+    lhs_total = _ZERO
+    rhs_total = _ZERO
+    unattributed_abs = _ZERO
+    for key in sorted(branch):
+        total, residual = branch[key]
+        expected = institution.get(key)
+        lhs_total += total
+        unattributed_abs += abs(residual)
+        if expected is None:
+            mismatches.append(
+                {
+                    "account": key[0],
+                    "currency": key[1],
+                    "branch_total": str(total),
+                    "ledger": None,
+                    "reason": "the institution ledger carries no row for this account this month",
+                }
+            )
+            continue
+        rhs_total += expected
+        if total != expected:
+            mismatches.append(
+                {
+                    "account": key[0],
+                    "currency": key[1],
+                    "branch_total": str(total),
+                    "ledger": str(expected),
+                }
+            )
+    # Accounts the register never mentioned are not a mismatch — they simply have
+    # no breakdown — but their balance is just as unattributed as a residual, and a
+    # coverage statement that ignored them would flatter the breakdown.
+    for key, expected in institution.items():
+        if key not in branch:
+            unattributed_abs += abs(expected)
+    ledger_abs = sum((abs(value) for value in institution.values()), _ZERO)
+    share = _ZERO if ledger_abs == _ZERO else unattributed_abs / ledger_abs * _HUNDRED
+    detail["unattributed_share_pct"] = str(share)
+    detail["unattributed_rc"] = str(unattributed_abs)
+    detail["ledger_abs_rc"] = str(ledger_abs)
+    if mismatches:
+        detail["mismatches"] = mismatches
+        return CheckResult(
+            GL_BRANCH_IDENTITY,
+            RED,
+            lhs_total,
+            rhs_total,
+            lhs_total - rhs_total,
+            TOLERANCES[GL_BRANCH_IDENTITY],
+            detail,
+        )
+    # A share ABOVE 100% is impossible for a correctly-signed register, and the
+    # identity cannot catch it: the residual absorbs whatever the branches did not
+    # account for, so the sum still equals the ledger by construction (audit
+    # A11-F4). What it means is that the reported branch figures pull AWAY from the
+    # ledger rather than toward it — overwhelmingly because the bank sent its
+    # profit-and-loss under the opposite sign convention, credits positive where
+    # the ledger has them negative. A ledger of -1000 against a register of +900
+    # leaves a residual of -1900 and reads as "190% unattributed".
+    #
+    # That is a data-quality fault, not partial coverage, so it is RED with a reason
+    # rather than amber with a nonsense percentage. Amber says "part of the ledger
+    # is not yet broken down", which a reader can act on by asking for more of the
+    # register; this needs them to fix the register they already sent, and the two
+    # are not the same request.
+    if share > _HUNDRED:
+        detail["reason"] = (
+            "the branch figures move further from the ledger than the ledger's own "
+            "size, which a partial breakdown cannot do — check the register's sign "
+            "convention against the ledger's"
+        )
+        return CheckResult(
+            GL_BRANCH_IDENTITY,
+            RED,
+            lhs_total,
+            rhs_total,
+            lhs_total - rhs_total,
+            TOLERANCES[GL_BRANCH_IDENTITY],
+            detail,
+        )
+    return CheckResult(
+        GL_BRANCH_IDENTITY,
+        GREEN if share == _ZERO else AMBER,
+        lhs_total,
+        rhs_total,
+        _ZERO,
+        TOLERANCES[GL_BRANCH_IDENTITY],
+        detail,
+    )
+
+
+def check_r12_arrears_completeness(
+    db: Session, organization_id: str, bank_id: str, as_of: date
+) -> CheckResult:
+    """How much of the loan book states no arrears amount (P5-A §6.6).
+
+    R10's argument, on the figure the bank STATES rather than the band the
+    platform derives from days past due. ``arrears_amount_rc`` is NULL exactly
+    when the bank supplied no ``attributes.arrears_amount`` for the facility (or
+    the facility is unconverted foreign currency, the D-015 derivation rule), and
+    ``loans.arrears_amount_rc`` sums only the rows that state one. So a bank that
+    states arrears for HALF its book shows a sum that reads as the whole book's
+    arrears and a share silently understated — with no visible defect anywhere.
+    This check is what stops the trust badge going green over that.
+
+    **The status follows the WORSE of two shares (D-049): missing ROWS and
+    missing EXPOSURE.** ``green`` at 0, ``amber`` above it, ``red`` at 100 % of
+    either. The same reason as R10: the guarded figure
+    (``loans.arrears_share_pct``) is exposure-weighted, so a gap of 1 % of rows
+    carrying all of the value understates it completely while a row-share badge
+    would read mild amber. ``max`` can only make the verdict more cautious, and
+    both shares are always disclosed.
+
+    **The population is loans with a POSITIVE classified exposure, and that is
+    what separates this check from R10.** ``arrears_amount_rc`` is NULL for an
+    unconverted foreign-currency loan whatever the bank stated (the derivation
+    rule, exactly like ``balance_rc``), so counting those rows as unstated arrears
+    would report a gap the bank cannot close by stating arrears — it closes it by
+    supplying conversions, which is **R6's** message, not this one. Under the
+    classification rule such a loan carries ``classification_exposure_rc = 0``, so
+    ``> 0`` excludes precisely them; it also excludes a facility with nothing
+    outstanding, which has nothing to be in arrears on. R10 keeps those rows
+    because ``dpd_band`` is stated or not stated independently of FX, and the
+    engine's PAR denominator includes them. Two checks, two populations, each
+    matching the figure it guards.
+
+    On what remains, ``classification_exposure_rc`` equals ``balance_rc`` for
+    every row — the two FX rules only diverge where a conversion is missing — so
+    weighting by it is the same weighting ``loans.arrears_share_pct``'s
+    ``balance_rc`` denominator uses, stated in the column that also expresses the
+    population filter. Grey when nothing is left: no loan row of the day carries a
+    positive classified exposure, so there is nothing to be complete about.
+
+    One consequence of that population, stated so it is not read as an untested
+    implication of ``max``: **the two limbs cannot disagree on the COLOUR here,
+    only on the magnitude.** Red is 100 % of either, and a zero-exposure row is
+    excluded, so "every row silent" and "all the exposure silent" coincide and
+    neither limb reaches 100 % alone. ``max`` therefore chooses the figure the
+    badge REPORTS — the exposure-weighted one when it is worse, which is what a
+    reader compares against ``loans.arrears_share_pct`` — and remains the
+    conservative direction if the population ever changes. R10's ``max`` does
+    decide a colour, because its population keeps the zero-exposure rows.
+    """
+    exposure = BiFactPositionDaily.classification_exposure_rc
+    missing_arrears = BiFactPositionDaily.arrears_amount_rc.is_(None)
+    loans, missing, total_exposure, missing_exposure, stated = db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(case((missing_arrears, 1), else_=0)), 0),
+            func.coalesce(func.sum(exposure), 0),
+            func.coalesce(func.sum(case((missing_arrears, exposure), else_=0)), 0),
+            func.coalesce(func.sum(BiFactPositionDaily.arrears_amount_rc), 0),
+        )
+        .select_from(BiFactPositionDaily)
+        .where(
+            *_mart_scope(organization_id, bank_id, as_of),
+            BiFactPositionDaily.position_type == LOAN_TYPE,
+            exposure.is_not(None),
+            exposure > _ZERO,
+        )
+    ).one()
+    loan_rows = int(loans or 0)
+    without_arrears = int(missing or 0)
+    if loan_rows == 0:
+        return _grey(
+            ARREARS_COMPLETENESS,
+            "The day's slice carries no loan rows with a classified exposure to be in arrears on.",
+        )
+    row_share = Decimal(without_arrears) / Decimal(loan_rows) * _HUNDRED
+    exposure_total = _dec(total_exposure)
+    exposure_share = (
+        _dec(missing_exposure) / exposure_total * _HUNDRED if exposure_total > _ZERO else _ZERO
+    )
+    worst = max(row_share, exposure_share)
+    status = GREEN if worst == _ZERO else RED if worst >= _HUNDRED else AMBER
+    detail: dict[str, Any] = {
+        "loan_rows": loan_rows,
+        "loans_without_arrears_amount": without_arrears,
+        "missing_share_pct": str(row_share),
+        "classification_exposure_rc": str(exposure_total),
+        "missing_share_of_exposure_pct": str(exposure_share),
+        "worst_share_pct": str(worst),
+        "stated_arrears_rc": str(_dec(stated)),
+    }
+    if status == RED:
+        detail["reason"] = (
+            "Every arrears figure over this book would read as a performing book rather "
+            "than as absent data: "
+            + (
+                "no loan states an arrears amount."
+                if without_arrears == loan_rows
+                else "the loans that state none carry the whole book's exposure."
+            )
+        )
+    elif status == AMBER:
+        detail["reason"] = (
+            "The arrears figures cover part of the loan book, so a total or a share "
+            "over them understates the whole book by whatever was not stated."
+        )
+    return CheckResult(ARREARS_COMPLETENESS, status, lhs=worst, detail=detail)
+
+
 # ---------------------------------------------------------------------------
 # evaluate / persist / trust
 # ---------------------------------------------------------------------------
@@ -728,6 +1057,12 @@ def evaluate(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> dict[s
         "R8": lambda: check_r8_freshness(db, organization_id, bank_id, as_of),
         "R9": lambda: check_r9_balance_identity(db, ctx, bank_id),
         DPD_COMPLETENESS: lambda: check_r10_dpd_completeness(db, organization_id, bank_id, as_of),
+        GL_BRANCH_IDENTITY: lambda: check_r11_gl_branch_identity(
+            db, organization_id, bank_id, as_of
+        ),
+        ARREARS_COMPLETENESS: lambda: check_r12_arrears_completeness(
+            db, organization_id, bank_id, as_of
+        ),
     }
     results: dict[str, CheckResult] = {}
     for check_id in CHECK_IDS:
@@ -840,10 +1175,12 @@ def trust_for(db: Session, organization_id: str, bank_id: str, as_of: date) -> d
 
 __all__ = [
     "AMBER",
+    "ARREARS_COMPLETENESS",
     "CHECK_IDS",
     "DEPOSIT_LINES",
     "DPD_COMPLETENESS",
     "ENGINE_RATIO_QUANTUM",
+    "GL_BRANCH_IDENTITY",
     "GREEN",
     "GREY",
     "LOANS_LINE",
@@ -854,6 +1191,7 @@ __all__ = [
     "TOLERANCES",
     "CheckResult",
     "check_r10_dpd_completeness",
+    "check_r11_gl_branch_identity",
     "evaluate",
     "overall_trust",
     "persist",

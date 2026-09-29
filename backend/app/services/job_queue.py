@@ -58,6 +58,7 @@ JOB_TYPES = (
     "desk_capture",
     "icaap_ai_draft",
     "bi_commentary",
+    "bi_nlq_translate",
     "bi_mart_refresh",
     "bi_mart_backfill",
     "bi_retention",
@@ -89,6 +90,7 @@ JOB_LANES: Mapping[str, str] = MappingProxyType(
     {
         "icaap_ai_draft": "ai",
         "bi_commentary": "ai",
+        "bi_nlq_translate": "ai",
         "bi_mart_refresh": "bi",
         "bi_mart_backfill": "bi",
         "bi_retention": "bi",
@@ -178,7 +180,8 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "bi_subscription_run": 30 * 60,
 }
 
-#: ``bi_commentary`` takes NO entry here on purpose: it is an ``ai``-lane type, so
+#: ``bi_commentary`` and ``bi_nlq_translate`` take NO entry here on purpose: both are
+#: ``ai``-lane types, so
 #: ``stale_after_for`` derives its window from the AI settings below — one model
 #: call per vendor in the tier plus a margin — which is exactly the bound its
 #: runtime has. An entry here would pin a second, competing number.

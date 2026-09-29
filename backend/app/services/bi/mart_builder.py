@@ -99,7 +99,11 @@ from app.domain.bi.catalogue import targets as target_catalogue
 from app.domain.capital import loan_classification as classification_engine
 from app.domain.gl import pl_mapping
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.reference_schemas import business_units, performance_targets
+from app.domain.ingestion.reference_schemas import (
+    business_units,
+    gl_segment_balances,
+    performance_targets,
+)
 from app.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
 from app.models import (
     Bank,
@@ -111,6 +115,7 @@ from app.models import (
     BiDimGlAccount,
     BiDimProduct,
     BiFactEngineMetric,
+    BiFactGlBranchMonthly,
     BiFactGlMonthly,
     BiFactLoanEvent,
     BiFactPositionDaily,
@@ -181,10 +186,19 @@ TARGETS_KIND = performance_targets.SCHEMA.kind
 #: re-pushes its budget does not move the build fingerprint, so the ETag does
 #: not change and every BI surface keeps serving the OLD variance out of cache
 #: — a wrong financial number under a fresh-looking badge.
+#: The bank's own general-ledger-by-branch register (P5-B). A dataset rather
+#: than a wider ``gl_account`` record because GL-by-branch is a different grain
+#: from the chart of accounts — see the schema module for the whole argument.
+GL_SEGMENTS_KIND = gl_segment_balances.SCHEMA.kind
+
 REFERENCE_KINDS: tuple[str, ...] = (
     BUSINESS_UNITS_KIND,
     pl_mapping.MAPPING_KIND,
     TARGETS_KIND,
+    # Same reasoning as TARGETS_KIND: without it a bank that re-pushes its branch
+    # breakdown does not move the build fingerprint, so every branch P&L surface
+    # keeps serving the OLD split — and the old residual — out of cache.
+    GL_SEGMENTS_KIND,
 )
 
 #: Classification-grid inputs that enter the fingerprint beside the class
@@ -1010,6 +1024,21 @@ def gl_month_end(db: Session, organization_id: str, bank_id: str, day: date) -> 
     )
 
 
+@dataclass(frozen=True)
+class _GlMonthlyBuild:
+    """What the institution GL build wrote, for the branch build to break down.
+
+    The branch mart is a breakdown of THESE rows: they decide which accounts
+    exist this month, what each is worth, which BSD7 line it feeds and on what
+    basis. Handing them on rather than re-deriving them is what makes the two
+    marts incapable of disagreeing about an account.
+    """
+
+    written: int
+    month_end: date | None
+    rows: tuple[extract.GlMonthlyFactRow, ...] = ()
+
+
 def _build_gl_monthly(  # noqa: PLR0913 - one build carries its whole identity
     db: Session,
     organization_id: str,
@@ -1018,7 +1047,7 @@ def _build_gl_monthly(  # noqa: PLR0913 - one build carries its whole identity
     *,
     base_currency: str,
     built_at: datetime,
-) -> int:
+) -> _GlMonthlyBuild:
     first, _last = month_bounds(as_of)
     db.execute(
         delete(BiFactGlMonthly).where(
@@ -1029,7 +1058,7 @@ def _build_gl_monthly(  # noqa: PLR0913 - one build carries its whole identity
     )
     month_end = gl_month_end(db, organization_id, bank_id, as_of)
     if month_end is None:
-        return 0
+        return _GlMonthlyBuild(written=0, month_end=None)
     start_month = pl_mapping.DEFAULT_FISCAL_YEAR_START_MONTH
     fy_start = pl_mapping.fiscal_year_start(month_end, start_month)
     mapping = pl_mapping.coa_mapping_from_rows(
@@ -1040,6 +1069,7 @@ def _build_gl_monthly(  # noqa: PLR0913 - one build carries its whole identity
         by_account[row.code].append(row)
 
     values: list[dict[str, Any]] = []
+    built: list[extract.GlMonthlyFactRow] = []
     for code in sorted(by_account):
         rows = by_account[code]
         current = max(rows, key=lambda row: row.as_of)
@@ -1058,11 +1088,165 @@ def _build_gl_monthly(  # noqa: PLR0913 - one build carries its whole identity
         )
         if row is None:
             continue
+        built.append(row)
         record = {name: getattr(row, name) for name in _GL_FIELDS}
         record["builder_version"] = BUILDER_VERSION
         record["built_at"] = built_at
         values.append(record)
-    return _insert_chunks(db, BiFactGlMonthly, values)
+    return _GlMonthlyBuild(
+        written=_insert_chunks(db, BiFactGlMonthly, values),
+        month_end=month_end,
+        rows=tuple(built),
+    )
+
+
+# ---------------------------------------------------------------------------
+# monthly GL by branch (P5-B)
+# ---------------------------------------------------------------------------
+
+_GL_BRANCH_FIELDS = tuple(f.name for f in fields(extract.GlBranchMonthlyFactRow))
+
+
+def _gl_segment_allocations(  # noqa: PLR0913 - the tenant keys, the window and the unit
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    *,
+    upto: date,
+    month_of: date,
+    base_currency: str,
+) -> tuple[date, tuple[extract.GlBranchAllocation, ...]] | None:
+    """The branch register batch for ``month_of``'s calendar month, parsed.
+
+    ``None`` when the latest batch on/before ``upto`` falls in a DIFFERENT month.
+    That refusal is the point: pairing March's breakdown with April's ledger would
+    push a whole month of unattributed movement into the residual and label it
+    unallocated, which is a wrong number with a right-looking name. A stale
+    register therefore yields no branch rows, and the surface says it needs the
+    dataset rather than showing a split that is a month out.
+
+    A row whose own fields the register's schema rejects is skipped and NOT
+    guessed at: the schema is enforced at ingestion
+    (``contracts.ENFORCED_REFERENCE_KINDS``), so a malformed row here means a
+    payload stored before that enforcement, and inventing a branch or an amount
+    for it would put a figure in a board pack that no bank sent.
+    """
+    found = latest_reference_batch(db, organization_id, bank_id, GL_SEGMENTS_KIND, upto)
+    if found is None:
+        return None
+    register_as_of, _batch = found
+    wanted_first, _wanted_last = month_bounds(month_of)
+    if month_bounds(register_as_of)[0] != wanted_first:
+        return None
+    allocations: list[extract.GlBranchAllocation] = []
+    for payload in reference_rows(db, organization_id, bank_id, GL_SEGMENTS_KIND, upto):
+        row = dict(payload)
+        if gl_segment_balances.SCHEMA.problems_for(row):
+            continue
+        currency = str(row.get("currency") or "").strip() or None
+        allocations.append(
+            extract.GlBranchAllocation(
+                gl_account_code=str(row["gl_account_code"]).strip(),
+                branch_id=str(row["branch_id"]).strip(),
+                currency=(
+                    ""
+                    if pl_mapping.is_base_currency(currency, base_currency)
+                    else str(currency).upper()
+                ),
+                ytd=Decimal(str(row["ytd_balance"]).replace(",", "").strip()),
+            )
+        )
+    return register_as_of, tuple(allocations)
+
+
+def _build_gl_branch_monthly(  # noqa: PLR0913 - one build carries its whole identity
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    as_of: date,
+    *,
+    institution: _GlMonthlyBuild,
+    base_currency: str,
+    built_at: datetime,
+) -> tuple[int, frozenset[str]]:
+    """The month's branch P&L rows, and the branch codes the dimension must carry.
+
+    Nothing is written when the bank has pushed no register for this month: a mart
+    of 100 %-unallocated rows would look like an answer and be none, so the
+    absence is left for the surface to report as the dataset it needs.
+    """
+    first, _last = month_bounds(as_of)
+    db.execute(
+        delete(BiFactGlBranchMonthly).where(
+            BiFactGlBranchMonthly.organization_id == organization_id,
+            BiFactGlBranchMonthly.bank_id == bank_id,
+            BiFactGlBranchMonthly.calendar_month == first,
+        )
+    )
+    month_end = institution.month_end
+    if month_end is None or not institution.rows:
+        return 0, frozenset()
+    current = _gl_segment_allocations(
+        db,
+        organization_id,
+        bank_id,
+        upto=month_end,
+        month_of=month_end,
+        base_currency=base_currency,
+    )
+    if current is None:
+        return 0, frozenset()
+    register_as_of, allocations = current
+    # The prior reading is the one ``pl_mapping`` used for ``prior_ytd_rc``: the
+    # last day of the previous calendar month. A register from any other month is
+    # not a prior month and is not treated as one — the movement stays NULL.
+    prior_end = month_bounds(month_end)[0] - timedelta(days=1)
+    prior = _gl_segment_allocations(
+        db,
+        organization_id,
+        bank_id,
+        upto=prior_end,
+        month_of=prior_end,
+        base_currency=base_currency,
+    )
+    result = extract.gl_branch_monthly_rows(
+        institution.rows,
+        current=allocations,
+        prior=prior[1] if prior is not None else (),
+        residual_branch_id=gl_segment_balances.RESIDUAL_BRANCH_ID,
+        register_as_of=register_as_of,
+    )
+    if result.orphans:
+        logger.warning(
+            "bi.gl_branch.orphan_accounts",
+            extra={
+                "organization_id": organization_id,
+                "bank_id": bank_id,
+                "month_end": month_end.isoformat(),
+                # Account codes and currencies only — no amount, no branch name.
+                "accounts": [
+                    f"{code}:{currency or base_currency}" for code, currency in result.orphans
+                ],
+            },
+        )
+    if result.over_allocated:
+        logger.warning(
+            "bi.gl_branch.over_allocated",
+            extra={
+                "organization_id": organization_id,
+                "bank_id": bank_id,
+                "month_end": month_end.isoformat(),
+                "accounts": list(result.over_allocated),
+            },
+        )
+    values: list[dict[str, Any]] = []
+    for row in result.rows:
+        record = {name: getattr(row, name) for name in _GL_BRANCH_FIELDS}
+        record["builder_version"] = BUILDER_VERSION
+        record["built_at"] = built_at
+        values.append(record)
+    written = _insert_chunks(db, BiFactGlBranchMonthly, values)
+    return written, result.branch_codes
 
 
 # ---------------------------------------------------------------------------
@@ -1153,7 +1337,8 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
     bank_id: str,
     as_of: date,
     *,
-    branch_codes: set[str],
+    branch_codes: set[str] | frozenset[str],
+    residual_branch: bool = False,
     built_at: datetime,
 ) -> int:
     outlets = {
@@ -1193,6 +1378,25 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
             "bank_id": bank_id,
             "branch_code": code,
             "name": UNMAPPED_BRANCH_NAME,
+            "region": UNASSIGNED_REGION,
+            "outlet_id": None,
+            "outlet_type": None,
+            "status": None,
+            "mapped": False,
+            "builder_version": BUILDER_VERSION,
+            "built_at": built_at,
+        }
+    if residual_branch:
+        # The GL breakdown's unallocated remainder. Not a branch and not an
+        # UNMAPPED one either — it is a computed line, so it gets its own name
+        # instead of reading as a branch the register forgot to declare, and it
+        # carries ``mapped=False`` so R7's unmapped-coverage count still sees it
+        # as exposure nobody attributed.
+        rows[gl_segment_balances.RESIDUAL_BRANCH_ID] = {
+            "organization_id": organization_id,
+            "bank_id": bank_id,
+            "branch_code": gl_segment_balances.RESIDUAL_BRANCH_ID,
+            "name": gl_segment_balances.RESIDUAL_BRANCH_NAME,
             "region": UNASSIGNED_REGION,
             "outlet_id": None,
             "outlet_type": None,
@@ -1413,11 +1617,21 @@ def _build_dims(  # noqa: PLR0913 - one build carries its whole identity
     as_of: date,
     *,
     seen: _PositionPass,
+    gl_branch_codes: frozenset[str],
     built_at: datetime,
     row_counts: dict[str, int],
 ) -> None:
     row_counts["bi_dim_branch"] = _build_dim_branch(
-        db, organization_id, bank_id, as_of, branch_codes=seen.branch_codes, built_at=built_at
+        db,
+        organization_id,
+        bank_id,
+        as_of,
+        # A branch the GL breakdown names but no position touches is still a
+        # branch the dimension must carry, or the compiler's join drops the
+        # ledger row it labels and the branch total stops matching the ledger.
+        branch_codes=seen.branch_codes | gl_branch_codes,
+        residual_branch=bool(gl_branch_codes),
+        built_at=built_at,
     )
     row_counts["bi_dim_product"] = _build_dim_product(
         db, organization_id, bank_id, as_of, seen=seen, built_at=built_at
@@ -1755,7 +1969,7 @@ def _build_targets(
 _SCOPE_TABLES: dict[str, tuple[str, ...]] = {
     "positions": ("bi_fact_position_daily", "bi_agg_position_daily", "bi_fact_position_eom"),
     "events": ("bi_fact_loan_event",),
-    "gl": ("bi_fact_gl_monthly",),
+    "gl": ("bi_fact_gl_monthly", "bi_fact_gl_branch_monthly"),
     "engine": ("bi_fact_engine_metric",),
     "targets": ("bi_fact_target",),
     "dims": (
@@ -1797,9 +2011,24 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
     timings["events"] = time.monotonic() - clock
 
     clock = time.monotonic()
-    row_counts["bi_fact_gl_monthly"] = _build_gl_monthly(
+    gl = _build_gl_monthly(
         db, organization_id, bank_id, as_of, base_currency=base_currency, built_at=built_at
     )
+    row_counts["bi_fact_gl_monthly"] = gl.written
+    # The branch breakdown is a breakdown OF those rows, so it is handed the rows
+    # the institution build just wrote rather than re-deriving them. It returns the
+    # branch codes it saw, which the branch dimension must carry even when no
+    # position mentions the branch.
+    written, gl_branch_codes = _build_gl_branch_monthly(
+        db,
+        organization_id,
+        bank_id,
+        as_of,
+        institution=gl,
+        base_currency=base_currency,
+        built_at=built_at,
+    )
+    row_counts["bi_fact_gl_branch_monthly"] = written
     timings["gl"] = time.monotonic() - clock
 
     clock = time.monotonic()
@@ -1816,7 +2045,14 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
 
     clock = time.monotonic()
     _build_dims(
-        db, organization_id, bank_id, as_of, seen=seen, built_at=built_at, row_counts=row_counts
+        db,
+        organization_id,
+        bank_id,
+        as_of,
+        seen=seen,
+        gl_branch_codes=gl_branch_codes,
+        built_at=built_at,
+        row_counts=row_counts,
     )
     timings["dims"] = time.monotonic() - clock
 

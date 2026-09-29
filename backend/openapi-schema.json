@@ -3092,6 +3092,645 @@
         "title": "BehavioralProductEstimate",
         "type": "object"
       },
+      "BiAlertEventListRead": {
+        "additionalProperties": false,
+        "description": "One alert's recorded transitions, newest first.",
+        "properties": {
+          "alert_id": {
+            "format": "uuid",
+            "title": "Alert Id",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/BiAlertEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "title": "BiAlertEventListRead",
+        "type": "object"
+      },
+      "BiAlertEventRead": {
+        "additionalProperties": false,
+        "description": "One recorded transition. ``reason`` is set only for ``not_evaluated``.",
+        "properties": {
+          "alert_id": {
+            "format": "uuid",
+            "title": "Alert Id",
+            "type": "string"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "limit_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Source"
+          },
+          "observed_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Value"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "enum": [
+              "breached",
+              "cleared",
+              "not_evaluated"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "threshold_basis": {
+            "enum": [
+              "stated",
+              "governed_limit"
+            ],
+            "title": "Threshold Basis",
+            "type": "string"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          }
+        },
+        "required": [
+          "id",
+          "alert_id",
+          "as_of_date",
+          "state",
+          "threshold_basis",
+          "detail",
+          "evaluated_at"
+        ],
+        "title": "BiAlertEventRead",
+        "type": "object"
+      },
+      "BiAlertListRead": {
+        "additionalProperties": false,
+        "description": "Every alert of one institution the caller may see.",
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/BiAlertRead"
+            },
+            "title": "Alerts",
+            "type": "array"
+          }
+        },
+        "title": "BiAlertListRead",
+        "type": "object"
+      },
+      "BiAlertRead": {
+        "additionalProperties": false,
+        "description": "One alert as a surface shows it.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "above",
+              "below"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/BiFilter"
+            },
+            "title": "Filters",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "latest_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest As Of"
+          },
+          "latest_detail": {
+            "title": "Latest Detail",
+            "type": "string"
+          },
+          "latest_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "breached",
+                  "cleared",
+                  "not_evaluated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest State"
+          },
+          "measure_id": {
+            "title": "Measure Id",
+            "type": "string"
+          },
+          "measure_label": {
+            "title": "Measure Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notify_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Notify User Ids",
+            "type": "array"
+          },
+          "owned_by_caller": {
+            "title": "Owned By Caller",
+            "type": "boolean"
+          },
+          "owner_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Display Name"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/BiNotificationRecipient"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "threshold_basis": {
+            "enum": [
+              "stated",
+              "governed_limit"
+            ],
+            "title": "Threshold Basis",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "name",
+          "measure_id",
+          "measure_label",
+          "direction",
+          "threshold_basis",
+          "owner_user_id",
+          "owned_by_caller",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "latest_detail"
+        ],
+        "title": "BiAlertRead",
+        "type": "object"
+      },
+      "BiAlertUpsert": {
+        "additionalProperties": false,
+        "description": "Create or replace one threshold alert.\n\n``threshold`` is the bank's OWN number and is required exactly when\n``threshold_basis`` is ``stated``. With ``governed_limit`` it must be absent:\nthe line then comes from the governed register through\n``app/services/bi/limits.py``, and a number sent alongside would be a second,\nunauthoritative copy of it.",
+        "properties": {
+          "direction": {
+            "enum": [
+              "above",
+              "below"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/BiFilter"
+            },
+            "maxItems": 8,
+            "title": "Filters",
+            "type": "array"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "measure_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Measure Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notify_emails": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Notify Emails",
+            "type": "array"
+          },
+          "notify_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Notify User Ids",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "threshold_basis": {
+            "default": "stated",
+            "enum": [
+              "stated",
+              "governed_limit"
+            ],
+            "title": "Threshold Basis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "measure_id",
+          "direction",
+          "reason"
+        ],
+        "title": "BiAlertUpsert",
+        "type": "object"
+      },
+      "BiAskClauseRead": {
+        "additionalProperties": false,
+        "description": "One thing the reader is agreeing to before the query runs.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "figure",
+              "grouping",
+              "period",
+              "comparison",
+              "filter",
+              "ranking",
+              "order"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "BiAskClauseRead",
+        "type": "object"
+      },
+      "BiAskRead": {
+        "additionalProperties": false,
+        "description": "A question, and whatever the platform is prepared to propose for it.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "catalogue_version": {
+            "title": "Catalogue Version",
+            "type": "string"
+          },
+          "figures_offered": {
+            "title": "Figures Offered",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiQuery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "question_id": {
+            "format": "uuid",
+            "title": "Question Id",
+            "type": "string"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiAskReadingRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "translating",
+              "proposed",
+              "refused",
+              "stopped"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/BiAskSuggestionRead"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question_id",
+          "state",
+          "message",
+          "question",
+          "as_of",
+          "catalogue_version",
+          "figures_offered"
+        ],
+        "title": "BiAskRead",
+        "type": "object"
+      },
+      "BiAskReadingRead": {
+        "additionalProperties": false,
+        "description": "The proposed query as a person reads it, plus its window as machine values.\n\nThe dates are repeated as fields so a client can format them in the\ninstitution's own locale rather than parse them out of ``sentence`` \u2014 the\nsentence renders them ISO-8601, which is the one form that names no country.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/BiAskClauseRead"
+            },
+            "title": "Clauses",
+            "type": "array"
+          },
+          "compare_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compare To"
+          },
+          "member_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Member Ids",
+            "type": "array"
+          },
+          "range_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range End"
+          },
+          "range_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range Start"
+          },
+          "sentence": {
+            "title": "Sentence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sentence"
+        ],
+        "title": "BiAskReadingRead",
+        "type": "object"
+      },
+      "BiAskRequest": {
+        "additionalProperties": false,
+        "description": "One question, and the reporting date the reader has selected.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "as_of"
+        ],
+        "title": "BiAskRequest",
+        "type": "object"
+      },
+      "BiAskRunRequest": {
+        "additionalProperties": false,
+        "description": "The reader's confirmation: the proposed query, echoed back unchanged.",
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/BiQuery"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "BiAskRunRequest",
+        "type": "object"
+      },
+      "BiAskSuggestionRead": {
+        "additionalProperties": false,
+        "description": "A figure the platform offers instead. Id plus the CATALOGUE's own label.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "label"
+        ],
+        "title": "BiAskSuggestionRead",
+        "type": "object"
+      },
       "BiBuildRead": {
         "additionalProperties": false,
         "description": "One mart build for the date, so a badge can say WHY it is not green.",
@@ -3402,6 +4041,246 @@
           "label"
         ],
         "title": "BiCatalogueValueRead",
+        "type": "object"
+      },
+      "BiCommentaryParagraphRead": {
+        "additionalProperties": false,
+        "description": "One paragraph of commentary, as segments plus the flattened text.\n\n``text`` is the concatenation of the segments and is carried so a client that\nonly needs prose (a tooltip, an accessibility label) does not reassemble it\nand risk dropping a figure.",
+        "properties": {
+          "measure_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Measure Ids",
+            "type": "array"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/BiCommentarySegmentRead"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "segments",
+          "text"
+        ],
+        "title": "BiCommentaryParagraphRead",
+        "type": "object"
+      },
+      "BiCommentaryRead": {
+        "additionalProperties": false,
+        "description": "What commentary is available for this reader, this institution, this date.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "author": {
+            "enum": [
+              "model",
+              "platform"
+            ],
+            "title": "Author",
+            "type": "string"
+          },
+          "can_request_draft": {
+            "default": false,
+            "title": "Can Request Draft",
+            "type": "boolean"
+          },
+          "catalogue_version": {
+            "title": "Catalogue Version",
+            "type": "string"
+          },
+          "compare_to": {
+            "format": "date",
+            "title": "Compare To",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "draft_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
+          "fact_sheet_hash": {
+            "title": "Fact Sheet Hash",
+            "type": "string"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Questions",
+            "type": "array"
+          },
+          "paragraphs": {
+            "items": {
+              "$ref": "#/components/schemas/BiCommentaryParagraphRead"
+            },
+            "title": "Paragraphs",
+            "type": "array"
+          },
+          "poll_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After Seconds"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requested": {
+            "default": false,
+            "title": "Requested",
+            "type": "boolean"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "ready"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/BiTrustBadge"
+          }
+        },
+        "required": [
+          "as_of",
+          "compare_to",
+          "state",
+          "author",
+          "notice",
+          "paragraphs",
+          "fact_sheet_hash",
+          "catalogue_version"
+        ],
+        "title": "BiCommentaryRead",
+        "type": "object"
+      },
+      "BiCommentaryRequest": {
+        "additionalProperties": false,
+        "description": "Ask for commentary on one reporting date.\n\nThe same two dates the insights surface takes, and nothing else: the facts a\ndraft may quote are decided by the reader's own access, never by the request.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "compare_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compare To"
+          }
+        },
+        "required": [
+          "as_of"
+        ],
+        "title": "BiCommentaryRequest",
+        "type": "object"
+      },
+      "BiCommentarySegmentRead": {
+        "additionalProperties": false,
+        "description": "One run of a paragraph, so a surface can mark the platform's own values.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "text",
+              "figure",
+              "name"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "measure_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "BiCommentarySegmentRead",
         "type": "object"
       },
       "BiDashboardCreateRequest": {
@@ -4008,6 +4887,51 @@
           "current"
         ],
         "title": "BiDashboardVersionRead",
+        "type": "object"
+      },
+      "BiDataScopeRead": {
+        "additionalProperties": false,
+        "description": "What the rows in this answer were restricted to.\n\nA branch- or region-scoped reader is served a smaller book than the\ninstitution holds, and a figure over that smaller book is indistinguishable on\nthe wire from an institution with a smaller book. Without this the browser\ncould only say \"some of what is shown here may be narrowed, and this page\ncannot say which\" \u2014 a hedge that is true and nearly useless. With it a surface\nnames the figure and the slice (audit A10-12).\n\nMirrors ``CreditDataScopeRead`` field for field on purpose: one grant means one\nshape on the wire whichever plane answers, so a client needs one parser.\n\n``kind`` is the reduction of the reader's own bindings. ``branches`` is the\nresolved code set the filter actually applied \u2014 for a region grant, the codes\nthe institution's own business-unit register places in that region.\n``unresolved_regions`` names a granted region no unit belongs to, because zero\nrows for THAT reason is a grant to correct, not a book to report.",
+        "properties": {
+          "branches": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "all",
+              "branch",
+              "region",
+              "mixed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "regions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          },
+          "unresolved_regions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Regions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BiDataScopeRead",
         "type": "object"
       },
       "BiDateRange": {
@@ -5511,6 +6435,60 @@
         "title": "BiMeasureValidationRequest",
         "type": "object"
       },
+      "BiNotificationDeactivateRequest": {
+        "additionalProperties": false,
+        "description": "Stop an alert or a subscription without deleting its history.",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "BiNotificationDeactivateRequest",
+        "type": "object"
+      },
+      "BiNotificationRecipient": {
+        "additionalProperties": false,
+        "description": "One named identity of this tenant, as the OWNER of the object sees it.\n\nDisclosed only to the owner. Telling one recipient who else is on a\ndistribution list is not part of being on it \u2014 the same rule, for the same\nreason, as a saved dashboard's share list.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "is_active"
+        ],
+        "title": "BiNotificationRecipient",
+        "type": "object"
+      },
       "BiPackListRead": {
         "additionalProperties": false,
         "description": "Every certified dashboard this institution and reader may open.",
@@ -6172,6 +7150,9 @@
             "title": "Columns",
             "type": "array"
           },
+          "data_scope": {
+            "$ref": "#/components/schemas/BiDataScopeRead"
+          },
           "elapsed_ms": {
             "title": "Elapsed Ms",
             "type": "integer"
@@ -6212,6 +7193,18 @@
         "description": "One output column: which member it came from and how to format it.",
         "properties": {
           "format": {
+            "enum": [
+              "amount",
+              "pct",
+              "fraction",
+              "index",
+              "duration_years",
+              "count",
+              "text",
+              "date",
+              "flag",
+              "int"
+            ],
             "title": "Format",
             "type": "string"
           },
@@ -6304,6 +7297,520 @@
           "member"
         ],
         "title": "BiSort",
+        "type": "object"
+      },
+      "BiSubscriptionDeliveryListRead": {
+        "additionalProperties": false,
+        "description": "One subscription's delivery history, newest run first.",
+        "properties": {
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/BiSubscriptionDeliveryRead"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id"
+        ],
+        "title": "BiSubscriptionDeliveryListRead",
+        "type": "object"
+      },
+      "BiSubscriptionDeliveryRead": {
+        "additionalProperties": false,
+        "description": "One recipient's copy of one run, as the owner's history shows it.",
+        "properties": {
+          "artifact_format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "csv",
+                  "xlsx",
+                  "pdf"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Format"
+          },
+          "artifact_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Size Bytes"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "delivery_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "attachment",
+                  "link"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Mode"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "disclosure_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "summary",
+                  "record_level"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disclosure Class"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "recipient_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Display Name"
+          },
+          "recipient_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Email"
+          },
+          "recipient_user_id": {
+            "format": "uuid",
+            "title": "Recipient User Id",
+            "type": "string"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "scheduled_for": {
+            "format": "date-time",
+            "title": "Scheduled For",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "sent",
+              "denied",
+              "no_data",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "trigger": {
+            "enum": [
+              "schedule",
+              "new_data"
+            ],
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subscription_id",
+          "recipient_user_id",
+          "scheduled_for",
+          "trigger",
+          "status",
+          "detail"
+        ],
+        "title": "BiSubscriptionDeliveryRead",
+        "type": "object"
+      },
+      "BiSubscriptionListRead": {
+        "additionalProperties": false,
+        "description": "Every subscription of one institution the caller may see.",
+        "properties": {
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/BiSubscriptionRead"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          }
+        },
+        "title": "BiSubscriptionListRead",
+        "type": "object"
+      },
+      "BiSubscriptionRead": {
+        "additionalProperties": false,
+        "description": "One subscription as a surface shows it.",
+        "properties": {
+          "artifact_format": {
+            "enum": [
+              "csv",
+              "xlsx",
+              "pdf"
+            ],
+            "title": "Artifact Format",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "cadence": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "on_new_data"
+            ],
+            "title": "Cadence",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "day_of_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Week"
+          },
+          "delivery_note": {
+            "title": "Delivery Note",
+            "type": "string"
+          },
+          "disclosure_class": {
+            "enum": [
+              "summary",
+              "record_level"
+            ],
+            "title": "Disclosure Class",
+            "type": "string"
+          },
+          "hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hour"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minute"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owned_by_caller": {
+            "title": "Owned By Caller",
+            "type": "boolean"
+          },
+          "owner_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Display Name"
+          },
+          "owner_user_id": {
+            "format": "uuid",
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/BiQuery"
+          },
+          "recipient_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Recipient User Ids",
+            "type": "array"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/BiNotificationRecipient"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "name",
+          "query",
+          "artifact_format",
+          "cadence",
+          "time_zone",
+          "owner_user_id",
+          "owned_by_caller",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "disclosure_class",
+          "delivery_note"
+        ],
+        "title": "BiSubscriptionRead",
+        "type": "object"
+      },
+      "BiSubscriptionUpsert": {
+        "additionalProperties": false,
+        "description": "Create or replace one scheduled subscription.\n\nThe clock fields are read in the INSTITUTION's own time zone, resolved from\nthe ``jurisdictions`` registry \u2014 ``07:30`` means half past seven where the\nbank is. ``day_of_month`` stops at 28 so a monthly subscription fires in\nevery month: a 31st would silently skip most of them.",
+        "properties": {
+          "artifact_format": {
+            "enum": [
+              "csv",
+              "xlsx",
+              "pdf"
+            ],
+            "title": "Artifact Format",
+            "type": "string"
+          },
+          "cadence": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "on_new_data"
+            ],
+            "title": "Cadence",
+            "type": "string"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "maximum": 28.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "day_of_week": {
+            "anyOf": [
+              {
+                "maximum": 7.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Week"
+          },
+          "hour": {
+            "anyOf": [
+              {
+                "maximum": 23.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hour"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "minute": {
+            "anyOf": [
+              {
+                "maximum": 59.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minute"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/BiQuery"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipient_emails": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Recipient Emails",
+            "type": "array"
+          },
+          "recipient_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Recipient User Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "query",
+          "artifact_format",
+          "cadence",
+          "reason"
+        ],
+        "title": "BiSubscriptionUpsert",
         "type": "object"
       },
       "BiTime": {
@@ -6610,6 +8117,18 @@
       "BindingCreateRequest": {
         "additionalProperties": false,
         "properties": {
+          "data_scope_kind": {
+            "$ref": "#/components/schemas/DataScope",
+            "default": "all"
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Selected branch codes or region names",
+            "type": "array"
+          },
           "expected_authority_sentence": {
             "maxLength": 2000,
             "minLength": 1,
@@ -6724,6 +8243,18 @@
       "BindingPreviewRequest": {
         "additionalProperties": false,
         "properties": {
+          "data_scope_kind": {
+            "$ref": "#/components/schemas/DataScope",
+            "default": "all"
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Selected branch codes or region names",
+            "type": "array"
+          },
           "institution_id": {
             "anyOf": [
               {
@@ -6786,6 +8317,20 @@
           "authority_sentence": {
             "title": "Authority Sentence",
             "type": "string"
+          },
+          "data_scope_kind": {
+            "$ref": "#/components/schemas/DataScope"
+          },
+          "data_scope_label": {
+            "title": "Data Scope Label",
+            "type": "string"
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Data Scope Values",
+            "type": "array"
           },
           "effective": {
             "title": "Effective",
@@ -6953,6 +8498,9 @@
           "institution_name",
           "module_scope",
           "sensitivity_scope",
+          "data_scope_kind",
+          "data_scope_values",
+          "data_scope_label",
           "status",
           "effective",
           "authority_sentence",
@@ -7210,6 +8758,76 @@
           "title"
         ],
         "title": "Body_uploadPackageAttachment",
+        "type": "object"
+      },
+      "BranchDirectoryEntryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "region"
+        ],
+        "title": "BranchDirectoryEntryRead",
+        "type": "object"
+      },
+      "BranchDirectoryRead": {
+        "additionalProperties": false,
+        "description": "One institution's declared branch register, for scoping a grant.\n\nBoth vocabularies are returned because the composer needs both and a region\nexists only as a declaration on this register. An institution that has\ningested no register yet returns empty lists \u2014 never a fabricated branch.",
+        "properties": {
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/BranchDirectoryEntryRead"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "institution_id": {
+            "title": "Institution Id",
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          },
+          "scope_options": {
+            "items": {
+              "$ref": "#/components/schemas/DataScopeOptionRead"
+            },
+            "title": "Scope Options",
+            "type": "array"
+          }
+        },
+        "required": [
+          "institution_id",
+          "branches",
+          "regions",
+          "scope_options"
+        ],
+        "title": "BranchDirectoryRead",
         "type": "object"
       },
       "Bsd2HeaderRead": {
@@ -14006,6 +15624,9 @@
             "title": "As Of",
             "type": "string"
           },
+          "data_scope": {
+            "$ref": "#/components/schemas/CreditDataScopeRead"
+          },
           "disbursement_count": {
             "title": "Disbursement Count",
             "type": "integer"
@@ -14055,7 +15676,8 @@
           "recoveries",
           "disbursement_count",
           "repayment_count",
-          "monthly_flows"
+          "monthly_flows",
+          "data_scope"
         ],
         "title": "CreditActivityRead",
         "type": "object"
@@ -14211,6 +15833,51 @@
         "title": "CreditDashboardRead",
         "type": "object"
       },
+      "CreditDataScopeRead": {
+        "additionalProperties": false,
+        "description": "What the rows and counts in this response were restricted to.\n\nA branch- or region-scoped reader is served a smaller book than the\ninstitution holds, and a count over that smaller book is indistinguishable\non the wire from an institution with a smaller book. So the response SAYS\nwhich scope produced it: without this, \"412 loans\" reads as the bank's whole\nblotter, and an empty page reads as \"this bank has no loans\" rather than\n\"your grant covers no branch that has any\".\n\n``kind`` is the reduction of the reader's own bindings (``all``, ``branch``,\n``region`` or ``mixed``). ``branches`` is the resolved code set the filter\nactually applied \u2014 for a region grant, the codes the institution's own\nbusiness-unit register places in that region. ``unresolved_regions`` names a\ngranted region no unit in the register belongs to, because zero rows for that\nreason is a grant to correct, not a book to report.",
+        "properties": {
+          "branches": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "all",
+              "branch",
+              "region",
+              "mixed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "regions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          },
+          "unresolved_regions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Regions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "CreditDataScopeRead",
+        "type": "object"
+      },
       "CreditFacetCountRead": {
         "additionalProperties": false,
         "properties": {
@@ -14232,6 +15899,7 @@
       },
       "CreditLoanFacetsRead": {
         "additionalProperties": false,
+        "description": "The blotter's own filter counts \u2014 every tally over the SAME scoped set the\nblotter pages, so a facet can never offer a value the page cannot show.",
         "properties": {
           "as_of": {
             "title": "As Of",
@@ -14243,6 +15911,9 @@
             },
             "title": "Branches",
             "type": "array"
+          },
+          "data_scope": {
+            "$ref": "#/components/schemas/CreditDataScopeRead"
           },
           "grades": {
             "items": {
@@ -14271,7 +15942,8 @@
           "grades",
           "products",
           "branches",
-          "sectors"
+          "sectors",
+          "data_scope"
         ],
         "title": "CreditLoanFacetsRead",
         "type": "object"
@@ -14447,6 +16119,9 @@
             "title": "As Of",
             "type": "string"
           },
+          "data_scope": {
+            "$ref": "#/components/schemas/CreditDataScopeRead"
+          },
           "filtered": {
             "title": "Filtered",
             "type": "integer"
@@ -14477,7 +16152,8 @@
           "filtered",
           "limit",
           "offset",
-          "rows"
+          "rows",
+          "data_scope"
         ],
         "title": "CreditLoansPageRead",
         "type": "object"
@@ -15424,6 +17100,78 @@
           "activated_at"
         ],
         "title": "DataActivationSummaryRead",
+        "type": "object"
+      },
+      "DataScope": {
+        "description": "Which slice of an institution's book ONE binding row admits.\n\nThis is the stored column vocabulary of ``data_scope_kind`` and nothing\nelse. The DERIVED union of several bindings' scopes is\n``services.authorization.EffectiveDataScope``, whose ``kind`` additionally\nadmits ``mixed`` and ``none`` \u2014 neither of which any row may carry, because\na row states one declared slice and only a reduction can be mixed or empty.",
+        "enum": [
+          "all",
+          "branch",
+          "region"
+        ],
+        "title": "DataScope",
+        "type": "string"
+      },
+      "DataScopeOptionRead": {
+        "additionalProperties": false,
+        "description": "One choice in the composer's scope control, with its production copy.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/DataScope"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "requires_values": {
+            "title": "Requires Values",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "requires_values"
+        ],
+        "title": "DataScopeOptionRead",
+        "type": "object"
+      },
+      "DataScopeRead": {
+        "additionalProperties": false,
+        "description": "The slice of an institution's book one capability reads.\n\n``kind`` widens beyond the stored vocabulary: ``mixed`` is the union of a\nbranch grant and a region grant, and ``none`` means nothing authorized the\nread. Neither is storable on a binding row.",
+        "properties": {
+          "branches": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "all",
+              "branch",
+              "region",
+              "mixed",
+              "none"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "branches",
+          "regions"
+        ],
+        "title": "DataScopeRead",
         "type": "object"
       },
       "DatabaseConnectionCreate": {
@@ -16732,6 +18480,9 @@
       "EffectiveCapabilityRead": {
         "additionalProperties": false,
         "properties": {
+          "data_scope": {
+            "$ref": "#/components/schemas/DataScopeRead"
+          },
           "module": {
             "$ref": "#/components/schemas/Module"
           },
@@ -16750,7 +18501,8 @@
           "module",
           "sensitivity",
           "permission",
-          "requires_contextual_authorization"
+          "requires_contextual_authorization",
+          "data_scope"
         ],
         "title": "EffectiveCapabilityRead",
         "type": "object"
@@ -18303,6 +20055,10 @@
             "title": "Bi Mart Enqueue Enabled",
             "type": "boolean"
           },
+          "bi_nlq_enabled": {
+            "title": "Bi Nlq Enabled",
+            "type": "boolean"
+          },
           "bi_scheduler_enabled": {
             "title": "Bi Scheduler Enabled",
             "type": "boolean"
@@ -18311,7 +20067,8 @@
         "required": [
           "bi_enabled",
           "bi_mart_enqueue_enabled",
-          "bi_scheduler_enabled"
+          "bi_scheduler_enabled",
+          "bi_nlq_enabled"
         ],
         "title": "FeatureFlagsRead",
         "type": "object"
@@ -36913,10 +38670,31 @@
             "title": "Integration key bank ID",
             "type": "string"
           },
+          "data_scope_kind": {
+            "$ref": "#/components/schemas/DataScope",
+            "default": "all"
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Selected branch codes or region names",
+            "type": "array"
+          },
           "label": {
             "maxLength": 80,
             "minLength": 1,
             "title": "Label",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "writer",
+            "enum": [
+              "writer",
+              "reader"
+            ],
+            "title": "Purpose",
             "type": "string"
           }
         },
@@ -36993,6 +38771,23 @@
             ],
             "title": "Created By"
           },
+          "data_scope_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Data Scope Values",
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -37017,6 +38812,21 @@
               }
             ],
             "title": "Last Used At"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "enum": [
+                  "writer",
+                  "reader"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
           },
           "revoked_at": {
             "anyOf": [
@@ -47075,7 +48885,8 @@
                 "remittance_flows",
                 "teller_withdrawals",
                 "interest_accruals",
-                "performance_targets"
+                "performance_targets",
+                "gl_segment_balances"
               ]
             },
             "title": "Reference",
@@ -47512,7 +49323,8 @@
               "remittance_flows",
               "teller_withdrawals",
               "interest_accruals",
-              "performance_targets"
+              "performance_targets",
+              "gl_segment_balances"
             ],
             "title": "Dataset Kind",
             "type": "string"
@@ -54322,6 +56134,18 @@
         "additionalProperties": false,
         "description": "Approval activates identity and creates exactly one complete scoped grant.",
         "properties": {
+          "data_scope_kind": {
+            "$ref": "#/components/schemas/DataScope",
+            "default": "all"
+          },
+          "data_scope_values": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Selected branch codes or region names",
+            "type": "array"
+          },
           "expected_authority_sentence": {
             "maxLength": 2000,
             "minLength": 1,
@@ -61806,6 +63630,1167 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/bi/alerts": {
+      "get": {
+        "description": "Every alert of this institution this identity owns or is addressed to.\n\nAn alert whose figure this caller's access does not cover is not dropped from\nthe list \u2014 its OWNER has to be able to see and stop it \u2014 but its verdict is,\nand the row says why. A caller who is neither the owner nor addressed sees\nnothing, because they reach nothing.",
+        "operationId": "listBiAlerts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bi Alerts",
+        "tags": [
+          "bi"
+        ]
+      },
+      "post": {
+        "description": "Watch one figure against one line. The caller becomes its owner.\n\nDeny-by-default applied to writing as well as reading: an author who may not\nask what this figure is may not instruct the platform to watch it either.\nBeing authorized HERE confers nothing on the alert \u2014 every recipient is\nre-authorized when a verdict is reached, and the owner is re-authorized at\nevery evaluation, so a withdrawn grant stops the figure rather than only the\ninteractive page.",
+        "operationId": "createBiAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiAlertUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Bi Alert",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/alerts/{alert_id}": {
+      "delete": {
+        "description": "Delete an alert and every verdict it recorded. Owner only.",
+        "operationId": "deleteBiAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Bi Alert",
+        "tags": [
+          "bi"
+        ]
+      },
+      "get": {
+        "description": "One alert, if this identity owns it or is addressed by it.",
+        "operationId": "getBiAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Alert",
+        "tags": [
+          "bi"
+        ]
+      },
+      "put": {
+        "description": "Replace an alert's definition. Owner only, and the author is re-authorized.\n\nRe-authorized on every edit, not only at creation: an owner whose grant was\nwithdrawn may stop or delete their alert, and may not point it at a figure\nthey can no longer read.",
+        "operationId": "updateBiAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiAlertUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Bi Alert",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/alerts/{alert_id}/deactivation": {
+      "post": {
+        "description": "Stop judging this figure, keeping the alert and its history. Owner only.\n\nSeparate from deleting it, and separate from an edit, because stopping an\nalert is the act somebody takes in a hurry: it needs no figure authority, no\nvalid threshold and no reachable measure \u2014 only the owner and a reason.",
+        "operationId": "deactivateBiAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiNotificationDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate Bi Alert",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/alerts/{alert_id}/events": {
+      "get": {
+        "description": "What this alert has recorded, newest first.\n\nEvery row states the figure it was judged on, so this read is refused unless\nthe caller's own bindings cover the alert's figure. That includes the owner:\nan alert outlives a grant, and a verdict is the figure in all but name.",
+        "operationId": "listBiAlertEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Alert Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many of the most recent rows to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "How many of the most recent rows to return.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAlertEventListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bi Alert Events",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/ask": {
+      "post": {
+        "description": "Ask one question in words. Proposes a query; executes nothing.",
+        "operationId": "askBiQuestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiAskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAskRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ask Bi Question",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/ask/{job_id}": {
+      "get": {
+        "description": "One of your OWN questions, and whatever the platform proposes for it.",
+        "operationId": "getBiQuestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiAskRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Question",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/ask/{job_id}/run": {
+      "post": {
+        "description": "Run a proposal the reader has confirmed, under the ordinary read authority.",
+        "operationId": "runBiQuestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiAskRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiQueryResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Bi Question",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/bi/catalogue": {
       "get": {
         "description": "Every measure, dimension and drill path THIS caller may query.",
@@ -61915,6 +64900,281 @@
           }
         ],
         "summary": "Get Bi Catalogue",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/commentary": {
+      "get": {
+        "description": "Read the commentary on offer for this reader and this reporting date.\n\nAlways answers: this reader's own draft when there is one, and the platform's\nown commentary when there is not. The read is re-authorized on every call\nrather than trusted from the request that made the draft, because a reader's\ngrants can narrow between the two and a draft holds figures from the wider\nset.",
+        "operationId": "getBiCommentary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The reporting date to read commentary for.",
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "description": "The reporting date to read commentary for.",
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The earlier period movements are measured against.",
+            "in": "query",
+            "name": "compare_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The earlier period movements are measured against.",
+              "title": "Compare To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiCommentaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Commentary",
+        "tags": [
+          "bi"
+        ]
+      },
+      "post": {
+        "description": "Ask for commentary on one reporting date.\n\nAnswers ``202`` when a model call was queued and ``200`` otherwise \u2014 because\n\"otherwise\" is a real answer: a request that coalesced onto the one already in\nflight, or one the gates, the daily cap or the sheet itself stopped, is served\nthe platform's own commentary with ``author`` and ``notice`` saying so.",
+        "operationId": "requestBiCommentary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiCommentaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiCommentaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Bi Commentary",
         "tags": [
           "bi"
         ]
@@ -63259,6 +66519,141 @@
           }
         ],
         "summary": "Get Bi Export",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/feeds/{dataset}": {
+      "get": {
+        "description": "Serve everything in ``dataset`` that is newer than ``cursor``.\n\nThe response carries the cursor to use next\n(``X-Bi-Feed-Next-Cursor``), the reporting dates it covered and the slice of\nthe institution the credential is authorized over. The consumer's one\nobligation is **replace by reporting date**: delete its own rows for every\ndate in ``X-Bi-Feed-Reporting-Dates``, then insert the payload. That is what\nmakes a restatement land, and it is why re-delivery is harmless.",
+        "operationId": "pullBiFeed",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dataset",
+            "required": true,
+            "schema": {
+              "title": "Dataset",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "ndjson",
+              "enum": [
+                "ndjson",
+                "csv"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {},
+              "text/csv": {}
+            },
+            "description": "The dataset, streamed as NDJSON or CSV."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pull one curated analytics dataset",
         "tags": [
           "bi"
         ]
@@ -64784,6 +68179,773 @@
           }
         ],
         "summary": "Run Bi Query",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/subscriptions": {
+      "get": {
+        "description": "Every scheduled report of this institution this identity owns or receives.\n\nNo figure and no delivery: a list names reports, not their contents, and each\ndelivery is prepared under its own recipient's access when the run happens.",
+        "operationId": "listBiSubscriptions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bi Subscriptions",
+        "tags": [
+          "bi"
+        ]
+      },
+      "post": {
+        "description": "Mail one report on a schedule. The caller becomes its owner.\n\nThe author must hold every figure the report reads \u2014 a principal cannot\ninstruct the platform to send a question they may not ask. What is STORED\ncarries no trace of that decision: no binding id, no permission, no\nauthorization version. Every delivery is authorized, compiled and rendered as\nits own recipient at send time, and a recipient the evaluator refuses is sent\nnothing at all.",
+        "operationId": "createBiSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiSubscriptionUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Bi Subscription",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}": {
+      "delete": {
+        "description": "Delete a scheduled report and its delivery history. Owner only.",
+        "operationId": "deleteBiSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Bi Subscription",
+        "tags": [
+          "bi"
+        ]
+      },
+      "get": {
+        "description": "One scheduled report, if this identity owns it or receives it.",
+        "operationId": "getBiSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bi Subscription",
+        "tags": [
+          "bi"
+        ]
+      },
+      "put": {
+        "description": "Replace a scheduled report's definition. Owner only.",
+        "operationId": "updateBiSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiSubscriptionUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Bi Subscription",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deactivation": {
+      "post": {
+        "description": "Stop sending this report, keeping it and its delivery history. Owner only.\n\nNeeds no figure authority: stopping the platform from mailing something is\nthe act somebody takes in a hurry, and an owner whose grant has been\nwithdrawn is exactly who needs it to work.",
+        "operationId": "deactivateBiSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiNotificationDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate Bi Subscription",
+        "tags": [
+          "bi"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deliveries": {
+      "get": {
+        "description": "What each recipient was sent, newest run first. Owner only.\n\nOwner-only because it is a membership disclosure twice over: it names who is\non the list, and it names which of them the evaluator refused. A refusal is\nreported as the honest outcome it is \u2014 nobody's access failed, a report\nsimply was not that person's to receive.\n\nIt carries no figure at all: a row count and a file size are facts about a\nfile, not about the book, and the artifact itself never existed for a refused\nrecipient.",
+        "operationId": "listBiSubscriptionDeliveries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many of the most recent rows to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "How many of the most recent rows to return.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiSubscriptionDeliveryListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bi Subscription Deliveries",
         "tags": [
           "bi"
         ]
@@ -67820,7 +71982,7 @@
     },
     "/api/v1/banks/{bank_id}/credit/loans": {
       "get": {
-        "description": "One page of the classified loan book, narrowed to one slice.\n\n``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who\nfollowed a figure into the rows behind it lands on the SAME slice. The\nservice refuses a stage or band outside the platform's vocabulary and a date\nwith no computed position; the bounds declared here are the same refusals\nstated in the contract, so a client learns them without asking.",
+        "description": "One page of the classified loan book, narrowed to one slice.\n\n``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who\nfollowed a figure into the rows behind it lands on the SAME slice. The\nservice refuses a stage or band outside the platform's vocabulary and a date\nwith no computed position; the bounds declared here are the same refusals\nstated in the contract, so a client learns them without asking.\n\n``branch`` is the client's filter; ``access.data_scope`` is the server's, and\nthe two intersect. A branch outside the reader's scope therefore answers an\nempty page with the scope disclosed, never that branch's rows and never an\nerror that would confirm the branch exists.",
         "operationId": "listCreditLoans",
         "parameters": [
           {
@@ -68368,6 +72530,7 @@
     },
     "/api/v1/banks/{bank_id}/credit/run-all-scenarios": {
       "post": {
+        "description": "Seal the baseline credit run for one reporting period.\n\nThe dependency requires the whole institution, so the sealed snapshot is the\ninstitution's book \u2014 the run has no way to record that it covered a slice, and\na filing record that claims more than it measured is worse than no record.",
         "operationId": "runAllCreditScenarios",
         "parameters": [
           {
@@ -113030,6 +117193,7 @@
         ]
       },
       "post": {
+        "description": "Issue one credential for one exact institution, for one purpose.\n\nThe authority required is unchanged by the second purpose: one\norganization-wide ACCOUNT/restricted ``administer`` binding\n(``require_account_administration``) plus an exact ``BK-*`` target, which the\nservice resolves inside the caller's tenant.",
         "operationId": "issueIntegrationKey",
         "requestBody": {
           "content": {
@@ -115854,6 +120018,104 @@
           }
         ],
         "summary": "List Organization Institutions",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/organization/institutions/{institution_id}/branches": {
+      "get": {
+        "description": "One institution's declared branches and regions, for scoping a grant.\n\nReads the CANONICAL ``business_units`` register \u2014 the bank's own declaration\nof its reporting hierarchy \u2014 and not the BI branch dimension: BI is a\ndispatch plane, so the account plane must neither import nor query ``bi_*``.\nThe register's documented field aliases (``unit_id``, ``name``) are resolved\nthrough ``business_units.normalise_row``, the one place that is done, so a\nbank pushing either spelling is read correctly.\n\nBank-scoped at the QUERY, not merely organization-scoped: two banks of one\norganization share an RLS tenant, so organization scoping alone cannot\nisolate their child objects. An institution outside the caller's\norganization is indistinguishable from one that does not exist.\n\nAn institution that has ingested no register yet returns empty lists. There\nis no fabricated branch and no inferred region: ``region`` is optional on\nthe register and is the only place a region can come from.",
+        "operationId": "listOrganizationInstitutionBranches",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "title": "Institution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchDirectoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Organization Institution Branches",
         "tags": [
           "authorization"
         ]

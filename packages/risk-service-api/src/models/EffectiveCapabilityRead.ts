@@ -32,6 +32,13 @@ import {
   ModuleToJSON,
   ModuleToJSONTyped,
 } from "./Module";
+import type { DataScopeRead } from "./DataScopeRead";
+import {
+  DataScopeReadFromJSON,
+  DataScopeReadFromJSONTyped,
+  DataScopeReadToJSON,
+  DataScopeReadToJSONTyped,
+} from "./DataScopeRead";
 
 /**
  *
@@ -39,6 +46,12 @@ import {
  * @interface EffectiveCapabilityRead
  */
 export interface EffectiveCapabilityRead {
+  /**
+   *
+   * @type {DataScopeRead}
+   * @memberof EffectiveCapabilityRead
+   */
+  dataScope: DataScopeRead;
   /**
    *
    * @type {Module}
@@ -71,6 +84,7 @@ export interface EffectiveCapabilityRead {
 export function instanceOfEffectiveCapabilityRead(
   value: object,
 ): value is EffectiveCapabilityRead {
+  if (!("dataScope" in value) || value["dataScope"] === undefined) return false;
   if (!("module" in value) || value["module"] === undefined) return false;
   if (!("permission" in value) || value["permission"] === undefined)
     return false;
@@ -99,6 +113,7 @@ export function EffectiveCapabilityReadFromJSONTyped(
   }
   return {
     ...json,
+    dataScope: DataScopeReadFromJSON(json["data_scope"]),
     module: ModuleFromJSON(json["module"]),
     permission: PermissionFromJSON(json["permission"]),
     requiresContextualAuthorization: json["requires_contextual_authorization"],
@@ -121,6 +136,7 @@ export function EffectiveCapabilityReadToJSONTyped(
   }
 
   return {
+    data_scope: DataScopeReadToJSON(value["dataScope"]),
     module: ModuleToJSON(value["module"]),
     permission: PermissionToJSON(value["permission"]),
     requires_contextual_authorization: value["requiresContextualAuthorization"],

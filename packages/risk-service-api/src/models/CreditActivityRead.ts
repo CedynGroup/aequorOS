@@ -25,6 +25,13 @@ import {
   MonthlyFlowReadToJSON,
   MonthlyFlowReadToJSONTyped,
 } from "./MonthlyFlowRead";
+import type { CreditDataScopeRead } from "./CreditDataScopeRead";
+import {
+  CreditDataScopeReadFromJSON,
+  CreditDataScopeReadFromJSONTyped,
+  CreditDataScopeReadToJSON,
+  CreditDataScopeReadToJSONTyped,
+} from "./CreditDataScopeRead";
 
 /**
  *
@@ -38,6 +45,12 @@ export interface CreditActivityRead {
    * @memberof CreditActivityRead
    */
   asOf: string;
+  /**
+   *
+   * @type {CreditDataScopeRead}
+   * @memberof CreditActivityRead
+   */
+  dataScope: CreditDataScopeRead;
   /**
    *
    * @type {number}
@@ -89,6 +102,7 @@ export function instanceOfCreditActivityRead(
   value: object,
 ): value is CreditActivityRead {
   if (!("asOf" in value) || value["asOf"] === undefined) return false;
+  if (!("dataScope" in value) || value["dataScope"] === undefined) return false;
   if (
     !("disbursementCount" in value) ||
     value["disbursementCount"] === undefined
@@ -122,6 +136,7 @@ export function CreditActivityReadFromJSONTyped(
   return {
     ...json,
     asOf: json["as_of"],
+    dataScope: CreditDataScopeReadFromJSON(json["data_scope"]),
     disbursementCount: json["disbursement_count"],
     monthlyFlows: (json["monthly_flows"] as Array<any>).map(
       MonthlyFlowReadFromJSON,
@@ -150,6 +165,7 @@ export function CreditActivityReadToJSONTyped(
 
   return {
     as_of: value["asOf"],
+    data_scope: CreditDataScopeReadToJSON(value["dataScope"]),
     disbursement_count: value["disbursementCount"],
     monthly_flows: (value["monthlyFlows"] as Array<any>).map(
       MonthlyFlowReadToJSON,

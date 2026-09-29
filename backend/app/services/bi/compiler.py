@@ -146,6 +146,7 @@ from app.models.bi import (
     BiDimGlAccount,
     BiDimProduct,
     BiFactEngineMetric,
+    BiFactGlBranchMonthly,
     BiFactGlMonthly,
     BiFactLoanEvent,
     BiFactPositionDaily,
@@ -198,6 +199,7 @@ _TABLES: dict[str, Table] = {
         BiAggPositionDaily.__tablename__,
         BiFactLoanEvent.__tablename__,
         BiFactGlMonthly.__tablename__,
+        BiFactGlBranchMonthly.__tablename__,
         BiFactEngineMetric.__tablename__,
         BiFactTarget.__tablename__,
         BiDimBranch.__tablename__,
@@ -216,6 +218,7 @@ _FACT_DATE_COLUMN: dict[str, str] = {
     _AGG_TABLE: "as_of_date",
     BiFactLoanEvent.__tablename__: "event_date",
     BiFactGlMonthly.__tablename__: "month_end",
+    BiFactGlBranchMonthly.__tablename__: "month_end",
     BiFactEngineMetric.__tablename__: "as_of_date",
     BiFactTarget.__tablename__: "as_of_date",
 }

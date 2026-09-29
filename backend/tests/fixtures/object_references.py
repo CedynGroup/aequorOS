@@ -1714,6 +1714,12 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             # principal — the last of those because a presigned download
             # link carries no identity of its own.
             "/api/v1/banks/{bank_id}/bi/exports/{job_id}",
+            # A natural-language question is collected by its QUEUE ROW too, for the
+            # same reason: the proposal is one reader's, translated over the members
+            # THAT reader may see, so both routes answer 404 for a job of another
+            # tenant, another institution, another type or another principal.
+            "/api/v1/banks/{bank_id}/bi/ask/{job_id}",
+            "/api/v1/banks/{bank_id}/bi/ask/{job_id}/run",
         ),
         bank_scoped=False,
     ),

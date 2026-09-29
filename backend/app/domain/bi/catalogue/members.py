@@ -115,6 +115,15 @@ SENSITIVITIES: tuple[Sensitivity, ...] = ("published", "aggregated", "confidenti
 #: (``dpd_completeness``) is what stops the trust badge reading green over both.
 DPD_COMPLETENESS = "R10"
 
+#: The completeness check every ARREARS measure carries. Its twin's argument, on
+#: the field the bank states rather than the band the platform derives: a bank
+#: that supplies ``arrears_amount`` for half its book would show a sum reading as
+#: the WHOLE book's arrears and a share silently understated, with no visible
+#: defect. The measures contribute no row for a loan that states nothing — never a
+#: zero — and R12 (``arrears_completeness``) is what stops the trust badge going
+#: green over the part of the book nobody stated.
+ARREARS_COMPLETENESS = "R12"
+
 
 @dataclass(frozen=True, slots=True)
 class ColumnRef:

@@ -6,7 +6,7 @@ mode and to the canonical output schema the extractor emits. The catalog is
 ground truth for what a T24 pull fetches and how its columns land in the
 canonical model — versioned alongside the adapter, overridable per bank.
 
-Two honesty rails, mirrored from the market-data catalog:
+Four honesty rails, the first two mirrored from the market-data catalog:
 
 - **Never fake support.** A domain without ``supported: true`` is not offered.
   A typo'd domain name fails loudly at load, never silently drops coverage.
@@ -14,6 +14,22 @@ Two honesty rails, mirrored from the market-data catalog:
   service names differ per bank; the shipped values are sensible documented
   defaults that a bank overrides via ``catalog_overrides`` on its connection.
   The loader validates structure, not that a given enquiry exists in a core.
+- **A supported reference domain must name a REGISTERED dataset kind.** Presence
+  of a ``dataset_key`` was checked; membership was not, so ``LIMITS`` — whose
+  ``limits`` is not a :data:`REFERENCE_DATASET_KINDS` member — could be flipped
+  to supported here and then failed far away: ``default_t24_mapping_config``
+  raises a raw Pydantic ``ValidationError`` that enumerates every internal
+  dataset kind, at onboarding, and ``canonical_reference_rows`` has a CHECK
+  constraint on the same list. Refuse at load, naming the kind.
+- **A supported reference domain must map every field its register REQUIRES.**
+  This is the structural form of the defect fixed in ``7277913a``: T24 published
+  branches under the vendor's own spelling, the ``business_units`` register
+  requires ``business_unit_id``/``business_unit_name``, and so every branch row
+  was refused while the pull still reported success. That was fixed by editing
+  the catalogs; nothing stopped it recurring, and the next register to enforce
+  its schema would have reproduced it exactly. A register that declares no
+  required fields (or none at all) imposes nothing — this rail checks what a
+  register actually asks for, never a shape invented here.
 
 The request coordinates stay opaque to everything but the transport and
 extractor for that mode, so T24 field vocabulary never leaks past this layer.
@@ -31,6 +47,7 @@ from app.adapters.temenos_t24.domains import (
     DOMAIN_TO_ENTITY_TYPE,
     CoreBankingDomain,
 )
+from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
 
 CATALOG_DIR = Path(__file__).parent / "catalogs"
 CATALOG_FILES: dict[str, str] = {
@@ -190,9 +207,11 @@ def _parse_entry(path: Path, domain: CoreBankingDomain, entry: dict[str, Any]) -
     if dataset_key is not None and not isinstance(dataset_key, str):
         msg = f"Catalog {path}: entry {name!r} 'dataset_key' must be a string."
         raise CatalogError(msg)
-    if entity_type == "reference" and supported and not dataset_key:
-        msg = f"Catalog {path}: reference entry {name!r} is supported but has no 'dataset_key'."
-        raise CatalogError(msg)
+    if entity_type == "reference" and supported:
+        if not dataset_key:
+            msg = f"Catalog {path}: reference entry {name!r} is supported but has no 'dataset_key'."
+            raise CatalogError(msg)
+        _check_reference_destination(path, name, dataset_key, field_map, lcy_fields, constants)
 
     selection = _require_mapping(path, name, "selection", entry.get("selection"))
     source = DomainSource(
@@ -218,6 +237,56 @@ def _parse_entry(path: Path, domain: CoreBankingDomain, entry: dict[str, Any]) -
         constants=constants,
         dataset_key=dataset_key,
     )
+
+
+def _check_reference_destination(  # noqa: PLR0913 - one argument per populating source
+    path: Path,
+    domain_name: str,
+    dataset_key: str,
+    field_map: dict[str, str],
+    lcy_fields: dict[str, str],
+    constants: dict[str, str],
+) -> None:
+    """Refuse a supported reference entry whose destination cannot receive it.
+
+    Two questions, both about the DESTINATION rather than the T24 side, because
+    the T24 side is installation-specific and this loader deliberately does not
+    judge it:
+
+    1. Is ``dataset_key`` a reference dataset kind the platform actually has? An
+       unknown kind is refused by ``ReferenceMapping`` (Pydantic) and by the
+       ``canonical_reference_rows`` CHECK constraint, so allowing it here only
+       moves the failure somewhere less legible.
+    2. Does the entry map every field that kind's register REQUIRES? A register
+       that declares no required fields asks nothing and passes; the check never
+       invents a requirement.
+    """
+    if dataset_key not in REFERENCE_DATASET_KINDS:
+        known = ", ".join(sorted(REFERENCE_DATASET_KINDS))
+        msg = (
+            f"Catalog {path}: reference entry {domain_name!r} is supported but its "
+            f"dataset_key {dataset_key!r} is not a reference dataset kind. Known kinds: "
+            f"{known}. A new destination needs its kind registered (and migrated) first."
+        )
+        raise CatalogError(msg)
+
+    # Lazy: the schema package imports the ingestion contracts, and importing it
+    # at module scope would pull that graph in behind every catalog load.
+    from app.domain.ingestion.reference_schemas import schema_for  # noqa: PLC0415
+
+    schema = schema_for(dataset_key)
+    if schema is None:
+        return
+    populated = {*field_map.values(), *lcy_fields, *constants}
+    missing = [name for name in schema.required if name not in populated]
+    if missing:
+        msg = (
+            f"Catalog {path}: reference entry {domain_name!r} is supported but never populates "
+            f"{missing!r}, which the {dataset_key!r} register requires — every row would be "
+            f"refused while the pull reported success. Map them in 'field_map' (or supply them "
+            f"as constants)."
+        )
+        raise CatalogError(msg)
 
 
 def _opt_str(path: Path, domain_name: str, key: str, value: Any) -> str | None:

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { BiDataScopeRead } from "./BiDataScopeRead";
+import {
+  BiDataScopeReadFromJSON,
+  BiDataScopeReadFromJSONTyped,
+  BiDataScopeReadToJSON,
+  BiDataScopeReadToJSONTyped,
+} from "./BiDataScopeRead";
 import type { BiTrustBadge } from "./BiTrustBadge";
 import {
   BiTrustBadgeFromJSON,
@@ -57,6 +64,12 @@ export interface BiQueryResult {
    * @memberof BiQueryResult
    */
   columns: Array<BiResultColumn>;
+  /**
+   *
+   * @type {BiDataScopeRead}
+   * @memberof BiQueryResult
+   */
+  dataScope?: BiDataScopeRead;
   /**
    *
    * @type {number}
@@ -123,6 +136,10 @@ export function BiQueryResultFromJSONTyped(
         : BuildFingerprintFromJSON(json["build_fingerprint"]),
     catalogueVersion: json["catalogue_version"],
     columns: (json["columns"] as Array<any>).map(BiResultColumnFromJSON),
+    dataScope:
+      json["data_scope"] == null
+        ? undefined
+        : BiDataScopeReadFromJSON(json["data_scope"]),
     elapsedMs: json["elapsed_ms"],
     rows: json["rows"],
     truncated: json["truncated"],
@@ -148,6 +165,7 @@ export function BiQueryResultToJSONTyped(
     build_fingerprint: BuildFingerprintToJSON(value["buildFingerprint"]),
     catalogue_version: value["catalogueVersion"],
     columns: (value["columns"] as Array<any>).map(BiResultColumnToJSON),
+    data_scope: BiDataScopeReadToJSON(value["dataScope"]),
     elapsed_ms: value["elapsedMs"],
     rows: value["rows"],
     truncated: value["truncated"],

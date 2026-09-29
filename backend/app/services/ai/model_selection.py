@@ -61,6 +61,11 @@ ModelSource = Literal["feature_override", "vendor_default"]
 FEATURE_MODEL_POLICY: dict[AiFeature, ModelPolicy] = {
     "icaap_drafting": "pinned",
     "bi_commentary": "may_float",
+    # Translating a question into a catalogue query is not a filed artifact and
+    # carries no bank figure, so a newer snapshot of the same family is an
+    # improvement rather than a change to something governed. It floats for the
+    # same reason commentary does.
+    "bi_nlq": "may_float",
 }
 
 #: What an operator-configured FLOATING id looks like. A shape test, not a list

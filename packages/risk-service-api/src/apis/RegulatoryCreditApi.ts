@@ -523,7 +523,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
-   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.
+   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.  ``branch`` is the client\'s filter; ``access.data_scope`` is the server\'s, and the two intersect. A branch outside the reader\'s scope therefore answers an empty page with the scope disclosed, never that branch\'s rows and never an error that would confirm the branch exists.
    * List Credit Loans
    */
   async listCreditLoansRaw(
@@ -610,7 +610,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
-   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.
+   * One page of the classified loan book, narrowed to one slice.  ``sector``, ``stage``, ``dpd_band`` and ``as_of`` exist so a reader who followed a figure into the rows behind it lands on the SAME slice. The service refuses a stage or band outside the platform\'s vocabulary and a date with no computed position; the bounds declared here are the same refusals stated in the contract, so a client learns them without asking.  ``branch`` is the client\'s filter; ``access.data_scope`` is the server\'s, and the two intersect. A branch outside the reader\'s scope therefore answers an empty page with the scope disclosed, never that branch\'s rows and never an error that would confirm the branch exists.
    * List Credit Loans
    */
   async listCreditLoans(
@@ -625,6 +625,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
+   * Seal the baseline credit run for one reporting period.  The dependency requires the whole institution, so the sealed snapshot is the institution\'s book — the run has no way to record that it covered a slice, and a filing record that claims more than it measured is worse than no record.
    * Run All Credit Scenarios
    */
   async runAllCreditScenariosRaw(
@@ -681,6 +682,7 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
   }
 
   /**
+   * Seal the baseline credit run for one reporting period.  The dependency requires the whole institution, so the sealed snapshot is the institution\'s book — the run has no way to record that it covered a slice, and a filing record that claims more than it measured is worse than no record.
    * Run All Credit Scenarios
    */
   async runAllCreditScenarios(

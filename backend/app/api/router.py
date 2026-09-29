@@ -6,6 +6,7 @@ from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
+from app.features.ask_bi import router as bi_ask_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.examiner_surfaces import router as examiner_router
 from app.features.export_bi import router as bi_export_router
@@ -265,6 +266,16 @@ v1_router.include_router(
 # enqueue site sits in a function no route reaches fails that guard by design.
 v1_router.include_router(
     bi_commentary_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Natural-language questions (docs/bi.md §Phase 5), on the same two dependencies and
+# in the same order. It is the one BI surface that sends a READER'S OWN WORDS to a
+# vendor, so a deployment where a BI read is 404 must not be one where a question can
+# be asked; ``BI_NLQ_ENABLED`` is a third switch checked inside the route, because a
+# 404 there would make a surface that is merely switched off indistinguishable from
+# one that does not exist — and that is the flag an Org Owner may be waiting on.
+v1_router.include_router(
+    bi_ask_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
 )
 # The Power BI Stage B feed, on the same two dependencies and in the same order.

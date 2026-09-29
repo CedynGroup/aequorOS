@@ -12,7 +12,16 @@
 
 import * as runtime from "../runtime";
 import type {
+  BiAlertEventListRead,
+  BiAlertListRead,
+  BiAlertRead,
+  BiAlertUpsert,
+  BiAskRead,
+  BiAskRequest,
+  BiAskRunRequest,
   BiCatalogueRead,
+  BiCommentaryRead,
+  BiCommentaryRequest,
   BiDashboardCreateRequest,
   BiDashboardListRead,
   BiDashboardRead,
@@ -36,17 +45,40 @@ import type {
   BiMeasureUpdateRequest,
   BiMeasureValidationRead,
   BiMeasureValidationRequest,
+  BiNotificationDeactivateRequest,
   BiPackListRead,
   BiPackRead,
   BiPagedQueryRequest,
   BiQuery,
   BiQueryResult,
+  BiSubscriptionDeliveryListRead,
+  BiSubscriptionListRead,
+  BiSubscriptionRead,
+  BiSubscriptionUpsert,
   BiTrustRead,
   ErrorResponse,
 } from "../models/index";
 import {
+  BiAlertEventListReadFromJSON,
+  BiAlertEventListReadToJSON,
+  BiAlertListReadFromJSON,
+  BiAlertListReadToJSON,
+  BiAlertReadFromJSON,
+  BiAlertReadToJSON,
+  BiAlertUpsertFromJSON,
+  BiAlertUpsertToJSON,
+  BiAskReadFromJSON,
+  BiAskReadToJSON,
+  BiAskRequestFromJSON,
+  BiAskRequestToJSON,
+  BiAskRunRequestFromJSON,
+  BiAskRunRequestToJSON,
   BiCatalogueReadFromJSON,
   BiCatalogueReadToJSON,
+  BiCommentaryReadFromJSON,
+  BiCommentaryReadToJSON,
+  BiCommentaryRequestFromJSON,
+  BiCommentaryRequestToJSON,
   BiDashboardCreateRequestFromJSON,
   BiDashboardCreateRequestToJSON,
   BiDashboardListReadFromJSON,
@@ -93,6 +125,8 @@ import {
   BiMeasureValidationReadToJSON,
   BiMeasureValidationRequestFromJSON,
   BiMeasureValidationRequestToJSON,
+  BiNotificationDeactivateRequestFromJSON,
+  BiNotificationDeactivateRequestToJSON,
   BiPackListReadFromJSON,
   BiPackListReadToJSON,
   BiPackReadFromJSON,
@@ -103,11 +137,29 @@ import {
   BiQueryToJSON,
   BiQueryResultFromJSON,
   BiQueryResultToJSON,
+  BiSubscriptionDeliveryListReadFromJSON,
+  BiSubscriptionDeliveryListReadToJSON,
+  BiSubscriptionListReadFromJSON,
+  BiSubscriptionListReadToJSON,
+  BiSubscriptionReadFromJSON,
+  BiSubscriptionReadToJSON,
+  BiSubscriptionUpsertFromJSON,
+  BiSubscriptionUpsertToJSON,
   BiTrustReadFromJSON,
   BiTrustReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
+
+export interface AskBiQuestionRequest {
+  bankId: string;
+  biAskRequest: BiAskRequest;
+}
+
+export interface CreateBiAlertRequest {
+  bankId: string;
+  biAlertUpsert: BiAlertUpsert;
+}
 
 export interface CreateBiDashboardRequest {
   bankId: string;
@@ -119,10 +171,32 @@ export interface CreateBiMeasureRequest {
   biMeasureCreateRequest: BiMeasureCreateRequest;
 }
 
+export interface CreateBiSubscriptionRequest {
+  bankId: string;
+  biSubscriptionUpsert: BiSubscriptionUpsert;
+}
+
+export interface DeactivateBiAlertRequest {
+  bankId: string;
+  alertId: string;
+  biNotificationDeactivateRequest: BiNotificationDeactivateRequest;
+}
+
+export interface DeactivateBiSubscriptionRequest {
+  bankId: string;
+  subscriptionId: string;
+  biNotificationDeactivateRequest: BiNotificationDeactivateRequest;
+}
+
 export interface DecideBiMeasurePromotionRequest {
   bankId: string;
   measureId: string;
   biMeasureDecisionRequest: BiMeasureDecisionRequest;
+}
+
+export interface DeleteBiAlertRequest {
+  bankId: string;
+  alertId: string;
 }
 
 export interface DeleteBiDashboardRequest {
@@ -135,15 +209,31 @@ export interface DeleteBiMeasureRequest {
   measureId: string;
 }
 
+export interface DeleteBiSubscriptionRequest {
+  bankId: string;
+  subscriptionId: string;
+}
+
 export interface ExplainBiMeasureRequest {
   bankId: string;
   biExplainRequest: BiExplainRequest;
   ifNoneMatch?: string | null;
 }
 
+export interface GetBiAlertRequest {
+  bankId: string;
+  alertId: string;
+}
+
 export interface GetBiCatalogueRequest {
   bankId: string;
   ifNoneMatch?: string | null;
+}
+
+export interface GetBiCommentaryRequest {
+  bankId: string;
+  asOf: Date;
+  compareTo?: Date | null;
 }
 
 export interface GetBiDashboardRequest {
@@ -176,10 +266,30 @@ export interface GetBiPackRequest {
   ifNoneMatch?: string | null;
 }
 
+export interface GetBiQuestionRequest {
+  bankId: string;
+  jobId: string;
+}
+
+export interface GetBiSubscriptionRequest {
+  bankId: string;
+  subscriptionId: string;
+}
+
 export interface GetBiTrustRequest {
   bankId: string;
   asOf: Date;
   ifNoneMatch?: string | null;
+}
+
+export interface ListBiAlertEventsRequest {
+  bankId: string;
+  alertId: string;
+  limit?: number;
+}
+
+export interface ListBiAlertsRequest {
+  bankId: string;
 }
 
 export interface ListBiDashboardSharesRequest {
@@ -206,10 +316,32 @@ export interface ListBiPacksRequest {
   ifNoneMatch?: string | null;
 }
 
+export interface ListBiSubscriptionDeliveriesRequest {
+  bankId: string;
+  subscriptionId: string;
+  limit?: number;
+}
+
+export interface ListBiSubscriptionsRequest {
+  bankId: string;
+}
+
 export interface ProposeBiMeasurePromotionRequest {
   bankId: string;
   measureId: string;
   biMeasureProposalRequest: BiMeasureProposalRequest;
+}
+
+export interface PullBiFeedRequest {
+  bankId: string;
+  dataset: string;
+  format?: PullBiFeedFormatEnum;
+  cursor?: string | null;
+}
+
+export interface RequestBiCommentaryRequest {
+  bankId: string;
+  biCommentaryRequest: BiCommentaryRequest;
 }
 
 export interface RunBiDrillQueryRequest {
@@ -235,10 +367,22 @@ export interface RunBiQueryRequest {
   ifNoneMatch?: string | null;
 }
 
+export interface RunBiQuestionRequest {
+  bankId: string;
+  jobId: string;
+  biAskRunRequest: BiAskRunRequest;
+}
+
 export interface SetBiDashboardSharesRequest {
   bankId: string;
   dashboardId: string;
   biDashboardShareRequest: BiDashboardShareRequest;
+}
+
+export interface UpdateBiAlertRequest {
+  bankId: string;
+  alertId: string;
+  biAlertUpsert: BiAlertUpsert;
 }
 
 export interface UpdateBiDashboardRequest {
@@ -253,6 +397,12 @@ export interface UpdateBiMeasureRequest {
   biMeasureUpdateRequest: BiMeasureUpdateRequest;
 }
 
+export interface UpdateBiSubscriptionRequest {
+  bankId: string;
+  subscriptionId: string;
+  biSubscriptionUpsert: BiSubscriptionUpsert;
+}
+
 export interface ValidateBiMeasureExpressionRequest {
   bankId: string;
   biMeasureValidationRequest: BiMeasureValidationRequest;
@@ -262,6 +412,146 @@ export interface ValidateBiMeasureExpressionRequest {
  *
  */
 export class BiApi extends runtime.BaseAPI {
+  /**
+   * Ask one question in words. Proposes a query; executes nothing.
+   * Ask Bi Question
+   */
+  async askBiQuestionRaw(
+    requestParameters: AskBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAskRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling askBiQuestion().',
+      );
+    }
+
+    if (requestParameters["biAskRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biAskRequest",
+        'Required parameter "biAskRequest" was null or undefined when calling askBiQuestion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/ask`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiAskRequestToJSON(requestParameters["biAskRequest"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAskReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Ask one question in words. Proposes a query; executes nothing.
+   * Ask Bi Question
+   */
+  async askBiQuestion(
+    requestParameters: AskBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAskRead> {
+    const response = await this.askBiQuestionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Watch one figure against one line. The caller becomes its owner.  Deny-by-default applied to writing as well as reading: an author who may not ask what this figure is may not instruct the platform to watch it either. Being authorized HERE confers nothing on the alert — every recipient is re-authorized when a verdict is reached, and the owner is re-authorized at every evaluation, so a withdrawn grant stops the figure rather than only the interactive page.
+   * Create Bi Alert
+   */
+  async createBiAlertRaw(
+    requestParameters: CreateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createBiAlert().',
+      );
+    }
+
+    if (requestParameters["biAlertUpsert"] == null) {
+      throw new runtime.RequiredError(
+        "biAlertUpsert",
+        'Required parameter "biAlertUpsert" was null or undefined when calling createBiAlert().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiAlertUpsertToJSON(requestParameters["biAlertUpsert"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Watch one figure against one line. The caller becomes its owner.  Deny-by-default applied to writing as well as reading: an author who may not ask what this figure is may not instruct the platform to watch it either. Being authorized HERE confers nothing on the alert — every recipient is re-authorized when a verdict is reached, and the owner is re-authorized at every evaluation, so a withdrawn grant stops the figure rather than only the interactive page.
+   * Create Bi Alert
+   */
+  async createBiAlert(
+    requestParameters: CreateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertRead> {
+    const response = await this.createBiAlertRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Save a dashboard: an authored canvas, or a copy of a certified pack.  The author must hold every figure the canvas reads. Deny-by-default applied to writing as well as reading: a principal cannot persist a question they may not ask, which also keeps the refusal marker a property of SHARING rather than something an author can produce for themselves.
    * Create Bi Dashboard
@@ -407,6 +697,246 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * Mail one report on a schedule. The caller becomes its owner.  The author must hold every figure the report reads — a principal cannot instruct the platform to send a question they may not ask. What is STORED carries no trace of that decision: no binding id, no permission, no authorization version. Every delivery is authorized, compiled and rendered as its own recipient at send time, and a recipient the evaluator refuses is sent nothing at all.
+   * Create Bi Subscription
+   */
+  async createBiSubscriptionRaw(
+    requestParameters: CreateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createBiSubscription().',
+      );
+    }
+
+    if (requestParameters["biSubscriptionUpsert"] == null) {
+      throw new runtime.RequiredError(
+        "biSubscriptionUpsert",
+        'Required parameter "biSubscriptionUpsert" was null or undefined when calling createBiSubscription().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiSubscriptionUpsertToJSON(
+          requestParameters["biSubscriptionUpsert"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Mail one report on a schedule. The caller becomes its owner.  The author must hold every figure the report reads — a principal cannot instruct the platform to send a question they may not ask. What is STORED carries no trace of that decision: no binding id, no permission, no authorization version. Every delivery is authorized, compiled and rendered as its own recipient at send time, and a recipient the evaluator refuses is sent nothing at all.
+   * Create Bi Subscription
+   */
+  async createBiSubscription(
+    requestParameters: CreateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionRead> {
+    const response = await this.createBiSubscriptionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Stop judging this figure, keeping the alert and its history. Owner only.  Separate from deleting it, and separate from an edit, because stopping an alert is the act somebody takes in a hurry: it needs no figure authority, no valid threshold and no reachable measure — only the owner and a reason.
+   * Deactivate Bi Alert
+   */
+  async deactivateBiAlertRaw(
+    requestParameters: DeactivateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deactivateBiAlert().',
+      );
+    }
+
+    if (requestParameters["alertId"] == null) {
+      throw new runtime.RequiredError(
+        "alertId",
+        'Required parameter "alertId" was null or undefined when calling deactivateBiAlert().',
+      );
+    }
+
+    if (requestParameters["biNotificationDeactivateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biNotificationDeactivateRequest",
+        'Required parameter "biNotificationDeactivateRequest" was null or undefined when calling deactivateBiAlert().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts/{alert_id}/deactivation`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"alert_id"}}`,
+            encodeURIComponent(String(requestParameters["alertId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiNotificationDeactivateRequestToJSON(
+          requestParameters["biNotificationDeactivateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Stop judging this figure, keeping the alert and its history. Owner only.  Separate from deleting it, and separate from an edit, because stopping an alert is the act somebody takes in a hurry: it needs no figure authority, no valid threshold and no reachable measure — only the owner and a reason.
+   * Deactivate Bi Alert
+   */
+  async deactivateBiAlert(
+    requestParameters: DeactivateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertRead> {
+    const response = await this.deactivateBiAlertRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Stop sending this report, keeping it and its delivery history. Owner only.  Needs no figure authority: stopping the platform from mailing something is the act somebody takes in a hurry, and an owner whose grant has been withdrawn is exactly who needs it to work.
+   * Deactivate Bi Subscription
+   */
+  async deactivateBiSubscriptionRaw(
+    requestParameters: DeactivateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deactivateBiSubscription().',
+      );
+    }
+
+    if (requestParameters["subscriptionId"] == null) {
+      throw new runtime.RequiredError(
+        "subscriptionId",
+        'Required parameter "subscriptionId" was null or undefined when calling deactivateBiSubscription().',
+      );
+    }
+
+    if (requestParameters["biNotificationDeactivateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biNotificationDeactivateRequest",
+        'Required parameter "biNotificationDeactivateRequest" was null or undefined when calling deactivateBiSubscription().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deactivation`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"subscription_id"}}`,
+            encodeURIComponent(String(requestParameters["subscriptionId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiNotificationDeactivateRequestToJSON(
+          requestParameters["biNotificationDeactivateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Stop sending this report, keeping it and its delivery history. Owner only.  Needs no figure authority: stopping the platform from mailing something is the act somebody takes in a hurry, and an owner whose grant has been withdrawn is exactly who needs it to work.
+   * Deactivate Bi Subscription
+   */
+  async deactivateBiSubscription(
+    requestParameters: DeactivateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionRead> {
+    const response = await this.deactivateBiSubscriptionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * The checker\'s half: certify the measure for the institution, or send it back.  Proposer ≠ approver, through the platform\'s own separation-of-duties machinery; the formula must be the one the checker read; and approving needs APPROVAL authority over every figure the formula names, not merely the authority to view them.
    * Decide Bi Measure Promotion
    */
@@ -488,6 +1018,72 @@ export class BiApi extends runtime.BaseAPI {
       initOverrides,
     );
     return await response.value();
+  }
+
+  /**
+   * Delete an alert and every verdict it recorded. Owner only.
+   * Delete Bi Alert
+   */
+  async deleteBiAlertRaw(
+    requestParameters: DeleteBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deleteBiAlert().',
+      );
+    }
+
+    if (requestParameters["alertId"] == null) {
+      throw new runtime.RequiredError(
+        "alertId",
+        'Required parameter "alertId" was null or undefined when calling deleteBiAlert().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts/{alert_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"alert_id"}}`,
+            encodeURIComponent(String(requestParameters["alertId"])),
+          ),
+        method: "DELETE",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Delete an alert and every verdict it recorded. Owner only.
+   * Delete Bi Alert
+   */
+  async deleteBiAlert(
+    requestParameters: DeleteBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.deleteBiAlertRaw(requestParameters, initOverrides);
   }
 
   /**
@@ -623,6 +1219,72 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * Delete a scheduled report and its delivery history. Owner only.
+   * Delete Bi Subscription
+   */
+  async deleteBiSubscriptionRaw(
+    requestParameters: DeleteBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling deleteBiSubscription().',
+      );
+    }
+
+    if (requestParameters["subscriptionId"] == null) {
+      throw new runtime.RequiredError(
+        "subscriptionId",
+        'Required parameter "subscriptionId" was null or undefined when calling deleteBiSubscription().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"subscription_id"}}`,
+            encodeURIComponent(String(requestParameters["subscriptionId"])),
+          ),
+        method: "DELETE",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Delete a scheduled report and its delivery history. Owner only.
+   * Delete Bi Subscription
+   */
+  async deleteBiSubscription(
+    requestParameters: DeleteBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.deleteBiSubscriptionRaw(requestParameters, initOverrides);
+  }
+
+  /**
    * Where one figure in a query came from — definition, source, checks.  It compiles the query (which is how the source table and whether the daily aggregate answered it are known) and deliberately never executes it: the figure itself came from ``query``. No statement text is returned.
    * Explain Bi Measure
    */
@@ -699,6 +1361,75 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * One alert, if this identity owns it or is addressed by it.
+   * Get Bi Alert
+   */
+  async getBiAlertRaw(
+    requestParameters: GetBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiAlert().',
+      );
+    }
+
+    if (requestParameters["alertId"] == null) {
+      throw new runtime.RequiredError(
+        "alertId",
+        'Required parameter "alertId" was null or undefined when calling getBiAlert().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts/{alert_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"alert_id"}}`,
+            encodeURIComponent(String(requestParameters["alertId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One alert, if this identity owns it or is addressed by it.
+   * Get Bi Alert
+   */
+  async getBiAlert(
+    requestParameters: GetBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertRead> {
+    const response = await this.getBiAlertRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
    * Every measure, dimension and drill path THIS caller may query.
    * Get Bi Catalogue
    */
@@ -758,6 +1489,85 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiCatalogueRead> {
     const response = await this.getBiCatalogueRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Read the commentary on offer for this reader and this reporting date.  Always answers: this reader\'s own draft when there is one, and the platform\'s own commentary when there is not. The read is re-authorized on every call rather than trusted from the request that made the draft, because a reader\'s grants can narrow between the two and a draft holds figures from the wider set.
+   * Get Bi Commentary
+   */
+  async getBiCommentaryRaw(
+    requestParameters: GetBiCommentaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiCommentaryRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiCommentary().',
+      );
+    }
+
+    if (requestParameters["asOf"] == null) {
+      throw new runtime.RequiredError(
+        "asOf",
+        'Required parameter "asOf" was null or undefined when calling getBiCommentary().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    if (requestParameters["compareTo"] != null) {
+      queryParameters["compare_to"] = (requestParameters["compareTo"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/commentary`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiCommentaryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Read the commentary on offer for this reader and this reporting date.  Always answers: this reader\'s own draft when there is one, and the platform\'s own commentary when there is not. The read is re-authorized on every call rather than trusted from the request that made the draft, because a reader\'s grants can narrow between the two and a draft holds figures from the wider set.
+   * Get Bi Commentary
+   */
+  async getBiCommentary(
+    requestParameters: GetBiCommentaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiCommentaryRead> {
+    const response = await this.getBiCommentaryRaw(
       requestParameters,
       initOverrides,
     );
@@ -1167,6 +1977,150 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * One of your OWN questions, and whatever the platform proposes for it.
+   * Get Bi Question
+   */
+  async getBiQuestionRaw(
+    requestParameters: GetBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAskRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiQuestion().',
+      );
+    }
+
+    if (requestParameters["jobId"] == null) {
+      throw new runtime.RequiredError(
+        "jobId",
+        'Required parameter "jobId" was null or undefined when calling getBiQuestion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/ask/{job_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"job_id"}}`,
+            encodeURIComponent(String(requestParameters["jobId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAskReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One of your OWN questions, and whatever the platform proposes for it.
+   * Get Bi Question
+   */
+  async getBiQuestion(
+    requestParameters: GetBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAskRead> {
+    const response = await this.getBiQuestionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One scheduled report, if this identity owns it or receives it.
+   * Get Bi Subscription
+   */
+  async getBiSubscriptionRaw(
+    requestParameters: GetBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBiSubscription().',
+      );
+    }
+
+    if (requestParameters["subscriptionId"] == null) {
+      throw new runtime.RequiredError(
+        "subscriptionId",
+        'Required parameter "subscriptionId" was null or undefined when calling getBiSubscription().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"subscription_id"}}`,
+            encodeURIComponent(String(requestParameters["subscriptionId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One scheduled report, if this identity owns it or receives it.
+   * Get Bi Subscription
+   */
+  async getBiSubscription(
+    requestParameters: GetBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionRead> {
+    const response = await this.getBiSubscriptionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Every reconciliation check for one (institution, date), with its evidence.  A check with no stored result is reported as \"not assessed\" — never as a pass — so a badge can never read green over a check that did not run.  The payload is figures, not metadata (audit A6-01), so it is authorized like every other data route: the caller must hold the sentence of every member :data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with coverage on another institution of the same tenant, or with no binding at all, gets 403 and no body — ``resolve_tenant_bank`` scopes by organization only, and organization is not institution.
    * Get Bi Trust
    */
@@ -1239,6 +2193,142 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiTrustRead> {
     const response = await this.getBiTrustRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * What this alert has recorded, newest first.  Every row states the figure it was judged on, so this read is refused unless the caller\'s own bindings cover the alert\'s figure. That includes the owner: an alert outlives a grant, and a verdict is the figure in all but name.
+   * List Bi Alert Events
+   */
+  async listBiAlertEventsRaw(
+    requestParameters: ListBiAlertEventsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertEventListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiAlertEvents().',
+      );
+    }
+
+    if (requestParameters["alertId"] == null) {
+      throw new runtime.RequiredError(
+        "alertId",
+        'Required parameter "alertId" was null or undefined when calling listBiAlertEvents().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts/{alert_id}/events`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"alert_id"}}`,
+            encodeURIComponent(String(requestParameters["alertId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertEventListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * What this alert has recorded, newest first.  Every row states the figure it was judged on, so this read is refused unless the caller\'s own bindings cover the alert\'s figure. That includes the owner: an alert outlives a grant, and a verdict is the figure in all but name.
+   * List Bi Alert Events
+   */
+  async listBiAlertEvents(
+    requestParameters: ListBiAlertEventsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertEventListRead> {
+    const response = await this.listBiAlertEventsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every alert of this institution this identity owns or is addressed to.  An alert whose figure this caller\'s access does not cover is not dropped from the list — its OWNER has to be able to see and stop it — but its verdict is, and the row says why. A caller who is neither the owner nor addressed sees nothing, because they reach nothing.
+   * List Bi Alerts
+   */
+  async listBiAlertsRaw(
+    requestParameters: ListBiAlertsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiAlerts().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every alert of this institution this identity owns or is addressed to.  An alert whose figure this caller\'s access does not cover is not dropped from the list — its OWNER has to be able to see and stop it — but its verdict is, and the row says why. A caller who is neither the owner nor addressed sees nothing, because they reach nothing.
+   * List Bi Alerts
+   */
+  async listBiAlerts(
+    requestParameters: ListBiAlertsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertListRead> {
+    const response = await this.listBiAlertsRaw(
+      requestParameters,
+      initOverrides,
+    );
     return await response.value();
   }
 
@@ -1586,6 +2676,142 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * What each recipient was sent, newest run first. Owner only.  Owner-only because it is a membership disclosure twice over: it names who is on the list, and it names which of them the evaluator refused. A refusal is reported as the honest outcome it is — nobody\'s access failed, a report simply was not that person\'s to receive.  It carries no figure at all: a row count and a file size are facts about a file, not about the book, and the artifact itself never existed for a refused recipient.
+   * List Bi Subscription Deliveries
+   */
+  async listBiSubscriptionDeliveriesRaw(
+    requestParameters: ListBiSubscriptionDeliveriesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionDeliveryListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiSubscriptionDeliveries().',
+      );
+    }
+
+    if (requestParameters["subscriptionId"] == null) {
+      throw new runtime.RequiredError(
+        "subscriptionId",
+        'Required parameter "subscriptionId" was null or undefined when calling listBiSubscriptionDeliveries().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}/deliveries`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"subscription_id"}}`,
+            encodeURIComponent(String(requestParameters["subscriptionId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionDeliveryListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * What each recipient was sent, newest run first. Owner only.  Owner-only because it is a membership disclosure twice over: it names who is on the list, and it names which of them the evaluator refused. A refusal is reported as the honest outcome it is — nobody\'s access failed, a report simply was not that person\'s to receive.  It carries no figure at all: a row count and a file size are facts about a file, not about the book, and the artifact itself never existed for a refused recipient.
+   * List Bi Subscription Deliveries
+   */
+  async listBiSubscriptionDeliveries(
+    requestParameters: ListBiSubscriptionDeliveriesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionDeliveryListRead> {
+    const response = await this.listBiSubscriptionDeliveriesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every scheduled report of this institution this identity owns or receives.  No figure and no delivery: a list names reports, not their contents, and each delivery is prepared under its own recipient\'s access when the run happens.
+   * List Bi Subscriptions
+   */
+  async listBiSubscriptionsRaw(
+    requestParameters: ListBiSubscriptionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBiSubscriptions().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every scheduled report of this institution this identity owns or receives.  No figure and no delivery: a list names reports, not their contents, and each delivery is prepared under its own recipient\'s access when the run happens.
+   * List Bi Subscriptions
+   */
+  async listBiSubscriptions(
+    requestParameters: ListBiSubscriptionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionListRead> {
+    const response = await this.listBiSubscriptionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * The maker\'s half of a promotion: put a personal measure up for certification.
    * Propose Bi Measure Promotion
    */
@@ -1663,6 +2889,152 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiMeasureRead> {
     const response = await this.proposeBiMeasurePromotionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Serve everything in ``dataset`` that is newer than ``cursor``.  The response carries the cursor to use next (``X-Bi-Feed-Next-Cursor``), the reporting dates it covered and the slice of the institution the credential is authorized over. The consumer\'s one obligation is **replace by reporting date**: delete its own rows for every date in ``X-Bi-Feed-Reporting-Dates``, then insert the payload. That is what makes a restatement land, and it is why re-delivery is harmless.
+   * Pull one curated analytics dataset
+   */
+  async pullBiFeedRaw(
+    requestParameters: PullBiFeedRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling pullBiFeed().',
+      );
+    }
+
+    if (requestParameters["dataset"] == null) {
+      throw new runtime.RequiredError(
+        "dataset",
+        'Required parameter "dataset" was null or undefined when calling pullBiFeed().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["format"] != null) {
+      queryParameters["format"] = requestParameters["format"];
+    }
+
+    if (requestParameters["cursor"] != null) {
+      queryParameters["cursor"] = requestParameters["cursor"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/feeds/{dataset}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"dataset"}}`,
+            encodeURIComponent(String(requestParameters["dataset"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Serve everything in ``dataset`` that is newer than ``cursor``.  The response carries the cursor to use next (``X-Bi-Feed-Next-Cursor``), the reporting dates it covered and the slice of the institution the credential is authorized over. The consumer\'s one obligation is **replace by reporting date**: delete its own rows for every date in ``X-Bi-Feed-Reporting-Dates``, then insert the payload. That is what makes a restatement land, and it is why re-delivery is harmless.
+   * Pull one curated analytics dataset
+   */
+  async pullBiFeed(
+    requestParameters: PullBiFeedRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.pullBiFeedRaw(requestParameters, initOverrides);
+  }
+
+  /**
+   * Ask for commentary on one reporting date.  Answers ``202`` when a model call was queued and ``200`` otherwise — because \"otherwise\" is a real answer: a request that coalesced onto the one already in flight, or one the gates, the daily cap or the sheet itself stopped, is served the platform\'s own commentary with ``author`` and ``notice`` saying so.
+   * Request Bi Commentary
+   */
+  async requestBiCommentaryRaw(
+    requestParameters: RequestBiCommentaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiCommentaryRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling requestBiCommentary().',
+      );
+    }
+
+    if (requestParameters["biCommentaryRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biCommentaryRequest",
+        'Required parameter "biCommentaryRequest" was null or undefined when calling requestBiCommentary().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/commentary`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiCommentaryRequestToJSON(
+          requestParameters["biCommentaryRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiCommentaryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Ask for commentary on one reporting date.  Answers ``202`` when a model call was queued and ``200`` otherwise — because \"otherwise\" is a real answer: a request that coalesced onto the one already in flight, or one the gates, the daily cap or the sheet itself stopped, is served the platform\'s own commentary with ``author`` and ``notice`` saying so.
+   * Request Bi Commentary
+   */
+  async requestBiCommentary(
+    requestParameters: RequestBiCommentaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiCommentaryRead> {
+    const response = await this.requestBiCommentaryRaw(
       requestParameters,
       initOverrides,
     );
@@ -1971,6 +3343,88 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * Run a proposal the reader has confirmed, under the ordinary read authority.
+   * Run Bi Question
+   */
+  async runBiQuestionRaw(
+    requestParameters: RunBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiQueryResult>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling runBiQuestion().',
+      );
+    }
+
+    if (requestParameters["jobId"] == null) {
+      throw new runtime.RequiredError(
+        "jobId",
+        'Required parameter "jobId" was null or undefined when calling runBiQuestion().',
+      );
+    }
+
+    if (requestParameters["biAskRunRequest"] == null) {
+      throw new runtime.RequiredError(
+        "biAskRunRequest",
+        'Required parameter "biAskRunRequest" was null or undefined when calling runBiQuestion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/ask/{job_id}/run`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"job_id"}}`,
+            encodeURIComponent(String(requestParameters["jobId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiAskRunRequestToJSON(requestParameters["biAskRunRequest"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiQueryResultFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Run a proposal the reader has confirmed, under the ordinary read authority.
+   * Run Bi Question
+   */
+  async runBiQuestion(
+    requestParameters: RunBiQuestionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiQueryResult> {
+    const response = await this.runBiQuestionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Replace the set of identities this dashboard reaches. Owner only.  Reachability, not authority: each of these identities is re-authorized widget by widget every time they open it, so naming someone here can never show them a figure their own bindings do not cover.
    * Set Bi Dashboard Shares
    */
@@ -2048,6 +3502,88 @@ export class BiApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BiDashboardShareListRead> {
     const response = await this.setBiDashboardSharesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Replace an alert\'s definition. Owner only, and the author is re-authorized.  Re-authorized on every edit, not only at creation: an owner whose grant was withdrawn may stop or delete their alert, and may not point it at a figure they can no longer read.
+   * Update Bi Alert
+   */
+  async updateBiAlertRaw(
+    requestParameters: UpdateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiAlertRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateBiAlert().',
+      );
+    }
+
+    if (requestParameters["alertId"] == null) {
+      throw new runtime.RequiredError(
+        "alertId",
+        'Required parameter "alertId" was null or undefined when calling updateBiAlert().',
+      );
+    }
+
+    if (requestParameters["biAlertUpsert"] == null) {
+      throw new runtime.RequiredError(
+        "biAlertUpsert",
+        'Required parameter "biAlertUpsert" was null or undefined when calling updateBiAlert().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/alerts/{alert_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"alert_id"}}`,
+            encodeURIComponent(String(requestParameters["alertId"])),
+          ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiAlertUpsertToJSON(requestParameters["biAlertUpsert"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiAlertReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Replace an alert\'s definition. Owner only, and the author is re-authorized.  Re-authorized on every edit, not only at creation: an owner whose grant was withdrawn may stop or delete their alert, and may not point it at a figure they can no longer read.
+   * Update Bi Alert
+   */
+  async updateBiAlert(
+    requestParameters: UpdateBiAlertRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiAlertRead> {
+    const response = await this.updateBiAlertRaw(
       requestParameters,
       initOverrides,
     );
@@ -2223,6 +3759,90 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
+   * Replace a scheduled report\'s definition. Owner only.
+   * Update Bi Subscription
+   */
+  async updateBiSubscriptionRaw(
+    requestParameters: UpdateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BiSubscriptionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateBiSubscription().',
+      );
+    }
+
+    if (requestParameters["subscriptionId"] == null) {
+      throw new runtime.RequiredError(
+        "subscriptionId",
+        'Required parameter "subscriptionId" was null or undefined when calling updateBiSubscription().',
+      );
+    }
+
+    if (requestParameters["biSubscriptionUpsert"] == null) {
+      throw new runtime.RequiredError(
+        "biSubscriptionUpsert",
+        'Required parameter "biSubscriptionUpsert" was null or undefined when calling updateBiSubscription().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/bi/subscriptions/{subscription_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"subscription_id"}}`,
+            encodeURIComponent(String(requestParameters["subscriptionId"])),
+          ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BiSubscriptionUpsertToJSON(
+          requestParameters["biSubscriptionUpsert"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BiSubscriptionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Replace a scheduled report\'s definition. Owner only.
+   * Update Bi Subscription
+   */
+  async updateBiSubscription(
+    requestParameters: UpdateBiSubscriptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BiSubscriptionRead> {
+    const response = await this.updateBiSubscriptionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Check a formula without saving it. The server\'s verdict is the only one.  A refusal carries the named message and the position it happened at, never an echo of the caller\'s text; a formula naming a figure this caller may not read is refused with those figures listed, which is the same answer saving it would give.
    * Validate Bi Measure Expression
    */
@@ -2294,3 +3914,13 @@ export class BiApi extends runtime.BaseAPI {
     return await response.value();
   }
 }
+
+/**
+ * @export
+ */
+export const PullBiFeedFormatEnum = {
+  Ndjson: "ndjson",
+  Csv: "csv",
+} as const;
+export type PullBiFeedFormatEnum =
+  (typeof PullBiFeedFormatEnum)[keyof typeof PullBiFeedFormatEnum];

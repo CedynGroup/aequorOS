@@ -18,6 +18,13 @@ import {
   CreditLoanReadToJSON,
   CreditLoanReadToJSONTyped,
 } from "./CreditLoanRead";
+import type { CreditDataScopeRead } from "./CreditDataScopeRead";
+import {
+  CreditDataScopeReadFromJSON,
+  CreditDataScopeReadFromJSONTyped,
+  CreditDataScopeReadToJSON,
+  CreditDataScopeReadToJSONTyped,
+} from "./CreditDataScopeRead";
 
 /**
  *
@@ -31,6 +38,12 @@ export interface CreditLoansPageRead {
    * @memberof CreditLoansPageRead
    */
   asOf: string;
+  /**
+   *
+   * @type {CreditDataScopeRead}
+   * @memberof CreditLoansPageRead
+   */
+  dataScope: CreditDataScopeRead;
   /**
    *
    * @type {number}
@@ -70,6 +83,7 @@ export function instanceOfCreditLoansPageRead(
   value: object,
 ): value is CreditLoansPageRead {
   if (!("asOf" in value) || value["asOf"] === undefined) return false;
+  if (!("dataScope" in value) || value["dataScope"] === undefined) return false;
   if (!("filtered" in value) || value["filtered"] === undefined) return false;
   if (!("limit" in value) || value["limit"] === undefined) return false;
   if (!("offset" in value) || value["offset"] === undefined) return false;
@@ -92,6 +106,7 @@ export function CreditLoansPageReadFromJSONTyped(
   return {
     ...json,
     asOf: json["as_of"],
+    dataScope: CreditDataScopeReadFromJSON(json["data_scope"]),
     filtered: json["filtered"],
     limit: json["limit"],
     offset: json["offset"],
@@ -114,6 +129,7 @@ export function CreditLoansPageReadToJSONTyped(
 
   return {
     as_of: value["asOf"],
+    data_scope: CreditDataScopeReadToJSON(value["dataScope"]),
     filtered: value["filtered"],
     limit: value["limit"],
     offset: value["offset"],

@@ -39,6 +39,7 @@ from app.domain.bi.catalogue.engine import (
 )
 from app.domain.bi.catalogue.measures import dpd_bands_from
 from app.domain.bi.catalogue.members import (
+    ARREARS_COMPLETENESS,
     DPD_COMPLETENESS,
     NUMERIC_VALUE_TYPES,
     VALUE_TYPES,
@@ -110,7 +111,9 @@ def test_member_counts_are_what_the_sources_imply(cat: Catalogue) -> None:
         e for e in engine_authorities() if e.metric_id not in TEXT_VALUED_METRIC_IDS
     ]
     assert len(cat.engine_measures()) == 2 * len(numeric_authorities)
-    assert len(cat.portfolio_measures()) == 44
+    # 48 since Phase 5: the four arrears / branch-ledger measures (two over
+    # ``arrears_amount_rc``, two over the new ``bi_fact_gl_branch_monthly``).
+    assert len(cat.portfolio_measures()) == 48
     # The Phase 2 target variants (``app/domain/bi/catalogue/targets.py``): five
     # per targetable base per REGISTER VERSION (D-072 exposes the budget and the
     # reforecast as distinct members), less ``attainment_pct`` where lower is
@@ -118,9 +121,11 @@ def test_member_counts_are_what_the_sources_imply(cat: Catalogue) -> None:
     # ``variance_pct``, so none of the five is missing for a unit reason.
     # The arithmetic is spelled out in
     # ``tests/domain/bi/test_targets.py::test_the_member_count_is_what_the_two_decisions_imply``.
-    assert len(cat.target_measures()) == 1198
-    assert len(cat.measures()) == 1416
-    assert len(cat.dimensions()) == 66
+    assert len(cat.target_measures()) == 1234
+    assert len(cat.measures()) == 1456
+    # 69 since Phase 5: ``position.officer_code`` / ``position.channel`` /
+    # ``position.account_status`` over the four new mart columns.
+    assert len(cat.dimensions()) == 69
     assert len(cat.hierarchies()) == 13
 
 
@@ -580,8 +585,28 @@ def test_the_dpd_band_dimension_carries_no_checks(cat: Catalogue) -> None:
 
 
 def test_every_reconciliation_check_id_is_well_formed(cat: Catalogue) -> None:
+    """R11 and R12 joined the set in Phase 5, and each has an evaluator.
+
+    The set grew because the GL-by-branch identity and the arrears completeness
+    share are genuinely new checks that new measures carry. The id list on its own
+    proves nothing — a check id a measure names with no evaluator behind it is a
+    check that can never fire — so
+    ``tests/services/bi/test_reconciliation.py::test_every_check_a_measure_names_is_evaluated``
+    asserts the other direction from the side that may import the service.
+    """
     ids = {check for measure in cat.measures() for check in measure.reconciliation_checks}
-    assert ids == {"R1", "R2", "R3", "R5", "R6", "R8", "R9", DPD_COMPLETENESS}
+    assert ids == {
+        "R1",
+        "R2",
+        "R3",
+        "R5",
+        "R6",
+        "R8",
+        "R9",
+        DPD_COMPLETENESS,
+        "R11",
+        ARREARS_COMPLETENESS,
+    }
     for check_id in ids:
         assert re.fullmatch(r"R[1-9][0-9]*", check_id), check_id
 
@@ -593,13 +618,24 @@ def test_single_obligor_exposure_is_restricted_and_aggregates_are_aggregated(
     assert cat.measure("loans.largest_single_name_share_pct").over == "counterparty.id"
     assert cat.measure("loans.sector_hhi").sensitivity == "aggregated"
     restricted = {m.id for m in cat.members() if m.sensitivity == "restricted"}
+    # ``position.officer_code`` joined the set in Phase 5 and belongs there: it is
+    # the bank's code for one member of STAFF, and filtering on it discloses that
+    # individual's whole book. The property, pinned below rather than implied by a
+    # literal: every restricted member either names a natural person or can
+    # disclose one obligor.
     assert restricted == {
         "loans.largest_single_name_share_pct",
         "counterparty.id",
         "counterparty.name",
         "counterparty.source_reference",
         "counterparty.group",
+        "position.officer_code",
     }
+    assert cat.dimension("position.officer_code").sensitivity == "restricted"
+    # Its neighbours over the same three new mart columns are NOT restricted: a
+    # channel and an account status are attributes of an account, not of a person.
+    for member_id in ("position.channel", "position.account_status"):
+        assert cat.dimension(member_id).sensitivity == "aggregated", member_id
     confidential = {m.id for m in cat.members() if m.sensitivity == "confidential"}
     assert confidential == {
         "position.id",
@@ -617,8 +653,32 @@ def test_flows_are_flow_measures_on_the_event_table(cat: Catalogue) -> None:
             assert set(measure.allowed_dimensions) >= {"event.type", "branch.code", "time.date"}
             assert "loan.grade" not in measure.allowed_dimensions
         else:
-            assert measure.time_behaviour == "stock", measure.id
+            # A flow is no longer only an event: ``gl.branch_movement_rc`` is a
+            # month's MOVEMENT in a branch ledger balance, so months add. The
+            # original property was "a position-fact measure is a stock", which is
+            # what is asserted here now; the two-way equivalence between
+            # ``flow_sum`` and ``flow`` is pinned separately below, so a measure
+            # cannot be declared one and aggregated as the other.
+            expected = "flow" if measure.aggregation == "flow_sum" else "stock"
+            assert measure.time_behaviour == expected, measure.id
     assert cat.measure("events.write_off_rc").row_filters[0].values == ("WRITE_OFF",)
+
+
+def test_flow_and_flow_sum_imply_each_other(cat: Catalogue) -> None:
+    """Neither half of the stock/flow declaration may drift from the other.
+
+    ``docs/bi.md`` names "targets misread (flow vs stock)" as a risk, and the two
+    ways to get it wrong are opposite: summing a YTD level across months, or
+    reporting a month's movement as a level. A measure aggregated as ``flow_sum``
+    must declare ``flow`` and vice versa.
+    """
+    for measure in cat.portfolio_measures():
+        assert (measure.aggregation == "flow_sum") == (
+            measure.time_behaviour == "flow" and measure.aggregation != "count"
+        ), measure.id
+    flows = {m.id for m in cat.portfolio_measures() if m.time_behaviour == "flow"}
+    assert "gl.branch_movement_rc" in flows
+    assert "gl.branch_ytd_rc" not in flows
 
 
 def test_portfolio_modules_and_entitlements(cat: Catalogue) -> None:

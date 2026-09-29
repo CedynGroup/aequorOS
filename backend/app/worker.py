@@ -32,6 +32,7 @@ from app.jobs import (
     bi_export,
     bi_mart_backfill,
     bi_mart_refresh,
+    bi_nlq,
     bi_retention,
     bi_subscriptions,
 )
@@ -72,6 +73,7 @@ HANDLERS: dict[str, Handler] = {
     "desk_capture": desk_capture_job.run_desk_capture,
     "icaap_ai_draft": icaap_ai_jobs.run_icaap_ai_draft,
     "bi_commentary": bi_commentary.run_bi_commentary,
+    "bi_nlq_translate": bi_nlq.run_bi_nlq_translate,
     "bi_mart_refresh": bi_mart_refresh.run_bi_mart_refresh,
     "bi_mart_backfill": bi_mart_backfill.run_bi_mart_backfill,
     "bi_retention": bi_retention.run_bi_retention,
@@ -374,12 +376,17 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
         logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")
     elif not ai_client.backend_configured(settings):
         logger.warning("AI worker started without a usable model backend; requests will cancel.")
-    # ``bi_commentary`` runs in this lane and re-reads the BI switch at its own run
-    # gate, so an AI worker on a deployment with BI off cancels every commentary
-    # request. Worth one line at boot: the symptom otherwise is a surface that
-    # only ever shows the platform's own commentary, with nothing saying why.
+    # ``bi_commentary`` and ``bi_nlq_translate`` run in this lane and re-read the BI
+    # switches at their own run gates, so an AI worker on a deployment with BI off
+    # cancels every one of their requests. Worth one line at boot: the symptom
+    # otherwise is a surface that only ever shows the platform's own commentary, or a
+    # question that always comes back cancelled, with nothing saying why.
     if not settings.bi.enabled:
-        logger.warning("AI worker started with BI_ENABLED off; commentary requests will cancel.")
+        logger.warning("AI worker started with BI_ENABLED off; BI AI requests will cancel.")
+    elif not settings.bi.nlq_enabled:
+        logger.warning(
+            "AI worker started with BI_NLQ_ENABLED off; questions asked in words will cancel."
+        )
 
 
 def _warn_if_bi_disabled(settings) -> None:  # pragma: no cover - process entrypoint

@@ -22,12 +22,15 @@ from app.domain.bi.catalogue.dimensions import (
     CREDIT,
     EVENT_DIMENSION_IDS,
     EVENT_TABLE,
+    GL_BRANCH_DIMENSION_IDS,
+    GL_BRANCH_TABLE,
     LIQUIDITY,
     POSITION_DIMENSION_IDS,
     POSITION_TABLE,
     RISK,
 )
 from app.domain.bi.catalogue.members import (
+    ARREARS_COMPLETENESS,
     DPD_COMPLETENESS,
     Aggregation,
     ColumnRef,
@@ -73,6 +76,17 @@ def _par_filters(minimum_days: int) -> tuple[RowFilter, ...]:
     return (LOANS, RowFilter("dpd_band", "in", dpd_bands_from(minimum_days)))
 
 
+#: Which dimension ids each fact this module measures may be sliced by. A table
+#: with no entry raises at catalogue construction rather than silently inheriting
+#: the position grouping: advertising a grouping the compiler must then refuse is
+#: how a member becomes unreachable while looking healthy.
+_DIMENSIONS_BY_TABLE: dict[str, tuple[str, ...]] = {
+    POSITION_TABLE: POSITION_DIMENSION_IDS,
+    EVENT_TABLE: EVENT_DIMENSION_IDS,
+    GL_BRANCH_TABLE: GL_BRANCH_DIMENSION_IDS,
+}
+
+
 def _measure(  # noqa: PLR0913 - one keyword per declared measure attribute
     id: str,
     label: str,
@@ -104,7 +118,7 @@ def _measure(  # noqa: PLR0913 - one keyword per declared measure attribute
         measure_kind="portfolio",
         aggregation=aggregation,
         time_behaviour=time_behaviour,
-        allowed_dimensions=EVENT_DIMENSION_IDS if table == EVENT_TABLE else POSITION_DIMENSION_IDS,
+        allowed_dimensions=_DIMENSIONS_BY_TABLE[table],
         grain="portfolio",
         entitlement=ENTITLEMENT_BY_MODULE[module],
         favourable_direction=direction,
@@ -235,6 +249,37 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             numerator="loans.specific_provision_held_rc",
             denominator="loans.npl_exposure_rc",
             description="Provisions held on non-performing loans over non-performing exposure.",
+            module=CREDIT,
+        ),
+        _measure(
+            "loans.arrears_amount_rc",
+            "Amount in arrears",
+            "arrears_amount_rc",
+            fx_rule="derivation",
+            direction="lower_better",
+            checks=(ARREARS_COMPLETENESS,),
+            filters=(LOANS,),
+            description=(
+                "The overdue portion of loan balances, as the bank states it. A loan "
+                "with no stated arrears contributes no row, not a zero."
+            ),
+            module=CREDIT,
+        ),
+        _measure(
+            "loans.arrears_share_pct",
+            "Share of the book in arrears",
+            "arrears_amount_rc",
+            aggregation="ratio_of_sums",
+            fx_rule="derivation",
+            value_type="pct",
+            direction="lower_better",
+            checks=(ARREARS_COMPLETENESS,),
+            numerator="loans.arrears_amount_rc",
+            denominator="loans.balance_rc",
+            description=(
+                "Stated arrears over the loan balances they are part of. Both legs "
+                "follow the derivation FX rule, so they cover the same population."
+            ),
             module=CREDIT,
         ),
         _measure(
@@ -551,6 +596,84 @@ def _event_measures() -> tuple[MeasureDef, ...]:
     return tuple(flows)
 
 
+def _gl_branch_measures() -> tuple[MeasureDef, ...]:
+    """The branch breakdown of the profit-and-loss ledger (P5-B).
+
+    Two decisions P5-B handed over deliberately, made here:
+
+    **``module=RISK``, so entitlement ``risk``, so an SDI keeps its own ledger.**
+    A chart of accounts broken down by branch is the institution's own
+    bookkeeping, not a regulatory computation: nothing in this fact depends on the
+    capital regime that differs between a bank and an SDI, and the five
+    ``gl_account.*`` dimensions and ``bi_fact_gl_monthly`` itself already carry no
+    class gate. ``risk`` is in both ``BANK_MODULES`` and ``SDI_MODULES``. If branch
+    P&L should ever be bank-only, the gate belongs in the authority registry
+    (``domain/bi/authority.py``) or a module an SDI lacks — never in a sensitivity,
+    which answers a different question.
+
+    **``sensitivity`` stays ``aggregated``, deliberately rather than by default.**
+    The ladder grades WHO a figure is about: ``position.id`` is confidential
+    because it identifies one account, ``position.officer_code`` restricted because
+    it names one member of staff, and the only restricted MEASURE
+    (``loans.largest_single_name_share_pct``) is restricted because a top-N share
+    can disclose one named obligor. A branch is the bank's own organisational unit
+    and names nobody; ``branch.name`` / ``branch.region`` are already
+    ``aggregated``, as is every branch-grouped balance measure the branch-network
+    pack ships. "Which branches may this reader see" is a real question and it
+    already has its own mechanism — ``authorization.branch_attributable`` returns
+    True for this fact because it carries ``branch_code``, so a branch-scoped
+    principal is confined to its own branches. Raising the sensitivity instead
+    would restrict the figure for readers scoping does not restrict, while adding
+    no control scoping does not already apply.
+    """
+    return (
+        _measure(
+            "gl.branch_ytd_rc",
+            "Ledger balance by branch, year to date",
+            "ytd_rc",
+            table=GL_BRANCH_TABLE,
+            # A YTD LEVEL at the month end: summing two months' YTD is
+            # meaningless, which is what ``stock`` exists to prevent.
+            time_behaviour="stock",
+            checks=("R11",),
+            description=(
+                "The branch's own year-to-date balance of a profit-and-loss ledger account, "
+                "from the bank's branch breakdown. Includes a line for the part of the ledger "
+                "the bank did not attribute to any branch, so the branches add up to the "
+                "institution's ledger."
+            ),
+            module=RISK,
+        ),
+        _measure(
+            "gl.branch_movement_rc",
+            "Ledger movement by branch, this month",
+            "movement_rc",
+            table=GL_BRANCH_TABLE,
+            # Months ADD, so a quarter is its three months. ``flow_sum`` emits a
+            # bare ``sum(...)`` with no coalesce (``compiler._plan_additive``
+            # coalesces only for ``count``), which is load-bearing: a branch whose
+            # previous month was never pushed has ``movement_rc IS NULL`` and must
+            # read as "not known", never as a month of zero movement measured
+            # against an assumed zero.
+            aggregation="flow_sum",
+            time_behaviour="flow",
+            checks=("R11",),
+            description=(
+                "The month's movement in a branch's ledger balance, from two months' "
+                "breakdowns. Blank where the previous month's breakdown does not cover the "
+                "branch — never a movement measured against an assumed zero."
+            ),
+            module=RISK,
+        ),
+    )
+
+
 def portfolio_measures() -> tuple[MeasureDef, ...]:
     """Every ``portfolio`` measure, in catalogue order."""
-    return (*_loan_measures(), *_deposit_measures(), *_position_measures(), *_event_measures())
+    return (
+        *_loan_measures(),
+        *_deposit_measures(),
+        *_position_measures(),
+        *_event_measures(),
+        *_gl_branch_measures(),
+    )

@@ -208,6 +208,8 @@ CHECK_LABELS: Mapping[str, str] = {
     "R8": "The analytics tables are as current as the live figures",
     "R9": "The balance sheet balances",
     "R10": "Arrears ageing is complete",
+    "R11": "The branch breakdown adds up to the ledger",
+    "R12": "Stated arrears cover the whole loan book",
 }
 
 #: What each reconciliation check DISCLOSES, named as the catalogue member whose
@@ -236,6 +238,12 @@ CHECK_DISCLOSURES: Mapping[str, str] = {
     "R8": "time.date",
     "R9": "positions.balance_rc",
     "R10": "loan.dpd_band",
+    # R11's ``lhs`` is the branch ledger total per account and its ``detail``
+    # carries account codes and branch totals, which is exactly the figure
+    # ``gl.branch_ytd_rc`` serves. R12's ``detail`` carries stated-arrears totals
+    # alongside the share, so it names the money measure rather than a flag.
+    "R11": "gl.branch_ytd_rc",
+    "R12": "loans.arrears_amount_rc",
 }
 
 #: D-028: a member that identifies ONE record is ``confidential``. A drill is
@@ -861,15 +869,22 @@ def _columns(specs: Sequence[ColumnSpec]) -> list[BiResultColumn]:
     ]
 
 
-# --- the pipeline, named for the second surface that reuses it ---------------------------
+# --- the pipeline, named for the surfaces that reuse it ----------------------------------
 #
-# ``app/features/export_bi.py`` runs the SAME guarded steps: budget, authorize,
-# fingerprint, log, refuse. It must not copy them — a second implementation of
-# "may this principal read this query" is how an export comes to return a member
-# its caller could not have queried interactively, which is the one rule
-# ``docs/bi.md`` §Exports states as a rule. These aliases are the seam: public
-# names for the steps above, so the reuse reads as reuse rather than as reaching
-# into another module's internals.
+# ``app/features/export_bi.py`` and ``app/features/ask_bi.py`` run the SAME guarded
+# steps: budget, authorize, fingerprint, log, refuse. They must not copy them — a
+# second implementation of "may this principal read this query" is how an export comes
+# to return a member its caller could not have queried interactively, which is the one
+# rule ``docs/bi.md`` §Exports states as a rule, and it is the rule §Phase 5 restates
+# for a question the model wrote. These aliases are the seam: public names for the
+# steps above, so the reuse reads as reuse rather than as reaching into another
+# module's internals.
+#
+# ``visible_pairs`` / ``visible_member`` are here for the natural-language surface,
+# which must hand the model the caller's OWN catalogue. Reimplementing that filter
+# would be the same defect in a different place: the model would then be offered a
+# member the query path refuses, and the refusal would arrive after the reader had
+# been shown the figure's name.
 
 Authorized = _Authorized
 authorize = _authorize
@@ -878,6 +893,10 @@ query_error = _query_error
 injected_filters = _injected_filters
 data_window = _data_window
 trust_badge = _trust_badge
+require_budget = _require_budget
+run_query = _run
+result_columns = _columns
+scope_read = _scope_read
 
 
 # --- the catalogue this caller may query -------------------------------------------------
@@ -1049,6 +1068,14 @@ def _dimension_read(dimension: DimensionDef) -> BiCatalogueDimensionRead:
             BiCatalogueValueRead(code=value.code, label=value.label) for value in dimension.values
         ],
     )
+
+
+# The visibility half of the seam, named here because ``_Visibility`` and the two
+# functions it belongs to are defined below the block above.
+
+Visibility = _Visibility
+visible_pairs = _visible_pairs
+visible_member = _visible
 
 
 # --- routes -----------------------------------------------------------------------------

@@ -43,6 +43,7 @@ from app.domain.capital.loan_classification import (
     SDI_GRADE_ORDER,
 )
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
+from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
 from app.domain.irr.engine import IRR_BUCKETS
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
@@ -64,6 +65,7 @@ from app.models.bi import (
     BiDimGlAccount,
     BiDimProduct,
     BiFactEngineMetric,
+    BiFactGlBranchMonthly,
     BiFactGlMonthly,
     BiFactLoanEvent,
     BiFactPositionDaily,
@@ -94,6 +96,7 @@ MODELS: tuple[type, ...] = (
     BiAggPositionDaily,
     BiFactLoanEvent,
     BiFactGlMonthly,
+    BiFactGlBranchMonthly,
     BiFactEngineMetric,
     BiFactTarget,
     BiDimBranch,
@@ -117,6 +120,14 @@ PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
         "bank_id",
         "month_end",
         "gl_account_code",
+        "currency",
+    ),
+    "bi_fact_gl_branch_monthly": (
+        "organization_id",
+        "bank_id",
+        "month_end",
+        "gl_account_code",
+        "branch_code",
         "currency",
     ),
     "bi_fact_engine_metric": (
@@ -155,6 +166,11 @@ VOCABULARIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     ("bi_fact_engine_metric", "ck_bi_fact_engine_metric_tier", bi.ENGINE_METRIC_TIERS),
     ("bi_fact_gl_monthly", "ck_bi_fact_gl_monthly_balance_basis", bi.GL_BALANCE_BASES),
+    (
+        "bi_fact_gl_branch_monthly",
+        "ck_bi_fact_gl_branch_monthly_balance_basis",
+        bi.GL_BALANCE_BASES,
+    ),
     ("bi_fact_target", "ck_bi_fact_target_period_grain", bi.TARGET_PERIOD_GRAINS),
     ("bi_fact_target", "ck_bi_fact_target_version", bi.TARGET_VERSIONS),
     ("bi_fact_target", "ck_bi_fact_target_time_behaviour", bi.TARGET_TIME_BEHAVIOURS),
@@ -440,6 +456,16 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         "R8",
         "R9",
         "R10",
+        # P5-B: the general-ledger-by-branch identity. The pinned tuple gained a
+        # member because the vocabulary genuinely did; the property this list
+        # exists to hold — that the constant, the model CHECK and the migrated
+        # CHECK agree — is pinned separately by
+        # ``test_check_constraints_admit_exactly_their_vocabulary`` here and by
+        # ``tests/db/test_bi_*_migration.py`` against Postgres.
+        "R11",
+        # P5-A: the arrears completeness share, admitted by ``202609280076``, for
+        # the same reason and pinned the same second way.
+        "R12",
     )
     assert bi.RECONCILIATION_STATUSES == ("green", "amber", "red", "grey")
     assert bi.QUERY_LOG_SURFACES == (
@@ -453,6 +479,17 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         "catalogue",
         "packs",
         "insights",
+        # P5-D: a question a reader typed, translated by a model and confirmed by
+        # them. Admitted to the database CHECK by ``202609280077``. Its own value
+        # rather than folded into ``catalogue``, because the query an auditor asks
+        # first about a model-assisted surface is which reads came from a model
+        # proposing rather than a person composing, and under ``catalogue`` that
+        # question has no answer. The pinned tuple gained a member because the
+        # vocabulary genuinely did; that the constant, the model CHECK and the
+        # MIGRATED CHECK all agree is pinned separately, here by
+        # ``test_check_constraints_admit_exactly_their_vocabulary`` and against
+        # Postgres by ``tests/db/test_bi_foundation_migration.py``.
+        "nlq",
     )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
     assert bi.TARGET_PERIOD_GRAINS == ("month", "quarter", "half_year", "year")
@@ -499,6 +536,64 @@ def test_a_target_scope_value_is_as_wide_as_the_widest_dimension_it_can_name() -
     for column_name in ("scope_value", "declared_scope_value"):
         column = _table(BiFactTarget).c[column_name]
         assert column.type.length == bi.TARGET_SCOPE_VALUE_WIDTH, column_name
+
+
+def _string_length(table: Table, column_name: str) -> int:
+    """The declared width of a ``VARCHAR`` column, narrowed rather than asserted."""
+    column_type = table.c[column_name].type
+    assert isinstance(column_type, sa.String), column_name
+    length = column_type.length
+    assert length is not None, f"{column_name} declares no width"
+    return length
+
+
+def test_the_optional_position_columns_are_wide_enough_for_their_vocabularies() -> None:
+    """A8-01 again, on the Phase 5 columns: derive the bound, never restate a number.
+
+    A column four characters too narrow for the values copied into it failed a
+    tenant's WHOLE nightly build every night, and neither the model/migration parity
+    tests nor SQLite could see it — the two sides agreed on the wrong number, and
+    SQLite ignores VARCHAR lengths. So the relationship is asserted rather than the
+    widths: each enumerated column must exceed the longest value its INGESTION
+    vocabulary admits, and the officer column must be exactly the width the
+    ingestion layer refuses beyond, so the two cannot disagree about what fits.
+    """
+    fact = _table(BiFactPositionDaily)
+    for column_name, vocabulary in (
+        ("channel", optional_position_fields.CHANNELS),
+        ("account_status", optional_position_fields.ACCOUNT_STATUSES),
+    ):
+        length = _string_length(fact, column_name)
+        longest = max(len(value) for value in vocabulary)
+        assert longest <= length, (
+            f"{column_name} holds {length} characters but its vocabulary's longest "
+            f"value is {longest}; the build would truncate it"
+        )
+    # ``officer_id`` is an OPEN identifier, so there is no vocabulary to measure:
+    # the bound is the length ingestion refuses beyond, and it is also
+    # ``branch_code``'s, the other column carried verbatim from the bank's own
+    # register. Equality on purpose — a wider mart column would accept a value the
+    # push already rejected, and a narrower one would truncate an accepted one.
+    assert _string_length(fact, "officer_id") == optional_position_fields.OFFICER_ID_MAX_LENGTH
+    assert _string_length(fact, "officer_id") == _string_length(fact, "branch_code")
+    # Both position facts share ``_PositionFactColumns``, so neither can drift.
+    for column_name in ("officer_id", "channel", "account_status", "arrears_amount_rc"):
+        daily = fact.c[column_name]
+        eom = _table(BiFactPositionEom).c[column_name]
+        assert str(daily.type) == str(eom.type), column_name
+        assert daily.nullable and eom.nullable, column_name
+
+
+def test_arrears_may_not_be_negative_on_either_position_fact() -> None:
+    """Arrears is a magnitude. The CHECK admits NULL because the two reasons the
+    column is empty — the bank stated nothing, or the position is unconverted
+    foreign currency — are both real and neither is zero."""
+    for model in (BiFactPositionDaily, BiFactPositionEom):
+        table = _table(model)
+        name = f"ck_{table.name}_arrears_amount_rc"
+        definition = _check_definitions(table)[name]
+        assert "arrears_amount_rc IS NULL" in definition
+        assert "arrears_amount_rc >= 0" in definition
 
 
 def test_target_vocabularies_match_the_register_that_supplies_them() -> None:
@@ -584,6 +679,7 @@ VOCABULARY_WIDTHS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("bi_fact_position_daily", "hqla_level", (HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B)),
     ("bi_fact_loan_event", "attribution_basis", bi.LOAN_EVENT_ATTRIBUTION_BASES),
     ("bi_fact_gl_monthly", "balance_basis", bi.GL_BALANCE_BASES),
+    ("bi_fact_gl_branch_monthly", "balance_basis", bi.GL_BALANCE_BASES),
     ("bi_fact_engine_metric", "tier", bi.ENGINE_METRIC_TIERS),
     (
         "bi_fact_engine_metric",
@@ -648,6 +744,8 @@ COPIED_WIDTHS: tuple[tuple[str, str, type, str], ...] = (
     ("bi_fact_loan_event", "currency", CanonicalLoanEvent, "currency"),
     ("bi_fact_gl_monthly", "gl_account_code", CanonicalGlAccount, "account_code"),
     ("bi_fact_gl_monthly", "account_class", CanonicalGlAccount, "account_class"),
+    ("bi_fact_gl_branch_monthly", "gl_account_code", CanonicalGlAccount, "account_code"),
+    ("bi_fact_gl_branch_monthly", "account_class", CanonicalGlAccount, "account_class"),
     ("bi_fact_engine_metric", "module", LiveMetric, "module"),
     ("bi_fact_engine_metric", "status", LiveMetric, "status"),
     ("bi_fact_engine_metric", "status", RegulatoryRun, "status"),

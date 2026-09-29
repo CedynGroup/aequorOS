@@ -32,4 +32,5 @@ def read_feature_flags(ctx: Tenant) -> FeatureFlagsRead:
         bi_enabled=bi.enabled,
         bi_mart_enqueue_enabled=bi.mart_enqueue_enabled,
         bi_scheduler_enabled=bi.scheduler_enabled,
+        bi_nlq_enabled=bi.nlq_enabled,
     )

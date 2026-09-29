@@ -64,6 +64,31 @@
       "title": "Branches against target",
       "caption": "Branch performance against the bank's own plan. Supply the performance targets dataset to turn it on.",
       "needs_data": "performance_targets"
+    },
+    {
+      "id": "arrears_by_branch",
+      "kind": "bar",
+      "title": "Arrears by branch",
+      "caption": "The overdue portion of the loan book, branch by branch. It reads as no value, never as zero, until the loan book states an arrears amount.",
+      "query": {
+        "measures": [
+          "loans.arrears_amount_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "branch.name"
+        ],
+        "sort": [
+          {
+            "member": "loans.arrears_amount_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      },
+      "needs_data": "positions"
     }
   ],
   "layout": [
@@ -92,6 +117,13 @@
       "i": "branches_against_target",
       "x": 0,
       "y": 11,
+      "w": 12,
+      "h": 5
+    },
+    {
+      "i": "arrears_by_branch",
+      "x": 0,
+      "y": 16,
       "w": 12,
       "h": 5
     }

@@ -281,7 +281,68 @@ ingestion. Using an authorized human session, fetch them at
 | `pledged_as_collateral`      | boolean | no       | Deposit pledged to secure a credit facility (drives the concentration-netting rule).                                                                                                                                                           |
 | `lien_reference`             | string  | no       | Source reference of the facility the deposit secures.                                                                                                                                                                                          |
 | `deposit_account_type`       | enum    | no       | `CURRENT`, `CALL`, `SAVINGS`, `FIXED`, `OTHER` — classifies deposits for the liquidity monitoring tables (volatile = current + call).                                                                                                          |
-| `attributes`                 | object  | no       | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented liquidity-directive conventions below.                                                    |
+| `attributes`                 | object  | no       | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented conventions below: the four optional analytics keys (`officer_id`, `channel`, `account_status`, `arrears_amount`), the liquidity-directive keys, and the BoG prudential-return keys.                                                    |
+
+**Optional analytics attributes.** Four `attributes` keys let the platform break
+your book down by the officer who owns a facility, the channel it came through,
+the account's own state, and how much of it is overdue. All four are optional in
+the strongest sense — a push that omits them behaves exactly as it does today —
+but a value you DO send is normalised and checked, because an optional field with
+no discipline arrives from three banks in three shapes:
+
+| Attribute key    | Position types | Type / values                                                                                                                                                     | Meaning                                                                                                          |
+| ---------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `officer_id`     | any            | string, up to 120 characters                                                                                                                                       | Your own code for the relationship / credit officer who owns the account. Stored verbatim (see below).            |
+| `channel`        | any            | `branch` · `agent` · `atm` · `pos` · `mobile_app` · `ussd` · `internet_banking` · `mobile_money` · `call_centre` · `direct_sales` · `partner` · `api` · `other`     | The origination or servicing channel. Use `other` when none of the listed values fits.                           |
+| `account_status` | any            | `active` · `inactive` · `dormant` · `blocked` · `closed` · `matured` · `written_off` · `other`                                                                      | The account's own lifecycle state as your core system holds it.                                                   |
+| `arrears_amount` | `LOAN`         | number, zero or greater                                                                                                                                            | The overdue portion of `balance`, **in the position's own `currency`** — see the three rules below.               |
+
+How the two enumerated keys are read: matched case-insensitively, with spaces,
+hyphens, dots and slashes read as underscores, and a short list of unambiguous
+synonyms resolved onto the values above (`MOMO` and `Mobile Money` → `mobile_money`;
+`Over the counter` and `teller` → `branch`; `online` → `internet_banking`;
+`frozen` → `blocked`; `WRITE OFF` → `written_off`). Deliberately NOT resolved,
+because each could mean two different things: a bare `mobile` (app, wallet or
+USSD?), a bare `card` (ATM or terminal?), and `suspended` on a loan (blocked, or
+interest in suspense?). Send one of the listed values for those.
+
+`arrears_amount`, being money, has three rules worth stating plainly:
+
+1. **It is in the position's own `currency`**, exactly like `balance`. There is no
+   per-attribute currency. If your core system reports arrears in your reporting
+   currency for a foreign-currency facility, convert it to the facility's currency
+   or leave the key out.
+2. **It is a PART of `balance`, not an addition to it.** `balance` is the whole
+   outstanding amount; `arrears_amount` is the overdue slice of it. Never send the
+   arrears figure as `balance`, and never expect the two to be summed.
+3. **Absent is not zero.** A position with no `arrears_amount` is a position whose
+   arrears you have not stated, and the platform reports it as unstated rather
+   than as up to date. Send `0` only when you mean the facility is genuinely
+   current.
+
+`officer_id` is an open identifier, so unlike the two enumerated keys it is NOT
+case-folded: it is matched against your own staff register, and folding the case
+would make the platform's idea of the code differ from yours (the same reason
+`branch_id` is carried verbatim). It is trimmed, and runs of whitespace inside it
+are collapsed to one space, so `RM  014` and `RM 014` agree — but `RM-014` and
+`rm-014` are two officers. Pick one spelling per officer, as you already do for
+`employer`.
+
+**What happens to a value the platform cannot use.** It is dropped — never stored
+as free text — the key is then absent (which reads as "not stated", never as a
+default), and the batch's validation report carries a finding naming the position,
+the key, the value you sent and what is accepted. The position itself still lands:
+deleting a facility from your balance sheet because its `channel` was misspelled
+would be a much larger error than the misspelling. The default severity is
+`WARNING` (rule `optional_position_attributes`), which flags the record and leaves
+it in every calculation; an institution that reports on these fields can raise it.
+
+A second rule, `position_attribute_consistency`, reports readable values that sit
+oddly beside the position carrying them — an `arrears_amount` above `balance`
+(the fingerprint of a unit error, or of the whole balance copied into the arrears
+column), an `arrears_amount` on a position type with no repayment schedule, and an
+`account_status` of `closed` on a non-zero balance. It changes nothing: your
+figures are reported exactly as you sent them. Its default severity is `INFO`.
 
 **Liquidity-directive attribute conventions.** The Liquidity Monitoring Tools
 return reads these documented `attributes` keys when present (all optional;
@@ -420,6 +481,7 @@ as-is by the calculation modules. Valid keys under `"reference"`:
 | `subsidiaries`           | `reporting_date` (ISO date = the batch `as_of_date`), `subsidiary_id` (the bank's stable id), `name`, `country_code`, `entity_type` (`bank` \| `nbfi` \| `insurance` \| `other`), `functional_currency`, `ownership_pct` (0–100), `consolidation_method` (`full` \| `equity` \| `none`), `control_via_board` (`true` \| `false`), `total_assets_ghs`, `total_liabilities_ghs`, `equity_ghs`, `net_profit_ytd_ghs`, `intercompany_receivable_ghs` (due FROM the subsidiary), `intercompany_payable_ghs` (due TO it); optional `tier1_capital_ghs`, `rwa_ghs`, `minority_interest_ghs` (required when `full` and ownership < 100 — the group's own working), `minority_interest_tier2_pref_ghs`, `investment_carrying_ghs`, `intercompany_receivable_type`, `intercompany_payable_type`, `regulator`, `licence_number`, `notes` — the subsidiary register + book, one row per subsidiary per reporting date; the whole register at one date per push (latest as-of wins). Feeds BSD9 minority interests + Annexure and BSD5B rows 3 / 18. Spec: `docs/data_engine/datasets/subsidiaries.md`. |
 | `capital_expenditure`    | `period_end` (ISO date = the batch `as_of_date`), `asset_class` (`land_buildings` \| `staff_land_premises` \| `furniture_equipment` \| `computers` \| `other_office_equipment` \| `motor_vehicles` \| `other_property_legal_rights`), `opening_nbv_ghs`, `additions_purchased_ghs`, `additions_finance_lease_ghs`, `additions_hire_purchase_ghs`, `disposal_proceeds_ghs`, `disposals_nbv_ghs`, `depreciation_ghs`, `closing_cost_ghs`, `accumulated_depreciation_ghs`, `closing_nbv_ghs` (= cost − accumulated depreciation, validated); optional `currency` (booking currency; blank = base ⇒ BSD2 Domestic), `capital_wip_ghs`, `wip_closing_ghs`, `contracted_not_provided_ghs`, `authorised_not_contracted_ghs`, `forecast_next_6m_ghs`, `forecast_0_3m_ghs`, `forecast_3_6m_ghs`, `budget_ghs`, `notes` — the fixed-asset / capex register, one row per (period, asset class); one period per push (half-year movements for BSD10 A–H, period-end stock for BSD2 item 12 rows 115–121 / 123). Spec: `docs/data_engine/datasets/capital_expenditure.md`.                              |
 | `performance_targets`    | `period` (ISO date: the **last day** of the window; must agree with `grain`), `grain` (`month` \| `quarter` \| `half_year` \| `year`), `measure_id` (the BI measure targeted — `loans.balance_rc`, `engine.car_pct.crd.official`), `time_behaviour` (`stock` \| `flow`; **required, never defaulted** — a stock target is the level to be standing at `period`, a flow target the amount to accumulate over the window `grain` names; reading one as the other is silently wrong by a period), `value` (in the measure's own unit: reporting currency for an amount, percentage points for a `_pct`; the row carries no unit), `version` (`budget` \| `reforecast`); optional `scope_dimension` / `scope_value` (which dimension the target applies to and its value, e.g. `branch.code` / `BR-001`; given together or not at all — a bank-wide target names neither) and `notes` — the bank's budget / reforecast figures, one row per (period, grain, measure, scope, version); re-push whole, latest as-of wins. Schema: `app/domain/ingestion/reference_schemas/performance_targets.py`.  |
+| `gl_segment_balances`    | `as_of_date` (ISO date = the batch `as_of_date`), `gl_account_code` (must match an `INCOME` / `EXPENSE` `gl_account.account_code` for the same month), `branch_id` (matched against `business_units.business_unit_id`, exactly as `position.attributes.branch_id` is; `__UNALLOCATED__` is **reserved** for the remainder the platform computes and is refused), `ytd_balance` (the branch's fiscal-year-to-date balance of that account, same convention and sign as the account's own `balance`); optional `currency` (blank = the reporting currency, as on a `gl_account` record), `gl_account_name`, `branch_name`, `notes` — the bank's branch breakdown of its profit-and-loss ledger. One row per (`as_of_date`, `gl_account_code`, `branch_id`, `currency`); ONE reporting date per push, the whole breakdown in that batch, and the batch must fall in the same calendar month as the ledger balances it breaks down. The breakdown may be partial: the platform adds an explicit unallocated line so the branches sum to the institution's ledger. Spec: `docs/data_engine/datasets/gl_segment_balances.md`. Schema: `app/domain/ingestion/reference_schemas/gl_segment_balances.py`. |
 
 ---
 

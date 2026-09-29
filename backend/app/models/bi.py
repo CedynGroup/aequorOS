@@ -141,12 +141,20 @@ MART_BUILD_SCOPES: tuple[str, ...] = ("positions", "events", "gl", "engine", "di
 #: already recorded per attempt on ``jobs.progress``; this is a STATE table.
 MART_BUILD_STATUSES: tuple[str, ...] = ("running", "succeeded", "failed")
 
-#: Reconciliation checks R1–R10 (architecture §Reconciliation → trust) and the
+#: Reconciliation checks R1–R12 (architecture §Reconciliation → trust) and the
 #: trust colours they resolve to. ``grey`` is "not assessed", never green.
 #: R10 (``dpd_completeness``, D-042) is the share of LOAN rows with no
 #: ``dpd_band``, so a badge can never read green over a "we were never told"
 #: figure — it must be storable or the stored badge disagrees with the live one.
-RECONCILIATION_CHECK_IDS: tuple[str, ...] = tuple(f"R{number}" for number in range(1, 11))
+#: R11 (P5-B) is the general-ledger-by-branch identity: the branch breakdown
+#: must sum to the institution ledger it breaks down; admitted to the stored
+#: vocabulary by migration ``202609280075``. R12 (P5-A) is the arrears
+#: completeness share, R10's twin for ``arrears_amount_rc``: a bank that states
+#: arrears for half its book would otherwise show a sum that reads as the whole
+#: book's; admitted by ``202609280076``. Until a migration lands, a Postgres
+#: ``ck_bi_reconciliation_results_check_id`` built by an earlier one refuses the
+#: row and ``reconciliation.persist`` logs the skip.
+RECONCILIATION_CHECK_IDS: tuple[str, ...] = tuple(f"R{number}" for number in range(1, 13))
 RECONCILIATION_STATUSES: tuple[str, ...] = ("green", "amber", "red", "grey")
 
 #: ``bi_query_log`` vocabularies. ``trust`` and ``catalogue`` are read surfaces
@@ -166,6 +174,13 @@ QUERY_LOG_SURFACES: tuple[str, ...] = (
     "catalogue",
     "packs",
     "insights",
+    #: A question a reader typed, translated into a ``BiQuery`` by a model and
+    #: confirmed by them before it ran. Its own value rather than ``catalogue``,
+    #: which is what the read technically is, because the one question an auditor
+    #: asks first about a model-assisted surface is which reads came from a model
+    #: proposing a query rather than a person composing one. Admitted to the
+    #: database CHECK by ``202609280077``.
+    "nlq",
 )
 QUERY_LOG_DECISIONS: tuple[str, ...] = ("allowed", "denied")
 QUERY_LOG_PRINCIPAL_TYPES: tuple[str, ...] = tuple(kind.value for kind in PrincipalType)
@@ -261,6 +276,25 @@ class _PositionFactColumns(_TenantKeys, _BuilderStamp):
     hqla_level: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: ``attributes.branch_id`` verbatim; ``bi_dim_branch`` resolves it.
     branch_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: ``attributes.officer_id`` verbatim — the bank's own code for the officer
+    #: who owns the account. No name is resolved: the platform holds no officer
+    #: register, and inventing one would be seeded data. Width is
+    #: ``optional_position_fields.OFFICER_ID_MAX_LENGTH``, itself ``branch_code``'s,
+    #: and ingestion refuses anything longer, so the two cannot disagree (A8-01).
+    officer_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: ``attributes.channel`` / ``attributes.account_status``, already resolved to
+    #: one spelling at ingestion (``domain.ingestion.optional_position_fields``),
+    #: so the mart never holds two spellings of one channel. Widths exceed the
+    #: longest value of each vocabulary; a parity test asserts that relationship
+    #: rather than restating the numbers.
+    channel: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    account_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: ``attributes.arrears_amount`` in the REPORTING currency, under the
+    #: DERIVATION rule (D-015): NULL when the position's currency is not the
+    #: reporting currency, exactly like ``balance_rc``, and NULL when the bank
+    #: stated no arrears. Never 0 for either reason — a zero would assert a
+    #: performing facility. R12 is what stops a partial book reading as a whole one.
+    arrears_amount_rc: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
     product_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     product_family: Mapped[str | None] = mapped_column(String(40), nullable=True)
     #: A mapped category, or ``unclassified_<slug of the 80-char regulatory
@@ -280,6 +314,10 @@ def _position_fact_table_args(table: str) -> tuple:
         CheckConstraint(
             "ifrs9_stage IS NULL OR ifrs9_stage IN (1, 2, 3)",
             name=f"ck_{table}_ifrs9_stage",
+        ),
+        CheckConstraint(
+            "arrears_amount_rc IS NULL OR arrears_amount_rc >= 0",
+            name=f"ck_{table}_arrears_amount_rc",
         ),
         _bank_fk(),
         Index(
@@ -464,6 +502,95 @@ class BiFactGlMonthly(_BuilderStamp, Base):
     pl_line: Mapped[str | None] = mapped_column(String(80), nullable=True)
     #: The mapping's sign for the account (+1 / -1), NULL when unmapped.
     pl_sign: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+
+
+class BiFactGlBranchMonthly(_BuilderStamp, Base):
+    """The same monthly P&L figures as :class:`BiFactGlMonthly`, by BRANCH.
+
+    Fed by the bank's own ``gl_segment_balances`` register
+    (``app/domain/ingestion/reference_schemas/gl_segment_balances.py``), which is
+    a dataset rather than a wider ``gl_account`` record because GL-by-branch is a
+    different grain from the chart of accounts and
+    ``uq_canonical_gl_accounts_current`` forbids the second key there.
+
+    Three properties this table exists to hold, each of which is a way the
+    feature goes wrong if it is dropped:
+
+    **It sums to the institution's ledger by construction.** Every (account,
+    month, currency) block carries one row per allocated branch PLUS one row on
+    ``gl_segment_balances.RESIDUAL_BRANCH_ID`` holding ``institution_ytd − Σ
+    reported_ytd``. So Σ over ``branch_code`` is
+    :class:`BiFactGlMonthly`'s ``ytd_rc`` exactly, for a complete allocation and
+    a partial one alike, and a bank that allocated four fifths of its interest
+    income still sees its whole interest income — with the rest on a line that
+    says nobody allocated it. Summing only what was allocated would be a board
+    figure that silently under-reports by whatever the bank forgot. R11 proves
+    the identity; the residual is a computed, labelled figure, the same device
+    ``services/reconciliation.py`` uses for a retained balance-sheet plug.
+
+    **It is a SEPARATE table, not a ``branch_code`` column on
+    ``bi_fact_gl_monthly``.** ``services/bi/authorization.branch_attributable``
+    reads the branch key off the mapped table, so a branch key on the
+    institution ledger would make the institution's own P&L readable by a
+    branch-scoped principal. Apart is what makes branch P&L visible to a scoped
+    reader and the institution's invisible, at no cost. It also keeps the
+    FILED-reconciled figure (R4 against BSD7A's own resolver) out of reach of how
+    completely a bank allocated its branches.
+
+    **``pl_line`` / ``pl_sign`` / ``balance_basis`` are the INSTITUTION row's.**
+    A branch does not get its own mapping: the account's BSD7 line and sign are
+    the bank's single statement about that account, so Σ ``pl_sign × ytd_rc`` per
+    line over branches is the same line the return files.
+    """
+
+    __tablename__ = "bi_fact_gl_branch_monthly"
+    __table_args__ = (
+        CheckConstraint(
+            f"balance_basis IN ({_values(GL_BALANCE_BASES)})",
+            name="ck_bi_fact_gl_branch_monthly_balance_basis",
+        ),
+        Index(
+            "ix_bi_fact_gl_branch_monthly_org_bank_month_branch",
+            "organization_id",
+            "bank_id",
+            "month_end",
+            "branch_code",
+        ),
+        _bank_fk(),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    bank_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    #: The institution row's ``month_end`` — the last GL date with data in the
+    #: month. The branch register batch must fall in the SAME calendar month or
+    #: no rows are built at all: pairing March's breakdown with April's ledger
+    #: would push a whole month of unattributed movement into the residual and
+    #: call it unallocated. ``register_as_of`` records which day inside the month.
+    month_end: Mapped[date] = mapped_column(Date, primary_key=True)
+    gl_account_code: Mapped[str] = mapped_column(String(80), primary_key=True)
+    #: ``gl_segment_balances.branch_id`` verbatim, or
+    #: ``gl_segment_balances.RESIDUAL_BRANCH_ID`` on the computed remainder.
+    #: ``bi_dim_branch`` resolves both, so the remainder renders with a name.
+    #: Width matches ``bi_dim_branch.branch_code`` and the position facts.
+    branch_code: Mapped[str] = mapped_column(String(120), primary_key=True)
+    currency: Mapped[str] = mapped_column(String(3), primary_key=True)
+    calendar_month: Mapped[date] = mapped_column(Date, nullable=False)
+    account_class: Mapped[str] = mapped_column(String(16), nullable=False)
+    ytd_rc: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
+    #: The branch's own prior-month fiscal-year-to-date balance, NULL when the
+    #: prior month's register does not carry this exact (account, branch).
+    prior_ytd_rc: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    #: ``ytd_rc − prior_ytd_rc``, NULL whenever ``missing_prior``. Never the YTD
+    #: figure passed off as a month, and never 0 for "unknown".
+    movement_rc: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    missing_prior: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    #: The institution row's basis, line and sign — see the class docstring.
+    balance_basis: Mapped[str] = mapped_column(String(16), nullable=False)
+    pl_line: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pl_sign: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    #: The ``as_of_date`` of the branch register batch these rows came from, so a
+    #: reader can see that the breakdown is (say) a month older than the ledger.
+    register_as_of: Mapped[date] = mapped_column(Date, nullable=False)
 
 
 class BiFactEngineMetric(_BuilderStamp, Base):
@@ -855,6 +982,7 @@ BI_TABLES: tuple[str, ...] = (
     BiAggPositionDaily.__tablename__,
     BiFactLoanEvent.__tablename__,
     BiFactGlMonthly.__tablename__,
+    BiFactGlBranchMonthly.__tablename__,
     BiFactEngineMetric.__tablename__,
     BiFactTarget.__tablename__,
     BiDimBranch.__tablename__,

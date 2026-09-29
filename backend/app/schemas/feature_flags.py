@@ -20,3 +20,9 @@ class FeatureFlagsRead(BaseModel):
     bi_mart_enqueue_enabled: bool
     #: The recovery sweep, retention and subscriptions ride the scheduler tick.
     bi_scheduler_enabled: bool
+    #: Natural-language questions may be asked. INDEPENDENT of ``bi_enabled``: the
+    #: ask routes answer 409 rather than 404 when it is off, deliberately, so the
+    #: flag cannot be probed by a caller — which makes the navigation the only thing
+    #: that can decline the door, and makes projecting this flag the difference
+    #: between a built surface and an invisible one.
+    bi_nlq_enabled: bool

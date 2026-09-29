@@ -19,6 +19,7 @@ import type {
   BindingPreviewRequest,
   BindingRead,
   BindingRevokeRequest,
+  BranchDirectoryRead,
   ErrorResponse,
   InstitutionDirectoryRead,
   MemberListRead,
@@ -38,6 +39,8 @@ import {
   BindingReadToJSON,
   BindingRevokeRequestFromJSON,
   BindingRevokeRequestToJSON,
+  BranchDirectoryReadFromJSON,
+  BranchDirectoryReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   InstitutionDirectoryReadFromJSON,
@@ -52,6 +55,10 @@ export interface CreateAuthorizationBindingRequest {
 
 export interface ListAuthorizationBindingsRequest {
   principalUserId?: string | null;
+}
+
+export interface ListOrganizationInstitutionBranchesRequest {
+  institutionId: string;
 }
 
 export interface PreviewAuthorizationBindingRequest {
@@ -174,6 +181,66 @@ export class AuthorizationApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BindingListRead> {
     const response = await this.listAuthorizationBindingsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One institution\'s declared branches and regions, for scoping a grant.  Reads the CANONICAL ``business_units`` register — the bank\'s own declaration of its reporting hierarchy — and not the BI branch dimension: BI is a dispatch plane, so the account plane must neither import nor query ``bi_*``. The register\'s documented field aliases (``unit_id``, ``name``) are resolved through ``business_units.normalise_row``, the one place that is done, so a bank pushing either spelling is read correctly.  Bank-scoped at the QUERY, not merely organization-scoped: two banks of one organization share an RLS tenant, so organization scoping alone cannot isolate their child objects. An institution outside the caller\'s organization is indistinguishable from one that does not exist.  An institution that has ingested no register yet returns empty lists. There is no fabricated branch and no inferred region: ``region`` is optional on the register and is the only place a region can come from.
+   * List Organization Institution Branches
+   */
+  async listOrganizationInstitutionBranchesRaw(
+    requestParameters: ListOrganizationInstitutionBranchesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BranchDirectoryRead>> {
+    if (requestParameters["institutionId"] == null) {
+      throw new runtime.RequiredError(
+        "institutionId",
+        'Required parameter "institutionId" was null or undefined when calling listOrganizationInstitutionBranches().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/organization/institutions/{institution_id}/branches`.replace(
+          `{${"institution_id"}}`,
+          encodeURIComponent(String(requestParameters["institutionId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BranchDirectoryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * One institution\'s declared branches and regions, for scoping a grant.  Reads the CANONICAL ``business_units`` register — the bank\'s own declaration of its reporting hierarchy — and not the BI branch dimension: BI is a dispatch plane, so the account plane must neither import nor query ``bi_*``. The register\'s documented field aliases (``unit_id``, ``name``) are resolved through ``business_units.normalise_row``, the one place that is done, so a bank pushing either spelling is read correctly.  Bank-scoped at the QUERY, not merely organization-scoped: two banks of one organization share an RLS tenant, so organization scoping alone cannot isolate their child objects. An institution outside the caller\'s organization is indistinguishable from one that does not exist.  An institution that has ingested no register yet returns empty lists. There is no fabricated branch and no inferred region: ``region`` is optional on the register and is the only place a region can come from.
+   * List Organization Institution Branches
+   */
+  async listOrganizationInstitutionBranches(
+    requestParameters: ListOrganizationInstitutionBranchesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BranchDirectoryRead> {
+    const response = await this.listOrganizationInstitutionBranchesRaw(
       requestParameters,
       initOverrides,
     );

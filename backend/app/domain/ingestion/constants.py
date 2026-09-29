@@ -215,6 +215,14 @@ REFERENCE_DATASET_KINDS: tuple[str, ...] = (
     # catalogue's variance measures. Bank-supplied like every other reference
     # dataset — no seeding, no derivation from a filed return.
     "performance_targets",  # budget / reforecast per measure, period and scope
+    # --- BI general ledger by branch (P5-B; migration pending) ---------------
+    # The bank's own branch breakdown of its P&L ledger. A dataset rather than a
+    # wider `gl_account` record because GL-by-branch is a different GRAIN from the
+    # chart of accounts — `(account, branch, date)` against
+    # `(account, date)` — and `uq_canonical_gl_accounts_current` forbids the
+    # second key there. The branch is never parsed out of `account_code`: see
+    # `reference_schemas/gl_segment_balances.py` for the whole argument.
+    "gl_segment_balances",  # P&L ledger balance per (account, branch, currency)
 )
 ReferenceDatasetKind = Literal[
     "capital_structure",
@@ -235,6 +243,7 @@ ReferenceDatasetKind = Literal[
     "teller_withdrawals",
     "interest_accruals",
     "performance_targets",
+    "gl_segment_balances",
 ]
 
 LINEAGE_OPERATION_TYPES: tuple[str, ...] = (

@@ -26,6 +26,7 @@ from app.domain.bi.authority import (
     TEXT_VALUED_METRIC_IDS,
 )
 from app.domain.bi.catalogue import catalogue
+from app.domain.ingestion.optional_position_fields import OPTIONAL_POSITION_ATTRIBUTE_KEYS
 from app.domain.positions.families import loan_family
 from app.models.live import LIVE_MODULES
 from app.services import fact_derivation, loan_classification, module_scope, pipeline
@@ -102,23 +103,62 @@ def test_loan_product_family_is_the_lifted_domain_function() -> None:
     assert fact_derivation._unclassified_category is extract.unclassified_category
 
 
-def test_the_extract_reads_the_same_wire_keys_the_services_read() -> None:
-    """Each attribute key the extractor reads is one a calculation service reads."""
+_CALCULATION_SERVICES: tuple[str, ...] = (
+    "app/services/fact_derivation.py",
+    "app/services/loan_classification.py",
+    "app/services/regulatory_credit.py",
+    "app/services/credit_concentration.py",
+    "app/services/enterprise_stress.py",
+)
+
+
+def test_the_extract_reads_no_wire_key_it_invented() -> None:
+    """Each attribute key the extractor reads has an owner outside BI.
+
+    The original assertion was "every key is one a CALCULATION SERVICE reads",
+    which held while the marts only ever projected the regulatory plane's own
+    inputs. Phase 5 added four keys that are analytics-only BY DESIGN — no BoG
+    return asks for a relationship officer, a channel or an account status, so the
+    official derivation deliberately does not learn about them (the same reasoning
+    that keeps ``gl_segment_balances`` out of ``fact_derivation``).
+
+    The property the test exists to hold is unchanged and is what is asserted
+    here: BI may not INVENT a wire key. A key is admissible only if a calculation
+    service reads it or ``domain.ingestion.optional_position_fields`` declares it,
+    and the second exemption is closed — the declared set is asserted to be
+    exactly those four, so a fifth cannot enter under it silently. The original
+    direction is additionally pinned below: none of the four may reach the
+    calculation plane.
+    """
     services = "".join(
-        (BACKEND / path).read_text(encoding="utf-8")
-        for path in (
-            "app/services/fact_derivation.py",
-            "app/services/loan_classification.py",
-            "app/services/regulatory_credit.py",
-            "app/services/credit_concentration.py",
-            "app/services/enterprise_stress.py",
-        )
+        (BACKEND / path).read_text(encoding="utf-8") for path in _CALCULATION_SERVICES
     )
     extract_source = (BACKEND / "app/domain/bi/extract.py").read_text(encoding="utf-8")
     keys = set(re.findall(r'attributes\.get\("([a-z0-9_]+)"\)', extract_source))
     assert keys, "the extractor reads no attributes?"
+    assert OPTIONAL_POSITION_ATTRIBUTE_KEYS == (
+        "officer_id",
+        "channel",
+        "account_status",
+        "arrears_amount",
+    )
     for key in sorted(keys):
+        if key in OPTIONAL_POSITION_ATTRIBUTE_KEYS:
+            continue
         assert f'"{key}"' in services, f"{key} is not an attribute any calculation service reads"
+
+
+def test_the_optional_analytics_attributes_never_reach_the_calculation_plane() -> None:
+    """The exemption above is one-way: an analytics attribute is not a fact input.
+
+    A filed figure that moved because a bank started stating a channel would be a
+    return whose value depends on an attribute no return asks for.
+    """
+    services = "".join(
+        (BACKEND / path).read_text(encoding="utf-8") for path in _CALCULATION_SERVICES
+    )
+    leaked = [key for key in OPTIONAL_POSITION_ATTRIBUTE_KEYS if f'"{key}"' in services]
+    assert leaked == []
 
 
 def test_every_catalogue_check_id_is_one_the_reconciliation_module_evaluates() -> None:

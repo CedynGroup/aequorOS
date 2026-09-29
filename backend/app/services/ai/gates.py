@@ -48,28 +48,36 @@ GateCode = Literal[
 GatePhase = Literal["enqueue", "run"]
 
 #: What a person is told. Never mentions the model, the provider or the key.
+#:
+#: Deliberately FEATURE-NEUTRAL wording. These sentences are shown verbatim by
+#: every AI surface, and they said "AI drafting" while there were only drafting
+#: surfaces — ICAAP sections and BI commentary. A reader who typed a question and
+#: was refused then read that their DRAFTING was unavailable, which names something
+#: they did not do. "AI assistance" reads correctly on all three, and the gate does
+#: not know which surface asked it, so a per-feature sentence would have to be a
+#: second mapping somewhere that could fall out of step with this one.
 GATE_MESSAGES: dict[GateCode, str] = {
-    "allowed": "AI drafting is available.",
-    "deployment_disabled": "AI drafting is switched off on this platform.",
+    "allowed": "AI assistance is available.",
+    "deployment_disabled": "AI assistance is switched off on this platform.",
     "deployment_not_approved": (
-        "AI drafting has not been approved for use in this environment yet."
+        "AI assistance has not been approved for use in this environment yet."
     ),
     "configuration_not_approved": (
-        "AI drafting has not been approved for use in this environment yet."
+        "AI assistance has not been approved for use in this environment yet."
     ),
     "tenant_disabled": (
-        "AI drafting is switched off for your organisation. An Organisation Owner "
+        "AI assistance is switched off for your organisation. An Organisation Owner "
         "can turn it on in Settings."
     ),
     "feature_disabled": (
-        "Your organisation has not switched on AI drafting for this part of the product."
+        "Your organisation has not switched on AI assistance for this part of the product."
     ),
     "consent_outdated": (
-        "The terms for AI drafting have changed. An Organisation Owner needs to read "
+        "The terms for AI assistance have changed. An Organisation Owner needs to read "
         "and accept them again before it can be used."
     ),
     "queue_expired": "This request waited too long and was cancelled.",
-    "not_configured": "AI drafting is not configured on this platform.",
+    "not_configured": "AI assistance is not configured on this platform.",
 }
 
 

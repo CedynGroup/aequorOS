@@ -52,14 +52,23 @@ pytestmark = [
 
 REVISION = "202609220066"
 PREVIOUS_REVISION = "202609200065"
-#: The BI plane is created across TWO revisions: ``REVISION`` builds the marts,
-#: dimensions, control tables and partitions, and ``202609270069`` adds
+#: The BI plane is created across SEVERAL revisions: ``REVISION`` builds the
+#: marts, dimensions, control tables and partitions, ``202609270069`` adds
 #: ``bi_fact_target`` (the pre-matched target mart) plus the ``targets`` build
-#: scope. ``BI_TABLES`` names both revisions' tables, so the round-trip test
-#: below has to come back up through the later one or it would measure the
-#: model against half a chain. A revision that adds a ``bi_*`` table must be
-#: named here.
-LAST_BI_REVISION = "202609270069"
+#: scope, and ``202609280075`` adds ``bi_fact_gl_branch_monthly`` (the branch
+#: breakdown of the ledger). ``BI_TABLES`` names every one of their tables, so the
+#: round-trip test below has to come back up through the LAST of them or it would
+#: measure the model against half a chain — and it convicts by name when it does
+#: not, which is how this constant was caught in Phase 5. **A revision that changes
+#: any ``bi_*`` table's SHAPE must be named here** — not only one that adds a table,
+#: which is how the constant went stale a second time: ``202609280076`` adds four
+#: columns to both position facts and ``202609280077`` widens the query log's
+#: surface CHECK, and this test compares the MODEL against the migrated schema, so
+#: stopping short of either measures a model that has moved against a database that
+#: has not. The ``bi_content`` / ``bi_notifications`` tables have their own suite
+#: (``test_bi_phase3_migration.py``) because this one reads ``app/models/bi.py``
+#: alone.
+LAST_BI_REVISION = "202609280077"
 PARTITIONED = (*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES)
 PLAIN = tuple(table for table in BI_TABLES if table not in PARTITIONED)
 ORG = "OR-BIFND0001"

@@ -29,7 +29,7 @@ import json
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from pydantic import ValidationError
@@ -44,6 +44,7 @@ from app.schemas.bi import (
     BiPackQuery,
     BiPackSpec,
     BiPackWidget,
+    BiPendingCapability,
     BiQuery,
 )
 from app.services.bi.compiler import _resolve
@@ -67,14 +68,19 @@ EXPECTED_PACKS: dict[str, str] = {
 #: are served by a SECOND widget embedding a platform panel, so 50 widgets
 #: carry 47 cells. Restating the shape here means a widget cannot be dropped,
 #: or silently demoted to a gap, without this failing.
+#: Phase 5 moved three counts: ``alco`` and ``branch_network`` each gained one
+#: query widget over the new optional position fields, ``credit`` gained one AND
+#: promoted ``officer_league_table`` from a gap to a figure, and ``finance``
+#: promoted ``profit_and_loss_by_branch`` — both promotions because the mart
+#: column each was waiting on now exists.
 EXPECTED_SHAPE: dict[str, tuple[int, int, int]] = {
-    "alco": (8, 0, 2),
+    "alco": (9, 0, 2),
     "board": (5, 1, 3),
-    "branch_network": (2, 0, 2),
+    "branch_network": (3, 0, 2),
     "compliance": (1, 3, 1),
-    "credit": (5, 2, 2),
+    "credit": (7, 2, 1),
     "cro": (7, 1, 1),
-    "finance": (1, 0, 3),
+    "finance": (2, 0, 2),
 }
 
 #: Widgets whose query spans more than one authorization module, and why.
@@ -104,12 +110,28 @@ MIXED_MODULE_WIDGETS: dict[str, str] = {
     # it by an attribute the liquidity and interest-rate modules own.
     "alco.maturity_ladder": "the whole book bucketed by contractual maturity",
     "alco.repricing_ladder": "the whole book bucketed by repricing date",
+    # Phase 5. The three optional position attributes are conformed attributes of
+    # an ACCOUNT and belong to Risk & Limits, so slicing or selecting a credit or
+    # liquidity figure by one spans two modules — which is the whole point of each
+    # widget, exactly as the branch and product dimensions above.
+    "alco.dormant_deposits": "a liquidity measure selected on the shared account status",
+    "branch_network.arrears_by_branch": ("a credit measure sliced by the shared branch dimension"),
+    "credit.book_by_channel": "a credit measure sliced by the shared channel dimension",
+    "credit.officer_league_table": "credit measures sliced by the shared officer dimension",
 }
 
 #: Widgets that name a ``restricted`` member. Most readers hold no sentence
 #: for these and see the restricted placeholder instead of the figure, so a
 #: pack acquiring one is a deliberate act.
-RESTRICTED_WIDGETS: frozenset[str] = frozenset({"cro.large_exposures"})
+#: ``credit.officer_league_table`` joined in Phase 5 and is the deliberate act
+#: this registry exists to record: ``position.officer_code`` names one member of
+#: staff, so the league table is officer-level performance information and a
+#: reader needs an explicit restricted-sensitivity sentence for it. Without one the
+#: widget renders the restricted placeholder and the rest of the credit dashboard
+#: is unaffected.
+RESTRICTED_WIDGETS: frozenset[str] = frozenset(
+    {"cro.large_exposures", "credit.officer_league_table"}
+)
 
 #: Standard names that legitimately carry a digit. Everything else numeric in a
 #: title or caption would be a figure the pack asserted rather than read.
@@ -287,7 +309,20 @@ def test_at_least_one_widget_of_each_gap_kind_ships() -> None:
         "risk is the worked example (a missing days-past-due column must read as no "
         "value, never as a clean book)"
     )
+    # ``mart_field`` has NO occupant since Phase 5, and that is this change
+    # landing rather than the vocabulary rotting: both widgets that carried it
+    # were waiting on a mart column, and both columns now exist
+    # (``bi_fact_position_daily.officer_id`` and the whole
+    # ``bi_fact_gl_branch_monthly``), so both read a query instead. Leaving the
+    # copy in place would have told a bank the platform cannot do something it can.
     assert {w.pending_capability for w in widgets if w.pending_capability} == {
+        "catalogue_member",
+        "governed_limit",
+    }
+    # The value stays in the vocabulary because the next such gap needs it, and it
+    # is asserted present so it cannot be dropped without a decision — so this test
+    # pins BOTH the occupancy and the vocabulary, where before it pinned one.
+    assert set(get_args(BiPendingCapability)) == {
         "catalogue_member",
         "governed_limit",
         "mart_field",
@@ -625,3 +660,58 @@ def test_a_pack_cannot_carry_an_unknown_key() -> None:
                 "query": {"measures": ["positions.balance_rc"], "window": "as_of"},
             }
         )
+
+
+# --- Phase 5: a figure that degrades to a named gap, never to a zero ---------------------
+
+
+#: The widgets Phase 5 added or promoted, and the dataset each degrades to.
+#: ``needs_data`` is carried BESIDE a query on purpose: the answer is still asked
+#: for, because a bank that has supplied the field must see the figure, and the key
+#: is what the empty state names for a bank that has not.
+PHASE_5_WIDGETS: dict[str, str] = {
+    "branch_network.arrears_by_branch": "positions",
+    "credit.book_by_channel": "positions",
+    "credit.officer_league_table": "positions",
+    "alco.dormant_deposits": "positions",
+    "finance.profit_and_loss_by_branch": "gl_segment_balances",
+}
+
+
+@pytest.mark.parametrize(("key", "dataset"), sorted(PHASE_5_WIDGETS.items()))
+def test_a_phase_5_widget_reads_a_figure_and_still_names_the_dataset_it_needs(
+    key: str, dataset: str
+) -> None:
+    pack_id, widget_id = key.split(".", 1)
+    widget = _widget(pack_id, widget_id)
+    assert widget.query is not None, f"{key} must ASK for the figure, not ship as a gap"
+    assert widget.needs_data == dataset, (
+        f"{key} must name the dataset its empty state asks for, so a bank with none "
+        "of the field sees a named gap rather than a chart of zeros"
+    )
+    assert widget.pending_capability is None, (
+        f"{key} is no longer waiting on platform work; saying it is would be a false "
+        "statement about what the platform can do"
+    )
+    assert widget.is_gap is False
+    # The caption carries the specificity the dataset key cannot: which FIELD of the
+    # dataset is missing. A key must stay a dataset the Data Engine accepts (there is
+    # no ``loan_arrears`` template to offer), so the sentence is where it is said.
+    assert widget.caption
+
+
+def test_the_phase_5_widgets_name_the_members_this_wave_added() -> None:
+    """The promotions are only honest if they read the NEW members; a widget that
+    kept its old query would have had its copy corrected and nothing else."""
+    named = {
+        f"{spec.id}.{widget.id}": set(_named_members(widget.query))
+        for spec in packs()
+        for widget in spec.widgets
+        if widget.query is not None and f"{spec.id}.{widget.id}" in PHASE_5_WIDGETS
+    }
+    assert set(named) == set(PHASE_5_WIDGETS)
+    assert "loans.arrears_amount_rc" in named["branch_network.arrears_by_branch"]
+    assert "position.channel" in named["credit.book_by_channel"]
+    assert "position.officer_code" in named["credit.officer_league_table"]
+    assert "position.account_status" in named["alco.dormant_deposits"]
+    assert "gl.branch_ytd_rc" in named["finance.profit_and_loss_by_branch"]

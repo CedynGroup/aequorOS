@@ -34,6 +34,12 @@ export interface FeatureFlagsRead {
    * @type {boolean}
    * @memberof FeatureFlagsRead
    */
+  biNlqEnabled: boolean;
+  /**
+   *
+   * @type {boolean}
+   * @memberof FeatureFlagsRead
+   */
   biSchedulerEnabled: boolean;
 }
 
@@ -48,6 +54,8 @@ export function instanceOfFeatureFlagsRead(
     !("biMartEnqueueEnabled" in value) ||
     value["biMartEnqueueEnabled"] === undefined
   )
+    return false;
+  if (!("biNlqEnabled" in value) || value["biNlqEnabled"] === undefined)
     return false;
   if (
     !("biSchedulerEnabled" in value) ||
@@ -72,6 +80,7 @@ export function FeatureFlagsReadFromJSONTyped(
     ...json,
     biEnabled: json["bi_enabled"],
     biMartEnqueueEnabled: json["bi_mart_enqueue_enabled"],
+    biNlqEnabled: json["bi_nlq_enabled"],
     biSchedulerEnabled: json["bi_scheduler_enabled"],
   };
 }
@@ -91,6 +100,7 @@ export function FeatureFlagsReadToJSONTyped(
   return {
     bi_enabled: value["biEnabled"],
     bi_mart_enqueue_enabled: value["biMartEnqueueEnabled"],
+    bi_nlq_enabled: value["biNlqEnabled"],
     bi_scheduler_enabled: value["biSchedulerEnabled"],
   };
 }

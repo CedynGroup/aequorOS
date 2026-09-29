@@ -45,9 +45,27 @@
       "id": "profit_and_loss_by_branch",
       "kind": "table",
       "title": "Profit and loss by branch",
-      "caption": "The income statement split by branch. The ledger marts carry no branch, so the split cannot yet be made.",
-      "needs_data": "gl_mapping_bsd7",
-      "pending_capability": "mart_field"
+      "caption": "The income statement split by branch, from the bank's own branch breakdown. It carries a line for the part of the ledger no branch was given, so the branches add up to the whole.",
+      "needs_data": "gl_segment_balances",
+      "query": {
+        "measures": [
+          "gl.branch_ytd_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "gl_account.pl_line",
+          "branch.name"
+        ],
+        "sort": [
+          {
+            "member": "gl.branch_ytd_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      }
     }
   ],
   "layout": [

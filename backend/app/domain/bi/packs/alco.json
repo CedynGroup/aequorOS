@@ -163,6 +163,34 @@
         "show_trend": true,
         "precision": 2
       }
+    },
+    {
+      "id": "dormant_deposits",
+      "kind": "bar",
+      "title": "Dormant deposit balances",
+      "caption": "Balances on accounts the bank has marked dormant, by product family. It reads as no value, never as zero, until deposits state an account status.",
+      "query": {
+        "measures": [
+          "deposits.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "product.family"
+        ],
+        "filters": [
+          {
+            "member": "position.account_status",
+            "op": "in",
+            "values": [
+              "dormant"
+            ]
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      },
+      "needs_data": "positions"
     }
   ],
   "layout": [
@@ -234,6 +262,13 @@
       "x": 0,
       "y": 15,
       "w": 12,
+      "h": 4
+    },
+    {
+      "i": "dormant_deposits",
+      "x": 0,
+      "y": 19,
+      "w": 6,
       "h": 4
     }
   ]

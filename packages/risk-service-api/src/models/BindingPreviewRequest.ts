@@ -18,6 +18,13 @@ import {
   SensitivityScopeToJSON,
   SensitivityScopeToJSONTyped,
 } from "./SensitivityScope";
+import type { DataScope } from "./DataScope";
+import {
+  DataScopeFromJSON,
+  DataScopeFromJSONTyped,
+  DataScopeToJSON,
+  DataScopeToJSONTyped,
+} from "./DataScope";
 import type { InstitutionScope } from "./InstitutionScope";
 import {
   InstitutionScopeFromJSON,
@@ -46,6 +53,18 @@ import {
  * @interface BindingPreviewRequest
  */
 export interface BindingPreviewRequest {
+  /**
+   *
+   * @type {DataScope}
+   * @memberof BindingPreviewRequest
+   */
+  dataScopeKind?: DataScope;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof BindingPreviewRequest
+   */
+  dataScopeValues?: Array<string>;
   /**
    *
    * @type {GrantTargetInstitutionID}
@@ -139,6 +158,12 @@ export function BindingPreviewRequestFromJSONTyped(
   }
   return {
     ...json,
+    dataScopeKind:
+      json["data_scope_kind"] == null
+        ? undefined
+        : DataScopeFromJSON(json["data_scope_kind"]),
+    dataScopeValues:
+      json["data_scope_values"] == null ? undefined : json["data_scope_values"],
     institutionId:
       json["institution_id"] == null
         ? undefined
@@ -165,6 +190,8 @@ export function BindingPreviewRequestToJSONTyped(
   }
 
   return {
+    data_scope_kind: DataScopeToJSON(value["dataScopeKind"]),
+    data_scope_values: value["dataScopeValues"],
     institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),

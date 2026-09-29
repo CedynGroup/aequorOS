@@ -20,10 +20,15 @@ from app.services import job_queue
 from app.worker import HANDLERS, WorkerConfigurationError, resolve_job_types
 from tests.api.helpers import ORG_1
 
-#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns. Both
-#: hold an external model credential while they run: ``bi_commentary`` is the BI
-#: surface's job but belongs to THIS lane, because the lane is about the key.
-AI_TYPES = ("icaap_ai_draft", "bi_commentary")
+#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns. Every
+#: one holds an external model credential while it runs: ``bi_commentary`` and
+#: ``bi_nlq_translate`` are BI surfaces' jobs but belong to THIS lane, because the
+#: lane is about the KEY and not about the feature. This tuple is deliberately
+#: written out rather than read from ``JOB_LANES`` — a test that derived it from the
+#: thing it checks would pass for any lane assignment at all, and what it exists to
+#: catch is an AI type landing in the core lane, where the API process's own daemon
+#: thread would claim it.
+AI_TYPES = ("icaap_ai_draft", "bi_commentary", "bi_nlq_translate")
 
 
 def test_the_default_selection_never_includes_the_ai_lane() -> None:

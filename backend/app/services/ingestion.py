@@ -47,6 +47,7 @@ from app.domain.ingestion.contracts import (
     MappingConfig,
 )
 from app.domain.ingestion.enrichment import apply_manual_override
+from app.domain.ingestion.optional_position_fields import normalize_positions
 from app.domain.ingestion.validation import (
     Finding,
     ValidationContext,
@@ -405,6 +406,13 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
 
     batch.status = "translating"
     records = adapter.translate(extraction, mapping)
+    # The ONE seam every source passes through for the optional position
+    # attributes: two closed vocabularies resolved to one spelling, the officer
+    # code trimmed and bounded, the arrears figure parsed exactly. Applied here
+    # rather than in each adapter so an Excel sheet, an API push and a
+    # core-banking extract cannot disagree about what "momo" means, and before
+    # validation so both the rules and persistence see the normalised bag.
+    attribute_problems = normalize_positions(records)
     batch.records_translated = records.record_count
     translate_node = _lineage(
         db,
@@ -440,6 +448,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
         known_products=known_products,
         known_gl_accounts=known_gl_accounts,
         known_positions=known_positions,
+        attribute_problems=attribute_problems,
     )
     outcome = run_validation(
         records,

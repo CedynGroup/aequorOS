@@ -962,6 +962,20 @@ class BiSettings(BaseSettings):
     #: a deployment that enabled only this would otherwise find the tick inert
     #: and the feature silently never running.
     subscriptions_enabled: bool = Field(default=False, alias="BI_SUBSCRIPTIONS_ENABLED")
+    #: Natural-language questions (docs/bi.md §Phase 5). It owns no tick branch —
+    #: a question is enqueued by a reader and by nobody else — so it is absent from
+    #: ``scheduler.any_scheduling_enabled`` for the ``alerts_enabled`` reason above.
+    #:
+    #: It is a SEPARATE switch from ``enabled`` because it is the only BI surface
+    #: that sends a reader's own words to an external vendor, and a deployment must
+    #: be able to run every other BI surface without that. Three further gates sit
+    #: behind it and all ship shut: ``AI_COMMENTARY_ENABLED`` (the deployment AI
+    #: kill-switch), an approved configuration for ``bi_nlq`` in
+    #: ``app/services/ai/approved_configurations.json`` (empty), and the tenant's own
+    #: consented ``enabled_features``. It also needs the ``ai``-lane worker
+    #: (``docker-compose.ai.prod.yml``) DEPLOYED before it is flipped, for the
+    #: shared-``jobs``-table reason stated at the top of this class.
+    nlq_enabled: bool = Field(default=False, alias="BI_NLQ_ENABLED")
     #: The largest artifact a scheduled delivery will attach. Above it the
     #: recipient is sent a sign-in link instead: an aggregated pack they are
     #: entitled to must not be dropped merely because the relay would refuse it,

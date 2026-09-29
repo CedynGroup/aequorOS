@@ -5,6 +5,25 @@
 # endpoints. Endpoint + field names are DEFAULTS overridable per bank via
 # connection catalog_overrides — the IRIS JSON schema is installation-specific.
 # A domain stays supported:false until its IRIS field schema is confirmed.
+#
+# A field name may only be ADDED here where the identifier is already in the
+# repository and a reviewer can check it without a Temenos portal account
+# (docs/data_engine.md §9 documents table names only and forbids inventing
+# more). `coCode: branch_id` on the money-market and securities entries (added
+# 2026-09-28) qualifies three ways: it is already each entry's own selection
+# key, the lending / deposit / current-account entries already map it to
+# `branch_id`, and this adapter's IRIS fixtures for all three domains carry it.
+# It lands `attributes.branch_id`, matched against
+# `business_units.business_unit_id` (BUSINESS_UNITS maps companyCode to it) —
+# the key the BI branch dimension resolves against. An endpoint that omits the
+# field leaves it unpopulated; it is optional, never required.
+#
+# The three domains left supported:false are argued per domain at the foot of
+# ofs_catalog.yaml (the OFS file is the reasoned original; this one is derived).
+# Every reason is destination-level rather than field-level, so none of them
+# closes by writing a field name here either. The loader refuses a supported
+# reference entry whose dataset_key is unregistered or whose register's required
+# fields go unpopulated, so LIMITS cannot be flipped on quietly.
 
 GL_BALANCES:
   supported: true
@@ -213,8 +232,10 @@ POSITIONS_MM_PLACEMENTS:
     valueDate: origination_date
     maturityDate: contractual_maturity
     interestRate: interest_rate
+    coCode: branch_id
   attribute_keys:
   - balance_ghs
+  - branch_id
   lcy_fields:
     balance_ghs: lcyPrincipal
   constants:
@@ -234,8 +255,10 @@ POSITIONS_MM_BORROWINGS:
     valueDate: origination_date
     maturityDate: contractual_maturity
     interestRate: interest_rate
+    coCode: branch_id
   attribute_keys:
   - balance_ghs
+  - branch_id
   lcy_fields:
     balance_ghs: lcyPrincipal
   constants:
@@ -308,8 +331,10 @@ SECURITIES_HOLDINGS:
     nominal: balance
     maturityDate: contractual_maturity
     couponRate: interest_rate
+    coCode: branch_id
   attribute_keys:
   - balance_ghs
+  - branch_id
   lcy_fields:
     balance_ghs: lcyMarketValue
   constants:

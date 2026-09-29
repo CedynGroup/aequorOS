@@ -21,6 +21,7 @@ from app.models.bi import (
     BiDimGlAccount,
     BiDimProduct,
     BiFactEngineMetric,
+    BiFactGlBranchMonthly,
     BiFactGlMonthly,
     BiFactLoanEvent,
     BiFactPositionDaily,
@@ -29,6 +30,17 @@ from app.models.bi import (
     BiQueryLog,
     BiReconciliationResult,
 )
+
+# ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
+# without it ``ai_commentary_drafts`` is absent from ``Base.metadata`` for any
+# caller that imports ``app.models`` rather than the whole app, so
+# ``Base.metadata.create_all`` silently builds a schema without it. That is the
+# AGENTS.md hazard — anything built with ``create_all`` runs no migration, so it
+# must contain what a migration would have written — and it was invisible to the
+# hermetic pytest suite, which imports the app and therefore registers the model
+# before ``create_all`` runs. It surfaced as ``POST /bi/ask`` answering 500 with
+# ``no such table: ai_commentary_drafts`` on the Playwright schema.
+from app.models.bi_commentary import AiCommentaryDraft
 from app.models.bi_content import (
     BiDashboard,
     BiDashboardShare,
@@ -243,6 +255,7 @@ __all__ = [
     "BiAggPositionDaily",
     "BiAlert",
     "BiAlertEvent",
+    "AiCommentaryDraft",
     "BiDashboard",
     "BiDashboardShare",
     "BiDashboardVersion",
@@ -252,6 +265,7 @@ __all__ = [
     "BiDimGlAccount",
     "BiDimProduct",
     "BiFactEngineMetric",
+    "BiFactGlBranchMonthly",
     "BiFactGlMonthly",
     "BiFactLoanEvent",
     "BiFactPositionDaily",

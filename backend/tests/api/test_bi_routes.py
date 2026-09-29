@@ -89,6 +89,9 @@ SIBLING_BASE = f"/api/v1/banks/{SIBLING_BANK_ID}/bi"
 
 #: Every route, as (method, path suffix, minimal valid body). One list so a new
 #: route cannot be added without deciding what it answers in each case below.
+#: A question id no row will ever carry, for the sweeps that assert a refusal.
+_ASK_JOB_ID = "00000000-0000-4000-8000-0000000000d4"
+
 ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ("GET", "/catalogue", None),
     ("GET", "/trust?as_of=2026-08-31", None),
@@ -148,6 +151,20 @@ ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     # ``tests/api/test_bi_commentary_routes.py``.
     ("POST", "/commentary", {"as_of": "2026-08-31"}),
     ("GET", "/commentary?as_of=2026-08-31", None),
+    # P5-D: natural-language questions. They join the sweeps for the commentary
+    # reason and one more of their own — the words a reader types are the input, so
+    # the deployment flag's 404, the cross-tenant 404, the impersonated operator and
+    # the zero-binding human all have to answer before the question is even read.
+    # ``{job_id}`` is a random UUID on purpose: every sweep below asserts a refusal,
+    # and a refusal that depended on the row existing would prove nothing. Their own
+    # behaviour is tested in ``tests/api/test_bi_ask_routes.py``.
+    ("POST", "/ask", {"question": "total loans by branch", "as_of": "2026-08-31"}),
+    ("GET", f"/ask/{_ASK_JOB_ID}", None),
+    (
+        "POST",
+        f"/ask/{_ASK_JOB_ID}/run",
+        {"query": {"measures": ["loans.balance_rc"], "time": {"as_of": "2026-08-31"}}},
+    ),
 )
 
 BALANCE_BY_BRANCH_QUERY: dict[str, Any] = {
@@ -490,6 +507,11 @@ def mart(db_session: Session) -> Bank:
 @pytest.fixture
 def bi_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BI_ENABLED", "1")
+    # Every surface these sweeps cover has to be ON, or a sweep silently stops
+    # exercising the route it names: the natural-language routes answer 409 for the
+    # flag before they reach authority, so with it off the zero-binding sweep below
+    # would prove nothing about them.
+    monkeypatch.setenv("BI_NLQ_ENABLED", "1")
     get_settings.cache_clear()
 
 
@@ -710,6 +732,13 @@ EXPECTED_UNSAFE_BI_ROUTES: frozenset[str] = frozenset(
         # the only BI write that can make a bank's figures leave the platform to a
         # vendor, so an unguarded one would do it for a principal nobody checked.
         "/api/v1/banks/{bank_id}/bi/commentary",
+        # Natural-language questions, in the unsafe set for the commentary reason and
+        # one more: ``/ask`` sends a READER'S OWN WORDS to a vendor, and ``/ask/{id}/run``
+        # executes a query a model wrote. Both carry ``require_bi_read`` (confirmed
+        # below), and ``/run`` additionally refuses anything but the query the platform
+        # proposed and re-authorizes it through ``authorize_query``.
+        "/api/v1/banks/{bank_id}/bi/ask",
+        "/api/v1/banks/{bank_id}/bi/ask/{job_id}/run",
     }
 )
 
@@ -924,6 +953,22 @@ def test_no_route_serves_a_principal_holding_no_binding(  # noqa: PLR0913 - one 
         assert "denied_members" not in details
         # No commentary of any authorship reached this reader.
         assert "paragraphs" not in response.text
+        return
+    if suffix == "/ask":
+        # A reader whose grants cover no figure has no question to ask, and the
+        # refusal names no member — it cannot, because there is none to name.
+        assert response.status_code == 403, response.text
+        details = response.json()["error"]["details"]
+        assert details["error_code"] == "bi_ask_no_figures_available"
+        assert "denied_members" not in details
+        assert "question" not in details
+        return
+    if suffix.startswith("/ask/"):
+        # Both are keyed by a question this reader would have to OWN, and ownership
+        # is scoped to the principal, so a reader holding nothing can never name one.
+        # 404 is the refusal, and it says nothing about whether the id exists.
+        assert response.status_code == 404, response.text
+        assert response.json()["error"]["message"] == "Question not found."
         return
     assert response.status_code == 403, response.text
     details = response.json()["error"]["details"]
@@ -1706,3 +1751,61 @@ def test_every_storable_check_has_production_copy() -> None:
         if any(token.lower() in label.lower() for token in forbidden)
     ]
     assert leaks == []
+
+
+def test_the_officer_widget_is_the_only_credit_figure_lost_without_the_officer_sentence(
+    db_client: TestClient, mart: Bank, bi_on: None, db_session: Session
+) -> None:
+    """Phase 5 put a ``restricted`` member on a CERTIFIED pack; this is the cost.
+
+    ``position.officer_code`` names one member of staff, so the league table needs an
+    explicit restricted-sensitivity sentence. The risk that decision carries is that
+    a widget nobody is cleared for takes the whole credit dashboard down with it, and
+    it does not: authorization is per WIDGET, so the officer tile comes back carrying
+    only its geometry while every other figure on the dashboard is served. Asserted
+    by name because "the rest of the dashboard still works" is the property, not an
+    implementation detail.
+    """
+    authv = grant_only(db_session, AGGREGATE_ONLY)
+    response = db_client.get(
+        f"{BASE}/packs/credit",
+        params={"as_of": AS_OF.isoformat()},
+        headers=headers(authorization_version=authv),
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    access = {widget["id"]: widget["access"] for widget in payload["widgets"]}
+    assert access["officer_league_table"] == "restricted"
+    assert access["portfolio_by_product"] == "granted"
+    assert access["book_by_channel"] == "granted"
+    assert payload["restricted_widgets"] == 1
+    assert payload["restricted_widgets"] < payload["readable_widgets"]
+    # The refusal carries geometry and nothing else, and names no officer.
+    officer = next(w for w in payload["widgets"] if w["id"] == "officer_league_table")
+    assert officer["title"] is None and officer["query"] is None
+    assert "officer" not in response.text.lower().replace("officer_league_table", "")
+
+
+def test_the_branch_profit_and_loss_widget_reads_and_names_its_register(
+    db_client: TestClient, mart: Bank, bi_on: None, db_session: Session
+) -> None:
+    """P5-B's mart reaches a certified dashboard.
+
+    The widget used to say the ledger marts carry no branch. It now reads
+    ``gl.branch_ytd_rc`` — all-RISK, so an aggregated risk sentence is enough — and
+    names ``gl_segment_balances``, so a bank that has pushed no branch breakdown sees
+    the dataset it needs instead of an empty table that reads as a flat ledger.
+    """
+    authv = grant_only(db_session, AGGREGATE_ONLY)
+    response = db_client.get(
+        f"{BASE}/packs/finance",
+        params={"as_of": AS_OF.isoformat()},
+        headers=headers(authorization_version=authv),
+    )
+    assert response.status_code == 200, response.text
+    widget = next(w for w in response.json()["widgets"] if w["id"] == "profit_and_loss_by_branch")
+    assert widget["access"] == "granted"
+    assert widget["query"] is not None
+    assert "gl.branch_ytd_rc" in widget["query"]["measures"]
+    assert widget["needs_data"] == "gl_segment_balances"
+    assert widget["pending_capability"] is None

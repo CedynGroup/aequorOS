@@ -25,6 +25,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.domain.ingestion.contracts import CanonicalRecords
+from app.domain.ingestion.optional_position_fields import (
+    ARREARS_POSITION_TYPES,
+    AttributeProblem,
+    stated_arrears_amount,
+)
 
 Severity = Literal["INFO", "WARNING", "ERROR", "BLOCKER"]
 SEVERITIES: tuple[Severity, ...] = ("INFO", "WARNING", "ERROR", "BLOCKER")
@@ -91,6 +96,19 @@ def default_validation_config() -> ValidationConfig:
             # LMTD classifications on day one, and a wall of warnings would
             # bury real ones. Institutions preparing LMT filings raise it.
             RuleConfig(name="lmtd_classification_coverage", severity="INFO"),
+            # WARNING, unlike lmtd_classification_coverage, because this rule
+            # never fires on ABSENCE: it fires only when a source actively sent
+            # an optional attribute value the platform could not use, which is
+            # an integration defect somebody has to fix. The record still
+            # aggregates (``warning`` is an included validation status) — the
+            # unusable value is what was dropped, not the position.
+            RuleConfig(name="optional_position_attributes", severity="WARNING"),
+            # INFO by default: every finding here is a READABLE value that sits
+            # oddly beside the position it was sent on. It may be a stale
+            # extract, a unit error or a perfectly good edge case, so the
+            # default states it without touching the record's status. A bank
+            # reporting on arrears or dormancy raises it.
+            RuleConfig(name="position_attribute_consistency", severity="INFO"),
         ]
     )
 
@@ -108,6 +126,12 @@ class ValidationContext:
     known_products: frozenset[str] = frozenset()
     known_gl_accounts: frozenset[str] = frozenset()
     known_positions: frozenset[str] = frozenset()
+    # Optional-attribute values the normalisation pass could not use, recorded
+    # by ``optional_position_fields.normalize_positions`` before validation
+    # runs. They arrive as context rather than as ``extra_findings`` so their
+    # severity stays per-institution configuration like every other rule, and
+    # so no rule has to mutate the records it is reporting on.
+    attribute_problems: tuple[AttributeProblem, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -602,6 +626,96 @@ def _rule_lmtd_classification_coverage(
     return findings
 
 
+def _rule_optional_position_attributes(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Report the optional attribute values normalisation could not use.
+
+    The four Phase 5 fields (``officer_id``, ``channel``, ``account_status``,
+    ``arrears_amount``) are normalised before validation; anything that could not
+    be resolved to the documented vocabulary was DROPPED rather than stored as
+    free text, and each drop is reported here with the key, the value the source
+    sent and what is accepted. The position itself still lands — an optional
+    descriptive field must never delete a facility from the balance sheet.
+    """
+    _ = records, outcome
+    return [
+        Finding(
+            rule=rule.name,
+            category="STRUCTURAL",
+            severity=rule.severity,
+            entity_type="position",
+            source_reference=problem.source_reference,
+            source_locator=problem.source_locator,
+            detail=problem.detail,
+        )
+        for problem in context.attribute_problems
+    ]
+
+
+def _rule_position_attribute_consistency(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Readable optional values that sit oddly beside the position carrying them.
+
+    Three checks, each a data-quality question rather than a refusal:
+
+    * ``arrears_amount`` above ``balance`` — normal for a fully overdue facility
+      with capitalised interest, and the fingerprint of a unit error (arrears in
+      minor units, or the whole balance copied into the arrears column).
+    * ``arrears_amount`` on a position with no repayment schedule — nothing can
+      be overdue on a deposit or a security holding.
+    * ``account_status`` of ``closed`` on a non-zero balance — either a stale
+      extract or a mis-stated status, and it would otherwise carry a closed
+      account's money into the balance sheet.
+
+    Nothing here changes a value: the figures stay exactly as the bank sent them.
+    """
+    _ = context, outcome
+    findings: list[Finding] = []
+    for position in records.positions:
+        arrears = stated_arrears_amount(position)
+        problems: list[str] = []
+        if arrears is not None:
+            if position.position_type not in ARREARS_POSITION_TYPES:
+                problems.append(
+                    f"arrears_amount {arrears} is stated on a {position.position_type} "
+                    f"position, which has no repayment schedule for anything to fall "
+                    f"due on; it is stored but not read as arrears."
+                )
+            if position.balance > 0 and arrears > position.balance:
+                problems.append(
+                    f"arrears_amount {arrears} exceeds the outstanding balance "
+                    f"{position.balance}; check the unit and that the column is the "
+                    f"overdue portion rather than the whole balance."
+                )
+        if position.attributes.get("account_status") == "closed" and position.balance != 0:
+            problems.append(
+                f"account_status is 'closed' but the balance is {position.balance}; "
+                f"a closed account carrying a balance is either a stale extract or a "
+                f"mis-stated status, and the balance is reported as it was sent."
+            )
+        if problems:
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="BUSINESS_RULES",
+                    severity=rule.severity,
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=" ".join(problems),
+                )
+            )
+    return findings
+
+
 def _rule_loan_event_integrity(
     records: CanonicalRecords,
     rule: RuleConfig,
@@ -674,6 +788,8 @@ _RULES = {
     "gl_subledger_reconciliation": _rule_gl_subledger_reconciliation,
     "unusual_balance_change": _rule_unusual_balance_change,
     "lmtd_classification_coverage": _rule_lmtd_classification_coverage,
+    "optional_position_attributes": _rule_optional_position_attributes,
+    "position_attribute_consistency": _rule_position_attribute_consistency,
 }
 
 RULE_NAMES = tuple(sorted(_RULES))

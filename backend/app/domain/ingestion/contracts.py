@@ -296,8 +296,13 @@ class PositionData(BaseModel):
 #: their shape but have never been enforced, and tenants have rows stored under
 #: them today, so switching those on would refuse data that currently lands
 #: (H-027). These two are new in this release and have no stored rows anywhere,
-#: so enforcing them rejects nothing that already exists.
-ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset({"performance_targets", "business_units"})
+#: so enforcing them rejects nothing that already exists. ``gl_segment_balances``
+#: (P5-B) joins them on the same argument: it is new in this release, no tenant has
+#: a row under it, and an unenforced row there would become a silent orphan in the
+#: branch mart rather than a reported translation failure at the boundary.
+ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset(
+    {"performance_targets", "business_units", "gl_segment_balances"}
+)
 
 
 class ReferenceRowData(BaseModel):

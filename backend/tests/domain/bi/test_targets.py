@@ -456,18 +456,26 @@ def test_the_version_vocabulary_is_the_registers_own() -> None:
 def test_the_member_count_is_what_the_two_decisions_imply(cat: Catalogue) -> None:
     """The arithmetic of the payload, stated so a change to it is deliberate.
 
-    129 targetable bases × 2 register versions (D-072) × three level variants,
+    133 targetable bases × 2 register versions (D-072) × three level variants,
     plus one ``variance_pct`` each now that D-071 leaves no base without one, plus
     ``attainment_pct`` wherever higher is better (D-062).
+
+    133 rather than Phase 4's 129 because Phase 5 added four comparable bases —
+    ``loans.arrears_amount_rc`` / ``loans.arrears_share_pct`` (both
+    ``lower_better``, so neither is attainable) and ``gl.branch_ytd_rc`` /
+    ``gl.branch_movement_rc`` (both ``neutral``, so both are). ``is_targetable``
+    reads what each measure DECLARES rather than a list of ids, which is why they
+    arrived targetable without anyone editing that function — and a branch P&L
+    budget is exactly the figure a bank states a target for.
     """
     targetable = [m for m in _bases(cat) if is_targetable(m)]
-    assert len(targetable) == 129
+    assert len(targetable) == 133
     attainable = [m for m in targetable if m.favourable_direction not in NO_ATTAINMENT_DIRECTIONS]
-    assert len(attainable) == 83
+    assert len(attainable) == 85
     expected = len(TARGET_VERSIONS) * (3 * len(targetable) + len(targetable) + len(attainable))
-    assert expected == 1198
+    assert expected == 1234
     assert len(cat.target_measures()) == expected
-    assert len(cat.measures()) == len(_bases(cat)) + expected == 1416
+    assert len(cat.measures()) == len(_bases(cat)) + expected == 1456
 
 
 # --- D-064: one fact table, safe division, NULL not zero ------------------------------------

@@ -64,92 +64,90 @@ import {
 /**
  *
  * @export
- * @interface BiPackWidgetReadQuery
+ * @interface BiAskReadQuery
  */
-export interface BiPackWidgetReadQuery {
+export interface BiAskReadQuery {
   /**
    *
    * @type {Array<string>}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   dimensions?: Array<string>;
   /**
    *
    * @type {Array<BiFilter>}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   filters?: Array<BiFilter>;
   /**
    *
    * @type {Limit}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   limit?: Limit;
   /**
    *
    * @type {Array<string>}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   measures: Array<string>;
   /**
    *
    * @type {number}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   offset?: number;
   /**
    *
    * @type {BiPackQueryPivot}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   pivot?: BiPackQueryPivot;
   /**
    *
    * @type {Array<BiSort>}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   sort?: Array<BiSort>;
   /**
    *
    * @type {boolean}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   subtotals?: boolean;
   /**
    *
    * @type {BiTime}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   time: BiTime;
   /**
    *
    * @type {BiPackQueryTopN}
-   * @memberof BiPackWidgetReadQuery
+   * @memberof BiAskReadQuery
    */
   topN?: BiPackQueryTopN;
 }
 
 /**
- * Check if a given object implements the BiPackWidgetReadQuery interface.
+ * Check if a given object implements the BiAskReadQuery interface.
  */
-export function instanceOfBiPackWidgetReadQuery(
+export function instanceOfBiAskReadQuery(
   value: object,
-): value is BiPackWidgetReadQuery {
+): value is BiAskReadQuery {
   if (!("measures" in value) || value["measures"] === undefined) return false;
   if (!("time" in value) || value["time"] === undefined) return false;
   return true;
 }
 
-export function BiPackWidgetReadQueryFromJSON(
-  json: any,
-): BiPackWidgetReadQuery {
-  return BiPackWidgetReadQueryFromJSONTyped(json, false);
+export function BiAskReadQueryFromJSON(json: any): BiAskReadQuery {
+  return BiAskReadQueryFromJSONTyped(json, false);
 }
 
-export function BiPackWidgetReadQueryFromJSONTyped(
+export function BiAskReadQueryFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): BiPackWidgetReadQuery {
+): BiAskReadQuery {
   if (json == null) {
     return json;
   }
@@ -179,12 +177,12 @@ export function BiPackWidgetReadQueryFromJSONTyped(
   };
 }
 
-export function BiPackWidgetReadQueryToJSON(json: any): BiPackWidgetReadQuery {
-  return BiPackWidgetReadQueryToJSONTyped(json, false);
+export function BiAskReadQueryToJSON(json: any): BiAskReadQuery {
+  return BiAskReadQueryToJSONTyped(json, false);
 }
 
-export function BiPackWidgetReadQueryToJSONTyped(
-  value?: BiPackWidgetReadQuery | null,
+export function BiAskReadQueryToJSONTyped(
+  value?: BiAskReadQuery | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

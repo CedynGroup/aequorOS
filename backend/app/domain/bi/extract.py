@@ -410,6 +410,10 @@ class PositionFactRow:
     encumbered: bool | None
     hqla_level: str | None
     branch_code: str | None
+    officer_id: str | None
+    channel: str | None
+    account_status: str | None
+    arrears_amount_rc: Decimal | None
     product_code: str | None
     product_family: str | None
     exposure_category: str | None
@@ -704,6 +708,17 @@ def position_row(  # noqa: PLR0913 - the contract's signature: one argument per 
         encumbered=snapshot.encumbered,
         hqla_level=_text(attributes.get("hqla_level")),
         branch_code=_text(attributes.get("branch_id")),
+        officer_id=_text(attributes.get("officer_id")),
+        channel=_text(attributes.get("channel")),
+        account_status=_text(attributes.get("account_status")),
+        # Reporting-currency arrears under the DERIVATION rule, the same rule
+        # ``balance_rc`` above uses: the bank supplies a converted BALANCE
+        # (``attributes.balance_ghs``) but there is no converted-arrears key, so a
+        # foreign-currency facility's arrears stay NULL and ``fx_unconverted``
+        # already says why. Deriving them from the implied rate
+        # (balance_rc / balance_native) is deliberately refused: an inferred money
+        # figure that is nearly right is worse than one that is absent and labelled.
+        arrears_amount_rc=(_dec_or_none(attributes.get("arrears_amount")) if in_base else None),
         product_code=product.product_code if product is not None else None,
         product_family=product_family(
             position_type,
@@ -878,6 +893,226 @@ def gl_monthly_row(  # noqa: PLR0913 - one keyword per input the month depends o
             if rule is not None
             else None
         ),
+    )
+
+
+# --- monthly GL by branch (P5-B) ----------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class GlBranchAllocation:
+    """One row of the bank's ``gl_segment_balances`` register, parsed.
+
+    ``currency`` follows the institution mart's convention: ``''`` for the
+    reporting currency, because an unstated ledger currency IS the reporting
+    currency (BSD7's Domestic rule). ``ytd`` is the branch's fiscal-year-to-date
+    balance on the same convention and sign as the account's own institution
+    balance — the register is a breakdown of a figure the bank already sends, not
+    a second opinion about it.
+    """
+
+    gl_account_code: str
+    branch_id: str
+    currency: str
+    ytd: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class GlBranchMonthlyFactRow:
+    """One ``bi_fact_gl_branch_monthly`` row: one P&L account, one branch, one month."""
+
+    organization_id: str
+    bank_id: str
+    month_end: date
+    gl_account_code: str
+    branch_code: str
+    currency: str
+    calendar_month: date
+    account_class: str
+    ytd_rc: Decimal
+    prior_ytd_rc: Decimal | None
+    movement_rc: Decimal | None
+    missing_prior: bool
+    balance_basis: str
+    pl_line: str | None
+    pl_sign: int | None
+    register_as_of: date
+
+
+@dataclass(frozen=True, slots=True)
+class GlBranchMonthlyResult:
+    """The month's branch rows plus everything the build must REPORT rather than absorb."""
+
+    rows: tuple[GlBranchMonthlyFactRow, ...]
+    #: Real branch ids the register named, so ``bi_dim_branch`` carries them even
+    #: when no position mentions the branch. Excludes the residual key, which the
+    #: builder adds to the dimension itself with its own label.
+    branch_codes: frozenset[str]
+    #: ``(account_code, currency)`` the register named that the institution's P&L
+    #: ledger does not carry this month. Excluded from the mart and REPORTED: the
+    #: ledger is the authority, so a branch figure with no institution row cannot
+    #: be reconciled to anything, and adding it would make the branch total
+    #: exceed the ledger. Never silently dropped.
+    orphans: tuple[tuple[str, str], ...]
+    #: Accounts where the register allocated MORE of the account than the ledger
+    #: holds (``|Σ reported| > |institution ytd|``), which makes the residual run
+    #: the other way. The residual is still written — the identity is the one
+    #: thing that may not break — and the condition is reported.
+    over_allocated: tuple[str, ...]
+
+
+def gl_branch_monthly_rows(
+    institution: Sequence[GlMonthlyFactRow],
+    *,
+    current: Sequence[GlBranchAllocation],
+    prior: Sequence[GlBranchAllocation],
+    residual_branch_id: str,
+    register_as_of: date,
+) -> GlBranchMonthlyResult:
+    """The branch breakdown of one month's P&L ledger, summing to it exactly.
+
+    ``institution`` is the month's :func:`gl_monthly_row` output — the authority
+    for which accounts exist, what each is worth, which BSD7 line it feeds and on
+    what basis. ``current`` / ``prior`` are the bank's register rows for this
+    month and for the month whose end the institution row's ``prior_ytd_rc``
+    describes; a branch with no ``prior`` reading gets ``movement_rc`` NULL, never
+    a movement computed against an assumed zero — and so does the residual when the
+    prior register did not cover the account at all, because "nothing was allocated
+    then" and "no breakdown was sent then" are not the same statement.
+
+    Per (account, currency) the result carries one row per reported branch plus
+    one on ``residual_branch_id`` holding ``institution_ytd − Σ reported_ytd``
+    (omitted only when it is zero at both readings, where it would carry nothing),
+    so ``Σ ytd_rc`` over branches IS the institution's ``ytd_rc``, exactly, however
+    partial the allocation. The residual's prior is
+    ``institution_prior − Σ prior_ytd over THIS month's branches``, which is what
+    makes the same identity hold for ``movement_rc`` whenever no row in the block
+    is ``missing_prior``: a branch that left since the prior month has its prior
+    balance absorbed by the residual rather than stranded, and a branch that
+    joined has no movement, so the block does not claim one.
+
+    An account the register names that the ledger has no P&L row for this month is
+    an orphan: reported in :attr:`GlBranchMonthlyResult.orphans`, not written.
+    An account the register does not mention at all is not built — it gets no
+    rows, so a reader sees which accounts have a breakdown and which do not,
+    rather than a table of 100 %-unallocated lines that looks like an answer.
+    """
+    by_key: dict[tuple[str, str], GlMonthlyFactRow] = {
+        (row.gl_account_code, row.currency): row for row in institution
+    }
+    reported: dict[tuple[str, str], dict[str, Decimal]] = {}
+    for item in current:
+        key = (item.gl_account_code, item.currency)
+        bucket = reported.setdefault(key, {})
+        # A register that lists one (account, branch, currency) twice is stating
+        # two parts of the same figure; summing is the only reading that keeps the
+        # identity, and the whole-register-per-push grain makes it a bank's choice
+        # of granularity rather than a conflict.
+        bucket[item.branch_id] = bucket.get(item.branch_id, _ZERO) + item.ytd
+    prior_by_key: dict[tuple[str, str], dict[str, Decimal]] = {}
+    for item in prior:
+        key = (item.gl_account_code, item.currency)
+        bucket = prior_by_key.setdefault(key, {})
+        bucket[item.branch_id] = bucket.get(item.branch_id, _ZERO) + item.ytd
+
+    rows: list[GlBranchMonthlyFactRow] = []
+    branch_codes: set[str] = set()
+    orphans: list[tuple[str, str]] = []
+    over_allocated: list[str] = []
+
+    for key in sorted(reported):
+        parent = by_key.get(key)
+        if parent is None:
+            orphans.append(key)
+            continue
+        allocations = reported[key]
+        priors = prior_by_key.get(key, {})
+        total_reported = sum(allocations.values(), _ZERO)
+        if abs(total_reported) > abs(parent.ytd_rc):
+            over_allocated.append(parent.gl_account_code)
+        for branch_id in sorted(allocations):
+            branch_codes.add(branch_id)
+            ytd = allocations[branch_id]
+            branch_prior = priors.get(branch_id)
+            rows.append(
+                _gl_branch_row(
+                    parent,
+                    branch_code=branch_id,
+                    ytd=ytd,
+                    prior=branch_prior,
+                    register_as_of=register_as_of,
+                )
+            )
+        # The remainder. Its prior is the institution's prior less the prior
+        # readings of THIS month's branches, so a departed branch's prior lands
+        # here instead of breaking the movement identity.
+        # The remainder's prior is knowable only if the prior register covered this
+        # (account, currency) at all. Without it, "nothing was allocated then" and
+        # "the breakdown was not sent then" are indistinguishable, and treating the
+        # second as the first would report the month a bank STARTED sending the
+        # dataset as a large movement out of the unallocated line — an artefact of
+        # the feed, presented as a business figure.
+        residual_prior = (
+            parent.prior_ytd_rc
+            - sum((priors[branch] for branch in allocations if branch in priors), _ZERO)
+            if parent.prior_ytd_rc is not None and key in prior_by_key
+            else None
+        )
+        residual_ytd = parent.ytd_rc - total_reported
+        # A residual that is zero at BOTH readings carries nothing: the account is
+        # fully allocated, Σ is already the institution's figure, and the row would
+        # only put an empty "unallocated" bar on every chart. It is kept when only
+        # one reading is zero, because then it carries a real movement.
+        if residual_ytd or residual_prior:
+            rows.append(
+                _gl_branch_row(
+                    parent,
+                    branch_code=residual_branch_id,
+                    ytd=residual_ytd,
+                    prior=residual_prior,
+                    register_as_of=register_as_of,
+                )
+            )
+    return GlBranchMonthlyResult(
+        rows=tuple(rows),
+        branch_codes=frozenset(branch_codes),
+        orphans=tuple(orphans),
+        over_allocated=tuple(sorted(set(over_allocated))),
+    )
+
+
+def _gl_branch_row(
+    parent: GlMonthlyFactRow,
+    *,
+    branch_code: str,
+    ytd: Decimal,
+    prior: Decimal | None,
+    register_as_of: date,
+) -> GlBranchMonthlyFactRow:
+    """One branch row, inheriting the account's mapping from the institution row.
+
+    ``pl_line`` / ``pl_sign`` / ``balance_basis`` / ``account_class`` are NOT
+    re-resolved per branch: the bank makes one statement about an account, so a
+    branch cannot feed a different BSD7 line or carry a different sign than the
+    account the return files.
+    """
+    return GlBranchMonthlyFactRow(
+        organization_id=parent.organization_id,
+        bank_id=parent.bank_id,
+        month_end=parent.month_end,
+        gl_account_code=parent.gl_account_code,
+        branch_code=branch_code,
+        currency=parent.currency,
+        calendar_month=parent.calendar_month,
+        account_class=parent.account_class,
+        ytd_rc=ytd,
+        prior_ytd_rc=prior,
+        movement_rc=None if prior is None else ytd - prior,
+        missing_prior=prior is None,
+        balance_basis=parent.balance_basis,
+        pl_line=parent.pl_line,
+        pl_sign=parent.pl_sign,
+        register_as_of=register_as_of,
     )
 
 

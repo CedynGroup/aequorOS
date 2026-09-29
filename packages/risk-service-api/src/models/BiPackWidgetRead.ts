@@ -32,6 +32,13 @@ import {
   PendingCapabilityToJSON,
   PendingCapabilityToJSONTyped,
 } from "./PendingCapability";
+import type { BiAskReadQuery } from "./BiAskReadQuery";
+import {
+  BiAskReadQueryFromJSON,
+  BiAskReadQueryFromJSONTyped,
+  BiAskReadQueryToJSON,
+  BiAskReadQueryToJSONTyped,
+} from "./BiAskReadQuery";
 import type { BiPackWidgetReadDisplay } from "./BiPackWidgetReadDisplay";
 import {
   BiPackWidgetReadDisplayFromJSON,
@@ -60,13 +67,6 @@ import {
   TitleToJSON,
   TitleToJSONTyped,
 } from "./Title";
-import type { BiPackWidgetReadQuery } from "./BiPackWidgetReadQuery";
-import {
-  BiPackWidgetReadQueryFromJSON,
-  BiPackWidgetReadQueryFromJSONTyped,
-  BiPackWidgetReadQueryToJSON,
-  BiPackWidgetReadQueryToJSONTyped,
-} from "./BiPackWidgetReadQuery";
 import type { Caption } from "./Caption";
 import {
   CaptionFromJSON,
@@ -145,10 +145,10 @@ export interface BiPackWidgetRead {
   pendingCapability?: PendingCapability;
   /**
    *
-   * @type {BiPackWidgetReadQuery}
+   * @type {BiAskReadQuery}
    * @memberof BiPackWidgetRead
    */
-  query?: BiPackWidgetReadQuery;
+  query?: BiAskReadQuery;
   /**
    *
    * @type {Title}
@@ -212,9 +212,7 @@ export function BiPackWidgetReadFromJSONTyped(
         ? undefined
         : PendingCapabilityFromJSON(json["pending_capability"]),
     query:
-      json["query"] == null
-        ? undefined
-        : BiPackWidgetReadQueryFromJSON(json["query"]),
+      json["query"] == null ? undefined : BiAskReadQueryFromJSON(json["query"]),
     title: json["title"] == null ? undefined : TitleFromJSON(json["title"]),
   };
 }
@@ -241,7 +239,7 @@ export function BiPackWidgetReadToJSONTyped(
     needs_data: NeedsData1ToJSON(value["needsData"]),
     panel: PanelToJSON(value["panel"]),
     pending_capability: PendingCapabilityToJSON(value["pendingCapability"]),
-    query: BiPackWidgetReadQueryToJSON(value["query"]),
+    query: BiAskReadQueryToJSON(value["query"]),
     title: TitleToJSON(value["title"]),
   };
 }

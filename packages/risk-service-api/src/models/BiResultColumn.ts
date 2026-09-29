@@ -44,7 +44,7 @@ export interface BiResultColumn {
    * @type {string}
    * @memberof BiResultColumn
    */
-  format: string;
+  format: BiResultColumnFormatEnum;
   /**
    *
    * @type {string}
@@ -82,6 +82,24 @@ export interface BiResultColumn {
    */
   role?: Role;
 }
+
+/**
+ * @export
+ */
+export const BiResultColumnFormatEnum = {
+  Amount: "amount",
+  Pct: "pct",
+  Fraction: "fraction",
+  Index: "index",
+  DurationYears: "duration_years",
+  Count: "count",
+  Text: "text",
+  Date: "date",
+  Flag: "flag",
+  Int: "int",
+} as const;
+export type BiResultColumnFormatEnum =
+  (typeof BiResultColumnFormatEnum)[keyof typeof BiResultColumnFormatEnum];
 
 /**
  * @export

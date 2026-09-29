@@ -33,6 +33,7 @@ from app.services import pipeline
 from app.services.bi import reconciliation
 from app.services.bi.reconciliation import (
     AMBER,
+    ARREARS_COMPLETENESS,
     DPD_COMPLETENESS,
     GREEN,
     GREY,
@@ -465,3 +466,209 @@ def test_r10_is_never_softened_by_a_silent_exposure_limb(db_session: Session) ->
     unconverted = _results(db_session, MID_MONTH)["R6"]
     assert unconverted.status == AMBER
     assert unconverted.detail["by_currency"] == {"USD": 2}
+
+
+# --- R12 arrears completeness (P5-A) ----------------------------------------------------------
+
+
+def _r12(db: Session, as_of: date) -> CheckResult:
+    """R12 over the built slice, from the check itself — and proven to be what the
+    build persisted, so the status a reader sees is the one measured here."""
+    result = reconciliation.check_r12_arrears_completeness(db, ORG_1, SAMPLE_BANK_ID, as_of)
+    assert _results(db, as_of)[ARREARS_COMPLETENESS].status == result.status
+    return result
+
+
+def _loan_with_arrears(
+    db: Session,
+    reference: str,
+    *,
+    arrears: str | None,
+    balance: str = "1000000",
+    currency: str = "GHS",
+) -> None:
+    """One accepted LOAN at ``MID_MONTH``, with or without a stated arrears amount.
+
+    The value goes in verbatim as the exact decimal STRING ingestion normalises it
+    to, so the mart column is filled by the same path a real push fills it by.
+    """
+    common = new_batch(db, MID_MONTH)
+    extra = {"arrears_amount": arrears} if arrears is not None else None
+    add_position(
+        db,
+        common,
+        reference,
+        "LOAN",
+        currency,
+        balance=balance,
+        balance_ghs=balance if currency == "GHS" else None,
+        product="LN.CORP.5Y",
+        stage=1,
+        extra=extra,
+    )
+
+
+def test_r12_is_green_when_every_loan_states_an_arrears_amount(db_session: Session) -> None:
+    seed_book(db_session, live=False)
+    _loan_with_arrears(db_session, "LOAN/ARR1", arrears="0")
+    _loan_with_arrears(db_session, "LOAN/ARR2", arrears="125000.75")
+    db_session.commit()
+    outcome = build(db_session, MID_MONTH)
+    r12 = _r12(db_session, MID_MONTH)
+    assert r12.status == GREEN
+    assert r12.lhs == Decimal(0)
+    assert r12.detail["loan_rows"] == 2
+    assert r12.detail["loans_without_arrears_amount"] == 0
+    assert Decimal(r12.detail["stated_arrears_rc"]) == Decimal("125000.75")
+    assert "reason" not in r12.detail
+    assert outcome.trust[ARREARS_COMPLETENESS] == GREEN
+
+
+def test_r12_reports_the_shortfall_when_only_part_of_the_book_states_arrears(
+    db_session: Session,
+) -> None:
+    """The defect R12 exists for, measured: a bank that states arrears for half its
+    book shows a sum that reads as the whole book's arrears, and a share silently
+    understated. Nothing else in the platform would say so — and the check must
+    FIRE here, not merely exist."""
+    seed_book(db_session, live=False)
+    _loan_with_arrears(db_session, "LOAN/ARR1", arrears="300000")
+    _loan_with_arrears(db_session, "LOAN/SILENT", arrears=None)
+    db_session.commit()
+    outcome = build(db_session, MID_MONTH)
+    r12 = _r12(db_session, MID_MONTH)
+    assert r12.status == AMBER
+    assert r12.lhs == Decimal(50)  # both limbs agree: 1 of 2 rows, half the exposure
+    assert r12.detail["loan_rows"] == 2
+    assert r12.detail["loans_without_arrears_amount"] == 1
+    assert Decimal(r12.detail["missing_share_pct"]) == Decimal(50)
+    assert Decimal(r12.detail["missing_share_of_exposure_pct"]) == Decimal(50)
+    assert Decimal(r12.detail["worst_share_pct"]) == Decimal(50)
+    # The stated total is the HALF that was stated, and the reason says as much,
+    # so a reader cannot take it for the book's arrears.
+    assert Decimal(r12.detail["stated_arrears_rc"]) == Decimal(300000)
+    assert "understates the whole book" in r12.detail["reason"]
+    assert outcome.trust[ARREARS_COMPLETENESS] == AMBER
+
+
+def test_r12_is_red_when_no_loan_states_an_arrears_amount(db_session: Session) -> None:
+    """The fixture book states none, which is exactly the "0 % reads as clean"
+    case: ``loans.arrears_amount_rc`` would sum to nothing over it."""
+    seed_book(db_session, live=False)
+    outcome = build(db_session)
+    r12 = _r12(db_session, AS_OF)
+    assert r12.status == RED
+    assert r12.lhs == Decimal(100)
+    assert Decimal(r12.detail["missing_share_of_exposure_pct"]) == Decimal(100)
+    assert Decimal(r12.detail["stated_arrears_rc"]) == Decimal(0)
+    assert "no loan states an arrears amount" in r12.detail["reason"]
+    assert outcome.trust[ARREARS_COMPLETENESS] == RED
+    assert outcome.trust["overall"] == RED
+
+
+def test_r12_reports_the_exposure_weighted_share_when_a_few_loans_hold_the_value(
+    db_session: Session,
+) -> None:
+    """D-049 on this check: 1 of 4 loans silent is 25 % by count and almost all of
+    the book by value, and the reported figure must be the second one — it is what
+    a reader compares against ``loans.arrears_share_pct``, which is
+    exposure-weighted.
+
+    **On R12's population the two limbs cannot disagree on the COLOUR**, only on
+    the magnitude, and that is worth stating rather than leaving as an untested
+    implication of ``max``. Red is ``>= 100 %`` of either limb; a zero-exposure row
+    is excluded from the population, so "every row silent" and "all the exposure
+    silent" coincide, and neither limb can reach 100 % alone. ``max`` therefore
+    chooses the figure the badge reports and is the conservative direction if the
+    population ever changes; it is not a second verdict. Both shares are always
+    disclosed, so the amber below is actionable rather than mild.
+    """
+    seed_book(db_session, live=False)
+    _loan_with_arrears(db_session, "LOAN/BIG", arrears=None, balance="900000000")
+    for index in range(3):
+        _loan_with_arrears(db_session, f"LOAN/TINY{index}", arrears="0", balance="1")
+    db_session.commit()
+    build(db_session, MID_MONTH)
+    r12 = _r12(db_session, MID_MONTH)
+    assert Decimal(r12.detail["missing_share_pct"]) == Decimal(25)  # the count alone
+    assert Decimal(r12.detail["missing_share_of_exposure_pct"]) > Decimal("99.99")
+    assert r12.lhs is not None and r12.lhs > Decimal("99.99")  # the worse limb is reported
+    assert r12.status == AMBER  # part of the book states arrears, so not "no data at all"
+    assert "understates the whole book" in r12.detail["reason"]
+
+
+def test_r12_is_grey_on_a_day_with_no_loan_carrying_a_positive_exposure(
+    db_session: Session,
+) -> None:
+    seed_book(db_session, live=False)
+    common = new_batch(db_session, MID_MONTH)
+    add_position(
+        db_session,
+        common,
+        "DEP/ONLY",
+        "DEPOSIT",
+        "GHS",
+        balance="500",
+        balance_ghs="500",
+        product="DEP.RET.CUR",
+    )
+    db_session.commit()
+    outcome = build(db_session, MID_MONTH)
+    r12 = _r12(db_session, MID_MONTH)
+    assert r12.status == GREY
+    assert r12.lhs is None
+    assert "no loan rows with a classified exposure" in r12.detail["reason"]
+    assert outcome.trust[ARREARS_COMPLETENESS] == GREY
+
+
+def test_r12_excludes_an_unconverted_loan_because_r6_owns_that_gap(
+    db_session: Session,
+) -> None:
+    """The one place R12 deliberately differs from R10, and why.
+
+    ``arrears_amount_rc`` is NULL for an unconverted foreign-currency loan
+    whatever the bank stated (the derivation rule, like ``balance_rc``), so
+    counting it as unstated arrears would report a gap the bank cannot close by
+    stating arrears. R6 already states that gap under its own claim. R10 keeps
+    such rows because ``dpd_band`` is stated independently of FX — two checks, two
+    populations, and neither is a copy of the other.
+    """
+    seed_book(db_session, live=False)
+    # Both state arrears; both are unconverted, so the column is NULL for both.
+    _loan_with_arrears(db_session, "LOAN/FX1", arrears="1000", balance="400000", currency="USD")
+    _loan_with_arrears(db_session, "LOAN/FX2", arrears="2000", balance="400000", currency="USD")
+    db_session.commit()
+    build(db_session, MID_MONTH)
+    r12 = _r12(db_session, MID_MONTH)
+    assert r12.status == GREY, "an FX-only day is R6's message, not a false arrears shortfall"
+    results = _results(db_session, MID_MONTH)
+    assert results["R6"].status == AMBER
+    assert results["R6"].detail["by_currency"] == {"USD": 2}
+    # R10 sees the same two rows and does NOT go grey: its population is the whole
+    # loan book, which is the population the engine's PAR ratio divides by.
+    assert _r10(db_session, MID_MONTH).status in (AMBER, RED)
+
+
+def test_r12_is_evaluated_dispatched_and_stored_through_the_same_vocabulary(
+    db_session: Session,
+) -> None:
+    """A check id with no evaluator behind it can never fire. All four sides are
+    asserted here: the model vocabulary, the evaluated list, the tolerance table
+    and ``evaluate``'s own dispatch."""
+    assert ARREARS_COMPLETENESS in RECONCILIATION_CHECK_IDS
+    assert ARREARS_COMPLETENESS in reconciliation.CHECK_IDS
+    assert ARREARS_COMPLETENESS in reconciliation.STORABLE_CHECK_IDS
+    assert ARREARS_COMPLETENESS in reconciliation.TOLERANCES
+    assert reconciliation.TOLERANCES[ARREARS_COMPLETENESS] is None  # threshold, not tolerance
+    assert len(ARREARS_COMPLETENESS) <= 4  # String(4): the id fits the column
+
+    seed_book(db_session, live=False)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    outcome = build(db_session)
+    evaluated = reconciliation.evaluate(db_session, CTX, bank, AS_OF)
+    assert ARREARS_COMPLETENESS in evaluated, "evaluate() must dispatch it, not just define it"
+    assert evaluated[ARREARS_COMPLETENESS].status == outcome.trust[ARREARS_COMPLETENESS]
+    stored = _results(db_session)
+    assert stored[ARREARS_COMPLETENESS].status == outcome.trust[ARREARS_COMPLETENESS]
+    assert trust_for(db_session, ORG_1, SAMPLE_BANK_ID, AS_OF) == outcome.trust

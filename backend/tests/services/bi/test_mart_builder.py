@@ -507,6 +507,36 @@ def test_fingerprint_moves_with_the_live_plane_and_the_builder_version(
     )
 
 
+def test_a_catalogue_version_bump_forces_a_rebuild_of_an_already_built_slice(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bump is the MECHANISM by which a new mart column gets filled.
+
+    A catalogue change that adds a column leaves it NULL on every slice already
+    built. Without ``CATALOGUE_VERSION`` in the fingerprint the builder would
+    consider those slices current and never refill them, so every figure over the
+    new column would read empty for all history while the mart looked healthy.
+    Asserted from both ends: the fingerprint moves, and a slice whose stored
+    fingerprint was minted under the old version is no longer ``skipped``.
+    """
+    seed_book(db_session, live=False)
+    first = build(db_session)
+    db_session.commit()
+    assert first.status == "succeeded"
+    assert build(db_session).status == "skipped", "the same catalogue must not rebuild"
+
+    monkeypatch.setattr(mart_builder, "CATALOGUE_VERSION", "99.0.0")
+    assert (
+        mart_builder.fingerprint_for(
+            db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=AS_OF
+        )
+        != first.fingerprint
+    )
+    again = build(db_session)
+    assert again.status == "succeeded", "a catalogue bump must refill the slice"
+    assert again.fingerprint != first.fingerprint
+
+
 # --- month-end (D-014) ------------------------------------------------------------------
 
 

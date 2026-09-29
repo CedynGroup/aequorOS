@@ -18,6 +18,13 @@ import {
   SensitivityScopeToJSON,
   SensitivityScopeToJSONTyped,
 } from "./SensitivityScope";
+import type { DataScope } from "./DataScope";
+import {
+  DataScopeFromJSON,
+  DataScopeFromJSONTyped,
+  DataScopeToJSON,
+  DataScopeToJSONTyped,
+} from "./DataScope";
 import type { InstitutionScope } from "./InstitutionScope";
 import {
   InstitutionScopeFromJSON,
@@ -46,6 +53,18 @@ import {
  * @interface SsoAccessRequestApprove
  */
 export interface SsoAccessRequestApprove {
+  /**
+   *
+   * @type {DataScope}
+   * @memberof SsoAccessRequestApprove
+   */
+  dataScopeKind?: DataScope;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof SsoAccessRequestApprove
+   */
+  dataScopeValues?: Array<string>;
   /**
    *
    * @type {string}
@@ -142,6 +161,12 @@ export function SsoAccessRequestApproveFromJSONTyped(
   }
   return {
     ...json,
+    dataScopeKind:
+      json["data_scope_kind"] == null
+        ? undefined
+        : DataScopeFromJSON(json["data_scope_kind"]),
+    dataScopeValues:
+      json["data_scope_values"] == null ? undefined : json["data_scope_values"],
     expectedAuthoritySentence: json["expected_authority_sentence"],
     institutionId:
       json["institution_id"] == null
@@ -170,6 +195,8 @@ export function SsoAccessRequestApproveToJSONTyped(
   }
 
   return {
+    data_scope_kind: DataScopeToJSON(value["dataScopeKind"]),
+    data_scope_values: value["dataScopeValues"],
     expected_authority_sentence: value["expectedAuthoritySentence"],
     institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),

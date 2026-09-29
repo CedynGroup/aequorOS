@@ -38,6 +38,7 @@ from app.domain.ingestion.constants import (
     POSITION_TYPES,
     RATE_TYPES,
 )
+from app.domain.ingestion.optional_position_fields import ACCOUNT_STATUSES, CHANNELS
 from app.domain.irr.buckets import REPRICING_BUCKETS
 
 POSITION_TABLE = "bi_fact_position_daily"
@@ -48,6 +49,7 @@ PRODUCT_TABLE = "bi_dim_product"
 COUNTERPARTY_TABLE = "bi_dim_counterparty"
 GL_ACCOUNT_TABLE = "bi_dim_gl_account"
 DATE_TABLE = "bi_dim_date"
+GL_BRANCH_TABLE = "bi_fact_gl_branch_monthly"
 
 RISK = "risk"
 CREDIT = "credit"
@@ -100,6 +102,31 @@ GL_ACCOUNT_CLASS_LABELS: dict[str, str] = {
     "OFF_BALANCE": "Off balance sheet",
 }
 RATE_TYPE_LABELS: dict[str, str] = {"FIXED": "Fixed rate", "FLOATING": "Floating rate"}
+CHANNEL_LABELS: dict[str, str] = {
+    "branch": "Branch",
+    "agent": "Agent outlet",
+    "atm": "ATM network",
+    "pos": "Card terminal",
+    "mobile_app": "Mobile app",
+    "ussd": "USSD banking",
+    "internet_banking": "Internet banking",
+    "mobile_money": "Mobile money",
+    "call_centre": "Call centre",
+    "direct_sales": "Direct sales",
+    "partner": "Partner",
+    "api": "API integration",
+    "other": "Other",
+}
+ACCOUNT_STATUS_LABELS: dict[str, str] = {
+    "active": "Active",
+    "inactive": "Inactive",
+    "dormant": "Dormant",
+    "blocked": "Blocked",
+    "closed": "Closed",
+    "matured": "Matured",
+    "written_off": "Written off",
+    "other": "Other",
+}
 GRADE_LABELS: dict[str, str] = {
     "standard": "Standard",
     "olem": "Other loans especially mentioned",
@@ -362,6 +389,36 @@ def _position_dimensions() -> tuple[DimensionDef, ...]:
             values=tuple(
                 EnumValue(name, REPRICING_BUCKET_LABELS[name]) for name, _, _ in REPRICING_BUCKETS
             ),
+        ),
+        _dim(
+            "position.officer_code",
+            "Relationship officer",
+            POSITION_TABLE,
+            "officer_id",
+            module=RISK,
+            sensitivity="restricted",
+            description=(
+                "The bank's own code for the officer who owns the account. Names one "
+                "member of staff, so it is restricted: filtering by it discloses that "
+                "individual's entire book. No officer name is resolved."
+            ),
+        ),
+        _dim(
+            "position.channel",
+            "Channel",
+            POSITION_TABLE,
+            "channel",
+            module=RISK,
+            values=_values(CHANNELS, CHANNEL_LABELS),
+            description="How the account was opened or is serviced, as the bank states it.",
+        ),
+        _dim(
+            "position.account_status",
+            "Account status",
+            POSITION_TABLE,
+            "account_status",
+            module=RISK,
+            values=_values(ACCOUNT_STATUSES, ACCOUNT_STATUS_LABELS),
         ),
     )
 
@@ -657,6 +714,14 @@ POSITION_DIMENSION_IDS: tuple[str, ...] = tuple(
         *_counterparty_dimensions(),
         *_gl_account_dimensions(),
     )
+)
+#: Dimension ids that slice the branch P&L ledger. Deliberately NOT the position,
+#: loan, product or counterparty dimensions: this fact carries none of those keys,
+#: and naming one would offer a grouping the compiler must then refuse.
+#: ``_time_dimensions()`` IS included — ``bi_dim_date`` joins on the fact's own
+#: date column (``month_end``), which the compiler already knows.
+GL_BRANCH_DIMENSION_IDS: tuple[str, ...] = tuple(
+    dim.id for dim in (*_time_dimensions(), *_branch_dimensions(), *_gl_account_dimensions())
 )
 #: Dimension ids that slice the loan-event facts.
 EVENT_DIMENSION_IDS: tuple[str, ...] = tuple(
