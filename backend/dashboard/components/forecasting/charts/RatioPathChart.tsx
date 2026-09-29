@@ -1,28 +1,18 @@
-'use client';
+"use client";
 
 /**
- * Regulatory-ratio path with a minimum-threshold reference line, themed from
- * lib/chartTheme for the forecasting workspace.
+ * Regulatory-ratio path with a minimum-threshold reference line, for the
+ * forecasting workspace.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  CartesianGrid,
-} from 'recharts';
-import {
-  axisProps,
-  CHART_CRIT,
-  CHART_GRID,
-  CHART_WARN,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
+  axisTooltip,
+  LINE_SERIES_BASE,
+  thresholdMarkLine,
+  type ThresholdLine,
+} from "@/lib/echartsOptions";
 
 type RatioPoint = {
   label: string;
@@ -34,72 +24,87 @@ export default function RatioPathChart({
   threshold = 100,
   thresholdLabel,
   internalBuffer,
-  color = seriesColor(0),
-  label = 'Ratio',
+  colorIndex = 0,
+  label = "Ratio",
   height = 240,
 }: {
   data: RatioPoint[];
   threshold?: number;
   thresholdLabel?: string;
   internalBuffer?: number;
-  /** CSS color string — pass a chartTheme token (seriesColor(n) etc.). */
-  color?: string;
+  /**
+   * Categorical palette index. This replaced a `color: string` prop that pages
+   * filled with `seriesColor(n)` from the old Recharts theme — i.e. the literal
+   * `var(--chart-n)`, which a canvas cannot resolve and would paint as nothing.
+   * Taking an index makes that mistake unreachable.
+   */
+  colorIndex?: number;
   label?: string;
   height?: number;
 }) {
-  const min = Math.floor(Math.min(...data.map((d) => d.value), threshold) - 2);
-  const max = Math.ceil(Math.max(...data.map((d) => d.value)) + 2);
+  const tokens = useChartTokens();
+  const color = seriesColor(tokens, colorIndex);
+  const min = Math.floor(
+    Math.min(...data.map((point) => point.value), threshold) - 2,
+  );
+  const max = Math.ceil(Math.max(...data.map((point) => point.value)) + 2);
+  const labels = data.map((point) => point.label);
+
+  const thresholds: ThresholdLine[] = [
+    {
+      axis: "y",
+      value: threshold,
+      label: thresholdLabel ?? `Min ${threshold}%`,
+      color: tokens.adverse,
+      labelPosition: "insideEndBottom",
+    },
+    ...(internalBuffer === undefined
+      ? []
+      : [
+          {
+            axis: "y" as const,
+            value: internalBuffer,
+            label: `Buffer ${internalBuffer}%`,
+            color: tokens.caution,
+            labelPosition: "insideEndTop" as const,
+          },
+        ]),
+  ];
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 16, top: 8, bottom: 4, containLabel: true },
+    xAxis: { type: "category", data: labels },
+    yAxis: {
+      type: "value",
+      min,
+      max,
+      axisLine: { show: false },
+      axisLabel: { formatter: (value: number) => `${Math.round(value)}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(labels, (value) => `${value.toFixed(2)}%`),
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        name: label,
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+        markLine: thresholdMarkLine(thresholds),
+        data: data.map((point) => point.value),
+      },
+    ],
+  } as BiEChartsOption;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} />
-        <YAxis
-          {...axisProps}
-          axisLine={false}
-          domain={[min, max]}
-          tickFormatter={(v: number) => `${Math.round(v)}%`}
-          width={48}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(v: number) => [`${v.toFixed(2)}%`, label]}
-        />
-        <ReferenceLine
-          y={threshold}
-          stroke={CHART_CRIT}
-          strokeDasharray="4 4"
-          label={{
-            value: thresholdLabel ?? `Min ${threshold}%`,
-            position: 'insideBottomRight',
-            fill: CHART_CRIT,
-            fontSize: 11,
-          }}
-        />
-        {internalBuffer !== undefined && (
-          <ReferenceLine
-            y={internalBuffer}
-            stroke={CHART_WARN}
-            strokeDasharray="2 4"
-            label={{
-              value: `Buffer ${internalBuffer}%`,
-              position: 'insideTopRight',
-              fill: CHART_WARN,
-              fontSize: 11,
-            }}
-          />
-        )}
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2}
-          name={label}
-          dot={{ r: 3, fill: color, strokeWidth: 0 }}
-          activeDot={{ r: 5 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Projected ${label} across ${data.length} periods against a minimum of ${threshold}%`}
+    />
   );
 }

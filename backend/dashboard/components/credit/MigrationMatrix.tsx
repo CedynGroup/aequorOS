@@ -1,25 +1,26 @@
-'use client';
+"use client";
 
 /**
  * The Notice-mandated monthly state-migration matrix (3×3 + entry/exit legs)
- * as a CSS table — cell fills need per-cell styling recharts cannot express.
+ * as a CSS table — a matrix of per-cell fills is layout and styling, not a
+ * chart, and expressing it as one would buy a chart runtime for nothing.
  * Deterioration (below the diagonal) tints critical, cures tint success.
  */
 
-import type { MigrationCellRead } from '@aequoros/risk-service-api';
-import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtInt } from '@/lib/format';
+import type { MigrationCellRead } from "@aequoros/risk-service-api";
+import { num } from "@/lib/api/values";
+import { fmtCurrency, fmtInt } from "@/lib/format";
 
-const STATES = ['performing', 'performing_restructured', 'npl'];
+const STATES = ["performing", "performing_restructured", "npl"];
 const LABELS: Record<string, string> = {
-  performing: 'Performing',
-  performing_restructured: 'Performing restructured',
-  npl: 'Non-performing',
+  performing: "Performing",
+  performing_restructured: "Performing restructured",
+  npl: "Non-performing",
 };
 
 function cellTone(fromIndex: number, toIndex: number): string {
-  if (fromIndex === toIndex) return 'bg-surface-alt';
-  return toIndex > fromIndex ? 'bg-critical-light/50' : 'bg-success-light/50';
+  if (fromIndex === toIndex) return "bg-surface-alt";
+  return toIndex > fromIndex ? "bg-critical-light/50" : "bg-success-light/50";
 }
 
 export default function MigrationMatrix({
@@ -70,7 +71,9 @@ export default function MigrationMatrix({
                   >
                     {value ? (
                       <>
-                        <span className="text-navy">{fmtCurrency(num(value.exposureGhs))}</span>
+                        <span className="text-navy">
+                          {fmtCurrency(num(value.exposureGhs))}
+                        </span>
                         <span className="block text-micro text-slate">
                           {fmtInt(value.loanCount)} loans
                         </span>
@@ -84,7 +87,9 @@ export default function MigrationMatrix({
               <td className="px-4 py-2 text-right font-mono tnum">
                 {exit(from) ? (
                   <>
-                    <span className="text-navy">{fmtCurrency(num(exit(from)!.exposureGhs))}</span>
+                    <span className="text-navy">
+                      {fmtCurrency(num(exit(from)!.exposureGhs))}
+                    </span>
                     <span className="block text-micro text-slate">
                       {fmtInt(exit(from)!.loanCount)} loans
                     </span>
@@ -101,7 +106,9 @@ export default function MigrationMatrix({
               <td key={to} className="px-4 py-2 text-right font-mono tnum">
                 {entry(to) ? (
                   <>
-                    <span className="text-navy">{fmtCurrency(num(entry(to)!.exposureGhs))}</span>
+                    <span className="text-navy">
+                      {fmtCurrency(num(entry(to)!.exposureGhs))}
+                    </span>
                     <span className="block text-micro text-slate">
                       {fmtInt(entry(to)!.loanCount)} loans
                     </span>

@@ -1,36 +1,25 @@
-'use client';
+"use client";
 
 /**
  * Earnings bridge over the forecast horizon — stacked income bars
  * (NII + fees) with opex and credit losses as negative bars and net income
  * as a line. Every series is a persisted field on the projection path.
- * Token-themed via lib/chartTheme.ts.
+ *
+ * Recharts needed `stackOffset="sign"` to stack the positive and negative bars
+ * in opposite directions from the axis; ECharts does that by default for a
+ * signed stack, so there is nothing to configure.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-  ReferenceLine,
-} from 'recharts';
-import {
-  axisProps,
-  CHART_AXIS,
-  CHART_CRIT,
-  CHART_GRID,
-  CHART_OK,
-  CHART_WARN,
-  chartLegendProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtCurrency, fmtCurrencySigned } from '@/lib/format';
+  axisTooltip,
+  BAR_SERIES_BASE,
+  LINE_SERIES_BASE,
+  STACK_ID,
+  thresholdMarkLine,
+} from "@/lib/echartsOptions";
+import { fmtCurrency, fmtCurrencySigned } from "@/lib/format";
 
 export type EarningsPoint = {
   label: string;
@@ -49,66 +38,88 @@ export default function EarningsChart({
   data: EarningsPoint[];
   height?: number;
 }) {
+  const tokens = useChartTokens();
+  const labels = data.map((point) => point.label);
+
+  const bars = [
+    {
+      name: "Net interest income",
+      color: seriesColor(tokens, 0),
+      opacity: 1,
+      values: data.map((point) => point.nii),
+    },
+    {
+      name: "Fee income",
+      color: seriesColor(tokens, 2),
+      opacity: 1,
+      values: data.map((point) => point.fees),
+    },
+    {
+      name: "Operating expenses",
+      color: tokens.caution,
+      opacity: 0.75,
+      values: data.map((point) => point.opex),
+    },
+    {
+      name: "Credit losses",
+      color: tokens.adverse,
+      opacity: 0.75,
+      values: data.map((point) => point.creditLosses),
+    },
+  ];
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 16, top: 30, bottom: 4, containLabel: true },
+    legend: { top: 0, right: 0, type: "scroll" },
+    xAxis: { type: "category", data: labels, axisLabel: { interval: 0 } },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      axisLabel: {
+        hideOverlap: true,
+        formatter: (value: number) =>
+          fmtCurrency(value, undefined, { decimals: 1 }),
+      },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: axisTooltip(labels, (value) => fmtCurrencySigned(value)),
+    },
+    series: [
+      ...bars.map((bar, index) => ({
+        ...BAR_SERIES_BASE,
+        name: bar.name,
+        stack: STACK_ID,
+        barMaxWidth: 42,
+        itemStyle: { color: bar.color, opacity: bar.opacity },
+        data: bar.values,
+        ...(index === 0
+          ? {
+              markLine: thresholdMarkLine([
+                { axis: "y", value: 0, color: tokens.axis, solid: true },
+              ]),
+            }
+          : {}),
+      })),
+      {
+        ...LINE_SERIES_BASE,
+        name: "Net income",
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        lineStyle: { color: tokens.favourable, width: 2.25 },
+        itemStyle: { color: tokens.favourable },
+        data: data.map((point) => point.netIncome),
+      },
+    ],
+  } as BiEChartsOption;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart
-        data={data}
-        stackOffset="sign"
-        margin={{ top: 8, right: 16, left: 4, bottom: 4 }}
-      >
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} interval={0} />
-        <YAxis
-          {...axisProps}
-          axisLine={false}
-          width={64}
-          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 1 })}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(v: number, name: string) => [fmtCurrencySigned(v), name]}
-        />
-        <Legend verticalAlign="top" align="right" height={28} {...chartLegendProps} />
-        <ReferenceLine y={0} stroke={CHART_AXIS} />
-        <Bar
-          dataKey="nii"
-          stackId="pl"
-          fill={seriesColor(0)}
-          name="Net interest income"
-          maxBarSize={42}
-        />
-        <Bar
-          dataKey="fees"
-          stackId="pl"
-          fill={seriesColor(2)}
-          name="Fee income"
-          maxBarSize={42}
-        />
-        <Bar
-          dataKey="opex"
-          stackId="pl"
-          fill={CHART_WARN}
-          fillOpacity={0.75}
-          name="Operating expenses"
-          maxBarSize={42}
-        />
-        <Bar
-          dataKey="creditLosses"
-          stackId="pl"
-          fill={CHART_CRIT}
-          fillOpacity={0.75}
-          name="Credit losses"
-          maxBarSize={42}
-        />
-        <Line
-          type="monotone"
-          dataKey="netIncome"
-          stroke={CHART_OK}
-          strokeWidth={2.25}
-          name="Net income"
-          dot={{ r: 3, fill: CHART_OK, strokeWidth: 0 }}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Earnings bridge across ${data.length} forecast periods: net interest income and fees against operating expenses and credit losses, with net income traced`}
+    />
   );
 }

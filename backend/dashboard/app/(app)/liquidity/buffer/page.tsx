@@ -14,7 +14,7 @@ import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLiquidityDashboard, useRegulatoryRun } from "@/lib/api/hooks";
 import { num } from "@/lib/api/values";
-import { CHART_SERIES, seriesColor } from "@/lib/chartTheme";
+import { CSS_CHART_SERIES, cssSeriesColor } from "@/lib/svgChartPalette";
 import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
 type BufferRow = {
@@ -100,7 +100,7 @@ export default function LiquidityBuffer() {
     level: r.instrument,
     shareGHS: r.weightedGHS,
     pct: r.sharePct === null ? 0 : Math.round(r.sharePct),
-    color: seriesColor(i),
+    colorIndex: i,
   }));
 
   const allLevel1 = data?.validations.find(
@@ -200,7 +200,7 @@ export default function LiquidityBuffer() {
                     <li key={h.level} className="flex items-center gap-3">
                       <span
                         className="w-2 h-2 rounded-sm shrink-0"
-                        style={{ background: h.color }}
+                        style={{ background: cssSeriesColor(h.colorIndex) }}
                         aria-hidden
                       />
                       <span className="text-navy flex-1 truncate font-medium">
@@ -214,9 +214,10 @@ export default function LiquidityBuffer() {
                       </span>
                     </li>
                   ))}
-                  {stackData.length > CHART_SERIES.length && (
+                  {stackData.length > CSS_CHART_SERIES.length && (
                     <li className="text-slate">
-                      Palette cycles beyond {CHART_SERIES.length} instruments.
+                      Palette cycles beyond {CSS_CHART_SERIES.length}{" "}
+                      instruments.
                     </li>
                   )}
                 </ul>

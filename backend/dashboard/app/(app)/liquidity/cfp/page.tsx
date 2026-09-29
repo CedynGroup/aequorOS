@@ -2,15 +2,6 @@
 
 import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat from "@/components/ui/KpiStat";
 import SectionCard from "@/components/ui/SectionCard";
@@ -20,13 +11,10 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useCfpEvents, useCfpSummary, useEwiDashboard } from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
-import { regShort } from "@/lib/format";
-import {
-  axisProps,
-  CHART_GRID,
-  chartTooltipProps,
-  seriesColor,
-} from "@/lib/chartTheme";
+import { fmtInt, regShort } from "@/lib/format";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import { BAR_SERIES_BASE, itemTooltip } from "@/lib/echartsOptions";
 import { isHrefVisible } from "@/lib/modules";
 import type { EwiEvaluationRead } from "@aequoros/risk-service-api";
 
@@ -281,37 +269,7 @@ export default function ContingencyFundingPlan() {
                 title="Early-warning distribution"
                 subtitle="Server-calculated indicator states; unconfigured and no-data signals remain visible control gaps."
               >
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={ewiDistribution}
-                    margin={{ top: 8, right: 12, bottom: 4, left: 0 }}
-                  >
-                    <CartesianGrid
-                      vertical={false}
-                      stroke={CHART_GRID}
-                      strokeDasharray="3 3"
-                    />
-                    <XAxis dataKey="status" {...axisProps} />
-                    <YAxis
-                      allowDecimals={false}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={axisProps.tick}
-                      width={28}
-                    />
-                    <Tooltip
-                      {...chartTooltipProps}
-                      formatter={(value: number) => [value, "Indicators"]}
-                    />
-                    <Bar
-                      dataKey="count"
-                      name="Indicators"
-                      fill={seriesColor(0)}
-                      maxBarSize={42}
-                      radius={[2, 2, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                <EwiDistributionChart data={ewiDistribution} />
               </SectionCard>
               <SectionCard
                 title="Plan execution readiness"
@@ -589,5 +547,68 @@ export default function ContingencyFundingPlan() {
         )}
       </QueryBoundary>
     </>
+  );
+}
+
+/**
+ * Early-warning indicator states as a count per state. The counts are integers,
+ * so the axis carries `minInterval: 1` — a fractional "1.5 indicators" tick would
+ * describe something that cannot exist.
+ */
+function EwiDistributionChart({
+  data,
+}: {
+  data: ReadonlyArray<{ status: string; count: number }>;
+}) {
+  const tokens = useChartTokens();
+  const labels = data.map((row) => row.status);
+  const option: BiEChartsOption = {
+    grid: { left: 0, right: 12, top: 8, bottom: 4, containLabel: true },
+    xAxis: { type: "category", data: labels },
+    yAxis: {
+      type: "value",
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { formatter: (value: number) => fmtInt(value) },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: itemTooltip(labels, (index) => {
+        const row = data[index];
+        // No `?? 0`: a state with no row has no count, and a count of zero is a
+        // different statement from "there is no such state".
+        return row === undefined
+          ? []
+          : [
+              {
+                label: "Indicators",
+                value: fmtInt(row.count),
+                color: seriesColor(tokens, 0),
+              },
+            ];
+      }),
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        name: "Indicators",
+        barMaxWidth: 42,
+        itemStyle: {
+          color: seriesColor(tokens, 0),
+          borderRadius: [2, 2, 0, 0],
+        },
+        data: data.map((row) => row.count),
+      },
+    ],
+  } as BiEChartsOption;
+
+  return (
+    <EChart
+      option={option}
+      height={220}
+      ariaLabel={`Early-warning indicators by state: ${data
+        .map((row) => `${row.status} ${fmtInt(row.count)}`)
+        .join(", ")}`}
+    />
   );
 }

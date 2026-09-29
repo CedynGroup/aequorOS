@@ -28,7 +28,7 @@ import {
   statusTone,
   type FloorAssessment,
 } from "@/lib/api/values";
-import { seriesColor } from "@/lib/chartTheme";
+import { cssSeriesColor } from "@/lib/svgChartPalette";
 import { fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
 function kpiStatus(status: "green" | "amber" | "red" | string): KpiStatus {
@@ -161,17 +161,17 @@ export default function BaselOverview() {
         {
           name: "Credit risk",
           value: num(data.rwaComposition.creditRwaGhs),
-          color: seriesColor(0),
+          colorIndex: 0,
         },
         {
           name: "Operational risk",
           value: num(data.rwaComposition.operationalRwaGhs),
-          color: seriesColor(1),
+          colorIndex: 1,
         },
         {
           name: "Market risk",
           value: num(data.rwaComposition.marketRwaGhs),
-          color: seriesColor(2),
+          colorIndex: 2,
         },
       ]
     : [];
@@ -501,7 +501,7 @@ export default function BaselOverview() {
                       <li key={s.name} className="flex items-center gap-3">
                         <span
                           className="w-2 h-2 rounded-sm shrink-0"
-                          style={{ background: s.color }}
+                          style={{ background: cssSeriesColor(s.colorIndex) }}
                           aria-hidden
                         />
                         <span className="text-navy/85 flex-1">{s.name}</span>

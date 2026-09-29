@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Cumulative net position per ladder horizon for one currency: contractual
@@ -7,24 +7,14 @@
  * colors only — the blobs carry no statuses, so the chart asserts none.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  Legend,
-} from 'recharts';
-import {
-  CHART_AXIS,
-  axisProps,
-  chartLegendProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtCurrency, fmtCurrencySigned } from '@/lib/format';
+  axisTooltip,
+  BAR_SERIES_BASE,
+  thresholdMarkLine,
+} from "@/lib/echartsOptions";
+import { fmtCurrency, fmtCurrencySigned } from "@/lib/format";
 
 export type LadderPoint = {
   horizon: string;
@@ -42,41 +32,71 @@ export default function StressedLadderChart({
   showStressed: boolean;
   height?: number;
 }) {
+  const tokens = useChartTokens();
+  const horizons = data.map((point) => point.horizon);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 16, top: 8, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: { type: "category", data: horizons },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      axisLabel: {
+        hideOverlap: true,
+        formatter: (value: number) =>
+          fmtCurrency(value, undefined, { decimals: 0 }),
+      },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      // A horizon the run produced no figure for says so: an absent cumulative
+      // position is not a balanced one.
+      formatter: axisTooltip(horizons, (value) => fmtCurrencySigned(value), {
+        absent: "no ladder figure",
+      }),
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        name: "Contractual cumulative net",
+        barMaxWidth: 40,
+        itemStyle: {
+          color: seriesColor(tokens, 0),
+          borderRadius: [2, 2, 0, 0],
+        },
+        data: data.map((point) => point.contractual),
+        markLine: thresholdMarkLine([
+          { axis: "y", value: 0, color: tokens.axis, solid: true },
+        ]),
+      },
+      ...(showStressed
+        ? [
+            {
+              ...BAR_SERIES_BASE,
+              name: "Behaviourally-stressed cumulative net",
+              barMaxWidth: 40,
+              itemStyle: {
+                color: seriesColor(tokens, 1),
+                borderRadius: [2, 2, 0, 0],
+              },
+              data: data.map((point) => point.stressed),
+            },
+          ]
+        : []),
+    ],
+  } as BiEChartsOption;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-        <XAxis dataKey="horizon" {...axisProps} />
-        <YAxis
-          axisLine={false}
-          tickLine={false}
-          tick={axisProps.tick}
-          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 0 })}
-          width={76}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          cursor={{ fill: 'rgb(var(--surface-hover))' }}
-          formatter={(v: number, name) => [fmtCurrencySigned(v), name]}
-        />
-        <Legend {...chartLegendProps} />
-        <ReferenceLine y={0} stroke={CHART_AXIS} strokeWidth={1} />
-        <Bar
-          dataKey="contractual"
-          name="Contractual cumulative net"
-          fill={seriesColor(0)}
-          maxBarSize={40}
-          radius={[2, 2, 0, 0]}
-        />
-        {showStressed && (
-          <Bar
-            dataKey="stressed"
-            name="Behaviourally-stressed cumulative net"
-            fill={seriesColor(1)}
-            maxBarSize={40}
-            radius={[2, 2, 0, 0]}
-          />
-        )}
-      </BarChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Cumulative net position across ${data.length} ladder horizons, contractual${
+        showStressed
+          ? " and behaviourally stressed"
+          : " only — this run carries no stressed ladder"
+      }`}
+    />
   );
 }

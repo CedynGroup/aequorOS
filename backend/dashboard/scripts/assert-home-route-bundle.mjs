@@ -43,7 +43,6 @@ if (missingHomeEntries.length > 0) {
 const initialJavaScript = [
   ...new Set(homeEntries.flatMap((entry) => entry[1])),
 ].filter((file) => file.endsWith(".js"));
-const offendingChunks = [];
 const offendingEditorChunks = [];
 const offendingBiChunks = [];
 let rawBytes = 0;
@@ -115,11 +114,6 @@ for (const chunk of initialJavaScript) {
   gzipBytes += gzipSync(source).byteLength;
 
   const text = source.toString("utf8");
-  // Recharts' rendered SVG/HTML class names are part of its runtime contract,
-  // survive production minification, and occur throughout each library chunk.
-  if (text.includes("recharts-")) {
-    offendingChunks.push(chunk);
-  }
   if (EDITOR_MARKERS.some((marker) => text.includes(marker))) {
     offendingEditorChunks.push(chunk);
   }
@@ -128,12 +122,6 @@ for (const chunk of initialJavaScript) {
       offendingBiChunks.push(`${chunk} (${library})`);
     }
   }
-}
-
-if (offendingChunks.length > 0) {
-  throw new Error(
-    `Command Center initial entry graph contains Recharts chunk(s): ${offendingChunks.join(", ")}`,
-  );
 }
 
 if (offendingEditorChunks.length > 0) {
@@ -155,6 +143,29 @@ if (offendingBiChunks.length > 0) {
   );
 }
 
+/**
+ * The Command Center's ratio chart, and the two things that must be true of it.
+ *
+ * It is the ONLY chart on the home route, and it is reached through
+ * `components/home/DeferredRatioTrendChart.tsx`, so the route must have exactly
+ * one deferred entry. That entry's chunk then has to satisfy BOTH halves of a
+ * rule, which is why reading it is not optional:
+ *
+ * - it must contain `EChart`'s loading label, proving the chart really is in the
+ *   deferred chunk rather than having quietly moved into the initial bundle (the
+ *   negative assertions above only say what is ABSENT from the entry graph, and
+ *   would pass just as happily if the chart were deleted); and
+ * - it must NOT contain a charting runtime. `components/bi/EChart.tsx` defers the
+ *   canvas a SECOND time, inside the already-deferred chart, so the Command
+ *   Center pays for an 8 KB component and pays for ECharts only when it draws.
+ *   Under Recharts this chunk carried the whole library.
+ *
+ * Together with the `/explore` assertion further down — which proves the ECharts
+ * runtime does exist in a deferred chunk of a route that draws one — neither half
+ * can pass vacuously.
+ */
+const CHART_BOUNDARY_MARKER = "Drawing the chart";
+
 const loadableManifestPath = resolve(routeDir, "react-loadable-manifest.json");
 const loadableManifest = JSON.parse(readFileSync(loadableManifestPath, "utf8"));
 const ratioChartEntries = Object.values(loadableManifest);
@@ -168,13 +179,36 @@ if (ratioChartEntries.length !== 1) {
 const deferredChartChunks = ratioChartEntries[0].files.filter((file) =>
   file.endsWith(".js"),
 );
-const deferredChunkHasRecharts = deferredChartChunks.some((chunk) =>
-  readFileSync(resolve(distDir, chunk), "utf8").includes("recharts-"),
+const deferredChartSources = deferredChartChunks.map((chunk) => ({
+  chunk,
+  text: readFileSync(resolve(distDir, chunk), "utf8"),
+}));
+
+if (
+  !deferredChartSources.some(({ text }) => text.includes(CHART_BOUNDARY_MARKER))
+) {
+  throw new Error(
+    "The Command Center's deferred chart chunks no longer contain the EChart " +
+      `loading label ${JSON.stringify(CHART_BOUNDARY_MARKER)}: ` +
+      `${deferredChartChunks.join(", ")}. Either the label was reworded (update ` +
+      "CHART_BOUNDARY_MARKER after checking the new build output), or the ratio " +
+      "chart no longer reaches the canvas through components/bi/EChart.tsx.",
+  );
+}
+
+const chartChunksCarryingRuntime = deferredChartSources.flatMap(
+  ({ chunk, text }) =>
+    BI_RUNTIME_MARKERS.filter(([, marker]) => text.includes(marker)).map(
+      ([library]) => `${chunk} (${library})`,
+    ),
 );
 
-if (!deferredChunkHasRecharts) {
+if (chartChunksCarryingRuntime.length > 0) {
   throw new Error(
-    `Deferred RatioTrendChart chunks no longer expose a Recharts runtime marker: ${deferredChartChunks.join(", ")}`,
+    "The Command Center's deferred chart chunk carries a charting runtime: " +
+      `${chartChunksCarryingRuntime.join(", ")}. components/bi/EChart.tsx must ` +
+      "load the canvas with dynamic(..., { ssr: false }) so the home route pays " +
+      "for the runtime only when it draws.",
   );
 }
 
@@ -315,5 +349,5 @@ if (!deferredBuilderHasGridLayout) {
 }
 
 console.log(
-  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts and AG Grid deferred to ${deferredBiChunks.join(", ")}; the dashboard builder's grid deferred to ${deferredBuilderChunks.join(", ")}.`,
+  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; the ratio chart deferred to ${deferredChartChunks.join(", ")} (runtime-free); ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts and AG Grid deferred to ${deferredBiChunks.join(", ")}; the dashboard builder's grid deferred to ${deferredBuilderChunks.join(", ")}.`,
 );

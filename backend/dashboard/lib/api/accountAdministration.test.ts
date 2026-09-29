@@ -16,6 +16,11 @@ const authority = (
       sensitivity,
       permission,
       requiresContextualAuthorization: false,
+      dataScope: {
+        kind: "all",
+        branches: [],
+        regions: [],
+      },
     },
   ],
   institutionCapabilities: [],

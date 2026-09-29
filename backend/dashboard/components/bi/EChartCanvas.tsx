@@ -10,18 +10,22 @@
  * out of the Command Center's initial entry graph. A static
  * `import ... from "./EChartCanvas"` anywhere else defeats both.
  *
- * Only the chart types the BI widgets actually draw are registered. Adding a
+ * Only the chart types the surfaces actually draw are registered. Adding a
  * chart type here is a deliberate act: the bundle is the sum of what is
- * registered, not of what ECharts can do.
+ * registered, not of what ECharts can do. `ScatterChart` and `MarkAreaComponent`
+ * were added when the module dashboards moved off Recharts — the FX hedge
+ * effectiveness plot is a scatter, and its target zone was a `<ReferenceArea>`.
+ * This canvas now serves every chart in the dashboard, not only the BI widgets.
  */
 
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
+import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import {
   DatasetComponent,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
   TitleComponent,
   TooltipComponent,
@@ -31,6 +35,7 @@ import type {
   BarSeriesOption,
   LineSeriesOption,
   PieSeriesOption,
+  ScatterSeriesOption,
 } from "echarts/charts";
 import type {
   DatasetComponentOption,
@@ -46,6 +51,7 @@ export type BiEChartsOption = ComposeOption<
   | BarSeriesOption
   | LineSeriesOption
   | PieSeriesOption
+  | ScatterSeriesOption
   | DatasetComponentOption
   | GridComponentOption
   | LegendComponentOption
@@ -57,9 +63,11 @@ echarts.use([
   BarChart,
   LineChart,
   PieChart,
+  ScatterChart,
   DatasetComponent,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
   TitleComponent,
   TooltipComponent,

@@ -474,6 +474,18 @@ function writeDistFixture(
     gridLayoutInHome?: boolean;
     /** react-grid-layout present in a deferred chunk of the builder route. */
     gridLayoutDeferred?: boolean;
+    /**
+     * The Command Center's deferred chart chunk carries EChart's loading label,
+     * which is what proves the chart is still IN that chunk. `false` is what a
+     * deleted or statically-imported chart looks like.
+     */
+    chartDeferred?: boolean;
+    /**
+     * The Command Center's deferred chart chunk also carries the ECharts runtime
+     * — i.e. `components/bi/EChart.tsx` stopped deferring the canvas, so the home
+     * route pays for the whole library as soon as it scrolls the chart into view.
+     */
+    chartRuntimeInChartChunk?: boolean;
   }>,
 ): void {
   const chunk = (name: string, body: string) => {
@@ -490,7 +502,12 @@ function writeDistFixture(
       (options.agGridInHome ? 'cls="ag-root-wrapper";' : "") +
       (options.gridLayoutInHome ? 'cls="react-grid-item";' : ""),
   );
-  const rechartsChunk = chunk("recharts.js", filler + '"recharts-wrapper"');
+  const chartBoundaryChunk = chunk(
+    "ratio-chart.js",
+    filler +
+      (options.chartDeferred === false ? "" : '"Drawing the chart";') +
+      (options.chartRuntimeInChartChunk ? '"_echarts_instance_";' : ""),
+  );
   const editorChunk = chunk("editor.js", filler + '"ProseMirror-focused"');
   const echartsChunk = chunk("echarts.js", filler + '"_echarts_instance_"');
   const gridChunk = chunk(
@@ -532,7 +549,7 @@ function writeDistFixture(
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ "1": { files } }));
   };
-  loadable("(app)/page", [rechartsChunk]);
+  loadable("(app)/page", [chartBoundaryChunk]);
   loadable("(app)/icaap/[cycleId]/sections/[sectionKey]/page", [editorChunk]);
   loadable("(app)/explore/page", [echartsChunk, gridChunk]);
   loadable("(app)/dashboards/new/page", [builderChunk]);
@@ -666,6 +683,69 @@ test("the bundle guard's react-grid-layout rule fires on both of its own violati
   assert.ok(
     /react-grid-layout runtime marker/.test(deferred.text),
     `the guard failed without naming the missing react-grid-layout marker:\n${deferred.text}`,
+  );
+
+  rmSync(base, { recursive: true, force: true });
+});
+
+test("the bundle guard's Command Center chart rule fires on both of its own violations", () => {
+  const base = mkdtempSync(join(tmpdir(), "aeq-bundle-guard-chart-"));
+
+  // The control: a build where the chart is deferred AND its chunk is free of the
+  // charting runtime. Without this, the two convictions below would prove only
+  // that the guard rejects everything it is shown.
+  const good = join(base, "good");
+  writeDistFixture(good, { agGridInHome: false, agGridDeferred: true });
+  const clean = runBundleGuard(good);
+  assert.equal(
+    clean.code,
+    0,
+    `the bundle guard rejected a correct build, so its verdicts mean nothing:\n${clean.text}`,
+  );
+
+  // Violation one: the chart is no longer in the deferred chunk at all. Every
+  // NEGATIVE assertion in the guard passes happily in that state — a route with
+  // no chart has no chart runtime in its entry graph — which is exactly why this
+  // half has to exist.
+  const notDeferred = join(base, "chart-gone");
+  writeDistFixture(notDeferred, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    chartDeferred: false,
+  });
+  const gone = runBundleGuard(notDeferred);
+  assert.notEqual(
+    gone.code,
+    0,
+    "the bundle guard passed a build whose Command Center deferred chunk no " +
+      "longer contains the chart. Its negative halves cannot tell that from a " +
+      "clean build, so the rule would report clean forever.",
+  );
+  assert.ok(
+    /Drawing the chart/.test(gone.text),
+    `the guard failed without naming the missing chart boundary:\n${gone.text}`,
+  );
+
+  // Violation two: the chart chunk carries the ECharts runtime, i.e. the SECOND
+  // deferral inside components/bi/EChart.tsx stopped happening. The Command
+  // Center's entry graph is still clean, so nothing else in the guard notices.
+  const runtimeInChart = join(base, "runtime-in-chart");
+  writeDistFixture(runtimeInChart, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    chartRuntimeInChartChunk: true,
+  });
+  const carried = runBundleGuard(runtimeInChart);
+  assert.notEqual(
+    carried.code,
+    0,
+    "the bundle guard passed a build whose Command Center chart chunk bundles " +
+      "the ECharts runtime. The chart would then cost the whole library the " +
+      "moment it scrolls into view, which is what the second deferral prevents.",
+  );
+  assert.ok(
+    /carries a charting runtime/.test(carried.text),
+    `the guard failed without naming the runtime in the chart chunk:\n${carried.text}`,
   );
 
   rmSync(base, { recursive: true, force: true });

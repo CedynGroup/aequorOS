@@ -25,6 +25,12 @@ import ModuleTabs from "@/components/shell/ModuleTabs";
  */
 const tabs = [
   { href: "/explore", label: "Explore" },
+  // Asking in words is a way of BUILDING a question, so it belongs beside the
+  // place questions are built rather than in a workspace of its own. `ModuleTabs`
+  // resolves every tab through `hrefAccess`, so this one disappears on any
+  // deployment that has not switched `BI_NLQ_ENABLED` on — and on a session where
+  // the flag has not resolved yet, which is why there is no flash.
+  { href: "/explore/ask", label: "Ask a question" },
   { href: "/explore/measures", label: "Calculated measures" },
   { href: "/explore/alerts", label: "Threshold alerts" },
   { href: "/explore/subscriptions", label: "Scheduled reports" },

@@ -4,6 +4,7 @@ import {
   effectiveOrganizationModules,
   hasEffectiveCapability,
   hrefAccess,
+  isAskPath,
   isHrefVisible,
   isPersonalSettingsPath,
   isPathVisible,
@@ -201,6 +202,11 @@ assert.equal(
         sensitivity: "confidential",
         permission: "approve",
         requiresContextualAuthorization: true,
+        dataScope: {
+          kind: "all",
+          branches: [] as string[],
+          regions: [] as string[],
+        },
       },
     ],
     "liq",
@@ -551,13 +557,27 @@ const accountView = {
   sensitivity: "restricted",
   permission: "view",
   requiresContextualAuthorization: false,
+  dataScope: { kind: "all", branches: [] as string[], regions: [] as string[] },
 } as const;
 for (const [capabilities, visible] of [
   [[accountView], true],
   [[], false],
   [[{ ...accountView, permission: "administer" }], false],
   [[{ ...accountView, sensitivity: "aggregated" }], false],
-  [[{ ...accountView, requiresContextualAuthorization: true }], false],
+  [
+    [
+      {
+        ...accountView,
+        requiresContextualAuthorization: true,
+        dataScope: {
+          kind: "all",
+          branches: [] as string[],
+          regions: [] as string[],
+        },
+      },
+    ],
+    false,
+  ],
 ] as const) {
   const scope = resolved(true, true, {
     modules: effectiveInstitutionModules(null, [accountView]),
@@ -588,6 +608,7 @@ const creditView = {
   sensitivity: "aggregated",
   permission: "view",
   requiresContextualAuthorization: false,
+  dataScope: { kind: "all", branches: [] as string[], regions: [] as string[] },
 } as const;
 const riskView = {
   ...creditView,
@@ -863,6 +884,11 @@ const capitalApproverCapabilities = [
     sensitivity: "confidential",
     permission: "approve",
     requiresContextualAuthorization: false,
+    dataScope: {
+      kind: "all",
+      branches: [] as string[],
+      regions: [] as string[],
+    },
   },
 ] as Parameters<typeof hasEffectiveCapability>[0];
 
@@ -895,6 +921,11 @@ assert.equal(
         sensitivity: "confidential",
         permission: "create",
         requiresContextualAuthorization: true,
+        dataScope: {
+          kind: "all",
+          branches: [] as string[],
+          regions: [] as string[],
+        },
       },
     ] as Parameters<typeof hasEffectiveCapability>[0],
     "audit",
@@ -922,6 +953,11 @@ const biCapabilities = [
     sensitivity: "aggregated",
     permission: "view",
     requiresContextualAuthorization: false,
+    dataScope: {
+      kind: "all",
+      branches: [] as string[],
+      regions: [] as string[],
+    },
   },
 ] as Parameters<typeof effectiveInstitutionModules>[1];
 
@@ -943,6 +979,11 @@ assert.equal(
       sensitivity: "restricted",
       permission: "view",
       requiresContextualAuthorization: false,
+      dataScope: {
+        kind: "all",
+        branches: [] as string[],
+        regions: [] as string[],
+      },
     },
   ] as Parameters<typeof effectiveInstitutionModules>[1]).has("bi"),
   false,
@@ -957,6 +998,11 @@ assert.equal(
       sensitivity: "aggregated",
       permission: "export",
       requiresContextualAuthorization: false,
+      dataScope: {
+        kind: "all",
+        branches: [] as string[],
+        regions: [] as string[],
+      },
     },
   ] as Parameters<typeof effectiveInstitutionModules>[1]).has("bi"),
   false,
@@ -985,6 +1031,61 @@ for (const href of ["/insights", "/dashboards", "/explore"]) {
   assert.equal(isPathVisible(href, biScope(true)), true, href);
   assert.equal(isPathVisible(href, biScope(false)), false, href);
   assert.equal(isPathVisible(href, biScope(undefined)), true, href);
+}
+
+// --- the ask surface has its OWN deployment flag -----------------------------
+//
+// `BI_NLQ_ENABLED` is independent of `BI_ENABLED`, and with it off the ask routes
+// answer 409 rather than 404 — deliberately, so a switched-off surface is
+// distinguishable from an absent one. That makes the nav the only thing that can
+// decline to offer the door, so all three flag states are pinned, both ways.
+
+const askScope = (
+  nlqEnabled: boolean | undefined,
+  biEnabled: boolean | undefined = true,
+): ModuleScope => ({
+  ...resolved(true, true, { biEnabled, nlqEnabled }),
+  modules: new Set([...resolved(true, true).modules!, "bi"]),
+});
+
+assert.equal(isAskPath("/explore/ask"), true);
+assert.equal(isAskPath("/explore/ask/anything"), true);
+assert.equal(isAskPath("/explore"), false);
+assert.equal(isAskPath("/explore/measures"), false);
+assert.equal(moduleForPath("/explore/ask"), "bi");
+
+// The flag is on: the tab is offered.
+assert.equal(hrefAccess("/explore/ask", askScope(true)).state, "enabled");
+// The flag is off: there is no grant that would fix it, so it is hidden — not
+// disabled with a sentence to ask for.
+assert.deepEqual(hrefAccess("/explore/ask", askScope(false)), {
+  state: "hidden",
+});
+// Not yet known: hidden too, so no link flashes into the tab strip on load.
+assert.deepEqual(hrefAccess("/explore/ask", askScope(undefined)), {
+  state: "hidden",
+});
+// The ROUTE GUARD is the mirror image: it refuses only on a definite no, so a
+// deep-link refresh does not briefly 404 while the flag is still resolving.
+assert.equal(isPathVisible("/explore/ask", askScope(true)), true);
+assert.equal(isPathVisible("/explore/ask", askScope(false)), false);
+assert.equal(isPathVisible("/explore/ask", askScope(undefined)), true);
+
+// The two flags are independent in the direction that matters: BI off closes the
+// ask surface whatever the NLQ flag says, because every BI route is 404 then.
+assert.deepEqual(hrefAccess("/explore/ask", askScope(true, false)), {
+  state: "hidden",
+});
+assert.equal(isPathVisible("/explore/ask", askScope(true, false)), false);
+
+// And the ask flag closes ONLY the ask surface: the rest of Explore is untouched.
+for (const sibling of ["/explore", "/explore/measures", "/insights"]) {
+  assert.equal(
+    hrefAccess(sibling, askScope(false)).state,
+    "enabled",
+    `${sibling} must not be closed by the natural-language flag`,
+  );
+  assert.equal(isPathVisible(sibling, askScope(false)), true, sibling);
 }
 
 // A deep link inside a dashboard follows its module.

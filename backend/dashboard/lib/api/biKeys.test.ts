@@ -24,6 +24,8 @@ import {
   biDrillKey,
   biExplainKey,
   biGridKey,
+  biAskKey,
+  BI_ASK_PREFIX,
   biMeasureKey,
   biMeasuresKey,
   biQueryFingerprint,
@@ -43,6 +45,10 @@ const DASHBOARD_A = "3f6b1d1e-4c5a-4f2b-9e7d-0a1b2c3d4e5f";
 const DASHBOARD_B = "7c2a8b90-1d3e-4a5b-8c6d-9e0f1a2b3c4d";
 const MEASURE_A = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 const MEASURE_B = "9f8e7d6c-5b4a-4938-8271-6f5e4d3c2b1a";
+const QUESTION_A = "6f2a1c90-1d3e-4a5b-8c6d-9e0f1a2b3c4d";
+const QUESTION_B = "b1d4e7f0-2a3b-4c5d-8e9f-0a1b2c3d4e5f";
+const WORDS_A = "gross loans by branch";
+const WORDS_B = "deposits by product";
 
 const analyst = queryAuthorityScope(TENANT_A, "analyst@aequoros.example", 7);
 const otherTenantAnalyst = queryAuthorityScope(
@@ -341,6 +347,7 @@ for (const surfaceKey of [
   biDashboardSharesKey(analyst, BANK_A, DASHBOARD_A),
   biMeasuresKey(analyst, BANK_A),
   biMeasureKey(analyst, BANK_A, MEASURE_A),
+  biAskKey(analyst, BANK_A, QUESTION_A, WORDS_A, "2026-06-30"),
 ] as readonly (readonly unknown[])[]) {
   assert.equal(
     surfaceKey[1],
@@ -372,6 +379,138 @@ assert.equal(
   ),
   false,
 );
+
+// --- one natural-language question ------------------------------------------
+//
+// The question is the fifth dimension, and it is a dimension in its own right:
+// two readers may ask the same words and be proposed different queries, and the
+// same reader may ask two different things a second apart. The route 404s for
+// anybody but the principal who asked, so a cache hit that crossed principals
+// would answer WITHOUT asking the server — which is the one thing this module
+// exists to prevent.
+
+const askBase = biAskKey(
+  analyst,
+  BANK_A,
+  QUESTION_A,
+  WORDS_A,
+  "2026-06-30",
+) as readonly unknown[];
+
+assert.equal(askBase[0], BI_ASK_PREFIX);
+assertDistinct(
+  "ask: tenant",
+  askBase,
+  biAskKey(
+    otherTenantAnalyst,
+    BANK_A,
+    QUESTION_A,
+    WORDS_A,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: signed-in user",
+  askBase,
+  biAskKey(
+    otherUser,
+    BANK_A,
+    QUESTION_A,
+    WORDS_A,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: authorization generation",
+  askBase,
+  biAskKey(
+    regranted,
+    BANK_A,
+    QUESTION_A,
+    WORDS_A,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: institution",
+  askBase,
+  biAskKey(
+    analyst,
+    BANK_B,
+    QUESTION_A,
+    WORDS_A,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: reporting date",
+  askBase,
+  biAskKey(
+    analyst,
+    BANK_A,
+    QUESTION_A,
+    WORDS_A,
+    "2026-03-31",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: the question itself",
+  askBase,
+  biAskKey(
+    analyst,
+    BANK_A,
+    QUESTION_A,
+    WORDS_B,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+assertDistinct(
+  "ask: which question",
+  askBase,
+  biAskKey(
+    analyst,
+    BANK_A,
+    QUESTION_B,
+    WORDS_A,
+    "2026-06-30",
+  ) as readonly unknown[],
+);
+// A key built before the question had an id must never match one built after.
+assertDistinct(
+  "ask: an id that has not arrived yet",
+  askBase,
+  biAskKey(analyst, BANK_A, null, WORDS_A, "2026-06-30") as readonly unknown[],
+);
+// Two different questions never share an entry, whichever way they differ.
+assert.notEqual(
+  key(
+    biAskKey(
+      analyst,
+      BANK_A,
+      QUESTION_A,
+      WORDS_A,
+      "2026-06-30",
+    ) as readonly unknown[],
+  ),
+  key(
+    biAskKey(
+      analyst,
+      BANK_A,
+      QUESTION_B,
+      WORDS_B,
+      "2026-06-30",
+    ) as readonly unknown[],
+  ),
+);
+// And the ask surface shares a prefix with no other BI surface.
+for (const otherSurface of [
+  biQueryKey(analyst, BANK_A, nplQuery),
+  biCatalogueKey(analyst, BANK_A),
+  biMeasuresKey(analyst, BANK_A),
+] as readonly (readonly unknown[])[]) {
+  assert.equal(isPrefixOf(askBase, otherSurface), false);
+  assert.equal(isPrefixOf(otherSurface, askBase), false);
+}
 
 // --- date normalisation ------------------------------------------------------
 

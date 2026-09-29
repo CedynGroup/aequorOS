@@ -230,6 +230,21 @@ export type ModuleScope = {
    */
   biEnabled?: boolean;
   /**
+   * Whether THIS DEPLOYMENT serves natural-language questions
+   * (`GET /feature-flags` → `bi_nlq_enabled`). A SECOND deployment flag, not a
+   * permission and not implied by `biEnabled`: `BI_NLQ_ENABLED` ships off, so a
+   * deployment can serve every BI surface and still refuse to send a reader's
+   * words to a model. With it off the ask routes answer 409 rather than 404 —
+   * deliberately, so a switched-off surface is distinguishable from an absent
+   * one — which means the nav is the only thing that can keep the door from
+   * being offered.
+   *
+   * Three-valued for exactly the reason `biEnabled` is: `undefined` is "not yet
+   * known" and hides, so no link flashes; only a definite `false` makes the
+   * route guard refuse, so a deep-link refresh does not briefly 404.
+   */
+  nlqEnabled?: boolean;
+  /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
    * assume "everything" — the fix for the every-module-flashes-on-refresh race.
@@ -426,6 +441,17 @@ export function isBiPath(path: string): boolean {
   return moduleForPath(normalize(path)) === "bi";
 }
 
+/**
+ * The natural-language surface. A BI path, and additionally gated on its own
+ * deployment flag — see `ModuleScope.nlqEnabled`.
+ */
+export function isAskPath(path: string): boolean {
+  const normalized = normalize(path);
+  return (
+    normalized === "/explore/ask" || normalized.startsWith("/explore/ask/")
+  );
+}
+
 function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
@@ -475,6 +501,10 @@ function bindingControlledSubrouteHidden(
   // here is "not yet known", and refusing on that would 404 a deep-link
   // refresh before the answer arrives.
   if (isBiPath(path) && scope.biEnabled === false) return true;
+  // Its own flag, and the same asymmetry: refuse only on a definite no. The ask
+  // routes answer 409 rather than 404 when the flag is off, so without this the
+  // page would load and only fail when the reader typed a question.
+  if (isAskPath(path) && scope.nlqEnabled === false) return true;
   if (
     (path === "/basel" ||
       path === "/basel/rwa" ||
@@ -713,6 +743,11 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   // hidden rather than disabled-with-a-sentence. `!== true` (not `=== false`)
   // because the nav must not offer the door before the flag has resolved.
   if (isBiPath(path) && scope.biEnabled !== true) return { state: "hidden" };
+  // The ask surface's own flag, decided here for the same reason and with the
+  // same `!== true`: a deployment flag is not a grant, so there is no sentence a
+  // reader could be shown, and the nav must not name the door before the flag
+  // has resolved.
+  if (isAskPath(path) && scope.nlqEnabled !== true) return { state: "hidden" };
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
     if (isBaselineOnlyScope(scope)) {

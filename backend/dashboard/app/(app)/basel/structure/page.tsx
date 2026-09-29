@@ -16,7 +16,7 @@ import {
   useCapitalStructure,
 } from "@/lib/api/hooks";
 import { num, shortId } from "@/lib/api/values";
-import { seriesColor } from "@/lib/chartTheme";
+import { cssSeriesColor } from "@/lib/svgChartPalette";
 import { fmtCurrencyFull } from "@/lib/format";
 
 function TierBlock({
@@ -108,9 +108,9 @@ export default function CapitalStructurePage() {
   const tier2 = num(data?.tier2CapitalGhs);
   const total = num(data?.totalCapitalGhs);
   const compositionSegments = [
-    { label: "CET1", value: cet1, color: seriesColor(0) },
-    { label: "AT1", value: at1, color: seriesColor(1) },
-    { label: "Tier 2", value: tier2, color: seriesColor(2) },
+    { label: "CET1", value: cet1, colorIndex: 0 },
+    { label: "AT1", value: at1, colorIndex: 1 },
+    { label: "Tier 2", value: tier2, colorIndex: 2 },
   ].filter((s) => s.value > 0);
 
   return (
@@ -197,7 +197,7 @@ export default function CapitalStructurePage() {
                         key={s.label}
                         style={{
                           width: `${total > 0 ? (s.value / total) * 100 : 0}%`,
-                          background: s.color,
+                          background: cssSeriesColor(s.colorIndex),
                         }}
                         title={`${s.label} · ${fmtCurrencyFull(s.value)}`}
                       />
@@ -211,7 +211,7 @@ export default function CapitalStructurePage() {
                       >
                         <span
                           className="w-2 h-2 rounded-sm"
-                          style={{ background: s.color }}
+                          style={{ background: cssSeriesColor(s.colorIndex) }}
                           aria-hidden
                         />
                         <span className="text-navy font-medium">{s.label}</span>

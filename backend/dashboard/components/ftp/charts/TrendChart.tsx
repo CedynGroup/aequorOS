@@ -1,24 +1,12 @@
-'use client';
+"use client";
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import type { DotProps } from 'recharts';
-import {
-  CHART_CRIT,
-  CHART_GRID,
-  axisProps,
-  chartMargins,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
+  LINE_SERIES_BASE,
+  thresholdMarkLine,
+  tooltipHtml,
+} from "@/lib/echartsOptions";
 
 export type TrendChartPoint = {
   label: string;
@@ -30,6 +18,9 @@ export type TrendChartPoint = {
 /**
  * Period-over-period trend line for FTP metrics with an optional floor line.
  * Hollow markers flag points computed live (no stored results yet).
+ *
+ * The hollow/solid distinction is a per-datum `itemStyle` rather than the custom
+ * dot renderer Recharts needed — a canvas has no element per point to render.
  */
 export default function TrendChart({
   data,
@@ -45,79 +36,79 @@ export default function TrendChart({
   threshold?: number;
   thresholdLabel?: string;
   valueLabel: string;
-  format: (v: number) => string;
+  format: (value: number) => string;
   height?: number;
   colorIndex?: number;
   yDomain?: [number, number];
 }) {
-  const color = seriesColor(colorIndex);
+  const tokens = useChartTokens();
+  const color = seriesColor(tokens, colorIndex);
 
-  const renderDot = (props: DotProps & { payload?: TrendChartPoint }) => {
-    const { cx, cy, payload } = props;
-    if (cx === undefined || cy === undefined) return <g key={`${cx}-${cy}`} />;
-    const stored = payload?.stored ?? true;
-    return (
-      <circle
-        key={`${cx}-${cy}`}
-        cx={cx}
-        cy={cy}
-        r={3.5}
-        stroke={color}
-        strokeWidth={1.5}
-        fill={stored ? color : 'rgb(var(--surface-raised))'}
-      />
-    );
-  };
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 20, top: 8, bottom: 4, containLabel: true },
+    xAxis: { type: "category", data: data.map((point) => point.label) },
+    yAxis: {
+      type: "value",
+      ...(yDomain ? { min: yDomain[0], max: yDomain[1] } : { scale: true }),
+      axisLabel: { formatter: (value: number) => format(value) },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: unknown) => {
+        const first = (params as ReadonlyArray<{ dataIndex: number }>)[0];
+        if (!first) return "";
+        const point = data[first.dataIndex];
+        if (!point) return "";
+        return tooltipHtml(point.label, [
+          {
+            label: valueLabel,
+            value: format(point.value),
+            color,
+            note: point.stored ? undefined : "inline",
+          },
+        ]);
+      },
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 7,
+        lineStyle: { color, width: 2 },
+        markLine:
+          threshold === undefined
+            ? undefined
+            : thresholdMarkLine([
+                {
+                  axis: "y",
+                  value: threshold,
+                  label: thresholdLabel,
+                  color: tokens.adverse,
+                  labelPosition: "insideEndBottom",
+                },
+              ]),
+        data: data.map((point) => ({
+          value: point.value,
+          itemStyle: {
+            color: point.stored ? color : tokens.surface,
+            borderColor: color,
+            borderWidth: 1.5,
+          },
+        })),
+      },
+    ],
+  } as BiEChartsOption;
+
+  const inline = data.filter((point) => !point.stored).length;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ ...chartMargins, right: 20 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} />
-        <YAxis
-          {...axisProps}
-          domain={yDomain ?? ['auto', 'auto']}
-          tickFormatter={(v: number) => format(v)}
-          width={64}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(value: number | string, _name, item) => {
-            const point = item?.payload as TrendChartPoint | undefined;
-            const v = typeof value === 'number' ? value : Number(value);
-            return [
-              `${format(v)}${point && !point.stored ? ' · inline' : ''}`,
-              valueLabel,
-            ];
-          }}
-        />
-        {threshold !== undefined && (
-          <ReferenceLine
-            y={threshold}
-            stroke={CHART_CRIT}
-            strokeDasharray="5 4"
-            label={
-              thresholdLabel
-                ? {
-                    value: thresholdLabel,
-                    position: 'insideBottomRight',
-                    fontSize: 11,
-                    fill: CHART_CRIT,
-                  }
-                : undefined
-            }
-          />
-        )}
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2}
-          dot={renderDot}
-          activeDot={{ r: 5 }}
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`${valueLabel} across ${data.length} periods${
+        inline > 0 ? `, ${inline} computed inline` : ""
+      }`}
+    />
   );
 }

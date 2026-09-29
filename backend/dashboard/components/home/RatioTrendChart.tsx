@@ -6,32 +6,27 @@
  * backend computed from stored baseline runs or inline). LCR/NSFR read the
  * left axis, CAR its own right axis so the ~10–25% capital band stays legible
  * next to triple-digit liquidity ratios.
+ *
+ * This chart is the reason `scripts/assert-home-route-bundle.mjs` exists: it is
+ * the only chart on the Command Center, and it is loaded through
+ * `components/home/DeferredRatioTrendChart.tsx` so the charting runtime stays
+ * out of the home route's initial JavaScript. The guard asserts both halves —
+ * no runtime marker in the entry graph, and one present in the deferred chunk.
  */
 
 import { useMemo, useState } from "react";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+  gapAwareData,
+  LINE_SERIES_BASE,
+  tooltipHtml,
+} from "@/lib/echartsOptions";
 import RangeTabs, {
   RANGE_MONTHS,
   type RangePreset,
 } from "@/components/ui/RangeTabs";
 import ChartFrame from "@/components/ui/ChartFrame";
-import {
-  axisProps,
-  chartLegendProps,
-  chartMargins,
-  chartTooltipProps,
-  CHART_GRID,
-  seriesColor,
-} from "@/lib/chartTheme";
 import { num } from "@/lib/api/values";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { useEffectiveRatioDashboards } from "@/lib/api/hooks";
@@ -52,6 +47,7 @@ export default function RatioTrendChart({
   periodId: string;
 }) {
   const [range, setRange] = useState<RangePreset>("1Y");
+  const tokens = useChartTokens();
   // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
   // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
   const moduleScope = useModuleScope();
@@ -92,11 +88,92 @@ export default function RatioTrendChart({
 
   const isLoading = liq.isLoading || cap.isLoading;
   const windowMove = (() => {
-    const withLcr = rows.filter((r) => r.lcr !== undefined);
+    // Narrowed to the readings that exist, so no `?? 0` stand-in is needed for
+    // the arithmetic: a window with fewer than two LCR readings has no move.
+    const withLcr = rows
+      .map((row) => row.lcr)
+      .filter((value): value is number => value !== undefined);
     if (withLcr.length < 2) return null;
-    return (withLcr[withLcr.length - 1].lcr ?? 0) - (withLcr[0].lcr ?? 0);
+    return withLcr[withLcr.length - 1] - withLcr[0];
   })();
   const storedCount = (liq.data?.trend ?? []).filter((p) => p.stored).length;
+
+  // The capital axis stays on the right even when it is the only axis, so that
+  // an SDI's CAR sits where a bank's CAR sits.
+  const capitalAxisIndex = isSdi ? 0 : 1;
+  const pctAxisLabel = {
+    formatter: (value: number) => `${Math.round(value)}%`,
+  };
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 4, top: 12, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: {
+      type: "category",
+      data: rows.map((row) => row.label),
+      axisLabel: { hideOverlap: true },
+    },
+    yAxis: isSdi
+      ? [{ type: "value", position: "right", axisLabel: pctAxisLabel }]
+      : [
+          { type: "value", axisLabel: pctAxisLabel },
+          { type: "value", position: "right", axisLabel: pctAxisLabel },
+        ],
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: unknown) => {
+        const points = params as ReadonlyArray<{
+          dataIndex: number;
+          seriesName: string;
+          color: string;
+          value: number | null;
+        }>;
+        const first = points[0];
+        if (!first) return "";
+        const row = rows[first.dataIndex];
+        return tooltipHtml(
+          row ? row.label : null,
+          points.map((entry) => ({
+            label: entry.seriesName,
+            color: entry.color,
+            // A period the platform did not compute says so. Printing 0.00%
+            // would report a ratio nobody measured.
+            value:
+              entry.value === null || entry.value === undefined
+                ? "not computed"
+                : `${entry.value.toFixed(2)}%`,
+          })),
+        );
+      },
+    },
+    series: [
+      ...(isSdi
+        ? []
+        : (
+            [
+              { name: "LCR", key: "lcr" as const, index: 0 },
+              { name: "NSFR", key: "nsfr" as const, index: 1 },
+            ] as const
+          ).map((series) => ({
+            ...LINE_SERIES_BASE,
+            name: series.name,
+            yAxisIndex: 0,
+            smooth: true,
+            lineStyle: { color: seriesColor(tokens, series.index), width: 1.8 },
+            itemStyle: { color: seriesColor(tokens, series.index) },
+            data: gapAwareData(rows.map((row) => row[series.key])),
+          }))),
+      {
+        ...LINE_SERIES_BASE,
+        name: "CAR",
+        yAxisIndex: capitalAxisIndex,
+        smooth: true,
+        lineStyle: { color: seriesColor(tokens, 2), width: 1.8 },
+        itemStyle: { color: seriesColor(tokens, 2) },
+        data: gapAwareData(rows.map((row) => row.car)),
+      },
+    ],
+  } as BiEChartsOption;
 
   return (
     <ChartFrame
@@ -130,83 +207,13 @@ export default function RatioTrendChart({
           </p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={chartMargins}>
-            <CartesianGrid
-              stroke={CHART_GRID}
-              strokeDasharray="3 3"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="label"
-              {...axisProps}
-              interval="preserveStartEnd"
-              minTickGap={24}
-            />
-            {!isSdi && (
-              <YAxis
-                yAxisId="liquidity"
-                {...axisProps}
-                width={44}
-                tickFormatter={(v: number) => `${Math.round(v)}%`}
-              />
-            )}
-            <YAxis
-              yAxisId="capital"
-              orientation="right"
-              {...axisProps}
-              width={40}
-              tickFormatter={(v: number) => `${Math.round(v)}%`}
-            />
-            <Tooltip
-              {...chartTooltipProps}
-              formatter={(value: number | string, name: string) => [
-                `${num(value).toFixed(2)}%`,
-                name,
-              ]}
-            />
-            <Legend {...chartLegendProps} />
-            {!isSdi && (
-              <Line
-                yAxisId="liquidity"
-                type="monotone"
-                dataKey="lcr"
-                name="LCR"
-                stroke={seriesColor(0)}
-                strokeWidth={1.8}
-                dot={false}
-                connectNulls
-                // Generation invalidation can refresh the series; re-animating
-                // a freshness update is noise.
-                isAnimationActive={false}
-              />
-            )}
-            {!isSdi && (
-              <Line
-                yAxisId="liquidity"
-                type="monotone"
-                dataKey="nsfr"
-                name="NSFR"
-                stroke={seriesColor(1)}
-                strokeWidth={1.8}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-            )}
-            <Line
-              yAxisId="capital"
-              type="monotone"
-              dataKey="car"
-              name="CAR"
-              stroke={seriesColor(2)}
-              strokeWidth={1.8}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <EChart
+          option={option}
+          height={280}
+          ariaLabel={`${
+            isSdi ? "CAR" : "LCR, NSFR and CAR"
+          } across ${rows.length} reporting periods, ${storedCount} of them from stored results`}
+        />
       )}
     </ChartFrame>
   );

@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * The ONLY import path to an ECharts canvas.
+ * The ONLY import path to an ECharts canvas, for every chart in the dashboard.
+ *
+ * It began as the BI workspace's chart entrance and is now the whole dashboard's:
+ * the module charts moved off Recharts, and they reach the canvas through here so
+ * that the two properties below hold for every route, not just for `/explore`.
  *
  * `dynamic(..., { ssr: false })` does two jobs. ECharts and zrender reach for
  * `window` at module scope, so they cannot be server-rendered; and they are a

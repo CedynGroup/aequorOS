@@ -31,7 +31,11 @@ test.describe("home check", () => {
     await page.mouse.wheel(0, 1000);
     const ratioPanel = panel();
     await expect(ratioPanel.getByLabel("Loading chart")).toBeHidden();
-    await expect(ratioPanel.locator(".recharts-wrapper")).toBeVisible();
+    // The ECharts canvas publishes no text, so the accessible name is the
+    // assertion: a visible role="img" with a name means the chart drew.
+    await expect(
+      ratioPanel.getByRole("img", { name: /reporting periods/ }),
+    ).toBeVisible();
     const loadedBox = await ratioPanel.boundingBox();
     expect(loadedBox?.height).toBe(loadingBox?.height);
     console.log(

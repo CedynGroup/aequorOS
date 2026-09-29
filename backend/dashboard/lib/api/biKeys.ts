@@ -519,3 +519,53 @@ export function biMeasureKey(
     measureId,
   );
 }
+
+/**
+ * One natural-language question, and whatever the platform proposes for it.
+ *
+ * A QUESTION IS A CACHE DIMENSION. The proposal is a `BiQuery` the model wrote
+ * over the members THIS reader may see, judged for THIS institution and THIS
+ * reporting date — so it is keyed on exactly the five dimensions every other BI
+ * read is, with the question itself as the fifth. Two consequences that are the
+ * reason this is not keyed on the question id alone:
+ *
+ * * the id is a queue row and the route 404s for anybody but the principal who
+ *   asked, so a key that dropped the actor or the authorization generation would
+ *   let a cache hit answer a colleague WITHOUT asking the server anything — the
+ *   one leak `./biKeys` exists to prevent;
+ * * the same words asked twice are two questions with two ids, and the proposals
+ *   may differ (the catalogue, the grants or the date may have moved between
+ *   them), so the words are part of the key and never a substitute for the id.
+ *
+ * The question is carried as its canonical serialisation, not a digest, for the
+ * reason the module docstring gives: a digest can collide and canonical JSON
+ * cannot.
+ */
+export const BI_ASK_PREFIX = "bi-ask";
+
+/** The question dimension of a key: the reader's own words, canonically. */
+export function askQuestionFingerprint(
+  question: string | null | undefined,
+): string {
+  return canonicalJson((question ?? "").trim());
+}
+
+/** `GET …/bi/ask/{question_id}` — one of your own questions. */
+export function biAskKey(
+  scope: QueryAuthorityScope,
+  bankId: string | null | undefined,
+  questionId: string | null | undefined,
+  question: string | null | undefined,
+  asOf: string | null | undefined,
+): QueryKey {
+  return scopedQueryKey(
+    BI_ASK_PREFIX,
+    scope,
+    bankDimension(bankId),
+    isoDay(asOf) ?? "unset",
+    askQuestionFingerprint(question),
+    // A distinct dimension value, not an absent one: a key built before the
+    // question had an id must never match one built after.
+    questionId ?? "question:pending",
+  );
+}

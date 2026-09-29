@@ -221,6 +221,17 @@ export function chartThemeFrom(tokens: BiChartTokens): BiChartTheme {
 }
 
 /**
+ * The categorical series colour at `index`, cycling once the palette runs out.
+ *
+ * The RESOLVED value, not `var(--chart-N)`: a canvas cannot read a CSS variable,
+ * which is the whole reason `readChartTokens` exists.
+ */
+export function seriesColor(tokens: BiChartTokens, index: number): string {
+  const size = tokens.series.length;
+  return tokens.series[((index % size) + size) % size];
+}
+
+/**
  * The active chart palette, rebuilt whenever the application theme changes.
  *
  * It watches `data-theme` on the document element — which is what both the
@@ -259,4 +270,15 @@ export function useChartTheme(): BiChartTheme {
   }, []);
 
   return chartTheme;
+}
+
+/**
+ * The resolved palette on its own, for a chart that builds its own option object
+ * rather than handing ECharts a theme. Module charts need individual colours —
+ * a series colour, the adverse tone for a breached floor — and this is the only
+ * honest way to get one: read it from the live document, and re-read it when the
+ * theme changes.
+ */
+export function useChartTokens(): BiChartTokens {
+  return useChartTheme().tokens;
 }

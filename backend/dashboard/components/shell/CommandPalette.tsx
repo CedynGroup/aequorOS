@@ -29,6 +29,7 @@ import {
   Lightbulb,
   LayoutGrid,
   Table2,
+  MessageSquareQuote,
 } from "lucide-react";
 
 type Item = {
@@ -96,6 +97,15 @@ const items: Item[] = [
     group: "Intelligence",
     keywords:
       "business intelligence self service query measure dimension ad hoc analysis",
+  },
+  {
+    id: "bi-ask",
+    label: "Ask a question",
+    href: "/explore/ask",
+    icon: MessageSquareQuote,
+    group: "Intelligence",
+    keywords:
+      "natural language question words ask assistant plain english translate",
   },
 
   {

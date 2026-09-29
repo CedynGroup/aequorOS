@@ -123,7 +123,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const isPersonalSelfService = isPersonalSettingsPath(pathname);
   const profileQuery = useUserProfile();
   const banksQuery = useBanks(!isPersonalSelfService);
-  const { biEnabled } = useBiAvailability(!isPersonalSelfService);
+  const { biEnabled, nlqEnabled } = useBiAvailability(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities = useMemo(
@@ -356,12 +356,17 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       // 404, so the nav must not offer the door and the route guard must refuse
       // it. `undefined` until `GET /feature-flags` answers — see ModuleScope.
       biEnabled,
+      // A SECOND deployment flag, independent of the first: with BI on and this
+      // off the ask routes answer 409, not 404, so only the nav can decline to
+      // offer the door. `undefined` until the flags answer — see ModuleScope.
+      nlqEnabled,
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [
       bank,
       banksQuery.isLoading,
       biEnabled,
+      nlqEnabled,
       institutionCapabilities,
       organizationCapabilities,
       profileQuery.isLoading,
@@ -427,13 +432,16 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     const staleSession = apiError?.status === 401;
     return (
       <FullScreenPanel
-        title={staleSession ? "Your access has changed" : "Risk service unreachable"}
+        title={
+          staleSession ? "Your access has changed" : "Risk service unreachable"
+        }
         description={
           staleSession
             ? (apiError?.message ??
               "Your permissions changed, so this session is out of date. Sign in again to pick them up.")
             : apiError
-              ? (apiError.message ?? "Effective authority is temporarily unavailable.")
+              ? (apiError.message ??
+                "Effective authority is temporarily unavailable.")
               : "Could not resolve effective authority from the risk service."
         }
         action={

@@ -68,6 +68,7 @@ import {
   configuration,
   isApiError,
 } from "./client";
+import { nlqEnabledFromFeatureFlags } from "./featureFlags";
 import { useQueryAuthorityScope } from "./useQueryScope";
 import type {
   AlertDirection,
@@ -142,6 +143,15 @@ export function isBiUnavailable(error: unknown): boolean {
  */
 export function useBiAvailability(enabled = true): {
   biEnabled: boolean | undefined;
+  /**
+   * Whether this deployment serves natural-language questions. A SECOND flag,
+   * read from the same body: `BI_NLQ_ENABLED` is independent of `BI_ENABLED`, and
+   * with it off the ask routes answer 409 rather than 404 — so the nav is the only
+   * thing that can decline to offer that door. `undefined` until the flags
+   * answer, and `undefined` too on a backend that does not project the field yet;
+   * both hide the surface. See `nlqEnabledFromFeatureFlags`.
+   */
+  nlqEnabled: boolean | undefined;
   isLoading: boolean;
 } {
   const scope = useQueryAuthorityScope();
@@ -155,6 +165,9 @@ export function useBiAvailability(enabled = true): {
   return {
     // A failed flag read is not an entitlement. Fail closed.
     biEnabled: query.isError ? false : query.data?.biEnabled,
+    nlqEnabled: query.isError
+      ? false
+      : nlqEnabledFromFeatureFlags(query.data ?? null),
     isLoading: query.isPending,
   };
 }
@@ -1570,7 +1583,9 @@ export function useBiMeasure(
  * are left alone for the same reason a canvas save leaves them alone — no figure
  * moved, and re-asking would make every open tile flicker.
  */
-function useInvalidateMeasures(bankId: string | undefined): () => Promise<void> {
+function useInvalidateMeasures(
+  bankId: string | undefined,
+): () => Promise<void> {
   const client = useQueryClient();
   const scope = useQueryAuthorityScope();
   return useCallback(async () => {

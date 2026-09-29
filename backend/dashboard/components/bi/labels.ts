@@ -16,7 +16,12 @@
  * before this map learns its name.
  */
 
-import { labelize } from "@/lib/api/values";
+// Relative on purpose: `labels.test.ts` runs this module under plain Node via
+// `tsconfig.test.json`, and tsc does not rewrite the `@/` alias — a value import
+// through it resolves to nothing at runtime and the suite dies before its first
+// assertion. Type-only `@/` imports are fine (they are erased); a VALUE import in
+// the Node-runnable set must be relative.
+import { labelize } from "../../lib/api/values";
 import type { BiDatasetRequirement, BiPanelKey, BiPanelSurface } from "./types";
 
 const MODULE_LABELS: Readonly<Record<string, string>> = {
@@ -95,6 +100,14 @@ const DATASET_REQUIREMENTS: Readonly<Record<string, BiDatasetRequirement>> = {
   },
   gl_mapping_bsd7: {
     label: "The general ledger account mapping",
+    href: "/data-engine/excel-csv",
+  },
+  // Phase 5. Without an entry the fallback titleises the key, and a reader was
+  // being told "Needs data: Gl Segment Balances" — a database identifier dressed
+  // up, which is exactly what this map exists to prevent. What the bank actually
+  // has to send is its ledger broken down by branch.
+  gl_segment_balances: {
+    label: "The general ledger broken down by branch",
     href: "/data-engine/excel-csv",
   },
 };

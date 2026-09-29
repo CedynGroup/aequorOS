@@ -1,11 +1,12 @@
 /**
  * The authority sentence an Org Owner composes, as scalar data.
  *
- * Everything here is PURE: option vocabularies, the wire bodies the composer
+ * Everything here is PURE: option vocabularies, the request bodies the composer
  * posts, the validation that mirrors the server's own, the cache identity of
  * the branch directory, and the production copy that describes a grant's
- * coverage in the Members list. Transport lives in
- * `components/settings/grantTransport.ts`; nothing in this module fetches.
+ * coverage in the Members list. Nothing in this module fetches — the generated
+ * operations in `@aequoros/risk-service-api` are the transport, called from
+ * `lib/api/grantAdministration.ts` and the composer itself.
  *
  * Phase 4 added the fifth dimension — WHICH SLICE of an institution's book the
  * sentence admits (`docs/bi.md` §Phase 4). It is still one indivisible
@@ -13,12 +14,15 @@
  */
 
 import type {
+  BindingCreateRequest,
   BindingCreateRequestRoleBundleEnum,
+  BindingPreviewRequest,
   BindingRead,
   InstitutionScope,
   MemberRead,
   ModuleScope,
   SensitivityScope,
+  SsoAccessRequestApprove,
 } from "@aequoros/risk-service-api";
 import { scopedQueryKey, type QueryAuthorityScope } from "./queryPolicy";
 
@@ -46,7 +50,14 @@ export const WHOLE_INSTITUTION_BOOK: GrantDataScope = Object.freeze({
 
 /**
  * The wire field names, taken from the migration that created the columns.
- * `grantRequirements.parity.test.ts` reads that file and fails if these drift.
+ *
+ * `grantRequirements.parity.test.ts` reads all THREE places these names have to
+ * agree and fails if any drifts: the migration that created the columns, the
+ * request contract that accepts them, and the generated serializer that has to
+ * emit them. That third check is the permanent form of the tripwire the interim
+ * transport used to be — a client regenerated against a schema that renamed or
+ * dropped either column would silently stop sending it, and the server default
+ * would then widen the grant to the whole book.
  */
 export const DATA_SCOPE_KIND_FIELD = "data_scope_kind";
 export const DATA_SCOPE_VALUES_FIELD = "data_scope_values";
@@ -203,13 +214,25 @@ export function grantScopeRefusal(
 }
 
 /**
- * The scalar scope every grant body carries, in the server's own field names.
+ * The scalar scope every grant request carries, as the generated request model.
  *
- * The data-scope pair is OMITTED when the coverage is the whole book. That is
- * deliberate on two counts: the column's server default is `all`, so omitting
- * says exactly what sending `all` would; and the request is then byte-identical
- * to the one the generated client sent before this feature existed, which is
- * what `grants.test.ts` pins against the generated model's own serializer.
+ * WHY THIS IS A MODEL AND NOT AN OBJECT LITERAL. Phase 4 added the coverage
+ * columns to a route the client had already been generated against, and
+ * `BindingCreateRequestToJSON` hand-enumerates its keys with no spread — so for
+ * as long as the package was stale, posting through the generated operation
+ * dropped the pair in the browser, the column default (`all`) applied, and an
+ * Org Owner who chose two branches granted the whole book with a success
+ * dialog. The interim answer was a hand-written transport
+ * (`components/settings/grantTransport.ts`, deleted with this change). The
+ * permanent one is this: the client is regenerated, the composer posts through
+ * `authorizationApi` / `authApi` again, and the shape of what it sends is
+ * checked by the COMPILER against the generated contract rather than by a
+ * second hand-written one nobody diffs.
+ *
+ * The data-scope pair is left UNSET when the coverage is the whole book. The
+ * generated serializer emits an unset field as `undefined` and `JSON.stringify`
+ * drops it, so both columns are absent from the request and the server default
+ * applies — which says exactly what sending `all` would.
  *
  * A NARROWING kind is sent even when nothing has been chosen yet, and that is
  * the other half of the same decision. `grantScopeRefusal` stops the composer
@@ -218,53 +241,60 @@ export function grantScopeRefusal(
  * the pair would have quietly granted the whole book. The unstorable shape is
  * the safe one.
  */
-function scopeBody(draft: GrantDraft): Record<string, unknown> {
+type GrantScopeFields = Pick<
+  BindingCreateRequest,
+  | "dataScopeKind"
+  | "dataScopeValues"
+  | "institutionId"
+  | "institutionScope"
+  | "moduleScope"
+  | "reason"
+  | "roleBundle"
+  | "sensitivityScope"
+>;
+
+function scopeFields(draft: GrantDraft): GrantScopeFields {
   const scope = statedDataScope(draft);
-  const body: Record<string, unknown> = {
-    institution_scope: draft.institutionScope,
-    module_scope: draft.moduleScope,
+  const narrowed = scope.kind !== "all";
+  return {
+    institutionScope: draft.institutionScope,
+    // Sent ONLY for an institution target: the server's own validator forbids
+    // an id on an organization-wide grant, and `undefined` is dropped from the
+    // request rather than posted as null.
+    institutionId:
+      draft.institutionScope === "institution" && draft.institutionId
+        ? draft.institutionId
+        : undefined,
+    moduleScope: draft.moduleScope,
     reason: draft.reason.trim(),
-    role_bundle: draft.roleBundle,
-    sensitivity_scope: draft.sensitivityScope,
+    roleBundle: draft.roleBundle,
+    sensitivityScope: draft.sensitivityScope,
+    dataScopeKind: narrowed ? scope.kind : undefined,
+    dataScopeValues: narrowed ? [...scope.values] : undefined,
   };
-  if (draft.institutionScope === "institution" && draft.institutionId) {
-    body.institution_id = draft.institutionId;
-  }
-  if (scope.kind !== "all") {
-    body[DATA_SCOPE_KIND_FIELD] = scope.kind;
-    body[DATA_SCOPE_VALUES_FIELD] = [...scope.values];
-  }
-  return body;
 }
 
-export function grantPreviewBody(
+export function grantPreviewRequest(
   draft: GrantDraft,
   principalUserId: string,
-): Record<string, unknown> {
-  return { ...scopeBody(draft), principal_user_id: principalUserId };
+): BindingPreviewRequest {
+  return { ...scopeFields(draft), principalUserId };
 }
 
-export function grantCreateBody(
+export function grantCreateRequest(
   draft: GrantDraft,
   principalUserId: string,
   expectedAuthoritySentence: string,
-): Record<string, unknown> {
-  return {
-    ...scopeBody(draft),
-    principal_user_id: principalUserId,
-    expected_authority_sentence: expectedAuthoritySentence,
-  };
+): BindingCreateRequest {
+  return { ...scopeFields(draft), principalUserId, expectedAuthoritySentence };
 }
 
-/** The SSO approval body: the same sentence, with the user in the path. */
-export function ssoApprovalBody(
+/** The SSO approval request: the same sentence, with the user in the path. */
+export function ssoApprovalRequest(
   draft: GrantDraft,
   expectedAuthoritySentence: string,
-): Record<string, unknown> {
-  return {
-    ...scopeBody(draft),
-    expected_authority_sentence: expectedAuthoritySentence,
-  };
+): SsoAccessRequestApprove {
+  return { ...scopeFields(draft), expectedAuthoritySentence };
 }
 
 /** Everything that decides which grant the preview describes. */
@@ -338,6 +368,14 @@ function text(value: unknown): string {
  * route's field names: a row it cannot read is a protocol failure, not a branch
  * to skip quietly. `grantRequirements.parity.test.ts` reads the response model
  * and fails if these three names drift.
+ *
+ * The caller now hands over the generated operation's own result, whose type
+ * says every field is present — and this still validates it, because
+ * `BranchDirectoryReadFromJSON` casts rather than checks: a response missing a
+ * branch code type-checks as a `string` that is `undefined` at runtime. The
+ * argument stays `unknown` so that fact cannot be forgotten. Both spellings of
+ * the read names are the same word, so the regenerated client changed nothing
+ * here.
  */
 export function parseBranchDirectory(
   raw: unknown,
@@ -527,10 +565,12 @@ function joinValues(values: readonly string[]): string {
  *
  * Every field is read in BOTH spellings on purpose. The generated client
  * spreads the raw JSON and then overwrites the fields it knows about, so a
- * column it has not been regenerated against arrives as `data_scope_kind` and
- * becomes `dataScopeKind` the day the client is regenerated. Reading only one
- * spelling would make a branch-scoped grant read as institution-wide on
- * exactly one side of that regeneration.
+ * column it has not been regenerated against arrives under its wire name and
+ * becomes camelCase the day the client is regenerated — which for the coverage
+ * columns has now happened, so `dataScopeKind` is the live path. The wire
+ * spelling is kept because reading one spelling only would make a
+ * branch-scoped grant read as institution-wide on exactly one side of a
+ * regeneration, and this display must never overstate a grant.
  */
 export function grantScopeDisplay(grant: unknown): GrantScopeDisplay {
   const rawKind =

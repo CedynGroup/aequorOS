@@ -21,7 +21,7 @@ import type {
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
-import { authorizationApi, normalizeApiError } from "@/lib/api/client";
+import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { avatarColor, initialsFrom } from "@/lib/api/identity";
@@ -29,17 +29,21 @@ import { fmtRelative } from "@/lib/api/values";
 import {
   ORGANIZATION_MEMBERS_QUERY_KEY,
   useGrantableInstitutions,
+  useInstitutionBranches,
 } from "@/lib/api/grantAdministration";
 import {
   bookCoverageAvailability,
   canAddGrantToMember,
   draftScopeLabel,
+  grantCreateRequest,
   grantPreviewFingerprint,
+  grantPreviewRequest,
   grantScopeDisplay,
   grantScopeRefusal,
   MODULE_OPTIONS,
   ROLE_OPTIONS,
   SENSITIVITY_OPTIONS,
+  ssoApprovalRequest,
   visibleGrantFragments,
   WHOLE_INSTITUTION_BOOK,
   type GrantDataScope,
@@ -52,12 +56,6 @@ import {
 } from "@/lib/api/grantRequirements";
 import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
 import BookCoverageControl from "./BookCoverageControl";
-import {
-  approveSsoAccessWithScopedGrant,
-  createScopedGrant,
-  previewScopedGrant,
-  useInstitutionBranches,
-} from "./grantTransport";
 
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
@@ -557,10 +555,12 @@ function GrantComposer({
 
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
-      previewScopedGrant(
-        { ...scope, reason: scope.reason || "Authority sentence preview" },
-        member.userId,
-      ),
+      authorizationApi.previewAuthorizationBinding({
+        bindingPreviewRequest: grantPreviewRequest(
+          { ...scope, reason: scope.reason || "Authority sentence preview" },
+          member.userId,
+        ),
+      }),
   });
 
   useEffect(() => {
@@ -596,13 +596,18 @@ function GrantComposer({
   const submit = useMutation({
     mutationFn: async () => {
       if (isPendingApproval) {
-        return approveSsoAccessWithScopedGrant(
-          member.userId,
-          scope,
-          previewSentence!,
-        );
+        return authApi.authApproveSsoAccessRequest({
+          userId: member.userId,
+          ssoAccessRequestApprove: ssoApprovalRequest(scope, previewSentence!),
+        });
       }
-      return createScopedGrant(scope, member.userId, previewSentence!);
+      return authorizationApi.createAuthorizationBinding({
+        bindingCreateRequest: grantCreateRequest(
+          scope,
+          member.userId,
+          previewSentence!,
+        ),
+      });
     },
     onSuccess: (result) => {
       setSaved(result);

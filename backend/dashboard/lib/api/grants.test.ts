@@ -7,7 +7,9 @@
  *
  * - a coverage the composer cannot POST would be granted as the whole book,
  *   with a success dialog (the generated client drops fields it was not
- *   generated from, so the request is pinned against its serializer here);
+ *   generated from, so the builder's shape is pinned against the generated
+ *   request contract here — every field that contract carries must be one this
+ *   composer decides, or the server default decides it instead);
  * - a branch list that survives a change of institution would name nothing;
  * - a branch request that FAILED would look like a bank that declared nothing;
  * - a grant rendered without its coverage reads as institution-wide;
@@ -31,14 +33,14 @@ import {
   DATA_SCOPE_KIND_FIELD,
   DATA_SCOPE_VALUES_FIELD,
   draftScopeLabel,
-  grantCreateBody,
-  grantPreviewBody,
+  grantCreateRequest,
   grantPreviewFingerprint,
+  grantPreviewRequest,
   grantScopeDisplay,
   grantScopeRefusal,
   institutionBranchesKey,
   parseBranchDirectory,
-  ssoApprovalBody,
+  ssoApprovalRequest,
   statedDataScope,
   visibleGrantFragments,
   WHOLE_INSTITUTION_BOOK,
@@ -125,55 +127,62 @@ test("the three choices are offered in production copy, not a vocabulary", () =>
 });
 
 // --- the three choices produce the three requests ---------------------------
+//
+// The builders return the GENERATED request models, so the wire names are the
+// serializer's business and these assertions are about the decision each field
+// carries. An unset optional field is what the whole book means: the generated
+// serializer emits `undefined` for it and `JSON.stringify` drops the key, so
+// the request omits the column and the server default applies.
 
 test("the whole book posts no coverage fields at all", () => {
-  const body = grantCreateBody(draft(), MEMBER, "sentence");
-  assert.equal(DATA_SCOPE_KIND_FIELD in body, false);
-  assert.equal(DATA_SCOPE_VALUES_FIELD in body, false);
-  assert.equal(body.institution_id, BANK_A);
-  assert.equal(body.role_bundle, "analyst");
-  assert.equal(body.expected_authority_sentence, "sentence");
-  assert.equal(body.principal_user_id, MEMBER);
+  const body = grantCreateRequest(draft(), MEMBER, "sentence");
+  assert.equal(body.dataScopeKind, undefined);
+  assert.equal(body.dataScopeValues, undefined);
+  assert.equal(JSON.stringify(body).includes("dataScope"), false);
+  assert.equal(body.institutionId, BANK_A);
+  assert.equal(body.roleBundle, "analyst");
+  assert.equal(body.expectedAuthoritySentence, "sentence");
+  assert.equal(body.principalUserId, MEMBER);
 });
 
 test("selected branches post the kind and the codes", () => {
-  const body = grantCreateBody(
+  const body = grantCreateRequest(
     draft({ dataScope: branchScope("002", "001") }),
     MEMBER,
     "sentence",
   );
-  assert.equal(body[DATA_SCOPE_KIND_FIELD], "branch");
+  assert.equal(body.dataScopeKind, "branch");
   // Sorted and de-duplicated so the same choice is always the same request.
-  assert.deepEqual(body[DATA_SCOPE_VALUES_FIELD], ["001", "002"]);
+  assert.deepEqual(body.dataScopeValues, ["001", "002"]);
 });
 
 test("selected regions post the declared names", () => {
-  const body = grantPreviewBody(
+  const body = grantPreviewRequest(
     draft({ dataScope: { kind: "region", values: ["Northern", "Northern"] } }),
     MEMBER,
   );
-  assert.equal(body[DATA_SCOPE_KIND_FIELD], "region");
-  assert.deepEqual(body[DATA_SCOPE_VALUES_FIELD], ["Northern"]);
-  assert.equal("expected_authority_sentence" in body, false);
+  assert.equal(body.dataScopeKind, "region");
+  assert.deepEqual(body.dataScopeValues, ["Northern"]);
+  assert.equal("expectedAuthoritySentence" in body, false);
 });
 
 test("the SSO approval body is the same sentence without the user", () => {
-  const body = ssoApprovalBody(
+  const body = ssoApprovalRequest(
     draft({ dataScope: branchScope("001") }),
     "sentence",
   );
-  assert.equal("principal_user_id" in body, false);
-  assert.equal(body[DATA_SCOPE_KIND_FIELD], "branch");
-  assert.equal(body.expected_authority_sentence, "sentence");
+  assert.equal("principalUserId" in body, false);
+  assert.equal(body.dataScopeKind, "branch");
+  assert.equal(body.expectedAuthoritySentence, "sentence");
 });
 
 test("blank and duplicate values never reach the wire", () => {
-  const body = grantCreateBody(
+  const body = grantCreateRequest(
     draft({ dataScope: branchScope(" 001 ", "001", "") }),
     MEMBER,
     "s",
   );
-  assert.deepEqual(body[DATA_SCOPE_VALUES_FIELD], ["001"]);
+  assert.deepEqual(body.dataScopeValues, ["001"]);
 });
 
 // --- the two validation refusals, mirroring the server ----------------------
@@ -191,13 +200,13 @@ test("a narrowing coverage with nothing chosen is refused, by name", () => {
   // accident: the body NAMES the narrowing kind with an empty list, which is
   // exactly the shape the database refuses — so the request fails and nothing
   // is granted. Omitting the pair here would have meant the whole book.
-  const body = grantCreateBody(
+  const body = grantCreateRequest(
     draft({ dataScope: branchScope() }),
     MEMBER,
     "s",
   );
-  assert.equal(body[DATA_SCOPE_KIND_FIELD], "branch");
-  assert.deepEqual(body[DATA_SCOPE_VALUES_FIELD], []);
+  assert.equal(body.dataScopeKind, "branch");
+  assert.deepEqual(body.dataScopeValues, []);
 });
 
 test("the whole book never carries a list", () => {
@@ -216,11 +225,13 @@ test("an organization-wide grant cannot state a branch list", () => {
     institutionId: undefined,
     dataScope: branchScope("001"),
   });
-  const body = grantCreateBody(orgDraft, MEMBER, "s");
-  assert.equal(DATA_SCOPE_KIND_FIELD in body, false);
+  const body = grantCreateRequest(orgDraft, MEMBER, "s");
+  assert.equal(body.dataScopeKind, undefined);
   // The server's own validator forbids an institution id here; sending one
-  // would be a 422 rather than a wider grant, but it must not be sent at all.
-  assert.equal("institution_id" in body, false);
+  // would be a 422 rather than a wider grant, but it must not be sent at all —
+  // and an unset field is dropped from the request, not posted as null.
+  assert.equal(body.institutionId, undefined);
+  assert.equal(JSON.stringify(body).includes("institutionId"), false);
   assert.equal(statedDataScope(orgDraft).kind, "all");
 
   const availability = bookCoverageAvailability({
@@ -731,9 +742,11 @@ test("who may be granted to is unchanged", () => {
 // --- the composer actually uses all of this ---------------------------------
 //
 // A registered helper with no caller is an inert feature and nothing reports it
-// (AGENTS.md, 2026-09-27). These two read the composer's own source: the first
-// proves the coverage reached the screen and the wire, the second proves the
-// calls that would SILENTLY DROP it are gone.
+// (AGENTS.md, 2026-09-27). The first two read the composer's own source: that
+// the coverage reached the screen and the wire, and that it travels through the
+// generated operations with no interim transport beside them. The third reads
+// the generated contract itself, and is what keeps the stale-client defect
+// caught now that the interim transport that used to catch it is gone.
 
 function dashboardRoot(): string {
   let dir = __dirname;
@@ -762,9 +775,9 @@ test("the composer renders the control and posts through the scoped calls", () =
     "useInstitutionBranches",
     "bookCoverageAvailability",
     "grantScopeRefusal",
-    "previewScopedGrant",
-    "createScopedGrant",
-    "approveSsoAccessWithScopedGrant",
+    "grantPreviewRequest",
+    "grantCreateRequest",
+    "ssoApprovalRequest",
     "grantScopeDisplay",
     "dataScopeShortfall",
   ]) {
@@ -776,30 +789,47 @@ test("the composer renders the control and posts through the scoped calls", () =
   }
 });
 
-test("the generated operations that drop the coverage are not called", () => {
+test("the interim transport is gone, and the generated operations are used", () => {
+  // The inverse of the assertion this file used to carry. While the package was
+  // stale, calling these three operations would have DROPPED the coverage and
+  // granted the whole book, so a hand-written transport carried the three
+  // requests and a test forbade the generated names. The client has since been
+  // regenerated; AGENTS.md records why the transport must not outlive that —
+  // "an interim one that outlives it is a second contract nobody is checking".
+  assert.equal(
+    existsSync(
+      join(dashboardRoot(), "components", "settings", "grantTransport.ts"),
+    ),
+    false,
+    "components/settings/grantTransport.ts is back. It was the workaround for " +
+      "a stale generated client and is now a second, unchecked copy of the " +
+      "grant contract. Post through authorizationApi / authApi instead.",
+  );
   const source = readFileSync(PANEL, "utf8");
-  for (const dropped of [
+  for (const operation of [
     "createAuthorizationBinding",
     "previewAuthorizationBinding",
     "authApproveSsoAccessRequest",
   ]) {
-    assert.equal(
-      source.includes(dropped),
-      false,
-      `MembersPanel calls ${dropped}. Its request serializer was generated ` +
-        `before the data-scope columns existed and silently drops them, so a ` +
-        `grant limited to two branches would be stored as the whole book — ` +
-        `with a success dialog. Post through components/settings/` +
-        `grantTransport.ts until the client is regenerated.`,
+    assert.ok(
+      source.includes(operation),
+      `MembersPanel no longer calls ${operation}. The three grant requests ` +
+        `must go through the generated operations, whose serializers are the ` +
+        `one checked copy of the contract.`,
     );
   }
 });
 
-test("the whole-book body is exactly what the generated client sent", () => {
-  // The interim transport must not change the request for a grant that names no
-  // coverage. The generated model's own serializer is the reference: its key
-  // list is read out of the package source rather than imported, because this
-  // suite runs as plain Node with no bundler.
+test("every field the grant contract carries is one the composer decides", () => {
+  // THE PERMANENT FORM OF THE STALE-CLIENT TRIPWIRE. `BindingCreateRequestToJSON`
+  // hand-enumerates its keys with no spread, so a field the builder leaves out
+  // is dropped in the browser and the server's column default decides it
+  // instead — silently, with a 201. That is exactly how Phase 4's coverage pair
+  // would have widened a two-branch grant to the whole book. So: every property
+  // the generated serializer reads must be one `grantCreateRequest` states.
+  //
+  // The serializer's source is read from disk rather than imported, because this
+  // suite runs as plain Node and the package ships TypeScript.
   const model = join(
     dirname(dirname(dashboardRoot())),
     "packages",
@@ -814,14 +844,36 @@ test("the whole-book body is exactly what the generated client sent", () => {
     /export function BindingCreateRequestToJSONTyped[\s\S]*?return \{([\s\S]*?)\n  \};/,
   );
   assert.ok(body, "could not read the generated serializer");
-  const generatedKeys = [...body[1].matchAll(/^\s{4}([a-z_]+):/gm)]
+  // Both coverage columns first, and by name: a client regenerated against a
+  // schema that dropped either one would stop sending it, and this is the
+  // failure whose cause is worth naming outright.
+  for (const wireName of [DATA_SCOPE_KIND_FIELD, DATA_SCOPE_VALUES_FIELD]) {
+    assert.match(
+      body[1],
+      new RegExp(`${wireName}: `),
+      `the generated serializer no longer emits ${wireName}, so the composer ` +
+        `cannot post the coverage and every grant would be the whole book`,
+    );
+  }
+  const serialized = [...body[1].matchAll(/value\["([A-Za-z]+)"\]/g)]
     .map((match) => match[1])
     .sort();
-  const mine = Object.keys(grantCreateBody(draft(), MEMBER, "sentence")).sort();
+  assert.ok(
+    serialized.length >= 10,
+    `read only ${serialized.length} fields from the generated serializer — ` +
+      `the shape it is parsed out of has changed, so this test is no longer ` +
+      `reading the contract. Fix the reader, never the assertion.`,
+  );
+  const stated = Object.keys(
+    grantCreateRequest(draft(), MEMBER, "sentence"),
+  ).sort();
   assert.deepEqual(
-    mine,
-    generatedKeys,
-    "the hand-written whole-book body has drifted from the generated client's",
+    stated,
+    serialized,
+    "the grant request contract and what the composer states have diverged. A " +
+      "field the contract carries and the composer does not set is decided by " +
+      "the server default, which for a scope column means a WIDER grant than " +
+      "the Owner composed.",
   );
 });
 

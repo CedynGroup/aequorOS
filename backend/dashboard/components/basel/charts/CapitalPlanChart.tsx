@@ -1,35 +1,21 @@
-'use client';
+"use client";
 
 /**
- * Multi-year capital ratio projection (CAR / Tier 1 / CET1) against the BoG
- * CAR floors. Feeds from stored forecast-run projection years — the chart
- * does no projection math of its own.
+ * Multi-year capital ratio projection (CAR / Tier 1 / CET1) against the
+ * regulatory CAR floors. Feeds from stored forecast-run projection years — the
+ * chart does no projection math of its own.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-  Legend,
-} from 'recharts';
-import {
-  CHART_ACCENT,
-  CHART_CRIT,
-  CHART_GRID,
-  CHART_WARN,
-  axisProps,
-  chartLegendProps,
-  chartMargins,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtFloorPct } from '@/lib/api/values';
-import { regShort } from '@/lib/format';
+  axisTooltip,
+  LINE_SERIES_BASE,
+  thresholdMarkLine,
+  type ThresholdLine,
+} from "@/lib/echartsOptions";
+import { fmtFloorPct } from "@/lib/api/values";
+import { regShort } from "@/lib/format";
 
 export type PlanPoint = {
   label: string;
@@ -42,7 +28,7 @@ export default function CapitalPlanChart({
   data,
   carMin,
   earlyWarning,
-  earlyWarningLabel = 'Early warning',
+  earlyWarningLabel = "Early warning",
   height = 300,
 }: {
   data: PlanPoint[];
@@ -56,7 +42,8 @@ export default function CapitalPlanChart({
   earlyWarningLabel?: string;
   height?: number;
 }) {
-  const values = data.flatMap((d) => [d.car, d.tier1, d.cet1]);
+  const tokens = useChartTokens();
+  const values = data.flatMap((point) => [point.car, point.tier1, point.cet1]);
   const floors = [
     ...(carMin === null ? [] : [carMin]),
     ...(earlyWarning === null || earlyWarning === undefined
@@ -66,78 +53,103 @@ export default function CapitalPlanChart({
   const scale = [...values, ...floors];
   const min = scale.length > 0 ? Math.floor(Math.min(...scale) - 1.5) : 0;
   const max = scale.length > 0 ? Math.ceil(Math.max(...scale) + 1.5) : 100;
+  const labels = data.map((point) => point.label);
+
+  const thresholds: ThresholdLine[] = [
+    ...(carMin === null
+      ? []
+      : [
+          {
+            axis: "y" as const,
+            value: carMin,
+            label: `${regShort()} min ${fmtFloorPct(carMin)}`,
+            color: tokens.adverse,
+            labelPosition: "insideEndBottom" as const,
+          },
+        ]),
+    ...(earlyWarning === undefined || earlyWarning === null
+      ? []
+      : [
+          {
+            axis: "y" as const,
+            value: earlyWarning,
+            label: `${earlyWarningLabel} ${fmtFloorPct(earlyWarning)}`,
+            color: tokens.caution,
+            labelPosition: "insideEndTop" as const,
+          },
+        ]),
+  ];
+
+  const series = [
+    {
+      name: "CAR",
+      values: data.map((point) => point.car),
+      color: tokens.accent,
+      width: 2,
+      dashed: false,
+      symbolSize: 6,
+    },
+    {
+      name: "Tier 1",
+      values: data.map((point) => point.tier1),
+      color: seriesColor(tokens, 1),
+      width: 1.5,
+      dashed: false,
+      symbolSize: 5,
+    },
+    {
+      name: "CET1",
+      values: data.map((point) => point.cet1),
+      color: seriesColor(tokens, 2),
+      width: 1.5,
+      dashed: true,
+      symbolSize: 5,
+    },
+  ];
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 24, top: 12, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: { type: "category", data: labels },
+    yAxis: {
+      type: "value",
+      min,
+      max,
+      axisLine: { show: false },
+      axisLabel: { formatter: (value: number) => `${value}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(labels, (value) => `${value.toFixed(2)}%`),
+    },
+    series: series.map((entry, index) => ({
+      ...LINE_SERIES_BASE,
+      name: entry.name,
+      smooth: true,
+      showSymbol: true,
+      symbolSize: entry.symbolSize,
+      lineStyle: {
+        color: entry.color,
+        width: entry.width,
+        ...(entry.dashed ? { type: "dashed" as const } : {}),
+      },
+      itemStyle: { color: entry.color },
+      data: entry.values,
+      ...(index === 0 && thresholds.length > 0
+        ? { markLine: thresholdMarkLine(thresholds) }
+        : {}),
+    })),
+  } as BiEChartsOption;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ ...chartMargins, right: 24 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} />
-        <YAxis
-          domain={[min, max]}
-          axisLine={false}
-          tickLine={false}
-          tick={axisProps.tick}
-          tickFormatter={(v: number) => `${v}%`}
-          width={44}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(v: number, name) => [`${v.toFixed(2)}%`, name]}
-        />
-        <Legend {...chartLegendProps} verticalAlign="top" align="right" height={24} iconType="line" />
-        {carMin !== null && (
-          <ReferenceLine
-            y={carMin}
-            stroke={CHART_CRIT}
-            strokeDasharray="4 4"
-            label={{
-              value: `${regShort()} min ${fmtFloorPct(carMin)}`,
-              position: 'insideBottomRight',
-              fill: CHART_CRIT,
-              fontSize: 11,
-            }}
-          />
-        )}
-        {earlyWarning !== undefined && earlyWarning !== null && (
-          <ReferenceLine
-            y={earlyWarning}
-            stroke={CHART_WARN}
-            strokeDasharray="2 4"
-            label={{
-              value: `${earlyWarningLabel} ${fmtFloorPct(earlyWarning)}`,
-              position: 'insideTopRight',
-              fill: CHART_WARN,
-              fontSize: 11,
-            }}
-          />
-        )}
-        <Line
-          type="monotone"
-          dataKey="car"
-          name="CAR"
-          stroke={CHART_ACCENT}
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          activeDot={{ r: 5 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="tier1"
-          name="Tier 1"
-          stroke={seriesColor(1)}
-          strokeWidth={1.5}
-          dot={{ r: 2.5 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="cet1"
-          name="CET1"
-          stroke={seriesColor(2)}
-          strokeWidth={1.5}
-          strokeDasharray="5 3"
-          dot={{ r: 2.5 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Projected CAR, Tier 1 and CET1 across ${data.length} plan years${
+        carMin === null
+          ? ", with no regulatory minimum resolved"
+          : `, against a minimum of ${fmtFloorPct(carMin)}`
+      }`}
+    />
   );
 }

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * 30-day net-outflow decomposition: one stacked bar of weighted outflows by
@@ -7,26 +7,19 @@
  * dashboard line items — no client-side regulatory math.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  Legend,
-} from 'recharts';
-import {
-  CHART_OK,
-  axisProps,
-  chartLegendProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtCurrency } from '@/lib/format';
+  axisTooltip,
+  BAR_SERIES_BASE,
+  STACK_ID,
+  thresholdMarkLine,
+} from "@/lib/echartsOptions";
+import { fmtCurrency } from "@/lib/format";
 
 export type OutflowCategory = { name: string; weighted: number };
+
+const ROWS = ["Outflows", "Inflows (capped)"] as const;
 
 export default function NetOutflowChart({
   outflows,
@@ -39,71 +32,73 @@ export default function NetOutflowChart({
   netOutflows: number;
   height?: number;
 }) {
-  // Two category rows: stacked outflows on top, capped inflows below.
-  const outflowRow: Record<string, number | string> = { name: 'Outflows' };
-  for (const [i, cat] of outflows.entries()) {
-    outflowRow[`c${i}`] = cat.weighted;
-  }
-  const inflowRow: Record<string, number | string> = {
-    name: 'Inflows (capped)',
-    inflows: cappedInflows,
-  };
+  const tokens = useChartTokens();
+
+  // Two category rows: the stacked outflow categories on the first, capped
+  // inflows alone on the second. A category a series does not belong to is
+  // `null`, not 0 — a zero-width bar and "no such figure" look identical, and
+  // only one of them is true.
+  const series = [
+    ...outflows.map((category, index) => ({
+      ...BAR_SERIES_BASE,
+      name: category.name,
+      stack: STACK_ID,
+      barMaxWidth: 34,
+      itemStyle: { color: seriesColor(tokens, index) },
+      data: [category.weighted, null],
+    })),
+    {
+      ...BAR_SERIES_BASE,
+      name: "Capped inflows",
+      stack: STACK_ID,
+      barMaxWidth: 34,
+      itemStyle: { color: tokens.favourable },
+      data: [null, cappedInflows],
+      markLine: thresholdMarkLine([
+        {
+          axis: "x",
+          value: netOutflows,
+          label: `Net ${fmtCurrency(netOutflows)}`,
+          color: tokens.muted,
+          labelPosition: "start",
+        },
+      ]),
+    },
+  ];
+
+  const option: BiEChartsOption = {
+    grid: { left: 8, right: 24, top: 8, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: {
+      type: "value",
+      axisLabel: {
+        hideOverlap: true,
+        formatter: (value: number) =>
+          fmtCurrency(value, undefined, { decimals: 0 }),
+      },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: [...ROWS],
+      axisLine: { show: false },
+      splitLine: { show: false },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: axisTooltip([...ROWS], (value) => fmtCurrency(value), {
+        hideAbsent: true,
+      }),
+    },
+    series,
+  } as BiEChartsOption;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart
-        data={[outflowRow, inflowRow]}
-        layout="vertical"
-        margin={{ top: 8, right: 24, bottom: 4, left: 8 }}
-      >
-        <XAxis
-          type="number"
-          {...axisProps}
-          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 0 })}
-        />
-        <YAxis
-          type="category"
-          dataKey="name"
-          axisLine={false}
-          tickLine={false}
-          tick={axisProps.tick}
-          width={104}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          cursor={{ fill: 'rgb(var(--surface-hover))' }}
-          formatter={(v: number, name) => [fmtCurrency(v), name]}
-        />
-        <Legend {...chartLegendProps} />
-        {outflows.map((cat, i) => (
-          <Bar
-            key={cat.name}
-            dataKey={`c${i}`}
-            name={cat.name}
-            stackId="flows"
-            fill={seriesColor(i)}
-            maxBarSize={34}
-          />
-        ))}
-        <Bar
-          dataKey="inflows"
-          name="Capped inflows"
-          stackId="flows"
-          fill={CHART_OK}
-          maxBarSize={34}
-        />
-        <ReferenceLine
-          x={netOutflows}
-          stroke="rgb(var(--text-muted))"
-          strokeDasharray="4 3"
-          label={{
-            value: `Net ${fmtCurrency(netOutflows)}`,
-            position: 'top',
-            fill: 'rgb(var(--text-muted))',
-            fontSize: 11,
-          }}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Weighted outflows across ${outflows.length} categories against capped inflows, with the net outflow figure marked at ${fmtCurrency(netOutflows)}`}
+    />
   );
 }

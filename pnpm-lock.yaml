@@ -64,9 +64,6 @@ importers:
       react-grid-layout:
         specifier: 2.2.4
         version: 2.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      recharts:
-        specifier: ^2.13.0
-        version: 2.15.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
       '@auth/core':
         specifier: 0.41.3
