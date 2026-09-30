@@ -409,11 +409,10 @@ component, so BI commentary can reuse them.
   form-posted decimal or boolean must be parsed explicitly (D-050).
 * **ICAAP is always available; there is no feature flag** (D-046, founder
   directive). The old `ICAAP_WORKSPACE_ENABLED` gate was removed.
-* **The REVIEW/APPROVE ladder does not separate duties on its own.** `APPROVER`
-  is the only bundle containing `REVIEW`, so `REVIEW ⟹ APPROVE` for every
-  principal. What actually keeps a reviewer off the freeze stage is
-  `domain.checkers`. Do not read a stage-derived permission split as separation
-  of duties.
+* **Stage permissions and separation of duties are distinct checks.** See
+  [the enforcement contract](icaap_enforcement_rollout.md#review-freeze-and-filing-p3-the-separated-authorities)
+  for the review/approval permission split and the conditions that keep a
+  round's reviewers off its freeze stage.
 * **ΔNII is dimensionally correct only at the seeded 12-month horizon.**
   `standardised.py` computes `gap × Δr × (H − t)/H` where the identity is
   `gap × Δr × (H − t)` years. `irrbb_sf_nii_horizon_months` is operator-editable;

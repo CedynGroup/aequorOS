@@ -8,7 +8,8 @@ record. Do not copy production identities into this repository.
 
 ## The gates, in the order they run
 
-Every `/api/v1/banks/{bank_id}/icaap/*` route resolves the same four steps, and
+Every `/api/v1/banks/{bank_id}/icaap/*` route applies the following gates (the
+object gate applies where an object is referenced), and
 the order is the policy. There is no deployment switch: the licence class and
 the caller's authority are what decide eligibility.
 
@@ -44,9 +45,10 @@ a different module or a different sensitivity.
 | `edit` | cycle update and archive; section autosave, version commit and requirement state; block create, refresh, pin, unpin, manual table and retire; attachment upload and withdrawal |
 | `export` | the draft PDF and Word exports |
 
-Of the standard bundles: **ANALYST** satisfies view/create/edit/export (the full
-preparer role); **APPROVER** satisfies view only, so a reviewer cannot also be
-the maker; **AUDITOR** and **VIEWER** satisfy view only.
+For the permissions in this table: **ANALYST** satisfies view/create/edit/export
+(the full preparer role); **APPROVER**, **AUDITOR** and **VIEWER** satisfy view
+only. Review and approval authorities are described
+[below](#review-freeze-and-filing-p3-the-separated-authorities).
 
 `require_icaap_create` and `require_icaap_edit` are registered in
 `MUTATION_ROLE_DEPENDENCY_NAMES`, so the impersonation route sweep classifies
@@ -168,16 +170,18 @@ route runs so the refusal is an authorization decision with a trace:
 | Submit for review; draft or submit the disclosure; update or submit a workflow template | `edit` | — |
 | Propose a workflow template; clone a cycle as a revision or an update | `create` | — |
 | Decide a review stage (`decideIcaapStage`) | `review` | The decider neither prepared the report nor decided another stage of this round |
-| Decide an approval stage (`decideIcaapStage`) | `approve` | As above. A REVIEWER bundle carries `review` only, so it can record a review but not the approval that makes the report ready to freeze. An unresolvable stage takes `approve`, the stricter permission |
+| Decide an approval stage (`decideIcaapStage`) | `approve` | As above. An unresolvable stage takes `approve` |
 | Freeze (`freezeIcaapCycle`) | `edit` | Nobody who reviewed or approved the round (D-030): freezing makes the actor the package's preparer of record |
 | Send a frozen ICAAP back (`returnIcaapCycle`) | `review` | Not the officer who froze it |
 | Decide a workflow template (`decideIcaapWorkflowTemplate`) | `approve` | Not its proposer |
 | Approve the disclosure (`decideIcaapDisclosure`) | `approve` | Not whoever chose what to publish |
 
-Each separation condition resolves its object under the route's organization
-and institution. A cycle, template, add-on or disclosure the institution does
-not hold passes the condition, so a fully entitled caller meets the route's own
-404 rather than a 403 that would confirm another institution's object exists.
+The current **APPROVER** bundle carries both `review` and `approve`; there is
+no separate Reviewer bundle. The stage permission split alone therefore does
+not separate officers: the conditions above enforce that separation.
+
+These conditions follow the institution-scoped resolution rule in
+[the gates above](#the-gates-in-the-order-they-run).
 
 ## Object references
 

@@ -1581,9 +1581,9 @@ def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -
     """Deciding a review or approval stage: CAP/confidential, and four eyes.
 
     The PERMISSION depends on the stage: a review stage takes REVIEW, an
-    approval stage takes APPROVE. An approver bundle carries both, a reviewer
-    bundle only the first, so a reviewer cannot sign off the stage that makes
-    the report ready to freeze.
+    approval stage takes APPROVE. The current approver bundle carries both;
+    the stage's maker-checker condition separates the officers. See the ICAAP
+    enforcement rollout contract for the complete authority matrix.
     """
     from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
