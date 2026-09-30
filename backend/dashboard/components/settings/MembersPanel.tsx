@@ -61,7 +61,6 @@ import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
 import BookCoverageControl from "./BookCoverageControl";
 import {
   GrantReasonFields,
-  REASON_OPTIONS,
   reasonDraftComplete,
   reasonLabel,
   toDatetimeLocalValue,
@@ -135,16 +134,8 @@ export default function MembersPanel() {
   const [requestedGrant, setRequestedGrant] =
     useState<AccessRequestRead | null>(null);
   const [rejecting, setRejecting] = useState<AccessRequestRead | null>(null);
-  const [reasonFilter, setReasonFilter] = useState("");
 
   const members = membersQuery.data?.members ?? [];
-  const visibleMembers = reasonFilter
-    ? members.filter((member) =>
-        member.grants.some(
-          (grant) => grant.grantReasonCategory === reasonFilter,
-        ),
-      )
-    : members;
   const currentSelected = selected
     ? (members.find((member) => member.userId === selected.userId) ?? selected)
     : null;
@@ -158,28 +149,9 @@ export default function MembersPanel() {
         title="Members"
         action={
           membersQuery.data ? (
-            <div className="flex items-center gap-3">
-              <label className="sr-only" htmlFor="grant-reason-filter">
-                Filter members by grant reason
-              </label>
-              <select
-                id="grant-reason-filter"
-                value={reasonFilter}
-                onChange={(event) => setReasonFilter(event.target.value)}
-                className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption text-navy"
-              >
-                <option value="">All reasons</option>
-                {REASON_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <span className="text-caption text-slate">
-                {visibleMembers.length}{" "}
-                {visibleMembers.length === 1 ? "member" : "members"}
-              </span>
-            </div>
+            <span className="text-caption text-slate">
+              {members.length} {members.length === 1 ? "member" : "members"}
+            </span>
           ) : undefined
         }
       />
@@ -245,7 +217,7 @@ export default function MembersPanel() {
           </p>
         ) : (
           <ul className="divide-y divide-border-light">
-            {visibleMembers.map((member) => (
+            {members.map((member) => (
               <MemberRow
                 key={member.userId}
                 member={member}
