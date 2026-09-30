@@ -1353,7 +1353,10 @@ assert.match(
     source.includes("biSubscriptionsEnabled"),
     "FeatureFlagsRead no longer carries biSubscriptionsEnabled",
   );
-  const modules = readFileSync(joinPath(dashboardRoot, "lib/modules.ts"), "utf8");
+  const modules = readFileSync(
+    joinPath(dashboardRoot, "lib/modules.ts"),
+    "utf8",
+  );
   assert.equal(
     modules.includes("notificationCapabilitiesFromFeatureFlags"),
     false,
@@ -1375,12 +1378,22 @@ assert.match(
     "utf8",
   );
   const subscriptions = readFileSync(
-    joinPath(dashboardRoot, "app", "(app)", "explore", "subscriptions", "page.tsx"),
+    joinPath(
+      dashboardRoot,
+      "app",
+      "(app)",
+      "explore",
+      "subscriptions",
+      "page.tsx",
+    ),
     "utf8",
   );
 
   // Both pages read the deployment flags.
-  assert.ok(alerts.includes("useBiNotificationCapabilities("), "alerts page reads the flags");
+  assert.ok(
+    alerts.includes("useBiNotificationCapabilities("),
+    "alerts page reads the flags",
+  );
   assert.ok(
     subscriptions.includes("useBiNotificationCapabilities("),
     "subscriptions page reads the flags",
@@ -1389,20 +1402,28 @@ assert.match(
   const waiting = [...alerts.matchAll(/"Waiting for figures"/g)];
   assert.equal(waiting.length, 1, "one site decides the 'waiting' copy");
   assert.ok(
-    alerts.includes('if (evaluationEnabled === true) return "Waiting for figures";'),
+    alerts.includes(
+      'if (evaluationEnabled === true) return "Waiting for figures";',
+    ),
     "'Waiting for figures' must be gated on the deployment saying it evaluates alerts",
   );
   assert.ok(
-    alerts.includes('if (evaluationEnabled === false) return "Not judged here";'),
+    alerts.includes(
+      'if (evaluationEnabled === false) return "Not judged here";',
+    ),
     "a shut flag must read as the deployment's, not the bank's",
   );
   // "Sending" likewise.
   assert.ok(
-    subscriptions.includes('if (deliveryEnabled === true) return { label: "Sending"'),
+    subscriptions.includes(
+      'if (deliveryEnabled === true) return { label: "Sending"',
+    ),
     "'Sending' must be gated on the deployment saying it delivers reports",
   );
   assert.ok(
-    subscriptions.includes('if (deliveryEnabled === false) return { label: "Not sending here"'),
+    subscriptions.includes(
+      'if (deliveryEnabled === false) return { label: "Not sending here"',
+    ),
     "a shut flag must read as the deployment's, not the bank's",
   );
   assert.doesNotMatch(
@@ -1419,8 +1440,14 @@ assert.match(
   ] as const) {
     const refusal = source.indexOf(`biRefusalSentence(${errorExpr}) ??`);
     const grant = source.indexOf(`isBiAccessDenied(${errorExpr})`);
-    assert.ok(refusal >= 0, `${name}: the history must consult biRefusalSentence`);
-    assert.ok(grant >= 0, `${name}: the history must keep the grant paraphrase`);
+    assert.ok(
+      refusal >= 0,
+      `${name}: the history must consult biRefusalSentence`,
+    );
+    assert.ok(
+      grant >= 0,
+      `${name}: the history must keep the grant paraphrase`,
+    );
     assert.ok(
       refusal < grant,
       `${name}: the server's sentence must be consulted before the grant paraphrase, ` +
