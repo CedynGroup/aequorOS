@@ -26,6 +26,8 @@ import os
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import inspect, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import DBAPIError
 
 from app.db.base import Base
 from app.models.bi_content import BI_CONTENT_TABLES, BI_CONTENT_UNALTERABLE_TABLES
@@ -50,7 +52,7 @@ pytestmark = [
 #: being declared, so it cannot be built without Postgres coverage.
 PHASE3_TABLES: tuple[str, ...] = (*BI_CONTENT_TABLES, *BI_NOTIFICATION_TABLES)
 
-_PG = sa.dialects.postgresql.dialect()
+_PG = postgresql.dialect()
 
 
 def _rendered(type_: sa.types.TypeEngine) -> str:
@@ -246,7 +248,7 @@ def test_a_version_cannot_be_rewritten_but_can_cascade_away(
     for table_name in BI_CONTENT_UNALTERABLE_TABLES:
         with (
             engine.connect() as connection,
-            pytest.raises(sa.exc.DBAPIError) as refused,
+            pytest.raises(DBAPIError) as refused,
             connection.begin(),
         ):
             connection.execute(text("SET LOCAL app.organization_id = 'OR-DEM00001'"))

@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-from collections.abc import Iterator
-from typing import Any, Literal
+from collections.abc import Iterable, Iterator
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -669,5 +669,6 @@ def test_a_browser_can_read_the_export_headers_it_needs() -> None:
     app = create_app()
     for middleware in app.user_middleware:
         if middleware.cls is CORSMiddleware:
-            exposed = set(middleware.kwargs.get("expose_headers") or ())
+            declared = middleware.kwargs.get("expose_headers") or ()
+            exposed = set(cast("Iterable[str]", declared))
             assert set(EXPOSED_RESPONSE_HEADERS) <= exposed, sorted(exposed)

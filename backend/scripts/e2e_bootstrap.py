@@ -506,11 +506,12 @@ def _seed_canonical_positions(session: Session) -> None:
     different dates, and the consequences are silent rather than loud:
     ``materialize_bi_plane`` builds at the latest POSITION date, looks for live
     metrics there, finds them two months later, and copies **zero**
-    ``bi_fact_engine_metric`` rows — so every engine measure in BI is empty, and
-    R1 to R4 (which compare the portfolio against the engine) all report
-    ``grey``, "not assessed". A browser journey asserting an engine figure or a
-    trust badge would then be vacuous, or would assert the broken state as if it
-    were the product's. A real bank's book and its fact spine advance together;
+    ``bi_fact_engine_metric`` rows — so every engine measure in BI is empty. A
+    browser journey asserting an engine figure would then be vacuous, or would
+    assert the broken state as if it were the product's. (Until 2026-09-29 this
+    also greyed the R1–R4 reconciliation checks; those are gone, but the empty
+    engine mart they were the loud symptom of is not.)
+    A real bank's book and its fact spine advance together;
     passing the date explicitly is what makes the fixture behave that way. The
     hermetic suite keeps the default, so nothing there moves.
     """
@@ -575,7 +576,7 @@ def _materialize_bi_plane(session: Session) -> None:
     The BI surfaces read the ``bi_*`` marts, which only that lane writes — and
     the e2e stack runs no worker. Runs the product's own builder for the
     bank's latest snapshot date, AFTER the live plane so the engine tier and
-    the trust checks have something to copy.
+    the freshness signal has a build to report.
     """
     outcome = materialize_bi_plane(session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
     session.commit()
@@ -584,7 +585,7 @@ def _materialize_bi_plane(session: Session) -> None:
         return
     print(
         f"bi plane: {outcome.status}, {outcome.row_counts.get('bi_fact_position_daily', 0)} "
-        f"position rows, trust {outcome.trust.get('overall')}"
+        "position rows"
     )
 
 

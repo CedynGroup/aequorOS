@@ -89,19 +89,21 @@ def _job_types_registered(monkeypatch: pytest.MonkeyPatch) -> None:
 
     ``job_queue.JOB_TYPES`` / ``JOB_LANES`` are owned by another track and the
     registration is a one-line change there (named in the task report). Patching
-    them here keeps the enqueue seam testable without editing a file this track
-    does not own; when the registration lands, this fixture becomes a no-op
-    rather than a lie, because it only ADDS missing names.
+    them here kept the enqueue seam testable before the registration landed. It
+    HAS landed, so this now asserts the registration instead of patching around
+    its absence.
     """
 
     wanted = (alerts.JOB_TYPE, "bi_subscription_scan", "bi_subscription_run")
-    missing = tuple(name for name in wanted if name not in job_queue.JOB_TYPES)
-    if missing:
-        monkeypatch.setattr(job_queue, "JOB_TYPES", (*job_queue.JOB_TYPES, *missing))
-        monkeypatch.setattr(
-            job_queue,
-            "JOB_LANES",
-            {**job_queue.JOB_LANES, **dict.fromkeys(missing, "bi")},
+    # The registration HAS landed (`job_queue.JOB_TYPES` / `JOB_LANES`), so what
+    # was a fixture that ADDED missing names is now an assertion that they are
+    # there. basedpyright proved the old branch dead — every name narrowed to
+    # `Never` — and a dead monkeypatch is how a job type silently loses its lane.
+    for name in wanted:
+        assert name in job_queue.JOB_TYPES, f"{name} is not a registered job type"
+        assert job_queue.JOB_LANES.get(name) == "bi", (
+            f"{name} must run on the `bi` lane; a job type off its lane is claimed "
+            "by no worker and strands in `queued`."
         )
 
 

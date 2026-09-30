@@ -49,8 +49,8 @@ recorded against migration ``202608150013``.
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 from app.db.session import force_rls_suspended
 
 revision = "202609290078"

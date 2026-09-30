@@ -36,7 +36,6 @@ from app.services.ai import features as ai_features
 from app.services.ai import gates
 from app.services.ai.features import (
     CONSENT_COVERED_FEATURES,
-    CONSENT_PENDING_FEATURES,
 )
 from tests.api.helpers import ORG_1, USER_1, headers
 

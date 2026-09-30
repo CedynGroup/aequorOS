@@ -21,7 +21,7 @@ from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import Table, event, inspect
+from sqlalchemy import String, Table, event, inspect
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, sessionmaker
@@ -508,7 +508,9 @@ def test_a_target_scope_value_is_as_wide_as_the_widest_dimension_it_can_name() -
     )
     for column_name in ("scope_value", "declared_scope_value"):
         column = _table(BiFactTarget).c[column_name]
-        assert column.type.length == bi.TARGET_SCOPE_VALUE_WIDTH, column_name
+        column_type = column.type
+        assert isinstance(column_type, String), column_name
+        assert column_type.length == bi.TARGET_SCOPE_VALUE_WIDTH, column_name
 
 
 def _string_length(table: Table, column_name: str) -> int:

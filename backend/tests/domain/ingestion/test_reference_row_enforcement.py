@@ -55,7 +55,9 @@ def test_a_period_that_is_not_the_end_of_its_grain_is_refused() -> None:
 def test_a_missing_time_behaviour_is_refused_rather_than_defaulted() -> None:
     """The whole point of the field. A defaulted ``stock`` silently reads a flow
     target as a level, which is wrong by a period and looks like a real number."""
-    payload = {k: v for k, v in _VALID_TARGET.items() if k != "time_behaviour"}
+    payload: dict[str, str | None] = {
+        k: v for k, v in _VALID_TARGET.items() if k != "time_behaviour"
+    }
     with pytest.raises(ValueError, match="time_behaviour"):
         _row("performance_targets", payload)
 

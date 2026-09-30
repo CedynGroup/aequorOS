@@ -119,7 +119,13 @@ def _constructed(tree: ast.Module, callee: str, *, deep: bool = False) -> set[st
         name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
         if name != callee:
             continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        targets = (
+            node.targets
+            if isinstance(node, ast.Assign)
+            else [node.target]
+            if isinstance(node, ast.AnnAssign)
+            else []
+        )
         for target in targets:
             if isinstance(target, ast.Name):
                 found.add(target.id)

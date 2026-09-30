@@ -124,19 +124,21 @@ def bank(db_session: Session) -> Bank:
 def _job_types_registered(monkeypatch: pytest.MonkeyPatch) -> None:
     """Admit this track's job types to the queue allow-list for the test.
 
-    ``job_queue.JOB_TYPES`` / ``JOB_LANES`` belong to another track and the
-    registration is a one-line change there (named in the task report). This only
-    ADDS missing names, so it becomes a no-op rather than a lie once it lands.
+    ``job_queue.JOB_TYPES`` / ``JOB_LANES`` belong to another track, and that
+    registration has now landed, so this asserts it rather than adding missing
+    names around its absence.
     """
 
     wanted = (subscriptions.JOB_TYPE_SCAN, subscriptions.JOB_TYPE_RUN, "bi_alert_evaluate")
-    missing = tuple(name for name in wanted if name not in job_queue.JOB_TYPES)
-    if missing:
-        monkeypatch.setattr(job_queue, "JOB_TYPES", (*job_queue.JOB_TYPES, *missing))
-        monkeypatch.setattr(
-            job_queue,
-            "JOB_LANES",
-            {**job_queue.JOB_LANES, **dict.fromkeys(missing, "bi")},
+    # The registration HAS landed (`job_queue.JOB_TYPES` / `JOB_LANES`), so what
+    # was a fixture that ADDED missing names is now an assertion that they are
+    # there. basedpyright proved the old branch dead — every name narrowed to
+    # `Never` — and a dead monkeypatch is how a job type silently loses its lane.
+    for name in wanted:
+        assert name in job_queue.JOB_TYPES, f"{name} is not a registered job type"
+        assert job_queue.JOB_LANES.get(name) == "bi", (
+            f"{name} must run on the `bi` lane; a job type off its lane is claimed "
+            "by no worker and strands in `queued`."
         )
 
 
@@ -1013,7 +1015,7 @@ def test_the_tick_says_nothing_about_subscriptions_while_they_are_off(
 
 
 def test_a_failed_rebuild_delivers_nothing_rather_than_mailing_stale_figures(
-    db_session: Session, bank: Bank, relay: _Relay
+    db_session: Session, bank: Bank, relay: type[_FakeSmtp]
 ) -> None:
     """Audit A360 H2, at the surface where it leaves the building.
 

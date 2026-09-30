@@ -224,7 +224,10 @@ def test_every_catalogue_direction_is_one_this_module_understands() -> None:
 
 def test_a_percentage_measure_is_bridged_in_points_and_a_ratio_in_units() -> None:
     assert drivers.scale_for("pct") == Fraction(100)
-    assert drivers.scale_for("ratio") == Fraction(1)
+    # `fraction` is the catalogue's name for a ratio; "ratio" is not a
+    # `ValueType` at all, so the old assertion tested a value no measure
+    # can carry.
+    assert drivers.scale_for("fraction") == Fraction(1)
     assert drivers.scale_for("amount") == Fraction(1)
 
 

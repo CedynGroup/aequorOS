@@ -358,7 +358,10 @@ def test_the_target_scope_bound_equals_what_the_comparison_mart_can_store() -> N
     build. The two constants are asserted equal rather than imported, because the
     reference-schema module deliberately stays free of ``app.models``.
     """
-    from app.models.bi import TARGET_SCOPE_VALUE_WIDTH
+    # Deferred ON PURPOSE (see the docstring): importing `app.models` at module
+    # scope would defeat what this test exists to prove — that the
+    # reference-schema module stays free of it.
+    from app.models.bi import TARGET_SCOPE_VALUE_WIDTH  # noqa: PLC0415
 
     assert SCOPE_VALUE_MAX_LENGTH == TARGET_SCOPE_VALUE_WIDTH, (
         "the performance_targets register and bi_fact_target disagree about how long "
