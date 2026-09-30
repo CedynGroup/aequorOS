@@ -1382,6 +1382,7 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
         request_ids.append(response.json()["id"])
     payload = _reviewed_payload(grant_client, role="viewer")
     payload.pop("principal_user_id")
+    payload["reference"] = "ACCESS-REVIEW-42"
     first = grant_client.post(
         f"/api/v1/authorization/access-requests/{request_ids[0]}/approve",
         headers=_owner_headers(),
@@ -1455,6 +1456,10 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
             assert len(audits) == 1
             assert audits[0].actor_user_id == USER_1
             assert audits[0].details["binding_id"] == binding_id
+            if existing_status != "composer" or request_id == request_ids[0]:
+                assert audits[0].details["reason_category"] == payload["reason_category"]
+                assert audits[0].details["reason_detail"] == payload["reason_detail"]
+                assert audits[0].details["reference"] == payload["reference"]
             assert (
                 audits[0].details["authority_sentence"]
                 == (first.json()["binding"]["authority_sentence"])
@@ -1648,3 +1653,57 @@ def test_composer_does_not_overwrite_concurrent_request_rejection(
             )
         )
         assert decisions == ["authorization.access_request_rejected"]
+
+
+@pytest.mark.parametrize("resolution_path", ["composer", "approval"])
+def test_capital_request_requires_whole_institution_coverage(
+    grant_client: TestClient, resolution_path: str
+) -> None:
+    request_id = _file_route_request(
+        grant_client, "/basel", module_scope="cap", sensitivity_scope="aggregated"
+    )
+    draft = _payload(role="viewer", module="cap", sensitivity="aggregated")
+    draft.update(data_scope_kind="branch", data_scope_values=["ACC"])
+    payload = _reviewed_payload(grant_client, draft)
+    if resolution_path == "approval":
+        payload.pop("principal_user_id")
+        endpoint = f"/api/v1/authorization/access-requests/{request_id}/approve"
+    else:
+        endpoint = "/api/v1/authorization/bindings"
+    response = grant_client.post(endpoint, headers=_owner_headers(), json=payload)
+    assert response.status_code == (409 if resolution_path == "approval" else 201), response.text
+    with _session() as db:
+        request = db.get(AuthorizationAccessRequest, UUID(request_id))
+        assert request is not None
+        assert request.status == "pending"
+        assert request.binding_id is None
+        assert (
+            db.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == "authorization.access_request_approved",
+                    AuditEvent.entity_id == request_id,
+                )
+            )
+            is None
+        )
+        bindings = list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.module_scope == "cap",
+                )
+            )
+        )
+        assert len(bindings) == (0 if resolution_path == "approval" else 1)
+    whole_payload = _reviewed_payload(
+        grant_client, role="viewer", module="cap", sensitivity="aggregated"
+    )
+    if resolution_path == "approval":
+        whole_payload.pop("principal_user_id")
+    resolved = grant_client.post(endpoint, headers=_owner_headers(), json=whole_payload)
+    assert resolved.status_code == (200 if resolution_path == "approval" else 201), resolved.text
+    with _session() as db:
+        request = db.get(AuthorizationAccessRequest, UUID(request_id))
+        assert request is not None
+        assert request.status == "approved"
+        assert str(request.binding_id) == resolved.json()["binding"]["id"]

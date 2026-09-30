@@ -572,6 +572,8 @@ queries. Own-organization public module/workspace routes on the explicit
 allow-list render an access-denied page inside the shell instead. It names the
 exact permission sentence, identifies organization owners/admins as grantors,
 and lets an active member create one deduplicated request per route/permission.
+BI routes are a transitional exception: they are gated by `BI_ENABLED`, and
+access-denied pages and request-access support for BI are deferred until BI is reviewed.
 The named requirements come from the same `lib/modules.ts` rules the route guard
 applies (institution class included), so whatever hides a public route also
 names what is missing. Requests target one institution, except Account

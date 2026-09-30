@@ -530,7 +530,7 @@ def create_authorization_binding(
         if isinstance(exc, authorization.AuthorizationInvariantError):
             exc = grant_administration.GrantAdministrationError(str(exc))
         raise grant_conflict(exc) from exc
-    _resolve_satisfied_access_requests(db, ctx, result, pending)
+    _resolve_satisfied_access_requests(db, ctx, pending)
     db.commit()
     db.refresh(result.binding)
     return binding_response(db, ctx.organization_id, result)
@@ -630,7 +630,6 @@ def _resolve_access_request(  # noqa: PLR0913 - explicit resolution actor and au
 def _resolve_satisfied_access_requests(
     db: DbSession,
     ctx: TenantContext,
-    result: grant_administration.GrantResult,
     pending: list[AuthorizationAccessRequest],
 ) -> None:
     """Close every pending request the grantee's authority now satisfies.
@@ -642,35 +641,13 @@ def _resolve_satisfied_access_requests(
     """
 
     assert ctx.actor_user_id is not None
-    binding = result.binding
     if not pending:
         return
-    principal = PrincipalLocator(
-        ctx.organization_id, binding.principal_user_id, PrincipalType.HUMAN
-    )
     for request in pending:
         if request.status != "pending":
             continue
-        resource = ResourceLocator(
-            ctx.organization_id,
-            InstitutionScope.INSTITUTION
-            if request.institution_id
-            else InstitutionScope.ORGANIZATION,
-            request.institution_id,
-            Module(request.module_scope),
-            Sensitivity(request.sensitivity_scope),
-        )
-        decision = authorization.evaluate_permission(
-            db, principal, Permission(request.permission), resource
-        )
-        if decision.allowed and decision.matching_binding_ids:
-            matching_binding = db.scalar(
-                select(AuthorizationBinding).where(
-                    AuthorizationBinding.id == decision.matching_binding_ids[0],
-                    AuthorizationBinding.organization_id == ctx.organization_id,
-                )
-            )
-            assert matching_binding is not None
+        matching_binding = _access_request_binding(db, request)
+        if matching_binding is not None:
             _resolve_access_request(
                 db,
                 request,
@@ -679,6 +656,40 @@ def _resolve_satisfied_access_requests(
                 authority_sentence=grant_administration.authority_sentence(db, matching_binding),
                 details={"resolution": "satisfied_by_grant"},
             )
+
+
+def _access_request_binding(
+    db: DbSession, request: AuthorizationAccessRequest
+) -> AuthorizationBinding | None:
+    principal = PrincipalLocator(
+        request.organization_id, request.requester_user_id, PrincipalType.HUMAN
+    )
+    resource = ResourceLocator(
+        request.organization_id,
+        InstitutionScope.INSTITUTION if request.institution_id else InstitutionScope.ORGANIZATION,
+        request.institution_id,
+        Module(request.module_scope),
+        Sensitivity(request.sensitivity_scope),
+    )
+    decision = authorization.evaluate_permission(
+        db, principal, Permission(request.permission), resource
+    )
+    if not decision.allowed:
+        return None
+    for binding_id in decision.matching_binding_ids:
+        if request.institution_id and request.route not in {"/credit/book", "/credit/activity"}:
+            data_scope = authorization.effective_data_scope(
+                db, organization_id=request.organization_id, binding_ids=[binding_id]
+            )
+            if not data_scope.whole_institution:
+                continue
+        return db.scalar(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.id == binding_id,
+                AuthorizationBinding.organization_id == request.organization_id,
+            )
+        )
+    return None
 
 
 @router.post(
@@ -923,12 +934,25 @@ def approve_authorization_access_request(
         if isinstance(exc, authorization.AuthorizationInvariantError):
             exc = grant_administration.GrantAdministrationError(str(exc))
         raise grant_conflict(exc) from exc
+    matching_binding = _access_request_binding(db, request)
+    if matching_binding is None:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The grant does not satisfy the requested permission and data coverage.",
+        )
     _resolve_access_request(
         db,
         request,
         actor_user_id=ctx.actor_user_id,
-        binding=result.binding,
-        authority_sentence=result.authority_sentence,
+        binding=matching_binding,
+        authority_sentence=grant_administration.authority_sentence(db, matching_binding),
+        details={
+            "reason_category": payload.reason_category.value,
+            "reason_detail": payload.reason_detail,
+            "reference": payload.reference,
+            "valid_until": payload.valid_until.isoformat() if payload.valid_until else None,
+        },
     )
     db.commit()
     db.refresh(result.binding)
