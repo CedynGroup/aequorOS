@@ -291,11 +291,14 @@ families are revoked in the same transaction.
   "institution_id": "<exact BK-*>",
   "module_scope": "credit",
   "sensitivity_scope": "aggregated",
-  "reason": "<institution-approved reason>",
+  "reason_category": "<structured reason category>",
+  "reason_detail": "<institution-approved reason>",
   "expected_authority_sentence": "<server preview response>"
 }
 ```
 
+The reason fields follow the
+[structured reason contract](authorization_foundation.md#structured-grant-reasons).
 Do not widen to `all` to compensate for a missing decision, and do not encode a
 branch, region or portfolio in the reason as if it were enforced scope — data
 scope is a later, separately migrated dimension.
@@ -541,7 +544,7 @@ binding row changed: the inventory SQL above reproduces it at any time.
 
 ### How an Org Owner grants what is needed
 
-Settings → Members, one indivisible sentence per row. Sensitivity is mandatory and
+Access → Members, one indivisible sentence per row. Sensitivity is mandatory and
 institution coverage is exact or explicitly organization-wide
 (`app/features/manage_authorization.py`).
 

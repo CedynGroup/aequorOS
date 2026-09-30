@@ -144,7 +144,7 @@ export function filingAuthorityFor(
 
 /**
  * The permission sentence an Org Owner would have to write, named the way
- * Settings → Members names it. Used to explain an absence when an officer asks
+ * Access → Members names it. Used to explain an absence when an officer asks
  * why a surface is not theirs — never to imply they can grant it themselves.
  */
 export const TRANSMISSION_SENTENCE =

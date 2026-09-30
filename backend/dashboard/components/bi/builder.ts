@@ -51,7 +51,7 @@ import type {
 /**
  * The roles a dashboard may be addressed to, and their names.
  *
- * Exactly the vocabulary the grant composer in Settings → Members issues, so the
+ * Exactly the vocabulary the grant composer in Access → Members issues, so the
  * words on this form and the words on the grant that satisfies it are the same
  * words. Addressing a dashboard to a role is REACHABILITY: whoever holds that
  * role over this institution may open the document, and every figure on it is

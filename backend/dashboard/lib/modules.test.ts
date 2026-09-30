@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  accessDeniedForPath,
   effectiveInstitutionModules,
   effectiveOrganizationModules,
   forecastingWorkspaceAccess,
@@ -10,9 +11,9 @@ import {
   isPersonalSettingsPath,
   isPathVisible,
   hubRedirectFor,
-  moduleForPath,
   isRootPath,
   landingPathFor,
+  moduleForPath,
   type ModuleKey,
   type ModuleScope,
   type ModuleKey as ModuleKeyForTest,
@@ -337,7 +338,7 @@ for (const href of [
   assert.deepEqual(hrefAccess(href, aggregatedForecastingOnly), {
     state: "disabled",
     reason:
-      "Requires Forecasting · Confidential · View. Ask an Org Owner to grant access via Settings → Members.",
+      "Requires Forecasting · Confidential · View. Ask your organization owner or admin to grant it.",
   });
 }
 
@@ -349,7 +350,7 @@ assert.equal(isHrefVisible("/forecasting", deniedForecasting), false);
 assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
   state: "disabled",
   reason:
-    "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
+    "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
 // Behavioral has no confidential page: every tab needs the same aggregated
@@ -428,16 +429,14 @@ const operationalOnly: ModuleScope = {
 };
 assert.equal(isHrefVisible("/settings/profile", operationalOnly), true);
 assert.equal(isPathVisible("/settings/profile", operationalOnly), true);
-assert.equal(isHrefVisible("/settings", operationalOnly), false);
-assert.equal(isPathVisible("/settings", operationalOnly), false);
-assert.equal(isHrefVisible("/settings/members", operationalOnly), false);
-assert.equal(isPathVisible("/settings/members", operationalOnly), false);
-assert.equal(isHrefVisible("/settings/authentication", operationalOnly), false);
-assert.equal(isPathVisible("/settings/authentication", operationalOnly), false);
+assert.equal(isHrefVisible("/settings", operationalOnly), true);
+assert.equal(isPathVisible("/settings", operationalOnly), true);
+assert.equal(isHrefVisible("/access", operationalOnly), true);
+assert.equal(isPathVisible("/access/my-access", operationalOnly), true);
 assert.equal(isPersonalSettingsPath("/settings/profile"), true);
 assert.equal(isPersonalSettingsPath("/settings/profile/preferences"), true);
-assert.equal(isPersonalSettingsPath("/settings"), false);
-assert.equal(isPersonalSettingsPath("/settings/members"), false);
+assert.equal(isPersonalSettingsPath("/settings"), true);
+assert.equal(isPersonalSettingsPath("/settings/members"), true);
 
 const unresolved: ModuleScope = {
   modules: null,
@@ -461,7 +460,7 @@ assert.equal(isRootPath("/?tour=1"), true);
 assert.equal(isRootPath("//"), true);
 assert.equal(isRootPath("/settings"), false);
 assert.equal(landingPathFor(resolved(true)), "/");
-assert.equal(landingPathFor(ownerOnly), "/settings");
+assert.equal(landingPathFor(ownerOnly), "/access");
 assert.equal(landingPathFor(unresolved), null);
 
 assert.equal(isPathVisible("/", liquidityOnly), false);
@@ -485,7 +484,7 @@ const nothingVisible: ModuleScope = {
   modules: new Set(),
   organizationModules: new Set(),
 };
-assert.equal(landingPathFor(nothingVisible), "/settings/profile");
+assert.equal(landingPathFor(nothingVisible), "/access");
 
 const memberOnly: ModuleScope = {
   modules: new Set(),
@@ -525,7 +524,7 @@ assert.deepEqual(hrefAccess("/irr/scenarios", memberOnly), {
 });
 assert.equal(isHrefVisible("/irr/scenarios", memberOnly), false);
 assert.equal(isPathVisible("/irr/scenarios", memberOnly), false);
-assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), "/");
+assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), null);
 
 // ---------------------------------------------------------------------------
 // The IRRBB standardised framework (P5)
@@ -563,7 +562,12 @@ assert.deepEqual(hrefAccess("/irr/standardised", memberOnly), {
     "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isHrefVisible("/irr/standardised", memberOnly), false);
-assert.equal(hubRedirectFor("/irr/standardised", memberOnly), "/");
+assert.equal(hubRedirectFor("/irr/standardised", memberOnly), null);
+assert.equal(
+  accessDeniedForPath("/irr/standardised", memberOnly)?.requirements[0]
+    .moduleScope,
+  "irrbb",
+);
 assert.equal(
   isHrefVisible("/irr/standardised", {
     ...resolved(true, true),
@@ -589,26 +593,45 @@ assert.equal(
 
 // Hubs redirect when hidden; a member without institution authority also
 // returns from public product-module paths to the root empty workspace.
-assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
+assert.equal(hubRedirectFor("/", ownerOnly), "/access");
 assert.equal(hubRedirectFor("/", resolved(true)), null);
 assert.equal(hubRedirectFor("/", unresolved), null);
-assert.equal(hubRedirectFor("/settings", operationalOnly), "/settings/profile");
-assert.equal(
-  hubRedirectFor("/settings/", operationalOnly),
-  "/settings/profile",
-);
+assert.equal(hubRedirectFor("/settings", operationalOnly), null);
+assert.equal(hubRedirectFor("/settings/", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
-assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), "/");
+assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), null);
 for (const route of [
   "/data-engine",
   "/data-engine/excel-csv",
   "/liquidity/stress/",
 ]) {
-  assert.equal(hubRedirectFor(route, memberOnly), "/");
+  assert.equal(hubRedirectFor(route, memberOnly), null);
 }
+assert.deepEqual(accessDeniedForPath("/fx", memberOnly), {
+  title: "Foreign Exchange",
+  reason:
+    "Requires Foreign Exchange · Aggregated · View. Ask your organization owner or admin to grant it.",
+  requirements: [
+    {
+      moduleScope: "fx",
+      moduleLabel: "Foreign Exchange",
+      sensitivityScope: "aggregated",
+      sensitivityLabel: "Aggregated",
+      permission: "view",
+      permissionLabel: "View",
+    },
+  ],
+});
+assert.equal(
+  accessDeniedForPath(
+    "/data-engine/batches/00000000-0000-0000-0000-000000000000",
+    memberOnly,
+  ),
+  null,
+);
 for (const route of [
   "/data-engine/batches/00000000-0000-0000-0000-000000000000",
   "/data-engine/batches/foreign-batch",
@@ -901,9 +924,14 @@ const icaapUnresolved: ModuleScope = {
 assert.deepEqual(hrefAccess("/icaap", icaapUnresolved), { state: "hidden" });
 assert.equal(isPathVisible("/icaap", icaapUnresolved), true);
 
-// The hub URL redirects a baseline-only member to the root workspace rather
-// than 404ing, and never advertises the surface with a grant sentence.
-assert.equal(hubRedirectFor("/icaap", memberOnly), "/");
+// The public hub names missing authority; object routes remain undisclosed.
+assert.equal(hubRedirectFor("/icaap", memberOnly), null);
+assert.deepEqual(
+  accessDeniedForPath("/icaap", memberOnly)?.requirements.map(
+    (item) => `${item.moduleScope}/${item.sensitivityScope}/${item.permission}`,
+  ),
+  ["cap/confidential/view"],
+);
 assert.deepEqual(hrefAccess("/icaap", memberOnly), { state: "hidden" });
 assert.equal(
   hubRedirectFor(`/icaap/${icaapCycleId}/overview`, memberOnly),
@@ -1072,6 +1100,129 @@ assert.equal(
 const withoutP2Capabilities: ModuleScope = resolved(true, true);
 assert.notEqual(withoutP2Capabilities.capitalApprove, true);
 assert.notEqual(withoutP2Capabilities.auditCreate, true);
+// The denied page names exactly what the route guard checks. A CAP/confidential
+// viewer has `capital` in scope yet lacks the aggregated view `/basel` needs; an
+// SDI member's `/liquidity` home is the confidential view; the same rule decides
+// both the 404-vs-denied split and the requirement list.
+const capitalConfidentialOnly = resolved(false, false, {
+  capitalAggregatedView: false,
+  capitalConfidentialView: true,
+});
+for (const route of [
+  "/basel",
+  "/basel/rwa",
+  "/basel/structure",
+  "/basel/stress",
+]) {
+  assert.equal(isPathVisible(route, capitalConfidentialOnly), false);
+  assert.deepEqual(
+    accessDeniedForPath(route, capitalConfidentialOnly)?.requirements.map(
+      (item) =>
+        `${item.moduleScope}/${item.sensitivityScope}/${item.permission}`,
+    ),
+    ["cap/aggregated/view"],
+  );
+}
+assert.equal(isPathVisible("/basel/planning", capitalConfidentialOnly), true);
+assert.equal(
+  accessDeniedForPath("/basel/planning", capitalConfidentialOnly),
+  null,
+);
+
+const sdiAggregatedOnly = {
+  ...resolved(true, false),
+  institutionClass: "sdi",
+};
+assert.equal(isPathVisible("/liquidity", sdiAggregatedOnly), false);
+assert.deepEqual(
+  accessDeniedForPath("/liquidity", sdiAggregatedOnly)?.requirements.map(
+    (item) => `${item.moduleScope}/${item.sensitivityScope}/${item.permission}`,
+  ),
+  ["liq/confidential/view"],
+);
+assert.deepEqual(
+  accessDeniedForPath("/liquidity", {
+    ...memberOnly,
+    institutionClass: "sdi",
+  })?.requirements.map((item) => item.sensitivityScope),
+  ["confidential"],
+);
+assert.deepEqual(
+  accessDeniedForPath("/liquidity", resolved(false, false))?.requirements.map(
+    (item) => item.sensitivityScope,
+  ),
+  ["aggregated"],
+);
+assert.equal(accessDeniedForPath("/liquidity/buffer", sdiAggregatedOnly), null);
+assert.deepEqual(
+  accessDeniedForPath(
+    "/institution",
+    resolved(true, true, {
+      organizationModules: new Set(),
+    }),
+  )?.requirements.map(
+    (item) => `${item.moduleScope}/${item.sensitivityScope}/${item.permission}`,
+  ),
+  ["account/restricted/view"],
+);
+
+// Every hidden public module route resolves to a denied page for every scope
+// shape above — never a 404 — unless the class excludes it structurally.
+const publicRoutes = [
+  "/alerts",
+  "/basel",
+  "/basel/planning",
+  "/basel/rwa",
+  "/credit",
+  "/data-engine",
+  "/fx",
+  "/fx/scenarios",
+  "/institution",
+  "/irr",
+  "/irr/scenarios",
+  "/liquidity",
+  "/liquidity/buffer",
+  "/liquidity/cfp",
+  "/liquidity/stress",
+  "/markets",
+  "/reports",
+  "/risk",
+  "/submissions",
+];
+for (const scope of [
+  memberOnly,
+  ownerOnly,
+  denied,
+  capitalConfidentialOnly,
+  sdiAggregatedOnly,
+  { ...memberOnly, institutionClass: "sdi" },
+  resolved(false, false),
+]) {
+  for (const route of publicRoutes) {
+    const visible = isPathVisible(route, scope);
+    const deniedRoute = accessDeniedForPath(route, scope);
+    if (visible) {
+      assert.equal(deniedRoute, null, `${route} visible yet denied`);
+    } else if (hubRedirectFor(route, scope) === null) {
+      const moduleKey = moduleForPath(route);
+      const structural =
+        (scope.institutionClass === "sdi" &&
+          ["/liquidity/buffer", "/basel/rwa", "/basel/planning"].includes(
+            route,
+          )) ||
+        Boolean(
+          scope.entitledModules &&
+          moduleKey &&
+          !scope.entitledModules.has(moduleKey),
+        );
+      assert.equal(
+        deniedRoute !== null,
+        !structural,
+        `${route} hidden for ${scope.institutionClass} without a denied page`,
+      );
+    }
+  }
+}
 
 // --- Business Intelligence visibility ---------------------------------------
 //
@@ -1435,7 +1586,7 @@ for (const path of [
   assert.deepEqual(hrefAccess(path, deniedForecasting), {
     state: "disabled",
     reason:
-      "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
+      "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
   });
 }
 for (const path of [
@@ -1479,7 +1630,7 @@ for (const [path, requirement] of [
 ]) {
   const expected = {
     state: "disabled",
-    reason: `Requires Forecasting · ${requirement} · View. Ask an Org Owner to grant access via Settings → Members.`,
+    reason: `Requires Forecasting · ${requirement} · View. Ask your organization owner or admin to grant ${requirement.includes(" and ") ? "them" : "it"}.`,
   };
   assert.deepEqual(hrefAccess(path, accountOnlyForecastingScope), expected);
   assert.deepEqual(

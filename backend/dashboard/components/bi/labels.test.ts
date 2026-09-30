@@ -328,7 +328,7 @@ for (const role of scalarRoles) {
 // only, so this read "Account_admin" under every account administrator's name.
 assert.equal(/_/.test(roleLabel("account_admin")), false);
 // The bundle names are the grant composer's, so one authority is never called
-// two things between the avatar menu and Settings → Members.
+// two things between the avatar menu and Access → Members.
 for (const [code, label] of ROLE_OPTIONS) {
   assert.equal(roleLabel(code), label, `role bundle "${code}" is named differently in the avatar menu`);
 }

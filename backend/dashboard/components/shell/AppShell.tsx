@@ -8,6 +8,7 @@ import HistoricalPeriodRibbon from "./HistoricalPeriodRibbon";
 import ModuleGuard from "./ModuleGuard";
 import { NoAuthorizedInstitutionsPanel, useBankContext } from "./BankContext";
 import {
+  isAccessPath,
   isBaselineOnlyScope,
   isPersonalSettingsPath,
   moduleForPath,
@@ -64,6 +65,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {isEmpty &&
               isBaselineOnlyScope(moduleScope) &&
               moduleForPath(pathname) !== null &&
+              !isAccessPath(pathname) &&
               !isPersonalSettingsPath(pathname) ? (
                 <NoAuthorizedInstitutionsPanel />
               ) : (

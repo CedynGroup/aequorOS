@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { AlertTriangle, Eye, Loader2 } from 'lucide-react';
+import { useState } from "react";
+import Link from "next/link";
+import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import {
   ApiError,
   provisionTenant,
@@ -10,7 +10,7 @@ import {
   type ProvisionStepStatus,
   type ProvisionTenantRequest,
   type ProvisionTenantResponse,
-} from '@/lib/api';
+} from "@/lib/api";
 import {
   Button,
   CopyButton,
@@ -27,7 +27,7 @@ import {
   type Step,
   type StepStatus,
   type StatusTone,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * /onboard — tenant provisioning.
@@ -43,15 +43,20 @@ import {
 // GET /operator/v1/jurisdictions endpoint exists — do not grow this list by
 // hand beyond the seeded four.
 const JURISDICTIONS = [
-  { code: 'GH', label: 'Ghana', currency: 'GHS' },
-  { code: 'NG', label: 'Nigeria', currency: 'NGN' },
-  { code: 'KE', label: 'Kenya', currency: 'KES' },
-  { code: 'ZA', label: 'South Africa', currency: 'ZAR' },
+  { code: "GH", label: "Ghana", currency: "GHS" },
+  { code: "NG", label: "Nigeria", currency: "NGN" },
+  { code: "KE", label: "Kenya", currency: "KES" },
+  { code: "ZA", label: "South Africa", currency: "ZAR" },
 ] as const;
 
 // license_type is a free string on the backend (banks.license_type,
 // String(40)); these presets are suggestions, not an enum.
-const LICENSE_PRESETS = ['universal', 'commercial', 'savings_and_loans', 'rural'];
+const LICENSE_PRESETS = [
+  "universal",
+  "commercial",
+  "savings_and_loans",
+  "rural",
+];
 
 // institution_type IS a closed enum: the seven codes in the global
 // institution_types registry (docs/sdi.md §1). The saga validates the value
@@ -68,60 +73,70 @@ const LICENSE_PRESETS = ['universal', 'commercial', 'savings_and_loans', 'rural'
 // institutions mid-transition are still on them, but an operator must not be
 // shown them as current forward-looking classes.
 const INSTITUTION_TYPES = [
-  { value: 'universal_bank', label: 'Universal Bank' },
+  { value: "universal_bank", label: "Universal Bank" },
   {
-    value: 'microfinance_bank',
-    label: 'Microfinance Bank (current class, Notice BG/GOV/SEC/2026/03)',
+    value: "microfinance_bank",
+    label: "Microfinance Bank (current class, Notice BG/GOV/SEC/2026/03)",
   },
   {
-    value: 'rural_community_bank',
-    label: 'Community Bank (formerly Rural Bank)',
+    value: "rural_community_bank",
+    label: "Community Bank (formerly Rural Bank)",
   },
   {
-    value: 'savings_and_loans',
-    label: 'Savings & Loans — legacy, transitioning to Microfinance Bank by 31 Dec 2026',
+    value: "savings_and_loans",
+    label:
+      "Savings & Loans — legacy, transitioning to Microfinance Bank by 31 Dec 2026",
   },
   {
-    value: 'finance_house',
-    label: 'Finance House — legacy, transitioning to Microfinance Bank by 31 Dec 2026',
+    value: "finance_house",
+    label:
+      "Finance House — legacy, transitioning to Microfinance Bank by 31 Dec 2026",
   },
-  { value: 'financial_holding_company', label: 'Financial Holding Company' },
-  { value: 'other_rfi', label: 'Other Regulated Financial Institution' },
+  { value: "financial_holding_company", label: "Financial Holding Company" },
+  { value: "other_rfi", label: "Other Regulated Financial Institution" },
 ] as const;
 
-type Phase = 'form' | 'review' | 'submitting' | 'done';
+type Phase = "form" | "review" | "submitting" | "done";
 
 const EMPTY_FORM: ProvisionTenantRequest = {
-  organization_name: '',
-  bank_name: '',
-  license_type: '',
+  organization_name: "",
+  bank_name: "",
+  license_type: "",
   // No default — the operator must choose deliberately, the same fail-loud
   // discipline as currency (the backend has no default and 422s without it).
-  institution_type: '',
-  jurisdiction_code: 'GH',
-  currency: 'GHS',
-  admin_email: '',
-  admin_full_name: '',
+  institution_type: "",
+  jurisdiction_code: "GH",
+  currency: "GHS",
+  admin_email: "",
+  admin_full_name: "",
 };
 
-const PHASE_INDEX: Record<Phase, number> = { form: 0, review: 1, submitting: 2, done: 3 };
+const PHASE_INDEX: Record<Phase, number> = {
+  form: 0,
+  review: 1,
+  submitting: 2,
+  done: 3,
+};
 
 const STEP_TONE: Record<ProvisionStepStatus, StatusTone> = {
-  succeeded: 'success',
-  failed: 'critical',
-  rolled_back: 'amber',
-  skipped: 'slate',
+  succeeded: "success",
+  failed: "critical",
+  rolled_back: "amber",
+  skipped: "slate",
 };
 
 export default function OnboardPage() {
-  const [phase, setPhase] = useState<Phase>('form');
+  const [phase, setPhase] = useState<Phase>("form");
   const [form, setForm] = useState<ProvisionTenantRequest>(EMPTY_FORM);
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const [result, setResult] = useState<ProvisionTenantResponse | null>(null);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [otpRevealed, setOtpRevealed] = useState(false);
 
-  function set<K extends keyof ProvisionTenantRequest>(key: K, value: ProvisionTenantRequest[K]) {
+  function set<K extends keyof ProvisionTenantRequest>(
+    key: K,
+    value: ProvisionTenantRequest[K],
+  ) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -141,17 +156,17 @@ export default function OnboardPage() {
 
   const currencyValid = /^[A-Z]{3}$/.test(form.currency);
   const formComplete =
-    form.organization_name.trim() !== '' &&
-    form.bank_name.trim() !== '' &&
-    form.license_type.trim() !== '' &&
-    form.institution_type !== '' &&
-    form.jurisdiction_code !== '' &&
+    form.organization_name.trim() !== "" &&
+    form.bank_name.trim() !== "" &&
+    form.license_type.trim() !== "" &&
+    form.institution_type !== "" &&
+    form.jurisdiction_code !== "" &&
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
-    form.admin_full_name.trim() !== '';
+    form.admin_full_name.trim() !== "";
 
   async function provision() {
-    setPhase('submitting');
+    setPhase("submitting");
     setSubmitError(null);
     setResult(null);
     setOtpRevealed(false);
@@ -168,15 +183,18 @@ export default function OnboardPage() {
     } catch (err) {
       setSubmitError(toApiError(err));
     }
-    setPhase('done');
+    setPhase("done");
   }
 
   // The API's own verdict is the authority; the id null-checks only narrow
   // the types for rendering.
-  const succeeded = Boolean(result?.succeeded && result.organization_id && result.bank_id);
-  const failedStep = result?.steps.find((s) => s.status === 'failed') ?? null;
+  const succeeded = Boolean(
+    result?.succeeded && result.organization_id && result.bank_id,
+  );
+  const failedStep = result?.steps.find((s) => s.status === "failed") ?? null;
   const handoffEmail = result?.admin_email ?? form.admin_email;
-  const failedRun = phase === 'done' && (Boolean(submitError) || Boolean(result && !succeeded));
+  const failedRun =
+    phase === "done" && (Boolean(submitError) || Boolean(result && !succeeded));
 
   function resetAll() {
     setForm(EMPTY_FORM);
@@ -184,21 +202,21 @@ export default function OnboardPage() {
     setResult(null);
     setSubmitError(null);
     setOtpRevealed(false);
-    setPhase('form');
+    setPhase("form");
   }
 
   const steps: Step[] = [
-    { key: 'form', label: 'Details' },
-    { key: 'review', label: 'Review' },
+    { key: "form", label: "Details" },
+    { key: "review", label: "Review" },
     {
-      key: 'provision',
-      label: 'Provision',
-      status: failedRun ? ('error' as StepStatus) : undefined,
+      key: "provision",
+      label: "Provision",
+      status: failedRun ? ("error" as StepStatus) : undefined,
     },
     {
-      key: 'done',
-      label: 'Complete',
-      status: failedRun ? ('error' as StepStatus) : undefined,
+      key: "done",
+      label: "Complete",
+      status: failedRun ? ("error" as StepStatus) : undefined,
     },
   ];
 
@@ -214,11 +232,11 @@ export default function OnboardPage() {
       </div>
 
       {/* ---------------------------------------------------------- form */}
-      {phase === 'form' && (
+      {phase === "form" && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (formComplete) setPhase('review');
+            if (formComplete) setPhase("review");
           }}
         >
           <SectionCard
@@ -226,7 +244,8 @@ export default function OnboardPage() {
             subtitle="Jurisdictions are the four seeded in the registry (GH/NG/KE/ZA); no jurisdictions endpoint exists yet."
             footer={
               <span className="text-caption text-slate">
-                A bank has no default currency — it reports in exactly the unit set here.
+                A bank has no default currency — it reports in exactly the unit
+                set here.
               </span>
             }
           >
@@ -234,7 +253,7 @@ export default function OnboardPage() {
               <Field label="Organization name" required>
                 <Input
                   value={form.organization_name}
-                  onChange={(e) => set('organization_name', e.target.value)}
+                  onChange={(e) => set("organization_name", e.target.value)}
                   placeholder="e.g. Horizon Financial Group"
                   required
                 />
@@ -242,15 +261,19 @@ export default function OnboardPage() {
               <Field label="Bank name" required>
                 <Input
                   value={form.bank_name}
-                  onChange={(e) => set('bank_name', e.target.value)}
+                  onChange={(e) => set("bank_name", e.target.value)}
                   placeholder="e.g. Horizon Bank Ghana"
                   required
                 />
               </Field>
-              <Field label="License type" required hint="Free text; presets are suggestions.">
+              <Field
+                label="License type"
+                required
+                hint="Free text; presets are suggestions."
+              >
                 <Input
                   value={form.license_type}
-                  onChange={(e) => set('license_type', e.target.value)}
+                  onChange={(e) => set("license_type", e.target.value)}
                   list="license-presets"
                   placeholder="e.g. universal"
                   required
@@ -268,7 +291,7 @@ export default function OnboardPage() {
               >
                 <Select
                   value={form.institution_type}
-                  onChange={(e) => set('institution_type', e.target.value)}
+                  onChange={(e) => set("institution_type", e.target.value)}
                   required
                 >
                   <option value="" disabled>
@@ -296,7 +319,11 @@ export default function OnboardPage() {
               <Field
                 label="Reporting currency"
                 required
-                error={form.currency && !currencyValid ? 'Must be a 3-letter ISO-4217 code.' : undefined}
+                error={
+                  form.currency && !currencyValid
+                    ? "Must be a 3-letter ISO-4217 code."
+                    : undefined
+                }
                 hint="Prefilled from the jurisdiction; override deliberately — the backend has no default."
               >
                 <Input
@@ -306,7 +333,7 @@ export default function OnboardPage() {
                   invalid={Boolean(form.currency) && !currencyValid}
                   onChange={(e) => {
                     setCurrencyTouched(true);
-                    set('currency', e.target.value.toUpperCase());
+                    set("currency", e.target.value.toUpperCase());
                   }}
                   placeholder="GHS"
                   required
@@ -316,7 +343,7 @@ export default function OnboardPage() {
                 <Input
                   type="email"
                   value={form.admin_email}
-                  onChange={(e) => set('admin_email', e.target.value)}
+                  onChange={(e) => set("admin_email", e.target.value)}
                   placeholder="admin@bank.example"
                   required
                 />
@@ -324,7 +351,7 @@ export default function OnboardPage() {
               <Field label="Admin full name" required className="sm:col-span-2">
                 <Input
                   value={form.admin_full_name}
-                  onChange={(e) => set('admin_full_name', e.target.value)}
+                  onChange={(e) => set("admin_full_name", e.target.value)}
                   placeholder="First admin of the institution"
                   required
                 />
@@ -341,7 +368,7 @@ export default function OnboardPage() {
       )}
 
       {/* -------------------------------------------------------- review */}
-      {phase === 'review' && (
+      {phase === "review" && (
         <SectionCard
           title="This will create…"
           subtitle="The API runs this as a saga: organization → bank → admin. Each step reports its own outcome, and a failure rolls back what preceded it."
@@ -351,22 +378,24 @@ export default function OnboardPage() {
             <FieldRow label="Bank">{form.bank_name}</FieldRow>
             <FieldRow label="License type">{form.license_type}</FieldRow>
             <FieldRow label="Institution type">
-              {INSTITUTION_TYPES.find((t) => t.value === form.institution_type)?.label ??
-                form.institution_type}
+              {INSTITUTION_TYPES.find((t) => t.value === form.institution_type)
+                ?.label ?? form.institution_type}
             </FieldRow>
             <FieldRow label="Jurisdiction">
-              {form.jurisdiction_code} —{' '}
-              {JURISDICTIONS.find((j) => j.code === form.jurisdiction_code)?.label ?? ''}
+              {form.jurisdiction_code} —{" "}
+              {JURISDICTIONS.find((j) => j.code === form.jurisdiction_code)
+                ?.label ?? ""}
             </FieldRow>
             <FieldRow label="Reporting currency">
               <span className="font-mono">{form.currency}</span>
             </FieldRow>
             <FieldRow label="First admin">
-              {form.admin_full_name} · <span className="font-mono">{form.admin_email}</span>
+              {form.admin_full_name} ·{" "}
+              <span className="font-mono">{form.admin_email}</span>
             </FieldRow>
           </div>
           <div className="mt-4 flex justify-between border-t border-border-light pt-4">
-            <Button variant="secondary" onClick={() => setPhase('form')}>
+            <Button variant="secondary" onClick={() => setPhase("form")}>
               Back
             </Button>
             <Button onClick={() => void provision()}>Provision tenant</Button>
@@ -375,7 +404,7 @@ export default function OnboardPage() {
       )}
 
       {/* ------------------------------------------- submitting / result */}
-      {phase === 'submitting' && (
+      {phase === "submitting" && (
         <div className="card flex items-center gap-3 p-5">
           <Loader2 size={18} className="animate-spin text-action" aria-hidden />
           <div>
@@ -387,37 +416,46 @@ export default function OnboardPage() {
         </div>
       )}
 
-      {phase === 'done' && submitError && (
+      {phase === "done" && submitError && (
         <div className="space-y-4">
           <ErrorPanel error={submitError} context="Provisioning request" />
           <p className="text-caption text-slate">
-            The request itself failed — the API returned no step record, so the saga may not have
-            started. Verify on the{' '}
+            The request itself failed — the API returned no step record, so the
+            saga may not have started. Verify on the{" "}
             <Link href="/tenants" className="text-action hover:underline">
               tenant list
-            </Link>{' '}
+            </Link>{" "}
             before retrying.
           </p>
-          <Button variant="secondary" onClick={() => setPhase('review')}>
+          <Button variant="secondary" onClick={() => setPhase("review")}>
             Back to review
           </Button>
         </div>
       )}
 
-      {phase === 'done' && result && (
+      {phase === "done" && result && (
         <div className="space-y-4">
           {/* Saga step record — rendered verbatim from the API */}
           <SectionCard title="Provisioning steps" noPadding>
             <ul className="divide-y divide-border-light">
               {result.steps.map((s, i) => (
-                <li key={`${s.step}-${i}`} className="flex items-start justify-between gap-3 px-5 py-3">
+                <li
+                  key={`${s.step}-${i}`}
+                  className="flex items-start justify-between gap-3 px-5 py-3"
+                >
                   <div className="min-w-0 flex-1">
-                    <span className="font-mono text-body text-ink">{s.step}</span>
+                    <span className="font-mono text-body text-ink">
+                      {s.step}
+                    </span>
                     {s.detail && (
-                      <p className="mt-0.5 break-words text-caption text-slate">{s.detail}</p>
+                      <p className="mt-0.5 break-words text-caption text-slate">
+                        {s.detail}
+                      </p>
                     )}
                   </div>
-                  <StatusPill tone={STEP_TONE[s.status]}>{s.status.replace(/_/g, ' ')}</StatusPill>
+                  <StatusPill tone={STEP_TONE[s.status]}>
+                    {s.status.replace(/_/g, " ")}
+                  </StatusPill>
                 </li>
               ))}
             </ul>
@@ -427,9 +465,15 @@ export default function OnboardPage() {
           {result.warnings.length > 0 && (
             <div className="card border-warning/40 p-4">
               <div className="flex items-start gap-2">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+                <AlertTriangle
+                  size={15}
+                  className="mt-0.5 shrink-0 text-warning"
+                  aria-hidden
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="text-body font-medium text-navy">Warnings from the API</p>
+                  <p className="text-body font-medium text-navy">
+                    Warnings from the API
+                  </p>
                   <ul className="mt-1 list-disc space-y-0.5 pl-5 text-caption text-slate">
                     {result.warnings.map((w, i) => (
                       <li key={i} className="break-words">
@@ -448,11 +492,15 @@ export default function OnboardPage() {
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-md border border-border-light bg-surface p-3">
-                  <div className="text-micro uppercase tracking-wide text-slate">Bank</div>
+                  <div className="text-micro uppercase tracking-wide text-slate">
+                    Bank
+                  </div>
                   <MonoId id={result.bank_id} className="mt-1" />
                 </div>
                 <div className="rounded-md border border-border-light bg-surface p-3">
-                  <div className="text-micro uppercase tracking-wide text-slate">Organization</div>
+                  <div className="text-micro uppercase tracking-wide text-slate">
+                    Organization
+                  </div>
                   <MonoId id={result.organization_id} className="mt-1" />
                 </div>
               </div>
@@ -460,16 +508,22 @@ export default function OnboardPage() {
               {/* One-time admin password — reveal once, copy now */}
               <div className="mt-4 rounded-md border border-warning/50 bg-warning-light p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+                  <AlertTriangle
+                    size={15}
+                    className="mt-0.5 shrink-0 text-warning"
+                    aria-hidden
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-body font-medium text-navy">
                       One-time admin password — copy it NOW
                     </p>
                     <p className="mt-1 text-caption text-slate">
-                      This is the only time the operator API will ever show this password — only a
-                      hash is stored server-side. Copy it and hand it to{' '}
-                      <span className="font-medium">{handoffEmail}</span> over a secure channel; it
-                      leaves this screen forever when you navigate away.
+                      This is the only time the operator API will ever show this
+                      password — only a hash is stored server-side. Copy it and
+                      hand it to{" "}
+                      <span className="font-medium">{handoffEmail}</span> over a
+                      secure channel; it leaves this screen forever when you
+                      navigate away.
                     </p>
                     <div className="mt-3">
                       {result.admin_one_time_password === null ? (
@@ -507,7 +561,8 @@ export default function OnboardPage() {
               {result.sso_redirect_uris.length > 0 && (
                 <div className="mt-4 rounded-md border border-border-light bg-surface p-3">
                   <div className="text-micro uppercase tracking-wide text-slate">
-                    OIDC redirect URIs for the bank&apos;s IdP — register ALL of them
+                    OIDC redirect URIs for the bank&apos;s IdP — register ALL of
+                    them
                   </div>
                   <ul className="mt-2 space-y-1">
                     {result.sso_redirect_uris.map((uri) => (
@@ -526,16 +581,19 @@ export default function OnboardPage() {
                 <h3 className="text-body font-medium text-navy">Next steps</h3>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-caption text-slate">
                   <li>
-                    Hand the admin their credentials. On first sign-in they set a real password.
+                    Hand the admin their credentials. On first sign-in they set
+                    a real password.
                   </li>
                   <li>
-                    The bank&apos;s IT completes SSO in the product under Settings → Authentication
-                    (issuer, client id/secret, allowed domains — and the redirect URIs above
-                    registered at their IdP; sign-in AND signing step-up).
+                    The bank&apos;s IT completes SSO in the product under Access
+                    → Authentication (issuer, client id/secret, allowed domains
+                    — and the redirect URIs above registered at their IdP;
+                    sign-in AND signing step-up).
                   </li>
                   <li>
-                    The bank goes live on its first ingestion — there is no seeded data; the Data
-                    Engine (upload, adapter, or API push) is the only way data enters.
+                    The bank goes live on its first ingestion — there is no
+                    seeded data; the Data Engine (upload, adapter, or API push)
+                    is the only way data enters.
                   </li>
                 </ul>
               </div>
@@ -557,34 +615,43 @@ export default function OnboardPage() {
               <h2 className="text-h3 text-navy">Provisioning failed</h2>
               {failedStep ? (
                 <p className="mt-2 text-body text-slate">
-                  Failed at <span className="font-mono text-ink">{failedStep.step}</span>
+                  Failed at{" "}
+                  <span className="font-mono text-ink">{failedStep.step}</span>
                   {failedStep.detail ? <> — {failedStep.detail}</> : null}
                 </p>
               ) : (
                 <p className="mt-2 text-body text-slate">
-                  The API reported the saga as not succeeded. The step record above is the
-                  authoritative account of what ran.
+                  The API reported the saga as not succeeded. The step record
+                  above is the authoritative account of what ran.
                 </p>
               )}
               {(result.organization_id || result.bank_id) && (
                 <p className="mt-2 text-body text-slate">
-                  Identifiers the API still returned:{' '}
+                  Identifiers the API still returned:{" "}
                   {result.organization_id && (
-                    <span className="font-mono text-ink">{result.organization_id}</span>
+                    <span className="font-mono text-ink">
+                      {result.organization_id}
+                    </span>
                   )}
-                  {result.organization_id && result.bank_id && ' · '}
-                  {result.bank_id && <span className="font-mono text-ink">{result.bank_id}</span>}
-                  {' — these rows may still exist.'}
+                  {result.organization_id && result.bank_id && " · "}
+                  {result.bank_id && (
+                    <span className="font-mono text-ink">{result.bank_id}</span>
+                  )}
+                  {" — these rows may still exist."}
                 </p>
               )}
               <p className="mt-2 text-caption text-slate">
-                Steps marked <span className="font-medium text-warning">rolled back</span> above were
-                undone by the saga; anything marked{' '}
-                <span className="font-medium text-success">succeeded</span> without a rollback may
-                still exist — check the tenant list before re-running.
+                Steps marked{" "}
+                <span className="font-medium text-warning">rolled back</span>{" "}
+                above were undone by the saga; anything marked{" "}
+                <span className="font-medium text-success">succeeded</span>{" "}
+                without a rollback may still exist — check the tenant list
+                before re-running.
               </p>
               <div className="mt-4 flex gap-2">
-                <Button onClick={() => setPhase('review')}>Back to review</Button>
+                <Button onClick={() => setPhase("review")}>
+                  Back to review
+                </Button>
                 <Link
                   href="/tenants"
                   className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"

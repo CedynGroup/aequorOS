@@ -13,7 +13,7 @@ test.describe("bank-scoped integration-key administration", () => {
   test("shows the target bank, rotation warning, issuance, and revocation", async ({
     page,
   }) => {
-    await page.goto("/data-engine/api");
+    await page.goto("/access/integration-keys");
 
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),
