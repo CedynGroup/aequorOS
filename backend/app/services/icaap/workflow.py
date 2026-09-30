@@ -312,9 +312,7 @@ def _decision_blocker(state: ChainState, seq: int, actor: str | None) -> str | N
         chain_open=state.cycle.status == "in_review",
         is_current_stage=state.cycle.current_stage_seq == seq,
         makers=state.makers,
-        checkers=domain.checkers(
-            state.facts, current_round=state.cycle.round, exclude_seq=seq
-        ),
+        checkers=domain.checkers(state.facts, current_round=state.cycle.round, exclude_seq=seq),
         messages=_BLOCKER_MESSAGES,
         after_stage=(
             (
@@ -330,9 +328,12 @@ def stage_authority(
 ) -> tuple[ConditionCheck, ...]:
     """The maker-checker condition for a stage decision, resolved for the evaluator.
 
-    Returns no condition when the cycle or stage cannot be resolved: the route
-    then answers 404/409 from the service rather than turning a missing object
-    into an authorization refusal.
+    A cycle this institution does not hold — another bank's, another tenant's,
+    or none at all — has nobody to separate from, so the condition passes and
+    the route answers the service's 404. Returning no condition instead would
+    turn the missing object into a 403, because APPROVE requires the
+    maker-checker context. An unparseable path token supplies no condition, so
+    it can never widen authority.
     """
     if cycle_id is None or stage_seq is None:
         return ()
@@ -344,7 +345,13 @@ def stage_authority(
         )
     )
     if cycle is None:
-        return ()
+        return (
+            ConditionCheck(
+                kind=ConditionKind.MAKER_CHECKER,
+                passed=True,
+                reason="no ICAAP of this institution to separate from",
+            ),
+        )
     access = IcaapAccess(ctx=ctx, bank=bank)
     state = load_state(db, access, cycle)
     blocker = _decision_blocker(

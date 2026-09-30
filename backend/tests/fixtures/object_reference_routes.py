@@ -47,6 +47,9 @@ from tests.fixtures.object_references import (
 )
 
 _USER_NAMESPACE = UUID("8f0c6f1e-3b7a-4c52-9d1e-2a6f4b8c9d01")
+_UNKNOWN_NAMESPACE = UUID("3d5a9e27-6c14-4b8f-a0d2-7e91c4f3b265")
+#: A well-formed institution id no tenant holds.
+_UNKNOWN_BANK_ID: Final = "BK-ZZZZZZZZ"
 ORG_A: Final = "OR-IDORPR01"
 ORG_B: Final = "OR-IDORPR02"
 GRANT_REASON: Final = "object reference property binding"
@@ -113,158 +116,17 @@ _BODY_OVERRIDES: Final[Mapping[tuple[str, str], Mapping[str, Any]]] = {
         "label": "probe"
     },
 }
-#: ICAAP deferred (captain, 2026-09-20); catalogue before ICAAP ships.  Every
-#: ICAAP route that carries an object identifier is named here one by one — no
-#: prefix wildcard — so picking the workspace back up means deleting each entry
-#: and seeding its kind, not discovering after merge that the census never saw
-#: it.  The routes without an identifier (list, create) are not object-reference
-#: routes and are absent from the census by construction.
-ICAAP_DEFERRED: Final[frozenset[tuple[str, str]]] = frozenset(
-    {
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}"),
-        ("PATCH", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/allocation"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/allocation"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics/{metric_id}"),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics/{metric_id}/retire",
-        ),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/archive"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments"),
-        (
-            "GET",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments/{attachment_id}/download",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments/{attachment_id}/withdraw",
-        ),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews/{review_id}"),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews/{review_id}/finalise",
-        ),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/bindings"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/manual-table"),
-        ("DELETE", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/pin"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/pin"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/refresh"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/retire"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/capital-triggers"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges"),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges/{challenge_id}/responses",
-        ),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/clone"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure/decision"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure/submit"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/draft.docx"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/draft.pdf"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/filing"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/freeze"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/freeze-preflight"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/parameters"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/capital-plan-proposal"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/approve"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/compute"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/retire"),
-        (
-            "GET",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/revisions",
-        ),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/table5"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/readiness"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/rebase"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation"),
-        (
-            "PUT",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/controls/{control_code}/explanations/{comparison_key}",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/requirement/compute",
-        ),
-        (
-            "PUT",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/requirement/lines/{line_key}/explanation",
-        ),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines"),
-        (
-            "DELETE",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines/{line_id}",
-        ),
-        (
-            "PUT",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines/{line_id}",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/load-regulatory",
-        ),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/return"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks"),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks/{risk_key}"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks/{risk_key}/retire"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts"),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts",
-        ),
-        (
-            "GET",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}/accept",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}/reject",
-        ),
-        (
-            "PUT",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/requirements/{item_id}",
-        ),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions"),
-        (
-            "GET",
-            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions/{version_no}",
-        ),
-        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/working"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/stages"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/stages/{seq}/decisions"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/submit-for-review"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/confirm"),
-        ("GET", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/letter"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/withdraw"),
-        ("PATCH", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}/decision"),
-        ("POST", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}/submit"),
-    }
-)
+#: Multipart routes: their form fields, sent beside one small PDF ``file`` part,
+#: so the request passes validation and reaches the object lookup.
+_MULTIPART_FORMS: Final[Mapping[tuple[str, str], Mapping[str, str]]] = {
+    ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments"): {
+        "kind": "senior_management_report",
+        "title": "probe",
+    },
+}
+_MULTIPART_FILE: Final = ("probe.pdf", b"%PDF-1.7\n%probe\n", "application/pdf")
 #: Routes the enumeration finds that the sweep cannot exercise automatically.
-KNOWN_UNCOVERED: Final[frozenset[tuple[str, str]]] = ICAAP_DEFERRED | frozenset(
+KNOWN_UNCOVERED: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("POST", "/api/v1/cases/{case_id}/financial-workspace/{unsupported_entity_type}"),
         (
@@ -322,6 +184,13 @@ class Request:
     path: str
     query: dict[str, str]
     body: dict[str, Any] | None
+    form: Mapping[str, str] | None = None
+
+    def send_arguments(self) -> dict[str, Any]:
+        """Keyword arguments for ``TestClient.request`` beyond method and path."""
+        if self.form is not None:
+            return {"params": self.query, "data": self.form, "files": {"file": _MULTIPART_FILE}}
+        return {"params": self.query, "json": self.body}
 
 
 # --- route census -----------------------------------------------------------
@@ -601,7 +470,12 @@ def build_request(
         for reference in route.references:
             if reference.location == "body":
                 _assign(body, reference.name, resolve(reference), schema, document)
-    return Request(path=route.path.format(**path_values), query=query, body=body)
+    return Request(
+        path=route.path.format(**path_values),
+        query=query,
+        body=body,
+        form=_MULTIPART_FORMS.get(route.key),
+    )
 
 
 def foreign_children(route: ObjectRoute) -> tuple[Reference, ...]:
@@ -677,6 +551,34 @@ def foreign_request(  # noqa: PLR0913 - explicit home, foreign owner and isolate
     return request, requested
 
 
+def unknown_request(
+    route: ObjectRoute,
+    document: Mapping[str, Any],
+    layout: Layout,
+    *,
+    home: ObjectSet,
+    child: Reference | None = None,
+) -> tuple[Request, set[str]]:
+    """:func:`foreign_request`'s twin whose foreign references name no object at all.
+
+    Comparing the two answers is how a refusal proves it reveals nothing: a
+    foreign object must be answered exactly as an identifier nobody holds.
+    """
+    foreign = foreign_references(route, layout, child)
+    assert foreign, f"{route.label} [{layout}] has no foreign reference"
+
+    def resolve(reference: Reference) -> str:
+        if reference not in foreign:
+            return home[reference.kind]
+        if reference.kind == "bank":
+            return _UNKNOWN_BANK_ID
+        return str(uuid5(_UNKNOWN_NAMESPACE, reference.kind))
+
+    request = build_request(route, document, TENANT_A.bank_id, resolve)
+    requested = {resolve(reference) for reference in route.references}
+    return request, requested
+
+
 def leaked(response_text: str, identifiers: set[str], requested: set[str]) -> list[str]:
     """Foreign identifiers that appear in a response body but were not the ones sent."""
     return sorted(
@@ -724,8 +626,18 @@ _FULL_AUTHORITY_BUNDLES: Final = (
 
 
 def full_authority_bindings(tenant: TenantSeed, *, owner: bool) -> list[AuthorizationBinding]:
-    """Every operational bundle on exactly one bank, plus Org Owner when ``owner``."""
-    bindings: list[AuthorizationBinding] = []
+    """Every operational bundle on exactly one bank, the organisation-wide Audit
+    grant that records an ICAAP independent review, plus Org Owner when ``owner``."""
+    bindings: list[AuthorizationBinding] = [
+        binding(
+            tenant=tenant,
+            user_id=tenant.actor_id,
+            role=RoleBundle.ANALYST,
+            module_scope=ModuleScope.AUDIT,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+            institution_scope=InstitutionScope.ORGANIZATION,
+        )
+    ]
     if owner:
         bindings.append(
             binding(

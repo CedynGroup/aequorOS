@@ -1459,11 +1459,18 @@ def require_icaap_addon_approve(request: Request, db: DbSession, ctx: Tenant) ->
     that answers with an authorization decision instead of a constraint error.
     """
     from app.services.icaap import supervisory_addons  # noqa: PLC0415
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
     addon_id = _icaap_path_uuid(request, "addon_id")
     conditions: tuple[ConditionCheck, ...] = ()
-    if addon_id is not None:
-        conditions = supervisory_addons.confirmation_conditions(db, ctx, addon_id)
+    if bank is not None and addon_id is not None:
+        conditions = supervisory_addons.confirmation_conditions(
+            db, IcaapAccess(ctx=ctx, bank=bank), addon_id
+        )
     return _require_icaap_access(
         request,
         db,
@@ -1693,7 +1700,7 @@ def require_icaap_disclosure_approve(request: Request, db: DbSession, ctx: Tenan
     if bank is not None:
         conditions = icaap_disclosure.approval_conditions(
             db, IcaapAccess(ctx=ctx, bank=bank), cycle_id
-        )  # pyright: ignore[reportAssignmentType]
+        )
     return _require_icaap_access(
         request,
         db,

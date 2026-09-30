@@ -408,8 +408,7 @@ component, so BI commentary can reuse them.
 * **`multipart/form-data` has no types** — every field arrives as text, so a
   form-posted decimal or boolean must be parsed explicitly (D-050).
 * **ICAAP is always available; there is no feature flag** (D-046, founder
-  directive). The old `ICAAP_WORKSPACE_ENABLED` gate described in
-  `icaap_enforcement_rollout.md` step 1 was removed.
+  directive). The old `ICAAP_WORKSPACE_ENABLED` gate was removed.
 * **The REVIEW/APPROVE ladder does not separate duties on its own.** `APPROVER`
   is the only bundle containing `REVIEW`, so `REVIEW ⟹ APPROVE` for every
   principal. What actually keeps a reviewer off the freeze stage is

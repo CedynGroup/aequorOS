@@ -1,7 +1,7 @@
 # ICAAP workspace enforcement rollout
 
-The ICAAP workspace is served only where it has been enabled, only to
-institutions inside the ICAAP regime, and only to principals holding one
+The ICAAP workspace is part of the product for every bank tenant. It is served
+only to institutions inside the ICAAP regime, and only to principals holding one
 complete scoped binding. Run this inventory against each target deployment
 immediately before release, and store the dated output with the deployment
 record. Do not copy production identities into this repository.
@@ -9,20 +9,25 @@ record. Do not copy production identities into this repository.
 ## The gates, in the order they run
 
 Every `/api/v1/banks/{bank_id}/icaap/*` route resolves the same four steps, and
-the order is the policy:
+the order is the policy. There is no deployment switch: the licence class and
+the caller's authority are what decide eligibility.
 
-1. **Is the module enabled?** With `ICAAP_WORKSPACE_ENABLED` unset or `0`, every
-   route answers **404** before the institution is resolved. An un-enabled
-   deployment does not advertise that ICAAP exists.
-2. **Is the institution this tenant's?** An institution in another organization
+1. **Is the institution this tenant's?** An institution in another organization
    answers **404** and emits a cross-tenant telemetry record.
-3. **Is the institution inside the regime?** ICAAP applies to banks and
+2. **Is the institution inside the regime?** ICAAP applies to banks and
    financial holding companies. Anything else answers **404** — not 403, which
    would imply the surface might apply. An unresolvable licence class raises its
    own **409** unchanged (fail-closed).
-4. **Does the caller hold the authority?** Only then does a missing binding
+3. **Does the caller hold the authority?** Only then does a missing binding
    become **403**: the caller's own institution existing is not a secret from
    them.
+4. **Is the object this institution's?** Every object in the path or body is
+   resolved under the organization **and** the institution named by the route.
+   Another tenant's object, a sibling institution's object, and an object nobody
+   holds get the same answer — **404** for a path reference — so the refusal
+   reveals nothing. A pre-authorization condition (four eyes, maker-checker)
+   resolves its object the same way; an object it cannot resolve passes the
+   condition and leaves the route to answer its 404.
 
 ## Required authority
 
@@ -61,20 +66,19 @@ Impersonated sessions remain structurally incapable of any unsafe method.
 
 ## Deployment
 
-- `ICAAP_WORKSPACE_ENABLED=1` in the Coolify environment of the API app only.
-  It is read per request, so enabling it is an environment change plus a
-  restart — not a rebuild. Do not use `${}` interpolation in the compose file.
-- `ICAAP_FILING_ENABLED` stays `0` until P3; it is served by
-  `GET /api/v1/feature-flags` from P1 so the dashboard contract does not change
-  when filing ships.
+- There is no workspace switch; `app/core/config.py::IcaapSettings` holds the
+  settings below.
 - `ICAAP_FRAMEWORKS_ENABLED` (default `bog_icaap`) is the per-framework switch.
   A framework may be published as reference data long before the platform can
   file to that regulator.
 - `ICAAP_MAX_ATTACHMENT_BYTES` (default 25 MB) caps evidence uploads.
+- `ICAAP_SIGNING_ENABLED` gates the signing ceremony on the ICAAP report, never
+  the workspace.
 
-## Before enabling
+## Before onboarding a tenant
 
-Run the access-impact inventory and read the output before the flag is set:
+Run the access-impact inventory and read the output before the tenant's
+preparers are expected to use the workspace:
 
 ```
 uv run python scripts/authorization_access_impact.py
@@ -139,15 +143,51 @@ reconciliation line, saved an allocation, or answered a challenge. The
 reviewer's own report attachment is excluded, so filing the report does not
 make the reviewer ineligible. P3 appends the stage deciders.
 
-## Before enabling the risk and capital half
+## Before relying on the risk and capital half
 
 The twenty Pillar 2 parameter codes (`202609190056`) must be present for the
 target jurisdiction in addition to P1's eight. `GET …/cycles/{id}/parameters`
 lists every code the workspace reads at the cycle's as-of date, with its
 provenance, and names the missing ones — read it for the target tenant before
-the flag is set.
+its preparers rely on a Pillar 2 figure.
 
 Fifteen of those rows are REPRESENTATIVE calibrations (their citation begins
 `REPRESENTATIVE:`) and every one ships `pending`. Outputs label them, readiness
 warns on any figure that rests on one, and the founder or the regulator has to
 confirm them before a real filing relies on them (D-039).
+
+## Review, freeze and filing (P3): the separated authorities
+
+The review chain, the freeze, the workflow templates, the disclosure and the
+revision clone take the same CAP/confidential bindings. Every write that changes
+who has signed off carries a separation condition as well, evaluated before the
+route runs so the refusal is an authorization decision with a trace:
+
+| Action | Authority | Separation |
+|---|---|---|
+| Submit for review; draft or submit the disclosure; update or submit a workflow template | `edit` | — |
+| Propose a workflow template; clone a cycle as a revision or an update | `create` | — |
+| Decide a review stage (`decideIcaapStage`) | `review` | The decider neither prepared the report nor decided another stage of this round |
+| Decide an approval stage (`decideIcaapStage`) | `approve` | As above. A REVIEWER bundle carries `review` only, so it can record a review but not the approval that makes the report ready to freeze. An unresolvable stage takes `approve`, the stricter permission |
+| Freeze (`freezeIcaapCycle`) | `edit` | Nobody who reviewed or approved the round (D-030): freezing makes the actor the package's preparer of record |
+| Send a frozen ICAAP back (`returnIcaapCycle`) | `review` | Not the officer who froze it |
+| Decide a workflow template (`decideIcaapWorkflowTemplate`) | `approve` | Not its proposer |
+| Approve the disclosure (`decideIcaapDisclosure`) | `approve` | Not whoever chose what to publish |
+
+Each separation condition resolves its object under the route's organization
+and institution. A cycle, template, add-on or disclosure the institution does
+not hold passes the condition, so a fully entitled caller meets the route's own
+404 rather than a 403 that would confirm another institution's object exists.
+
+## Object references
+
+Every ICAAP route that carries an object identifier is in the object-reference
+census (`backend/tests/fixtures/object_reference_routes.py`). The coverage layer
+(`backend/tests/api/test_authorization_object_reference_coverage.py`) refuses
+each one on the cross-organization, sibling-institution and single-foreign-child
+layouts, and `test_icaap_refusal_is_the_unknown_object_answer` holds ICAAP to
+the stricter shape in
+[the verification contract](authorization_foundation.md#executable-verification).
+A foreign attachment named in a request BODY is refused with the same **422**
+(`evidence_required` or `unknown_attachment`) an unknown attachment gets; it is
+not a 404 because the object addressed by the path does exist.
