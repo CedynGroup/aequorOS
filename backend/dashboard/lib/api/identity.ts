@@ -20,7 +20,7 @@ export function initialsFrom(nameOrEmail: string): string {
  * and the role bundles, in production copy.
  *
  * The bundle names are READ from the grant composer's own list so the avatar
- * menu and Settings → Members cannot call one authority two things. The
+ * menu and Access → Members cannot call one authority two things. The
  * scalar-only roles are named here. Anything else degrades through `labelize`,
  * which never leaves an underscore on screen — the previous fallback
  * capitalised the first letter only, so every account administrator saw

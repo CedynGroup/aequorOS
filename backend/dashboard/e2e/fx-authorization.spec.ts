@@ -30,7 +30,8 @@ const test = base.extend<{
             institution_id: "BK-SAMP0001",
             module_scope: module,
             sensitivity_scope: sensitivity,
-            reason: "Verify FX controls against real scoped authority",
+            reason_category: "other",
+            reason_detail: "Verify FX controls against real scoped authority",
           };
           const preview = await page.request.post(
             `${api}/authorization/bindings/preview`,
