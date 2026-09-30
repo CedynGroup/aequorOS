@@ -333,7 +333,7 @@ jobs:
     timeout-minutes: 60
     services:
       postgres:
-        image: postgres:17
+        image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
         env:
           POSTGRES_DB: risk_service
           POSTGRES_PASSWORD: postgres
@@ -435,7 +435,7 @@ jobs:
     timeout-minutes: 120
     services:
       postgres:
-        image: postgres:17
+        image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
         env:
           POSTGRES_DB: risk_service
           POSTGRES_PASSWORD: postgres
@@ -553,8 +553,9 @@ jobs:
       # configured`. The key NAME is load-bearing: the at-rest assertion pins the
       # literal `aequoros-key` against the returned SSEKMSKeyId. The key MATERIAL
       # is a throwaway generated per run and encrypts nothing that outlives the job.
-      # The image is the community fork pgsty/minio, pinned by digest: MinIO stopped
-      # serving anonymous pulls of quay.io/minio/minio and minio/minio (2026-09).
+      # Every public image in CI comes from Amazon ECR Public, pinned by digest.
+      # MinIO stopped serving anonymous pulls of its own images (2026-09), so this
+      # is Chainguard's build of it.
       - name: Start MinIO with built-in KMS
         run: |
           set -euo pipefail
@@ -563,7 +564,7 @@ jobs:
             -e MINIO_ROOT_PASSWORD=ciminio123 \
             -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
             -p 9000:9000 \
-            pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372 server /data
+            public.ecr.aws/chainguard/minio:latest@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285 server /data
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
               echo "MinIO is live"; exit 0

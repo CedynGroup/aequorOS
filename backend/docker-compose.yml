@@ -1,6 +1,6 @@
 services:
   risk-postgres:
-    image: postgres:17
+    image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -15,10 +15,11 @@ services:
       timeout: 3s
       retries: 10
 
-  # pgsty/minio and pgsty/mc are the community forks, pinned by digest: MinIO stopped
-  # serving anonymous pulls of its own images (2026-09).
+  # Public images come from Amazon ECR Public, pinned by digest. MinIO stopped serving
+  # anonymous pulls of its own images (2026-09), so these are Chainguard's builds; the
+  # client is the -dev variant because the init entrypoint below needs a shell.
   risk-minio:
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
+    image: public.ecr.aws/chainguard/minio:latest@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -30,7 +31,7 @@ services:
       - risk-minio-data:/data
 
   risk-minio-init:
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd
+    image: public.ecr.aws/chainguard/minio-client:latest-dev@sha256:a552f9a01603b3db647712ae056e8bb4c04800365707f5bd4abffa05c9e4198e
     depends_on:
       - risk-minio
     entrypoint: >
