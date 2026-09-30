@@ -1359,11 +1359,15 @@ def test_access_request_directory_exposes_uncovered_institution_class(
             )
 
 
-@pytest.mark.parametrize("existing_status", ["active", "revoked", "composer"])
-def test_route_requests_sharing_requirement_resolve_against_effective_binding(
+type SharedRequirementResolution = tuple[list[str], str, str, int, dict[str, object], str, str]
+
+
+@pytest.fixture(params=["active", "revoked", "composer"])
+def shared_requirement_resolution(
     grant_client: TestClient,
-    existing_status: str,
-) -> None:
+    request: pytest.FixtureRequest,
+) -> SharedRequirementResolution:
+    existing_status = str(request.param)
     request_ids = []
     for route in ("/liquidity/forecast", "/liquidity/monitoring"):
         response = grant_client.post(
@@ -1410,9 +1414,9 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
         )
         assert second.status_code == 201, second.text
         with _session() as db:
-            request = db.get(AuthorizationAccessRequest, UUID(request_ids[1]))
-            assert request is not None
-            second_binding = str(request.binding_id)
+            access_request = db.get(AuthorizationAccessRequest, UUID(request_ids[1]))
+            assert access_request is not None
+            second_binding = str(access_request.binding_id)
     else:
         second = grant_client.post(
             f"/api/v1/authorization/access-requests/{request_ids[1]}/approve",
@@ -1421,6 +1425,22 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
         )
         assert second.status_code == 200, second.text
         second_binding = second.json()["binding"]["id"]
+    return (
+        request_ids,
+        first_binding,
+        second_binding,
+        version,
+        payload,
+        first.json()["binding"]["authority_sentence"],
+        existing_status,
+    )
+
+
+def test_route_requests_sharing_requirement_resolve_against_effective_binding(
+    grant_client: TestClient,
+    shared_requirement_resolution: SharedRequirementResolution,
+) -> None:
+    _, first_binding, second_binding, version, _, _, existing_status = shared_requirement_resolution
     assert (first_binding == second_binding) == (existing_status != "revoked")
     with _session() as db:
         rows = list(
@@ -1436,6 +1456,18 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
         user = db.get(User, GRANTEE)
         assert user is not None
         assert user.authorization_version == version + (existing_status != "active")
+    pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
+    assert pending.status_code == 200
+    assert pending.json()["requests"] == []
+
+
+def test_route_requests_sharing_requirement_record_resolution_evidence(
+    shared_requirement_resolution: SharedRequirementResolution,
+) -> None:
+    request_ids, first_binding, second_binding, _, payload, authority_sentence, existing_status = (
+        shared_requirement_resolution
+    )
+    with _session() as db:
         for request_id, binding_id in zip(
             request_ids, (first_binding, second_binding), strict=True
         ):
@@ -1460,13 +1492,7 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
                 assert audits[0].details["reason_category"] == payload["reason_category"]
                 assert audits[0].details["reason_detail"] == payload["reason_detail"]
                 assert audits[0].details["reference"] == payload["reference"]
-            assert (
-                audits[0].details["authority_sentence"]
-                == (first.json()["binding"]["authority_sentence"])
-            )
-    pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
-    assert pending.status_code == 200
-    assert pending.json()["requests"] == []
+            assert audits[0].details["authority_sentence"] == authority_sentence
 
 
 def _file_route_request(client: TestClient, route: str, **overrides: object) -> str:
