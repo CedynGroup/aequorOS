@@ -1180,9 +1180,8 @@ export function accessDeniedForPath(
   const path = normalize(pathname);
   if (!scope.isResolved || !PUBLIC_MODULE_ROUTES.has(path)) return null;
   const moduleKey = moduleForPath(path);
-  // BI is admitted by a view grant on any module it reads, so there is no one
-  // capability to name or request; like a switched-off deployment flag, it
-  // stays not-found.
+  // Transitional exception: BI routes are gated by BI_ENABLED; access-denied
+  // pages and request-access support are deferred until BI is reviewed.
   if (
     !moduleKey ||
     moduleKey === "access" ||
