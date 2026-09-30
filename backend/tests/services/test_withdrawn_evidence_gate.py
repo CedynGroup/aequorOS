@@ -214,8 +214,20 @@ def _withdraw(db_session: Session) -> CanonicalWithdrawal:
 
 
 def _naive(stamp: datetime | None) -> datetime | None:
-    """SQLite drops tzinfo on round-trip; compare the instants, not the shapes."""
-    return stamp.replace(tzinfo=None) if stamp is not None else None
+    """Compare the INSTANTS, not the shapes.
+
+    SQLite drops tzinfo on round-trip and hands back what was written, so both
+    sides are naive UTC and any comparison agrees. Postgres hands back
+    `timestamptz` as an AWARE datetime, and `replace(tzinfo=None)` -- which is
+    what this did -- keeps the wall clock and throws the offset away, so the
+    same moment reads 07:18 in one place and 11:18 in another and the snapshot
+    compares unequal. Converting is the difference between an instant and a
+    clock face.
+    """
+    if stamp is None:
+        return None
+    aware = stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp
+    return aware.astimezone(UTC).replace(tzinfo=None)
 
 
 def _snapshot(run: RegulatoryRun | None) -> dict[str, object]:

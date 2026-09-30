@@ -263,6 +263,18 @@ def daily_rows(db: Session, as_of: date = AS_OF) -> dict[str, BiFactPositionDail
     }
 
 
+
+def _as_utc(value: datetime) -> datetime:
+    """The instant, however the dialect chose to hand it back.
+
+    A naive value is UTC by construction here (SQLite stores what the builder
+    wrote); an aware one is converted rather than truncated.
+    """
+    return (
+        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    ).replace(tzinfo=None)
+
+
 def build_records(db: Session, as_of: date = AS_OF) -> dict[str, BiMartBuild]:
     return {
         row.scope: row
@@ -786,7 +798,11 @@ def test_official_tier_copies_the_latest_succeeded_baseline_run_per_module(
     assert car.pipeline_state is None
     # a run without completed_at is stamped with the build instant, never NULL
     started_at = build_records(db_session)["engine"].started_at
-    assert car.computed_at.replace(tzinfo=None) == started_at.replace(tzinfo=None)
+    # Compared as INSTANTS, not as wall clocks. SQLite hands both back naive, so
+    # stripping tzinfo agreed by accident; Postgres hands back `timestamptz` as
+    # aware datetimes, and dropping the offset compares 06:47 EDT with 10:47 UTC
+    # -- the same moment, asserted unequal.
+    assert _as_utc(car.computed_at) == _as_utc(started_at)
     assert outcome.row_counts["bi_fact_engine_metric"] == len(official) + sum(
         1 for row in db_session.scalars(select(BiFactEngineMetric)) if row.tier == "live"
     )
@@ -1426,6 +1442,16 @@ def test_retention_names_only_the_daily_parents_and_is_a_no_op_off_postgres(
 
 
 def test_partition_wrapper_is_inert_off_postgres(db_session: Session) -> None:
+    """What the wrapper does on a backend WITHOUT partitions, which is SQLite.
+
+    The Postgres behaviour is the opposite and is proven where it can actually be
+    proven -- `tests/db`, against a real server with the `SECURITY DEFINER`
+    ensure/drop functions installed. Run here on Postgres this asserts the
+    negation of the truth, so it skips by dialect exactly as the compiler
+    snapshots do.
+    """
+    if db_session.get_bind().dialect.name != "sqlite":
+        pytest.skip("the SQLite path; tests/db proves the Postgres partition guards")
     assert partitions.is_postgres(db_session) is False
     assert partitions.is_partitioned(db_session, "bi_fact_position_daily") is False
     assert partitions.ensure_for_build(db_session, as_of=AS_OF) == []
