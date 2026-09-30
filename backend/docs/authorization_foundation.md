@@ -371,10 +371,14 @@ organization target), module, sensitivity, and permission. Org Owners list and
 approve or reject them through `/authorization/access-requests`; approval
 preserves the requested scope and uses the scoped-grant service. An equivalent
 effective binding can resolve approval without creating duplicate authority;
-the resolution records the binding and actor in audit evidence. Ordinary composer
-grants also resolve pending requests that the evaluator now allows, recording
-the first matching binding and its authority sentence rather than assuming the
-new grant supplied the authority. Composer resolution locks pending requests in
+the resolution records the binding, actor, and submitted structured approval
+reason in audit evidence, including when an existing binding is reused. Ordinary
+composer grants also resolve pending requests that the evaluator now allows.
+Both paths require a matching binding with whole-institution data coverage for
+institution routes, except `/credit/book` and `/credit/activity`, which support
+scoped data. Resolution records the first matching binding that satisfies this
+coverage and its authority sentence rather than assuming the new grant supplied
+the authority. Composer resolution locks pending requests in
 ID order before grant creation and rechecks their status; approval and rejection
 lock their pending request too, so a concurrent rejection cannot be overwritten.
 Rejection records the actor and structured reason in audit evidence, grants
