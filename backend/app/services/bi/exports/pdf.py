@@ -113,7 +113,7 @@ class _Furniture:
         self._watermark = ctx.watermark
         self._footer = (
             f"{EXPORT_TITLE} · {ctx.institution_name} · as at {ctx.as_of_label} · "
-            f"{ctx.trust_label} · {STANDING_NOTE}"
+            f"{STANDING_NOTE}"
         )
 
     def __call__(self, canvas: pdf_canvas.Canvas, _doc: BaseDocTemplate) -> None:

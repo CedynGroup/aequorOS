@@ -73,7 +73,7 @@ type BankContextValue = {
    * `/auth/me` projected them — each one carrying its OWN data scope (the slice
    * of the book that (institution, module, sensitivity, permission) reads).
    *
-   * Exposed because the BI query, grid, insights and trust payloads disclose no
+   * Exposed because the BI query, grid and insights payloads disclose no
    * scope even though the server resolves and applies one, so this projection is
    * the only honest source in the browser for "does what is on screen cover the
    * whole institution". Read it through `lib/api/dataScope.ts`, never by hand:

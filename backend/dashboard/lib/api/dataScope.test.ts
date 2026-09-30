@@ -419,7 +419,7 @@ assert.equal(
 
 // --- 4b. the surface precision hedges rather than inventing a specific -----
 //
-// A payload that discloses no scope (BI query, grid, insights, trust) leaves the
+// A payload that discloses no scope (BI query, grid, insights) leaves the
 // reader's own grants as the only source. Those describe what the surface COULD
 // read, not what is on it, so the statement may not claim "these figures" —
 // while still never reading as the institution's whole book.

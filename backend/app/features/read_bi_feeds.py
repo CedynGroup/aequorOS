@@ -533,7 +533,6 @@ def _finalise(  # noqa: PLR0913 - one served pull, recorded in both places
             "more_available": selection.more_available,
             "row_count": rows,
             "data_scope": block.data_scope_label,
-            "trust": block.trust_status,
             "build_fingerprint": block.build_fingerprint,
             "catalogue_version": CATALOGUE_VERSION,
             "integration_key_id": str(access.integration_key_id),

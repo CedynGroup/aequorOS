@@ -355,15 +355,11 @@ def _unavailable_reason(fact: Fact) -> str | None:
 def _descriptors(fact: Fact, *, policy: InsightPolicy) -> dict[str, Any]:
     """Everything the model may say about this figure, and nothing more.
 
-    Trust and designation ride on the fact, so they ride into the payload: a
-    model told a figure is unreconciled or advisory can write the sentence the
-    reader needs, while one told nothing writes the sentence it would have
-    written about a filed, checked number.
+    Designation rides on the fact, so it rides into the payload: a model told a
+    figure is advisory can write the sentence the reader needs, while one told
+    nothing writes the sentence it would have written about a filed number.
     """
-    descriptors: dict[str, Any] = {
-        "data_trust": fact.trust.overall,
-        "certified": fact.certified,
-    }
+    descriptors: dict[str, Any] = {"certified": fact.certified}
     if fact.advisory is not None:
         descriptors["designation"] = fact.advisory
     if isinstance(fact, MovementFact):

@@ -41,7 +41,6 @@ AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)
 BANK_ID = "BK-COMM0001"
 BANK_NAME = "Commentary Test Bank"
-_ALL_GREEN: dict[str, str] = dict.fromkeys(("R8", "R9", "R10"), "green")
 
 #: A filed, certified ratio — the figure a standard-mode request may carry.
 RATIO = "engine.car_pct.crd.official"
@@ -53,10 +52,10 @@ ADVISORY = "engine.par_90_pct.crd.official"
 #: The prompt digests as committed. A wording change without a version bump fails
 #: here rather than silently invalidating every tenant's prompt cache and every
 #: approved configuration (the version is part of the approval key).
-STATIC_PROMPT_SHA256 = "54ad54b8b7325dc0440486a99f9e97cb5db6b9327b747f7a16e8a051369527f5"
+STATIC_PROMPT_SHA256 = "0814e288d15ea6172c385d746f38db420fd93e2ae86f5c4e5745587ace216076"
 MODE_PROMPT_SHA256 = {
-    "descriptor_only": "c7cf09d59561cdb9c7d98e7413879267c6d189753ba30c4199c892cbda23fefd",
-    "standard": "d2b70057f80fee28ec0fe3e97cd87cf3e148b7aef288c8a1e2ddd63efb5e2ccd",
+    "descriptor_only": "0cb8df7f4381d4de38514326e0a3e971090c9cac86511254df4f217e3a2767c0",
+    "standard": "4eaa9b826d2ad6e0a54a1a7504eb98436f1640e96bd6937a04c643c7cec106b0",
 }
 
 
@@ -97,8 +96,6 @@ def _movement(
         as_of=AS_OF,
         prior_as_of=PRIOR,
         provenance=_provenance(),
-        statuses=_ALL_GREEN,
-        build_overall="green",
         prior=None if prior is None else Decimal(prior),
         current=None if current is None else Decimal(current),
         missing_reason=missing_reason,
@@ -174,7 +171,7 @@ def test_descriptor_only_still_says_everything_worth_saying(
     assert entry["descriptors"]["moved"] == "higher"
     assert entry["descriptors"]["size"] == "material"
     assert entry["descriptors"]["assessment"] == "favourable"
-    assert entry["descriptors"]["data_trust"] == "green"
+    assert "data_trust" not in entry["descriptors"]
     assert entry["descriptors"]["certified"] is True
     assert entry["label"] == catalogue().measure(RATIO).label
 
@@ -378,7 +375,7 @@ def test_the_prompt_puts_the_payload_last_and_caches_both_system_blocks() -> Non
 
 
 def test_the_prompt_version_is_pinned_to_the_prompt_text() -> None:
-    assert prompt_module.PROMPT_VERSION == "bi-commentary-v1"
+    assert prompt_module.PROMPT_VERSION == "bi-commentary-v2"
     assert prompt_module.static_prompt_sha256() == STATIC_PROMPT_SHA256
     for mode, digest in MODE_PROMPT_SHA256.items():
         assert prompt_module.prompt_digest(mode) == digest

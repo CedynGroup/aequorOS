@@ -5,22 +5,22 @@ insight may only restate something a typed fact already carries. There is no
 path from a query result to a sentence that does not pass through
 :mod:`~app.services.bi.insights.facts`, so an insight cannot assert a figure the
 platform did not compute, cannot describe a missing figure as zero or flat, and
-cannot present an unreconciled or advisory number as a certified one.
+cannot present an advisory number as a certified one.
 
 The pieces, in the order a caller uses them:
 
 ``facts``
     The closed, typed vocabulary of what may be asserted: an observation, a
     movement, a ratio bridge, a projection. Each carries its own measure
-    identity, trust state and advisory designation, and each is built from a
+    identity and advisory designation, and each is built from a
     catalogue :class:`~app.domain.bi.catalogue.members.MeasureDef` so none of
     that metadata is a caller's choice.
 
 ``digest``
     ``fact_sheet_hash`` — a value-based fingerprint, in the posture of the
     regulatory ``input_hash`` and the attestation digests: identifiers and
-    timestamps are excluded by rule, every value and the trust state are
-    included, and the facts are ordered by content so re-derivation over
+    timestamps are excluded by rule, every value is included, and the facts
+    are ordered by content so re-derivation over
     unchanged figures produces an unchanged hash.
 
 ``drivers``
@@ -36,7 +36,7 @@ The pieces, in the order a caller uses them:
     presentation policy that decides how many a reader gets.
 
 ``statements``
-    What an insight is: the sentence, the evidence, the trust, the designation.
+    What an insight is: the sentence, the evidence, the designation.
 
 ``assemble``
     The one impure piece: it reads a bank's headline figures through the QUERY
@@ -84,13 +84,11 @@ from app.services.bi.insights.facts import (
     MovementFact,
     ObservedFact,
     ProjectionFact,
-    TrustState,
     bridge_fact,
     fact_sheet,
     movement_fact,
     observed_fact,
     projection_fact,
-    trust_state,
 )
 from app.services.bi.insights.projections import (
     Observation,
@@ -135,7 +133,6 @@ __all__ = [
     "RatioPoint",
     "StatementClass",
     "TIME_DATE_DIMENSION",
-    "TrustState",
     "WHOLE_INSTITUTION",
     "assemble",
     "bridge_fact",
@@ -153,5 +150,4 @@ __all__ = [
     "project",
     "projection_fact",
     "ratio_bridge",
-    "trust_state",
 ]

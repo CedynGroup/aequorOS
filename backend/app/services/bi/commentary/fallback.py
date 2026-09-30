@@ -51,7 +51,6 @@ FALLBACK_SOURCE = "platform"
 _PARAGRAPHS: tuple[tuple[str, tuple[StatementClass, ...]], ...] = (
     ("What moved", ("movement", "attribution")),
     ("What the figures do not show", ("data_gap",)),
-    ("How far these figures are confirmed", ("trust_notice",)),
     ("If the observed trend continues", ("projection",)),
 )
 

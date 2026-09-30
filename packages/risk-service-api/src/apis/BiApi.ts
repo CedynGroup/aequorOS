@@ -55,7 +55,6 @@ import type {
   BiSubscriptionListRead,
   BiSubscriptionRead,
   BiSubscriptionUpsert,
-  BiTrustRead,
   ErrorResponse,
 } from "../models/index";
 import {
@@ -145,8 +144,6 @@ import {
   BiSubscriptionReadToJSON,
   BiSubscriptionUpsertFromJSON,
   BiSubscriptionUpsertToJSON,
-  BiTrustReadFromJSON,
-  BiTrustReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
@@ -274,12 +271,6 @@ export interface GetBiQuestionRequest {
 export interface GetBiSubscriptionRequest {
   bankId: string;
   subscriptionId: string;
-}
-
-export interface GetBiTrustRequest {
-  bankId: string;
-  asOf: Date;
-  ifNoneMatch?: string | null;
 }
 
 export interface ListBiAlertEventsRequest {
@@ -2117,82 +2108,6 @@ export class BiApi extends runtime.BaseAPI {
       requestParameters,
       initOverrides,
     );
-    return await response.value();
-  }
-
-  /**
-   * Every reconciliation check for one (institution, date), with its evidence.  A check with no stored result is reported as \"not assessed\" — never as a pass — so a badge can never read green over a check that did not run.  The payload is figures, not metadata (audit A6-01), so it is authorized like every other data route: the caller must hold the sentence of every member :data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with coverage on another institution of the same tenant, or with no binding at all, gets 403 and no body — ``resolve_tenant_bank`` scopes by organization only, and organization is not institution.
-   * Get Bi Trust
-   */
-  async getBiTrustRaw(
-    requestParameters: GetBiTrustRequest,
-    initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<BiTrustRead>> {
-    if (requestParameters["bankId"] == null) {
-      throw new runtime.RequiredError(
-        "bankId",
-        'Required parameter "bankId" was null or undefined when calling getBiTrust().',
-      );
-    }
-
-    if (requestParameters["asOf"] == null) {
-      throw new runtime.RequiredError(
-        "asOf",
-        'Required parameter "asOf" was null or undefined when calling getBiTrust().',
-      );
-    }
-
-    const queryParameters: any = {};
-
-    if (requestParameters["asOf"] != null) {
-      queryParameters["as_of"] = (requestParameters["asOf"] as any)
-        .toISOString()
-        .substring(0, 10);
-    }
-
-    const headerParameters: runtime.HTTPHeaders = {};
-
-    if (requestParameters["ifNoneMatch"] != null) {
-      headerParameters["If-None-Match"] = String(
-        requestParameters["ifNoneMatch"],
-      );
-    }
-
-    if (this.configuration && this.configuration.accessToken) {
-      const token = this.configuration.accessToken;
-      const tokenString = await token("HTTPBearer", []);
-
-      if (tokenString) {
-        headerParameters["Authorization"] = `Bearer ${tokenString}`;
-      }
-    }
-    const response = await this.request(
-      {
-        path: `/api/v1/banks/{bank_id}/bi/trust`.replace(
-          `{${"bank_id"}}`,
-          encodeURIComponent(String(requestParameters["bankId"])),
-        ),
-        method: "GET",
-        headers: headerParameters,
-        query: queryParameters,
-      },
-      initOverrides,
-    );
-
-    return new runtime.JSONApiResponse(response, (jsonValue) =>
-      BiTrustReadFromJSON(jsonValue),
-    );
-  }
-
-  /**
-   * Every reconciliation check for one (institution, date), with its evidence.  A check with no stored result is reported as \"not assessed\" — never as a pass — so a badge can never read green over a check that did not run.  The payload is figures, not metadata (audit A6-01), so it is authorized like every other data route: the caller must hold the sentence of every member :data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with coverage on another institution of the same tenant, or with no binding at all, gets 403 and no body — ``resolve_tenant_bank`` scopes by organization only, and organization is not institution.
-   * Get Bi Trust
-   */
-  async getBiTrust(
-    requestParameters: GetBiTrustRequest,
-    initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<BiTrustRead> {
-    const response = await this.getBiTrustRaw(requestParameters, initOverrides);
     return await response.value();
   }
 

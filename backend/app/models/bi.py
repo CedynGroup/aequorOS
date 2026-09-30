@@ -56,7 +56,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
@@ -141,28 +140,20 @@ MART_BUILD_SCOPES: tuple[str, ...] = ("positions", "events", "gl", "engine", "di
 #: already recorded per attempt on ``jobs.progress``; this is a STATE table.
 MART_BUILD_STATUSES: tuple[str, ...] = ("running", "succeeded", "failed")
 
-#: Reconciliation checks R1–R12 (architecture §Reconciliation → trust) and the
-#: trust colours they resolve to. ``grey`` is "not assessed", never green.
-#: R10 (``dpd_completeness``, D-042) is the share of LOAN rows with no
-#: ``dpd_band``, so a badge can never read green over a "we were never told"
-#: figure — it must be storable or the stored badge disagrees with the live one.
-#: R11 (P5-B) is the general-ledger-by-branch identity: the branch breakdown
-#: must sum to the institution ledger it breaks down; admitted to the stored
-#: vocabulary by migration ``202609280075``. R12 (P5-A) is the arrears
-#: completeness share, R10's twin for ``arrears_amount_rc``: a bank that states
-#: arrears for half its book would otherwise show a sum that reads as the whole
-#: book's; admitted by ``202609280076``. Until a migration lands, a Postgres
-#: ``ck_bi_reconciliation_results_check_id`` built by an earlier one refuses the
-#: row and ``reconciliation.persist`` logs the skip.
-RECONCILIATION_CHECK_IDS: tuple[str, ...] = tuple(f"R{number}" for number in range(1, 13))
-RECONCILIATION_STATUSES: tuple[str, ...] = ("green", "amber", "red", "grey")
-
-#: ``bi_query_log`` vocabularies. ``trust`` and ``catalogue`` are read surfaces
-#: that return no mart rows, and they are named here for one reason: the read
-#: budget is counted over THIS table, so a surface with no value of its own
-#: either goes unmetered or gets recorded as something it is not — and putting
-#: an event in an append-only audit table that did not happen is worse than the
-#: missing limit. With the values admitted, the routes log what they did (A6-06).
+#: ``bi_query_log`` vocabularies. ``catalogue`` is a read surface that returns
+#: no mart rows, and it is named here for one reason: the read budget is counted
+#: over THIS table, so a surface with no value of its own either goes unmetered
+#: or gets recorded as something it is not — and putting an event in an
+#: append-only audit table that did not happen is worse than the missing limit.
+#: With the value admitted, the route logs what it did (A6-06).
+#:
+#: ``trust`` is RETIRED, not removed. It named ``GET …/bi/trust``, the
+#: reconciliation-verdict route that left BI on 2026-09-29 (migration
+#: ``202609290080``); no code writes it any more. It stays in the vocabulary
+#: because ``bi_query_log`` is an append-only audit tier — a row trigger and
+#: RESTRICTIVE policies block UPDATE and DELETE — so narrowing the CHECK would
+#: mean deleting rows that record reads which genuinely happened. An append-only
+#: table's vocabulary can only ever grow; the evidence outlives the feature.
 QUERY_LOG_SURFACES: tuple[str, ...] = (
     "query",
     "grid",
@@ -225,8 +216,8 @@ class _PositionFactColumns(_TenantKeys, _BuilderStamp):
     position's currency is not the reporting currency and no converted value
     was supplied (``fx_unconverted`` counts it); ``classification_exposure_rc``
     is the same value under the CLASSIFICATION rule — ``0`` when unconverted,
-    NULL for non-loan types — because R1 reconciles it to the engine's NPL
-    while R2/R3 reconcile ``balance_rc`` to the balance-sheet facts (D-015).
+    NULL for non-loan types — the rule the credit engine's own NPL denominator
+    follows, where ``balance_rc`` follows the balance-sheet derivation (D-015).
     """
 
     as_of_date: Mapped[date] = mapped_column(Date, primary_key=True)
@@ -293,7 +284,8 @@ class _PositionFactColumns(_TenantKeys, _BuilderStamp):
     #: DERIVATION rule (D-015): NULL when the position's currency is not the
     #: reporting currency, exactly like ``balance_rc``, and NULL when the bank
     #: stated no arrears. Never 0 for either reason — a zero would assert a
-    #: performing facility. R12 is what stops a partial book reading as a whole one.
+    #: performing facility, and the measures over it contribute no row for a
+    #: loan that states nothing.
     arrears_amount_rc: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
     product_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     product_family: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -546,9 +538,11 @@ class BiFactGlBranchMonthly(_BuilderStamp, Base):
     a partial one alike, and a bank that allocated four fifths of its interest
     income still sees its whole interest income — with the rest on a line that
     says nobody allocated it. Summing only what was allocated would be a board
-    figure that silently under-reports by whatever the bank forgot. R11 proves
-    the identity; the residual is a computed, labelled figure, the same device
-    ``services/reconciliation.py`` uses for a retained balance-sheet plug.
+    figure that silently under-reports by whatever the bank forgot. The identity
+    holds by construction (``domain/bi/extract.gl_branch_monthly_rows`` derives
+    the residual from exactly that subtraction); the residual is a computed,
+    labelled figure, the same device ``services/reconciliation.py`` uses for a
+    retained balance-sheet plug.
 
     **It is a SEPARATE table, not a ``branch_code`` column on
     ``bi_fact_gl_monthly``.** ``services/bi/authorization.branch_attributable``
@@ -556,8 +550,8 @@ class BiFactGlBranchMonthly(_BuilderStamp, Base):
     institution ledger would make the institution's own P&L readable by a
     branch-scoped principal. Apart is what makes branch P&L visible to a scoped
     reader and the institution's invisible, at no cost. It also keeps the
-    FILED-reconciled figure (R4 against BSD7A's own resolver) out of reach of how
-    completely a bank allocated its branches.
+    institution's own ledger figure out of reach of how completely a bank
+    allocated its branches.
 
     **``pl_line`` / ``pl_sign`` / ``balance_basis`` are the INSTITUTION row's.**
     A branch does not get its own mapping: the account's BSD7 line and sign are
@@ -621,8 +615,9 @@ class BiFactEngineMetric(_BuilderStamp, Base):
     ``live`` rows come from ``live_metrics``; ``official`` rows from the latest
     succeeded baseline ``regulatory_runs`` joined to
     ``bank_reporting_periods.period_end``. The row carries the run's own
-    ``input_hash``, ``pipeline_state`` and reconciliation-blocked flag so a
-    dashboard can say exactly which computation it is quoting, and
+    ``input_hash``, ``pipeline_state`` and ``reconciliation_blocked`` flag — the
+    ENGINE's own state, copied verbatim and never graded here — so a dashboard
+    can say exactly which computation it is quoting, and
     ``advisory_designation`` from the authority registry so an advisory metric
     is never badged certified (D-022).
     """
@@ -749,7 +744,7 @@ class BiDimBranch(_BuilderStamp, Base):
 
     ``mapped`` is False for a code the register does not know; the row then
     carries ``UNMAPPED_BRANCH_NAME`` so the facts it labels stay visible and
-    R7 can count them. ``region`` defaults to ``UNASSIGNED_REGION`` until the
+    countable. ``region`` defaults to ``UNASSIGNED_REGION`` until the
     bank declares one (D-020).
     """
 
@@ -885,43 +880,6 @@ class BiMartBuild(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class BiReconciliationResult(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
-    """The R1–R12 outcome for a (bank, as-of) that the trust badge is read from."""
-
-    __tablename__ = "bi_reconciliation_results"
-    __table_args__ = (
-        CheckConstraint(
-            f"check_id IN ({_values(RECONCILIATION_CHECK_IDS)})",
-            name="ck_bi_reconciliation_results_check_id",
-        ),
-        CheckConstraint(
-            f"status IN ({_values(RECONCILIATION_STATUSES)})",
-            name="ck_bi_reconciliation_results_status",
-        ),
-        _bank_fk(),
-        UniqueConstraint(
-            "organization_id",
-            "bank_id",
-            "as_of_date",
-            "check_id",
-            name="uq_bi_reconciliation_results_bank_as_of_check",
-        ),
-    )
-
-    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
-    check_id: Mapped[str] = mapped_column(String(4), nullable=False)
-    status: Mapped[str] = mapped_column(String(8), nullable=False)
-    lhs: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
-    rhs: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
-    difference: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
-    tolerance: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
-    detail: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
-    )
-    builder_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
 class BiQueryLog(_TenantKeys, Base):
     """Append-only record of every BI read decision.
 
@@ -1013,6 +971,5 @@ BI_TABLES: tuple[str, ...] = (
     BiDimGlAccount.__tablename__,
     BiDimDate.__tablename__,
     BiMartBuild.__tablename__,
-    BiReconciliationResult.__tablename__,
     BiQueryLog.__tablename__,
 )

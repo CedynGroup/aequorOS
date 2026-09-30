@@ -57,12 +57,10 @@ from app.models.bi import (
     BiFactPositionDaily,
     BiMartBuild,
     BiQueryLog,
-    BiReconciliationResult,
 )
 from app.schemas.bi import BiDateRange, BiQuery, BiTime
 from app.services import authorization
-from app.services.bi import compiler, query_log, reconciliation
-from app.services.bi.authorization import query_members
+from app.services.bi import compiler, query_log
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
@@ -79,8 +77,6 @@ CP_TWO = UUID("22222222-2222-4222-8222-222222222222")
 FINGERPRINT = "f" * 64
 #: Figures that exist ONLY on the second institution of the same tenant, so a
 #: response that contains one of them has leaked across institutions.
-OTHER_BANK_LOANS = Decimal("8123456789.12")
-OTHER_BANK_BRANCH = "BR-KUMASI-07"
 OTHER_BANK_ROWS = 41234
 OTHER_BANK_FINGERPRINT = "a1b2c3d4" * 8
 
@@ -94,7 +90,6 @@ _ASK_JOB_ID = "00000000-0000-4000-8000-0000000000d4"
 
 ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ("GET", "/catalogue", None),
-    ("GET", "/trust?as_of=2026-08-31", None),
     ("POST", "/query", {"measures": ["loans.balance_rc"], "time": {"as_of": "2026-08-31"}}),
     (
         "POST",
@@ -445,42 +440,9 @@ def seed_bi_mart(db: Session) -> Bank:
                 row_counts={},
             )
         )
-    for check_id, status in (("R2", reconciliation.GREEN), ("R7", reconciliation.AMBER)):
-        db.add(
-            BiReconciliationResult(
-                organization_id=ORG_1,
-                bank_id=bank.id,
-                as_of_date=AS_OF,
-                check_id=check_id,
-                status=status,
-                lhs=Decimal("600"),
-                rhs=Decimal("600"),
-                difference=Decimal("0"),
-                tolerance=Decimal("0.0001"),
-                detail={"note": "seeded"},
-                builder_version=1,
-                evaluated_at=BUILT_AT,
-            )
-        )
-    # The SECOND institution of the same tenant carries figures of its own, with
-    # values that appear nowhere else, so "the 403 leaked nothing" is a real
+    # The SECOND institution of the same tenant carries build state of its own,
+    # with values that appear nowhere else, so "the 403 leaked nothing" is a real
     # assertion rather than a statement about an empty table (audit A6-01).
-    db.add(
-        BiReconciliationResult(
-            organization_id=ORG_1,
-            bank_id=SAME_TENANT_BANK_ID,
-            as_of_date=AS_OF,
-            check_id="R2",
-            status=reconciliation.RED,
-            lhs=OTHER_BANK_LOANS,
-            rhs=Decimal("0"),
-            difference=OTHER_BANK_LOANS,
-            tolerance=Decimal("0.0001"),
-            detail={"unmapped_codes": [OTHER_BANK_BRANCH]},
-            builder_version=1,
-            evaluated_at=BUILT_AT,
-        )
-    )
     db.add(
         BiMartBuild(
             organization_id=ORG_1,
@@ -533,17 +495,6 @@ AGGREGATE_ONLY: tuple[Grant, ...] = (
     Grant(ModuleScope.CREDIT),
     Grant(ModuleScope.RISK),
 )
-
-#: The three pairs ``GET trust`` discloses (credit loans / NPL / arrears, the
-#: liquidity deposit total, and the risk-plane positions, GL and branch figures).
-AGGREGATE_ONLY_WITH_DEPOSITS: tuple[Grant, ...] = (*AGGREGATE_ONLY, Grant(ModuleScope.LIQUIDITY))
-
-#: Every member the trust payload discloses. Derived from the route's own probe;
-#: the SET is pinned against ``CHECK_DISCLOSURES`` by its own test.
-TRUST_MEMBERS: tuple[str, ...] = tuple(
-    member.id for member in query_members(catalogue(), read_bi.trust_probe(AS_OF))
-)
-
 
 def grant_only(db: Session, grants: tuple[Grant, ...]) -> int:
     """Replace the fixture's org-wide sentence with exactly ``grants``.
@@ -801,8 +752,7 @@ def test_a_query_the_caller_holds_is_served(
     assert [column["id"] for column in body["columns"]] == ["branch.code", "loans.balance_rc"]
     assert {row[0]: float(row[1]) for row in body["rows"]} == {"B1": 400.0, "B2": 200.0}
     assert body["build_fingerprint"] == FINGERPRINT
-    # R7 is amber in the fixture, so the badge may not read green.
-    assert body["trust"] == {"status": reconciliation.AMBER, "failing_checks": ["R7"]}
+    assert "trust" not in body, "BI issues no verdict on its own figures (2026-09-29)"
 
 
 @pytest.mark.parametrize(
@@ -1460,14 +1410,13 @@ def test_explain_names_the_engine_metric_and_its_input_hash(
         "pipeline_state": "ready",
         "status": "green",
         "advisory_designation": "filed",
-        "reconciliation_blocked": False,
         "run_id": None,
         "reporting_period_id": None,
     }
     assert "select" not in response.text.lower()
 
 
-def test_explain_names_the_checks_that_govern_a_portfolio_measure(
+def test_explain_names_the_source_and_fx_rule_of_a_portfolio_measure(
     db_client: TestClient, mart: Bank, bi_on: None
 ) -> None:
     response = call(
@@ -1481,9 +1430,7 @@ def test_explain_names_the_checks_that_govern_a_portfolio_measure(
     assert body["source_table"] in {"bi_fact_position_daily", "bi_agg_position_daily"}
     assert body["engine"] is None
     assert body["fx_rule"] == "derivation"
-    assert [check["check_id"] for check in body["checks"]] == ["R2"]
-    assert body["checks"][0]["status"] == reconciliation.GREEN
-    assert body["checks"][0]["label"] == read_bi.CHECK_LABELS["R2"]
+    assert "checks" not in body and "trust" not in body
     assert body["as_of"] == AS_OF.isoformat()
     assert body["build_fingerprint"] == FINGERPRINT
 
@@ -1524,150 +1471,6 @@ def test_explain_refuses_a_measure_the_query_never_asked_for(
     assert response.json()["error"]["details"]["error_code"] == "bi_explain_measure_not_in_query"
 
 
-# --- trust ---------------------------------------------------------------------------------
-#
-# The reproduction the A6 audit ran: a principal bound to institution A asked for
-# institution B's trust payload and was served its total loans, total deposits,
-# total assets, real branch codes and mart row counts — the figures the same
-# principal is refused on ``POST /bi/query``. ``resolve_tenant_bank`` scopes by
-# ORGANIZATION; institution coverage is a binding question, and the route asked
-# nobody. These are the tests that make that answer 403.
-
-
-def test_trust_on_an_institution_without_coverage_is_403_with_no_figures(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """A6-01, the auditor's shape: bound to bank A, asking for bank B."""
-    authv = grant_only(db_session, AGGREGATE_ONLY_WITH_DEPOSITS)
-    request_headers = headers(authorization_version=authv)
-    covered = db_client.get(
-        f"{BASE}/trust", params={"as_of": AS_OF.isoformat()}, headers=request_headers
-    )
-    assert covered.status_code == 200, covered.text
-    uncovered = db_client.get(
-        f"/api/v1/banks/{SAME_TENANT_BANK_ID}/bi/trust",
-        params={"as_of": AS_OF.isoformat()},
-        headers=request_headers,
-    )
-    assert uncovered.status_code == 403, uncovered.text
-    details = uncovered.json()["error"]["details"]
-    assert details["error_code"] == "bi_authorization_denied"
-    # A set: the evaluator reports denials grouped by (module, sensitivity) pair,
-    # so the ORDER is the pair order, not the member order. Completeness is the
-    # property — every member the payload would have disclosed is refused.
-    assert set(details["denied_members"]) == set(TRUST_MEMBERS)
-    assert len(details["denied_members"]) == len(TRUST_MEMBERS)
-    # None of the other institution's evidence may appear: not its figures, not
-    # its branch codes, not its build state, not even the payload's shape.
-    for leak in (
-        str(OTHER_BANK_LOANS),
-        OTHER_BANK_BRANCH,
-        str(OTHER_BANK_ROWS),
-        OTHER_BANK_FINGERPRINT,
-        "lhs",
-        "row_counts",
-        "builds",
-        "checks",
-    ):
-        assert leak not in uncovered.text, leak
-
-
-def test_trust_is_refused_to_a_principal_with_no_bindings(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """The other half of A6-01: an account administrator "sees no bank and no
-    module" by design, and that must include the reconciliation evidence."""
-    authv = grant_only(db_session, ())
-    response = db_client.get(
-        f"{BASE}/trust",
-        params={"as_of": AS_OF.isoformat()},
-        headers=headers(authorization_version=authv),
-    )
-    assert response.status_code == 403, response.text
-    assert set(response.json()["error"]["details"]["denied_members"]) == set(TRUST_MEMBERS)
-
-
-def test_trust_requires_every_pair_its_checks_disclose(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """The badge is one verdict over the whole book, so a principal missing the
-    deposit sentence is not told what the deposit reconciliation says either."""
-    authv = grant_only(db_session, AGGREGATE_ONLY)  # credit + risk, no liquidity
-    response = db_client.get(
-        f"{BASE}/trust",
-        params={"as_of": AS_OF.isoformat()},
-        headers=headers(authorization_version=authv),
-    )
-    assert response.status_code == 403, response.text
-    assert response.json()["error"]["details"]["denied_members"] == ["deposits.balance_rc"]
-
-
-def test_the_trust_probe_names_one_catalogue_member_per_stored_check(
-    db_client: TestClient, mart: Bank, bi_on: None
-) -> None:
-    """The sentence comes from the catalogue, not from a literal: every stored
-    check maps to a member that resolves, and the probe is exactly that set."""
-    cat = catalogue()
-    assert set(read_bi.CHECK_DISCLOSURES) == set(reconciliation.STORABLE_CHECK_IDS)
-    for check_id, member_id in read_bi.CHECK_DISCLOSURES.items():
-        member = cat.member(member_id)
-        assert member.sensitivity == "aggregated", (check_id, member_id)
-    probe = read_bi.trust_probe(AS_OF)
-    assert set(probe.measures) | set(probe.dimensions) == set(read_bi.CHECK_DISCLOSURES.values())
-    assert probe.time.as_of == AS_OF
-
-
-def test_trust_reports_every_check_and_greys_the_ones_that_did_not_run(
-    db_client: TestClient, mart: Bank, bi_on: None
-) -> None:
-    response = db_client.get(
-        f"{BASE}/trust", params={"as_of": AS_OF.isoformat()}, headers=headers()
-    )
-    assert response.status_code == 200, response.text
-    body = response.json()
-    statuses = {check["check_id"]: check["status"] for check in body["checks"]}
-    assert list(statuses) == list(reconciliation.STORABLE_CHECK_IDS)
-    assert statuses["R2"] == reconciliation.GREEN
-    assert statuses["R7"] == reconciliation.AMBER
-    assert statuses["R1"] == reconciliation.GREY
-    assert body["status"] == reconciliation.AMBER
-    assert body["build_fingerprint"] == FINGERPRINT
-    assert {build["scope"] for build in body["builds"]} == {
-        "positions",
-        "events",
-        "gl",
-        "engine",
-        "dims",
-    }
-    assert all(check["label"] for check in body["checks"])
-
-
-def test_trust_agrees_with_the_reconciliation_services_own_badge(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    served = db_client.get(
-        f"{BASE}/trust", params={"as_of": AS_OF.isoformat()}, headers=headers()
-    ).json()
-    stored = reconciliation.trust_for(db_session, ORG_1, BANK_ID, AS_OF)
-    assert served["status"] == stored[reconciliation.OVERALL]
-    assert {check["check_id"]: check["status"] for check in served["checks"]} == {
-        check_id: status
-        for check_id, status in stored.items()
-        if check_id != reconciliation.OVERALL
-    }
-
-
-def test_trust_on_a_date_with_nothing_built_is_grey_not_green(
-    db_client: TestClient, mart: Bank, bi_on: None
-) -> None:
-    response = db_client.get(f"{BASE}/trust", params={"as_of": "2026-07-31"}, headers=headers())
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["status"] == reconciliation.GREY
-    assert body["build_fingerprint"] is None
-    assert body["builds"] == []
-
-
 # --- the read budget -----------------------------------------------------------------------
 
 
@@ -1685,32 +1488,35 @@ def test_the_read_budget_refuses_a_principal_that_has_spent_it(
     assert int(second.headers["Retry-After"]) >= 1
 
 
-def test_the_catalogue_and_trust_are_subject_to_the_budget_but_do_not_refill_it(  # noqa: PLR0913 - one fixture per guard
+def test_the_catalogue_is_subject_to_the_budget_but_does_not_refill_it(  # noqa: PLR0913 - one fixture per guard
     db_client: TestClient,
     db_session: Session,
     mart: Bank,
     bi_on: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both are metered, and neither can be counted (no log row): the honest
-    residue is that a principal polling ONLY these two is never throttled, which
-    is what the vocabulary follow-up in the module docstring closes."""
-    trust_url = f"{BASE}/trust"
+    """Metered, and not counted (no log row): the honest residue is that a
+    principal polling ONLY the catalogue is never throttled, which is what the
+    vocabulary follow-up in the module docstring closes."""
     assert db_client.get(f"{BASE}/catalogue", headers=headers()).status_code == 200
-    assert (
-        db_client.get(trust_url, params={"as_of": AS_OF.isoformat()}, headers=headers()).status_code
-        == 200
-    )
     db_session.expire_all()
-    assert db_session.query(BiQueryLog).count() == 0, "neither refills the budget"
+    assert db_session.query(BiQueryLog).count() == 0, "the catalogue does not refill the budget"
 
     monkeypatch.setattr(query_log, "RATE_LIMIT_MAX_QUERIES", 1)
     assert call(db_client, "POST", "/query", BALANCE_BY_BRANCH_QUERY).status_code == 200
     assert db_client.get(f"{BASE}/catalogue", headers=headers()).status_code == 429
-    assert (
-        db_client.get(trust_url, params={"as_of": AS_OF.isoformat()}, headers=headers()).status_code
-        == 429
+
+
+def test_the_trust_route_is_gone(db_client: TestClient, mart: Bank, bi_on: None) -> None:
+    """``GET …/bi/trust`` served a reconciliation verdict over the bank's figures. BI
+    is intelligence over the bank's own book and grades nothing against the returns
+    the platform files (founder, 2026-09-29), so the path resolves to no handler —
+    for a principal who holds everything, with the flag on."""
+    response = db_client.get(
+        f"{BASE}/trust", params={"as_of": AS_OF.isoformat()}, headers=headers()
     )
+    assert response.status_code == 404, response.text
+    assert "checks" not in response.text and "failing_checks" not in response.text
 
 
 # --- shared rules --------------------------------------------------------------------------
@@ -1728,29 +1534,13 @@ def test_the_catalogue_and_trust_are_subject_to_the_budget_but_do_not_refill_it(
         ),
     ],
 )
-def test_the_badged_window_covers_every_date_the_compiler_reads(time: BiTime) -> None:
-    """The badge and the fingerprint must span the comparison period too, so this
-    mirrors the compiler's own window arithmetic rather than restating it."""
+def test_the_provenance_window_covers_every_date_the_compiler_reads(time: BiTime) -> None:
+    """The fingerprint must span the comparison period too, so this mirrors the
+    compiler's own window arithmetic rather than restating it."""
     current, prior = compiler._windows(time)  # noqa: SLF001 - the rule under comparison
     expected_start = current.start if prior is None else min(current.start, prior.start)
     expected_end = current.end if prior is None else max(current.end, prior.end)
     assert read_bi._data_window(time) == (expected_start, expected_end)  # noqa: SLF001
-
-
-def test_every_storable_check_has_production_copy() -> None:
-    missing = [
-        check_id
-        for check_id in reconciliation.STORABLE_CHECK_IDS
-        if not read_bi.CHECK_LABELS.get(check_id)
-    ]
-    assert missing == []
-    forbidden = ("GHS", "cedi", "BoG", "Bank of Ghana", "BSD")
-    leaks = [
-        label
-        for label in read_bi.CHECK_LABELS.values()
-        if any(token.lower() in label.lower() for token in forbidden)
-    ]
-    assert leaks == []
 
 
 def test_the_officer_widget_is_the_only_credit_figure_lost_without_the_officer_sentence(

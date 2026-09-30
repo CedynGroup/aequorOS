@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { CompletedAt } from "./CompletedAt";
 import {
   CompletedAtFromJSON,
@@ -169,12 +162,6 @@ export interface BiCommentaryRead {
    * @memberof BiCommentaryRead
    */
   state: BiCommentaryReadStateEnum;
-  /**
-   *
-   * @type {BiTrustBadge}
-   * @memberof BiCommentaryRead
-   */
-  trust?: BiTrustBadge;
 }
 
 /**
@@ -261,8 +248,6 @@ export function BiCommentaryReadFromJSONTyped(
         : RequestedAtFromJSON(json["requested_at"]),
     stale: json["stale"] == null ? undefined : json["stale"],
     state: json["state"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
   };
 }
 
@@ -298,6 +283,5 @@ export function BiCommentaryReadToJSONTyped(
     requested_at: RequestedAtToJSON(value["requestedAt"]),
     stale: value["stale"],
     state: value["state"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
   };
 }

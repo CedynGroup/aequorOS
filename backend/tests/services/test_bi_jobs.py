@@ -53,7 +53,6 @@ class StubBuilder:
             status=self.outcome_status,
             fingerprint="fp-" + kwargs["as_of"].isoformat(),
             row_counts={"bi_fact_position_daily": 12},
-            trust={"positions": "green"},
         )
 
     def backfill_step(self, db: Session, **kwargs: Any) -> date | None:
@@ -381,7 +380,6 @@ def test_refresh_dispatches_with_the_contract_signature(
         "builder_version": 3,
         "fingerprint": "fp-2026-06-30",
         "row_counts": {"bi_fact_position_daily": 12},
-        "trust": {"positions": "green"},
         # A SUCCEEDED build is the only place that knows a bank's figures moved,
         # so it is where the alert evaluation and the on-new-data runs are queued.
         # Both are ZERO here because both features ship behind their own flag and

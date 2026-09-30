@@ -236,10 +236,6 @@ const PANEL_SURFACES: Readonly<Record<BiPanelKey, BiPanelSurface>> = {
     label: "Open the signature register",
     href: "/submissions/signatures",
   },
-  reconciliation_trust: {
-    label: "Open the reconciliation checks",
-    href: "/insights",
-  },
   ingestion_quality: {
     label: "Open the ingestion history",
     href: "/data-engine",

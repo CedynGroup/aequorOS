@@ -63,7 +63,7 @@ def table(*, truncated: bool = False) -> export_context.ExportTable:
 
 
 def context(
-    *, export_class: policy.ExportClass = policy.SUMMARY, trust: str = "amber"
+    *, export_class: policy.ExportClass = policy.SUMMARY, user_label: str = "analyst@bank.test"
 ) -> export_context.ExportContext:
     return export_context.ExportContext(
         institution_id="BK-EXPORT01",
@@ -74,11 +74,9 @@ def context(
         unit="XTS",
         query_lines=("Measures: Loan balance", "Grouped by: Branch"),
         as_of_label=AS_OF.isoformat(),
-        trust_status=trust,
-        failing_checks=("R7",),
         catalogue_version="bi-catalogue-test",
         data_scope_label="Whole institution",
-        user_label="analyst@bank.test",
+        user_label=user_label,
         export_class=export_class,
         build_fingerprint="f" * 64,
     )
@@ -99,8 +97,8 @@ def test_the_pdf_is_byte_identical_for_identical_input() -> None:
 def test_the_pdf_changes_when_the_provenance_changes() -> None:
     """A determinism test that cannot tell two documents apart proves nothing."""
 
-    assert exports.render("pdf", table(), context(trust="amber")) != exports.render(
-        "pdf", table(), context(trust="red")
+    assert exports.render("pdf", table(), context()) != exports.render(
+        "pdf", table(), context(user_label="reviewer@bank.test")
     )
 
 
@@ -117,7 +115,8 @@ def workbook(**kwargs: object):
 
 
 def test_the_metadata_sheet_carries_every_field_the_spec_names() -> None:
-    """Query, as-of, trust, catalogue version, scope, user — all six, by label."""
+    """Query, as-of, catalogue version, scope, user — all five, by label. No
+    "Data confidence" row: BI issues no verdict on its own figures (2026-09-29)."""
 
     sheet = workbook()[xlsx_export.METADATA_SHEET]
     fields = {
@@ -128,13 +127,13 @@ def test_the_metadata_sheet_carries_every_field_the_spec_names() -> None:
     assert set(exports.METADATA_FIELDS) <= set(fields), sorted(fields)
     assert fields["Query"] == "Measures: Loan balance; Grouped by: Branch"
     assert fields["As at"] == AS_OF.isoformat()
-    assert fields["Data confidence"] == "Reconciled with exceptions (R7)"
+    assert "Data confidence" not in fields
     assert fields["Catalogue version"] == "bi-catalogue-test"
     assert fields["Data scope"] == "Whole institution"
     assert fields["Exported by"] == "analyst@bank.test"
 
 
-def test_the_six_metadata_fields_lead_the_block_in_the_spec_order() -> None:
+def test_the_five_metadata_fields_lead_the_block_in_the_spec_order() -> None:
     """Order is contract: "as at" is the first thing a reader checks."""
 
     labels = [field for field, _ in context().metadata_rows()]

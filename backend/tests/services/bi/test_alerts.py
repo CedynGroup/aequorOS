@@ -692,7 +692,7 @@ def test_a_failed_rebuild_evaluates_no_alert_against_the_rows_it_rolled_back_to(
 
     A false breach is worse than silence for a threshold alert: it is acted on.
     So the date is skipped explicitly now, on `provenance.stale_dates`, which is
-    the same fact the trust badge greys itself on.
+    the same fact the subscription runner refuses to mail a board pack on.
     """
 
     row = _alert(db_session, direction="below", threshold=Decimal("1"))

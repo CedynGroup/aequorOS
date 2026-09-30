@@ -34,12 +34,10 @@ statement mentioning it, and the response says only HOW MANY were withheld —
 never which, because naming a withheld measure is the disclosure the refusal
 exists to prevent.
 
-**Trust and designation are the book's, not the sentence's.** Every fact is
-built through ``facts.py``'s constructors, which take the label, value type,
-direction, advisory designation and ``certified`` verdict from the catalogue
-``MeasureDef``, and the trust state from the STORED reconciliation results for
-the date plus the build's own badge (``provenance``). An unreconciled or
-advisory figure therefore cannot be presented as a certified one, because the
+**Designation is the book's, not the sentence's.** Every fact is built through
+``facts.py``'s constructors, which take the label, value type, direction,
+advisory designation and ``certified`` verdict from the catalogue ``MeasureDef``.
+An advisory figure therefore cannot be presented as a certified one, because the
 sentence never gets to choose.
 
 **Which measures earn a headline.** Not a list in code: the candidates are
@@ -334,8 +332,6 @@ class AssembledInsights:
     measures_withheld: int
     compiled_reads: int
     build_fingerprint: str | None
-    trust_status: str
-    trust_failing_checks: tuple[str, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -600,19 +596,6 @@ def _scope_for(  # noqa: PLR0913 - the complete authorization sentence
 # ---------------------------------------------------------------------------
 
 
-def _statuses_at(
-    db: Session, *, organization_id: str, bank_id: str, as_of: date
-) -> Mapping[str, str]:
-    """The stored reconciliation verdict per check for the reporting date.
-
-    Only the date the facts are about: a check with no stored result for it is
-    absent here, which ``facts.trust_state`` reads as grey — never as a pass.
-    """
-    rows = provenance.stored_checks(
-        db, organization_id=organization_id, bank_id=bank_id, window=(as_of, as_of)
-    )
-    return {row.check_id: row.status for row in rows}
-
 
 def _movement_or_gap(  # noqa: PLR0913 - one measure, its two dates and its evidence
     measure: MeasureDef,
@@ -621,8 +604,6 @@ def _movement_or_gap(  # noqa: PLR0913 - one measure, its two dates and its evid
     compare_to: date,
     current: Decimal | None,
     prior: Decimal | None,
-    statuses: Mapping[str, str],
-    build_overall: str,
 ) -> Fact:
     """A movement when both dates answered, otherwise the gap, stated.
 
@@ -638,8 +619,6 @@ def _movement_or_gap(  # noqa: PLR0913 - one measure, its two dates and its evid
             as_of=as_of,
             prior_as_of=compare_to,
             provenance=provenance_block,
-            statuses=statuses,
-            build_overall=build_overall,
             current=current,
             prior=prior,
         )
@@ -650,16 +629,12 @@ def _movement_or_gap(  # noqa: PLR0913 - one measure, its two dates and its evid
             measure,
             as_of=as_of,
             provenance=provenance_block,
-            statuses=statuses,
-            build_overall=build_overall,
             value=current,
         )
     return observed_fact(
         measure,
         as_of=as_of,
         provenance=provenance_block,
-        statuses=statuses,
-        build_overall=build_overall,
         missing_reason="not_computed",
     )
 
@@ -671,8 +646,6 @@ def _bridge(  # noqa: PLR0913 - the ratio, its components and both dates
     as_of: date,
     compare_to: date,
     answer: _Answer,
-    statuses: Mapping[str, str],
-    build_overall: str,
 ) -> Fact | None:
     """The exact attribution of a ratio's move, or nothing.
 
@@ -703,8 +676,6 @@ def _bridge(  # noqa: PLR0913 - the ratio, its components and both dates
         prior_as_of=compare_to,
         bridge=bridge,
         provenance=FactProvenance(fact_id=uuid4(), derived_at=utc_now()),
-        statuses=statuses,
-        build_overall=build_overall,
     )
 
 
@@ -713,8 +684,6 @@ def _projection(  # noqa: PLR0913 - one measure, its series and its horizon
     *,
     as_of: date,
     observations: Sequence[Observation],
-    statuses: Mapping[str, str],
-    build_overall: str,
 ) -> Fact | None:
     """Where the observed trend reaches, or nothing at all.
 
@@ -733,8 +702,6 @@ def _projection(  # noqa: PLR0913 - one measure, its series and its horizon
             horizon=shift_months(as_of, PROJECTION_HORIZON_MONTHS),
         ),
         provenance=FactProvenance(fact_id=uuid4(), derived_at=utc_now()),
-        statuses=statuses,
-        build_overall=build_overall,
     )
 
 
@@ -799,10 +766,6 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
     trends_allowed = TIME_DATE_DIMENSION not in denied_set
 
     window = provenance.data_window(BiTime(as_of=as_of, compare_to=prior))
-    verdict = provenance.trust_verdict(
-        db, organization_id=ctx.organization_id, bank_id=bank.id, window=window
-    )
-    statuses = _statuses_at(db, organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of)
     fingerprint = provenance.build_fingerprint(
         db, organization_id=ctx.organization_id, bank_id=bank.id, window=window
     )
@@ -834,8 +797,6 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
                     compare_to=prior,
                     current=None if answer is None else answer.value(measure.id, "current"),
                     prior=None if answer is None else answer.value(measure.id, "prior"),
-                    statuses=statuses,
-                    build_overall=verdict.status,
                 )
             )
             if answer is None or not _is_bridgeable(measure):
@@ -846,8 +807,6 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
                 as_of=as_of,
                 compare_to=prior,
                 answer=answer,
-                statuses=statuses,
-                build_overall=verdict.status,
             )
             if bridged is not None:
                 facts.append(bridged)
@@ -884,8 +843,6 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
                 measure,
                 as_of=as_of,
                 observations=_observations(series, measure),
-                statuses=statuses,
-                build_overall=verdict.status,
             )
             if projected is not None:
                 facts.append(projected)
@@ -908,6 +865,4 @@ def assemble(  # noqa: PLR0913 - one institution, one date, and the reader
         measures_withheld=len(candidates) - len(allowed),
         compiled_reads=reads,
         build_fingerprint=fingerprint,
-        trust_status=verdict.status,
-        trust_failing_checks=tuple(verdict.failing_checks),
     )

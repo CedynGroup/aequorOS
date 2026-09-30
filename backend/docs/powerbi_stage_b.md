@@ -153,7 +153,7 @@ when it is.
 | Header | What it tells you |
 |---|---|
 | `X-Bi-Feed-Data-Scope` | The slice of the institution this credential covers: the whole institution, or the named branches. **If this changes, your dataset has changed shape.** Alert on it. |
-| `X-Bi-Feed-Trust` | The reconciliation verdict over the dates served: `green`, `amber`, `red`, or `grey` for "not assessed". `grey` is never a pass. Surface it on any page built from the feed. |
+| `X-Bi-Feed-Trust` | **REMOVED BY FOUNDER DECISION 2026-09-29.** This header carried a reconciliation verdict (`green` / `amber` / `red` / `grey`) of the feed's figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict. Do not build a page on it, and a loader that requires the header must stop requiring it. Freshness is `X-Bi-Feed-Build` (which build the rows came from) together with the rule above: a date whose build did not succeed is absent, never partial. |
 | `X-Bi-Feed-Build` | The fingerprint of the analytics build the rows came from. Two pulls with the same fingerprint read the same book. |
 | `X-Bi-Feed-Catalogue-Version` | Which definitions were in force. A change here can change what a column means. |
 | `X-Bi-Feed-Reporting-Date-Count` | How many dates the payload covers, for a cheap sanity check against your own load. |
@@ -235,9 +235,8 @@ it is the tool this feed most often replaces or feeds.
 ### The residual risk, stated plainly
 
 - **Once data leaves through this feed, the platform's controls stop.** Inside
-  AequorOS, every figure carries a data-scope filter the reader cannot remove, a
-  reconciliation verdict, and a logged authorization decision. A copy in a report
-  model carries none of that. Whoever can open the report can see the whole model,
+  AequorOS, every figure carries a data-scope filter the reader cannot remove and
+  a logged authorization decision. A copy in a report model carries neither. Whoever can open the report can see the whole model,
   whatever their authority in the bank; a branch-scoped feed key limits what is
   *pulled*, not who reads the report afterwards.
 - **The feed's own record ends at the pull.** AequorOS can tell you that a

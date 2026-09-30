@@ -62,14 +62,15 @@ the second check can only refuse. Every export writes `bi_query_log` and an
 
 ## What is in the file
 
-Every format carries the same six provenance fields, in this order, as the
-platform names them (`services/bi/exports/context.py::METADATA_FIELDS`):
+Every format carries the same provenance fields, in this order, as the
+platform names them (`services/bi/exports/context.py::METADATA_FIELDS` — read the
+tuple for the authoritative list; one entry below is marked removed):
 
 | Field | What to do with it in your model |
 |---|---|
 | **Query** | The catalogue member ids the export answers. Keep it as a text measure or in a provenance table; it is the only unambiguous statement of what a column is. |
 | **As at** | The reporting date (or window) the figures describe. Put it on the report page. A Stage A model has no other freshness signal. |
-| **Data confidence** | `Reconciled` / `Reconciled with exceptions` / `Does not reconcile` / `Not assessed`, with the failing checks named. Show it beside the figures. `Not assessed` is not a pass. |
+| **Data confidence** | **REMOVED BY FOUNDER DECISION 2026-09-29.** This field carried a reconciliation verdict (`Reconciled` / `Reconciled with exceptions` / `Does not reconcile` / `Not assessed`) of the BI figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict; the row is kept so a file exported before the change still reads. Freshness is **As at** together with the build the export records. |
 | **Catalogue version** | Which measure definitions produced the file. A version change means a column may have changed meaning; do not merge exports across versions without reading the change. |
 | **Data scope** | `Whole institution`, or the slice the exporter's grant admits (`Branches: B001, B002`; `Regions: Northern · 4 branches in scope`). A file that looks institution-wide and is not is exactly the misreading this field exists to prevent — display it. |
 | **Exported by** | The person. The watermark repeats it. |
@@ -146,9 +147,10 @@ hard-code a skip count; find the blank line.
 5. **Do not merge exports of different Data scope or Catalogue version** without
    reading both fields first. A branch-scoped file and an institution-wide file are
    different populations under the same headings.
-6. **Show As at and Data confidence on every page** that shows a figure. A board
-   pack built from a Stage A export is a claim about a date and a reconciliation
-   verdict; the file carries both so the report can too.
+6. **Show As at on every page** that shows a figure. A board pack built from a
+   Stage A export is a claim about a date; the file carries it so the report can
+   too. (Until 2026-09-29 this rule also asked for Data confidence — removed by
+   founder decision, see the field table above.)
 
 ## Residency and record
 

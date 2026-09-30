@@ -8,8 +8,9 @@ dashboard sentence lies:
   important property: an insight is read as a statement about the institution, and
   "unchanged" over a figure nobody computed is a false one. Proven on a mart with
   no prior period at all.
-* **an unreconciled figure is presented as certified.** The badge on the fixture is
-  not green, so nothing may read as certified until it is.
+* **an analytical figure is presented as certified.** Only a filed engine figure
+  copied from the sealed tier may read as certified (D-022); nothing computed from
+  the marts may, and there is no badge in between.
 * **a measure the reader may not see is mentioned anyway.** A narrow reader gets no
   statement naming a capital figure, and no hint beyond a count.
 * **a reader who may see nothing is told "nothing stands out".** That sentence is a
@@ -44,10 +45,8 @@ from app.models.bi import (
     BiFactPositionDaily,
     BiMartBuild,
     BiQueryLog,
-    BiReconciliationResult,
 )
 from app.schemas.bi import BiInsightRead
-from app.services.bi import reconciliation
 from app.services.bi.insights import default_compare_to, headline_measures
 from tests.api.helpers import ORG_1, headers
 from tests.api.test_bi_routes import (
@@ -148,30 +147,6 @@ def _clone_day(db: Session, bank: Bank, *, target: date, factor: Decimal) -> Non
     db.commit()
 
 
-def _reconcile_everything(db: Session, bank: Bank, *, status: str) -> None:
-    """Every storable check, at both dates, at one verdict."""
-    db.query(BiReconciliationResult).filter(BiReconciliationResult.bank_id == bank.id).delete()
-    for as_of in (PRIOR, AS_OF):
-        for check_id in reconciliation.STORABLE_CHECK_IDS:
-            db.add(
-                BiReconciliationResult(
-                    organization_id=bank.organization_id,
-                    bank_id=bank.id,
-                    as_of_date=as_of,
-                    check_id=check_id,
-                    status=status,
-                    lhs=Decimal("600"),
-                    rhs=Decimal("600"),
-                    difference=Decimal("0"),
-                    tolerance=Decimal("0.0001"),
-                    detail={},
-                    builder_version=1,
-                    evaluated_at=BUILT_AT,
-                )
-            )
-    db.commit()
-
-
 def _get(client: TestClient, query: str, *, authv: int, base: str = BASE) -> Any:
     return client.get(f"{base}/insights?{query}", headers=headers(authorization_version=authv))
 
@@ -262,62 +237,7 @@ def test_two_points_do_not_become_a_projection(
     assert "projection" not in _classes(payload)
 
 
-# --- trust and certification -----------------------------------------------------------------
-
-
-def test_an_unchecked_book_is_never_presented_as_certified(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """The fixture's badge is not green, so nothing may read as a filed figure.
-
-    The fixture stores R2 green and R7 amber, and amber beats grey, so the state
-    the reader is told about is the amber one — a difference that WAS found, not a
-    check that could not run. Both sentences exist; asserting the one the stored
-    verdicts actually produce is what makes this a test of the wiring.
-    """
-    _clone_day(db_session, mart, target=PRIOR, factor=Decimal("0.8"))
-    authv = grant_only(db_session, EVERYTHING)
-    payload = _get(db_client, f"as_of={AS_OF.isoformat()}", authv=authv).json()
-    assert payload["trust"]["status"] == reconciliation.AMBER
-    assert payload["trust"]["failing_checks"] == ["R7"]
-    assert payload["insights"], "no insight at all; this test is vacuous"
-    for insight in payload["insights"]:
-        assert insight["certified"] is False, insight["id"]
-        assert insight["trust"]["status"] == reconciliation.AMBER
-        assert any("a gap was found" in qualifier for qualifier in insight["qualifiers"])
-    notices = [i for i in payload["insights"] if i["statement_class"] == "trust_notice"]
-    assert notices
-    assert any("a gap was found" in i["detail"] for i in notices)
-
-
-def test_a_reconciled_filed_figure_may_read_as_certified(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """The positive control for the trust wiring: real stored verdicts, not a stub."""
-    _clone_day(db_session, mart, target=PRIOR, factor=Decimal("0.8"))
-    _reconcile_everything(db_session, mart, status=reconciliation.GREEN)
-    authv = grant_only(db_session, EVERYTHING)
-    payload = _get(db_client, f"as_of={AS_OF.isoformat()}", authv=authv).json()
-    assert payload["trust"]["status"] == reconciliation.GREEN
-    assert "trust_notice" not in _classes(payload)
-    certified = [i for i in payload["insights"] if i["certified"]]
-    assert certified, [(i["id"], i["certified"]) for i in payload["insights"]]
-    for insight in certified:
-        assert insight["trust"]["status"] == reconciliation.GREEN
-
-
-def test_a_failing_check_reaches_every_insight_it_bears_on(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    _clone_day(db_session, mart, target=PRIOR, factor=Decimal("0.8"))
-    _reconcile_everything(db_session, mart, status=reconciliation.RED)
-    authv = grant_only(db_session, EVERYTHING)
-    payload = _get(db_client, f"as_of={AS_OF.isoformat()}", authv=authv).json()
-    assert payload["trust"]["status"] == reconciliation.RED
-    for insight in payload["insights"]:
-        assert insight["trust"]["status"] == reconciliation.RED
-        assert insight["certified"] is False
-        assert insight["qualifiers"]
+# --- certification and build freshness --------------------------------------------------------
 
 
 # --- authorization ---------------------------------------------------------------------------
@@ -492,7 +412,8 @@ def test_the_wire_shape_mirrors_the_dashboards_own_type() -> None:
 
     Read from the TypeScript source rather than restated, so the two cannot drift:
     a field the browser expects and the server does not send renders as
-    ``undefined``, which for ``trust`` is a badge that silently disappears.
+    ``undefined``, which for a boolean like ``certified`` is a flag that silently
+    reads as false.
     """
     source = _TYPES_TS.read_text(encoding="utf-8")
     block = re.search(r"export type BiInsight = Readonly<\{(.*?)\}>;", source, re.DOTALL)
@@ -517,13 +438,11 @@ def test_every_served_insight_carries_the_whole_shape(
         assert set(insight) == set(BiInsightRead.model_fields)
         assert insight["headline"] and insight["detail"]
         assert insight["as_of"] == AS_OF.isoformat() or insight["as_of"] == PRIOR.isoformat()
-        assert insight["trust"]["status"] in {"green", "amber", "red", "grey"}
         assert insight["statement_class"] in {
             "movement",
             "attribution",
             "projection",
             "data_gap",
-            "trust_notice",
         }
 
 

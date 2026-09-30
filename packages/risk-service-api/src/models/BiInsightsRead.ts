@@ -18,13 +18,13 @@ import {
   BiInsightReadToJSON,
   BiInsightReadToJSONTyped,
 } from "./BiInsightRead";
-import type { BiTrustBadge } from "./BiTrustBadge";
+import type { BiBuildRead } from "./BiBuildRead";
 import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
+  BiBuildReadFromJSON,
+  BiBuildReadFromJSONTyped,
+  BiBuildReadToJSON,
+  BiBuildReadToJSONTyped,
+} from "./BiBuildRead";
 import type { BuildFingerprint } from "./BuildFingerprint";
 import {
   BuildFingerprintFromJSON,
@@ -57,6 +57,12 @@ export interface BiInsightsRead {
    * @memberof BiInsightsRead
    */
   buildFingerprint?: BuildFingerprint;
+  /**
+   *
+   * @type {Array<BiBuildRead>}
+   * @memberof BiInsightsRead
+   */
+  builds?: Array<BiBuildRead>;
   /**
    *
    * @type {string}
@@ -99,12 +105,6 @@ export interface BiInsightsRead {
    * @memberof BiInsightsRead
    */
   truncated?: boolean;
-  /**
-   *
-   * @type {BiTrustBadge}
-   * @memberof BiInsightsRead
-   */
-  trust?: BiTrustBadge;
 }
 
 /**
@@ -141,6 +141,10 @@ export function BiInsightsReadFromJSONTyped(
       json["build_fingerprint"] == null
         ? undefined
         : BuildFingerprintFromJSON(json["build_fingerprint"]),
+    builds:
+      json["builds"] == null
+        ? undefined
+        : (json["builds"] as Array<any>).map(BiBuildReadFromJSON),
     catalogueVersion: json["catalogue_version"],
     compareTo: new Date(json["compare_to"]),
     factSheetHash: json["fact_sheet_hash"],
@@ -150,8 +154,6 @@ export function BiInsightsReadFromJSONTyped(
     measuresWithheld:
       json["measures_withheld"] == null ? undefined : json["measures_withheld"],
     truncated: json["truncated"] == null ? undefined : json["truncated"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
   };
 }
 
@@ -170,6 +172,10 @@ export function BiInsightsReadToJSONTyped(
   return {
     as_of: value["asOf"].toISOString().substring(0, 10),
     build_fingerprint: BuildFingerprintToJSON(value["buildFingerprint"]),
+    builds:
+      value["builds"] == null
+        ? undefined
+        : (value["builds"] as Array<any>).map(BiBuildReadToJSON),
     catalogue_version: value["catalogueVersion"],
     compare_to: value["compareTo"].toISOString().substring(0, 10),
     fact_sheet_hash: value["factSheetHash"],
@@ -177,6 +183,5 @@ export function BiInsightsReadToJSONTyped(
     measures_read: value["measuresRead"],
     measures_withheld: value["measuresWithheld"],
     truncated: value["truncated"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
   };
 }

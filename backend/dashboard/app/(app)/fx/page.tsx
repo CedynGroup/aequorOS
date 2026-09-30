@@ -10,7 +10,6 @@ import ChartFrame from '@/components/ui/ChartFrame';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFrame';
 import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
-import { ReconciliationTrustBadge } from '@/components/bi/TrustBadge';
 import ExposureBars from '@/components/fx/charts/ExposureBars';
 import ScenarioStrip from '@/components/fx/ScenarioStrip';
 import { fxPositionSplits, type FxPositionSplit } from '@/components/fx/params';
@@ -152,7 +151,6 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
           title="Net position by currency"
           subtitle="Long positive, short negative · colored by single-currency limit state"
           height={300}
-          trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
           footer={
             <span>
               Green within limit · amber at ≥ 80% of the {fmtPct(singleLimit, 0)} limit ·

@@ -31,14 +31,13 @@ from app.models import (
     BiFactEngineMetric,
     BiFactPositionDaily,
     BiMartBuild,
-    BiReconciliationResult,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     IngestionBatch,
     LineageRecord,
     RegulatoryRun,
 )
-from app.services.bi import mart_builder, partitions, reconciliation
+from app.services.bi import mart_builder, partitions
 from tests.api.helpers import ORG_1, USER_1
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
@@ -214,31 +213,6 @@ def test_partitions_are_created_by_the_definer_before_the_slice_lands(session: S
     assert partitions.month_children(session, "bi_fact_position_daily") == [
         ("bi_fact_position_daily_y2026m06", date(2026, 6, 1))
     ]
-
-
-def test_every_reconciliation_check_including_r10_survives_the_real_check_constraint(
-    session: Session,
-) -> None:
-    """R10 is the id the CHECK literal in migration 0066 did not admit for one
-    wave. SQLite enforces the model's CHECK too, but only Postgres runs the
-    migration that owns the constraint — so this is where "R10 persists" is
-    actually proven, against the migrated column and its ``String(4)`` width."""
-    stored = {
-        row.check_id: row.status
-        for row in session.scalars(
-            select(BiReconciliationResult).where(
-                BiReconciliationResult.bank_id == SAMPLE_BANK_ID,
-                BiReconciliationResult.as_of_date == AS_OF,
-            )
-        )
-    }
-    assert set(stored) == set(reconciliation.CHECK_IDS)
-    assert reconciliation.DPD_COMPLETENESS in stored
-    # the fixture book states no days_past_due at all, so the badge must be red
-    assert stored[reconciliation.DPD_COMPLETENESS] == reconciliation.RED
-    assert reconciliation.trust_for(session, ORG_1, SAMPLE_BANK_ID, AS_OF)["overall"] == (
-        reconciliation.RED
-    )
 
 
 def test_second_run_skips_and_a_changed_book_replaces_the_slice_in_place(session: Session) -> None:

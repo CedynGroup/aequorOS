@@ -104,7 +104,6 @@ function measure(
     grain: "portfolio",
     allowedDimensions: extra.allowedDimensions ?? ["grade", "branch", "wide"],
     favourableDirection: "neutral",
-    reconciliationChecks: [],
     certified: false,
   };
 }

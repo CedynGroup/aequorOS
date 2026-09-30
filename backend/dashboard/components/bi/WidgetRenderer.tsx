@@ -18,7 +18,7 @@
  *
  * Everything drawn here comes from the answer. The renderer computes no ratio,
  * supplies no threshold and carries no floor: a widget shows what the catalogue
- * measured, badged with the trust verdict the server attached.
+ * measured.
  */
 
 import { useMemo, type ReactNode } from "react";
@@ -33,7 +33,6 @@ import EChart, { type BiEChartsOption } from "./EChart";
 import NeedsDataWidget from "./NeedsDataWidget";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
-import TrustBadge from "./TrustBadge";
 import { biRefusalSentence, isBiAccessDenied } from "@/lib/api/bi";
 import type { ReaderCoverage } from "@/lib/api/dataScope";
 import { drillDestinations } from "./drill";
@@ -58,6 +57,25 @@ export function widgetBodyHeight(rows: number): number {
     MIN_CHART_HEIGHT,
     rows * WIDGET_ROW_HEIGHT - WIDGET_CHROME_HEIGHT,
   );
+}
+
+/**
+ * How a widget says it is NOT carrying the page's narrowing.
+ *
+ * An engine-copied figure has no decomposition by branch or product, so the
+ * page's filter cannot honestly apply to it (see `query.ts::applicableNarrowing`).
+ * The tile still shows the figure — an institution-wide margin is the right
+ * answer to "what is our margin" — but it must SAY that the filter stopped at
+ * its edge, because a number sitting on a filtered page is otherwise read as a
+ * filtered number.
+ */
+function notNarrowedSentence(fields: readonly string[]): string | null {
+  if (fields.length === 0) return null;
+  const named =
+    fields.length === 1
+      ? fields[0]
+      : `${fields.slice(0, -1).join(", ")} or ${fields[fields.length - 1]}`;
+  return `Not narrowed by ${named} \u2014 this figure is reported for the institution as a whole.`;
 }
 
 type RowShape = { label: string; cells: readonly unknown[] };
@@ -165,6 +183,7 @@ export default function WidgetRenderer({
   actions,
   query,
   coverage,
+  notNarrowedBy = [],
 }: {
   spec: BiWidgetSpec;
   result: BiQueryResult | null | undefined;
@@ -190,6 +209,12 @@ export default function WidgetRenderer({
    * not an empty book, and the empty state has to say so.
    */
   coverage?: ReaderCoverage;
+  /**
+   * Fields the page is filtered by that THIS widget's measures cannot be sliced
+   * by, already resolved to their catalogue labels. The tile states them; it
+   * never silently shows an un-narrowed figure on a narrowed page.
+   */
+  notNarrowedBy?: readonly string[];
 }) {
   const height = widgetBodyHeight(spec.layout.h);
 
@@ -249,13 +274,9 @@ export default function WidgetRenderer({
 
   const measures = measureColumns(result);
   const primaryMeasure = measures[0];
+  const notNarrowed = notNarrowedSentence(notNarrowedBy);
   const frameActions = (
     <>
-      <TrustBadge
-        status={result.trust?.status}
-        failingChecks={result.trust?.failingChecks ?? []}
-        size="compact"
-      />
       {onExplain && primaryMeasure?.memberId && (
         <button
           type="button"
@@ -317,6 +338,9 @@ export default function WidgetRenderer({
             );
           })}
         </div>
+        {notNarrowed && (
+          <p className="text-caption text-slate">{notNarrowed}</p>
+        )}
       </section>
     );
   }
@@ -350,6 +374,11 @@ export default function WidgetRenderer({
             Explore to page through the full answer.
           </p>
         )}
+        {notNarrowed && (
+          <p className="border-t border-border-light px-5 py-2 text-caption text-slate">
+            {notNarrowed}
+          </p>
+        )}
       </section>
     );
   }
@@ -361,10 +390,16 @@ export default function WidgetRenderer({
       actions={frameActions}
       height={height}
       footer={
-        result.truncated ? (
+        result.truncated || notNarrowed ? (
           <span>
-            More rows match than this chart shows. Narrow the filters, or open
-            Explore to page through the full answer.
+            {result.truncated && (
+              <>
+                More rows match than this chart shows. Narrow the filters, or
+                open Explore to page through the full answer.
+              </>
+            )}
+            {result.truncated && notNarrowed && " "}
+            {notNarrowed}
           </span>
         ) : undefined
       }

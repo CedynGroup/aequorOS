@@ -1094,13 +1094,25 @@ for (const file of [
   "components/bi/WidgetRenderer.tsx",
   "components/bi/PivotGridCanvas.tsx",
   "components/bi/ExplainDrawer.tsx",
-  "app/(app)/insights/page.tsx",
+  "components/bi/InsightStrip.tsx",
 ]) {
   const source = code(file);
   assert.ok(
     /biRefusalSentence\(/.test(source) && /<RefusedWidget\b/.test(source),
     `${file} paraphrases a grant denial and must therefore also render the server's ` +
       "sentence for every other refusal through RefusedWidget.",
+  );
+}
+// The insights hub paraphrases nothing of its own: its one data read is the
+// strip, which renders both kinds above, and its catalogue read fails to the
+// ordinary panel. A paraphrase reappearing here would have to join the list.
+{
+  const hub = code("app/(app)/insights/page.tsx");
+  assert.equal(
+    /isBiAccessDenied\(|<RestrictedWidget\b/.test(hub),
+    false,
+    "app/(app)/insights/page.tsx must not paraphrase a grant denial itself — the strip " +
+      "owns the refusal rendering; if it does again, add it to the list above.",
   );
 }
 // RefusedWidget composes nothing: it renders the sentence it is given.

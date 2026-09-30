@@ -38,8 +38,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.bi import BiTrustBadge
-
 #: Whose words the served paragraphs are. Mirrors
 #: ``commentary.view.MODEL_SOURCE`` / ``commentary.fallback.FALLBACK_SOURCE``.
 BiCommentaryAuthor = Literal["model", "platform"]
@@ -133,7 +131,6 @@ class BiCommentaryRead(BiCommentaryClosedModel):
     #: draft's own failure code. For telemetry and tests. NEVER shown to a reader:
     #: ``notice`` is the copy.
     reason: str | None = None
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
 
 

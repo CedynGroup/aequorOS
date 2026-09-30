@@ -41,13 +41,12 @@ How a build runs
    ``as_of`` is the bank's last date with data in its month (D-014), attribute
    the day's loan events (D-018), rebuild the calendar month's GL rows, copy the
    engine metrics, Type-1-upsert the dimensions and rebuild the per-bank
-   calendar, then grade the result (``reconciliation.evaluate``). A failure
-   anywhere rolls the savepoint back — the marts are never half-written —
+   calendar. A failure anywhere rolls the savepoint back — the marts are never half-written —
    marks every scope's build row ``failed`` with the error, commits THAT (the
    job layer rolls its session back on the way to ``failed``, so nothing else
    would survive) and re-raises for the queue to classify.
 4. ``bi_mart_builds`` gets one row per scope with the fingerprint, row counts
-   and timings; :class:`BuildOutcome` carries the same plus the trust badge.
+   and timings; :class:`BuildOutcome` carries the same.
 
 Conventions the marts rely on
 -----------------------------
@@ -143,7 +142,7 @@ from app.models.canonical import is_current_generation
 from app.schemas.bi import BiDateRange, BiQuery, BiTime
 from app.services import institution_types, jurisdictions, loan_classification
 from app.services import regulatory_parameters as rp
-from app.services.bi import partitions, reconciliation
+from app.services.bi import partitions
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.versions import BUILDER_VERSION
@@ -216,7 +215,6 @@ class BuildOutcome:
     status: BuildStatus
     fingerprint: str
     row_counts: dict[str, int]
-    trust: dict[str, str]
 
 
 class BankNotFoundError(LookupError):
@@ -1468,8 +1466,8 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
         # The GL breakdown's unallocated remainder. Not a branch and not an
         # UNMAPPED one either — it is a computed line, so it gets its own name
         # instead of reading as a branch the register forgot to declare, and it
-        # carries ``mapped=False`` so R7's unmapped-coverage count still sees it
-        # as exposure nobody attributed.
+        # carries ``mapped=False`` so a branch-coverage reading still sees it as
+        # exposure nobody attributed.
         rows[gl_segment_balances.RESIDUAL_BRANCH_ID] = {
             "organization_id": organization_id,
             "bank_id": bank_id,
@@ -2069,8 +2067,8 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
     built_at: datetime,
     row_counts: dict[str, int],
     timings: dict[str, float],
-) -> dict[str, reconciliation.CheckResult]:
-    """Every scope in order, inside the caller's savepoint; the R-check results."""
+) -> None:
+    """Every scope in order, inside the caller's savepoint."""
     organization_id, bank_id = ctx.organization_id, bank.id
     base_currency = jurisdictions.base_currency(bank)
     regime = institution_types.capital_regime(db, bank)
@@ -2143,18 +2141,6 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
     )
     timings["targets"] = time.monotonic() - clock
 
-    results = reconciliation.evaluate(db, ctx, bank, as_of)
-    reconciliation.persist(
-        db,
-        results,
-        organization_id=organization_id,
-        bank_id=bank_id,
-        as_of=as_of,
-        builder_version=BUILDER_VERSION,
-        evaluated_at=utc_now(),
-    )
-    return results
-
 
 def refresh_bank_as_of(
     db: Session, *, organization_id: str, bank_id: str, as_of: date, reason: str
@@ -2176,12 +2162,7 @@ def refresh_bank_as_of(
             reason,
             fingerprint[:12],
         )
-        return BuildOutcome(
-            "skipped",
-            fingerprint,
-            {},
-            reconciliation.trust_for(db, organization_id, bank_id, as_of),
-        )
+        return BuildOutcome("skipped", fingerprint, {})
 
     # DDL first, on its own (see partitions.py for the lock and DEFAULT hazards).
     if partitions.ensure_for_build(db, as_of=as_of):
@@ -2193,7 +2174,7 @@ def refresh_bank_as_of(
     timings: dict[str, float] = {}
     try:
         with db.begin_nested():
-            results = _build_scopes(
+            _build_scopes(
                 db, ctx, bank, as_of, built_at=started_at, row_counts=row_counts, timings=timings
             )
         finished_at = utc_now()
@@ -2220,16 +2201,14 @@ def refresh_bank_as_of(
         )
         raise
 
-    trust = reconciliation.trust_of(results)
     logger.info(
-        "bi.mart_builder.succeeded bank=%s as_of=%s reason=%s rows=%s trust=%s",
+        "bi.mart_builder.succeeded bank=%s as_of=%s reason=%s rows=%s",
         bank_id,
         as_of,
         reason,
         row_counts,
-        trust.get("overall"),
     )
-    return BuildOutcome("succeeded", fingerprint, dict(row_counts), trust)
+    return BuildOutcome("succeeded", fingerprint, dict(row_counts))
 
 
 def backfill_step(  # noqa: PLR0913 - the contract's signature

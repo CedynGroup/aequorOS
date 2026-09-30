@@ -191,7 +191,6 @@ def test_the_seam_does_not_import_the_builder() -> None:
             (
                 "app.services.bi.mart_builder",
                 "app.services.bi.compiler",
-                "app.services.bi.reconciliation",
                 "app.services.bi.partitions",
                 "app.domain.bi",
                 "app.jobs",

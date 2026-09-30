@@ -24,7 +24,11 @@
  */
 
 import type { ReactNode } from "react";
-import type { BiFilter, BiQuery } from "@aequoros/risk-service-api";
+import type {
+  BiCatalogueRead,
+  BiFilter,
+  BiQuery,
+} from "@aequoros/risk-service-api";
 import { useBiQuery } from "@/lib/api/bi";
 import NeedsDataWidget from "./NeedsDataWidget";
 import PanelWidget from "./PanelWidget";
@@ -34,7 +38,7 @@ import WidgetRenderer, {
   WIDGET_ROW_HEIGHT,
   widgetBodyHeight,
 } from "./WidgetRenderer";
-import { narrowedQuery } from "./query";
+import { applicableNarrowing } from "./query";
 import type { BiPackWidgetView, BiWidgetSpec } from "./types";
 
 const COLUMNS = 12;
@@ -48,19 +52,27 @@ function DashboardWidget({
   bankId,
   spec,
   filters,
+  catalogue,
   onExplain,
   widgetActions,
 }: {
   bankId: string | undefined;
   spec: BiWidgetSpec;
   filters: readonly BiFilter[];
+  catalogue: BiCatalogueRead | undefined;
   onExplain?: (measureId: string, query: BiQuery) => void;
   widgetActions?: (query: BiQuery) => ReactNode;
 }) {
   // The window is the one the SERVER resolved when it served this pack for the
   // reader's date. Only the filter bar's narrowing is merged in — see
-  // `query.ts::narrowedQuery` for why the date must not be rewritten here.
-  const query = narrowedQuery(spec.query, filters);
+  // `query.ts::narrowedQuery` for why the date must not be rewritten here, and
+  // `applicableNarrowing` for why a filter this widget's measures cannot be
+  // sliced by is withheld and named rather than submitted and refused.
+  const { query, withheld } = applicableNarrowing(
+    spec.query,
+    filters,
+    catalogue,
+  );
   const result = useBiQuery(bankId, query);
 
   return (
@@ -70,6 +82,7 @@ function DashboardWidget({
       isLoading={result.isPending}
       error={result.error}
       onRetry={() => void result.refetch()}
+      notNarrowedBy={withheld}
       onExplain={
         onExplain ? (measureId) => onExplain(measureId, query) : undefined
       }
@@ -88,12 +101,18 @@ export default function DashboardCanvas({
   bankId,
   widgets,
   filters,
+  catalogue,
   onExplain,
   widgetActions,
 }: {
   bankId: string | undefined;
   widgets: readonly BiPackWidgetView[];
   filters: readonly BiFilter[];
+  /**
+   * The reader's own catalogue — the same one the filter bar was built from.
+   * It is what says which figures each filter can honestly narrow.
+   */
+  catalogue: BiCatalogueRead | undefined;
   onExplain?: (measureId: string, query: BiQuery) => void;
   /** Controls for one figure's frame, given that figure's own query. */
   widgetActions?: (query: BiQuery) => ReactNode;
@@ -130,6 +149,7 @@ export default function DashboardCanvas({
               bankId={bankId}
               spec={widget.spec}
               filters={filters}
+              catalogue={catalogue}
               onExplain={onExplain}
               widgetActions={widgetActions}
             />

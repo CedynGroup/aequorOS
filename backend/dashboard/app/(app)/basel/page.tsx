@@ -19,7 +19,6 @@ import {
   LandingInsightStrip,
   useKpiExplain,
 } from "@/components/bi/InsightStrip";
-import { ReconciliationTrustBadge } from "@/components/bi/TrustBadge";
 import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
@@ -451,7 +450,6 @@ export default function BaselOverview() {
                 title="CAR — reporting-period trend"
                 subtitle={`CAR and Tier 1 across ${carTrend.length} reporting periods`}
                 height={260}
-                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 actions={
                   compliantCount === null ? (
                     <StatusPill tone="pending">
@@ -542,7 +540,6 @@ export default function BaselOverview() {
                 title="Capital waterfall"
                 subtitle="CET1 components → deductions → AT1 → Tier 2 → total qualifying capital"
                 height={280}
-                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 footer={
                   <span>
                     CET1 {fmtCurrency(num(structure.cet1CapitalGhs))} · Tier 1{" "}

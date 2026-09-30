@@ -1,26 +1,29 @@
-"""``bi_fact_gl_branch_monthly`` and R11: the branch breakdown of the ledger.
+"""``bi_fact_gl_branch_monthly``: the branch breakdown of the ledger.
 
-Four claims, each asserted on rows the builder actually wrote rather than on the
+Three claims, each asserted on rows the builder actually wrote rather than on the
 function that computes them (``tests/domain/bi/test_gl_branch_extract.py`` owns
 that half):
 
-1. **A bank that sends nothing new reconciles exactly as before.** No register,
-   no branch rows, R4 byte-identical to the institution-only build, and R11 green
-   over zero accounts — the absence reported as an absence, never as a pass over
-   a table of unallocated lines.
+1. **A bank that sends nothing new is unaffected.** No register, no branch rows,
+   the institution ledger byte-identical to the institution-only build.
 2. **Branch GL sums to institution GL**, per account and in total, for a complete
-   push and a partial one alike, and R11 grades the partial case amber because the
-   total is right and the breakdown is incomplete.
+   push and a partial one alike — the identity holds BY CONSTRUCTION, because the
+   residual row is derived from exactly that subtraction, and this file proves it
+   on the STORED rows. It holds even when the register's sign convention is the
+   opposite of the ledger's, or the ledger account is zero: the residual then
+   carries the difference, visibly, rather than the total drifting.
 3. **A partial push is handled honestly**: a branch the register names but no
    position touches is in ``bi_dim_branch``, the residual has a name of its own,
-   and an account with no allocation gets no rows rather than a 100 %-unallocated
-   one.
-4. **R11 can fire.** A row edited to break the identity turns it red, and a
-   branch figure for an account the ledger does not carry is refused entry.
+   an account with no allocation gets no rows rather than a 100 %-unallocated one,
+   and a branch figure for an account the ledger does not carry is refused entry.
 
 The stale-register case gets its own test because it is the subtle one: pairing
 May's breakdown with June's ledger would push a month of unattributed movement
 into the residual and label it unallocated.
+
+Nothing here grades the breakdown. Whether the split is complete is the reader's
+to see on the residual line; BI stopped issuing verdicts on its own figures on
+2026-09-29.
 """
 
 from __future__ import annotations
@@ -32,21 +35,19 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.gl import pl_mapping
 from app.domain.ingestion.reference_schemas import gl_segment_balances
 from app.models import (
-    Bank,
     BiDimBranch,
     BiFactGlBranchMonthly,
     BiFactGlMonthly,
     CanonicalReferenceRow,
 )
 from app.models.canonical import CanonicalGlAccount
-from app.services.bi import authorization, compiler, reconciliation
+from app.services.bi import authorization, compiler
 from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_gl_monthly import M, _seed_ledger
-from tests.services.bi.test_mart_builder import AS_OF, CTX, build, new_batch, seed_book
+from tests.services.bi.test_mart_builder import AS_OF, build, new_batch, seed_book
 
 JUN, MAY = AS_OF, date(2026, 5, 31)
 KIND = gl_segment_balances.SCHEMA.kind
@@ -118,20 +119,29 @@ def institution_ytd(db: Session) -> dict[tuple[str, str], Decimal]:
     }
 
 
-def r11(db: Session) -> reconciliation.CheckResult:
-    return reconciliation.check_r11_gl_branch_identity(db, ORG_1, SAMPLE_BANK_ID, JUN)
+def branch_totals(db: Session) -> dict[tuple[str, str], Decimal]:
+    """Σ ``ytd_rc`` over every branch row — reported branches AND the residual —
+    per (account, currency): the left-hand side of the identity."""
+    totals: dict[tuple[str, str], Decimal] = {}
+    for row in branch_rows(db):
+        key = (row.gl_account_code, row.currency)
+        totals[key] = totals.get(key, Decimal(0)) + row.ytd_rc
+    return totals
 
 
-def r4(db: Session) -> reconciliation.CheckResult:
-    row = db.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
-    assert row is not None
-    return reconciliation.check_r4_gl_pl(db, CTX, row, JUN)
+def assert_identity_holds(db: Session) -> None:
+    """Every account the breakdown covers sums to its institution row, exactly."""
+    ledger = institution_ytd(db)
+    totals = branch_totals(db)
+    for key, total in totals.items():
+        assert key in ledger, f"{key}: branch rows for an account the ledger does not carry"
+        assert total == ledger[key], (key, total, ledger[key])
 
 
 # --- 1. a bank that sends nothing new -----------------------------------------------------------
 
 
-def test_no_register_means_no_branch_rows_and_an_unchanged_r4(db_session: Session) -> None:
+def test_no_register_means_no_branch_rows_and_an_unchanged_ledger(db_session: Session) -> None:
     """The institution GL path is not an input to this feature, so a tenant that
     never hears of ``gl_segment_balances`` is unaffected — structurally, not within
     a tolerance."""
@@ -143,23 +153,14 @@ def test_no_register_means_no_branch_rows_and_an_unchanged_r4(db_session: Sessio
     assert outcome.row_counts["bi_fact_gl_branch_monthly"] == 0
     assert branch_rows(db_session) == []
     assert outcome.row_counts["bi_fact_gl_monthly"] == 6
-    baseline_r4 = r4(db_session)
-    assert baseline_r4.status == reconciliation.GREEN
-
-    check = r11(db_session)
-    assert check.status == reconciliation.GREEN
-    # Green, but never mistakable for "the branch breakdown reconciles": the detail
-    # says nothing was compared, and says which figures exist.
-    assert check.detail["accounts_compared"] == 0
-    assert check.detail["accounts_in_ledger"] == 6
-    assert "no branch breakdown" in check.detail["reason"]
+    assert len(institution_ytd(db_session)) == 6
     assert RESIDUAL not in {row.branch_code for row in db_session.scalars(select(BiDimBranch))}
 
 
 # --- 2. the identity ----------------------------------------------------------------------------
 
 
-def test_a_partial_breakdown_sums_to_the_ledger_and_r11_calls_it_amber(
+def test_a_partial_breakdown_sums_to_the_ledger_with_the_rest_on_the_residual(
     db_session: Session,
 ) -> None:
     seed_book(db_session, live=False)
@@ -182,14 +183,9 @@ def test_a_partial_breakdown_sums_to_the_ledger_and_r11_calls_it_amber(
 
     rows = branch_rows(db_session)
     assert outcome.row_counts["bi_fact_gl_branch_monthly"] == len(rows)
-    ledger = institution_ytd(db_session)
-    per_account: dict[tuple[str, str], Decimal] = {}
-    for row in rows:
-        key = (row.gl_account_code, row.currency)
-        per_account[key] = per_account.get(key, Decimal(0)) + row.ytd_rc
     # THE claim: every account the breakdown covers sums to the ledger, exactly.
-    for key, total in per_account.items():
-        assert total == ledger[key], key
+    assert_identity_holds(db_session)
+    per_account = branch_totals(db_session)
     assert per_account[("4001", "")] == Decimal(330 * M)
     assert per_account[("5301", "")] == Decimal(950 * M)
     # Only the covered accounts were built; 4002 / 4101 / 5302 / 6001 get no rows.
@@ -198,12 +194,6 @@ def test_a_partial_breakdown_sums_to_the_ledger_and_r11_calls_it_amber(
     residuals = {row.gl_account_code: row for row in rows if row.branch_code == RESIDUAL}
     assert residuals["4001"].ytd_rc == Decimal(130 * M)
     assert "5301" not in residuals  # fully allocated, so no empty remainder row
-
-    check = r11(db_session)
-    assert check.status == reconciliation.AMBER  # the total is right; the split is partial
-    assert check.difference == Decimal(0)
-    assert Decimal(check.detail["unattributed_share_pct"]) > Decimal(0)
-    assert check.detail["accounts_compared"] == 2
 
     # And the account's own mapping rides on every branch row.
     fours = [row for row in rows if row.gl_account_code == "4001"]
@@ -218,9 +208,9 @@ def test_a_partial_breakdown_sums_to_the_ledger_and_r11_calls_it_amber(
     ]
 
 
-def test_a_complete_breakdown_of_every_account_is_green(db_session: Session) -> None:
-    """Green requires the identity AND full attribution: every cedi of the month's
-    P&L on a real branch, nothing on the remainder and no account left out."""
+def test_a_complete_breakdown_of_every_account_leaves_no_residual(db_session: Session) -> None:
+    """Every cedi of the month's P&L on a real branch: nothing on the remainder and
+    no account left out."""
     seed_book(db_session, live=False)
     _seed_ledger(db_session)
     push_units(db_session, {"BR-101": "Osu"})
@@ -239,10 +229,8 @@ def test_a_complete_breakdown_of_every_account_is_green(db_session: Session) -> 
     db_session.commit()
     build(db_session)
 
-    check = r11(db_session)
-    assert check.status == reconciliation.GREEN
-    assert Decimal(check.detail["unattributed_share_pct"]) == Decimal(0)
-    assert check.detail["accounts_compared"] == check.detail["accounts_in_ledger"] == 6
+    assert_identity_holds(db_session)
+    assert set(branch_totals(db_session)) == set(institution_ytd(db_session))
     assert RESIDUAL not in {row.branch_code for row in branch_rows(db_session)}
 
 
@@ -265,7 +253,88 @@ def test_the_movement_identity_holds_over_two_pushed_months(db_session: Session)
         )
     )
     assert institution is not None and institution.movement_rc == Decimal(120 * M)
-    assert r11(db_session).status == reconciliation.AMBER  # still only 4001 is covered
+    assert_identity_holds(db_session)
+
+
+def test_the_identity_holds_by_construction_under_an_inverted_sign_convention(
+    db_session: Session,
+) -> None:
+    """A register sent with flipped signs (audit A11-F4): the residual absorbs
+    whatever the branches did not account for, so the branch total still equals the
+    ledger — and the residual is then LARGER than the ledger it completes, which is
+    visible on the row rather than hidden in a total that drifted.
+
+    Account 4001 is 330 in the fixture ledger. A register of -297 against it
+    leaves a residual of 627.
+    """
+    seed_book(db_session, live=False)
+    _seed_ledger(db_session)
+    push_units(db_session, {"BR-101": "Osu", "BR-102": "Tema"})
+    push_segments(db_session, JUN, [segment("4001", "BR-101", -297)])
+    db_session.commit()
+    build(db_session)
+
+    rows = {row.branch_code: row.ytd_rc for row in branch_rows(db_session)}
+    assert rows == {"BR-101": Decimal(-297 * M), RESIDUAL: Decimal(627 * M)}
+    assert_identity_holds(db_session)
+
+
+def _seed_income_ledger(db: Session, balances: dict[str, int]) -> None:
+    """A June P&L ledger of INCOME accounts at the given balances (× M), mapped to
+    no return line — the identity does not need one."""
+    common = new_batch(db, JUN)
+    for code, balance in balances.items():
+        db.add(
+            CanonicalGlAccount(
+                **common,
+                source_reference=f"GL/{code}/{JUN.isoformat()}",
+                account_code=code,
+                name=f"P&L {code}",
+                account_class="INCOME",
+                currency="GHS",
+                balance=Decimal(balance * M),
+                attributes={},
+            )
+        )
+    db.flush()
+
+
+def test_a_negative_ledger_account_gets_a_negative_residual_beside_a_fully_allocated_one(
+    db_session: Session,
+) -> None:
+    """Account 4100 is −1,000 in the ledger and the register sends +900, so the
+    residual is −1,900; beside it 4200 is 10,000 and fully allocated, so it gets no
+    remainder row at all. Per account, by construction."""
+    seed_book(db_session, live=False)
+    _seed_income_ledger(db_session, {"4100": -1000, "4200": 10000})
+    push_units(db_session, {"BR-101": "Osu"})
+    push_segments(
+        db_session, JUN, [segment("4100", "BR-101", 900), segment("4200", "BR-101", 10000)]
+    )
+    db_session.commit()
+    build(db_session)
+
+    rows = {(row.gl_account_code, row.branch_code): row.ytd_rc for row in branch_rows(db_session)}
+    assert rows[("4100", RESIDUAL)] == Decimal(-1900 * M)
+    assert ("4200", RESIDUAL) not in rows  # fully allocated: no remainder row
+    assert_identity_holds(db_session)
+
+
+def test_a_zero_ledger_account_with_branch_figures_carries_an_offsetting_residual(
+    db_session: Session,
+) -> None:
+    """Ledger 0, branch +500: the residual is −500, so the total is still the
+    ledger's zero and the +500 is visibly matched by a −500 nobody attributed."""
+    seed_book(db_session, live=False)
+    _seed_income_ledger(db_session, {"4100": 0})
+    push_units(db_session, {"BR-101": "Osu"})
+    push_segments(db_session, JUN, [segment("4100", "BR-101", 500)])
+    db_session.commit()
+    build(db_session)
+
+    rows = {row.branch_code: row.ytd_rc for row in branch_rows(db_session)}
+    assert rows == {"BR-101": Decimal(500 * M), RESIDUAL: Decimal(-500 * M)}
+    assert_identity_holds(db_session)
 
 
 # --- 3. honesty about what is missing -----------------------------------------------------------
@@ -285,7 +354,7 @@ def test_a_stale_register_is_refused_rather_than_paired_with_this_months_ledger(
     outcome = build(db_session)
 
     assert outcome.row_counts["bi_fact_gl_branch_monthly"] == 0
-    assert r11(db_session).detail["accounts_compared"] == 0
+    assert branch_rows(db_session) == []
 
 
 def test_a_branch_no_position_touches_still_reaches_the_dimension(db_session: Session) -> None:
@@ -340,46 +409,11 @@ def test_a_malformed_register_row_is_skipped_rather_than_guessed_at(db_session: 
     assert sum(row.ytd_rc for row in rows.values()) == Decimal(330 * M)
 
 
-# --- 4. R11 can fire ----------------------------------------------------------------------------
-
-
-def test_r11_turns_red_when_a_stored_branch_row_breaks_the_identity(
-    db_session: Session,
-) -> None:
-    """The guard's self-proving case. The builder cannot produce this state — the
-    residual is derived from exactly this subtraction — which is why the check is
-    worth having: it proves the construction on the STORED rows."""
-    seed_book(db_session, live=False)
-    _seed_ledger(db_session)
-    push_units(db_session, {"BR-101": "Osu"})
-    push_segments(db_session, JUN, [segment("4001", "BR-101", 200)])
-    db_session.commit()
-    build(db_session)
-    assert r11(db_session).status == reconciliation.AMBER
-
-    tampered = db_session.scalar(
-        select(BiFactGlBranchMonthly).where(
-            BiFactGlBranchMonthly.bank_id == SAMPLE_BANK_ID,
-            BiFactGlBranchMonthly.branch_code == "BR-101",
-        )
-    )
-    assert tampered is not None
-    tampered.ytd_rc = tampered.ytd_rc + Decimal(M)
-    db_session.flush()
-
-    check = r11(db_session)
-    assert check.status == reconciliation.RED
-    assert check.difference == Decimal(M)
-    assert check.detail["mismatches"][0]["account"] == "4001"
-    assert check.tolerance == Decimal(0)
-
-
-def test_r11_turns_red_on_a_branch_row_the_ledger_has_no_account_for(
+def test_a_branch_row_for_an_account_the_ledger_does_not_carry_is_refused_at_write_time(
     db_session: Session,
 ) -> None:
     """A branch figure with no institution row would make a branch total exceed the
-    ledger. The builder refuses it at write time (it is an ``orphan``); the check
-    refuses it at read time, so neither half can be the only defence."""
+    ledger. The builder refuses it (it is an ``orphan``) and reports it."""
     seed_book(db_session, live=False)
     _seed_ledger(db_session)
     push_units(db_session, {"BR-101": "Osu"})
@@ -387,40 +421,8 @@ def test_r11_turns_red_on_a_branch_row_the_ledger_has_no_account_for(
     db_session.commit()
     build(db_session)
 
-    # Write time: the unknown account never reaches the mart.
     assert {row.gl_account_code for row in branch_rows(db_session)} == {"4001"}
-    assert r11(db_session).status == reconciliation.AMBER
-
-    # Read time: the same row inserted behind the builder's back is convicted.
-    template = branch_rows(db_session)[0]
-    db_session.add(
-        BiFactGlBranchMonthly(
-            organization_id=ORG_1,
-            bank_id=SAMPLE_BANK_ID,
-            month_end=template.month_end,
-            gl_account_code="9999",
-            branch_code="BR-101",
-            currency="",
-            calendar_month=template.calendar_month,
-            account_class="INCOME",
-            ytd_rc=Decimal(5 * M),
-            prior_ytd_rc=None,
-            movement_rc=None,
-            missing_prior=True,
-            balance_basis=pl_mapping.YTD,
-            pl_line=None,
-            pl_sign=None,
-            register_as_of=JUN,
-            builder_version=template.builder_version,
-            built_at=template.built_at,
-        )
-    )
-    db_session.flush()
-
-    check = r11(db_session)
-    assert check.status == reconciliation.RED
-    assert check.detail["mismatches"][0]["account"] == "9999"
-    assert check.detail["mismatches"][0]["ledger"] is None
+    assert_identity_holds(db_session)
 
 
 def test_the_register_enters_the_build_fingerprint(db_session: Session) -> None:
@@ -479,187 +481,6 @@ def test_the_branch_ledger_is_a_fact_the_compiler_can_bind_a_measure_to() -> Non
         )
 
 
-def test_an_inverted_sign_convention_is_RED_and_not_amber_at_a_nonsense_share(
-    db_session: Session,
-) -> None:
-    """Audit A11-F4: a register sent with flipped signs reconciled, and read amber.
-
-    The identity cannot catch this, and that is the point. The residual absorbs
-    whatever the branches did not account for, so the sum equals the ledger BY
-    CONSTRUCTION however wrong the reported figures are. What gives it away is the
-    coverage share: a ledger of one sign against a register of the other leaves a
-    residual LARGER than the ledger, so the share exceeds 100% — which a partial
-    breakdown mathematically cannot do.
-
-    Amber and red are different requests to the reader. Amber says part of the
-    ledger is not broken down yet, which they answer by sending more of the
-    register. This needs them to fix the register they already sent. Reporting the
-    second as the first, at "190% unattributed", tells them to do the wrong thing.
-
-    Account 4001 is 330 in the fixture ledger, as the amber test above states. A
-    register of -297 against it leaves a residual of 627, i.e. 190% of the ledger —
-    the audit's own numbers, reached from the other side because this fixture's
-    ledger is all positive.
-    """
-
-    seed_book(db_session, live=False)
-    _seed_ledger(db_session)
-    push_units(db_session, {"BR-101": "Osu", "BR-102": "Tema"})
-    push_segments(db_session, JUN, [segment("4001", "BR-101", -297)])
-    db_session.commit()
-    build(db_session)
-
-    ledger = institution_ytd(db_session)
-    # Keyed on (account, currency); the fixture's currency is read rather than
-    # assumed, because jurisdiction is data and a literal here would be a leak.
-    account_rows = {key: value for key, value in ledger.items() if key[0] == "4001"}
-    assert account_rows and all(value > 0 for value in account_rows.values()), ledger
-    outcome = r11(db_session)
-    share = Decimal(outcome.detail["unattributed_share_pct"])
-    assert share > Decimal("100"), (
-        f"share is {share}; the inverted register should push it past 100%, and if it "
-        "cannot then this test is not exercising the fault"
-    )
-    assert outcome.status == reconciliation.RED, outcome.detail
-    assert "sign convention" in outcome.detail["reason"]
-
-
-def test_a_partial_breakdown_of_the_RIGHT_sign_is_still_only_amber(
-    db_session: Session,
-) -> None:
-    """The control for the test above. Without it, a change that reddened every
-    incomplete breakdown would pass and would nag every bank mid-rollout.
-
-    The same account and the same proportion as the inverted case, correctly signed:
-    +297 of 330, leaving 33 unattributed, i.e. 10%.
-    """
-
-    seed_book(db_session, live=False)
-    _seed_ledger(db_session)
-    push_units(db_session, {"BR-101": "Osu"})
-    push_segments(db_session, JUN, [segment("4001", "BR-101", 297)])
-    db_session.commit()
-    build(db_session)
-
-    outcome = r11(db_session)
-    share = Decimal(outcome.detail["unattributed_share_pct"])
-    assert Decimal("0") < share < Decimal("100"), share
-    assert outcome.status == reconciliation.AMBER, outcome.detail
-    assert "reason" not in outcome.detail or "sign convention" not in outcome.detail["reason"]
-
-
-# --- audit A360 R11: the sign-convention rule is evaluated PER ACCOUNT ----------------------------
-#
-# The two tests above prove the aggregate share rule. The audit's two cases are the
-# ones it cannot see: one inverted account beside a large fully-allocated one
-# dilutes the share to an ordinary amber, and a ZERO ledger against non-zero branch
-# rows leaves the share at 0 — green. The fault is per account, so the rule now is.
-
-
-def _seed_income_ledger(db: Session, balances: dict[str, int]) -> None:
-    """A June P&L ledger of INCOME accounts at the given balances (× M), mapped to
-    no return line — the identity does not need one."""
-    common = new_batch(db, JUN)
-    for code, balance in balances.items():
-        db.add(
-            CanonicalGlAccount(
-                **common,
-                source_reference=f"GL/{code}/{JUN.isoformat()}",
-                account_code=code,
-                name=f"P&L {code}",
-                account_class="INCOME",
-                currency="GHS",
-                balance=Decimal(balance * M),
-                attributes={},
-            )
-        )
-    db.flush()
-
-
-def test_r11_catches_a_per_account_sign_inversion_that_the_aggregate_share_dilutes(
-    db_session: Session,
-) -> None:
-    """The auditor's numbers: account 4100 is −1,000 in the ledger and the register
-    sends +900 (residual −1,900, i.e. 190 % of THAT account); beside it 4200 is
-    10,000 and fully allocated. The aggregate share is 1,900 / 11,000 = 17.27 %,
-    which the old rule graded AMBER — "send more of the register" — for a fault
-    that needs the register already sent to be fixed."""
-    seed_book(db_session, live=False)
-    _seed_income_ledger(db_session, {"4100": -1000, "4200": 10000})
-    push_units(db_session, {"BR-101": "Osu"})
-    push_segments(
-        db_session, JUN, [segment("4100", "BR-101", 900), segment("4200", "BR-101", 10000)]
-    )
-    db_session.commit()
-    build(db_session)
-
-    rows = {(row.gl_account_code, row.branch_code): row.ytd_rc for row in branch_rows(db_session)}
-    assert rows[("4100", RESIDUAL)] == Decimal(-1900 * M)  # the identity holds by construction
-    assert ("4200", RESIDUAL) not in rows  # fully allocated: no remainder row
-
-    check = r11(db_session)
-    share = Decimal(check.detail["unattributed_share_pct"])
-    assert Decimal("17.27") < share < Decimal("17.28"), share  # the share the old rule read
-    assert check.status == reconciliation.RED, check.detail
-    assert "sign convention" in check.detail["reason"]
-    assert [item["account"] for item in check.detail["sign_convention"]] == ["4100"]
-    (inverted,) = check.detail["sign_convention"]
-    assert Decimal(inverted["ledger"]) == Decimal(-1000 * M)
-    assert Decimal(inverted["residual"]) == Decimal(-1900 * M)
-    # ``branch_total`` is Σ over every branch row INCLUDING the remainder — the
-    # reconciled total, so it equals the ledger by construction (same meaning as
-    # in ``mismatches``); the reported branches alone are total − residual = +900.
-    assert Decimal(inverted["branch_total"]) == Decimal(-1000 * M)
-    assert Decimal(inverted["branch_total"]) - Decimal(inverted["residual"]) == Decimal(900 * M)
-    # Not a broken identity — lhs equals rhs — and 4200 is not accused.
-    assert check.difference == Decimal(0)
-    assert "mismatches" not in check.detail
-
-
-def test_r11_is_not_green_when_a_zero_ledger_account_carries_branch_figures(
-    db_session: Session,
-) -> None:
-    """Ledger 0, branch +500, residual −500: the share is 0 / 0 and reads 0 %, so the
-    old rule called it GREEN — a fully attributed breakdown of nothing."""
-    seed_book(db_session, live=False)
-    _seed_income_ledger(db_session, {"4100": 0})
-    push_units(db_session, {"BR-101": "Osu"})
-    push_segments(db_session, JUN, [segment("4100", "BR-101", 500)])
-    db_session.commit()
-    build(db_session)
-
-    rows = {row.branch_code: row.ytd_rc for row in branch_rows(db_session)}
-    assert rows == {"BR-101": Decimal(500 * M), RESIDUAL: Decimal(-500 * M)}
-
-    check = r11(db_session)
-    assert Decimal(check.detail["unattributed_share_pct"]) == Decimal(0)  # the share is blind
-    assert check.status == reconciliation.RED, check.detail
-    assert "sign convention" in check.detail["reason"]
-    assert [item["account"] for item in check.detail["sign_convention"]] == ["4100"]
-
-
-def test_a_correctly_signed_negative_ledger_account_is_still_only_amber(
-    db_session: Session,
-) -> None:
-    """The control for the per-account rule: a NEGATIVE ledger account partially
-    broken down with the RIGHT sign (−1,000 with −600 allocated, residual −400) is
-    incomplete, not inverted. Without this a rule that reddened every negative
-    account would pass the two tests above."""
-    seed_book(db_session, live=False)
-    _seed_income_ledger(db_session, {"4100": -1000, "4200": 10000})
-    push_units(db_session, {"BR-101": "Osu"})
-    push_segments(
-        db_session, JUN, [segment("4100", "BR-101", -600), segment("4200", "BR-101", 10000)]
-    )
-    db_session.commit()
-    build(db_session)
-
-    check = r11(db_session)
-    assert check.status == reconciliation.AMBER, check.detail
-    assert "sign_convention" not in check.detail
-    assert "reason" not in check.detail
-
-
 # --- audit A360 H3: a branch id the mart cannot store is skipped, never truncated --------------
 
 
@@ -701,4 +522,4 @@ def test_a_segment_row_whose_branch_id_is_wider_than_the_mart_is_skipped_not_tru
     assert at_limit in dimension_codes
     assert wide not in dimension_codes
     assert wide[:120] not in dimension_codes
-    assert r11(db_session).status == reconciliation.AMBER  # partial, honestly
+    assert_identity_holds(db_session)

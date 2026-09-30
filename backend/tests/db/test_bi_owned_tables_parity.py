@@ -152,7 +152,13 @@ def test_the_subject_is_derived_from_the_model_modules_and_the_prefix() -> None:
         "bi_content",
         "bi_notifications",
     }
-    assert len(BI_OWNED_TABLES) >= 25, BI_OWNED_TABLES
+    # 24 since `202609290080` dropped `bi_reconciliation_results` (BI carries no
+    # reconciliation verdict — founder's decision of 2026-09-29). The floor is a
+    # coarse "the scan found the tables at all" guard, not a census: the exact
+    # membership is proven in both directions by the next test, against the hand
+    # tuples. Move this number only alongside a migration that adds or drops a
+    # BI-owned table, and say which in the comment.
+    assert len(BI_OWNED_TABLES) >= 24, BI_OWNED_TABLES
     # The one deliberately unprefixed BI table is in the subject BY DECLARATION,
     # which is the whole point of deriving from modules as well as from the prefix.
     assert "ai_commentary_drafts" in DECLARED_BY_BI_MODULES

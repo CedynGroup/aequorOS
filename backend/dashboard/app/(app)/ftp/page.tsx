@@ -9,7 +9,6 @@ import ValidationList from '@/components/ui/ValidationList';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FtpModuleFrame, { type FtpFrameContext } from '@/components/ftp/FtpModuleFrame';
 import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
-import { ReconciliationTrustBadge } from '@/components/bi/TrustBadge';
 import TransferCurveChart from '@/components/ftp/charts/TransferCurveChart';
 import TrendChart from '@/components/ftp/charts/TrendChart';
 import { num } from '@/lib/api/values';
@@ -157,7 +156,6 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
           title="Portfolio NIM trend"
           subtitle="Trailing periods against the margin floor · hollow points are inline computations"
           height={260}
-          trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
         >
           <TrendChart
             data={nimTrend}

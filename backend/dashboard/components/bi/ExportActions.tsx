@@ -8,10 +8,9 @@
  * classifies the disclosure from the catalogue members the query touches — never
  * from a flag on the request — records the release in `bi_query_log` and
  * `audit_events`, and stamps every artifact with who took it, from which
- * institution, on which catalogue version, under which analytics build, and with
- * the book's own reconciliation verdict. None of that can be produced by a
- * browser's own "download data", which is why neither the chart library's nor the
- * grid's is wired to anything.
+ * institution, on which catalogue version and under which analytics build. None
+ * of that can be produced by a browser's own "download data", which is why
+ * neither the chart library's nor the grid's is wired to anything.
  *
  * WHAT A READER WITHOUT THE AUTHORITY SEES. The three governed items are always
  * offered, because whether this reader may export THIS answer is the server's

@@ -44,7 +44,7 @@ d. **``app/domain/bi/**`` imports no application state.** The BI-specific
    restatement of the pure-domain rule (``test_dependency_boundaries.py``), so
    the catalogue and the row extractors stay reusable and golden-testable.
 e. **The seam is thin.** ``enqueue.py`` and ``versions.py`` import no builder,
-   catalogue, compiler, executor, reconciliation or handler. That thinness is
+   catalogue, compiler, executor or handler. That thinness is
    the entire justification for rule (a)'s allow-list: the hook sites run in
    the request path and the core worker, and must not pull the mart machinery
    into it. Reading the two BI MODELS is permitted and deliberate (D-043) —
@@ -1376,12 +1376,11 @@ def test_the_purity_guard_catches_a_deliberate_violation(tmp_path: Path) -> None
 #: no BI model, and importing the two models costs the hot path nothing because
 #: ``app/models/__init__.py`` already loads them for every consumer of
 #: ``app.models``. The cost the seam must avoid is the BUILDER — the catalogue,
-#: the compiler, the reconciliation checks and the handler tree.
+#: the compiler and the handler tree.
 SEAM_FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "app.services.bi.mart_builder",
     "app.services.bi.compiler",
     "app.services.bi.execution",
-    "app.services.bi.reconciliation",
     "app.services.bi.partitions",
     "app.domain.bi",
     "app.jobs",

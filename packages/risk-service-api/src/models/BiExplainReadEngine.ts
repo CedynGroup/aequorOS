@@ -67,13 +67,6 @@ import {
   AsOfToJSON,
   AsOfToJSONTyped,
 } from "./AsOf";
-import type { ReconciliationBlocked } from "./ReconciliationBlocked";
-import {
-  ReconciliationBlockedFromJSON,
-  ReconciliationBlockedFromJSONTyped,
-  ReconciliationBlockedToJSON,
-  ReconciliationBlockedToJSONTyped,
-} from "./ReconciliationBlocked";
 import type { ComputedAt } from "./ComputedAt";
 import {
   ComputedAtFromJSON,
@@ -166,12 +159,6 @@ export interface BiExplainReadEngine {
   pipelineState?: PipelineState;
   /**
    *
-   * @type {ReconciliationBlocked}
-   * @memberof BiExplainReadEngine
-   */
-  reconciliationBlocked?: ReconciliationBlocked;
-  /**
-   *
    * @type {Regime}
    * @memberof BiExplainReadEngine
    */
@@ -261,10 +248,6 @@ export function BiExplainReadEngineFromJSONTyped(
       json["pipeline_state"] == null
         ? undefined
         : PipelineStateFromJSON(json["pipeline_state"]),
-    reconciliationBlocked:
-      json["reconciliation_blocked"] == null
-        ? undefined
-        : ReconciliationBlockedFromJSON(json["reconciliation_blocked"]),
     regime: json["regime"] == null ? undefined : RegimeFromJSON(json["regime"]),
     reportingPeriodId:
       json["reporting_period_id"] == null
@@ -301,9 +284,6 @@ export function BiExplainReadEngineToJSONTyped(
     metric_id: value["metricId"],
     module: value["module"],
     pipeline_state: PipelineStateToJSON(value["pipelineState"]),
-    reconciliation_blocked: ReconciliationBlockedToJSON(
-      value["reconciliationBlocked"],
-    ),
     regime: RegimeToJSON(value["regime"]),
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     run_id: RunIdToJSON(value["runId"]),

@@ -26,10 +26,10 @@ The two FX rules (D-015)
 ------------------------
 A foreign-currency position without an ingested conversion has NO reporting-
 currency balance. The **derivation rule** (``fact_derivation._position_row``)
-keeps it ``None`` and counts it, because the balance-sheet facts R2/R3
-reconcile to exclude it; the **classification rule**
-(``loan_classification._load_loan_exposures``) puts it in the book at ``0`` so
-it is counted and the NPL denominator R1 reconciles to matches. The mart
+keeps it ``None`` and counts it, because the balance-sheet facts exclude it;
+the **classification rule** (``loan_classification._load_loan_exposures``)
+puts it in the book at ``0`` so it is counted, exactly as the credit engine's
+NPL denominator counts it. The mart
 carries both: ``balance_rc`` (NULL + ``fx_unconverted``) and
 ``classification_exposure_rc`` (``0`` for an unconverted loan, NULL for a
 non-loan). A position already in the reporting currency needs no conversion —
@@ -558,7 +558,7 @@ def arrears_amount_rc(
     balance_rc: Decimal | None,
 ) -> Decimal | None:
     """The stated arrears in the reporting currency, under the position's OWN
-    conversion (audit A360 R12).
+    conversion (audit A360).
 
     A reporting-currency position states arrears in the reporting currency
     already. A foreign-currency position states them in its own currency
@@ -570,8 +570,8 @@ def arrears_amount_rc(
     ``arrears_rc / balance_rc`` equals ``stated / balance`` EXACTLY, which is
     what makes ``loans.arrears_share_pct`` right, and the amount is off by at
     most the rounding the bank applied to ``balance_ghs`` itself. Dropping it
-    instead (the previous rule) made R12 report "no loan states an arrears
-    amount" for a loan that did, and understated the share by that loan's whole
+    instead (the previous rule) read a loan that DID state an arrears amount as
+    one that stated none, and understated the share by that loan's whole
     balance. An UNCONVERTED position still yields ``None``: there is no rate of
     the bank's to apply, and ``fx_unconverted`` already says why.
     """
@@ -880,7 +880,8 @@ class GlMonthlyFactRow:
     ``ytd_rc`` / ``prior_ytd_rc`` / ``movement_rc`` are the LEDGER's own
     balances (unsigned); ``pl_sign`` is the mapping's sign, so an official line
     is Σ ``pl_sign × ytd_rc`` over its accounts — exactly BSD7's period-to-date
-    figure, which R4 proves.
+    figure, computed by the SAME ``pl_mapping`` functions the return resolver
+    delegates to (D-021).
     """
 
     organization_id: str
@@ -1018,8 +1019,8 @@ class GlBranchMonthlyResult:
     branch_codes: frozenset[str]
     #: ``(account_code, currency)`` the register named that the institution's P&L
     #: ledger does not carry this month. Excluded from the mart and REPORTED: the
-    #: ledger is the authority, so a branch figure with no institution row cannot
-    #: be reconciled to anything, and adding it would make the branch total
+    #: ledger is the authority, so a branch figure with no institution row has
+    #: nothing to be a breakdown OF, and adding it would make the branch total
     #: exceed the ledger. Never silently dropped.
     orphans: tuple[tuple[str, str], ...]
     #: Accounts where the register allocated MORE of the account than the ledger

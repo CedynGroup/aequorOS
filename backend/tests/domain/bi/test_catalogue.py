@@ -39,12 +39,9 @@ from app.domain.bi.catalogue.engine import (
 )
 from app.domain.bi.catalogue.measures import dpd_bands_from
 from app.domain.bi.catalogue.members import (
-    ARREARS_COMPLETENESS,
-    DPD_COMPLETENESS,
     NUMERIC_VALUE_TYPES,
     VALUE_TYPES,
 )
-from app.domain.bi.catalogue.targets import TARGET_SUFFIX, is_targetable, variants_for
 from app.domain.bi.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
 from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import POSITION_TYPES
@@ -383,18 +380,6 @@ def test_fx_rule_follows_the_column(cat: Catalogue) -> None:
             assert measure.fx_rule == "derivation", measure.id
 
 
-def test_classification_figures_reconcile_to_r1_and_balances_to_r2_r3(cat: Catalogue) -> None:
-    assert "R1" in cat.measure("loans.npl_ratio_pct").reconciliation_checks
-    assert "R1" in cat.measure("loans.npl_exposure_rc").reconciliation_checks
-    assert "R2" in cat.measure("loans.balance_rc").reconciliation_checks
-    assert "R3" in cat.measure("deposits.balance_rc").reconciliation_checks
-    assert "R6" in cat.measure("positions.unconverted_count").reconciliation_checks
-    assert "R5" in cat.measure("positions.count").reconciliation_checks
-    assert "R1" in cat.measure("engine.npl_ratio_pct.crd.official").reconciliation_checks
-    assert "R8" in cat.measure("engine.car_pct.crd.live").reconciliation_checks
-    assert "R8" not in cat.measure("engine.car_pct.crd.official").reconciliation_checks
-
-
 def test_ratios_compose_from_existing_measures(cat: Catalogue) -> None:
     npl = cat.measure("loans.npl_ratio_pct")
     assert npl.aggregation == "ratio_of_sums"
@@ -483,14 +468,15 @@ def test_the_engine_par_expansion_is_the_whole_registered_set(cat: Catalogue) ->
     } == DPD_ENGINE_METRIC_IDS
 
 
-def test_every_dpd_dependent_measure_carries_the_completeness_check(cat: Catalogue) -> None:
-    """D-042 + D-046: no DPD-dependent figure may be badged green over absent data.
+def test_every_dpd_dependent_measure_is_enumerated_and_copied_verbatim(cat: Catalogue) -> None:
+    """D-042 + D-046: the DPD-dependent figures are a known, closed set.
 
     A measure's value depends on days-past-due either because it selects on the
     mart's derived ``dpd_band`` (the compiler returns NULL for a wholly-NULL
-    population) or because it is a verbatim COPY of an engine portfolio-at-risk
-    metric (the engine divides raw DPD exposures and yields a genuine ``0``).
-    Both are badged by BI, so both carry R10; nothing else does.
+    population — a book that never supplied the attribute reads as absent, never
+    as 0 % at risk) or because it is a verbatim COPY of an engine portfolio-at-risk
+    metric (the engine divides raw DPD exposures and yields a genuine ``0``, which
+    BI copies as the engine's own figure and never recomputes).
     """
     selecting = {m.id for m in cat.measures() if _selects_on_dpd_band(cat, m)}
     assert selecting == DPD_MART_MEASURES
@@ -501,23 +487,7 @@ def test_every_dpd_dependent_measure_carries_the_completeness_check(cat: Catalog
         and measure.engine_rule.metric_id in DPD_ENGINE_METRIC_IDS
     }
     assert copied == DPD_ENGINE_MEASURES
-    # A target variant is a function of the ACTUAL, which is the base measure's
-    # own figure, so it inherits the base's checks — all but ``.target``, which
-    # is the number the bank stated and contains none of the platform's
-    # arithmetic.
-    expected = DPD_MART_MEASURES | DPD_ENGINE_MEASURES
-    expected |= {
-        variant.id
-        for base_id in DPD_MART_MEASURES | DPD_ENGINE_MEASURES
-        if is_targetable(cat.measure(base_id))
-        for variant in variants_for(cat.measure(base_id))
-        if not variant.id.endswith(f".{TARGET_SUFFIX}")
-    }
-    carrying = {m.id for m in cat.measures() if DPD_COMPLETENESS in m.reconciliation_checks}
-    assert carrying == expected, (
-        f"missing {sorted(expected - carrying)}, unexpected {sorted(carrying - expected)}"
-    )
-    # The copied value is still the engine's: R10 badges, it never recomputes.
+    # The copied value is still the engine's: never recomputed.
     for member_id in DPD_ENGINE_MEASURES:
         measure = cat.measure(member_id)
         assert measure.measure_kind == "certified_engine"
@@ -576,39 +546,6 @@ def test_the_engine_facts_key_and_provenance_columns_are_not_dimensions(cat: Cat
     assert (measure.engine_rule.module, measure.engine_rule.tier) == ("capital", "official")
     assert measure.advisory_designation == "filed"
     assert measure.label.endswith("· Official")
-
-
-def test_the_dpd_band_dimension_carries_no_checks(cat: Catalogue) -> None:
-    """Grouping BY the band is not the defect; selecting on it is (dimensions hold no checks)."""
-    dimension = cat.dimension("loan.dpd_band")
-    assert not hasattr(dimension, "reconciliation_checks")
-
-
-def test_every_reconciliation_check_id_is_well_formed(cat: Catalogue) -> None:
-    """R11 and R12 joined the set in Phase 5, and each has an evaluator.
-
-    The set grew because the GL-by-branch identity and the arrears completeness
-    share are genuinely new checks that new measures carry. The id list on its own
-    proves nothing — a check id a measure names with no evaluator behind it is a
-    check that can never fire — so
-    ``tests/services/bi/test_reconciliation.py::test_every_check_a_measure_names_is_evaluated``
-    asserts the other direction from the side that may import the service.
-    """
-    ids = {check for measure in cat.measures() for check in measure.reconciliation_checks}
-    assert ids == {
-        "R1",
-        "R2",
-        "R3",
-        "R5",
-        "R6",
-        "R8",
-        "R9",
-        DPD_COMPLETENESS,
-        "R11",
-        ARREARS_COMPLETENESS,
-    }
-    for check_id in ids:
-        assert re.fullmatch(r"R[1-9][0-9]*", check_id), check_id
 
 
 def test_single_obligor_exposure_is_restricted_and_aggregates_are_aggregated(

@@ -28,7 +28,6 @@ from app.models.bi import (
     BiFactPositionEom,
     BiMartBuild,
     BiQueryLog,
-    BiReconciliationResult,
 )
 
 # ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
@@ -273,7 +272,6 @@ __all__ = [
     "BiMartBuild",
     "BiMeasure",
     "BiQueryLog",
-    "BiReconciliationResult",
     "BiSubscription",
     "BiSubscriptionDelivery",
     "FinancialFactRow",

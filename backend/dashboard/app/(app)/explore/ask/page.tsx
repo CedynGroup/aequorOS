@@ -20,7 +20,7 @@
  *      server refuses anything whose digest differs, which is what makes the
  *      confirmation its property rather than this page's promise;
  *   4. the answer is the same `BiQueryResult` any other BI read returns, under
- *      the reader's own authority, with the same reconciliation badge.
+ *      the reader's own authority.
  *
  * WHY THERE IS NO "EDIT THE QUERY" CONTROL. The only two things a reader can do
  * with a proposal are run it or discard it. Offering a field editor would produce

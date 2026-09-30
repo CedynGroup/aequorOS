@@ -25,15 +25,11 @@ import type {
   BiCatalogueRead,
   BiFilter,
 } from "@aequoros/risk-service-api";
+
+import { narrowingFieldsFor } from "./query";
 import type { ReactNode } from "react";
 
-function filterableDimensions(
-  catalogue: BiCatalogueRead | undefined,
-): BiCatalogueDimensionRead[] {
-  return (catalogue?.dimensions ?? []).filter(
-    (dimension) => (dimension.values ?? []).length > 0,
-  );
-}
+
 
 function valueLabel(
   dimension: BiCatalogueDimensionRead | undefined,
@@ -54,8 +50,16 @@ export default function FilterBar({
   filters,
   onFiltersChange,
   actions,
+  widgetMeasures = [],
 }: {
   catalogue: BiCatalogueRead | undefined;
+  /**
+   * The measures of each widget on the page, when the bar is narrowing a
+   * PUBLISHED dashboard. Given them, the bar offers only fields at least one of
+   * those widgets can be sliced by. Left empty — Explore, where the reader is
+   * building the question — it offers the reader's whole catalogue.
+   */
+  widgetMeasures?: readonly (readonly string[])[];
   /** The reporting date, ISO `YYYY-MM-DD`. */
   asOf: string;
   onAsOfChange: (asOf: string) => void;
@@ -67,8 +71,8 @@ export default function FilterBar({
   actions?: ReactNode;
 }) {
   const dimensions = useMemo(
-    () => filterableDimensions(catalogue),
-    [catalogue],
+    () => narrowingFieldsFor(catalogue, widgetMeasures),
+    [catalogue, widgetMeasures],
   );
   const [pendingDimension, setPendingDimension] = useState("");
 

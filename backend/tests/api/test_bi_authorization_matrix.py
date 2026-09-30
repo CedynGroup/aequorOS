@@ -46,7 +46,6 @@ from app.core.authorization import (
 )
 from app.domain.bi.catalogue import Catalogue, ColumnRef, MeasureDef, catalogue
 from app.domain.bi.catalogue.dimensions import POSITION_DIMENSION_IDS, POSITION_TABLE
-from app.features import read_bi
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
 from app.schemas.bi import BiFilter, BiPivot, BiQuery, BiSort, BiTime, BiTopN
 from app.services import authorization
@@ -54,8 +53,6 @@ from app.services.bi.authorization import (
     REASON_HUMAN_REQUIRED,
     REASON_NOT_ENTITLED,
     authorize_query,
-    query_members,
-    scope_pairs,
 )
 from tests.api.helpers import ORG_1, USER_1
 
@@ -135,29 +132,7 @@ SHAPES: dict[str, BiQuery] = {
     "record": _query(dimensions=["position.source_reference"]),
     "cross_module": _query(measures=[CROSS_MODULE_RATIO.id]),
     "fx_engine": _query(measures=["engine.nop_ghs.crd.official"]),
-    # ``GET …/bi/trust`` (audit A6-01). Not hand-written: the route's own probe,
-    # so the matrix exercises the sentence the handler actually requires. Its
-    # payload is figures — R2's ``lhs`` IS the institution's total loans — and it
-    # reaches CREDIT, LIQ and RISK at ``aggregated``.
-    "trust": read_bi.trust_probe(AS_OF),
 }
-
-#: Every member the trust payload discloses, in QUERY order — which is what a
-#: refusal BEFORE any pair is evaluated reports (a machine or impersonated
-#: principal: the whole walk is denied at once).
-TRUST_MEMBERS: tuple[str, ...] = tuple(
-    member.id for member in query_members(catalogue(), SHAPES["trust"])
-)
-#: The same members in PAIR order — what an authority denial reports, because the
-#: evaluator decides once per ``(module, sensitivity)`` and extends the denial
-#: pair by pair. Two orders for two different refusals; both derived from the
-#: functions the decision itself uses rather than hand-listed.
-TRUST_MEMBERS_BY_PAIR: tuple[str, ...] = tuple(
-    member_id
-    for member_ids in scope_pairs(query_members(catalogue(), SHAPES["trust"])).values()
-    for member_id in member_ids
-)
-assert set(TRUST_MEMBERS) == set(TRUST_MEMBERS_BY_PAIR)
 
 #: Which members each shape needs a RESTRICTED credit sentence for.
 RESTRICTED_IN = {
@@ -486,98 +461,6 @@ ROWS: tuple[Row, ...] = (
         shape="fx_engine",
         allowed=True,
         grants=(ORG_WIDE_ALL,),
-    ),
-    # --- the trust surface (audit A6-01) -------------------------------------------------
-    # It used to ask nobody, so a principal bound to one institution read another
-    # institution's totals. These rows are the same questions the other shapes
-    # answer, asked of the reconciliation payload.
-    Row(
-        id="trust-with-every-pair-it-discloses",
-        shape="trust",
-        allowed=True,
-        grants=(
-            CREDIT_AGGREGATED,
-            Grant(module=ModuleScope.RISK),
-            Grant(module=ModuleScope.LIQUIDITY),
-        ),
-    ),
-    Row(
-        id="trust-with-organization-wide-authority",
-        shape="trust",
-        allowed=True,
-        grants=(ORG_WIDE_ALL,),
-    ),
-    Row(
-        id="trust-missing-one-pair-is-refused-entirely",
-        shape="trust",
-        allowed=False,
-        denied=("deposits.balance_rc",),
-        grants=(CREDIT_AGGREGATED, Grant(module=ModuleScope.RISK)),
-    ),
-    Row(
-        id="trust-on-an-institution-without-coverage",
-        shape="trust",
-        allowed=False,
-        denied=TRUST_MEMBERS_BY_PAIR,
-        grants=(
-            CREDIT_AGGREGATED,
-            Grant(module=ModuleScope.RISK),
-            Grant(module=ModuleScope.LIQUIDITY),
-        ),
-        bank=OTHER_BANK,
-        pins="S3",
-    ),
-    Row(
-        id="trust-with-no-binding-at-all",
-        shape="trust",
-        allowed=False,
-        denied=TRUST_MEMBERS_BY_PAIR,
-        grants=(),
-    ),
-    Row(
-        id="trust-account-admin-bundle-does-not-view",
-        shape="trust",
-        allowed=False,
-        denied=TRUST_MEMBERS_BY_PAIR,
-        grants=(
-            Grant(
-                bundle=RoleBundle.ACCOUNT_ADMIN,
-                module=ModuleScope.ALL,
-                sensitivity=SensitivityScope.ALL,
-            ),
-        ),
-    ),
-    Row(
-        id="trust-tenant-examiner-with-the-pairs",
-        shape="trust",
-        allowed=True,
-        principal="examiner",
-        grants=(
-            CREDIT_AGGREGATED,
-            Grant(module=ModuleScope.RISK),
-            Grant(module=ModuleScope.LIQUIDITY),
-        ),
-        pins="S7",
-    ),
-    Row(
-        id="trust-impersonated-operator",
-        shape="trust",
-        allowed=False,
-        denied=TRUST_MEMBERS,
-        principal="impersonated",
-        grants=(ORG_WIDE_ALL,),
-        reason=REASON_HUMAN_REQUIRED,
-        pins="S8",
-    ),
-    Row(
-        id="trust-machine-integration-key",
-        shape="trust",
-        allowed=False,
-        denied=TRUST_MEMBERS,
-        principal="machine",
-        grants=(ORG_WIDE_ALL,),
-        reason=REASON_HUMAN_REQUIRED,
-        pins="S9",
     ),
 )
 

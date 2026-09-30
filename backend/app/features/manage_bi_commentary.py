@@ -84,7 +84,6 @@ from app.features import read_bi
 from app.features.read_bi import BiRead, BiReadAccess
 from app.jobs import bi_commentary
 from app.models.bi_commentary import AiCommentaryDraft
-from app.schemas.bi import BiTime, BiTrustBadge
 from app.schemas.bi_commentary import (
     BiCommentaryAuthor,
     BiCommentaryParagraphRead,
@@ -512,7 +511,6 @@ def _answer(  # noqa: PLR0913 - one response, and every field is decided here
             reason = _terminal_reason(draft, served_model_prose=served_model_prose)
 
     _log_served(db, access, read, paragraphs=len(paragraphs))
-    window = read_bi.data_window(BiTime(as_of=assembled.as_of, compare_to=assembled.compare_to))
     return BiCommentaryRead(
         as_of=assembled.as_of,
         compare_to=assembled.compare_to,
@@ -532,13 +530,8 @@ def _answer(  # noqa: PLR0913 - one response, and every field is decided here
         poll_after_seconds=poll_after,
         can_request_draft=can_request_draft,
         reason=reason,
-        trust=_trust(db, access, window),
         catalogue_version=CATALOGUE_VERSION,
     )
-
-
-def _trust(db: Session, access: BiReadAccess, window: tuple[date, date]) -> BiTrustBadge:
-    return read_bi.trust_badge(db, access.ctx.organization_id, access.bank.id, window)
 
 
 def _can_request(db: Session, access: BiReadAccess) -> bool:

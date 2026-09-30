@@ -563,9 +563,6 @@ def run_bi_question(  # noqa: PLR0913 - FastAPI injects db/access/response
         truncated=result.truncated,
         elapsed_ms=result.elapsed_ms,
         used_aggregate=result.used_aggregate,
-        trust=read_bi.trust_badge(
-            db, access.ctx.organization_id, access.bank.id, authorized.window
-        ),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
         data_scope=read_bi.scope_read(authorized.scope),

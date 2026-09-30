@@ -77,20 +77,15 @@ def build_context(  # noqa: PLR0913 - the provenance block's own inputs, all exp
     user_label: str,
     window: tuple[date, date] | None = None,
 ) -> ExportContext:
-    """The six provenance fields and everything else the renderers print."""
+    """The five provenance fields and everything else the renderers print."""
 
     covered = window if window is not None else provenance.data_window(query.time)
-    verdict = provenance.trust_verdict(
-        db, organization_id=bank.organization_id, bank_id=bank.id, window=covered
-    )
     return ExportContext(
         institution_id=bank.id,
         institution_name=bank.name,
         unit=jurisdictions.base_currency(bank),
         query_lines=query_lines(cat, query),
         as_of_label=window_label(query),
-        trust_status=verdict.status,
-        failing_checks=verdict.failing_checks,
         catalogue_version=cat.version,
         data_scope_label=scope_label(data_scope),
         user_label=user_label,

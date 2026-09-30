@@ -1044,11 +1044,11 @@ _POPULATION_COLUMNS: frozenset[str] = frozenset(
 #: neither as a grain attribute, so on that source "was the question
 #: answerable" cannot be asked at all; applying the rule on the fact path
 #: alone would make the two sources return different numbers for one query,
-#: which is the single invariant aggregate selection rests on. Completeness of
-#: the classification instead has a reconciliation check of its own: R1 compares
-#: the mart's non-performing exposure with the engine's, reading the fact table
-#: directly rather than through this compiler. ``fx_unconverted`` is NOT NULL on
-#: both sources, so the question never arises for it.
+#: which is the single invariant aggregate selection rests on. The classification
+#: column is ``0`` (never NULL) for an unconverted loan under the D-015 rule, so
+#: the aggregate's pre-computed sum and the fact path's sum agree by
+#: construction. ``fx_unconverted`` is NOT NULL on both sources, so the question
+#: never arises for it.
 _PRECOMPUTED_SELECTION_COLUMNS: frozenset[str] = frozenset({"non_performing", "fx_unconverted"})
 
 

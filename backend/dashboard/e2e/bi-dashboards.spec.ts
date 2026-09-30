@@ -1,6 +1,6 @@
 /**
- * Dashboards — the seven certified content packs, the trust badge they carry,
- * and what a reader is told about a widget they may not see.
+ * Dashboards — the seven certified content packs, and what a reader is told
+ * about a widget they may not see.
  *
  * TWO HALVES, AND THE SPLIT IS THE PRODUCT'S, NOT THIS SPEC'S. The packs are
  * authored, validated and authorized server-side and served by
@@ -28,8 +28,6 @@ import { E2E_BASE_URL, E2E_TMP } from "../playwright.config";
 import {
   biApi,
   CERTIFIED_PACKS,
-  EXPECTED_OVERALL_BADGE,
-  EXPECTED_OVERALL_STATUS,
   fixtureAsOf,
   SAMPLE_BANK_ID,
 } from "./support/bi";
@@ -91,7 +89,7 @@ const WITHHELD_CREDIT_STRINGS = [
 test.describe("certified dashboards", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  test("all seven packs resolve for the date, each certified and carrying its own trust verdict", async ({
+  test("all seven packs resolve for the date, each certified", async ({
     request,
   }) => {
     const asOf = await fixtureAsOf(request);
@@ -151,44 +149,6 @@ test.describe("certified dashboards", () => {
       "balance_sheet_mix",
     );
     expect(alco.readable_widgets).toBeGreaterThan(0);
-  });
-
-  test("the trust badge a pack carries is the book's own verdict, with its failing checks named by id only", async ({
-    request,
-  }) => {
-    const asOf = await fixtureAsOf(request);
-
-    // A widget's answer carries the SAME verdict the Insights page shows, so a
-    // figure cannot be read off a dashboard without its reservation.
-    const answer = await biApi(
-      request,
-      "admin",
-      `/banks/${SAMPLE_BANK_ID}/bi/query`,
-      {
-        method: "POST",
-        data: {
-          measures: ["positions.balance_rc"],
-          dimensions: ["position.type"],
-          time: { as_of: asOf },
-          filters: [],
-        },
-      },
-    );
-    expect(answer.status).toBe(200);
-    const result = answer.body as {
-      rows: unknown[][];
-      trust: { status: string; failing_checks: string[] };
-    };
-    expect(result.trust.status).toBe(EXPECTED_OVERALL_STATUS);
-    // Check IDS, never the figures behind them: the badge's hover detail is
-    // "R2, R3" and not "loans differ by 1.3bn".
-    expect(result.trust.failing_checks).toContain("R2");
-    expect(result.trust.failing_checks).toContain("R3");
-    for (const id of result.trust.failing_checks) {
-      expect(id).toMatch(/^R\d+$/);
-    }
-    // And it is a real answer, not an empty one wearing a badge.
-    expect(result.rows.length).toBeGreaterThan(0);
   });
 
   test("a widget this reader may not see is given its geometry and nothing else", async ({
@@ -301,11 +261,6 @@ test.describe("the Dashboards page", () => {
       await expect(tile, `${pack.id} must be offered`).toBeVisible();
       await expect(
         tile.getByText("Platform-certified", { exact: true }),
-      ).toBeVisible();
-      // The per-tile badge is the institution's own reconciliation verdict for
-      // the date — the same verdict every figure on the pack will carry.
-      await expect(
-        tile.getByText(EXPECTED_OVERALL_BADGE, { exact: true }),
       ).toBeVisible();
       await expect(tile.getByRole("link")).toHaveAttribute(
         "href",

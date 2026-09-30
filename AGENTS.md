@@ -727,7 +727,15 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   (`data scope` column, `scoped_reader` flag) and is the gate for any change that touches it. `bi_reader`
   is the second machine bundle (`{view}`, disjoint from `integration_writer`'s `{ingest}`, `202609270074`)
   for the Stage B feed (`backend/docs/powerbi_stage_b.md`); Stage A is `powerbi_stage_a.md`.
-  Reconciliation is R1–R12. NLQ (`ask` routes, `bi_nlq_translate` on the `ai` lane) is built, and the
+  **BI carries NO reconciliation to the regulatory returns (founder decision 2026-09-29):** treasury/ALM and
+  the regulatory spine are different planes, and BI is intelligence over the bank's own treasury data. The
+  R1–R12 checks (R4 compared the GL mart with BSD7A, a BoG return), `bi_reconciliation_results`,
+  `GET …/bi/trust`, the trust badge on every BI payload and card, the export "Data confidence" field and
+  `X-Bi-Feed-Trust` were all removed by that decision. **Build FRESHNESS stays** (`bi_mart_builds`,
+  fingerprints, `provenance.stale_dates`) — a stale build is about the bank's data, not a regulator — and
+  the stale-date signal needs its own surface now that the badge is gone (A360 H2). Never put a regulatory
+  verdict on a BI surface again. `docs/bi.md`, the spec whose pitch line produced the mistake, is gitignored
+  (`.gitignore:62`) and not reviewable in the repository. NLQ (`ask` routes, `bi_nlq_translate` on the `ai` lane) is built, and the
   consent text was amended on 2026-09-29 (`ai-consent-2026-09-v2`) so `bi_nlq` is now in
   `CONSENT_COVERED_FEATURES`. **The rule it exists for is enforced at the EGRESS gate, not in a
   request schema**: `gates.evaluate` refuses any feature the shipped consent text does not describe,

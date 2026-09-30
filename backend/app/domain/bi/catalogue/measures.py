@@ -2,12 +2,12 @@
 
 Every measure declares which FX rule it follows (D-015) by choosing its
 column: balances and mix read ``balance_rc`` (derivation rule — an
-unconverted foreign-currency position is NULL, excluded and counted; R2/R3
-reconcile these to the balance-sheet facts), while classification figures —
-NPL, PAR, provisions, coverage — read ``classification_exposure_rc``
-(classification rule — the same position is ``0``, counted; R1 reconciles
-these to the engine's NPL). Nothing here re-implements either rule; the
-column already carries it.
+unconverted foreign-currency position is NULL, excluded and counted, exactly
+as the balance-sheet facts treat it), while classification figures — NPL,
+PAR, provisions, coverage — read ``classification_exposure_rc``
+(classification rule — the same position is ``0``, counted, exactly as the
+credit engine's NPL denominator treats it). Nothing here re-implements either
+rule; the column already carries it.
 
 Ratios are composed from other measures by id (``numerator`` /
 ``denominator``), so the compiler emits ``sum(num) / nullif(sum(den), 0)``
@@ -30,8 +30,6 @@ from app.domain.bi.catalogue.dimensions import (
     RISK,
 )
 from app.domain.bi.catalogue.members import (
-    ARREARS_COMPLETENESS,
-    DPD_COMPLETENESS,
     Aggregation,
     ColumnRef,
     FavourableDirection,
@@ -100,7 +98,6 @@ def _measure(  # noqa: PLR0913 - one keyword per declared measure attribute
     fx_rule: FxRule | None = None,
     value_type: ValueType = "amount",
     direction: FavourableDirection = "neutral",
-    checks: tuple[str, ...] = (),
     filters: tuple[RowFilter, ...] = (),
     numerator: str | None = None,
     denominator: str | None = None,
@@ -123,7 +120,6 @@ def _measure(  # noqa: PLR0913 - one keyword per declared measure attribute
         entitlement=ENTITLEMENT_BY_MODULE[module],
         favourable_direction=direction,
         thresholds_source=None,
-        reconciliation_checks=checks,
         engine_rule=None,
         fx_rule=fx_rule,
         advisory_designation=None,
@@ -143,7 +139,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "Gross loans",
             "balance_rc",
             fx_rule="derivation",
-            checks=("R2",),
             filters=(LOANS,),
             description="Loan balances in the reporting currency; unconverted positions excluded.",
             module=CREDIT,
@@ -153,7 +148,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "Classified loan exposure",
             "classification_exposure_rc",
             fx_rule="classification",
-            checks=("R1",),
             filters=(LOANS,),
             description=(
                 "The exposure the classification engine grades; unconverted loans count at zero."
@@ -166,7 +160,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "classification_exposure_rc",
             fx_rule="classification",
             direction="lower_better",
-            checks=("R1",),
             filters=(LOANS, NON_PERFORMING),
             module=CREDIT,
         ),
@@ -178,7 +171,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             fx_rule="classification",
             value_type="pct",
             direction="lower_better",
-            checks=("R1",),
             numerator="loans.npl_exposure_rc",
             denominator="loans.classification_exposure_rc",
             module=CREDIT,
@@ -190,7 +182,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
                 "classification_exposure_rc",
                 fx_rule="classification",
                 direction="lower_better",
-                checks=(DPD_COMPLETENESS,),
                 filters=_par_filters(days),
                 module=CREDIT,
             )
@@ -205,7 +196,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
                 fx_rule="classification",
                 value_type="pct",
                 direction="lower_better",
-                checks=(DPD_COMPLETENESS,),
                 numerator=f"loans.par_{days}_exposure_rc",
                 denominator="loans.classification_exposure_rc",
                 module=CREDIT,
@@ -217,7 +207,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "Provisions required",
             "provision_required_rc",
             fx_rule="classification",
-            checks=("R1",),
             filters=(LOANS,),
             module=CREDIT,
         ),
@@ -245,7 +234,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             fx_rule="classification",
             value_type="pct",
             direction="higher_better",
-            checks=("R1",),
             numerator="loans.specific_provision_held_rc",
             denominator="loans.npl_exposure_rc",
             description="Provisions held on non-performing loans over non-performing exposure.",
@@ -257,7 +245,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "arrears_amount_rc",
             fx_rule="derivation",
             direction="lower_better",
-            checks=(ARREARS_COMPLETENESS,),
             filters=(LOANS,),
             description=(
                 "The overdue portion of loan balances, as the bank states it. A loan "
@@ -273,7 +260,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             fx_rule="derivation",
             value_type="pct",
             direction="lower_better",
-            checks=(ARREARS_COMPLETENESS,),
             numerator="loans.arrears_amount_rc",
             denominator="loans.balance_rc",
             description=(
@@ -313,7 +299,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             "snapshot_id",
             aggregation="count",
             value_type="count",
-            checks=("R5",),
             filters=(LOANS,),
             module=CREDIT,
         ),
@@ -324,7 +309,6 @@ def _loan_measures() -> tuple[MeasureDef, ...]:
             aggregation="count",
             value_type="count",
             direction="lower_better",
-            checks=("R6",),
             filters=(LOANS, UNCONVERTED),
             module=CREDIT,
         ),
@@ -380,7 +364,6 @@ def _deposit_measures() -> tuple[MeasureDef, ...]:
             "Deposits",
             "balance_rc",
             fx_rule="derivation",
-            checks=("R3",),
             filters=(DEPOSITS,),
             module=LIQUIDITY,
         ),
@@ -410,7 +393,6 @@ def _deposit_measures() -> tuple[MeasureDef, ...]:
             "snapshot_id",
             aggregation="count",
             value_type="count",
-            checks=("R5",),
             filters=(DEPOSITS,),
             module=LIQUIDITY,
         ),
@@ -421,7 +403,6 @@ def _deposit_measures() -> tuple[MeasureDef, ...]:
             aggregation="count",
             value_type="count",
             direction="lower_better",
-            checks=("R6",),
             filters=(DEPOSITS, UNCONVERTED),
             module=LIQUIDITY,
         ),
@@ -455,7 +436,6 @@ def _position_measures() -> tuple[MeasureDef, ...]:
             "Balance",
             "balance_rc",
             fx_rule="derivation",
-            checks=("R2", "R3"),
             description="Reporting-currency balance across every position type.",
             module=RISK,
         ),
@@ -479,7 +459,6 @@ def _position_measures() -> tuple[MeasureDef, ...]:
             "snapshot_id",
             aggregation="count",
             value_type="count",
-            checks=("R5",),
             module=RISK,
         ),
         _measure(
@@ -489,7 +468,6 @@ def _position_measures() -> tuple[MeasureDef, ...]:
             aggregation="count",
             value_type="count",
             direction="lower_better",
-            checks=("R6",),
             filters=(UNCONVERTED,),
             module=RISK,
         ),
@@ -500,7 +478,6 @@ def _position_measures() -> tuple[MeasureDef, ...]:
             aggregation="share",
             value_type="pct",
             direction="lower_better",
-            checks=("R6",),
             numerator="positions.unconverted_count",
             denominator="positions.count",
             module=RISK,
@@ -574,7 +551,6 @@ def _event_measures() -> tuple[MeasureDef, ...]:
                 time_behaviour="flow",
                 value_type="count",
                 direction="lower_better",
-                checks=("R6",),
                 filters=(RowFilter("fx_unconverted", "is_true"),),
                 module=CREDIT,
             ),
@@ -635,7 +611,6 @@ def _gl_branch_measures() -> tuple[MeasureDef, ...]:
             # A YTD LEVEL at the month end: summing two months' YTD is
             # meaningless, which is what ``stock`` exists to prevent.
             time_behaviour="stock",
-            checks=("R11",),
             description=(
                 "The branch's own year-to-date balance of a profit-and-loss ledger account, "
                 "from the bank's branch breakdown. Includes a line for the part of the ledger "
@@ -657,7 +632,6 @@ def _gl_branch_measures() -> tuple[MeasureDef, ...]:
             # against an assumed zero.
             aggregation="flow_sum",
             time_behaviour="flow",
-            checks=("R11",),
             description=(
                 "The month's movement in a branch's ledger balance, from two months' "
                 "breakdowns. Blank where the previous month's breakdown does not cover the "

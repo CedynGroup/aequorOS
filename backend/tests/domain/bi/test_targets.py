@@ -166,10 +166,8 @@ def test_only_the_target_variant_drops_the_platforms_own_caveats(cat: Catalogue)
     for variant in cat.target_measures():
         base = _base_of(cat, variant)
         if variant.id.endswith(f".{TARGET_SUFFIX}"):
-            assert variant.reconciliation_checks == (), variant.id
             assert variant.thresholds_source is None, variant.id
         else:
-            assert variant.reconciliation_checks == base.reconciliation_checks, variant.id
             assert variant.thresholds_source == base.thresholds_source, variant.id
 
 

@@ -422,7 +422,7 @@ function scopeKey(scope: DeclaredScope): string {
 /**
  * The coverage of figures whose own payload does not disclose one.
  *
- * The BI query, grid, insights and trust payloads carry no scope field even
+ * The BI query, grid and insights payloads carry no scope field even
  * though the server resolves and applies one, so the only honest source in the
  * browser is the projection on `/auth/me`: `EffectiveCapabilityRead.data_scope`
  * is reduced per (institution, module, sensitivity, permission), which is

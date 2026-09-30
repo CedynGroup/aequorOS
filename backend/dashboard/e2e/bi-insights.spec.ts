@@ -1,21 +1,13 @@
 /**
- * Insights — the reconciliation position, the catalogue a reader may analyse,
- * and the statements the platform is prepared to make about a reporting date.
+ * Insights — the catalogue a reader may analyse, and the statements the
+ * platform is prepared to make about a reporting date.
  *
  * Every assertion here names a figure, a production label or a refusal that
  * could only appear if the whole chain worked: the Data Engine fixture book →
- * the live plane → the `bi_*` marts → the reconciliation checks → the badge. A
- * navigate-and-see-a-page test would prove none of it, which is why the
- * catalogue counts, the difference strings and the per-check verdicts are all
- * pinned individually rather than through "the section rendered".
- *
- * THE BADGE THE FIXTURE EARNS IS RED, AND THAT IS ASSERTED AS RED. The canonical
- * fixture's position balances genuinely do not sum to its balance-sheet facts
- * and its loans carry no days past due, so R2, R3 and R10 fail, R6 and R7 report
- * differences, R4 was never assessed and four checks pass. A mixed verdict over
- * a partial book is exactly what a real bank mid-onboarding sees, and it is the
- * state worth pinning — the alternative is to edit the fixture until the badge
- * flatters it, which would delete the coverage rather than earn it.
+ * the live plane → the `bi_*` marts → the statements. A navigate-and-see-a-page
+ * test would prove none of it, which is why the catalogue counts and the
+ * statement sentences are pinned individually rather than through "the section
+ * rendered".
  *
  * THE GENERATED STATEMENTS ARE COVERED FROM BOTH SIDES. `GET …/bi/insights`
  * composes them server-side and `InsightStrip` renders them under the page
@@ -29,18 +21,12 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
-import {
-  biApi,
-  EXPECTED_CHECKS,
-  EXPECTED_OVERALL_BADGE,
-  fixtureAsOf,
-  SAMPLE_BANK_ID,
-} from "./support/bi";
+import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
 
 test.describe("Insights", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  test("the reconciliation position, check by check, with the verdict the book earns", async ({
+  test("offers every Intelligence door and opens on the institution's latest computed snapshot", async ({
     page,
     request,
   }) => {
@@ -64,65 +50,6 @@ test.describe("Insights", () => {
     await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
     // The page opens on the institution's latest computed snapshot, not on today.
     await expect(page.locator('input[type="date"]').first()).toHaveValue(asOf);
-
-    // `section.card` is the SectionCard shell; the heading identifies which one.
-    const reconciliation = page
-      .locator("section.card")
-      .filter({
-        has: page.getByRole("heading", { name: "Reconciliation", level: 3 }),
-      });
-
-    // The overall verdict, in the section's own action slot. Red, because three
-    // checks failed — asserted against the fixture, never wished green.
-    await expect(
-      reconciliation.getByText(EXPECTED_OVERALL_BADGE, { exact: true }).first(),
-    ).toBeVisible();
-
-    // Every check, by its own production label, with its own verdict. Scoped to
-    // the row so four "Reconciled" badges cannot satisfy one another.
-    for (const check of EXPECTED_CHECKS) {
-      const row = reconciliation
-        .locator("li")
-        .filter({ hasText: check.label })
-        .first();
-      await expect(row, `${check.id}: ${check.why}`).toBeVisible();
-      await expect(
-        row.getByText(check.badge, { exact: true }),
-        `${check.id} must read "${check.badge}" — ${check.why}`,
-      ).toBeVisible();
-    }
-
-    // A failing check states the difference AND the tolerance it broke, in the
-    // platform's own precision. These are the marts measured against the live
-    // fact plane; neither number can be produced by an empty mart.
-    const loanRow = reconciliation
-      .locator("li")
-      .filter({ hasText: "Loan balances agree with the balance sheet" })
-      .first();
-    await expect(loanRow).toContainText(
-      "Difference -1315150000.000000 against a tolerance of 0.000100",
-    );
-
-    // Grey is "not assessed", and it says so rather than reporting a zero
-    // difference that would read as agreement.
-    const plRow = reconciliation
-      .locator("li")
-      .filter({
-        hasText: "Income-statement lines agree with the regulatory return",
-      })
-      .first();
-    await expect(plRow).toContainText(
-      "No difference was measured for this check.",
-    );
-
-    // The builds behind the figures. `Engine — Succeeded` exists only because
-    // the mart builder found a live plane at the SAME date as the position book;
-    // before the H-015 fix it copied zero engine rows and R1/R8 read grey.
-    for (const scope of ["Positions", "Engine", "Dims"]) {
-      await expect(
-        reconciliation.getByText(new RegExp(`${scope} — Succeeded`)),
-      ).toBeVisible();
-    }
   });
 
   test("what this reader may analyse is the catalogue the server filtered, not a claim about it", async ({
@@ -193,7 +120,6 @@ test.describe("Insights", () => {
         headline: string;
         detail: string;
         qualifiers: string[];
-        trust: { status: string } | null;
       }[];
     };
 
@@ -202,25 +128,6 @@ test.describe("Insights", () => {
     expect(wideBody.as_of).toBe(asOf);
     expect(wideBody.compare_to).not.toBe(asOf);
     expect(wideBody.insights.length).toBeGreaterThan(0);
-
-    // The reservation rides on the statement: this book does not reconcile, so
-    // the strip's first card says so before it says anything else.
-    const notice = wideBody.insights.find(
-      (insight) => insight.rule_id === "trust_notice",
-    );
-    expect(notice, "a book that does not reconcile must carry the notice").toBeDefined();
-    expect(notice!.headline).toBe(
-      "Some figures do not agree with the returns the platform files",
-    );
-    expect(notice!.trust?.status).toBe("red");
-
-    // Every statement carries its reservations rather than reading clean.
-    for (const insight of wideBody.insights) {
-      expect(
-        insight.qualifiers.length,
-        `"${insight.headline}" must carry its reservations`,
-      ).toBeGreaterThan(0);
-    }
 
     // A figure that was not computed is SAID to be absent, in words, and is
     // explicitly not reported as zero or as flat.
@@ -284,12 +191,18 @@ test.describe("Insights", () => {
     await page.goto("/insights");
     await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
 
-    // The reservation first: this book does not reconcile, and the notice the
-    // engine composed for that is on screen verbatim.
-    const notice = served.insights.find(
-      (insight) => insight.rule_id === "trust_notice",
+    // The statement the engine composed for the figure it could not compute is
+    // on screen verbatim, in its own card (`InsightCard` renders an
+    // `article.card`) — the route half of this journey pins that a `data_gap`
+    // statement is served for the fixture, so its absence here would be the
+    // screen failing to tell the reader, not the platform having nothing to say.
+    const gap = served.insights.find(
+      (insight) => insight.rule_id === "data_gap",
     )!;
-    await expect(page.getByText(notice.headline, { exact: true })).toBeVisible();
+    await expect(page.getByText(gap.headline, { exact: true })).toBeVisible();
+    await expect(
+      page.locator("article.card").filter({ hasText: gap.headline }).first(),
+    ).toBeVisible();
 
     // A figure that was not computed is SAID to be absent, in the platform's own
     // words — and explicitly not as a zero or as flat. This sentence is the
@@ -297,25 +210,6 @@ test.describe("Insights", () => {
     await expect(
       page.getByText(/It is not zero, and it has not stayed flat\./).first(),
     ).toBeVisible();
-
-    // Every statement on screen carries its reservations: the strip renders the
-    // trust verdict beside each one rather than letting a sentence read clean.
-    // Scoped to the CARD that carries this statement (`InsightCard` renders an
-    // `article.card`), so the badge is asserted on the sentence it qualifies and
-    // not satisfied by a badge somewhere else on the page.
-    const card = page
-      .locator("article.card")
-      .filter({ hasText: notice.headline })
-      .first();
-    await expect(card).toBeVisible();
-    await expect(
-      card.getByText(EXPECTED_OVERALL_BADGE, { exact: true }).first(),
-    ).toBeVisible();
-    // A statement never reads clean: it carries at least one reservation beside
-    // its badge.
-    expect(
-      await card.locator("span.rounded.border").count(),
-    ).toBeGreaterThan(1);
 
     // AND THE EMPTY STATE IS NOT SHOWN, in either of its two forms. The strip must
     // never report "nothing stands out" over a date it read nothing for, and this

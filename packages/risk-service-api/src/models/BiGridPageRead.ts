@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { BiGridRowRead } from "./BiGridRowRead";
 import {
   BiGridRowReadFromJSON,
@@ -109,12 +102,6 @@ export interface BiGridPageRead {
   truncated: boolean;
   /**
    *
-   * @type {BiTrustBadge}
-   * @memberof BiGridPageRead
-   */
-  trust?: BiTrustBadge;
-  /**
-   *
    * @type {boolean}
    * @memberof BiGridPageRead
    */
@@ -167,8 +154,6 @@ export function BiGridPageReadFromJSONTyped(
     rows: (json["rows"] as Array<any>).map(BiGridRowReadFromJSON),
     startRow: json["start_row"],
     truncated: json["truncated"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
     usedAggregate: json["used_aggregate"],
   };
 }
@@ -195,7 +180,6 @@ export function BiGridPageReadToJSONTyped(
     rows: (value["rows"] as Array<any>).map(BiGridRowReadToJSON),
     start_row: value["startRow"],
     truncated: value["truncated"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
     used_aggregate: value["usedAggregate"],
   };
 }

@@ -69,7 +69,6 @@ from app.schemas.bi import (
     BiExportRequest,
     BiExportState,
     BiQuery,
-    BiTrustBadge,
 )
 from app.services import audit
 from app.services.bi import exports, query_log
@@ -134,11 +133,6 @@ def _classify(query: BiQuery) -> policy.ExportClass:
     """
 
     return policy.classify(query_members(catalogue(), query))
-
-
-def _trust_badge(db: Session, access: BiReadAccess, query: BiQuery) -> BiTrustBadge:
-    window = read_bi.data_window(query.time)
-    return read_bi.trust_badge(db, access.ctx.organization_id, access.bank.id, window)
 
 
 # --- the export ------------------------------------------------------------------------------
@@ -273,7 +267,6 @@ def _inline(  # noqa: PLR0913 - one delivery, spelled out
             "truncated": run.truncated,
             "catalogue_version": CATALOGUE_VERSION,
             "build_fingerprint": ctx_block.build_fingerprint,
-            "trust": ctx_block.trust_status,
         },
     )
     read_bi.append_query_log(
@@ -344,7 +337,6 @@ def _queue(  # noqa: PLR0913 - one delivery, spelled out
         format=fmt,
         export_class=cast("BiExportClass", export_class),
         message=STATE_MESSAGES["queued"],
-        trust=_trust_badge(db, access, query),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
     )

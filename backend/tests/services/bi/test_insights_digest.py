@@ -3,8 +3,8 @@
 The live plane re-derives its facts on every refresh with new identifiers and a
 new timestamp, so a digest that moved with them would be useless. These pin both
 halves: what must NOT move the hash (identity, timing, build, arrival order,
-trailing zeros) and what MUST (any value, any trust state, any designation, the
-institution, the date, the catalogue version).
+trailing zeros) and what MUST (any value, any designation, the institution, the
+date, the catalogue version).
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from app.services.bi.insights import digest, drivers, facts, projections
 _AS_OF = date(2026, 6, 30)
 _PRIOR = date(2026, 5, 31)
 _INSTITUTION = "BK-SAMP0001"
-_GREEN: dict[str, str] = {"R8": "green", "R9": "green", "R10": "green"}
 
 
 def _provenance(build: UUID | None = None) -> facts.FactProvenance:
@@ -41,15 +40,11 @@ def _observed(
     value: str = "13.25",
     *,
     member_id: str = "engine.car_pct.crd.live",
-    statuses: dict[str, str] | None = None,
-    build_overall: str = "green",
 ) -> facts.ObservedFact:
     return facts.observed_fact(
         _measure(member_id),
         as_of=_AS_OF,
         provenance=_provenance(),
-        statuses=_GREEN if statuses is None else statuses,
-        build_overall=build_overall,
         value=Decimal(value),
     )
 
@@ -92,20 +87,11 @@ def test_a_negative_zero_is_a_zero() -> None:
     )
 
 
-def test_a_changed_trust_state_moves_the_hash() -> None:
-    """The same figures under a different badge are not the same fact sheet."""
-    green = _sheet(_observed(statuses=_GREEN, build_overall="green"))
-    grey = _sheet(_observed(statuses={}, build_overall="grey"))
-    assert digest.fact_sheet_hash(green) != digest.fact_sheet_hash(grey)
-
-
 def test_a_missing_figure_does_not_hash_as_a_zero() -> None:
     missing = facts.observed_fact(
         _measure(),
         as_of=_AS_OF,
         provenance=_provenance(),
-        statuses=_GREEN,
-        build_overall="green",
         missing_reason="not_supplied",
     )
     assert digest.fact_sheet_hash(_sheet(missing)) != digest.fact_sheet_hash(_sheet(_observed("0")))
@@ -171,8 +157,6 @@ def test_every_kind_of_fact_is_covered_by_the_digest() -> None:
                 as_of=_AS_OF,
                 prior_as_of=_PRIOR,
                 provenance=_provenance(),
-                statuses=_GREEN,
-                build_overall="green",
                 current=Decimal("13.25"),
                 prior=Decimal("12.75"),
             ),
@@ -182,8 +166,6 @@ def test_every_kind_of_fact_is_covered_by_the_digest() -> None:
                 prior_as_of=_PRIOR,
                 bridge=drivers.BridgeUnavailable("loans.npl_ratio_pct", "component_missing"),
                 provenance=_provenance(),
-                statuses=_GREEN,
-                build_overall="green",
             ),
             facts.projection_fact(
                 _measure(),
@@ -192,8 +174,6 @@ def test_every_kind_of_fact_is_covered_by_the_digest() -> None:
                     "engine.car_pct.crd.live", "too_few_observations"
                 ),
                 provenance=_provenance(),
-                statuses=_GREEN,
-                build_overall="green",
             ),
         )
     }
@@ -240,8 +220,6 @@ def test_a_bridge_and_a_projection_carry_their_values_into_the_digest() -> None:
                 prior_as_of=_PRIOR,
                 bridge=built,  # pyright: ignore[reportArgumentType]
                 provenance=_provenance(),
-                statuses=_GREEN,
-                build_overall="green",
             )
         )
 

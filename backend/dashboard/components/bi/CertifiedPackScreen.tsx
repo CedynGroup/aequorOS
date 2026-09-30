@@ -51,7 +51,6 @@ import ExplainDrawer from "@/components/bi/ExplainDrawer";
 import ExportActions from "@/components/bi/ExportActions";
 import ExportMenu, { printExportOption } from "@/components/bi/ExportMenu";
 import FilterBar from "@/components/bi/FilterBar";
-import TrustBadge from "@/components/bi/TrustBadge";
 import {
   CERTIFICATION_LABELS,
   shownBesideRefusals,
@@ -64,7 +63,6 @@ import {
   isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
-  useBiTrust,
   useCreateBiSavedDashboard,
 } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
@@ -102,13 +100,13 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
   const [chosenDate, setChosenDate] = useState<string | null>(null);
   const asOf = chosenDate ?? defaultDate;
   const [filters, setFilters] = useState<BiFilter[]>([]);
+
   const [explaining, setExplaining] = useState<{
     measure: string;
     query: BiQuery;
   } | null>(null);
 
   const catalogue = useBiCatalogue(bank?.id);
-  const trust = useBiTrust(bank?.id, asOf);
   const pack = useDashboard(bank?.id, id, asOf);
   const copy = useCreateBiSavedDashboard(bank?.id);
   const dashboard = pack.dashboard;
@@ -119,6 +117,20 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
    * platform but ANSWERED under the reader's own scope, so a branch-scoped reader
    * of a board pack must not read its tiles as the institution's own figures.
    */
+  /**
+   * What the filter bar may offer: the measures of every widget the reader can
+   * actually see. A refused widget contributes nothing — offering a field only
+   * IT could be sliced by would say something about a tile the reader was not
+   * granted.
+   */
+  const widgetMeasures = useMemo(
+    () =>
+      (dashboard?.widgets ?? [])
+        .filter((widget) => widget.state === "figure")
+        .map((widget) => widget.spec.query.measures),
+    [dashboard],
+  );
+
   const coverage = useMemo(() => {
     const parts = (dashboard?.widgets ?? [])
       .filter((widget) => widget.state === "figure")
@@ -198,14 +210,6 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
             <span className="text-micro text-slate">
               Version {dashboard.version}
             </span>
-            {trust.data && (
-              <TrustBadge
-                status={trust.data.status}
-                failingChecks={(trust.data.checks ?? [])
-                  .filter((check) => check.status !== "green")
-                  .map((check) => check.checkId)}
-              />
-            )}
             <button
               type="button"
               disabled={copy.isPending}
@@ -260,6 +264,7 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
 
         <FilterBar
           catalogue={catalogue.data}
+          widgetMeasures={widgetMeasures}
           asOf={asOf}
           onAsOfChange={setChosenDate}
           filters={filters}
@@ -288,6 +293,7 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
           bankId={bank?.id}
           widgets={dashboard.widgets}
           filters={filters}
+          catalogue={catalogue.data}
           onExplain={(measure, query) => setExplaining({ measure, query })}
           widgetActions={(query) => (
             <ExportActions bankId={bank?.id} query={query} />

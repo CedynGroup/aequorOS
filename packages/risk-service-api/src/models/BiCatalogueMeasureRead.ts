@@ -126,12 +126,6 @@ export interface BiCatalogueMeasureRead {
   module: string;
   /**
    *
-   * @type {Array<string>}
-   * @memberof BiCatalogueMeasureRead
-   */
-  reconciliationChecks?: Array<string>;
-  /**
-   *
    * @type {string}
    * @memberof BiCatalogueMeasureRead
    */
@@ -227,10 +221,6 @@ export function BiCatalogueMeasureReadFromJSONTyped(
     label: json["label"],
     measureKind: json["measure_kind"],
     module: json["module"],
-    reconciliationChecks:
-      json["reconciliation_checks"] == null
-        ? undefined
-        : json["reconciliation_checks"],
     sensitivity: json["sensitivity"],
     thresholdsSource:
       json["thresholds_source"] == null
@@ -271,7 +261,6 @@ export function BiCatalogueMeasureReadToJSONTyped(
     label: value["label"],
     measure_kind: value["measureKind"],
     module: value["module"],
-    reconciliation_checks: value["reconciliationChecks"],
     sensitivity: value["sensitivity"],
     thresholds_source: ThresholdsSourceToJSON(value["thresholdsSource"]),
     time_behaviour: value["timeBehaviour"],

@@ -1,7 +1,7 @@
 {
   "id": "compliance",
   "title": "Compliance",
-  "description": "What is due, what has been signed, whether the book reconciles, and where the incoming data is incomplete.",
+  "description": "What is due, what has been signed, and where the incoming data is incomplete.",
   "audience": "compliance",
   "version": "1.0.0",
   "widgets": [
@@ -18,13 +18,6 @@
       "title": "Attestation status",
       "caption": "Which returns have been signed, by whom, and what is still outstanding.",
       "panel": "attestation_status"
-    },
-    {
-      "id": "reconciliation_exceptions",
-      "kind": "panel",
-      "title": "Reconciliation exceptions",
-      "caption": "Every reconciliation check behind the figures on these dashboards, and its current verdict.",
-      "panel": "reconciliation_trust"
     },
     {
       "id": "limit_monitor",
@@ -76,15 +69,8 @@
       "h": 5
     },
     {
-      "i": "reconciliation_exceptions",
-      "x": 0,
-      "y": 5,
-      "w": 6,
-      "h": 5
-    },
-    {
       "i": "limit_monitor",
-      "x": 6,
+      "x": 0,
       "y": 5,
       "w": 6,
       "h": 5

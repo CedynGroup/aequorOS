@@ -283,10 +283,10 @@ def test_a_panel_widget_is_not_refused_by_this_plane(db_session: Session, plane:
     spec = BiDashboardSpec(
         widgets=[
             BiPackWidget(
-                id="trust", kind="panel", title="Reconciliation", panel="reconciliation_trust"
+                id="calendar", kind="panel", title="Filing calendar", panel="return_calendar"
             )
         ],
-        layout=[BiLayoutItem(i="trust", x=0, y=0, w=4, h=4)],
+        layout=[BiLayoutItem(i="calendar", x=0, y=0, w=4, h=4)],
     )
 
     canvas = content.resolve_widgets(

@@ -318,7 +318,6 @@ test.describe("a reader asking in words", () => {
         truncated: false,
         elapsed_ms: 12,
         used_aggregate: false,
-        trust: { status: "green", failing_checks: [] },
         catalogue_version: "e2e-catalogue",
       };
     });
@@ -384,7 +383,7 @@ test.describe("a reader asking in words", () => {
     );
     expect(JSON.stringify(sent)).toBe(JSON.stringify(PROPOSED_QUERY));
 
-    // The answer is the reader's, with the reconciliation verdict attached.
+    // The answer is the reader's.
     await expect(page.getByText("Adum")).toBeVisible();
   });
 
@@ -412,7 +411,6 @@ test.describe("a reader asking in words", () => {
       truncated: false,
       elapsed_ms: 8,
       used_aggregate: false,
-      trust: { status: "grey", failing_checks: [] },
       catalogue_version: "e2e-catalogue",
     }));
 

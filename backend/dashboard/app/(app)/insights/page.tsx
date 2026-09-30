@@ -5,28 +5,20 @@
  *
  * Two things are on this page today and both are live reads.
  *
- * THE RECONCILIATION POSITION. `GET …/bi/trust` returns every check for the
- * selected (institution, date) with its own evidence, and a check with no
- * stored result is reported as "not assessed" — never as a pass. The whole
- * payload is figures rather than metadata, so the route authorizes it like any
- * other data read: a principal missing any one of the pairs the checks disclose
- * is refused the page rather than shown a partial verdict.
- *
  * WHAT THIS READER MAY ANALYSE. The catalogue comes back already filtered by
  * the same decision the query path makes, so nothing on it can be selected and
  * then refused. Members the reader has no sentence for are returned as a COUNT
  * and never as ids.
  *
- * HOW MUCH OF THE BOOK ANY OF IT COVERS. The statements and the checks are both
- * computed over the reader's own data scope — `assemble_insights` takes the
- * resolved scope as a REQUIRED input, and a scoped reader gets each check's
- * verdict without its institution-wide operands — but neither payload discloses
- * the scope it applied. So the coverage is derived from the only honest source in
- * the browser, the per-capability scope on `/auth/me`, and it is stated at the
- * precision that source supports: the reader's grants describe what this page
- * COULD read, not which statement on it was narrowed, so the sentence says part
- * of the page is narrowed and does not invent which part. It still never reads as
- * the institution's whole book, and it fails closed.
+ * HOW MUCH OF THE BOOK ANY OF IT COVERS. The statements are computed over the
+ * reader's own data scope — `assemble_insights` takes the resolved scope as a
+ * REQUIRED input — but the payload does not disclose the scope it applied. So
+ * the coverage is derived from the only honest source in the browser, the
+ * per-capability scope on `/auth/me`, and it is stated at the precision that
+ * source supports: the reader's grants describe what this page COULD read, not
+ * which statement on it was narrowed, so the sentence says part of the page is
+ * narrowed and does not invent which part. It still never reads as the
+ * institution's whole book, and it fails closed.
  *
  * WHAT THE PLATFORM WILL SAY. `GET …/bi/insights` composes the movements,
  * attributions, projections and data gaps server-side from typed facts, with
@@ -53,22 +45,14 @@ import CoverageNotice from "@/components/access/CoverageNotice";
 import { useBankContext } from "@/components/shell/BankContext";
 import FilterBar from "@/components/bi/FilterBar";
 import InsightStrip from "@/components/bi/InsightStrip";
-import TrustBadge from "@/components/bi/TrustBadge";
-import RefusedWidget from "@/components/bi/RefusedWidget";
-import RestrictedWidget from "@/components/bi/RestrictedWidget";
 import { moduleLabel, sensitivityLabel } from "@/components/bi/labels";
-import { NOT_MEASURED } from "@/components/bi/result";
 import {
-  biRefusalSentence,
-  isBiAccessDenied,
   isBiUnavailable,
   useBiCatalogue,
   useBiInsights,
-  useBiTrust,
 } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
 import { coverageFromCapabilities } from "@/lib/api/dataScope";
-import { fmtTimestamp, labelize } from "@/lib/api/values";
 import { fmtInt } from "@/lib/format";
 
 function BiNotAvailable() {
@@ -91,7 +75,6 @@ export default function InsightsPage() {
   const asOf = chosenDate ?? defaultDate;
 
   const catalogue = useBiCatalogue(bank?.id);
-  const trust = useBiTrust(bank?.id, asOf);
   // The comparison date is deliberately not named here: the server takes the
   // prior period on the content packs' own end-of-month convention, so a
   // statement on this strip and a widget's prior column cannot be measured
@@ -119,9 +102,9 @@ export default function InsightsPage() {
    *
    * `surface` precision on purpose: `pairs` is every address the reader's
    * catalogue holds, which is what this page COULD read — the insight statements
-   * and the reconciliation checks name no member on the wire, so claiming a
-   * specific statement is narrowed would be a fabricated specific. Every address
-   * being institution-wide is still a sound "nothing here is narrowed".
+   * name no member on the wire, so claiming a specific statement is narrowed
+   * would be a fabricated specific. Every address being institution-wide is
+   * still a sound "nothing here is narrowed".
    */
   const coverage = coverageFromCapabilities(institutionCapabilities, pairs, {
     pending: authorityPending || catalogue.isPending,
@@ -139,18 +122,11 @@ export default function InsightsPage() {
     );
   }
 
-  const checks = trust.data?.checks ?? [];
-  const builds = trust.data?.builds ?? [];
-  // The badge is one verdict over the whole institution, so a reader scoped to
-  // part of it is refused with the server's own sentence
-  // (`bi_data_scope_unsupported`) — not a grant denial, and not a fault.
-  const trustRefusal = biRefusalSentence(trust.error);
-
   return (
     <>
       <PageHeader
         title="Insights"
-        subtitle="Whether this institution's analytics reconcile to the position the platform computed, and what you can analyse."
+        subtitle="What the platform can say about this institution's reporting date, and what you can analyse."
         asOf={asOf}
       />
 
@@ -163,7 +139,7 @@ export default function InsightsPage() {
           onFiltersChange={() => undefined}
         />
 
-        {/* Above everything it qualifies: the strip AND the reconciliation card. */}
+        {/* Above everything it qualifies. */}
         <CoverageNotice coverage={coverage} />
 
         <InsightStrip
@@ -172,85 +148,6 @@ export default function InsightsPage() {
           error={insights.error}
           onRetry={() => void insights.refetch()}
         />
-
-        <SectionCard
-          title="Reconciliation"
-          subtitle="Each check compares an analytics figure with the position the platform already computed for this date."
-          actions={
-            trust.data ? (
-              <TrustBadge
-                status={trust.data.status}
-                failingChecks={checks
-                  .filter((check) => check.status !== "green")
-                  .map((check) => check.checkId)}
-              />
-            ) : undefined
-          }
-        >
-          {trust.isPending && (
-            <div className="space-y-2" aria-busy="true">
-              <SkeletonLine width="70%" />
-              <SkeletonLine width="55%" />
-              <SkeletonLine width="60%" />
-            </div>
-          )}
-
-          {isBiAccessDenied(trust.error) && <RestrictedWidget />}
-
-          {trustRefusal !== null && <RefusedWidget sentence={trustRefusal} />}
-
-          {trust.error && !isBiAccessDenied(trust.error) && trustRefusal === null && (
-            <ErrorPanel
-              error={trust.error}
-              onRetry={() => void trust.refetch()}
-              title="Could not load the reconciliation position"
-            />
-          )}
-
-          {trust.data && checks.length === 0 && (
-            <p className="text-body leading-relaxed text-slate">
-              No reconciliation check has run for this date, so these analytics
-              have not been compared with the computed position. That is
-              reported as not assessed — it is not a pass.
-            </p>
-          )}
-
-          {checks.length > 0 && (
-            <ul className="divide-y divide-border-light">
-              {checks.map((check) => (
-                <li
-                  key={check.checkId}
-                  className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-body text-navy">{check.label}</p>
-                    <p className="mt-0.5 text-caption text-slate">
-                      {check.difference
-                        ? `Difference ${check.difference} against a tolerance of ${
-                            check.tolerance ?? NOT_MEASURED
-                          }`
-                        : "No difference was measured for this check."}
-                    </p>
-                  </div>
-                  <TrustBadge status={check.status} size="compact" />
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {builds.length > 0 && (
-            <ul className="mt-4 border-t border-border-light pt-3 text-caption text-slate">
-              {builds.map((build) => (
-                <li key={`${build.scope}:${build.fingerprint}`}>
-                  {labelize(build.scope)} — {labelize(build.status)}
-                  {build.finishedAt
-                    ? `, ${fmtTimestamp(new Date(build.finishedAt))}`
-                    : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </SectionCard>
 
         <SectionCard
           title="What you can analyse"

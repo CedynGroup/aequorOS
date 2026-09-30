@@ -5,8 +5,8 @@ sentence that overstates what the platform knows is to make the sentence
 unable to reach anything the facts do not carry. So the insight layer never sees
 a query result, a row, or a number in free text. It sees a
 :class:`FactSheet` — a set of instances of the four types below, each carrying
-its own measure identity, its own trust state and its own advisory designation —
-and the rules may only restate what is in one of them.
+its own measure identity and its own advisory designation — and the rules may
+only restate what is in one of them.
 
 The four kinds, and why there are exactly four:
 
@@ -32,16 +32,13 @@ The four kinds, and why there are exactly four:
     A forward-looking statement (``projections.py``), typed apart from
     observation so it can never be rendered as something that happened.
 
-Trust and designation ride on the FACT, not on the page
--------------------------------------------------------
-Every fact carries a :class:`TrustState` — the reconciliation verdict of the
-checks that bear on that measure, folded together with the build's overall badge
-so a fact can never look better than the book it came from. ``grey`` means the
-check could not be assessed and is NEVER reported as a pass
-(``reconciliation.py``). Every fact also carries the registry's
-``advisory_designation`` and the catalogue's own ``certified`` verdict (D-022 /
-D-055): an advisory figure is analysis, and an insight over one must not read
-like a filed number.
+Designation rides on the FACT, not on the page
+----------------------------------------------
+Every fact carries the registry's ``advisory_designation`` and the catalogue's
+own ``certified`` verdict (D-022 / D-055): an advisory figure is analysis, and an
+insight over one must not read like a filed number. Nothing here grades a figure
+against the returns the platform files — BI is intelligence over the bank's own
+book, and that verdict left the plane on 2026-09-29.
 
 Provenance is carried and excluded
 ----------------------------------
@@ -54,7 +51,7 @@ run ids and timestamps while keeping them in the stored snapshot.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -63,7 +60,6 @@ from uuid import UUID
 
 from app.domain.bi.authority import AdvisoryDesignation
 from app.domain.bi.catalogue.members import FavourableDirection, MeasureDef, ValueType
-from app.services.bi import reconciliation
 from app.services.bi.insights.drivers import (
     BridgeUnavailable,
     Favourability,
@@ -85,18 +81,13 @@ __all__ = [
     "MovementFact",
     "ObservedFact",
     "ProjectionFact",
-    "TrustState",
-    "TrustStatus",
     "WHOLE_INSTITUTION",
     "bridge_fact",
     "fact_sheet",
     "movement_fact",
     "observed_fact",
     "projection_fact",
-    "trust_state",
 ]
-
-TrustStatus = Literal["green", "amber", "red", "grey"]
 
 #: Why a measure has no value. Each is a different question the platform could
 #: not answer, and the copy a reader sees differs accordingly:
@@ -107,66 +98,6 @@ TrustStatus = Literal["green", "amber", "red", "grey"]
 #:   none are answerable there is no ratio);
 #: * ``not_computed`` — the platform has not computed this figure for this date.
 MissingReason = Literal["not_supplied", "not_answerable", "not_computed"]
-
-
-@dataclass(frozen=True, slots=True)
-class TrustState:
-    """How far the figures behind a fact reconcile to what the platform files.
-
-    ``overall`` is the worst of the checks that bear on the measure and the
-    build's own badge — a fact may understate confidence, never overstate it.
-    """
-
-    overall: TrustStatus
-    checks: tuple[tuple[str, TrustStatus], ...] = ()
-
-    @property
-    def assessed(self) -> bool:
-        """``False`` when nothing could be checked. Never read as a pass."""
-        return self.overall != reconciliation.GREY
-
-    @property
-    def reconciles(self) -> bool:
-        """Only a green badge means the figures were checked and agreed."""
-        return self.overall == reconciliation.GREEN
-
-    @property
-    def failing_checks(self) -> tuple[str, ...]:
-        return tuple(check for check, status in self.checks if status != reconciliation.GREEN)
-
-
-def trust_state(
-    measure: MeasureDef,
-    statuses: Mapping[str, str],
-    *,
-    build_overall: str | None = None,
-) -> TrustState:
-    """The trust a fact over ``measure`` carries.
-
-    ``statuses`` is the stored reconciliation verdict per check id; a check the
-    measure declares but ``statuses`` does not carry is ``grey``, because an
-    absent result is "not assessed" and must never be silently dropped.
-    ``build_overall`` is the badge for the whole build, folded in so a measure
-    with no check of its own still reports the state of the book it came from.
-    """
-    checks: tuple[tuple[str, TrustStatus], ...] = tuple(
-        (check_id, _status(statuses.get(check_id))) for check_id in measure.reconciliation_checks
-    )
-    overall = reconciliation.overall_trust(
-        [status for _, status in checks] + [_status(build_overall)]
-    )
-    return TrustState(overall=_status(overall), checks=checks)
-
-
-def _status(value: str | None) -> TrustStatus:
-    """A recognised verdict, or ``grey``. An unknown string is never a pass."""
-    if value == reconciliation.GREEN:
-        return "green"
-    if value == reconciliation.AMBER:
-        return "amber"
-    if value == reconciliation.RED:
-        return "red"
-    return "grey"
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,7 +142,6 @@ class _FactBase:
     measure_id: str
     label: str
     value_type: ValueType
-    trust: TrustState
     provenance: FactProvenance
     direction: FavourableDirection = "neutral"
     advisory: AdvisoryDesignation | None = None
@@ -387,10 +317,9 @@ class _Facet:
     direction: FavourableDirection
     advisory: AdvisoryDesignation | None
     certified: bool
-    trust: TrustState
 
 
-def _facet(measure: MeasureDef, statuses: Mapping[str, str], build_overall: str | None) -> _Facet:
+def _facet(measure: MeasureDef) -> _Facet:
     return _Facet(
         measure_id=measure.id,
         label=measure.label,
@@ -398,7 +327,6 @@ def _facet(measure: MeasureDef, statuses: Mapping[str, str], build_overall: str 
         direction=measure.favourable_direction,
         advisory=measure.advisory_designation,
         certified=measure.certified,
-        trust=trust_state(measure, statuses, build_overall=build_overall),
     )
 
 
@@ -407,14 +335,12 @@ def observed_fact(  # noqa: PLR0913 - the measure, its context and its one figur
     *,
     as_of: date,
     provenance: FactProvenance,
-    statuses: Mapping[str, str],
-    build_overall: str | None = None,
     value: Decimal | None = None,
     missing_reason: MissingReason | None = None,
     scope: FactScope = WHOLE_INSTITUTION,
 ) -> ObservedFact:
     """One figure for ``measure``, or the reason it has none."""
-    facet = _facet(measure, statuses, build_overall)
+    facet = _facet(measure)
     return ObservedFact(
         measure_id=facet.measure_id,
         label=facet.label,
@@ -422,7 +348,6 @@ def observed_fact(  # noqa: PLR0913 - the measure, its context and its one figur
         direction=facet.direction,
         advisory=facet.advisory,
         certified=facet.certified,
-        trust=facet.trust,
         scope=scope,
         provenance=provenance,
         as_of=as_of,
@@ -437,15 +362,13 @@ def movement_fact(  # noqa: PLR0913 - the measure, two dates and two figures
     as_of: date,
     prior_as_of: date,
     provenance: FactProvenance,
-    statuses: Mapping[str, str],
-    build_overall: str | None = None,
     current: Decimal | None = None,
     prior: Decimal | None = None,
     missing_reason: MissingReason | None = None,
     scope: FactScope = WHOLE_INSTITUTION,
 ) -> MovementFact:
     """How ``measure`` moved between two dates, or why that is unknown."""
-    facet = _facet(measure, statuses, build_overall)
+    facet = _facet(measure)
     return MovementFact(
         measure_id=facet.measure_id,
         label=facet.label,
@@ -453,7 +376,6 @@ def movement_fact(  # noqa: PLR0913 - the measure, two dates and two figures
         direction=facet.direction,
         advisory=facet.advisory,
         certified=facet.certified,
-        trust=facet.trust,
         scope=scope,
         provenance=provenance,
         as_of=as_of,
@@ -471,12 +393,10 @@ def bridge_fact(  # noqa: PLR0913 - the measure, two dates and the bridge itself
     prior_as_of: date,
     bridge: RatioBridge | BridgeUnavailable,
     provenance: FactProvenance,
-    statuses: Mapping[str, str],
-    build_overall: str | None = None,
     scope: FactScope = WHOLE_INSTITUTION,
 ) -> BridgeFact:
     """What moved ``measure``, decomposed exactly, or why it could not be."""
-    facet = _facet(measure, statuses, build_overall)
+    facet = _facet(measure)
     return BridgeFact(
         measure_id=facet.measure_id,
         label=facet.label,
@@ -484,7 +404,6 @@ def bridge_fact(  # noqa: PLR0913 - the measure, two dates and the bridge itself
         direction=facet.direction,
         advisory=facet.advisory,
         certified=facet.certified,
-        trust=facet.trust,
         scope=scope,
         provenance=provenance,
         as_of=as_of,
@@ -499,12 +418,10 @@ def projection_fact(  # noqa: PLR0913 - the measure, its date and the projection
     as_of: date,
     projection: Projection | ProjectionUnavailable,
     provenance: FactProvenance,
-    statuses: Mapping[str, str],
-    build_overall: str | None = None,
     scope: FactScope = WHOLE_INSTITUTION,
 ) -> ProjectionFact:
     """Where ``measure``'s observed trend reaches, or why it was not drawn."""
-    facet = _facet(measure, statuses, build_overall)
+    facet = _facet(measure)
     return ProjectionFact(
         measure_id=facet.measure_id,
         label=facet.label,
@@ -512,7 +429,6 @@ def projection_fact(  # noqa: PLR0913 - the measure, its date and the projection
         direction=facet.direction,
         advisory=facet.advisory,
         certified=facet.certified,
-        trust=facet.trust,
         scope=scope,
         provenance=provenance,
         as_of=as_of,

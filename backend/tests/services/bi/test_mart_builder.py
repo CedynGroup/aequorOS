@@ -5,7 +5,7 @@ call the e2e bootstrap makes) over ``tests/factories/canonical.py``'s book —
 18 included current-generation snapshots plus one superseded and one
 error-status row that must never appear — with the live plane materialised by
 the product's own ``pipeline.recompute_live`` so the engine tier and the
-reconciliation checks have something to read. Extra rows (an unconverted
+engine tier has something to copy. Extra rows (an unconverted
 foreign-currency loan, a withdrawn snapshot, a mid-month book, loan events,
 an unmapped branch, a sealed run) are added per test through the canonical
 models, never through the builder.
@@ -55,14 +55,13 @@ from app.models import (
 )
 from app.models.bi import (
     MART_BUILD_SCOPES,
-    RECONCILIATION_CHECK_IDS,
     UNASSIGNED_REGION,
     UNMAPPED_BRANCH_NAME,
 )
 from app.models.live import LIVE_MODULES
 from app.schemas.bi import BiQuery
 from app.services import pipeline
-from app.services.bi import compiler, mart_builder, partitions, provenance, reconciliation
+from app.services.bi import compiler, mart_builder, partitions, provenance
 from app.services.bi.compiler import compile_query
 from app.services.bi.mart_builder import BuildOutcome
 from app.services.bi.versions import BUILDER_VERSION
@@ -455,11 +454,6 @@ def test_second_run_skips_on_the_same_fingerprint_and_a_new_batch_changes_it(
     second = build(db_session)
     assert second.status == "skipped"
     assert second.fingerprint == first.fingerprint
-    # A skip reports the STORED badge and a build its evaluated one; now that
-    # every evaluated check is storable (R10 included) the two are identical.
-    assert second.trust == first.trust
-    assert set(second.trust) == set(reconciliation.CHECK_IDS) | {"overall"}
-    assert reconciliation.DPD_COMPLETENESS in second.trust
     records = build_records(db_session)
     assert set(records) == set(MART_BUILD_SCOPES)
     assert all(
@@ -1030,11 +1024,11 @@ def test_the_builders_aggregate_answers_an_absent_figure_exactly_as_the_fact_row
     )
 
 
-# --- audit A360 H2: a failed rebuild must not serve stale figures under the old badge -------------
+# --- audit A360 H2: a failed rebuild must be served as STALE, and attributably ------------------
 
 
-def _window_verdict(db: Session, *dates: date) -> provenance.TrustVerdict:
-    return provenance.trust_verdict(
+def _window_stale(db: Session, *dates: date) -> tuple[date, ...]:
+    return provenance.stale_dates(
         db, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(min(dates), max(dates))
     )
 
@@ -1045,22 +1039,20 @@ def _window_fingerprint(db: Session, *dates: date) -> str | None:
     )
 
 
-def test_a_failed_rebuild_never_serves_the_previous_builds_trust_badge(
+def test_a_failed_rebuild_is_served_as_stale_and_attributably(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The shape the auditor reproduced: a build succeeds, new data arrives, the
     rebuild fails, and the mart still holds the old rows (the savepoint rolled the
-    new ones back) beside the old reconciliation results (never re-evaluated). A
-    reader is then served last night's figures — which is the design — but the
-    badge on them must be the badge of THIS state, and nothing on file describes
-    it: grey, with the date named, and a fingerprint that is not ``None`` and not
-    one any successful build stamped."""
+    new ones back). A reader is then served last night's figures — which is the
+    design — but the state must be NAMED as stale: the date appears in
+    ``stale_dates`` (which is what stops an alert firing and a board pack mailing
+    over those rows), and the fingerprint is not ``None`` and not one any
+    successful build stamped."""
     seed_book(db_session)
     first = build(db_session)
     db_session.commit()
-    before = _window_verdict(db_session, AS_OF)
-    assert before.status == first.trust["overall"]
-    assert before.stale_dates == ()
+    assert _window_stale(db_session, AS_OF) == ()
     assert _window_fingerprint(db_session, AS_OF) == first.fingerprint
 
     # New data: one more deposit lands at AS_OF, which moves the fingerprint…
@@ -1091,19 +1083,8 @@ def test_a_failed_rebuild_never_serves_the_previous_builds_trust_badge(
     assert len(rows) == FIXTURE_ROWS
     assert "DEP/NEW" not in rows
     assert all(row.status == "failed" for row in build_records(db_session).values())
-    # The stored per-check rows are still readable for a detail view…
-    stored = provenance.stored_checks(
-        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(AS_OF, AS_OF)
-    )
-    assert {row.check_id for row in stored} == set(RECONCILIATION_CHECK_IDS)
-    # …but no badge may be earned from them.
-    after = _window_verdict(db_session, AS_OF)
-    assert after.status == reconciliation.GREY
-    assert after.failing_checks == ()
-    assert after.stale_dates == (AS_OF,)
-    assert provenance.stale_dates(
-        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, window=(AS_OF, AS_OF)
-    ) == (AS_OF,)
+    # The date is named as stale, so nothing may be judged from its rows.
+    assert _window_stale(db_session, AS_OF) == (AS_OF,)
     # And the served state is attributable: a digest that joins back to the failed
     # records, never ``None`` (which the query log read as "no build at all") and
     # never the fingerprint a successful build stamped.
@@ -1112,46 +1093,41 @@ def test_a_failed_rebuild_never_serves_the_previous_builds_trust_badge(
     assert len(fingerprint) == 64
     assert fingerprint != first.fingerprint
 
-    # A successful rebuild earns a badge of its own again.
+    # A successful rebuild makes the date current again.
     second = build(db_session)
     assert second.status == "succeeded"
     assert second.fingerprint != first.fingerprint
-    restored = _window_verdict(db_session, AS_OF)
-    assert restored.stale_dates == ()
-    assert restored.status == second.trust["overall"]
+    assert _window_stale(db_session, AS_OF) == ()
     assert _window_fingerprint(db_session, AS_OF) == second.fingerprint
     assert "DEP/NEW" in daily_rows(db_session)
 
 
-def test_a_build_record_left_running_greys_the_badge_too(db_session: Session) -> None:
+def test_a_build_record_left_running_counts_as_stale_too(db_session: Session) -> None:
     """Not succeeded is the rule. A ``running`` record is never visible from another
     session in practice (the builder commits only on success or failure), but one
-    left by a dead process would otherwise read as trusted."""
+    left by a dead process would otherwise read as current."""
     seed_book(db_session, live=False)
     outcome = build(db_session)
-    assert _window_verdict(db_session, AS_OF).status == outcome.trust["overall"]
+    assert _window_stale(db_session, AS_OF) == ()
     build_records(db_session)["engine"].status = "running"
     db_session.flush()
-    verdict = _window_verdict(db_session, AS_OF)
-    assert verdict.status == reconciliation.GREY
-    assert verdict.stale_dates == (AS_OF,)
+    assert _window_stale(db_session, AS_OF) == (AS_OF,)
     fingerprint = _window_fingerprint(db_session, AS_OF)
     assert fingerprint is not None and fingerprint != outcome.fingerprint
 
 
-def test_one_stale_date_greys_a_window_that_also_holds_a_good_one(
+def test_one_stale_date_is_named_in_a_window_that_also_holds_a_good_one(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A badge may understate confidence, never overstate it: the worst date in the
-    window decides, and the verdict names which date is stale so a surface can say
-    why."""
+    """A window over several dates names exactly the dates that are stale, so a
+    consumer refusing on staleness refuses the right ones and no others."""
     seed_book(db_session, live=False)
     resnapshot_loan_1(db_session, MID_MONTH, balance="29000000")
     db_session.commit()
-    good = build(db_session, AS_OF)
+    build(db_session, AS_OF)
     build(db_session, MID_MONTH)
     db_session.commit()
-    assert _window_verdict(db_session, MID_MONTH, AS_OF).stale_dates == ()
+    assert _window_stale(db_session, MID_MONTH, AS_OF) == ()
 
     add_position(
         db_session,
@@ -1173,19 +1149,13 @@ def test_one_stale_date_greys_a_window_that_also_holds_a_good_one(
         build(db_session, MID_MONTH)
     monkeypatch.undo()
 
-    verdict = _window_verdict(db_session, MID_MONTH, AS_OF)
-    assert verdict.stale_dates == (MID_MONTH,)
-    # The stale date is graded grey and contributes NO failing check, whatever is
-    # on file for it; the window then takes the worst verdict across its dates
-    # (``overall_trust``: red outranks grey, so a red good date still reads red).
-    alone = _window_verdict(db_session, AS_OF)
-    assert alone.stale_dates == ()
-    assert alone.status == good.trust["overall"]
-    assert verdict.status == reconciliation.overall_trust([reconciliation.GREY, alone.status])
-    assert verdict.failing_checks == alone.failing_checks
-    # The stale date alone earns nothing from its stored rows.
-    stale_alone = _window_verdict(db_session, MID_MONTH)
-    assert (stale_alone.status, stale_alone.failing_checks) == (reconciliation.GREY, ())
+    assert _window_stale(db_session, MID_MONTH, AS_OF) == (MID_MONTH,)
+    assert _window_stale(db_session, AS_OF) == ()
+    assert _window_stale(db_session, MID_MONTH) == (MID_MONTH,)
+    # And the window's fingerprint is a digest over the mixed state, not the good
+    # date's own fingerprint.
+    mixed = _window_fingerprint(db_session, MID_MONTH, AS_OF)
+    assert mixed is not None and mixed != _window_fingerprint(db_session, AS_OF)
 
 
 # --- audit A360 H3: an attribute wider than its mart column never fails the build ---------------
@@ -1335,7 +1305,7 @@ def test_build_records_carry_row_counts_and_timings_per_scope(db_session: Sessio
     assert records["dims"].row_counts["bi_dim_branch"] == 2
     assert positions.builder_version == BUILDER_VERSION
     assert positions.finished_at is not None and positions.finished_at >= positions.started_at
-    assert set(outcome.trust) == set(reconciliation.CHECK_IDS) | {"overall"}
+    assert outcome.status == "succeeded"
 
 
 def test_unknown_bank_is_refused_before_anything_is_written(db_session: Session) -> None:

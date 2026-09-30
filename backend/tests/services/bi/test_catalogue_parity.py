@@ -25,12 +25,10 @@ from app.domain.bi.authority import (
     READ_COMPUTED_LIVE_MODULES,
     TEXT_VALUED_METRIC_IDS,
 )
-from app.domain.bi.catalogue import catalogue
 from app.domain.ingestion.optional_position_fields import OPTIONAL_POSITION_ATTRIBUTE_KEYS
 from app.domain.positions.families import loan_family
 from app.models.live import LIVE_MODULES
 from app.services import fact_derivation, loan_classification, module_scope, pipeline
-from app.services.bi.reconciliation import CHECK_IDS, DPD_COMPLETENESS
 
 BACKEND = Path(__file__).parents[3]
 
@@ -160,13 +158,3 @@ def test_the_optional_analytics_attributes_never_reach_the_calculation_plane() -
     leaked = [key for key in OPTIONAL_POSITION_ATTRIBUTE_KEYS if f'"{key}"' in services]
     assert leaked == []
 
-
-def test_every_catalogue_check_id_is_one_the_reconciliation_module_evaluates() -> None:
-    """A measure may not cite a check nothing computes (D-042 added R10).
-
-    Set membership, not order: this is about the catalogue's vocabulary being
-    real, and ``reconciliation.CHECK_IDS`` is the module's own evaluated list.
-    """
-    cited = {check for measure in catalogue().measures() for check in measure.reconciliation_checks}
-    assert cited <= set(CHECK_IDS), sorted(cited - set(CHECK_IDS))
-    assert DPD_COMPLETENESS in cited, "the portfolio-at-risk measures must cite R10"

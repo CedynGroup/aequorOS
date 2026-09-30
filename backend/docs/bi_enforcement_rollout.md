@@ -62,7 +62,7 @@ is 404 before any authorization runs (the bank-route existence rule,
 | `POST …/bi/grid` | `view` | Same, at the record grain — these queries reach `confidential` members |
 | `POST …/bi/drill` | `view` | Same, plus every level the drill path descends into |
 | `POST …/bi/explain` | `view` | Same as the query it explains |
-| `GET …/bi/trust` | `view` | **Every pair the reported checks disclose: `credit`/`aggregated` + `liq`/`aggregated` + `risk`/`aggregated`** (`read_bi.CHECK_DISCLOSURES` names one catalogue member per check). The payload is figures, not metadata — R2's `lhs` IS the institution's total loans, R3's its total deposits, R9's its total assets and funding, R7's `detail` its real branch codes — and the badge is one verdict over the whole book, so a principal missing any one of the three is refused the page rather than shown a partial verdict. Audit A6-01 found this route authorizing nothing and serving another institution's totals to a principal denied that institution's aggregates |
+| `GET …/bi/trust` | — | **REMOVED BY FOUNDER DECISION 2026-09-29.** BI carries no reconciliation verdict against the regulatory returns (`docs/bi.md` §Founder decision 2026-09-29); the route, the `trust` badge on every BI payload and `read_bi.CHECK_DISCLOSURES` go with it. The row is kept because its history is real: until removal the route required every pair the reported checks disclosed (`credit`/`aggregated` + `liq`/`aggregated` + `risk`/`aggregated`) because the payload was figures — R2's `lhs` was the institution's total loans, R3's its total deposits, R9's its total assets and funding — and audit A6-01 found it authorizing nothing and serving another institution's totals. That defect was fixed before the route was removed. When the code lands, re-derive the read-route count in this document's header from `read_bi.py` (six at HEAD `884e3797`) |
 | `POST …/bi/export` (Phase 2) | `view` for summary, `export` for record-level | The member's own module and sensitivity |
 
 No BI surface infers authority from `users.role`, the token's `roles[]`, a
@@ -138,8 +138,12 @@ and each is now implemented and pinned by `tests/api/test_bi_routes.py` /
    surface now writes its own row: the `surface` CHECK (widened by migrations
    `202609270070` and `202609280077`) names `query`, `grid`, `drill`,
    `explain`, `export`, `feed`, `trust`, `catalogue`, `packs`, `insights` and
-   `nlq`, so `catalogue` and `trust` — which at Phase 1 could not be recorded
-   without misnaming them — are metered and logged like the data surfaces.
+   `nlq`, so `catalogue` — which at Phase 1 could not be recorded without
+   misnaming it — is metered and logged like the data surfaces. `trust` names
+   the surface REMOVED BY FOUNDER DECISION on 2026-09-29: no new row may carry
+   it. The value stays in the CHECK on purpose — migration `202609290080`
+   (working tree at the time of writing) declines to narrow an append-only
+   log's vocabulary, because the trust reads that happened are evidence.
 3. **ETag** = hash(query, build fingerprint, principal id,
    `matching_binding_ids`, `authv`). A revoked or re-scoped grant bumps `authv`
    in the same transaction, so old tokens 401 and cached responses miss.

@@ -89,7 +89,6 @@ FEED_HEADERS: Final[tuple[str, ...]] = (
     "X-Bi-Feed-Data-Scope",
     "X-Bi-Feed-Catalogue-Version",
     "X-Bi-Feed-Build",
-    "X-Bi-Feed-Trust",
     "X-Bi-Feed-Unit",
 )
 
@@ -213,7 +212,6 @@ class FeedProvenance:
     selection: SliceSelection
     data_scope_label: str
     unit: str
-    trust_status: str
     build_fingerprint: str | None
 
     def headers(self) -> dict[str, str]:
@@ -236,7 +234,6 @@ class FeedProvenance:
             "X-Bi-Feed-Data-Scope": self.data_scope_label,
             "X-Bi-Feed-Catalogue-Version": CATALOGUE_VERSION,
             "X-Bi-Feed-Build": self.build_fingerprint or NONE_SENTINEL,
-            "X-Bi-Feed-Trust": self.trust_status,
             "X-Bi-Feed-Unit": self.unit,
             "Cache-Control": "private, no-store",
         }
@@ -257,12 +254,8 @@ def build_provenance(  # noqa: PLR0913 - the provenance block's own inputs, all 
 
     window = selection.window
     fingerprint: str | None = None
-    verdict = provenance.TrustVerdict(status="grey", failing_checks=())
     if window is not None:
         fingerprint = provenance.build_fingerprint(
-            db, organization_id=bank.organization_id, bank_id=bank.id, window=window
-        )
-        verdict = provenance.trust_verdict(
             db, organization_id=bank.organization_id, bank_id=bank.id, window=window
         )
     return FeedProvenance(
@@ -272,7 +265,6 @@ def build_provenance(  # noqa: PLR0913 - the provenance block's own inputs, all 
         selection=selection,
         data_scope_label=data_scope_label,
         unit=jurisdictions.base_currency(bank),
-        trust_status=verdict.status,
         build_fingerprint=fingerprint,
     )
 

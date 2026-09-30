@@ -1,9 +1,8 @@
 """The properties an insight must hold whatever the data does.
 
-These are the four ways a dashboard sentence lies, each pinned here:
+These are the three ways a dashboard sentence lies, each pinned here:
 
 * it reports a figure the bank never supplied as ``0`` or as "unchanged";
-* it presents a reconciliation check that could not run as a pass;
 * it presents analytical output as a filed, certified figure;
 * it reads a signed risk figure's sign instead of its size, so a reduction in
   risk is announced as a deterioration (D-013).
@@ -23,7 +22,6 @@ from app.services.bi.insights import digest, drivers, facts, projections, rules,
 
 _AS_OF = date(2026, 6, 30)
 _PRIOR = date(2026, 5, 31)
-_ALL_GREEN: dict[str, str] = dict.fromkeys(("R1", "R8", "R9", "R10"), "green")
 
 #: A filed, official-tier engine figure — the only class that may read certified.
 _FILED = "engine.car_pct.crd.official"
@@ -49,13 +47,11 @@ def _sheet(*items: facts.Fact) -> facts.FactSheet:
     )
 
 
-def _movement(  # noqa: PLR0913 - a movement takes two dates, two figures and a badge
+def _movement(
     member_id: str,
     prior: str | None,
     current: str | None,
     *,
-    statuses: dict[str, str] | None = None,
-    build_overall: str = "green",
     missing_reason: facts.MissingReason | None = None,
 ) -> facts.MovementFact:
     return facts.movement_fact(
@@ -63,8 +59,6 @@ def _movement(  # noqa: PLR0913 - a movement takes two dates, two figures and a 
         as_of=_AS_OF,
         prior_as_of=_PRIOR,
         provenance=_provenance(),
-        statuses=_ALL_GREEN if statuses is None else statuses,
-        build_overall=build_overall,
         prior=None if prior is None else Decimal(prior),
         current=None if current is None else Decimal(current),
         missing_reason=missing_reason,
@@ -105,7 +99,6 @@ def test_a_fact_cannot_state_a_value_and_a_missing_reason_at_once() -> None:
             catalogue().measure(_FILED),
             as_of=_AS_OF,
             provenance=_provenance(),
-            statuses=_ALL_GREEN,
             value=Decimal("13.2"),
             missing_reason="not_supplied",
         )
@@ -117,7 +110,6 @@ def test_a_fact_cannot_state_neither_a_value_nor_a_reason() -> None:
             catalogue().measure(_FILED),
             as_of=_AS_OF,
             provenance=_provenance(),
-            statuses=_ALL_GREEN,
         )
 
 
@@ -136,65 +128,11 @@ def test_each_kind_of_gap_says_which_question_went_unanswered(reason: str, fragm
                 catalogue().measure(_DPD),
                 as_of=_AS_OF,
                 provenance=_provenance(),
-                statuses=_ALL_GREEN,
-                build_overall="green",
                 missing_reason=reason,  # pyright: ignore[reportArgumentType]
             )
         )
     )
     assert fragment in result.insights[0].detail
-
-
-# ---------------------------------------------------------------------------
-# a check that could not run is never a pass
-# ---------------------------------------------------------------------------
-
-
-def test_an_unassessed_check_is_reported_as_not_checked_and_never_as_a_pass() -> None:
-    result = rules.derive_insights(
-        _sheet(_movement(_DPD, "3.0", "4.5", statuses={}, build_overall="grey"))
-    )
-    notices = [i for i in result.insights if i.rule_id == "trust_notice"]
-    assert len(notices) == 1
-    notice = notices[0]
-    assert notice.trust.overall == "grey"
-    assert notice.trust.assessed is False
-    assert notice.trust.reconciles is False
-    assert "have not been checked" in notice.headline
-    assert "Not checked is not the same as checked and correct." in notice.detail
-    assert all(insight.certified is False for insight in result.insights)
-    assert "agree" not in notice.headline
-
-
-def test_the_grey_state_rides_on_every_insight_drawn_from_it() -> None:
-    result = rules.derive_insights(
-        _sheet(_movement(_DPD, "3.0", "4.5", statuses={}, build_overall="grey"))
-    )
-    movements = [i for i in result.insights if i.rule_id == "movement"]
-    assert movements
-    for insight in movements:
-        assert insight.trust.overall == "grey"
-        assert any("have not been checked" in text for text in insight.qualifiers)
-
-
-@pytest.mark.parametrize(
-    "state, fragment",
-    [
-        ("red", "do not agree with the returns"),
-        ("amber", "a gap was found"),
-        ("grey", "have not been checked"),
-    ],
-)
-def test_every_non_green_state_is_stated_in_the_bank_s_own_words(state: str, fragment: str) -> None:
-    result = rules.derive_insights(
-        _sheet(_movement(_DPD, "3.0", "4.5", statuses={"R10": state}, build_overall=state))
-    )
-    assert fragment in _all_text(result).lower() or fragment in _all_text(result)
-
-
-def test_a_green_book_carries_no_trust_notice() -> None:
-    result = rules.derive_insights(_sheet(_movement(_FILED, "13.0", "11.0")))
-    assert _by_rule(result, "trust_notice") == []
 
 
 # ---------------------------------------------------------------------------
@@ -213,19 +151,12 @@ def test_an_advisory_metric_is_not_certified_and_says_what_it_is() -> None:
     assert "certified" not in _all_text(result).lower()
 
 
-def test_a_filed_figure_under_a_green_badge_may_be_certified() -> None:
+def test_a_filed_figure_may_be_certified() -> None:
     """The counterpart: ``certified`` is not vacuously false for everything."""
     result = rules.derive_insights(_sheet(_movement(_FILED, "13.0", "11.0")))
     movements = [i for i in result.insights if i.rule_id == "movement"]
     assert movements
     assert all(insight.certified for insight in movements)
-
-
-def test_a_filed_figure_under_a_grey_badge_is_not_certified() -> None:
-    result = rules.derive_insights(
-        _sheet(_movement(_FILED, "13.0", "11.0", statuses={}, build_overall="grey"))
-    )
-    assert all(insight.certified is False for insight in result.insights)
 
 
 # ---------------------------------------------------------------------------
@@ -317,8 +248,6 @@ def _bridge_fact() -> facts.BridgeFact:
         prior_as_of=_PRIOR,
         bridge=bridge,
         provenance=_provenance(),
-        statuses=_ALL_GREEN,
-        build_overall="green",
     )
 
 
@@ -342,8 +271,6 @@ def test_an_unavailable_bridge_produces_no_attribution_at_all() -> None:
         prior_as_of=_PRIOR,
         bridge=drivers.BridgeUnavailable("loans.npl_ratio_pct", "denominator_zero"),
         provenance=_provenance(),
-        statuses=_ALL_GREEN,
-        build_overall="green",
     )
     result = rules.derive_insights(_sheet(unavailable))
     assert _by_rule(result, "attribution") == []
@@ -363,8 +290,6 @@ def _projection_fact(*values: str) -> facts.ProjectionFact:
         as_of=_AS_OF,
         projection=projection,
         provenance=_provenance(),
-        statuses=_ALL_GREEN,
-        build_overall="green",
     )
 
 
@@ -384,8 +309,6 @@ def test_a_projection_that_could_not_be_drawn_produces_no_sentence() -> None:
         as_of=_AS_OF,
         projection=projections.ProjectionUnavailable(_FILED, "observation_missing"),
         provenance=_provenance(),
-        statuses=_ALL_GREEN,
-        build_overall="green",
     )
     result = rules.derive_insights(_sheet(fact))
     assert result.insights == ()
@@ -405,7 +328,7 @@ def test_the_same_facts_always_produce_the_same_sentences_in_the_same_order() ->
     def sheet() -> facts.FactSheet:
         return _sheet(
             _movement(_FILED, "13.0", "11.0"),
-            _movement("loans.npl_ratio_pct", "3.0", "4.5", statuses={}, build_overall="grey"),
+            _movement("loans.npl_ratio_pct", "3.0", "4.5"),
             _bridge_fact(),
             _projection_fact("13.0", "12.5", "12.0"),
         )
@@ -416,15 +339,21 @@ def test_the_same_facts_always_produce_the_same_sentences_in_the_same_order() ->
     assert first.fact_sheet_hash == second.fact_sheet_hash
 
 
-def test_trust_and_gaps_are_shown_before_anything_else() -> None:
+def test_gaps_are_shown_before_movements_of_the_same_emphasis() -> None:
+    """Emphasis sorts first, then the kind of statement: at equal emphasis a gap
+    outranks a movement, and a projection (always ``low``) comes last. The movement
+    here is favourable — a capital ratio rising — so it sits at ``normal`` beside the
+    gap and the class order is what decides."""
     result = rules.derive_insights(
         _sheet(
-            _movement(_FILED, "13.0", "11.0", statuses={}, build_overall="red"),
+            _movement(_FILED, "11.0", "13.0"),
             _movement(_DPD, None, None, missing_reason="not_supplied"),
             _projection_fact("13.0", "12.5", "12.0"),
         )
     )
-    assert [i.statement_class for i in result.insights][0] == "trust_notice"
+    classes = [i.statement_class for i in result.insights]
+    assert classes[0] == "data_gap", classes
+    assert classes.index("data_gap") < classes.index("movement"), classes
     assert result.insights[-1].statement_class == "projection"
 
 
@@ -454,7 +383,7 @@ def test_the_ui_legend_names_every_class_the_rules_can_produce() -> None:
         insight.statement_class
         for insight in rules.derive_insights(
             _sheet(
-                _movement(_FILED, "13.0", "11.0", statuses={}, build_overall="grey"),
+                _movement(_FILED, "13.0", "11.0"),
                 _movement(_DPD, None, None, missing_reason="not_supplied"),
                 _bridge_fact(),
                 _projection_fact("13.0", "12.5", "12.0"),

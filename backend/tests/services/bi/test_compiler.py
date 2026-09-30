@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.bi.catalogue import Catalogue, ColumnRef, MeasureDef, catalogue
 from app.domain.bi.catalogue.dimensions import POSITION_DIMENSION_IDS
+from app.domain.capital import loan_classification
 from app.models import Bank
 from app.models.bi import (
     TARGET_BANK_WIDE_SCOPE,
@@ -53,7 +54,7 @@ from app.schemas.bi import (
     BiTime,
     BiTopN,
 )
-from app.services.bi import alerts, compiler, mart_builder, reconciliation
+from app.services.bi import alerts, compiler, mart_builder
 from app.services.bi.compiler import CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError, InvalidQuery, UnknownMember, is_member_id
 from app.services.bi.execution import execute
@@ -2387,12 +2388,12 @@ def test_a_ratio_is_the_unrounded_float_quotient_not_the_engines_quantized_decim
     visible: ``compiler._ratio`` casts to ``Float`` and divides, so
     ``loans.npl_ratio_pct`` over 3,000,000 of 84,850,000 is ``3.5356511490866236``
     where the credit engine's ``npl_ratio_pct`` is the fraction quantized to
-    ``ENGINE_RATIO_QUANTUM`` and scaled: ``Decimal('3.535700')``. Identical at
-    two decimals, different in a full-precision export cell. The compiler's
+    the engine's own ``_RATIO_Q`` and scaled: ``Decimal('3.535700')``. Identical
+    at two decimals, different in a full-precision export cell. The compiler's
     figure is a portfolio measure it computes; the engine's is the CERTIFIED
-    figure, copied into ``engine.*`` never recomputed, and R1 reconciles the two
-    at the engine's own quantum — so the export that needs the filed number
-    reads the engine copy. Changing ``_ratio`` to Decimal arithmetic would move
+    figure, copied into ``engine.*`` and never recomputed — so the export that
+    needs the filed number reads the engine copy, and BI does not grade one
+    against the other. Changing ``_ratio`` to Decimal arithmetic would move
     every ratio, share and HHI in the catalogue and every golden that reads
     them; it is not done here.
     """
@@ -2401,7 +2402,7 @@ def test_a_ratio_is_the_unrounded_float_quotient_not_the_engines_quantized_decim
     assert isinstance(value, float), path
     assert value == pytest.approx(3_000_000 / 84_850_000 * 100, rel=1e-15), path
     engine = (Decimal(3_000_000) / Decimal(84_850_000)).quantize(
-        reconciliation.ENGINE_RATIO_QUANTUM
+        loan_classification._RATIO_Q  # noqa: SLF001 - the engine's own quantum, pinned
     ) * 100
     assert engine == Decimal("3.535700")
     assert Decimal(str(value)) != engine, "the two figures are not the same number"

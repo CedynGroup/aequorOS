@@ -25,13 +25,6 @@ import {
   AsOfToJSON,
   AsOfToJSONTyped,
 } from "./AsOf";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { BiExplainComponentRead } from "./BiExplainComponentRead";
 import {
   BiExplainComponentReadFromJSON,
@@ -67,13 +60,6 @@ import {
   FxRuleToJSON,
   FxRuleToJSONTyped,
 } from "./FxRule";
-import type { BiTrustCheckRead } from "./BiTrustCheckRead";
-import {
-  BiTrustCheckReadFromJSON,
-  BiTrustCheckReadFromJSONTyped,
-  BiTrustCheckReadToJSON,
-  BiTrustCheckReadToJSONTyped,
-} from "./BiTrustCheckRead";
 import type { CompareTo } from "./CompareTo";
 import {
   CompareToFromJSON,
@@ -90,13 +76,12 @@ import {
 } from "./BiExplainReadEngine";
 
 /**
- * Where one figure came from: its definition, its source and its checks.
+ * Where one figure came from: its definition and its source.
  *
  * No SQL: the statement encodes the mart layout and is not a bank-facing
  * surface. What a reviewer gets instead is the measure's own declaration, the
  * mart table and tier the value was read from, the window it was read over,
- * the engine metric and input hash when the figure is a copy, and the current
- * status of every reconciliation check that governs it.
+ * and the engine metric and input hash when the figure is a copy.
  * @export
  * @interface BiExplainRead
  */
@@ -119,12 +104,6 @@ export interface BiExplainRead {
    * @memberof BiExplainRead
    */
   catalogueVersion: string;
-  /**
-   *
-   * @type {Array<BiTrustCheckRead>}
-   * @memberof BiExplainRead
-   */
-  checks?: Array<BiTrustCheckRead>;
   /**
    *
    * @type {CompareTo}
@@ -161,12 +140,6 @@ export interface BiExplainRead {
    * @memberof BiExplainRead
    */
   sourceTable: string;
-  /**
-   *
-   * @type {BiTrustBadge}
-   * @memberof BiExplainRead
-   */
-  trust?: BiTrustBadge;
   /**
    *
    * @type {boolean}
@@ -220,10 +193,6 @@ export function BiExplainReadFromJSONTyped(
         ? undefined
         : BuildFingerprintFromJSON(json["build_fingerprint"]),
     catalogueVersion: json["catalogue_version"],
-    checks:
-      json["checks"] == null
-        ? undefined
-        : (json["checks"] as Array<any>).map(BiTrustCheckReadFromJSON),
     compareTo:
       json["compare_to"] == null
         ? undefined
@@ -242,8 +211,6 @@ export function BiExplainReadFromJSONTyped(
       json["fx_rule"] == null ? undefined : FxRuleFromJSON(json["fx_rule"]),
     measure: BiCatalogueMeasureReadFromJSON(json["measure"]),
     sourceTable: json["source_table"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
     usedAggregate: json["used_aggregate"],
     windowEnd:
       json["window_end"] == null
@@ -272,10 +239,6 @@ export function BiExplainReadToJSONTyped(
     as_of: AsOfToJSON(value["asOf"]),
     build_fingerprint: BuildFingerprintToJSON(value["buildFingerprint"]),
     catalogue_version: value["catalogueVersion"],
-    checks:
-      value["checks"] == null
-        ? undefined
-        : (value["checks"] as Array<any>).map(BiTrustCheckReadToJSON),
     compare_to: CompareToToJSON(value["compareTo"]),
     components:
       value["components"] == null
@@ -285,7 +248,6 @@ export function BiExplainReadToJSONTyped(
     fx_rule: FxRuleToJSON(value["fxRule"]),
     measure: BiCatalogueMeasureReadToJSON(value["measure"]),
     source_table: value["sourceTable"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
     used_aggregate: value["usedAggregate"],
     window_end: WindowEndToJSON(value["windowEnd"]),
     window_start: WindowStartToJSON(value["windowStart"]),

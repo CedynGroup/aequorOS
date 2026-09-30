@@ -292,9 +292,9 @@ def test_explain_cannot_be_used_to_read_outside_the_slice(
 
     This test originally asserted ``payload["value"] == B1_ONLY`` and failed with
     ``KeyError: 'value'``. The assertion was wrong, not the route: ``BiExplainRead``
-    carries the measure's declaration, the mart table, the window, the engine rule
-    and the reconciliation checks, and **no number anywhere** — not on the response
-    and not on a component, which holds only ``role``, ``member_id`` and ``label``.
+    carries the measure's declaration, the mart table, the window and the engine
+    rule, and **no number anywhere** — not on the response and not on a component,
+    which holds only ``role``, ``member_id`` and ``label``.
     The route compiles the query (which is how the source table and the aggregate
     decision are known) and deliberately never executes it, because the figure came
     from ``query``.
@@ -316,10 +316,11 @@ def test_explain_cannot_be_used_to_read_outside_the_slice(
     assert response.status_code == 200, response.text
     payload = response.json()
 
-    # The measure's own value is absent by design. What the response DID carry was
-    # the reconciliation operands, and on R7 those are the institution's total
-    # loans against the ledger — the exact figure a B1 grant excludes. That was a
-    # real leak and is now withheld; the walk below is what caught it, so it stays.
+    # The measure's own value is absent by design. What the response ONCE carried
+    # was a set of reconciliation operands — the institution's total loans against
+    # the ledger, the exact figure a B1 grant excludes. That was a real leak; the
+    # operands, and the checks they rode on, have since left BI altogether, and the
+    # walk below is what caught them, so it stays.
     def _numbers(node: Any, path: str = "") -> list[str]:
         if isinstance(node, dict):
             return [n for key, value in node.items() for n in _numbers(value, f"{path}.{key}")]
@@ -338,14 +339,7 @@ def test_explain_cannot_be_used_to_read_outside_the_slice(
     )
     assert str(B1_ONLY) not in response.text
     assert str(INSTITUTION_LOANS) not in response.text
-    # The verdict is KEPT — a scoped reader still needs to know whether the book
-    # they can see reconciles — and every check says why its numbers are absent.
-    assert payload["checks"], "the reconciliation verdicts were dropped, not just their operands"
-    for check in payload["checks"]:
-        assert check["status"], check
-        assert check["lhs"] is None and check["rhs"] is None, check
-        assert check["difference"] is None and check["tolerance"] is None, check
-        assert check["detail"] == {"reason": "withheld_outside_data_scope"}, check
+    assert "checks" not in payload and "trust" not in payload
 
     # And the scope did reach this handler: the log row names the injected scope
     # member, and never a branch code.
@@ -357,73 +351,6 @@ def test_explain_cannot_be_used_to_read_outside_the_slice(
     assert logged is not None, "explain recorded no query-log row"
     assert any("branch" in member for member in logged.member_ids), logged.member_ids
     assert "B1" not in (logged.denied_members or []) and "B1" not in logged.member_ids
-
-
-def test_an_institution_wide_reader_still_receives_the_reconciliation_operands(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """The control for the test above, on both surfaces that serve check evidence.
-
-    Withholding the operands from a SCOPED reader is only correct if an
-    institution-wide reader still gets them. Without this, the change that closed
-    that leak could have removed the reconciliation evidence for everybody and the
-    withholding test would still have passed — the failure mode of every
-    "the field is absent" assertion written without its positive half.
-
-    ``explain`` and ``trust`` both build their checks through ``_check_read``, so
-    both are exercised: a regression in the shared helper has to break one of them.
-    """
-
-    whole = _grant(db_session)
-
-    explained = _post(
-        db_client, "/explain", {"query": _query_body(), "measure": PORTFOLIO_MEASURE}, whole
-    )
-    assert explained.status_code == 200, explained.text
-    assessed = [
-        check
-        for check in explained.json()["checks"]
-        if check["detail"].get("reason") != "not_assessed"
-    ]
-    assert assessed, "the seeded reconciliation check did not reach explain at all"
-    assert any(check["lhs"] is not None for check in assessed), assessed
-    assert all(
-        check["detail"].get("reason") != "withheld_outside_data_scope" for check in assessed
-    ), assessed
-
-    trust = _get(db_client, f"/trust?as_of={AS_OF.isoformat()}", whole)
-    assert trust.status_code == 200, trust.text
-    trusted = [
-        check for check in trust.json()["checks"] if check["detail"].get("reason") != "not_assessed"
-    ]
-    assert trusted, "the seeded reconciliation check did not reach trust at all"
-    assert any(check["lhs"] is not None for check in trusted), trusted
-
-
-def test_a_scoped_trust_read_is_REFUSED_rather_than_narrowed(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
-) -> None:
-    """``trust`` fails closed for a scoped reader, which is why only ``explain`` leaked.
-
-    Written expecting the same withholding ``explain`` now does, and it is not what
-    happens: the route answers 403 ``bi_data_scope_unsupported`` before it builds a
-    single check. That is the stronger answer and it was already there, so the
-    reconciliation-operand leak existed on ``explain`` alone — ``explain`` serves a
-    scoped reader by design, because provenance is not a figure, and that is exactly
-    what made the operands the one number on its response.
-
-    Pinned because the two surfaces now differ deliberately: if ``trust`` ever stops
-    refusing, it must start withholding, and this test is what says so.
-    """
-
-    scoped = _grant(db_session, scope=DataScope.BRANCH, values=("B1",))
-    response = _get(db_client, f"/trust?as_of={AS_OF.isoformat()}", scoped)
-    assert response.status_code == 403, response.text
-    assert response.json()["error"]["details"]["error_code"] == "bi_data_scope_unsupported"
-    # And it discloses nothing on the way out.
-    assert str(INSTITUTION_LOANS) not in response.text
-    assert "lhs" not in response.text
-    assert "checks" not in response.text
 
 
 def test_a_scoped_export_carries_its_slice_and_says_so_on_the_artifact(

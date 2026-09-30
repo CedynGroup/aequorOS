@@ -50,7 +50,6 @@ import ExportActions from "@/components/bi/ExportActions";
 import ExportMenu, { printExportOption } from "@/components/bi/ExportMenu";
 import FilterBar from "@/components/bi/FilterBar";
 import SharePanel from "@/components/bi/SharePanel";
-import TrustBadge from "@/components/bi/TrustBadge";
 import VersionHistory from "@/components/bi/VersionHistory";
 import {
   CERTIFICATION_LABELS,
@@ -65,7 +64,6 @@ import {
   useBiCatalogue,
   useBiDashboardShares,
   useBiDashboardVersions,
-  useBiTrust,
   useDeleteBiSavedDashboard,
   useSetBiDashboardShares,
 } from "@/lib/api/bi";
@@ -91,6 +89,7 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
   const [chosenDate, setChosenDate] = useState<string | null>(null);
   const asOf = chosenDate ?? defaultDate;
   const [filters, setFilters] = useState<BiFilter[]>([]);
+
   const [explaining, setExplaining] = useState<{
     measure: string;
     query: BiQuery;
@@ -98,7 +97,6 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const catalogue = useBiCatalogue(bank?.id);
-  const trust = useBiTrust(bank?.id, asOf);
   const saved = useSavedDashboard(bank?.id, id, asOf);
   const dashboard = saved.dashboard;
   const isOwner = dashboard?.ownedByCaller === true;
@@ -124,6 +122,20 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
    * a dashboard widget (the composer offers only catalogue members), so an
    * unresolvable measure id here is a genuine reason to fail closed.
    */
+  /**
+   * What the filter bar may offer: the measures of every widget the reader can
+   * actually see. A refused widget contributes nothing — offering a field only
+   * IT could be sliced by would say something about a tile the reader was not
+   * granted.
+   */
+  const widgetMeasures = useMemo(
+    () =>
+      (dashboard?.widgets ?? [])
+        .filter((widget) => widget.state === "figure")
+        .map((widget) => widget.spec.query.measures),
+    [dashboard],
+  );
+
   const coverage = useMemo(() => {
     const published = catalogue.data?.measures ?? [];
     const dimensions = catalogue.data?.dimensions ?? [];
@@ -242,14 +254,6 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
             <span className="text-micro text-slate">
               Version {fmtInt(dashboard.version)}
             </span>
-            {trust.data && (
-              <TrustBadge
-                status={trust.data.status}
-                failingChecks={(trust.data.checks ?? [])
-                  .filter((check) => check.status !== "green")
-                  .map((check) => check.checkId)}
-              />
-            )}
             {isOwner && (
               <Link
                 href={`/dashboards/${dashboard.id}/edit`}
@@ -276,6 +280,7 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
 
         <FilterBar
           catalogue={catalogue.data}
+          widgetMeasures={widgetMeasures}
           asOf={asOf}
           onAsOfChange={setChosenDate}
           filters={filters}
@@ -304,6 +309,7 @@ export default function SavedDashboardScreen({ id }: { id: string }) {
           bankId={bank?.id}
           widgets={dashboard.widgets}
           filters={filters}
+          catalogue={catalogue.data}
           onExplain={(measure, query) => setExplaining({ measure, query })}
           widgetActions={(query) => (
             <ExportActions bankId={bank?.id} query={query} />

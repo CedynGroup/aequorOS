@@ -16,7 +16,6 @@
 import type {
   BiCatalogueMeasureRead,
   BiQuery,
-  BiTrustBadge,
 } from "@aequoros/risk-service-api";
 
 /**
@@ -103,7 +102,6 @@ export type BiPanelKey =
   | "credit_vintages"
   | "return_calendar"
   | "attestation_status"
-  | "reconciliation_trust"
   | "ingestion_quality";
 
 /** Platform work a figure is waiting on (`app/schemas/bi.py::BiPendingCapability`). */
@@ -178,7 +176,7 @@ export type BiPackView = Readonly<{
 
 /** Mirrors `insights/statements.py::StatementClass`. */
 export type BiStatementClass =
-  "movement" | "attribution" | "projection" | "data_gap" | "trust_notice";
+  "movement" | "attribution" | "projection" | "data_gap";
 
 /** Mirrors `insights/drivers.py::Favourability`. */
 export type BiFavourability = "favourable" | "adverse" | "neutral";
@@ -203,15 +201,9 @@ export type BiInsight = Readonly<{
   measureIds: readonly string[];
   favourability: BiFavourability;
   emphasis: BiEmphasis;
-  /** Reservations that qualify the statement — advisory basis, trust, gaps. */
+  /** Reservations that qualify the statement — advisory basis, gaps. */
   qualifiers: readonly string[];
   certified: boolean;
-  /**
-   * The reconciliation verdict behind the statement. Optional only because the
-   * wire model declares it so; an absent badge degrades to "Not assessed" in
-   * `TrustBadge` and never to a pass.
-   */
-  trust?: BiTrustBadge;
   /** A short recent series for the strip's sparkline, when one is published. */
   series?: readonly number[];
   /** Where the reader goes to see the statement's working. */

@@ -316,9 +316,9 @@ test.describe("a reader whose grant covers some branches", () => {
 
   /**
    * INSIGHTS IS THE HEDGED CASE, and the wording is deliberately weaker. The
-   * statements and the reconciliation checks name no member on the wire, so the
-   * reader's grants describe what the page COULD read and not which statement was
-   * narrowed. Claiming "these figures" there would be a fabricated specific.
+   * statements name no member on the wire, so the reader's grants describe what
+   * the page COULD read and not which statement was narrowed. Claiming "these
+   * figures" there would be a fabricated specific.
    */
   test("Insights says part of the page is narrowed, and does not invent which part", async ({
     page,

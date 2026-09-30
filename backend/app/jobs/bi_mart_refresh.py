@@ -9,7 +9,7 @@ ingestions for one day debounces into one build. The handler itself is thin —
 see ``bi_common`` — and the build is
 ``mart_builder.refresh_bank_as_of(db, *, organization_id, bank_id, as_of, reason)``,
 which owns the fingerprint skip, the atomic slice replace, the aggregates,
-dimensions, ``bi_dim_date`` and reconciliation, and returns a ``BuildOutcome``.
+dimensions and ``bi_dim_date``, and returns a ``BuildOutcome``.
 
 Run gate: ``BI_MART_ENQUEUE_ENABLED`` is re-checked HERE as well as at enqueue
 (the ``desk_capture`` idiom). A job queued before the switch was pulled must
@@ -105,7 +105,6 @@ def run_bi_mart_refresh(session: Session, job: Job) -> None:
         "builder_version": builder.BUILDER_VERSION,
         "fingerprint": outcome.fingerprint,
         "row_counts": dict(outcome.row_counts),
-        "trust": dict(outcome.trust),
         "alert_evaluations_enqueued": alerts_enqueued,
         "on_new_data_runs_enqueued": on_new_data_enqueued,
     }

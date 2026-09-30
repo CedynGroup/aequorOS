@@ -22,8 +22,8 @@
  * are pushed nightly; what was missing was the run. Asserting a cause the
  * platform does not know is the false statement `PendingWidget` exists to
  * prevent, arriving through a default. So the unknown case names no dataset,
- * offers no upload, and points at the two surfaces that can answer "why": the
- * reconciliation checks and the ingestion history.
+ * offers no upload, and points at the surface that can answer "why": the
+ * ingestion history.
  *
  * A third qualification rides on both: when the reader's access covers PART of
  * the book, an empty answer is not an empty book. `CoverageEmptyMeaning` says so
@@ -44,8 +44,12 @@ import type { ReaderCoverage } from "@/lib/api/dataScope";
 import { panelSurface } from "./labels";
 import type { BiDatasetRequirement } from "./types";
 
-/** The two platform surfaces that can say why a figure is missing. */
-const WHY_SURFACES = ["reconciliation_trust", "ingestion_quality"] as const;
+/**
+ * The platform surface that can say why a figure is missing. Resolved through
+ * the same panel-surface map a pack uses, so the door here and the door on a
+ * pack tile lead to one place.
+ */
+const WHY_SURFACE = panelSurface("ingestion_quality");
 
 export default function NeedsDataWidget({
   dataset,
@@ -119,22 +123,15 @@ export default function NeedsDataWidget({
           {coverage && (
             <CoverageEmptyMeaning coverage={coverage} className="max-w-xs" />
           )}
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-            {WHY_SURFACES.map((key) => {
-              const surface = panelSurface(key);
-              if (surface === null) return null;
-              return (
-                <Link
-                  key={key}
-                  href={surface.href}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-caption font-medium text-action hover:bg-surface"
-                >
-                  {surface.label}
-                  <ArrowRight size={13} aria-hidden />
-                </Link>
-              );
-            })}
-          </div>
+          {WHY_SURFACE !== null && (
+            <Link
+              href={WHY_SURFACE.href}
+              className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-caption font-medium text-action hover:bg-surface"
+            >
+              {WHY_SURFACE.label}
+              <ArrowRight size={13} aria-hidden />
+            </Link>
+          )}
         </>
       )}
     </section>

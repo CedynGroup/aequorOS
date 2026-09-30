@@ -46,6 +46,8 @@
     "components/bi/result.ts",
     "components/bi/exploreQuery.ts",
     "components/bi/exploreQuery.test.ts",
+    "components/bi/query.ts",
+    "components/bi/narrowing.test.ts",
     "components/bi/expressionDigest.ts",
     "components/bi/measures.ts",
     "components/bi/measures.test.ts",

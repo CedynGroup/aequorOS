@@ -1,16 +1,14 @@
 "use client";
 
 /**
- * The dashboard's client for the six BI read routes.
+ * The dashboard's client for the BI read routes.
  *
  * `GET …/bi/catalogue` says what this principal may ask; `POST …/bi/query`
  * answers one question; `…/bi/grid` and `…/bi/drill` page an answer;
- * `…/bi/explain` says where a figure came from; `GET …/bi/trust` says whether
- * the figures reconcile to what the platform already files. Nothing is decided
- * here: every route re-evaluates the caller's bindings against every member the
- * submitted query touches, so the browser's job is to ask honestly, to key the
- * answer so it cannot be reused by anyone else, and to render a refusal as a
- * refusal.
+ * `…/bi/explain` says where a figure came from. Nothing is decided here: every
+ * route re-evaluates the caller's bindings against every member the submitted
+ * query touches, so the browser's job is to ask honestly, to key the answer so
+ * it cannot be reused by anyone else, and to render a refusal as a refusal.
  *
  * Cache identity lives in `./biKeys`, which is pure and separately proved. The
  * one rule to keep in mind when adding a hook here: a BI cache key must carry
@@ -42,7 +40,6 @@ import {
   type BiPagedQueryRequest,
   type BiQuery,
   type BiQueryResult,
-  type BiTrustRead,
   // Saved dashboards: the eight routes are generated operations on this same
   // `BiApi`, so nothing below is hand-rolled.
   type BiDashboardCreateRequest,
@@ -102,7 +99,6 @@ import {
   biPacksKey,
   biQueryKey,
   biSubscriptionsKey,
-  biTrustKey,
   biWindowOf,
   isoDay,
   utcDay,
@@ -313,23 +309,6 @@ export function useBiExplain(
         }),
       ),
     enabled: enabled && Boolean(bankId) && measure !== null && query !== null,
-    retry: false,
-  });
-}
-
-/** Every reconciliation check for one (institution, date), with its evidence. */
-export function useBiTrust(
-  bankId: string | undefined,
-  asOf: string | null | undefined,
-  enabled = true,
-) {
-  const scope = useQueryAuthorityScope();
-  const day = isoDay(asOf);
-  return useQuery<BiTrustRead>({
-    queryKey: biTrustKey(scope, bankId, day),
-    queryFn: () =>
-      apiCall(() => biApi.getBiTrust({ bankId: bankId!, asOf: utcDay(day!) })),
-    enabled: enabled && Boolean(bankId) && day !== null,
     retry: false,
   });
 }
@@ -628,7 +607,6 @@ export {
   biPacksKey,
   biQueryKey,
   biSubscriptionsKey,
-  biTrustKey,
   isoDay,
   utcDay,
 } from "./biKeys";

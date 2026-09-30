@@ -12,17 +12,13 @@
  *     which is the one BI route that is mounted unconditionally.
  *  2. A BASELINE MEMBER with no binding is offered the door, disabled, with the
  *     sentence an owner would act on — because here there IS a grant to ask for.
- *  3. A LIQUIDITY-ONLY READER is the sharpest case. The reconciliation payload
- *     discloses the institution's loan total, its deposit total and its branch
- *     codes, so the route requires every one of those sentences and refuses the
- *     whole page to a reader holding one. What they get back is `Access
- *     restricted` and NOTHING ELSE: this spec asserts that none of the ten check
- *     labels, none of the nine denied member labels and none of the figures
- *     appear anywhere in the document. A lock icon is not the property — the
- *     absence of the withheld strings is. The insight strip sits on that same
- *     page, so those document-wide checks now cover it too, and the journey adds
- *     the positive control: the strip DOES tell this reader about the figures they
- *     hold, so the absence assertions cannot pass on a blank page.
+ *  3. A LIQUIDITY-ONLY READER on the Insights page is told about the figures
+ *     they hold and NOTHING ELSE: this spec asserts that none of the withheld
+ *     member labels and none of the loan-book figures appear anywhere in the
+ *     document — a lock icon is not the property; the absence of the withheld
+ *     strings is. The insight strip on that page is the positive control: it
+ *     DOES tell this reader about the liquidity figures their sentence covers, so
+ *     the absence assertions cannot pass on a blank page.
  *  4. THE SAME READER'S CATALOGUE is filtered member by member, and what is kept
  *     back is reported as a COUNT. The count is asserted, and so is the fact that
  *     the ids behind it never reach the page.
@@ -31,19 +27,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
-import { biApi, EXPECTED_CHECKS, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
+import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
 
 const BI_ENTRIES = ["Insights", "Dashboards", "Explore"] as const;
 
 /**
- * Everything the reconciliation page would have said, which a refused reader
- * must not be told.
+ * What the Insights page holds for a wider reader, which a Liquidity-only
+ * reader must not be told.
  *
- * The check labels come from `read_bi.CHECK_LABELS`; the member labels are the
- * ones the 403 body names for the OPERATOR writing the grant, and which the UI
- * deliberately does not render for the reader. The figures are the two totals
- * R2 and R3 disclose, in every form they could surface in — full precision, the
- * compact display form, and the raw difference.
+ * The member labels are catalogue members outside this reader's sentence, which
+ * the catalogue withholds as a count and the UI never renders for them. The
+ * figures are the institution's loan and deposit totals, in every form they
+ * could surface in — full precision, the compact display form, and the gap
+ * between the position book and the balance sheet.
  */
 const WITHHELD_MEMBER_LABELS = [
   "Gross loans",
@@ -125,9 +121,6 @@ test.describe("a deployment that does not serve BI", () => {
       page.getByText(/404|not found|could not be found/i).first(),
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Insights" })).toHaveCount(0);
-    await expect(
-      page.getByText("Reconciliation", { exact: true }),
-    ).toHaveCount(0);
   });
 });
 
@@ -179,85 +172,17 @@ test.describe("a baseline member with no binding", () => {
 test.describe("a reader whose access does not cover the view", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("is refused the reconciliation position, and told nothing about what it holds", async ({
+  test("is told about the figures it holds on Insights, and nothing about the ones it does not", async ({
     page,
     request,
   }) => {
     const asOf = await fixtureAsOf(request);
 
-    // First, the refusal on the wire — so the strings this reader was refused
-    // are known from the server rather than guessed at.
-    const refused = await biApi(
-      request,
-      "liquidity_viewer",
-      `/banks/${SAMPLE_BANK_ID}/bi/trust?as_of=${asOf}`,
-    );
-    expect(refused.status).toBe(403);
-    const detail = (
-      refused.body as {
-        error: { details: { error_code: string; denied_member_labels: string[] } };
-      }
-    ).error.details;
-    expect(detail.error_code).toBe("bi_authorization_denied");
-    // The 403 names the members FOR THE OPERATOR. That is deliberate and is the
-    // one place they are named.
-    expect(detail.denied_member_labels).toContain("Gross loans");
-
-    await page.goto("/insights");
-    const reconciliation = page.locator("section.card").filter({
-      has: page.getByRole("heading", { name: "Reconciliation", level: 3 }),
-    });
-    await expect(reconciliation).toBeVisible();
-
-    // What the reader is given: a refusal, and who can change it.
-    await expect(
-      reconciliation.getByText("Access restricted", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      reconciliation.getByText(
-        "Your access does not cover everything this view needs. An organization owner can grant it.",
-      ),
-    ).toBeVisible();
-
-    // THE DISCLOSURE PROPERTY. None of the ten checks is named — not even the
-    // ones that passed. "Deposit balances agree with the balance sheet" would
-    // tell this reader the institution's deposits were reconciled and against
-    // what; the verdict is one statement about the whole book.
-    await assertAbsentFromPage(
-      page,
-      EXPECTED_CHECKS.map((check) => check.label),
-      "a refused reconciliation must name no check",
-    );
-    await assertAbsentFromPage(
-      page,
-      WITHHELD_MEMBER_LABELS,
-      "a refused reconciliation must name no withheld field",
-    );
-    await assertAbsentFromPage(
-      page,
-      WITHHELD_FIGURES,
-      "a refused reconciliation must carry no figure",
-    );
-    // And none of the badge verdicts, which would leak the outcome without the
-    // figures.
-    for (const verdict of [
-      "Does not reconcile",
-      "Differences found",
-      "Not assessed",
-      "Reconciled",
-    ]) {
-      await expect(
-        reconciliation.getByText(verdict, { exact: true }),
-        `a refused reconciliation must show no verdict, and it shows "${verdict}"`,
-      ).toHaveCount(0);
-    }
-
-    // THE POSITIVE CONTROL, and it is what makes every absence above mean
-    // something. This reader is refused the reconciliation section but is served
-    // `GET …/bi/insights` for the two liquidity measures their sentence covers, and
-    // the strip on this same page states them. So the page is NOT blank, and the
-    // withheld strings are absent because they were withheld rather than because
-    // nothing rendered.
+    // THE POSITIVE CONTROL FIRST, because it is what makes every absence below
+    // mean something. This reader is served `GET …/bi/insights` for the two
+    // liquidity measures their sentence covers, and the strip on the Insights
+    // page states them. So the page is NOT blank, and the withheld strings are
+    // absent because they were withheld rather than because nothing rendered.
     const strip = await biApi(
       request,
       "liquidity_viewer",
@@ -268,9 +193,26 @@ test.describe("a reader whose access does not cover the view", () => {
       strip.body as { insights: { headline: string }[]; measures_read: number }
     ).insights;
     expect(statements.length).toBeGreaterThan(0);
+
+    await page.goto("/insights");
+    await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
     await expect(
       page.getByText(statements[0].headline, { exact: true }).first(),
     ).toBeVisible();
+
+    // THE DISCLOSURE PROPERTY. Nothing outside this reader's sentence reaches
+    // the document — not a member label the catalogue withheld, and not a
+    // loan-book figure in any of the forms it could surface in.
+    await assertAbsentFromPage(
+      page,
+      WITHHELD_MEMBER_LABELS,
+      "a Liquidity-only Insights page must name no withheld field",
+    );
+    await assertAbsentFromPage(
+      page,
+      WITHHELD_FIGURES,
+      "a Liquidity-only Insights page must carry no loan-book figure",
+    );
   });
 
   test("sees a catalogue filtered to its own sentence, with the rest reported as a count", async ({

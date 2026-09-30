@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { AdvisoryDesignation } from "./AdvisoryDesignation";
 import {
   AdvisoryDesignationFromJSON,
@@ -110,12 +103,6 @@ export interface BiInsightRead {
    * @memberof BiInsightRead
    */
   statementClass: BiInsightReadStatementClassEnum;
-  /**
-   *
-   * @type {BiTrustBadge}
-   * @memberof BiInsightRead
-   */
-  trust?: BiTrustBadge;
 }
 
 /**
@@ -148,7 +135,6 @@ export const BiInsightReadStatementClassEnum = {
   Attribution: "attribution",
   Projection: "projection",
   DataGap: "data_gap",
-  TrustNotice: "trust_notice",
 } as const;
 export type BiInsightReadStatementClassEnum =
   (typeof BiInsightReadStatementClassEnum)[keyof typeof BiInsightReadStatementClassEnum];
@@ -205,8 +191,6 @@ export function BiInsightReadFromJSONTyped(
     qualifiers: json["qualifiers"],
     ruleId: json["rule_id"],
     statementClass: json["statement_class"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
   };
 }
 
@@ -238,6 +222,5 @@ export function BiInsightReadToJSONTyped(
     qualifiers: value["qualifiers"],
     rule_id: value["ruleId"],
     statement_class: value["statementClass"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
   };
 }

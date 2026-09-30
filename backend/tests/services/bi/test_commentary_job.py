@@ -47,7 +47,6 @@ AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)
 BANK_ID = "BK-COMMJOB1"
 BANK_NAME = "Commentary Job Bank"
-_ALL_GREEN: dict[str, str] = dict.fromkeys(("R8", "R9", "R10"), "green")
 
 RATIO = "engine.car_pct.crd.official"
 
@@ -122,8 +121,6 @@ def _movement(
         provenance=facts.FactProvenance(
             fact_id=uuid4(), derived_at=datetime.now(tz=UTC), build_id=uuid4()
         ),
-        statuses=_ALL_GREEN,
-        build_overall="green",
         prior=None if prior is None else Decimal(prior),
         current=None if current is None else Decimal(current),
         missing_reason=missing_reason,
@@ -151,8 +148,6 @@ def _assembled(*items: facts.Fact) -> AssembledInsights:
         measures_withheld=0,
         compiled_reads=1,
         build_fingerprint="f" * 64,
-        trust_status="green",
-        trust_failing_checks=(),
     )
 
 

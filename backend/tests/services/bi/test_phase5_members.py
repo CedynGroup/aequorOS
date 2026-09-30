@@ -13,8 +13,8 @@ neither is visible in a passing build:
 
 1. **A loan that states no arrears contributes NO ROW, never a zero.** The
    measures sum only what the bank stated, and the share's two legs cover the same
-   population, so a partial book cannot read as a complete one. R12 is what says
-   the book is partial; this file proves the figures themselves do not lie about it.
+   population, so a partial book cannot read as a complete one. This file proves
+   the figures themselves do not lie about what was and was not stated.
 2. **``movement_rc`` stays NULL through the aggregation.** ``flow_sum`` must emit a
    bare ``sum(...)``: a branch whose previous month was never pushed has no known
    movement, and a coalesce to 0 would report a month of no change. A coalesce is
@@ -248,9 +248,8 @@ def test_a_loan_that_states_no_arrears_contributes_no_row_not_a_zero(
 ) -> None:
     """The sum is the 1000 stated over two loans of 4000, NOT over the 10000 book.
 
-    That is the whole reason R12 exists: this figure is honest about what it read
-    and says nothing about what it did not, so the completeness check is what tells
-    a reader the book is only partly covered.
+    This figure is honest about what it read and says nothing about what it did
+    not: a loan that states no arrears is absent from the sum, never a zero in it.
     """
     _, rows = _run(
         db_session,
@@ -266,7 +265,7 @@ def test_a_loan_that_states_no_arrears_contributes_no_row_not_a_zero(
     assert _num(rows[0][0]) == 1000.0
     # 1000 / 10000: both legs follow the DERIVATION rule, so the denominator is the
     # whole converted book — the share is understated exactly to the extent the book
-    # is unstated, which is the defect R12 reports rather than one this hides.
+    # is unstated — visibly, because the unstated loans contribute no row.
     assert _num(rows[0][1]) == pytest.approx(10.0)
 
 

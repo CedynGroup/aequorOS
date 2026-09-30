@@ -22,7 +22,6 @@ import {
   LandingInsightStrip,
   useKpiExplain,
 } from "@/components/bi/InsightStrip";
-import { ReconciliationTrustBadge } from "@/components/bi/TrustBadge";
 import { runComputedAt, runThresholds } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
@@ -540,7 +539,6 @@ export default function LiquidityCockpit() {
                 title="LCR & NSFR — reporting-period trend"
                 subtitle={`Ratios across ${data.trend.length} reporting periods`}
                 height={260}
-                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 actions={
                   lcrMin !== null ? (
                     <StatusPill tone="success">
@@ -582,7 +580,6 @@ export default function LiquidityCockpit() {
                 title="Net-outflow decomposition"
                 subtitle="Weighted 30-day outflows by category vs capped inflows"
                 height={260}
-                trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}
                 footer={capNote ? <span>{capNote.message}</span> : undefined}
               >
                 <NetOutflowChart

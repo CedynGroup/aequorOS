@@ -656,7 +656,7 @@ never zero.** Provenance travels in headers, never in the payload:
 | `X-Bi-Feed-More-Available` | `true` when older reporting dates remain unserved: pull again at once. |
 | `X-Bi-Feed-Reporting-Dates` / `-Reporting-Date-Count` | Exactly which reporting dates the payload covers. |
 | `X-Bi-Feed-Data-Scope` | The slice of the institution this credential covers. A change here means your dataset changed shape. |
-| `X-Bi-Feed-Trust` | The reconciliation verdict over those dates: `green` / `amber` / `red` / `grey` (not assessed). |
+| `X-Bi-Feed-Trust` | **Removed by founder decision 2026-09-29.** It carried a reconciliation verdict (`green` / `amber` / `red` / `grey`) of the feed's figures against the regulatory returns; BI carries no such verdict. A loader must not require this header. Freshness is `X-Bi-Feed-Build`. |
 | `X-Bi-Feed-Build` / `X-Bi-Feed-Catalogue-Version` | Which analytics build and which measure definitions produced the rows. |
 | `X-Bi-Feed-Unit` | The reporting currency. It is deliberately not in any column name. |
 

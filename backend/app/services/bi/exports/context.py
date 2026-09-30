@@ -2,24 +2,26 @@
 
 An export is the one BI artifact that leaves the platform. Once it has, nothing
 the product knows travels with it — not the as-of date it was read at, not
-whether the book reconciled that day, not which catalogue defined the measures,
-not who took it. So every renderer in this package prints the same block, built
+which build it came from, not which catalogue defined the measures, not who
+took it. So every renderer in this package prints the same block, built
 here once:
 
 * **the query** — the measures, dimensions, filters and window that produced the
   rows, in the catalogue's own labels rather than member ids, so a reader who
   does not know the wire contract can still say what the sheet is;
 * **the as-of date** — the window, not "today";
-* **the trust status** — the reconciliation verdict for that window, with the
-  failing checks named. Grey is "not assessed" and is never dressed up as a pass;
 * **the catalogue version** — which definitions were in force;
 * **the data scope** — the slice of the institution the caller was authorized
   over, so a partial book cannot be read as the whole one;
 * **the user** — who took it.
 
-Those six are ``docs/bi.md`` §Exports' list, in its order, and
+Those five are ``docs/bi.md`` §Exports' list, in its order, and
 :data:`METADATA_FIELDS` names them so a renderer cannot quietly drop one.
-Everything after them is supplementary.
+Everything after them is supplementary — including the analytics build the rows
+were read from, which is how a reviewer tells a current artifact from one
+rendered before a rebuild. What the block does NOT carry is any verdict on
+whether the figures agree with the returns the platform files: that was the
+regulatory plane's question and it left BI on 2026-09-29.
 
 **Determinism.** Nothing here reads the clock. The watermark, the metadata block
 and the cell text are functions of the query, the data and the principal alone,
@@ -36,7 +38,7 @@ is no literal anywhere in this package.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -55,7 +57,6 @@ from app.services.bi.exports.policy import CLASS_LABELS, ExportClass
 METADATA_FIELDS: tuple[str, ...] = (
     "Query",
     "As at",
-    "Data confidence",
     "Catalogue version",
     "Data scope",
     "Exported by",
@@ -70,16 +71,6 @@ EXPORT_TITLE = "Business intelligence export"
 #: metadata block. Production copy, and the reason the regulatory exports and
 #: these can never be confused for one another.
 STANDING_NOTE = "Management information. Not a regulatory return and not a signed record of filing."
-
-#: How a trust status reads to a banker. The vocabulary is
-#: ``reconciliation``'s; the wording is the dashboard's badge wording, so the
-#: file and the screen say the same thing.
-TRUST_LABELS: Mapping[str, str] = {
-    "green": "Reconciled",
-    "amber": "Reconciled with exceptions",
-    "red": "Does not reconcile",
-    "grey": "Not assessed",
-}
 
 #: Displayed for a value the mart holds as NULL. Never a zero: a measure with no
 #: rows and a measure that is zero are different statements.
@@ -177,22 +168,11 @@ class ExportContext:
     #: One readable sentence per clause of the query.
     query_lines: tuple[str, ...]
     as_of_label: str
-    trust_status: str
-    failing_checks: tuple[str, ...]
     catalogue_version: str
     data_scope_label: str
     user_label: str
     export_class: ExportClass
     build_fingerprint: str | None
-
-    @property
-    def trust_label(self) -> str:
-        """The verdict, with the failing checks named when there are any."""
-
-        label = TRUST_LABELS.get(self.trust_status, TRUST_LABELS["grey"])
-        if not self.failing_checks:
-            return label
-        return f"{label} ({', '.join(self.failing_checks)})"
 
     @property
     def query_label(self) -> str:
@@ -213,14 +193,13 @@ class ExportContext:
     def metadata_rows(self) -> tuple[tuple[str, str], ...]:
         """``(field, value)`` for the artifact, spec fields first.
 
-        The first six entries are :data:`METADATA_FIELDS` in order; the rest are
+        The first five entries are :data:`METADATA_FIELDS` in order; the rest are
         supplementary and may grow without a renderer changing.
         """
 
         rows: list[tuple[str, str]] = [
             ("Query", self.query_label),
             ("As at", self.as_of_label),
-            ("Data confidence", self.trust_label),
             ("Catalogue version", self.catalogue_version),
             ("Data scope", self.data_scope_label),
             ("Exported by", self.user_label),
@@ -376,7 +355,6 @@ __all__ = [
     "EXPORT_TITLE",
     "METADATA_FIELDS",
     "STANDING_NOTE",
-    "TRUST_LABELS",
     "ExportColumn",
     "ExportContext",
     "ExportTable",

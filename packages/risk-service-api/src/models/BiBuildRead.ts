@@ -20,7 +20,14 @@ import {
 } from "./FinishedAt";
 
 /**
- * One mart build for the date, so a badge can say WHY it is not green.
+ * One mart build for the date: which scope, whether it succeeded, and when.
+ *
+ * Build freshness, not a verdict. ``status`` is ``bi_mart_builds``' own outcome
+ * vocabulary (``running`` / ``succeeded`` / ``failed``) and says whether the rows
+ * a reader is looking at were written by a build that completed — nothing about
+ * whether they agree with any figure the platform files. A date whose latest
+ * build did not succeed is served from the previous build's rows, and this is how
+ * a surface says so rather than letting yesterday's numbers read as today's.
  * @export
  * @interface BiBuildRead
  */

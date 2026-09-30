@@ -17,10 +17,7 @@
  *
  * NEITHER LIST IS ITSELF A DISCLOSURE. It names views, not figures: the member ids
  * a view reads are only shown once they have been authorized for the reader, which
- * happens when the dashboard is opened. The per-tile badge on a certified pack is
- * the institution's own reconciliation verdict for the date; a reader who may not
- * read the checks is shown no badge rather than a grey one, because "not assessed"
- * would be a false statement about a book that was assessed.
+ * happens when the dashboard is opened.
  */
 
 import Link from "next/link";
@@ -31,14 +28,13 @@ import EmptyState from "@/components/ui/EmptyState";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
-import TrustBadge from "@/components/bi/TrustBadge";
 import {
   CERTIFICATION_LABELS,
   shownBesideRefusals,
   useDashboardList,
   useSavedDashboardList,
 } from "@/components/bi/dashboards";
-import { isBiUnavailable, useBiTrust } from "@/lib/api/bi";
+import { isBiUnavailable } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
 import { fmtInt } from "@/lib/format";
 
@@ -48,7 +44,6 @@ export default function DashboardsPage() {
 
   const packs = useDashboardList(bank?.id, asOf);
   const saved = useSavedDashboardList(bank?.id);
-  const trust = useBiTrust(bank?.id, asOf);
   const { dashboards } = packs;
   const mine = saved.dashboards;
 
@@ -260,15 +255,6 @@ export default function DashboardsPage() {
                           {dashboard.description}
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {trust.data && (
-                            <TrustBadge
-                              status={trust.data.status}
-                              failingChecks={(trust.data.checks ?? [])
-                                .filter((check) => check.status !== "green")
-                                .map((check) => check.checkId)}
-                              size="compact"
-                            />
-                          )}
                           <span className="text-micro text-slate">
                             {fmtInt(shown)} {shown === 1 ? "view" : "views"}
                           </span>

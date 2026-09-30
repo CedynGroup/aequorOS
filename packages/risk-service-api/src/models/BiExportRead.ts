@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { DownloadExpiresInSeconds } from "./DownloadExpiresInSeconds";
 import {
   DownloadExpiresInSecondsFromJSON,
@@ -175,12 +168,6 @@ export interface BiExportRead {
    * @memberof BiExportRead
    */
   truncated?: boolean;
-  /**
-   *
-   * @type {BiTrustBadge}
-   * @memberof BiExportRead
-   */
-  trust?: BiTrustBadge;
 }
 
 /**
@@ -282,8 +269,6 @@ export function BiExportReadFromJSONTyped(
         : SizeBytesFromJSON(json["size_bytes"]),
     state: json["state"],
     truncated: json["truncated"] == null ? undefined : json["truncated"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
   };
 }
 
@@ -317,6 +302,5 @@ export function BiExportReadToJSONTyped(
     size_bytes: SizeBytesToJSON(value["sizeBytes"]),
     state: value["state"],
     truncated: value["truncated"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
   };
 }

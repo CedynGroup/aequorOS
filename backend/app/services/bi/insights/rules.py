@@ -7,13 +7,7 @@ sheet always produces the same insights, in the same order, with the same
 wording. That is what makes an insight citable: the reader can be shown the
 fact sheet and the hash of it, and re-derive exactly what they were told.
 
-The five rules, and the order they are applied in:
-
-``trust_notice``
-    One statement per non-green reconciliation state present on the sheet,
-    naming the measures it covers. ``grey`` is stated as "not checked" — it is
-    never reported as a pass, because a check that could not run has proved
-    nothing (``reconciliation.py``).
+The four rules, and the order they are applied in:
 
 ``data_gap``
     One statement per figure that has no value, saying which dataset is missing
@@ -66,7 +60,6 @@ from app.services.bi.insights.facts import (
 )
 from app.services.bi.insights.projections import Projection
 from app.services.bi.insights.statements import (
-    Emphasis,
     Insight,
     StatementClass,
     insight_from,
@@ -86,7 +79,6 @@ __all__ = [
     "movement_rule",
     "projection_rule",
     "statement_classes",
-    "trust_notice_rule",
 ]
 
 
@@ -140,30 +132,6 @@ _CHANGE_SUFFIX: dict[str, str] = {
     "count": "",
 }
 
-_TRUST_HEADLINE: dict[str, str] = {
-    "grey": "Some figures have not been checked",
-    "amber": "A gap was found when checking some figures",
-    "red": "Some figures do not agree with the returns the platform files",
-}
-
-_TRUST_DETAIL: dict[str, str] = {
-    "grey": (
-        "The reconciliation checks behind these figures could not be run, so nothing "
-        "shown for them is confirmed. Not checked is not the same as checked and correct."
-    ),
-    "amber": (
-        "These figures were compared with the returns the platform files and a gap was "
-        "found. Read them with that gap in mind."
-    ),
-    "red": (
-        "These figures were compared with the returns the platform files and did not "
-        "agree. Treat them as unreliable until the difference is resolved."
-    ),
-}
-
-_TRUST_EMPHASIS: dict[str, Emphasis] = {"grey": "normal", "amber": "high", "red": "high"}
-
-
 def _render_change(value: Decimal, value_type: ValueType) -> str:
     """A change at the factor its type is stated at, so it matches the level.
 
@@ -187,33 +155,6 @@ def _names(measures: Sequence[str]) -> str:
 # the rules
 # ---------------------------------------------------------------------------
 
-
-def trust_notice_rule(sheet: FactSheet, policy: InsightPolicy) -> tuple[Insight, ...]:
-    """One notice per non-green reconciliation state on the sheet."""
-    _ = policy
-    grouped: dict[str, list[Fact]] = {}
-    for fact in sheet.facts:
-        if fact.trust.overall != "green":
-            grouped.setdefault(fact.trust.overall, []).append(fact)
-    insights: list[Insight] = []
-    for state in ("red", "amber", "grey"):
-        facts = grouped.get(state)
-        if not facts:
-            continue
-        insights.append(
-            insight_from(
-                rule_id="trust_notice",
-                statement_class="trust_notice",
-                facts=tuple(facts),
-                headline=_TRUST_HEADLINE[state],
-                detail=(
-                    f"{_TRUST_DETAIL[state]} This covers {_names([fact.label for fact in facts])}."
-                ),
-                as_of=sheet.as_of,
-                emphasis=_TRUST_EMPHASIS[state],
-            )
-        )
-    return tuple(insights)
 
 
 def data_gap_rule(sheet: FactSheet, policy: InsightPolicy) -> tuple[Insight, ...]:
@@ -357,7 +298,6 @@ Rule = Callable[[FactSheet, InsightPolicy], tuple[Insight, ...]]
 
 #: Applied in this order; the result is then sorted by ``Insight.sort_key``.
 RULES: tuple[Rule, ...] = (
-    trust_notice_rule,
     data_gap_rule,
     movement_rule,
     attribution_rule,
@@ -389,4 +329,4 @@ def derive_insights(sheet: FactSheet, policy: InsightPolicy = DEFAULT_POLICY) ->
 
 def statement_classes() -> tuple[StatementClass, ...]:
     """Every class of statement the rules can produce, for the UI's legend."""
-    return ("trust_notice", "data_gap", "movement", "attribution", "projection")
+    return ("data_gap", "movement", "attribution", "projection")

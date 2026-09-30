@@ -1,13 +1,13 @@
 /**
- * The three Phase 2 surfaces a module landing page mounts — and that were
- * built and never mounted (audit A360-7 S3).
+ * The Phase 2 surfaces a module landing page mounts — and that were built and
+ * never mounted (audit A360-7 S3).
  *
  * `docs/bi.md` §Insights layer: "`<InsightStrip>` sits under `PageHeader` on
  * the Command Center and every module landing page. `KpiStat` gains an
- * `explain` prop that opens `ExplainDrawer`. `TrustBadge` goes in the
- * `ChartFrame` actions slot." All three existed, in `components/bi/`, reached
- * by exactly one route. A module user never saw a statement, a trust verdict or
- * a provenance drawer. Every gate was green, because each piece was correct.
+ * `explain` prop that opens `ExplainDrawer`." Both existed, in
+ * `components/bi/`, reached by exactly one route. A module user never saw a
+ * statement or a provenance drawer. Every gate was green, because each piece
+ * was correct.
  *
  * So this file reads the SOURCE of the landing pages and asserts they reach the
  * pieces — the shape `lib/api/grants.test.ts` and `lib/api/ask.test.ts` use,
@@ -75,21 +75,6 @@ function code(relativePath: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^[ \t]*\/\/.*$/gm, "")
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
-}
-
-/** Every `<ChartFrame …>…</ChartFrame>` block in a page, in order. */
-function chartFrames(source: string): string[] {
-  const blocks: string[] = [];
-  let cursor = 0;
-  for (;;) {
-    const open = source.indexOf("<ChartFrame", cursor);
-    if (open < 0) break;
-    const close = source.indexOf("</ChartFrame>", open);
-    assert.ok(close > open, "unterminated <ChartFrame");
-    blocks.push(source.slice(open, close));
-    cursor = close;
-  }
-  return blocks;
 }
 
 /**
@@ -415,214 +400,7 @@ test("the explain query is one measure at the page's date and nothing else", () 
   });
 });
 
-// --- 3. TrustBadge in the ChartFrame actions slot ---------------------------
-
-test("ChartFrame reserves the first place in its actions row for the trust badge, and is unchanged without it", () => {
-  const frame = code("components/ui/ChartFrame.tsx");
-  assert.ok(/trust\?: ReactNode;/.test(frame), "the slot is an optional prop");
-  assert.ok(
-    /\{\(trust \|\| actions\) && \(/.test(frame),
-    "the row renders when EITHER is given, so a page with no actions still shows the badge and a page with neither renders as before",
-  );
-  assert.ok(
-    /\{trust\}\s*\{actions\}/.test(frame),
-    "the badge renders before the page's own actions — its own prop, so a page that fills the slot cannot drop it",
-  );
-});
-
-test("ReconciliationTrustBadge draws the server's verdict, and nothing where there is none", () => {
-  const badge = code("components/bi/TrustBadge.tsx");
-  const start = badge.indexOf("export function ReconciliationTrustBadge");
-  assert.ok(start >= 0, "ReconciliationTrustBadge must be exported from components/bi/TrustBadge");
-  const fn = badge.slice(start);
-  assert.ok(
-    /const enabled = availability\.biEnabled === true;/.test(fn) &&
-      /useBiTrust\(bankId, day, enabled\)/.test(fn),
-    "the flag gates the fetch",
-  );
-  assert.ok(
-    /if \(!enabled \|\| !bankId \|\| day === null\) return null;/.test(fn),
-    "off, no institution or no date → nothing",
-  );
-  assert.ok(
-    /if \(trust\.isPending \|\| trust\.error \|\| !trust\.data\) return null;/.test(fn),
-    "pending, refused (403), not served (404) or failed → nothing; a placeholder verdict is a verdict",
-  );
-  assert.ok(
-    /status=\{trust\.data\.status\}/.test(fn),
-    "the status drawn is the server's roll-up",
-  );
-  assert.equal(
-    /status=["']/.test(fn),
-    false,
-    "never a literal verdict",
-  );
-  assert.ok(
-    /\.filter\(\(check\) => check\.status !== "green"\)/.test(fn),
-    "the checks that did not pass are named on hover — grey (not assessed) included",
-  );
-  // The presentational badge itself must still refuse to widen an unknown value.
-  assert.ok(
-    /status === "green" \|\| status === "amber" \|\| status === "red"/.test(badge) &&
-      /return PRESENTATION\.grey;/.test(badge),
-    "an unrecognised or absent verdict degrades to grey, never to a pass",
-  );
-});
-
-/**
- * Which charts on which page carry the badge — and which deliberately do not.
- * The badge belongs on a chart whose figures ARE the institution's computed
- * position at the page's reporting date, because that is what the
- * reconciliation checks compare. A projection path is not that position, and
- * the transfer curve is market inputs plus parameters; a badge on either would
- * assert a comparison nobody made. Every `<ChartFrame>` on these pages must be
- * in one list or the other, so a new chart is classified rather than defaulted.
- */
-const BADGED_CHARTS: Record<string, readonly string[]> = {
-  basel: ["CAR — reporting-period trend", "Capital waterfall"],
-  liquidity: ["LCR & NSFR — reporting-period trend", "Net-outflow decomposition"],
-  fx: ["Net position by currency"],
-  ftp: ["Portfolio NIM trend"],
-  forecasting: [],
-};
-const UNBADGED_CHARTS: Record<string, readonly string[]> = {
-  basel: [],
-  liquidity: [],
-  fx: [],
-  ftp: ["Transfer curve composition"],
-  forecasting: [
-    "Balance-sheet projection",
-    "Asset composition",
-    "Asset waterfall",
-    "CAR path",
-    "LCR path",
-    "NSFR path",
-  ],
-};
-
-test("every module chart of the computed position carries the reconciliation badge, and no other chart does", () => {
-  const TRUST = "trust={<ReconciliationTrustBadge bankId={bankId} asOf={asOf} />}";
-  for (const page of Object.keys(BADGED_CHARTS)) {
-    const path = `app/(app)/${page}/page.tsx`;
-    const source = code(path);
-    const frames = chartFrames(source);
-    const badged = BADGED_CHARTS[page];
-    const unbadged = UNBADGED_CHARTS[page];
-    assert.equal(
-      frames.length,
-      badged.length + unbadged.length,
-      `${path} has ${frames.length} <ChartFrame> blocks; ${badged.length + unbadged.length} are classified above — classify the new one`,
-    );
-    if (badged.length > 0) {
-      assert.ok(
-        /import \{ ReconciliationTrustBadge \} from ["']@\/components\/bi\/TrustBadge["']/.test(
-          source,
-        ),
-        `${path} must import ReconciliationTrustBadge`,
-      );
-    }
-    for (const title of badged) {
-      const frame = frames.find((block) => block.includes(`title="${title}"`));
-      assert.ok(frame, `${path}: no <ChartFrame title="${title}">`);
-      assert.ok(
-        frame.includes(TRUST),
-        `${path}: the "${title}" chart must carry ${TRUST} in its trust slot`,
-      );
-    }
-    for (const title of unbadged) {
-      const frame = frames.find((block) => block.includes(`title="${title}"`));
-      assert.ok(frame, `${path}: no <ChartFrame title="${title}">`);
-      assert.equal(
-        /\btrust=/.test(frame),
-        false,
-        `${path}: the "${title}" chart is not a computed position and must not carry a reconciliation verdict`,
-      );
-    }
-  }
-});
-
-// --- the badge's hover names checks in words, and the same words as the server --
-
-test("the trust badge's hover names each outstanding check in the platform's words, never as a wire token", () => {
-  const badge = code("components/bi/TrustBadge.tsx");
-  assert.equal(
-    /failingChecks\.join\(/.test(badge),
-    false,
-    "the raw check ids must never be joined into the tooltip (audit A360-6)",
-  );
-  assert.ok(
-    /const failing = outstandingChecksSentence\(failingChecks\);/.test(badge),
-    "the tooltip goes through outstandingChecksSentence",
-  );
-  const start = badge.indexOf("export function outstandingChecksSentence");
-  assert.ok(start >= 0, "outstandingChecksSentence must be exported");
-  const fn = badge.slice(start, badge.indexOf("export default function TrustBadge"));
-  assert.ok(
-    /RECONCILIATION_CHECK_LABELS\[id\]/.test(fn),
-    "each id is looked up in the label map",
-  );
-  assert.equal(
-    /\$\{id\}/.test(fn),
-    false,
-    "an id this client cannot name is counted, never printed",
-  );
-  assert.ok(
-    /further checks? this client cannot name/.test(fn),
-    "an unnamed check is still reported as outstanding — dropping it would read as fewer failures",
-  );
-});
-
-test("the check-label map mirrors the server's CHECK_LABELS exactly and covers every check the platform stores", () => {
-  const badge = code("components/bi/TrustBadge.tsx");
-  const mapStart = badge.indexOf("export const RECONCILIATION_CHECK_LABELS");
-  assert.ok(mapStart >= 0, "RECONCILIATION_CHECK_LABELS must be exported");
-  const mapBody = badge.slice(mapStart, badge.indexOf("};", mapStart));
-  const mirrored = new Map(
-    [...mapBody.matchAll(/^\s*(R\d+):\s*"([^"]+)",?$/gm)].map((match) => [
-      match[1],
-      match[2],
-    ]),
-  );
-
-  const readBi = readFileSync(
-    join(repoRoot(), "backend", "app", "features", "read_bi.py"),
-    "utf8",
-  );
-  const labelsStart = readBi.indexOf("CHECK_LABELS: Mapping[str, str] = {");
-  assert.ok(labelsStart >= 0, "could not find CHECK_LABELS in read_bi.py");
-  const labelsBody = readBi.slice(labelsStart, readBi.indexOf("}", labelsStart));
-  const server = new Map(
-    [...labelsBody.matchAll(/^\s*"(R\d+)":\s*"([^"]+)",?$/gm)].map((match) => [
-      match[1],
-      match[2],
-    ]),
-  );
-  assert.ok(server.size >= 12, `read only ${server.size} server labels`);
-  assert.deepEqual(
-    [...mirrored.entries()].sort(),
-    [...server.entries()].sort(),
-    "TrustBadge.RECONCILIATION_CHECK_LABELS must equal read_bi.py CHECK_LABELS, id for id and word for word: the hover on a chart and the list on the Insights hub describe one check with one sentence",
-  );
-
-  // …and the server's own list is complete against the ids the platform stores,
-  // so a list of ten cannot hide behind a mirror that matches it.
-  const models = readFileSync(
-    join(repoRoot(), "backend", "app", "models", "bi.py"),
-    "utf8",
-  );
-  const range =
-    /RECONCILIATION_CHECK_IDS: tuple\[str, \.\.\.\] = tuple\(f"R\{number\}" for number in range\(1, (\d+)\)\)/.exec(
-      models,
-    );
-  assert.ok(range, "could not read RECONCILIATION_CHECK_IDS from app/models/bi.py");
-  const stored = Array.from({ length: Number(range[1]) - 1 }, (_, index) => `R${index + 1}`);
-  assert.ok(stored.includes("R12"), "R11 and R12 are stored checks (Phase 5)");
-  for (const id of stored) {
-    assert.ok(mirrored.has(id), `${id} is a stored check with no sentence in TrustBadge`);
-  }
-});
-
-// --- a refusal on a module page is the SERVER's decision --------------------
+// --- 3. a refusal on a module page is the SERVER's decision -----------------
 
 test("the strip paraphrases a grant denial and renders every other refusal in the server's sentence", () => {
   const strip = code("components/bi/InsightStrip.tsx");
@@ -681,8 +459,8 @@ if (failures > 0) {
 }
 
 console.log(
-  "landingSurfaces.test.ts: the insight strip, the KPI provenance drawer and the " +
-    "chart trust badge are mounted on the Command Center and every module landing " +
-    "page, gated on the feature flag, silent when not served, refusing as a refusal, " +
-    "and speaking about the page's own reporting date.",
+  "landingSurfaces.test.ts: the insight strip and the KPI provenance drawer are " +
+    "mounted on the Command Center and every module landing page, gated on the " +
+    "feature flag, silent when not served, refusing as a refusal, and speaking " +
+    "about the page's own reporting date.",
 );

@@ -30,7 +30,6 @@ export const BI_QUERY_PREFIX = "bi-query";
 export const BI_GRID_PREFIX = "bi-grid";
 export const BI_DRILL_PREFIX = "bi-drill";
 export const BI_EXPLAIN_PREFIX = "bi-explain";
-export const BI_TRUST_PREFIX = "bi-trust";
 export const BI_FEATURE_PREFIX = "bi-features";
 /**
  * The certified content packs, and one resolved pack.
@@ -83,7 +82,6 @@ export const BI_QUERY_PREFIXES: readonly string[] = [
   BI_GRID_PREFIX,
   BI_DRILL_PREFIX,
   BI_EXPLAIN_PREFIX,
-  BI_TRUST_PREFIX,
   BI_PACKS_PREFIX,
   BI_PACK_PREFIX,
   BI_INSIGHTS_PREFIX,
@@ -202,20 +200,6 @@ export function biCatalogueKey(
   bankId: string | null | undefined,
 ): QueryKey {
   return scopedQueryKey(BI_CATALOGUE_PREFIX, scope, bankDimension(bankId));
-}
-
-/** `GET …/bi/trust` — the reconciliation verdict for one (institution, date). */
-export function biTrustKey(
-  scope: QueryAuthorityScope,
-  bankId: string | null | undefined,
-  asOf: string | null | undefined,
-): QueryKey {
-  return scopedQueryKey(
-    BI_TRUST_PREFIX,
-    scope,
-    bankDimension(bankId),
-    isoDay(asOf) ?? "unset",
-  );
 }
 
 /** `GET /feature-flags` — whether this deployment serves BI at all. */

@@ -1,10 +1,9 @@
-"""The BI read surface: nine routes under ``/api/v1/banks/{bank_id}/bi/``.
+"""The BI read surface: eight routes under ``/api/v1/banks/{bank_id}/bi/``.
 
 ``catalogue`` says what this caller may ask, ``query`` answers one question,
 ``grid`` and ``drill`` page an answer for the grid, ``explain`` says where a
-figure came from, ``trust`` says whether the figures reconcile to what the
-platform already files, ``packs`` resolves a certified dashboard for a reader and
-a reporting date, and ``insights`` says what the platform is prepared to state
+figure came from, ``packs`` resolves a certified dashboard for a reader and a
+reporting date, and ``insights`` says what the platform is prepared to state
 about that date. Everything they need is built elsewhere: the catalogue
 declares the members (``app/domain/bi/catalogue``), the compiler turns a
 ``BiQuery`` into one read-only statement (``app/services/bi/compiler.py``), the
@@ -58,14 +57,15 @@ subset whose ``denied_members`` is non-empty, and a malformed request is a
 ``denied`` row naming no member at all — the unknown id is client bytes and is
 never stored. ``row_count IS NULL`` is how a row says no rows were served.
 
-``catalogue`` and ``trust`` write NO row: C1's ``surface`` CHECK did not name
-them, and recording either under ``query`` or ``explain`` would put an event in
-an append-only audit table that did not happen. Both are still authorized (trust
-over every member its checks disclose — audit A6-01) and both are subject to the
-budget; neither refills it, so a principal polling only those two is bounded by
-nothing but the process. ``packs`` and ``insights`` DO have surfaces of their
-own, so both record one row per request — including the refusals, because the
-budget is counted over these rows and a probe loop must not be free.
+``catalogue`` writes NO row: C1's ``surface`` CHECK did not name it, and
+recording it under ``query`` or ``explain`` would put an event in an append-only
+audit table that did not happen. It is still subject to the budget; it does not
+refill it, so a principal polling only it is bounded by nothing but the process.
+(The vocabulary also still admits ``trust``, the retired reconciliation-verdict
+route's value — see ``QUERY_LOG_SURFACES``; nothing writes it.) ``packs`` and
+``insights`` DO have surfaces of their own, so both record one row per request —
+including the refusals, because the budget is counted over these rows and a
+probe loop must not be free.
 
 **Two conventions the last two routes add.** A ``packs`` row may carry
 ``denied_members`` on an ``allowed`` decision: a dashboard is a MIXED read by
@@ -84,7 +84,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from time import perf_counter
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -107,12 +107,7 @@ from app.domain.bi.packs import PackError
 from app.domain.bi.packs import pack as certified_pack
 from app.domain.bi.packs import packs as certified_packs
 from app.models import Bank
-from app.models.bi import (
-    RECONCILIATION_STATUSES,
-    BiFactEngineMetric,
-    BiMartBuild,
-    BiReconciliationResult,
-)
+from app.models.bi import BiFactEngineMetric, BiMartBuild
 from app.schemas.bi import (
     BI_MAX_MEASURES,
     BiBuildRead,
@@ -143,13 +138,9 @@ from app.schemas.bi import (
     BiQueryResult,
     BiResultColumn,
     BiTime,
-    BiTrustBadge,
-    BiTrustCheckRead,
-    BiTrustRead,
-    BiTrustStatus,
 )
 from app.services import institution_types
-from app.services.bi import data_scope, grid_adapter, provenance, query_log, reconciliation
+from app.services.bi import data_scope, grid_adapter, provenance, query_log
 from app.services.bi.authorization import (
     BiAuthorization,
     BiDataScope,
@@ -185,63 +176,10 @@ SURFACE_EXPORT = "export"
 #: read runs real statements over the marts.
 SURFACE_PACKS = "packs"
 SURFACE_INSIGHTS = "insights"
-#: Not ``bi_query_log`` surfaces — C1's ``surface`` CHECK names the six data
-#: surfaces and neither of these is one. Carried so the decision telemetry and
-#: the ETags can name them (see the module docstring on the trust row).
+#: Not a ``bi_query_log`` surface — C1's ``surface`` CHECK names the data
+#: surfaces and this is not one. Carried so the decision telemetry and the ETags
+#: can name it (see the module docstring on the catalogue row).
 SURFACE_CATALOGUE = "catalogue"
-SURFACE_TRUST = "trust"
-
-#: Production copy for each reconciliation check, in the units a banker reads.
-#: Neutral by construction: no currency, no regulator, no form number (the
-#: return family differs per jurisdiction, the check does not).
-CHECK_LABELS: Mapping[str, str] = {
-    "R1": "Non-performing loans agree with the credit engine",
-    "R2": "Loan balances agree with the balance sheet",
-    "R3": "Deposit balances agree with the balance sheet",
-    "R4": "Income-statement lines agree with the regulatory return",
-    "R5": "Every position in the book reached the analytics tables",
-    "R6": "Every balance is stated in the reporting currency",
-    "R7": "Every balance is attributed to a known branch",
-    "R8": "The analytics tables are as current as the live figures",
-    "R9": "The balance sheet balances",
-    "R10": "Arrears ageing is complete",
-    "R11": "The branch breakdown adds up to the ledger",
-    "R12": "Stated arrears cover the whole loan book",
-}
-
-#: What each reconciliation check DISCLOSES, named as the catalogue member whose
-#: sentence already governs that same figure (audit A6-01).
-#:
-#: A trust payload is not a query — it is a status, an ``lhs``, an ``rhs``, a
-#: ``difference`` and a ``detail`` per check — which is exactly why it read as
-#: metadata and was served to anyone. It is not metadata: R2's ``lhs`` IS the
-#: institution's total loans, the same number ``loans.balance_rc`` serves; R3's
-#: is its total deposits; R9's is total assets and funding; R7's ``detail``
-#: carries real branch codes. So the sentence this route needs is the union of
-#: the sentences those members need, and it is expressed AS those members so the
-#: pairs come from the catalogue (D-028) rather than from a literal here.
-#:
-#: Every check is mapped, and the route requires EVERY pair, because the badge's
-#: verdict is one statement about the whole book: a principal who may not see the
-#: deposit total may not be told that the deposit reconciliation failed either.
-CHECK_DISCLOSURES: Mapping[str, str] = {
-    "R1": "loans.npl_exposure_rc",
-    "R2": "loans.balance_rc",
-    "R3": "deposits.balance_rc",
-    "R4": "gl_account.pl_line",
-    "R5": "positions.count",
-    "R6": "positions.unconverted_count",
-    "R7": "branch.code",
-    "R8": "time.date",
-    "R9": "positions.balance_rc",
-    "R10": "loan.dpd_band",
-    # R11's ``lhs`` is the branch ledger total per account and its ``detail``
-    # carries account codes and branch totals, which is exactly the figure
-    # ``gl.branch_ytd_rc`` serves. R12's ``detail`` carries stated-arrears totals
-    # alongside the share, so it names the money measure rather than a flag.
-    "R11": "gl.branch_ytd_rc",
-    "R12": "loans.arrears_amount_rc",
-}
 
 #: D-028: a member that identifies ONE record is ``confidential``. A drill is
 #: the record-level surface, so it must name at least one of them — otherwise it
@@ -392,94 +330,6 @@ def _build_fingerprint(
     return provenance.build_fingerprint(
         db, organization_id=organization_id, bank_id=bank_id, window=window
     )
-
-
-def _stored_checks(
-    db: Session, organization_id: str, bank_id: str, window: tuple[date, date]
-) -> list[BiReconciliationResult]:
-    return provenance.stored_checks(
-        db, organization_id=organization_id, bank_id=bank_id, window=window
-    )
-
-
-def _trust_badge(
-    db: Session, organization_id: str, bank_id: str, window: tuple[date, date]
-) -> BiTrustBadge:
-    """The verdict for everything the window covers; a missing check is grey."""
-
-    verdict = provenance.trust_verdict(
-        db, organization_id=organization_id, bank_id=bank_id, window=window
-    )
-    return BiTrustBadge(
-        status=_trust_status(verdict.status), failing_checks=list(verdict.failing_checks)
-    )
-
-
-def _check_read(
-    check_id: str, row: BiReconciliationResult | None, *, whole_institution: bool = True
-) -> BiTrustCheckRead:
-    """One reconciliation check's verdict, with its operands only for a reader
-    whose grant covers the whole institution.
-
-    A check reconciles the WHOLE book — ``lhs``/``rhs``/``difference`` on R7 are
-    the institution's total loans against the ledger — so handing them to a
-    branch-scoped reader discloses precisely the figure their grant excludes.
-    That was a real leak on ``explain``, found by
-    ``tests/api/test_bi_data_scope.py::test_explain_cannot_be_used_to_read_outside_the_slice``:
-    the response carries no measure value by design, so the operands were the one
-    number on it, and they were the institution's.
-
-    The VERDICT is kept, deliberately. Whether the bank's book reconciles is not a
-    figure and is already shown to every BI reader through the trust badge (audit
-    A6-01 authorized that route over every member its checks disclose); withholding
-    it would tell a scoped reader nothing about whether the numbers they CAN see
-    are trustworthy, which is the question the badge exists to answer. So the
-    status, the label and ``evaluated_at`` stay, and the arithmetic goes.
-
-    ``detail`` goes too. It is documented as "never a row of the book", but it
-    carries counts and line references that are institution-wide in the same way
-    the operands are, and a check that cannot be assessed says so in ``status``.
-    The one exception is the ``not_assessed`` reason, which is about the check
-    rather than the book.
-    """
-
-    if row is None:
-        return BiTrustCheckRead(
-            check_id=check_id,
-            label=CHECK_LABELS.get(check_id, check_id),
-            status=_trust_status(reconciliation.GREY),
-            detail={"reason": "not_assessed"},
-        )
-    if not whole_institution:
-        return BiTrustCheckRead(
-            check_id=check_id,
-            label=CHECK_LABELS.get(check_id, check_id),
-            status=_trust_status(row.status),
-            detail={"reason": "withheld_outside_data_scope"},
-            evaluated_at=row.evaluated_at,
-        )
-    return BiTrustCheckRead(
-        check_id=check_id,
-        label=CHECK_LABELS.get(check_id, check_id),
-        status=_trust_status(row.status),
-        lhs=row.lhs,
-        rhs=row.rhs,
-        difference=row.difference,
-        tolerance=row.tolerance,
-        detail=dict(row.detail or {}),
-        evaluated_at=row.evaluated_at,
-    )
-
-
-def _trust_status(value: str) -> BiTrustStatus:
-    """The stored status, or grey for a value the badge vocabulary does not know."""
-
-    if value in RECONCILIATION_STATUSES:
-        return cast("BiTrustStatus", value)
-    return cast("BiTrustStatus", reconciliation.GREY)
-
-
-# --- the guarded pipeline ---------------------------------------------------------------
 
 
 def _query_error(exc: BiQueryError) -> HTTPException:
@@ -851,7 +701,6 @@ append_query_log = _append
 query_error = _query_error
 injected_filters = _injected_filters
 data_window = _data_window
-trust_badge = _trust_badge
 require_budget = _require_budget
 run_query = _run
 result_columns = _columns
@@ -1007,7 +856,6 @@ def _measure_read(measure: MeasureDef) -> BiCatalogueMeasureRead:
         allowed_dimensions=list(measure.allowed_dimensions),
         favourable_direction=measure.favourable_direction,
         thresholds_source=measure.thresholds_source,
-        reconciliation_checks=list(measure.reconciliation_checks),
         advisory_designation=measure.advisory_designation,
         certified=measure.certified,
         engine_metric_id=None if rule is None else rule.metric_id,
@@ -1132,7 +980,6 @@ def run_bi_query(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         truncated=result.truncated,
         elapsed_ms=result.elapsed_ms,
         used_aggregate=result.used_aggregate,
-        trust=_trust_badge(db, access.ctx.organization_id, access.bank.id, authorized.window),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
         data_scope=_scope_read(authorized.scope),
@@ -1176,7 +1023,6 @@ def _paged(
         truncated=page.truncated,
         elapsed_ms=page.elapsed_ms,
         used_aggregate=page.used_aggregate,
-        trust=_trust_badge(db, access.ctx.organization_id, access.bank.id, authorized.window),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
     )
@@ -1309,7 +1155,6 @@ def _engine_read(
         pipeline_state=row.pipeline_state,
         status=row.status,
         advisory_designation=row.advisory_designation,
-        reconciliation_blocked=row.reconciliation_blocked,
         computed_at=row.computed_at,
         run_id=row.run_id,
         reporting_period_id=row.reporting_period_id,
@@ -1376,10 +1221,6 @@ def explain_bi_measure(  # noqa: PLR0913 - FastAPI injects db/access/response/he
         db, replace(authorized.record, member_ids=_logged_members(authorized.decision, compiled))
     )
     measure = cat.measure(request.measure)
-    rows = {
-        row.check_id: row
-        for row in _stored_checks(db, access.ctx.organization_id, access.bank.id, authorized.window)
-    }
     time = request.query.time
     response.headers.update(_cache_headers(authorized.etag))
     return BiExplainRead(
@@ -1393,194 +1234,10 @@ def explain_bi_measure(  # noqa: PLR0913 - FastAPI injects db/access/response/he
         window_end=None if time.range is None else time.range.end,
         compare_to=time.compare_to,
         engine=_engine_read(db, access, measure, authorized.window),
-        checks=[
-            _check_read(
-                check_id,
-                rows.get(check_id),
-                whole_institution=authorized.decision.data_scope.whole_institution,
-            )
-            for check_id in measure.reconciliation_checks
-        ],
-        trust=_trust_badge(db, access.ctx.organization_id, access.bank.id, authorized.window),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=authorized.build_fingerprint,
     )
 
-
-def trust_probe(as_of: date) -> BiQuery:
-    """The members ``GET trust`` discloses, as one query for the decision function.
-
-    Public because the authorization matrix runs it as a shape: the trust route's
-    sentence must be exercised by the same table every other surface is, not by a
-    second copy of the member list.
-    """
-
-    cat = catalogue()
-    measures = sorted(
-        member_id
-        for member_id in set(CHECK_DISCLOSURES.values())
-        if isinstance(cat.member(member_id), MeasureDef)
-    )
-    dimensions = sorted(
-        member_id
-        for member_id in set(CHECK_DISCLOSURES.values())
-        if not isinstance(cat.member(member_id), MeasureDef)
-    )
-    return BiQuery(measures=measures, dimensions=dimensions, time=BiTime(as_of=as_of))
-
-
-def _authorize_trust(db: Session, access: BiReadAccess, as_of: date) -> BiAuthorization:
-    """Require every sentence the reconciliation payload discloses, or 403.
-
-    No ``bi_query_log`` row is written: C1's ``surface`` CHECK has no ``trust``
-    value, and recording this read under ``query`` or ``explain`` would put an
-    event in an append-only audit table that did not happen. The decision still
-    reaches the shared authorization telemetry (``authorization_denied``,
-    surface ``bi_trust``). Widening the vocabulary is a two-line change to
-    ``app/models/bi.py`` and migration ``202609220066`` — C1's files — after
-    which this route logs and refills the budget like the others; until then it
-    is subject to the budget and contributes nothing to it.
-    """
-
-    cat = catalogue()
-    decision = authorize_query(
-        db, access.ctx, access.bank, cat, trust_probe(as_of), surface=SURFACE_TRUST
-    )
-    if not decision.allowed:
-        raise _denied(cat, decision)
-    if not decision.data_scope.whole_institution:
-        # The badge is one verdict over the whole institution; a principal scoped
-        # to part of it cannot be told what the whole reconciles to (S18).
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_code": "bi_data_scope_unsupported",
-                "message": (
-                    "Your access covers part of this institution, "
-                    "which this view cannot narrow to yet."
-                ),
-            },
-        )
-    return decision
-
-
-@router.get(
-    "/banks/{bank_id}/bi/trust",
-    response_model=BiTrustRead,
-    operation_id="getBiTrust",
-)
-def get_bi_trust(  # noqa: PLR0913 - FastAPI injects db/access/response/header
-    bank_id: str,
-    db: DbSession,
-    access: BiRead,
-    response: Response,
-    as_of: Annotated[date, Query(description="The reporting date to report on.")],
-    if_none_match: IfNoneMatch = None,
-) -> BiTrustRead | Response:
-    """Every reconciliation check for one (institution, date), with its evidence.
-
-    A check with no stored result is reported as "not assessed" — never as a
-    pass — so a badge can never read green over a check that did not run.
-
-    The payload is figures, not metadata (audit A6-01), so it is authorized like
-    every other data route: the caller must hold the sentence of every member
-    :data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with
-    coverage on another institution of the same tenant, or with no binding at
-    all, gets 403 and no body — ``resolve_tenant_bank`` scopes by organization
-    only, and organization is not institution.
-    """
-
-    _ = bank_id
-    window = (as_of, as_of)
-    _require_budget(db, access)
-    decision = _authorize_trust(db, access, as_of)
-    fingerprint = _build_fingerprint(db, access.ctx.organization_id, access.bank.id, window)
-    etag = _etag(
-        SURFACE_TRUST,
-        as_of.isoformat(),
-        fingerprint,
-        CATALOGUE_VERSION,
-        access.bank.id,
-        access.principal_user_id,
-        access.authorization_version,
-        *sorted(str(binding_id) for binding_id in decision.matching_binding_ids),
-    )
-    if _is_fresh(if_none_match, etag):
-        return _not_modified(etag)
-    rows = {
-        row.check_id: row
-        for row in _stored_checks(db, access.ctx.organization_id, access.bank.id, window)
-    }
-    builds = db.scalars(
-        select(BiMartBuild)
-        .where(
-            BiMartBuild.organization_id == access.ctx.organization_id,
-            BiMartBuild.bank_id == access.bank.id,
-            BiMartBuild.as_of_date == as_of,
-        )
-        .order_by(BiMartBuild.scope)
-    ).all()
-    response.headers.update(_cache_headers(etag))
-    return BiTrustRead(
-        as_of=as_of,
-        status=_trust_badge(db, access.ctx.organization_id, access.bank.id, window).status,
-        # The operands are institution-wide arithmetic, so a scoped reader gets
-        # the verdict without the numbers — see ``_check_read``. This route's
-        # docstring already says the payload is FIGURES, not metadata, which is
-        # exactly why the slice has to apply here too.
-        checks=[
-            _check_read(
-                check_id,
-                rows.get(check_id),
-                whole_institution=decision.data_scope.whole_institution,
-            )
-            for check_id in reconciliation.STORABLE_CHECK_IDS
-        ],
-        builds=[
-            BiBuildRead(
-                scope=build.scope,
-                status=build.status,
-                fingerprint=build.fingerprint,
-                finished_at=build.finished_at,
-                row_counts=dict(build.row_counts or {}),
-            )
-            for build in builds
-        ],
-        build_fingerprint=fingerprint,
-    )
-
-
-# --- certified content packs ---------------------------------------------------------------
-#
-# ``app/domain/bi/packs`` holds the FILES: seven certified dashboards, validated
-# at import, carrying catalogue member ids, a closed relative-window vocabulary
-# and no date at all. These two routes resolve a file for one reader and one
-# reporting date, and the resolution is where three product rules live.
-#
-# **The date is the caller's, and only the caller's.** Every widget query comes
-# back through ``BiPackQuery.for_period(as_of)``; nothing in this module builds a
-# ``BiTime`` for a widget and nothing may. A pack that pinned a date would show a
-# stale book forever, which is the whole reason ``BiPackQuery`` exists.
-#
-# **A refused widget discloses nothing.** The same ``(module, sensitivity)``
-# decision the query path makes decides each widget separately, and a refusal is
-# a ``BiPackWidgetRead`` carrying its id and its place on the canvas — no title,
-# no caption, no measure, no dimension, no filter, no figure. "You may not see
-# the largest single-name share" tells the reader the institution tracks one, and
-# on a filtered view the filter is usually the sensitive half. The 403 on a
-# direct query DOES name the denied members, for the operator writing the grant;
-# a dashboard does not, because the reader is not the operator.
-#
-# **A pack is certified for a licence class, and the class is read from the
-# authority registry** (D-070). The seven packs name CRD engine measures; an SDI
-# is on the s.29 capital regime, so the authority those measures copy is not the
-# one an SDI's figures come from and the mart can never hold a row for them
-# (``insights/assemble.py::engine_measure_applies``). Until a pack set naming an
-# SDI's own authorities exists, the surface answers 404 for an SDI rather than
-# showing it a bank's dashboard. No new notion of "is this an SDI" is introduced
-# to do it: the same registry resolution the mart builder used when it stamped
-# the rows decides here too, so the gate opens by itself the day such a pack set
-# lands.
 
 #: Production copy for each thing the pack surface can tell a reader. A pack
 #: whose every figure was refused must never read as a dashboard with nothing to
@@ -2019,10 +1676,6 @@ def _insight_read(insight: Insight) -> BiInsightRead:
         qualifiers=list(insight.qualifiers),
         certified=insight.certified,
         advisory_designation=insight.advisory,
-        trust=BiTrustBadge(
-            status=_trust_status(insight.trust.overall),
-            failing_checks=list(insight.trust.failing_checks),
-        ),
     )
 
 
@@ -2180,10 +1833,36 @@ def get_bi_insights(  # noqa: PLR0913 - FastAPI injects db/access/response/heade
         truncated=insight_set.truncated,
         measures_read=assembled.measures_read,
         measures_withheld=assembled.measures_withheld,
-        trust=BiTrustBadge(
-            status=_trust_status(assembled.trust_status),
-            failing_checks=list(assembled.trust_failing_checks),
-        ),
+        builds=_builds_for(db, access.ctx.organization_id, access.bank.id, as_of),
         catalogue_version=CATALOGUE_VERSION,
         build_fingerprint=assembled.build_fingerprint,
     )
+
+
+def _builds_for(db: Session, organization_id: str, bank_id: str, as_of: date) -> list[BiBuildRead]:
+    """Every ``bi_mart_builds`` record for the date, one per scope, in scope order.
+
+    Freshness only: which scopes were built, whether each build succeeded and when
+    it finished. No verdict rides here — BI says nothing about whether its figures
+    agree with the returns the platform files.
+    """
+
+    builds = db.scalars(
+        select(BiMartBuild)
+        .where(
+            BiMartBuild.organization_id == organization_id,
+            BiMartBuild.bank_id == bank_id,
+            BiMartBuild.as_of_date == as_of,
+        )
+        .order_by(BiMartBuild.scope)
+    ).all()
+    return [
+        BiBuildRead(
+            scope=build.scope,
+            status=build.status,
+            fingerprint=build.fingerprint,
+            finished_at=build.finished_at,
+            row_counts=dict(build.row_counts or {}),
+        )
+        for build in builds
+    ]

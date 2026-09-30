@@ -3733,7 +3733,7 @@
       },
       "BiBuildRead": {
         "additionalProperties": false,
-        "description": "One mart build for the date, so a badge can say WHY it is not green.",
+        "description": "One mart build for the date: which scope, whether it succeeded, and when.\n\nBuild freshness, not a verdict. ``status`` is ``bi_mart_builds``' own outcome\nvocabulary (``running`` / ``succeeded`` / ``failed``) and says whether the rows\na reader is looking at were written by a build that completed \u2014 nothing about\nwhether they agree with any figure the platform files. A date whose latest\nbuild did not succeed is served from the previous build's rows, and this is how\na surface says so rather than letting yesterday's numbers read as today's.",
         "properties": {
           "fingerprint": {
             "title": "Fingerprint",
@@ -3930,13 +3930,6 @@
           "module": {
             "title": "Module",
             "type": "string"
-          },
-          "reconciliation_checks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Reconciliation Checks",
-            "type": "array"
           },
           "sensitivity": {
             "title": "Sensitivity",
@@ -4201,9 +4194,6 @@
             ],
             "title": "State",
             "type": "string"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           }
         },
         "required": [
@@ -5067,17 +5057,6 @@
             ],
             "title": "Pipeline State"
           },
-          "reconciliation_blocked": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reconciliation Blocked"
-          },
           "regime": {
             "anyOf": [
               {
@@ -5162,7 +5141,7 @@
       },
       "BiExplainRead": {
         "additionalProperties": false,
-        "description": "Where one figure came from: its definition, its source and its checks.\n\nNo SQL: the statement encodes the mart layout and is not a bank-facing\nsurface. What a reviewer gets instead is the measure's own declaration, the\nmart table and tier the value was read from, the window it was read over,\nthe engine metric and input hash when the figure is a copy, and the current\nstatus of every reconciliation check that governs it.",
+        "description": "Where one figure came from: its definition and its source.\n\nNo SQL: the statement encodes the mart layout and is not a bank-facing\nsurface. What a reviewer gets instead is the measure's own declaration, the\nmart table and tier the value was read from, the window it was read over,\nand the engine metric and input hash when the figure is a copy.",
         "properties": {
           "as_of": {
             "anyOf": [
@@ -5190,13 +5169,6 @@
           "catalogue_version": {
             "title": "Catalogue Version",
             "type": "string"
-          },
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/BiTrustCheckRead"
-            },
-            "title": "Checks",
-            "type": "array"
           },
           "compare_to": {
             "anyOf": [
@@ -5244,9 +5216,6 @@
           "source_table": {
             "title": "Source Table",
             "type": "string"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           },
           "used_aggregate": {
             "title": "Used Aggregate",
@@ -5444,9 +5413,6 @@
             "default": false,
             "title": "Truncated",
             "type": "boolean"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           }
         },
         "required": [
@@ -5605,9 +5571,6 @@
             "title": "Truncated",
             "type": "boolean"
           },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
-          },
           "used_aggregate": {
             "title": "Used Aggregate",
             "type": "boolean"
@@ -5742,14 +5705,10 @@
               "movement",
               "attribution",
               "projection",
-              "data_gap",
-              "trust_notice"
+              "data_gap"
             ],
             "title": "Statement Class",
             "type": "string"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           }
         },
         "required": [
@@ -5789,6 +5748,13 @@
             ],
             "title": "Build Fingerprint"
           },
+          "builds": {
+            "items": {
+              "$ref": "#/components/schemas/BiBuildRead"
+            },
+            "title": "Builds",
+            "type": "array"
+          },
           "catalogue_version": {
             "title": "Catalogue Version",
             "type": "string"
@@ -5823,9 +5789,6 @@
             "default": false,
             "title": "Truncated",
             "type": "boolean"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           }
         },
         "required": [
@@ -6781,7 +6744,6 @@
                   "credit_vintages",
                   "return_calendar",
                   "attestation_status",
-                  "reconciliation_trust",
                   "ingestion_quality"
                 ],
                 "type": "string"
@@ -6919,7 +6881,6 @@
                   "credit_vintages",
                   "return_calendar",
                   "attestation_status",
-                  "reconciliation_trust",
                   "ingestion_quality"
                 ],
                 "type": "string"
@@ -7168,9 +7129,6 @@
           "truncated": {
             "title": "Truncated",
             "type": "boolean"
-          },
-          "trust": {
-            "$ref": "#/components/schemas/BiTrustBadge"
           },
           "used_aggregate": {
             "title": "Used Aggregate",
@@ -7882,181 +7840,6 @@
           "n"
         ],
         "title": "BiTopN",
-        "type": "object"
-      },
-      "BiTrustBadge": {
-        "additionalProperties": false,
-        "description": "Placeholder for the reconciliation verdict wave 3 attaches to a result.\n\n``grey`` is \"not assessed\" and is what a result carries until the\nreconciliation summary is wired in; a missing check is never green.",
-        "properties": {
-          "failing_checks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Failing Checks",
-            "type": "array"
-          },
-          "status": {
-            "default": "grey",
-            "enum": [
-              "green",
-              "amber",
-              "red",
-              "grey"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "title": "BiTrustBadge",
-        "type": "object"
-      },
-      "BiTrustCheckRead": {
-        "additionalProperties": false,
-        "description": "One reconciliation check's current verdict for a (bank, as-of).",
-        "properties": {
-          "check_id": {
-            "title": "Check Id",
-            "type": "string"
-          },
-          "detail": {
-            "additionalProperties": true,
-            "title": "Detail",
-            "type": "object"
-          },
-          "difference": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Difference"
-          },
-          "evaluated_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Evaluated At"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "lhs": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lhs"
-          },
-          "rhs": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rhs"
-          },
-          "status": {
-            "enum": [
-              "green",
-              "amber",
-              "red",
-              "grey"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "tolerance": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tolerance"
-          }
-        },
-        "required": [
-          "check_id",
-          "label",
-          "status"
-        ],
-        "title": "BiTrustCheckRead",
-        "type": "object"
-      },
-      "BiTrustRead": {
-        "additionalProperties": false,
-        "description": "Every reconciliation check for a (bank, as-of), and the builds behind them.\n\nA check with no stored result is ``grey`` \u2014 \"not assessed\" \u2014 and never reads\nas a pass.",
-        "properties": {
-          "as_of": {
-            "format": "date",
-            "title": "As Of",
-            "type": "string"
-          },
-          "build_fingerprint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Fingerprint"
-          },
-          "builds": {
-            "items": {
-              "$ref": "#/components/schemas/BiBuildRead"
-            },
-            "title": "Builds",
-            "type": "array"
-          },
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/BiTrustCheckRead"
-            },
-            "title": "Checks",
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "green",
-              "amber",
-              "red",
-              "grey"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "as_of",
-          "status",
-          "checks"
-        ],
-        "title": "BiTrustRead",
         "type": "object"
       },
       "BiWidgetDisplay": {
@@ -68956,132 +68739,6 @@
           }
         ],
         "summary": "List Bi Subscription Deliveries",
-        "tags": [
-          "bi"
-        ]
-      }
-    },
-    "/api/v1/banks/{bank_id}/bi/trust": {
-      "get": {
-        "description": "Every reconciliation check for one (institution, date), with its evidence.\n\nA check with no stored result is reported as \"not assessed\" \u2014 never as a\npass \u2014 so a badge can never read green over a check that did not run.\n\nThe payload is figures, not metadata (audit A6-01), so it is authorized like\nevery other data route: the caller must hold the sentence of every member\n:data:`CHECK_DISCLOSURES` names, for THIS institution. A principal with\ncoverage on another institution of the same tenant, or with no binding at\nall, gets 403 and no body \u2014 ``resolve_tenant_bank`` scopes by organization\nonly, and organization is not institution.",
-        "operationId": "getBiTrust",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "bank_id",
-            "required": true,
-            "schema": {
-              "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The reporting date to report on.",
-            "in": "query",
-            "name": "as_of",
-            "required": true,
-            "schema": {
-              "description": "The reporting date to report on.",
-              "format": "date",
-              "title": "As Of",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "If-None-Match",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-None-Match"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BiTrustRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Missing or invalid tenant context."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Requested resource was not found for the tenant."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Workflow transition or state conflict."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request validation failed."
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected server error."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Bi Trust",
         "tags": [
           "bi"
         ]

@@ -364,9 +364,9 @@ test.describe("Explore", () => {
 
     const csv = String(governed.body);
     // The provenance block: who took it, from which institution, on which
-    // catalogue, under which analytics build, with the book's own trust verdict
-    // and the standing of the figures. None of these can be produced by an
-    // unauthorized copy out of the browser, which is the whole point.
+    // catalogue, under which analytics build, and the standing of the figures.
+    // None of these can be produced by an unauthorized copy out of the browser,
+    // which is the whole point.
     expect(csv).toContain("Exported by,e2e.admin@aequoros.example");
     expect(csv).toContain("Institution,Sample Bank Ltd (BK-SAMP0001)");
     expect(csv).toContain("Disclosure class,Summary");
@@ -374,7 +374,6 @@ test.describe("Explore", () => {
     expect(csv).toContain(
       "Standing,Management information. Not a regulatory return and not a signed record of filing.",
     );
-    expect(csv).toContain('Data confidence,"Does not reconcile');
     expect(csv).toMatch(/Analytics build,[0-9a-f]{64}/);
     // And the figures themselves, at full precision in the file.
     expect(csv).toContain(`standard,${FIXTURE_FIGURES.standardGradeRaw}`);

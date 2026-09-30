@@ -4,7 +4,7 @@
  * A widget that embeds another part of the platform rather than a figure.
  *
  * A certified pack may reference a closed set of platform surfaces — the filing
- * calendar, the signature register, the reconciliation checks, the credit
+ * calendar, the signature register, the ingestion history, the credit
  * migration and vintage views — and it references them BY KEY: a pack can express
  * no route, no parameter and no query, so it cannot widen what one of those
  * surfaces shows. The surface itself decides what its reader may see when they

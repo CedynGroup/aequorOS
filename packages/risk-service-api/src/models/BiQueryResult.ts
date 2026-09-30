@@ -18,13 +18,6 @@ import {
   BiDataScopeReadToJSON,
   BiDataScopeReadToJSONTyped,
 } from "./BiDataScopeRead";
-import type { BiTrustBadge } from "./BiTrustBadge";
-import {
-  BiTrustBadgeFromJSON,
-  BiTrustBadgeFromJSONTyped,
-  BiTrustBadgeToJSON,
-  BiTrustBadgeToJSONTyped,
-} from "./BiTrustBadge";
 import type { BuildFingerprint } from "./BuildFingerprint";
 import {
   BuildFingerprintFromJSON,
@@ -90,12 +83,6 @@ export interface BiQueryResult {
   truncated: boolean;
   /**
    *
-   * @type {BiTrustBadge}
-   * @memberof BiQueryResult
-   */
-  trust?: BiTrustBadge;
-  /**
-   *
    * @type {boolean}
    * @memberof BiQueryResult
    */
@@ -143,8 +130,6 @@ export function BiQueryResultFromJSONTyped(
     elapsedMs: json["elapsed_ms"],
     rows: json["rows"],
     truncated: json["truncated"],
-    trust:
-      json["trust"] == null ? undefined : BiTrustBadgeFromJSON(json["trust"]),
     usedAggregate: json["used_aggregate"],
   };
 }
@@ -169,7 +154,6 @@ export function BiQueryResultToJSONTyped(
     elapsed_ms: value["elapsedMs"],
     rows: value["rows"],
     truncated: value["truncated"],
-    trust: BiTrustBadgeToJSON(value["trust"]),
     used_aggregate: value["usedAggregate"],
   };
 }

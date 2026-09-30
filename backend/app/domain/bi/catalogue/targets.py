@@ -314,12 +314,11 @@ def _variant(  # noqa: PLR0913 - one keyword per field the variant restates
     date with data per grain. Summing the rows of a window would count one
     target once per business day.
 
-    ``reads_the_actual`` is false for ``.target`` alone. A limit and a
-    reconciliation check both describe how the PLATFORM derived a figure, and
-    the target is the one variant that contains none of the platform's
-    arithmetic — it is the number the bank stated. Every other variant carries
-    the base's limit source and its checks, because every other variant is a
-    function of the actual.
+    ``reads_the_actual`` is false for ``.target`` alone. A limit describes how
+    the PLATFORM derived a figure, and the target is the one variant that
+    contains none of the platform's arithmetic — it is the number the bank
+    stated. Every other variant carries the base's limit source, because every
+    other variant is a function of the actual.
     """
     return replace(
         base,
@@ -331,7 +330,6 @@ def _variant(  # noqa: PLR0913 - one keyword per field the variant restates
         aggregation=aggregation,
         time_behaviour="stock",
         thresholds_source=base.thresholds_source if reads_the_actual else None,
-        reconciliation_checks=base.reconciliation_checks if reads_the_actual else (),
         engine_rule=None,
         fx_rule=None,
         value_type=base.value_type if value_type is None else value_type,

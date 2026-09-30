@@ -20,7 +20,6 @@ export type Panel =
   | "credit_vintages"
   | "return_calendar"
   | "attestation_status"
-  | "reconciliation_trust"
   | "ingestion_quality"
   | null;
 
@@ -34,7 +33,6 @@ export function instanceOfPanel(value: unknown): value is Panel {
       "credit_vintages",
       "return_calendar",
       "attestation_status",
-      "reconciliation_trust",
       "ingestion_quality",
     ].indexOf(value as never) !== -1 || value === null
   );

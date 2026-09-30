@@ -8,9 +8,8 @@
  * answered from the daily aggregate rather than the fact grain, has a different
  * answer. `POST …/bi/explain` returns no SQL — the statement encodes the mart
  * layout and is not a bank-facing surface — so what a reviewer gets is the
- * measure's own declaration, the table and window it was read over, the engine
- * row it is a copy of when it is one, and the current status of every
- * reconciliation check that governs it.
+ * measure's own declaration, the table and window it was read over, and the
+ * engine row it is a copy of when it is one.
  *
  * Absent evidence is shown as absent. A blank input hash means the figure is
  * not an engine copy, not that it has one and we did not look.
@@ -27,13 +26,12 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import type { BiQuery, BiTrustCheckRead } from "@aequoros/risk-service-api";
+import type { BiQuery } from "@aequoros/risk-service-api";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { biRefusalSentence, isBiAccessDenied, useBiExplain } from "@/lib/api/bi";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
-import TrustBadge from "./TrustBadge";
 import {
   aggregationLabel,
   componentRoleLabel,
@@ -57,23 +55,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function text(value: string | null | undefined): string {
   return value && value.length > 0 ? value : NOT_MEASURED;
-}
-
-function CheckRow({ check }: { check: BiTrustCheckRead }) {
-  return (
-    <li className="flex items-start justify-between gap-3 border-t border-border-light py-2 first:border-t-0">
-      <div className="min-w-0">
-        <p className="text-caption font-medium text-navy">{check.label}</p>
-        {check.difference && check.tolerance && (
-          <p className="mt-0.5 text-micro text-slate">
-            Difference {check.difference} against a tolerance of{" "}
-            {check.tolerance}
-          </p>
-        )}
-      </div>
-      <TrustBadge status={check.status} size="compact" />
-    </li>
-  );
 }
 
 export default function ExplainDrawer({
@@ -168,11 +149,6 @@ export default function ExplainDrawer({
                   {data.measure.description}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <TrustBadge
-                    status={data.trust?.status}
-                    failingChecks={data.trust?.failingChecks ?? []}
-                    size="compact"
-                  />
                   {data.measure.certified && (
                     <span className="rounded border border-success/20 bg-success-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-success">
                       Filed figure
@@ -280,33 +256,9 @@ export default function ExplainDrawer({
                       value={text(engine.engineVersion)}
                     />
                     <Row label="Computed" value={text(engine.computedAt)} />
-                    {engine.reconciliationBlocked === true && (
-                      <Row
-                        label="Reconciliation"
-                        value="Blocked when this figure was computed"
-                      />
-                    )}
                   </dl>
                 </section>
               )}
-
-              <section>
-                <h3 className="mb-1 text-caption font-semibold text-navy">
-                  Reconciliation checks that govern it
-                </h3>
-                {data.checks && data.checks.length > 0 ? (
-                  <ul>
-                    {data.checks.map((check) => (
-                      <CheckRow key={check.checkId} check={check} />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-caption leading-relaxed text-slate">
-                    No reconciliation check governs this measure, so its trust
-                    state is reported as not assessed.
-                  </p>
-                )}
-              </section>
             </>
           )}
         </div>

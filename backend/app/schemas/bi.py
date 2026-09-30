@@ -237,7 +237,6 @@ BiPanelKey = Literal[
     "credit_vintages",
     "return_calendar",
     "attestation_status",
-    "reconciliation_trust",
     "ingestion_quality",
 ]
 
@@ -557,7 +556,6 @@ class BiPackSpec(BiClosedModel):
 
 BiResultColumnKind = Literal["dimension", "measure", "marker"]
 BiComparisonRole = Literal["current", "prior", "delta", "delta_pct"]
-BiTrustStatus = Literal["green", "amber", "red", "grey"]
 
 #: How a client renders a result column: the CATALOGUE's value-type vocabulary
 #: (``app/domain/bi/catalogue/members.py::VALUE_TYPES``) plus ``int`` for the
@@ -603,17 +601,6 @@ class BiResultColumn(BiClosedModel):
     pivot_value: str | None = None
 
 
-class BiTrustBadge(BiClosedModel):
-    """Placeholder for the reconciliation verdict wave 3 attaches to a result.
-
-    ``grey`` is "not assessed" and is what a result carries until the
-    reconciliation summary is wired in; a missing check is never green.
-    """
-
-    status: BiTrustStatus = "grey"
-    failing_checks: list[str] = Field(default_factory=list)
-
-
 class BiDataScopeRead(BiClosedModel):
     """What the rows in this answer were restricted to.
 
@@ -649,9 +636,8 @@ class BiQueryResult(BiClosedModel):
     truncated: bool
     elapsed_ms: int
     used_aggregate: bool
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
-    #: The mart build fingerprint the rows were read from; wave 3 fills it.
+    #: The mart build fingerprint the rows were read from.
     build_fingerprint: str | None = None
     #: The slice these rows cover. Always present, including ``all``: a client
     #: must not have to treat "absent" and "the whole institution" as the same
@@ -733,8 +719,6 @@ class BiCatalogueMeasureRead(BiClosedModel):
     favourable_direction: str
     #: Register / parameter CODE a limit resolves from — never a number.
     thresholds_source: str | None = None
-    #: The reconciliation checks whose status governs this measure's trust badge.
-    reconciliation_checks: list[str] = Field(default_factory=list)
     #: ``filed`` / ``advisory_only`` / ``supervisory_monitoring`` / ``unregistered``
     #: for an engine copy; ``None`` for a portfolio measure computed from the marts.
     advisory_designation: str | None = None
@@ -812,49 +796,26 @@ class BiGridPageRead(BiClosedModel):
     truncated: bool
     elapsed_ms: int
     used_aggregate: bool
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
     build_fingerprint: str | None = None
 
 
-class BiTrustCheckRead(BiClosedModel):
-    """One reconciliation check's current verdict for a (bank, as-of)."""
-
-    check_id: str
-    label: str
-    status: BiTrustStatus
-    lhs: Decimal | None = None
-    rhs: Decimal | None = None
-    difference: Decimal | None = None
-    tolerance: Decimal | None = None
-    #: The check's own evidence (counts, lines, the reason it could not be
-    #: assessed). Never a row of the book.
-    detail: dict[str, Any] = Field(default_factory=dict)
-    evaluated_at: datetime | None = None
-
-
 class BiBuildRead(BiClosedModel):
-    """One mart build for the date, so a badge can say WHY it is not green."""
+    """One mart build for the date: which scope, whether it succeeded, and when.
+
+    Build freshness, not a verdict. ``status`` is ``bi_mart_builds``' own outcome
+    vocabulary (``running`` / ``succeeded`` / ``failed``) and says whether the rows
+    a reader is looking at were written by a build that completed — nothing about
+    whether they agree with any figure the platform files. A date whose latest
+    build did not succeed is served from the previous build's rows, and this is how
+    a surface says so rather than letting yesterday's numbers read as today's.
+    """
 
     scope: str
     status: str
     fingerprint: str
     finished_at: datetime | None = None
     row_counts: dict[str, int] = Field(default_factory=dict)
-
-
-class BiTrustRead(BiClosedModel):
-    """Every reconciliation check for a (bank, as-of), and the builds behind them.
-
-    A check with no stored result is ``grey`` — "not assessed" — and never reads
-    as a pass.
-    """
-
-    as_of: date
-    status: BiTrustStatus
-    checks: list[BiTrustCheckRead]
-    builds: list[BiBuildRead] = Field(default_factory=list)
-    build_fingerprint: str | None = None
 
 
 class BiExplainComponentRead(BiClosedModel):
@@ -888,7 +849,6 @@ class BiExplainEngineRead(BiClosedModel):
     pipeline_state: str | None = None
     status: str | None = None
     advisory_designation: str | None = None
-    reconciliation_blocked: bool | None = None
     computed_at: datetime | None = None
     #: Present for the sealed tier: the run and reporting period the copy came from.
     run_id: UUID | None = None
@@ -896,13 +856,12 @@ class BiExplainEngineRead(BiClosedModel):
 
 
 class BiExplainRead(BiClosedModel):
-    """Where one figure came from: its definition, its source and its checks.
+    """Where one figure came from: its definition and its source.
 
     No SQL: the statement encodes the mart layout and is not a bank-facing
     surface. What a reviewer gets instead is the measure's own declaration, the
     mart table and tier the value was read from, the window it was read over,
-    the engine metric and input hash when the figure is a copy, and the current
-    status of every reconciliation check that governs it.
+    and the engine metric and input hash when the figure is a copy.
     """
 
     measure: BiCatalogueMeasureRead
@@ -919,8 +878,6 @@ class BiExplainRead(BiClosedModel):
     window_end: date | None = None
     compare_to: date | None = None
     engine: BiExplainEngineRead | None = None
-    checks: list[BiTrustCheckRead] = Field(default_factory=list)
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
     build_fingerprint: str | None = None
 
@@ -982,7 +939,6 @@ class BiExportRead(BiClosedModel):
     checksum_sha256: str | None = None
     download_url: str | None = None
     download_expires_in_seconds: int | None = None
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
     catalogue_version: str
     build_fingerprint: str | None = None
 
@@ -1084,7 +1040,7 @@ class BiPackListRead(BiClosedModel):
 # browser that re-rounded a capital ratio would change what the sentence says.
 
 #: The kind of statement. Mirrors ``statements.StatementClass``.
-BiStatementClass = Literal["movement", "attribution", "projection", "data_gap", "trust_notice"]
+BiStatementClass = Literal["movement", "attribution", "projection", "data_gap"]
 #: Whether the move was good for the bank. Mirrors ``drivers.Favourability``.
 BiFavourability = Literal["favourable", "adverse", "neutral"]
 #: How prominently the statement is shown. Mirrors ``statements.Emphasis``.
@@ -1106,13 +1062,13 @@ class BiInsightRead(BiClosedModel):
     evidence: list[str]
     favourability: BiFavourability
     emphasis: BiEmphasis
-    #: Reservations that qualify the statement: advisory basis, trust state, a
-    #: gap in the data. Rendered as given.
+    #: Reservations that qualify the statement: advisory basis, a gap in the
+    #: data. Rendered as given.
     qualifiers: list[str]
-    #: Only a filed engine figure under a green badge may be shown as certified.
+    #: Only a filed engine figure copied from the sealed tier may be shown as
+    #: certified (D-022).
     certified: bool
     advisory_designation: str | None = None
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
 
 
 class BiInsightsRead(BiClosedModel):
@@ -1140,6 +1096,9 @@ class BiInsightsRead(BiClosedModel):
     #: A count only: an insight the reader may not see is not named, and neither
     #: is its measure.
     measures_withheld: int = 0
-    trust: BiTrustBadge = Field(default_factory=BiTrustBadge)
+    #: Every mart build recorded for ``as_of``, one per scope, so the strip can say
+    #: when its figures were last built and whether that build succeeded. Empty when
+    #: nothing has ever been built for the date.
+    builds: list[BiBuildRead] = Field(default_factory=list)
     catalogue_version: str
     build_fingerprint: str | None = None

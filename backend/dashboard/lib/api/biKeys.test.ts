@@ -30,7 +30,6 @@ import {
   biMeasuresKey,
   biQueryFingerprint,
   biQueryKey,
-  biTrustKey,
   biWindowKey,
   canonicalJson,
   isoDay,
@@ -232,11 +231,6 @@ for (const [surface, left, right] of [
     biCatalogueKey(analyst, BANK_B),
   ],
   [
-    "trust",
-    biTrustKey(analyst, BANK_A, "2026-06-30"),
-    biTrustKey(analyst, BANK_A, "2026-03-31"),
-  ],
-  [
     "grid",
     biGridKey(analyst, BANK_A, { query: nplQuery, startRow: 0, endRow: 100 }),
     biGridKey(analyst, BANK_A, { query: nplQuery, startRow: 100, endRow: 200 }),
@@ -336,7 +330,6 @@ for (const [dimension, other] of [
 
 for (const surfaceKey of [
   biCatalogueKey(analyst, BANK_A),
-  biTrustKey(analyst, BANK_A, "2026-06-30"),
   biQueryKey(analyst, BANK_A, nplQuery),
   biGridKey(analyst, BANK_A, { query: nplQuery }),
   biDrillKey(analyst, BANK_A, { query: nplQuery }),

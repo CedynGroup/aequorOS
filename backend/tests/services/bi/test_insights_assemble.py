@@ -47,7 +47,6 @@ from app.services.bi.insights.assemble import (
 from app.services.bi.insights.facts import MovementFact, ObservedFact
 
 _AS_OF = date(2026, 6, 30)
-_ALL_GREEN: dict[str, str] = dict.fromkeys(("R1", "R8", "R9", "R10"), "green")
 
 _SOURCE = Path("app/services/bi/insights/assemble.py")
 
@@ -212,8 +211,6 @@ def _movement(current: Decimal | None, prior: Decimal | None):  # noqa: ANN202 -
         compare_to=default_compare_to(_AS_OF),
         current=current,
         prior=prior,
-        statuses=_ALL_GREEN,
-        build_overall="green",
     )
 
 

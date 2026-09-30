@@ -17,7 +17,10 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
 ## The ten steps
 
 1. **Deploy the release; `risk-migrate` applies `202609220066` … `202609290079`**
-   (fourteen BI revisions; single head, `alembic heads`). The last two close audit
+   (fourteen BI revisions; single head, `alembic heads` — HEAD's count: a fifteenth,
+   `202609290080_reconciliation_leaves_bi.py`, which drops `bi_reconciliation_results`
+   under the founder's 2026-09-29 decision, is in the working tree at the time of
+   writing; re-derive the head before the release). The last two close audit
    A360: `0078` makes the aggregate sums nullable (an absent figure stops being a
    zero) and `0079` makes a partition child be VERIFIED before it is adopted —
    without it, a child created by hand carries no RLS and leaks across tenants
@@ -57,10 +60,15 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    Dashboards / Explore. **Was UNSAFE** — this is the step that exposed
    `bi_enforcement_rollout.md`'s scope section, which stated the opposite of the
    code until 2026-09-29 (A360-7 S1; corrected). Two of the three caveats this step
-   carried are now CLOSED: the module-level insight strip, KPI explain drawer and
-   chart trust badge ARE mounted on the Command Center and every module landing page
-   (A360-7 S3), and the integration-key screen now offers the analytics-feed purpose,
-   so the Stage B feed is reachable from the product (A360 H4).
+   carried are now CLOSED: the module-level insight strip and KPI explain drawer ARE
+   mounted on the Command Center and every module landing page (A360-7 S3), and the
+   integration-key screen now offers the analytics-feed purpose, so the Stage B feed
+   is reachable from the product (A360 H4). The chart trust badge that was mounted
+   beside them is **REMOVED BY FOUNDER DECISION 2026-09-29**: BI carries no
+   reconciliation verdict against the regulatory returns (treasury/ALM and the
+   regulatory spine are different planes — `docs/bi.md` §Founder decision
+   2026-09-29). Nothing in this sequence changes: `bi_mart_builds` and the build
+   fingerprint (freshness) stay, and no step ever depended on a reconciliation result.
    **Still open, so tell tenants:** AI commentary has routes and no dashboard caller
    (A360-2 M1), and `POST /bi/drill` has no component caller, so a drill whose slice
    is not exactly carryable offers nothing (A360-2 M2).

@@ -1,4 +1,4 @@
-"""``bi_fact_gl_monthly`` mirrors BSD7's own P&L semantics (D-021), and R4 proves it.
+"""``bi_fact_gl_monthly`` mirrors BSD7's own P&L semantics (D-021), by construction.
 
 A small INCOME/EXPENSE ledger is inserted beside the canonical fixture — the
 shape ``tests/services/bog_forms/test_bsd7.py`` uses, moved to the fixture's
@@ -9,7 +9,10 @@ with a prior month (movement = difference), one booked only this month
 figure superseded by the month-end one), a register-mapped account with a
 negative sign, an unmapped account, a prior-year generation and a superseded
 generation (never read). The mart's per-line sums are then compared with the
-``bsd7.pl_line`` resolver itself — exact equality, which is what R4 grades.
+``bsd7.pl_line`` resolver itself — exact equality, because the mart is computed by
+the SAME ``pl_mapping`` functions the return resolver delegates to. That is a
+property of how the rows are built, not a verdict BI issues on them: BI stopped
+grading its figures against the returns the platform files on 2026-09-29.
 """
 
 from __future__ import annotations
@@ -33,11 +36,9 @@ from app.models import (
     BiDimGlAccount,
     BiFactGlMonthly,
     BiMartBuild,
-    BiReconciliationResult,
     CanonicalReferenceRow,
 )
 from app.models.canonical import CanonicalGlAccount
-from app.services.bi import reconciliation
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
@@ -199,27 +200,16 @@ def test_gl_monthly_rows_follow_bsd7s_ytd_and_period_rules(db_session: Session) 
     assert accounts["1301"].pl_line is None
 
 
-def test_r4_is_exactly_bsd7s_own_period_to_date_figure(db_session: Session) -> None:
+def test_the_mart_lines_are_exactly_bsd7s_own_period_to_date_figures(
+    db_session: Session,
+) -> None:
+    """Both sides run the same ``pl_mapping`` functions (D-021), so the mart's
+    per-line sums and the ``bsd7.pl_line`` resolver's figures are equal, exactly."""
     seed_book(db_session, live=False)
     _seed_ledger(db_session)
     db_session.commit()
-    outcome = build(db_session)
-    assert outcome.trust["R4"] == reconciliation.GREEN
-    r4 = db_session.scalar(
-        select(BiReconciliationResult).where(
-            BiReconciliationResult.bank_id == SAMPLE_BANK_ID,
-            BiReconciliationResult.check_id == "R4",
-        )
-    )
-    assert r4 is not None
-    assert r4.difference == Decimal(0) and r4.tolerance == Decimal(0)
-    assert r4.detail["month_end"] == _JUN.isoformat()
-    # 1a domestic, 1c domestic, 5 foreign, 16 domestic, 17 domestic + the zero-valued
-    # opposite slice of every mapped line (mapped, nothing arose) = 10 comparisons
-    assert r4.detail["lines_compared"] == 10
-    assert "mismatches" not in r4.detail
+    build(db_session)
 
-    # the same equality, asserted here against the resolver itself
     period = BankReportingPeriod(
         organization_id=ORG_1,
         bank_id=SAMPLE_BANK_ID,
@@ -399,50 +389,3 @@ def test_a_non_integral_register_sign_is_refused_not_truncated(db_session: Sessi
 
     assert validate_mapping_row({"gl_account_code": "7001", "bsd7_item": "18", "sign": "0.5"})
 
-
-def test_r4_stays_green_when_a_line_map_declares_its_own_sign(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """BSD7 multiplies the LINE MAP's ``sign`` into the whole line; R4's mart side
-    must too, or a line map with ``sign=-1`` turns the check red with no defect."""
-    seed_book(db_session, live=False)
-    _seed_ledger(db_session)
-    db_session.commit()
-    real = reconciliation._bsd7a_line_params  # noqa: SLF001 - the seam under test
-
-    def negated() -> list[dict[str, Any]]:
-        params = real()
-        assert all("sign" not in row for row in params), (
-            "no BSD7A line declares a sign today; this test exists for the day one does"
-        )
-        return [{**row, "sign": -1} if row.get("line") == "1a" else row for row in params]
-
-    monkeypatch.setattr(reconciliation, "_bsd7a_line_params", negated)
-    outcome = build(db_session)
-    assert outcome.trust["R4"] == reconciliation.GREEN
-    r4 = db_session.scalar(
-        select(BiReconciliationResult).where(
-            BiReconciliationResult.bank_id == SAMPLE_BANK_ID,
-            BiReconciliationResult.check_id == "R4",
-        )
-    )
-    assert r4 is not None and r4.difference == Decimal(0)
-    assert "mismatches" not in r4.detail
-    # and the sign really did move both sides: item 1a is now negative
-    period = BankReportingPeriod(
-        organization_id=ORG_1,
-        bank_id=SAMPLE_BANK_ID,
-        period_start=date(2026, 6, 1),
-        period_end=_JUN,
-        label="2026-06",
-        status="open",
-    )
-    bank = db_session.get(Bank, SAMPLE_BANK_ID)
-    assert bank is not None
-    rc = ResolveContext(
-        db=db_session, ctx=CTX, bank=bank, period=period, column="ptd_domestic", cache={}
-    )
-    resolved = get_resolver("bsd7.pl_line")(
-        rc, {"line": "1a", "gl_classes": ["INCOME"], "sign": -1}
-    )
-    assert resolved == Decimal(-330 * M)

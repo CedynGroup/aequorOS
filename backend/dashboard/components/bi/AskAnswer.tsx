@@ -22,7 +22,6 @@
 import { Check, Database } from "lucide-react";
 import type { BiQueryResult } from "@aequoros/risk-service-api";
 import DataTable, { type Column } from "@/components/ui/DataTable";
-import TrustBadge from "./TrustBadge";
 import { formatCell, hasNoMeasuredValue, isEmptyResult } from "./result";
 import {
   askEmptyAnswerSentence,
@@ -85,21 +84,14 @@ export default function AskAnswer({
 
   return (
     <section className="card overflow-hidden">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light px-5 py-4">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-h3 text-navy">
-            <Check size={16} className="shrink-0 text-compliant" aria-hidden />
-            The question you confirmed
-          </h2>
-          <p className="mt-1 max-w-2xl text-caption leading-relaxed text-slate">
-            {proposal.reading?.sentence ?? proposal.question}
-          </p>
-        </div>
-        <TrustBadge
-          status={result.trust?.status}
-          failingChecks={result.trust?.failingChecks ?? []}
-          size="compact"
-        />
+      <header className="border-b border-border-light px-5 py-4">
+        <h2 className="flex items-center gap-2 text-h3 text-navy">
+          <Check size={16} className="shrink-0 text-compliant" aria-hidden />
+          The question you confirmed
+        </h2>
+        <p className="mt-1 max-w-2xl text-caption leading-relaxed text-slate">
+          {proposal.reading?.sentence ?? proposal.question}
+        </p>
       </header>
       <DataTable
         columns={columns}

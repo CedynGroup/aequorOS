@@ -1,7 +1,7 @@
 """Shared plumbing for the three ``bi`` lane handlers (``app/jobs/bi_*.py``).
 
-The handlers are deliberately thin: every mart write, fingerprint and
-reconciliation lives in ``app.services.bi.mart_builder`` (the BUILDER), and a
+The handlers are deliberately thin: every mart write and every fingerprint
+lives in ``app.services.bi.mart_builder`` (the BUILDER), and a
 handler's whole job is to (1) honour the run-time kill-switch, (2) apply the
 version rule, (3) resolve the tenant and bank the queue row names, (4) call one
 builder entrypoint, and (5) classify what came back for the queue.

@@ -107,23 +107,6 @@ NUMERIC_VALUE_TYPES: frozenset[ValueType] = frozenset(
 #: The four sensitivity levels, in ascending order of restriction.
 SENSITIVITIES: tuple[Sensitivity, ...] = ("published", "aggregated", "confidential", "restricted")
 
-#: The completeness check every DPD-dependent measure carries (D-042, D-046). A bank
-#: that never supplied ``days_past_due`` has a NULL band on every mart loan row AND a
-#: genuine engine ``0`` for portfolio-at-risk, so either figure would read 0 % —
-#: indistinguishable from a clean book. The compiler returns NULL for the mart
-#: population and the copied engine value stays the engine's; R10
-#: (``dpd_completeness``) is what stops the trust badge reading green over both.
-DPD_COMPLETENESS = "R10"
-
-#: The completeness check every ARREARS measure carries. Its twin's argument, on
-#: the field the bank states rather than the band the platform derives: a bank
-#: that supplies ``arrears_amount`` for half its book would show a sum reading as
-#: the WHOLE book's arrears and a share silently understated, with no visible
-#: defect. The measures contribute no row for a loan that states nothing — never a
-#: zero — and R12 (``arrears_completeness``) is what stops the trust badge going
-#: green over the part of the book nobody stated.
-ARREARS_COMPLETENESS = "R12"
-
 
 @dataclass(frozen=True, slots=True)
 class ColumnRef:
@@ -224,7 +207,6 @@ class MeasureDef(MemberDef):
     favourable_direction: FavourableDirection = "neutral"
     thresholds_source: str | None = None
     """Register / parameter CODE the measure's limit resolves from — never a number."""
-    reconciliation_checks: tuple[str, ...] = ()
     engine_rule: EngineRule | None = None
     fx_rule: FxRule | None = None
     advisory_designation: AdvisoryDesignation | None = None

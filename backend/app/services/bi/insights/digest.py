@@ -19,10 +19,7 @@ follows back to the build; they are removed from the digest INPUT only.
 
 **Included: everything a reader could be misled by.** Every value, every date,
 every measure identity and scope, the favourable direction, the value type, the
-advisory designation and the certified verdict, and the full trust state. Trust
-is value-bearing: the same numbers under a green badge and under a red one are
-NOT the same fact sheet, and a digest that ignored the badge would call them
-equal.
+advisory designation and the certified verdict.
 
 **Canonicalisation is the platform's one recipe.** Sorted keys, compact
 separators, ASCII, and deliberately no ``default=`` handler — reused from
@@ -60,7 +57,6 @@ from app.services.bi.insights.facts import (
     MovementFact,
     ObservedFact,
     ProjectionFact,
-    TrustState,
 )
 from app.services.bi.insights.projections import Projection, ProjectionUnavailable
 
@@ -75,7 +71,10 @@ __all__ = [
 
 #: Versioned like the regulatory ``INPUT_SCHEMA_VERSION``: a change in what the
 #: digest covers is a change of schema, never a silent re-meaning of the hash.
-FACT_SHEET_SCHEMA = "aequoros-bi-fact-sheet-v1"
+#: v2 (2026-09-29): the per-fact reconciliation ``trust`` payload left the digest
+#: with the verdict itself, so a sheet hashed under v1 and the same figures hashed
+#: here differ by construction; the schema name says which recipe produced a hash.
+FACT_SHEET_SCHEMA = "aequoros-bi-fact-sheet-v2"
 
 
 class UnhashableFact(TypeError):
@@ -93,13 +92,6 @@ def _decimal_or_none(value: Decimal | None) -> str | None:
     return None if value is None else canonical_decimal(value)
 
 
-def _trust_payload(trust: TrustState) -> dict[str, Any]:
-    return {
-        "overall": trust.overall,
-        "checks": [[check_id, status] for check_id, status in trust.checks],
-    }
-
-
 def _common_payload(fact: Fact) -> dict[str, Any]:
     """Everything every fact carries. Provenance is deliberately absent."""
     return {
@@ -115,7 +107,6 @@ def _common_payload(fact: Fact) -> dict[str, Any]:
             "value_code": fact.scope.value_code,
             "value_label": fact.scope.value_label,
         },
-        "trust": _trust_payload(fact.trust),
     }
 
 

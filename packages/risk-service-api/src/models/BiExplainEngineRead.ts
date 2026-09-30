@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { PipelineState } from "./PipelineState";
+import {
+  PipelineStateFromJSON,
+  PipelineStateFromJSONTyped,
+  PipelineStateToJSON,
+  PipelineStateToJSONTyped,
+} from "./PipelineState";
 import type { Regime } from "./Regime";
 import {
   RegimeFromJSON,
@@ -25,27 +32,6 @@ import {
   StatusToJSON,
   StatusToJSONTyped,
 } from "./Status";
-import type { EngineVersion } from "./EngineVersion";
-import {
-  EngineVersionFromJSON,
-  EngineVersionFromJSONTyped,
-  EngineVersionToJSON,
-  EngineVersionToJSONTyped,
-} from "./EngineVersion";
-import type { Unit1 } from "./Unit1";
-import {
-  Unit1FromJSON,
-  Unit1FromJSONTyped,
-  Unit1ToJSON,
-  Unit1ToJSONTyped,
-} from "./Unit1";
-import type { PipelineState } from "./PipelineState";
-import {
-  PipelineStateFromJSON,
-  PipelineStateFromJSONTyped,
-  PipelineStateToJSON,
-  PipelineStateToJSONTyped,
-} from "./PipelineState";
 import type { InputHash } from "./InputHash";
 import {
   InputHashFromJSON,
@@ -53,6 +39,13 @@ import {
   InputHashToJSON,
   InputHashToJSONTyped,
 } from "./InputHash";
+import type { EngineVersion } from "./EngineVersion";
+import {
+  EngineVersionFromJSON,
+  EngineVersionFromJSONTyped,
+  EngineVersionToJSON,
+  EngineVersionToJSONTyped,
+} from "./EngineVersion";
 import type { AsOf } from "./AsOf";
 import {
   AsOfFromJSON,
@@ -60,13 +53,6 @@ import {
   AsOfToJSON,
   AsOfToJSONTyped,
 } from "./AsOf";
-import type { ReconciliationBlocked } from "./ReconciliationBlocked";
-import {
-  ReconciliationBlockedFromJSON,
-  ReconciliationBlockedFromJSONTyped,
-  ReconciliationBlockedToJSON,
-  ReconciliationBlockedToJSONTyped,
-} from "./ReconciliationBlocked";
 import type { ComputedAt } from "./ComputedAt";
 import {
   ComputedAtFromJSON,
@@ -95,6 +81,13 @@ import {
   RunIdToJSON,
   RunIdToJSONTyped,
 } from "./RunId";
+import type { Unit1 } from "./Unit1";
+import {
+  Unit1FromJSON,
+  Unit1FromJSONTyped,
+  Unit1ToJSON,
+  Unit1ToJSONTyped,
+} from "./Unit1";
 import type { AdvisoryDesignation } from "./AdvisoryDesignation";
 import {
   AdvisoryDesignationFromJSON,
@@ -161,12 +154,6 @@ export interface BiExplainEngineRead {
    * @memberof BiExplainEngineRead
    */
   pipelineState?: PipelineState;
-  /**
-   *
-   * @type {ReconciliationBlocked}
-   * @memberof BiExplainEngineRead
-   */
-  reconciliationBlocked?: ReconciliationBlocked;
   /**
    *
    * @type {Regime}
@@ -259,10 +246,6 @@ export function BiExplainEngineReadFromJSONTyped(
       json["pipeline_state"] == null
         ? undefined
         : PipelineStateFromJSON(json["pipeline_state"]),
-    reconciliationBlocked:
-      json["reconciliation_blocked"] == null
-        ? undefined
-        : ReconciliationBlockedFromJSON(json["reconciliation_blocked"]),
     regime: json["regime"] == null ? undefined : RegimeFromJSON(json["regime"]),
     reportingPeriodId:
       json["reporting_period_id"] == null
@@ -299,9 +282,6 @@ export function BiExplainEngineReadToJSONTyped(
     metric_id: value["metricId"],
     module: value["module"],
     pipeline_state: PipelineStateToJSON(value["pipelineState"]),
-    reconciliation_blocked: ReconciliationBlockedToJSON(
-      value["reconciliationBlocked"],
-    ),
     regime: RegimeToJSON(value["regime"]),
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     run_id: RunIdToJSON(value["runId"]),

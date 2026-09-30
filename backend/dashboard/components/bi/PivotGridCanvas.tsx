@@ -73,7 +73,6 @@ import type { ReaderCoverage } from "@/lib/api/dataScope";
 import NeedsDataWidget from "./NeedsDataWidget";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
-import TrustBadge from "./TrustBadge";
 import { useChartTheme } from "./echartsTheme";
 import { legalSorts } from "./exploreQuery";
 import {
@@ -378,18 +377,11 @@ export default function PivotGridCanvas({
 
   return (
     <section className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <TrustBadge
-          status={page.trust?.status}
-          failingChecks={page.trust?.failingChecks ?? []}
-          size="compact"
-        />
-        <p className="text-caption text-slate">
-          {page.usedAggregate
-            ? "Read from the pre-aggregated tables."
-            : "Read from the position book."}
-        </p>
-      </div>
+      <p className="text-right text-caption text-slate">
+        {page.usedAggregate
+          ? "Read from the pre-aggregated tables."
+          : "Read from the position book."}
+      </p>
 
       {truncated && (
         <p

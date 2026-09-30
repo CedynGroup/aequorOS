@@ -73,7 +73,6 @@ from app.models.bi import (
     BiFactTarget,
     BiMartBuild,
     BiQueryLog,
-    BiReconciliationResult,
 )
 from app.models.bi_content import BI_CONTENT_TABLES
 from app.models.bi_notifications import BI_NOTIFICATION_TABLES
@@ -105,7 +104,6 @@ MODELS: tuple[type, ...] = (
     BiDimGlAccount,
     BiDimDate,
     BiMartBuild,
-    BiReconciliationResult,
     BiQueryLog,
 )
 
@@ -153,7 +151,6 @@ PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
     "bi_dim_gl_account": ("organization_id", "bank_id", "account_code"),
     "bi_dim_date": ("organization_id", "bank_id", "date"),
     "bi_mart_builds": ("id",),
-    "bi_reconciliation_results": ("id",),
     "bi_query_log": ("queried_at", "id"),
 }
 
@@ -177,16 +174,6 @@ VOCABULARIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("bi_fact_target", "ck_bi_fact_target_scope_basis", bi.TARGET_SCOPE_BASES),
     ("bi_mart_builds", "ck_bi_mart_builds_scope", bi.MART_BUILD_SCOPES),
     ("bi_mart_builds", "ck_bi_mart_builds_status", bi.MART_BUILD_STATUSES),
-    (
-        "bi_reconciliation_results",
-        "ck_bi_reconciliation_results_check_id",
-        bi.RECONCILIATION_CHECK_IDS,
-    ),
-    (
-        "bi_reconciliation_results",
-        "ck_bi_reconciliation_results_status",
-        bi.RECONCILIATION_STATUSES,
-    ),
     ("bi_query_log", "ck_bi_query_log_surface", bi.QUERY_LOG_SURFACES),
     ("bi_query_log", "ck_bi_query_log_decision", bi.QUERY_LOG_DECISIONS),
     ("bi_query_log", "ck_bi_query_log_principal_type", bi.QUERY_LOG_PRINCIPAL_TYPES),
@@ -326,9 +313,9 @@ def test_builder_provenance_is_stamped_where_the_builder_writes() -> None:
         columns = Base.metadata.tables[name].c
         assert "builder_version" in columns and not columns["builder_version"].nullable, name
     for name in built_by_builder:
-        if name in {"bi_mart_builds", "bi_reconciliation_results"}:
-            # The control tables keep their own timestamps: a running build has
-            # no ``built_at`` yet, and a reconciliation is ``evaluated_at``.
+        if name == "bi_mart_builds":
+            # The control table keeps its own timestamps: a running build has
+            # no ``built_at`` yet.
             assert "built_at" not in Base.metadata.tables[name].c, name
         else:
             assert not Base.metadata.tables[name].c["built_at"].nullable, name
@@ -417,27 +404,16 @@ def test_aggregate_grain_is_unique_with_nulls_coalesced() -> None:
         )
 
 
-def test_control_tables_carry_the_contract_unique_keys() -> None:
+def test_the_control_table_carries_the_contract_unique_key() -> None:
     builds = {
         (uc.name, tuple(c.name for c in uc.columns))
         for uc in _table(BiMartBuild).constraints
-        if isinstance(uc, sa.UniqueConstraint)
-    }
-    results = {
-        (uc.name, tuple(c.name for c in uc.columns))
-        for uc in _table(BiReconciliationResult).constraints
         if isinstance(uc, sa.UniqueConstraint)
     }
     assert builds == {
         (
             "uq_bi_mart_builds_bank_as_of_scope",
             ("organization_id", "bank_id", "as_of_date", "scope"),
-        )
-    }
-    assert results == {
-        (
-            "uq_bi_reconciliation_results_bank_as_of_check",
-            ("organization_id", "bank_id", "as_of_date", "check_id"),
         )
     }
 
@@ -457,29 +433,10 @@ def test_vocabularies_are_exactly_the_contract() -> None:
     assert bi.ENGINE_METRIC_TIERS == ("live", "official")
     assert bi.MART_BUILD_SCOPES == ("positions", "events", "gl", "engine", "dims", "targets")
     assert bi.MART_BUILD_STATUSES == ("running", "succeeded", "failed")
-    assert bi.RECONCILIATION_CHECK_IDS == (
-        "R1",
-        "R2",
-        "R3",
-        "R4",
-        "R5",
-        "R6",
-        "R7",
-        "R8",
-        "R9",
-        "R10",
-        # P5-B: the general-ledger-by-branch identity. The pinned tuple gained a
-        # member because the vocabulary genuinely did; the property this list
-        # exists to hold — that the constant, the model CHECK and the migrated
-        # CHECK agree — is pinned separately by
-        # ``test_check_constraints_admit_exactly_their_vocabulary`` here and by
-        # ``tests/db/test_bi_*_migration.py`` against Postgres.
-        "R11",
-        # P5-A: the arrears completeness share, admitted by ``202609280076``, for
-        # the same reason and pinned the same second way.
-        "R12",
+    assert not hasattr(bi, "RECONCILIATION_CHECK_IDS"), (
+        "BI grades nothing against the returns the platform files (2026-09-29, "
+        "migration 202609290080); the check vocabulary must not come back"
     )
-    assert bi.RECONCILIATION_STATUSES == ("green", "amber", "red", "grey")
     assert bi.QUERY_LOG_SURFACES == (
         "query",
         "grid",
@@ -487,6 +444,10 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         "explain",
         "export",
         "feed",
+        # RETIRED, not removed: ``GET …/bi/trust`` left BI on 2026-09-29 and nothing
+        # writes this value any more. It stays because ``bi_query_log`` is an
+        # append-only audit tier — narrowing the CHECK would mean deleting rows that
+        # record reads which genuinely happened. The vocabulary can only grow.
         "trust",
         "catalogue",
         "packs",
@@ -717,8 +678,6 @@ VOCABULARY_WIDTHS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("bi_dim_branch", "name", (bi.UNMAPPED_BRANCH_NAME,)),
     ("bi_mart_builds", "scope", bi.MART_BUILD_SCOPES),
     ("bi_mart_builds", "status", bi.MART_BUILD_STATUSES),
-    ("bi_reconciliation_results", "check_id", bi.RECONCILIATION_CHECK_IDS),
-    ("bi_reconciliation_results", "status", bi.RECONCILIATION_STATUSES),
     ("bi_query_log", "principal_type", bi.QUERY_LOG_PRINCIPAL_TYPES),
     ("bi_query_log", "surface", bi.QUERY_LOG_SURFACES),
     ("bi_query_log", "decision", bi.QUERY_LOG_DECISIONS),

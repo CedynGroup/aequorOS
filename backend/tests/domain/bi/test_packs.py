@@ -66,8 +66,11 @@ EXPECTED_PACKS: dict[str, str] = {
 #: 47 cells; three of them (stage migration beside the stage mix, vintage
 #: curves beside the vintage balances, attestation beside the filing calendar)
 #: are served by a SECOND widget embedding a platform panel, so 50 widgets
-#: carry 47 cells. Restating the shape here means a widget cannot be dropped,
+#: carried 47 cells. Restating the shape here means a widget cannot be dropped,
 #: or silently demoted to a gap, without this failing.
+#: 2026-09-29: the Compliance pack's "Reconciliation exceptions" panel left with
+#: the rest of BI reconciliation (BI grades nothing against the returns the
+#: platform files), so 49 widgets now carry 46 cells; ``compliance`` is (1, 2, 1).
 #: Phase 5 moved three counts: ``alco`` and ``branch_network`` each gained one
 #: query widget over the new optional position fields, ``credit`` gained one AND
 #: promoted ``officer_league_table`` from a gap to a figure, and ``finance``
@@ -77,7 +80,7 @@ EXPECTED_SHAPE: dict[str, tuple[int, int, int]] = {
     "alco": (9, 0, 2),
     "board": (5, 1, 3),
     "branch_network": (3, 0, 2),
-    "compliance": (1, 3, 1),
+    "compliance": (1, 2, 1),
     "credit": (7, 2, 1),
     "cro": (7, 1, 1),
     "finance": (2, 0, 2),

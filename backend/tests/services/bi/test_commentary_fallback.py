@@ -29,11 +29,10 @@ from app.services.bi.insights import facts, rules
 AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)
 BANK_NAME = "Commentary Test Bank"
-_ALL_GREEN: dict[str, str] = dict.fromkeys(("R8", "R9", "R10"), "green")
 
 RATIO = "engine.car_pct.crd.official"
 ADVISORY = "engine.par_90_pct.crd.official"
-UNRECONCILED = "engine.worst_eve_change_pct_tier1.crd.live"
+LIVE_COPY = "engine.worst_eve_change_pct_tier1.crd.live"
 
 #: Words that would tell a reader the machine failed. None of them belongs in
 #: commentary the platform wrote on purpose.
@@ -52,22 +51,18 @@ def _provenance() -> facts.FactProvenance:
     return facts.FactProvenance(fact_id=uuid4(), derived_at=datetime.now(tz=UTC), build_id=uuid4())
 
 
-def _movement(  # noqa: PLR0913 - one measure, two figures and the two badges
+def _movement(
     measure_id: str,
     prior: str | None,
     current: str | None,
     *,
     missing_reason: facts.MissingReason | None = None,
-    statuses: dict[str, str] | None = None,
-    build_overall: str = "green",
 ) -> facts.MovementFact:
     return facts.movement_fact(
         catalogue().measure(measure_id),
         as_of=AS_OF,
         prior_as_of=PRIOR,
         provenance=_provenance(),
-        statuses=_ALL_GREEN if statuses is None else statuses,
-        build_overall=build_overall,
         prior=None if prior is None else Decimal(prior),
         current=None if current is None else Decimal(current),
         missing_reason=missing_reason,
@@ -118,7 +113,7 @@ def test_it_never_reads_like_an_error() -> None:
     sheet = _sheet(
         _movement(RATIO, "12.10", "13.40"),
         _movement(ADVISORY, None, None, missing_reason="not_supplied"),
-        _movement(UNRECONCILED, "1.10", "1.90", build_overall="amber"),
+        _movement(LIVE_COPY, "1.10", "1.90"),
     )
     body = " ".join(_commentary(sheet))
 
@@ -139,13 +134,6 @@ def test_a_missing_figure_is_stated_as_missing_and_never_as_zero() -> None:
     assert "What the figures do not show" in body
     assert "It is not zero, and it has not stayed flat." in body
 
-
-def test_an_unreconciled_book_is_said_to_be_unreconciled() -> None:
-    sheet = _sheet(_movement(RATIO, "12.10", "13.40", build_overall="grey"))
-    body = " ".join(_commentary(sheet))
-
-    assert "How far these figures are confirmed" in body
-    assert "not checked is not the same as checked and correct" in body.casefold()
 
 
 def test_an_advisory_figure_is_qualified_once_rather_than_per_sentence() -> None:

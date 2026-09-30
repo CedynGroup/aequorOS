@@ -1,42 +1,48 @@
-"""What state a BI answer was read from, and whether that state reconciles.
+"""What state a BI answer was read from, and whether that state is current.
 
-Three reads that every BI answer needs and that no surface may compute for
-itself: the window of dates a query touches, the fingerprint of the mart build
-those dates were read from, and the reconciliation verdict for the same window.
+Two reads that every BI answer needs and that no surface may compute for
+itself: the window of dates a query touches, and the mart build those dates
+were read from — its fingerprint, and which dates in the window are being
+served from a build that did not succeed.
 
 They live here rather than on the read route because the ROUTE is no longer the
-only caller. A governed export renders the same three values onto the artifact —
-the spreadsheet's metadata sheet and the PDF's footer are a provenance record —
-and the asynchronous export runs them in the ``bi`` worker lane, where there is
-no request, no ``Response`` and no ETag. Two implementations of "which build did
+only caller. A governed export renders the same values onto the artifact — the
+spreadsheet's metadata sheet and the PDF's footer are a provenance record — and
+the asynchronous export runs them in the ``bi`` worker lane, where there is no
+request, no ``Response`` and no ETag. Two implementations of "which build did
 this come from" would be two answers to the same question, and the one on the
 artifact is the one a reviewer keeps.
 
-Nothing here decides anything: no authorization, no formatting, no wire model.
-:class:`TrustVerdict` is a plain value the caller shapes for its own surface, so
-this module stays usable from the worker.
+This module says nothing about whether the figures AGREE with anything. BI is
+intelligence over the bank's own treasury and ALM book; grading that book
+against the returns the platform files was the regulatory plane's question, and
+it left BI on 2026-09-29 (migration ``202609290080``). What remains is about the
+bank's OWN data being current: a reader must not take yesterday's rows for
+today's, and :func:`stale_dates` is how the alert evaluator and the subscription
+runner refuse to act on rows a later build has disowned.
+
+Nothing here decides anything: no authorization, no formatting, no wire model,
+so this module stays usable from the worker.
 """
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.bi import BiMartBuild, BiReconciliationResult
+from app.models.bi import BiMartBuild
 from app.schemas.bi import BiTime
-from app.services.bi import reconciliation
 
 #: Separator for digest material. A unit separator cannot occur in a build
 #: fingerprint, a scope name or an ISO date, so the digest is unambiguous.
 _SEPARATOR = "\x1f"
 
-#: The one ``bi_mart_builds.status`` under which the rows on file and the
-#: reconciliation results on file describe the same book.
+#: The one ``bi_mart_builds.status`` under which the rows on file describe the
+#: book the build read.
 MART_BUILD_SUCCEEDED = "succeeded"
 
 
@@ -45,8 +51,8 @@ def data_window(time: BiTime) -> tuple[date, date]:
 
     Mirrors the compiler's own ``_windows`` (pinned by a test): a single as-of
     is one day, a range is itself, and a comparison adds the prior date or an
-    equal-length prior window. The badge and the fingerprint must cover the
-    prior period too — a comparison reads it.
+    equal-length prior window. The fingerprint must cover the prior period too —
+    a comparison reads it.
     """
 
     if time.as_of is not None:
@@ -126,115 +132,23 @@ def stale_dates(
     """Dates in the window whose LATEST build did not succeed, in order.
 
     For such a date the rows being served (if any) were written by an earlier
-    build — the builder rolls a failed rebuild back to them — and the stored
-    reconciliation results were evaluated against a canonical book that has since
-    moved. Nothing about that state is described by the results on file, so no
-    badge may be earned from them (audit A360 H2). A ``running`` record counts
-    too: it is never visible from another session in practice (the builder
-    commits only on success or failure), but "not succeeded" is the rule, and a
-    record left mid-flight by a dead process would otherwise read as trusted.
+    build — the builder rolls a failed rebuild back to them — against a canonical
+    book that has since moved. Nothing about the bank's current position is
+    described by those rows, so no judgement may be made from them (audit A360
+    H2): ``alerts.evaluate_bank`` raises no threshold alert and
+    ``subscriptions.run_subscription`` mails no pack for a stale date. A
+    ``running`` record counts too: it is never visible from another session in
+    practice (the builder commits only on success or failure), but "not
+    succeeded" is the rule, and a record left mid-flight by a dead process would
+    otherwise read as current.
     """
     rows = _build_rows(db, organization_id=organization_id, bank_id=bank_id, window=window)
     return tuple(sorted({row.as_of_date for row in rows if row.status != MART_BUILD_SUCCEEDED}))
 
 
-@dataclass(frozen=True, slots=True)
-class TrustVerdict:
-    """The reconciliation verdict for one window, and what is failing in it.
-
-    ``stale_dates`` names the dates in the window whose latest mart build did
-    not succeed (:func:`stale_dates`). Each such date is graded ``grey`` and
-    contributes no failing checks, whatever results are on file for it: those
-    results were earned by an earlier build against an earlier book, and the
-    badge on a served figure must be the badge of THAT figure's build, never one
-    inherited from a build that no longer describes the data (audit A360 H2). A
-    consumer that wants to say WHY a badge is grey reads this field; the wire
-    badge itself stays ``status`` + ``failing_checks``.
-    """
-
-    status: str
-    failing_checks: tuple[str, ...]
-    stale_dates: tuple[date, ...] = ()
-
-
-def stored_checks(
-    db: Session, *, organization_id: str, bank_id: str, window: tuple[date, date]
-) -> list[BiReconciliationResult]:
-    """Every stored reconciliation result inside the window, in a stable order."""
-
-    return list(
-        db.scalars(
-            select(BiReconciliationResult)
-            .where(
-                BiReconciliationResult.organization_id == organization_id,
-                BiReconciliationResult.bank_id == bank_id,
-                BiReconciliationResult.as_of_date >= window[0],
-                BiReconciliationResult.as_of_date <= window[1],
-            )
-            .order_by(BiReconciliationResult.as_of_date, BiReconciliationResult.check_id)
-        )
-    )
-
-
-def trust_verdict(
-    db: Session, *, organization_id: str, bank_id: str, window: tuple[date, date]
-) -> TrustVerdict:
-    """The verdict for everything the window covers; a missing check is grey.
-
-    For a single date whose latest build succeeded this is
-    ``reconciliation.trust_for`` (pinned by a test). For a window it is the worst
-    verdict in it — a badge may understate confidence, never overstate it — which
-    is also why a date in the window with no stored result greys the whole badge
-    rather than being skipped.
-
-    **A date whose latest build did not succeed is grey regardless of what is on
-    file for it** (audit A360 H2). The builder rolls a failed rebuild back to the
-    previous rows and leaves the previous reconciliation results committed, so
-    without this rule a reader was shown last night's figures under a badge that
-    a different build earned against a book that has since changed — verified as
-    a mart 7 loans / 84.85M behind a canonical book of 8 / 91.85M, badge
-    unchanged, every scope ``failed``. The stored per-check rows stay readable
-    (``stored_checks``) for the detail view; only the badge refuses to inherit.
-    """
-
-    rows = stored_checks(db, organization_id=organization_id, bank_id=bank_id, window=window)
-    stale = stale_dates(db, organization_id=organization_id, bank_id=bank_id, window=window)
-    by_date: dict[date, dict[str, str]] = {}
-    for row in rows:
-        by_date.setdefault(row.as_of_date, {})[row.check_id] = row.status
-    for day in stale:
-        by_date.setdefault(day, {})
-    if not by_date:
-        return TrustVerdict(status=reconciliation.GREY, failing_checks=(), stale_dates=stale)
-    overalls: list[str] = []
-    failing: set[str] = set()
-    for day, stored in by_date.items():
-        if day in stale:
-            overalls.append(reconciliation.GREY)
-            continue
-        statuses = {
-            check_id: stored.get(check_id, reconciliation.GREY)
-            for check_id in reconciliation.STORABLE_CHECK_IDS
-        }
-        overalls.append(reconciliation.overall_trust(statuses.values()))
-        failing.update(
-            check_id
-            for check_id, value in statuses.items()
-            if value in {reconciliation.RED, reconciliation.AMBER}
-        )
-    return TrustVerdict(
-        status=reconciliation.overall_trust(overalls),
-        failing_checks=tuple(sorted(failing)),
-        stale_dates=stale,
-    )
-
-
 __all__ = [
     "MART_BUILD_SUCCEEDED",
-    "TrustVerdict",
     "build_fingerprint",
     "data_window",
     "stale_dates",
-    "stored_checks",
-    "trust_verdict",
 ]

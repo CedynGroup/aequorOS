@@ -6,8 +6,8 @@
  * Every statement is composed server-side from typed facts
  * (`app/services/bi/insights/`), with its figures already formatted in the
  * institution's own unit and its reservations already attached — the advisory
- * basis of a measure, the trust state of the checks behind it, a gap in the
- * data it would have needed. The strip renders those words as given: it does
+ * basis of a measure, a gap in the data it would have needed. The strip
+ * renders those words as given: it does
  * not recompute a figure, re-round one, or drop a qualifier to make a sentence
  * read better.
  *
@@ -32,14 +32,13 @@
  * charting runtime out of that route's initial bundle.
  *
  * THIS FILE ALSO HOSTS WHAT A LANDING PAGE MOUNTS. `docs/bi.md` §Insights layer
- * names three seams a module page carries, and two of them live here so that
- * every landing page wires them the same way and none can get the gating wrong
- * on its own: `LandingInsightStrip` (the strip, connected to the route and to
- * the feature flag) and `useKpiExplain` (the provenance drawer a `KpiStat`'s
- * `explain` prop opens). The third, the chart badge, is
- * `./TrustBadge.tsx::ReconciliationTrustBadge`. `landingSurfaces.test.ts` pins
- * that every landing page reaches all three — "built and never mounted" is the
- * defect this build has shipped repeatedly (audit A360-7 S3).
+ * names the seams a module page carries, and both live here so that every
+ * landing page wires them the same way and none can get the gating wrong on
+ * its own: `LandingInsightStrip` (the strip, connected to the route and to the
+ * feature flag) and `useKpiExplain` (the provenance drawer a `KpiStat`'s
+ * `explain` prop opens). `landingSurfaces.test.ts` pins that every landing
+ * page reaches both — "built and never mounted" is the defect this build has
+ * shipped repeatedly (audit A360-7 S3).
  */
 
 import { useCallback, useState, type ReactNode } from "react";
@@ -67,7 +66,6 @@ import { isoDay } from "@/lib/api/biKeys";
 import ExplainDrawer from "./ExplainDrawer";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
-import TrustBadge from "./TrustBadge";
 import type { BiFavourability, BiInsight } from "./types";
 
 const TREND_COLOR: Record<BiFavourability, string> = {
@@ -114,7 +112,6 @@ export function insightViews(
     emphasis: insight.emphasis,
     qualifiers: insight.qualifiers,
     certified: insight.certified,
-    trust: insight.trust,
   }));
 }
 
@@ -136,11 +133,6 @@ function InsightCard({ insight }: { insight: BiInsight }) {
         {insight.detail}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <TrustBadge
-          status={insight.trust?.status}
-          failingChecks={insight.trust?.failingChecks ?? []}
-          size="compact"
-        />
         {insight.qualifiers.map((qualifier) => (
           <span
             key={qualifier}
@@ -309,8 +301,7 @@ export function LandingInsightStrip({
  * and `drawer` is the one `ExplainDrawer` the page renders (anywhere in its
  * tree, once). Opening it asks `POST …/bi/explain` for that measure in a
  * point-in-time query at the page's reporting date, and the drawer shows the
- * measure's declaration, the engine row it is a copy of, and the current
- * status of every reconciliation check that governs it.
+ * measure's declaration and the engine row it is a copy of.
  *
  * `undefined` is returned, and no button is drawn, whenever the affordance would
  * not be honest:

@@ -412,7 +412,7 @@ it, adding one registry entry moved an unrelated family's content digest.
 
 ---
 
-## 3e. BI plane (governed analytics over the same numbers we file)
+## 3e. BI plane (governed analytics over the bank's own treasury and ALM data)
 
 One governed foundation: worker-built marts and conformed dimensions, a metric
 catalogue, a safe query compiler, and an authorization gate every BI surface
@@ -442,7 +442,9 @@ of it, including that BI never calls `derive_facts`.
 - **Engine metrics are COPIED, never recomputed.** `bi_fact_engine_metric`
   carries a `live` tier from `live_metrics` and an `official` tier from the
   latest succeeded baseline `regulatory_runs` per period, with the input hash,
-  pipeline state and reconciliation-blocked flag that produced them. A metric
+  pipeline state and the live plane's own `reconciliation_blocked` flag that
+  produced them (the regulatory plane's provenance about the source figure,
+  copied as-is — not a BI verdict). A metric
   resolves to its authority by `(metric_id, regime)`; only `filed` designations
   may be badged certified (an SDI's IRRBB has no registry entry at all and is
   marked `unregistered`).
@@ -453,17 +455,31 @@ of it, including that BI never calls `derive_facts`.
 - **Two FX rules, declared per measure.** Classification counts an unconverted
   foreign-currency loan at zero; fact derivation excludes it. The mart carries
   both (`classification_exposure_rc` beside `balance_rc` + `fx_unconverted`) so
-  portfolio NPL reconciles exactly to the engine's, and each measure declares
+  portfolio NPL is the SAME figure as the engine's, and each measure declares
   which rule it follows.
-- **Reconciliation R1–R12 drives a trust badge** (`green | amber | red | grey`).
-  A check that cannot run is grey — never a pass. R10 (`dpd_completeness`)
-  exists because a bank that never supplied `days_past_due` would otherwise
-  render PAR-90 as a confident `0.00 %`; the compiler returns NULL when a
-  selecting column is NULL across the whole population, and R10 makes the
-  badge say why. R11 (`gl_branch_identity`, Phase 5) is exact: the branch
-  ledger's `ytd_rc` summed per (account, month, currency) must equal the
-  institution ledger's, on the SAME Decimal figures. R12
-  (`arrears_completeness`) is R10's twin over `arrears_amount_rc`.
+- **BI carries NO reconciliation to the regulatory returns — founder decision
+  2026-09-29.** Until that date this bullet read "Reconciliation R1–R12 drives a
+  trust badge (`green | amber | red | grey`)": twelve checks in
+  `app/services/bi/reconciliation.py` compared the marts with "the figures the
+  platform already files" (R4 against BSD7A, a BoG return, line by line), and
+  the verdict was rendered as a "Does not reconcile" chip on every dashboard
+  card, treasury ones included. The founder rejected the premise — *"we are
+  showing intelligence to users based on their data. Let's not complicate
+  things"*: treasury/ALM and the regulatory spine are different planes, and BI
+  is analytics over the bank's own treasury data. Removed by that decision: the
+  R1–R12 checks and `bi_reconciliation_results`, `MeasureDef.reconciliation_checks`,
+  `GET …/bi/trust` and the `trust` badge on every BI payload, the `TrustBadge` in
+  `ChartFrame`, the Compliance pack's `reconciliation_trust` panel, the export
+  metadata's "Data confidence" field and the feed's `X-Bi-Feed-Trust` header.
+  **Build freshness STAYS** — `bi_mart_builds`, the value-based fingerprint and
+  `provenance.stale_dates` say the bank's own data is stale, which is not a
+  regulatory statement; the stale-date signal needs a surface of its own now
+  that the badge that carried it is gone (audit A360 H2). Nothing on the
+  regulatory side moved: filing gates, ICAAP freeze gates, BoG return
+  reconciliation and `derive_facts`' refusal are untouched. Never put a
+  regulatory verdict back on a BI surface. The spec that produced the mistake,
+  `docs/bi.md`, is gitignored (`.gitignore:62`) and so not reviewable in the
+  repository — a recorded governance gap.
 
 **Partition RLS is the sharp edge.** Postgres does not inherit row-level
 security onto partitions, so the marts' monthly and yearly children are created
@@ -515,8 +531,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 - **An insight may only restate a typed fact.** There is no path from a query
   result to a sentence that does not pass through `insights/facts.py`, so an
   insight cannot assert a figure the platform did not compute, describe a missing
-  figure as zero or flat, or present an unreconciled or advisory number as
-  certified. The ratio bridge sums exactly or returns `BridgeUnavailable` with a
+  figure as zero or flat, or present an advisory number as certified. The ratio bridge sums exactly or returns `BridgeUnavailable` with a
   reason — never a leg worth nothing.
 - **Export authority is derived from the member set, never from a client flag.**
   `authorization.query_members` gives the transitive walk and each member declares
@@ -527,9 +542,12 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   audited and watermarked; over the interactive threshold it becomes a `bi_export`
   job that re-authorizes at render time rather than trusting the request's
   authority.
-- **`bi_query_log` names every surface it records**, including `trust`,
-  `catalogue`, `packs` and `insights` — surfaces that return no mart rows or that
-  make a statement rather than return a figure. The read budget is counted over
+- **`bi_query_log` names every surface it records**, including `catalogue`,
+  `packs` and `insights` — surfaces that return no mart rows or that make a
+  statement rather than return a figure (and, historically, `trust`, the surface
+  removed by the 2026-09-29 decision; the log is append-only, so migration
+  `202609290080` keeps the value in the CHECK — an append-only table's
+  vocabulary can only grow). The read budget is counted over
   this table, so a surface with no word of its own either goes unmetered or is
   recorded as something it is not. Its downgrade path deliberately FAILS rather
   than deleting rows: an append-only log a migration can quietly empty is not one.
