@@ -335,8 +335,8 @@ export function grantPreviewFingerprint(
     draft.sensitivityScope,
     scope.kind,
     scope.values.join(","),
-    // The sentence states the expiry, and the reason decides whether the
-    // server will preview the grant at all.
+    // Reason and expiry edits must invalidate the preview because they
+    // affect whether the server accepts the grant.
     draft.reasonCategory,
     draft.reasonDetail.trim(),
     draft.validUntil,

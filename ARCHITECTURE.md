@@ -463,9 +463,9 @@ of it, including that BI never calls `derive_facts`.
   `app/services/bi/reconciliation.py` compared the marts with "the figures the
   platform already files" (R4 against BSD7A, a BoG return, line by line), and
   the verdict was rendered as a "Does not reconcile" chip on every dashboard
-  card, treasury ones included. The founder rejected the premise — *"we are
+  card, treasury ones included. The founder rejected the premise — _"we are
   showing intelligence to users based on their data. Let's not complicate
-  things"*: treasury/ALM and the regulatory spine are different planes, and BI
+  things"_: treasury/ALM and the regulatory spine are different planes, and BI
   is analytics over the bank's own treasury data. Removed by that decision: the
   R1–R12 checks and `bi_reconciliation_results`, `MeasureDef.reconciliation_checks`,
   `GET …/bi/trust` and the `trust` badge on every BI payload, the `TrustBadge` in

@@ -146,7 +146,7 @@ test.describe("Organization Owner", () => {
       page.getByRole("heading", { name: "Integration keys" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Generate data push key" }),
+      page.getByRole("button", { name: "Generate data push key", exact: true }),
     ).toBeVisible();
 
     if (evidenceDir) {
