@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -19,10 +19,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import BankReportingPeriod, RegulatoryRun
+from app.domain.reporting.period_windows import trailing_month_end_window
+from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun, User
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import (
+    authorization,
     job_queue,
     pipeline,
     regulatory_capital,
@@ -197,6 +208,61 @@ def test_empty_window_returns_valid_empty_payload(db_session: Session) -> None:
     assert result.daily == []
 
 
+def test_period_count_counts_every_period_the_caller_asked_for(db_session: Session) -> None:
+    """``period_count`` is the wire count of periods the CALLER's dates cover.
+
+    The five module dashboards select their sparkline through
+    ``trailing_month_end_window`` because a fixed 13-ROW slice meant 13
+    month-ends for a monthly feeder and 13 business days for a daily one. This
+    surface has no such stand-in — the horizon is the two dates that were sent,
+    and the window-analysis footer reads this number as "N periods". Thinning
+    the selection to month-ends would drop periods the caller asked for, so the
+    two selections are pinned here as different contracts (audit A1-10).
+    """
+    materialize_canonical_test_book(db_session)
+    for period_end in (date(2026, 3, 6), date(2026, 3, 13), date(2026, 3, 20)):
+        db_session.add(
+            BankReportingPeriod(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                period_start=date(2026, 3, 1),
+                period_end=period_end,
+                label=period_end.isoformat(),
+                status="open",
+            )
+        )
+    db_session.flush()
+
+    result = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 31),
+    )
+
+    # Three weekly closes plus the month-end: the count follows the dates, not
+    # the cadence, and not how many periods happened to resolve a ratio.
+    assert result.period_count == 4
+    assert [stat.ratio for stat in result.ratios] == list(ALL_RATIOS)
+    assert all(len(stat.points) == 1 for stat in result.ratios)
+
+    # The dashboards' helper over the same rows keeps only the month's last
+    # period. Swapping it in here would report 1 period for a window that
+    # covers 4 — the field would stop answering the question it is asked.
+    periods = db_session.scalars(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.organization_id == DEMO_ORG_ID,
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end >= date(2026, 3, 1),
+            BankReportingPeriod.period_end <= date(2026, 3, 31),
+        )
+    ).all()
+    assert [period.period_end for period in trailing_month_end_window(periods)] == [
+        date(2026, 3, 31)
+    ]
+
+
 def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> None:
     """The daily section aggregates the snapshot ladder inside the window."""
     materialize_canonical_test_book(db_session)
@@ -238,6 +304,206 @@ def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> No
         end_date=today - timedelta(days=10),
     )
     assert off_window.daily == []
+
+
+def test_daily_stats_read_the_measured_headline_for_irr_and_credit(db_session: Session) -> None:
+    """IRR aggregates the SIGNED ΔEVE / Tier 1 the engine measured — never the
+    limit (``eve_limit_pct``, a parameter that would make a flat series) — and
+    credit aggregates the NPL ratio; rows come out in live-module order."""
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    snapshot_date = date(2026, 3, 31)
+    ladder = (
+        ("capital", {"car_pct": "14.1"}),
+        ("credit", {"npl_ratio_pct": "6.5", "npl_limit_pct": "10"}),
+        # A limit without the measured change is not a headline: no irr row.
+        ("irr", {"eve_limit_pct": "15"}),
+        ("liquidity", {"lcr_pct": "131.2"}),
+    )
+    for module, metrics in ladder:
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics=metrics,
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.commit()
+
+    limit_only = window_analytics.compute_window(
+        db_session, MAKER, SAMPLE_BANK_ID, start_date=snapshot_date, end_date=snapshot_date
+    )
+    assert [row.module for row in limit_only.daily] == ["liquidity", "capital", "credit"]
+    credit = next(row for row in limit_only.daily if row.module == "credit")
+    assert credit.metric_key == "npl_ratio_pct"
+    assert credit.min == credit.avg == credit.max == Decimal("6.5")
+
+    db_session.add(
+        LiveMetricSnapshot(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            module="irr",
+            reporting_period_id=period_id,
+            snapshot_date=date(2026, 3, 30),
+            metrics={"worst_eve_change_pct_tier1": "-7.25", "eve_limit_pct": "15"},
+            status="green",
+            computed_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    measured = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 30),
+        end_date=snapshot_date,
+    )
+    assert [row.module for row in measured.daily] == ["liquidity", "capital", "credit", "irr"]
+    irr = next(row for row in measured.daily if row.module == "irr")
+    assert irr.metric_key == "worst_eve_change_pct_tier1"
+    # The signed value survives aggregation as stored (loss negative).
+    assert irr.day_count == 1
+    assert irr.min == irr.avg == irr.max == Decimal("-7.25")
+
+
+def test_daily_stats_aggregate_the_rating_ladder(db_session: Session) -> None:
+    """The rating engine's PD band is advisory, and it still gets a daily row.
+
+    ``_PRIMARY_METRIC_KEY`` had no ``rating`` entry, so ``_daily_stats`` skipped
+    every rating snapshot: the module computed and the window never mentioned it
+    (decision D-031). Advisory standing is a labelling rule — the panel marks the
+    line advisory — not grounds for dropping an engine from the analysis.
+    """
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    for snapshot_date, upper in ((date(2026, 3, 30), "1.20"), (date(2026, 3, 31), "1.80")):
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module="rating",
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics={"pit_pd_upper_pct": upper, "pit_rating_grade": "bb"},
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.commit()
+
+    result = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 30),
+        end_date=date(2026, 3, 31),
+    )
+
+    rating = next(row for row in result.daily if row.module == "rating")
+    assert rating.metric_key == "pit_pd_upper_pct"
+    assert rating.day_count == 2
+    assert rating.min == Decimal("1.20")
+    assert rating.max == Decimal("1.80")
+    assert rating.avg == Decimal("1.500000")
+
+
+def _principal_with(
+    db: Session, *, module_scope: ModuleScope, sensitivity_scope: SensitivityScope
+) -> TenantContext:
+    """A fresh human in the demo org holding exactly one Viewer sentence."""
+    user = User(
+        id=uuid4(),
+        organization_id=DEMO_ORG_ID,
+        email=f"{module_scope.value}.{sensitivity_scope.value}.viewer@example.test",
+        display_name=f"{module_scope.value} {sensitivity_scope.value} viewer",
+    )
+    db.add(user)
+    db.flush()
+    authorization.create_role_binding(
+        db,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION, SAMPLE_BANK_ID, module_scope, sensitivity_scope
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "window-analytics-test"),
+        reason="Exercise credit daily-ladder gating.",
+        commit=False,
+    )
+    db.flush()
+    return TenantContext(
+        organization_id=DEMO_ORG_ID,
+        actor_user_id=user.id,
+        authorization_version=user.authorization_version,
+    )
+
+
+def test_daily_stats_serve_credit_only_to_a_credit_or_all_aggregated_view(
+    db_session: Session,
+) -> None:
+    """Credit daily rows are gated like every other engine (D-017 retro-gate).
+
+    Capital stays ungated on this surface until its own cutover, so it is the
+    control that proves the response is filtered rather than emptied.
+    """
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    snapshot_date = date(2026, 3, 31)
+    for module, metrics in (
+        ("capital", {"car_pct": "14.1"}),
+        ("credit", {"npl_ratio_pct": "6.5"}),
+    ):
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics=metrics,
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.flush()
+
+    def daily_modules(ctx: TenantContext) -> list[str]:
+        result = window_analytics.compute_window(
+            db_session, ctx, SAMPLE_BANK_ID, start_date=snapshot_date, end_date=snapshot_date
+        )
+        return [row.module for row in result.daily]
+
+    liquidity_only = _principal_with(
+        db_session,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.AGGREGATED,
+    )
+    assert daily_modules(liquidity_only) == ["capital"]
+
+    credit_confidential = _principal_with(
+        db_session,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    # Sensitivity is exact: a confidential credit sentence is not the aggregated one.
+    assert daily_modules(credit_confidential) == ["capital"]
+
+    credit_aggregated = _principal_with(
+        db_session,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.AGGREGATED,
+    )
+    assert daily_modules(credit_aggregated) == ["capital", "credit"]
+
+    # The hermetic fixture's org-wide viewer/all/all sentence keeps seeing it.
+    assert daily_modules(MAKER) == ["capital", "credit"]
 
 
 def test_endpoint_wiring_serializes_decimals_as_strings(db_client: TestClient) -> None:

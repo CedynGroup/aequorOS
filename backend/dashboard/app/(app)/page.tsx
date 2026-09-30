@@ -5,7 +5,7 @@
  *
  * Composition (top → bottom, permuted by the role lens):
  *   1. Breach banner (open critical/high alerts, or a slim compliance strip)
- *   2. Six-module pulse wall (headline live metric per regulatory engine)
+ *   2. Module pulse wall (headline live metric per regulatory engine)
  *   3. Big-4 balance-sheet strip (canonical facts)
  *   4. Ratio trend (LCR/NSFR/CAR across all periods) + operational feed
  *
@@ -41,6 +41,7 @@ import DeferredRatioTrendChart from "@/components/home/DeferredRatioTrendChart";
 import WindowAnalysis from "@/components/home/WindowAnalysis";
 import OperationalFeed from "@/components/home/OperationalFeed";
 import SdiLiquiditySummary from "@/components/home/SdiLiquiditySummary";
+import { LandingInsightStrip } from "@/components/bi/InsightStrip";
 import { centralBankName } from "@/lib/format";
 
 export default function CommandCenterPage() {
@@ -113,6 +114,15 @@ export default function CommandCenterPage() {
               </p>
             </div>
           )}
+
+          {/* Under the header (docs/bi.md §Insights layer). Every statement
+              carries its own reconciliation badge, so it needs no banner above
+              it; the strip is absent when BI is off and says so in words when
+              nothing has been computed for the date. */}
+          <LandingInsightStrip
+            bankId={bankId}
+            asOf={effective.period.periodEnd}
+          />
 
           {/* Above the breach banner on purpose: a limit breach computed on a
               book that does not balance is not a trustworthy breach. */}

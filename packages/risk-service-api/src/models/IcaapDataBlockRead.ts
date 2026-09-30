@@ -32,6 +32,13 @@ import {
   StatusDetailToJSON,
   StatusDetailToJSONTyped,
 } from "./StatusDetail";
+import type { Title } from "./Title";
+import {
+  TitleFromJSON,
+  TitleFromJSONTyped,
+  TitleToJSON,
+  TitleToJSONTyped,
+} from "./Title";
 import type { IcaapDataBlockReadCurrentBinding } from "./IcaapDataBlockReadCurrentBinding";
 import {
   IcaapDataBlockReadCurrentBindingFromJSON,
@@ -46,13 +53,6 @@ import {
   RetiredAtToJSON,
   RetiredAtToJSONTyped,
 } from "./RetiredAt";
-import type { Title1 } from "./Title1";
-import {
-  Title1FromJSON,
-  Title1FromJSONTyped,
-  Title1ToJSON,
-  Title1ToJSONTyped,
-} from "./Title1";
 import type { IcaapBlockTypeRead } from "./IcaapBlockTypeRead";
 import {
   IcaapBlockTypeReadFromJSON,
@@ -148,10 +148,10 @@ export interface IcaapDataBlockRead {
   statusDetail?: StatusDetail;
   /**
    *
-   * @type {Title1}
+   * @type {Title}
    * @memberof IcaapDataBlockRead
    */
-  title?: Title1;
+  title?: Title;
 }
 
 /**
@@ -210,7 +210,7 @@ export function IcaapDataBlockReadFromJSONTyped(
       json["status_detail"] == null
         ? undefined
         : StatusDetailFromJSON(json["status_detail"]),
-    title: json["title"] == null ? undefined : Title1FromJSON(json["title"]),
+    title: json["title"] == null ? undefined : TitleFromJSON(json["title"]),
   };
 }
 
@@ -241,6 +241,6 @@ export function IcaapDataBlockReadToJSONTyped(
     spec: IcaapBlockTypeReadToJSON(value["spec"]),
     status: IcaapBlockStatusToJSON(value["status"]),
     status_detail: StatusDetailToJSON(value["statusDetail"]),
-    title: Title1ToJSON(value["title"]),
+    title: TitleToJSON(value["title"]),
   };
 }

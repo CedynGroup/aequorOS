@@ -67,6 +67,7 @@ from app.domain.irr.engine import (
     run_irr_scenarios,
     scenario_shifts,
 )
+from app.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -254,7 +255,18 @@ def get_irr_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
+        # Current mode computes from the LIVE plane, exactly as ``compute_live``
+        # does. The batch holds ``BankFinancialFact`` — the official spine, which
+        # only an official run writes — so a tenant whose live plane is ready but
+        # has no official run for its latest date used to fail here with
+        # ``financial_facts_missing`` (BI Phase 0 item 2). The trend stays on the
+        # batch: a point is a period's official picture or nothing.
+        current_facts = (
+            load_current_facts(db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)).facts
+            if reporting_period_id is None
+            else None
+        )
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch, facts=current_facts)
         metrics = _metrics_from_analysis(analysis)
         gap_table = _gap_table_from_analysis(analysis)
         eve_scenarios = _eve_scenarios_from_analysis(analysis)
@@ -785,10 +797,9 @@ def _eve_scenarios_from_run(run: RegulatoryRun) -> list[IrrEveScenarioRead]:
 # Dashboard trends show a trailing window, not the bank's full period history. With
 # 10 years of monthly history (~120 periods) and few stored runs, recomputing every
 # period inline on each load cost ~500 queries / ~25s; a trailing year is both fast
-# and a readable sparkline. Tune here if a longer horizon is wanted.
-_TREND_MAX_POINTS = 13
-
-
+# and a readable sparkline. The window is the last period in each of the trailing
+# twelve calendar months plus the latest period (``period_windows``), so a daily
+# feeder shows a year, not its last thirteen business days.
 def _build_trend(
     db: Session,
     ctx: TenantContext,
@@ -797,7 +808,7 @@ def _build_trend(
     *,
     batch: _IrrDashboardBatch | None = None,
 ) -> list[IrrTrendPointRead]:
-    trend_periods = periods[-_TREND_MAX_POINTS:]
+    trend_periods = period_windows.trailing_month_end_window(periods)
     batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[IrrTrendPointRead] = []
     for period in trend_periods:
@@ -842,7 +853,7 @@ def _prefetch_dashboard_batch(
     *,
     extra_period: BankReportingPeriod | None = None,
 ) -> _IrrDashboardBatch:
-    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    candidates = period_windows.trailing_month_end_window(periods)
     if extra_period is not None and all(item.id != extra_period.id for item in candidates):
         candidates.append(extra_period)
     period_ids = [period.id for period in candidates]
@@ -936,14 +947,19 @@ def _irr_params_from_batch(
     )
 
 
-def _compute_inline_from_batch(
+def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus optional reuse
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     batch: _IrrDashboardBatch,
+    *,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _IrrAnalysis:
-    period_facts = batch.facts.get(period.id, [])
+    # ``facts`` overrides the batch's official rows for the period (IRR groups
+    # plus capital components): current mode passes the live plane, which the
+    # official spine may not carry yet.
+    period_facts = batch.facts.get(period.id, []) if facts is None else facts
     facts = [fact for fact in period_facts if fact.fact_group in _IRR_FACT_GROUPS]
     active = _irr_params_from_batch(db, ctx, bank, period.period_end, batch)
     tier1 = (
@@ -1155,17 +1171,18 @@ def _validate_ear_analysis_inputs(horizon_months: int, delta_bp: int) -> None:
         )
 
 
-def _compute_inline_or_409(
+def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     *,
     batch: _IrrDashboardBatch | None = None,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _IrrAnalysis:
     try:
         return (
-            _compute_inline_from_batch(db, ctx, bank, period, batch)
+            _compute_inline_from_batch(db, ctx, bank, period, batch, facts=facts)
             if batch is not None
             else _compute_inline(db, ctx, bank, period)
         )
@@ -1206,7 +1223,7 @@ def compute_live(
         period,
         facts,
         active,
-        tier1=_tier1_from_facts(current.facts),
+        tier1=_capital_base(db, ctx, bank, current.source_as_of_date, current.facts),
     )
     snapshot = current_snapshot(
         _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active),
@@ -1356,8 +1373,7 @@ def tier1_for_period(
 def _load_tier1(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> Decimal:
-    if institution_types.institution_class(db, bank) == "sdi":
-        return sdi_capital.net_own_funds(db, ctx, bank, period.period_end)
+    """The official run's ΔEVE denominator over the period's capital spine."""
     components = list(
         db.scalars(
             select(BankFinancialFact).where(
@@ -1368,7 +1384,32 @@ def _load_tier1(
             )
         )
     )
-    return _tier1_from_facts(components)
+    return _capital_base(db, ctx, bank, period.period_end, components)
+
+
+def _capital_base(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    facts: Sequence[FinancialFactRow],
+) -> Decimal:
+    """The ΔEVE denominator for one book — the ONE statement of the regime split.
+
+    A bank's Tier 1 comes from the capital-component ``facts`` in hand; an SDI
+    uses its signed Act 930 s.29 Net Own Funds as of ``as_of``
+    (``sdi_capital.net_own_funds``), the denominator the SDI-IRRBB-QUARTERLY
+    return names. Shared by the official run (``_load_tier1``) and the live
+    tier (``compute_live``) so the two cannot disagree: until 2026-09-21 the
+    live tier derived Tier 1 from facts for every class, so an SDI's live
+    ΔEVE/T1 headline sat on a different denominator from its filed trend
+    point. ``_compute_inline_from_batch`` applies the same split over the
+    class and Net Own Funds its batch prefetches rather than re-querying per
+    trend point.
+    """
+    if institution_types.institution_class(db, bank) == "sdi":
+        return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+    return _tier1_from_facts(facts)
 
 
 def _tier1_from_facts(facts: Sequence[FinancialFactRow]) -> Decimal:

@@ -1,34 +1,21 @@
-'use client';
+"use client";
 
 /**
  * Token-themed ratio trend line chart for the liquidity and Basel capital
- * workspaces. A theme-aware copy of components/charts/RatioHistoryChart
- * (which is shared with other modules and therefore left untouched), extended
- * with an optional second series and an explicit red-floor line.
+ * workspaces, with an optional second series and an explicit red-floor line.
+ *
+ * The hollow/solid point distinction (inline vs persisted) is a per-datum
+ * `itemStyle` — a canvas has no element per point for a custom dot renderer.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
-import {
-  CHART_ACCENT,
-  CHART_CRIT,
-  CHART_GRID,
-  CHART_WARN,
-  axisProps,
-  chartLegendProps,
-  chartMargins,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
+  axisTooltip,
+  LINE_SERIES_BASE,
+  thresholdMarkLine,
+  type ThresholdLine,
+} from "@/lib/echartsOptions";
 
 export type TrendPoint = {
   label: string;
@@ -38,36 +25,13 @@ export type TrendPoint = {
   stored?: boolean;
 };
 
-function trendDot(color: string) {
-  return function TrendDot(props: unknown) {
-    const { key, cx, cy, payload } = props as {
-      key?: string;
-      cx?: number;
-      cy?: number;
-      payload?: TrendPoint;
-    };
-    const hollow = payload?.stored === false;
-    return (
-      <circle
-        key={key}
-        cx={cx}
-        cy={cy}
-        r={3}
-        fill={hollow ? 'rgb(var(--surface-raised))' : color}
-        stroke={color}
-        strokeWidth={hollow ? 1.5 : 0}
-      />
-    );
-  };
-}
-
 export default function RatioTrendChart({
   data,
   threshold,
-  thresholdLabel = 'Min',
+  thresholdLabel = "Min",
   redFloor,
-  redFloorLabel = 'Red floor',
-  primaryLabel = 'Ratio',
+  redFloorLabel = "Red floor",
+  primaryLabel = "Ratio",
   secondaryLabel,
   yMin,
   yMax,
@@ -91,85 +55,137 @@ export default function RatioTrendChart({
   yMax?: number;
   height?: number;
 }) {
-  const values = data.flatMap((d) =>
-    d.secondary === undefined ? [d.primary] : [d.primary, d.secondary]
+  const tokens = useChartTokens();
+  const values = data.flatMap((point) =>
+    point.secondary === undefined
+      ? [point.primary]
+      : [point.primary, point.secondary],
   );
   const floors = [
     ...(threshold === null ? [] : [threshold]),
     ...(redFloor === null || redFloor === undefined ? [] : [redFloor]),
   ];
   const scale = [...values, ...floors];
-  const min = yMin ?? (scale.length > 0 ? Math.floor(Math.min(...scale) - 5) : 0);
-  const max = yMax ?? (scale.length > 0 ? Math.ceil(Math.max(...scale) + 5) : 100);
-  const primaryColor = CHART_ACCENT;
-  const secondaryColor = seriesColor(1);
+  const min =
+    yMin ?? (scale.length > 0 ? Math.floor(Math.min(...scale) - 5) : 0);
+  const max =
+    yMax ?? (scale.length > 0 ? Math.ceil(Math.max(...scale) + 5) : 100);
+  const primaryColor = tokens.accent;
+  const secondaryColor = seriesColor(tokens, 1);
+  const labels = data.map((point) => point.label);
+
+  const thresholds: ThresholdLine[] = [
+    ...(threshold === null
+      ? []
+      : [
+          {
+            axis: "y" as const,
+            value: threshold,
+            label: `${thresholdLabel} ${threshold}%`,
+            color: tokens.adverse,
+            labelPosition: "insideEndBottom" as const,
+          },
+        ]),
+    ...(redFloor === undefined || redFloor === null
+      ? []
+      : [
+          {
+            axis: "y" as const,
+            value: redFloor,
+            label: `${redFloorLabel} ${redFloor}%`,
+            color: tokens.caution,
+            labelPosition: "start" as const,
+          },
+        ]),
+  ];
+
+  const pointStyle = (color: string) => (point: TrendPoint) => ({
+    value: point.primary,
+    itemStyle: {
+      color: point.stored === false ? tokens.surface : color,
+      borderColor: color,
+      borderWidth: point.stored === false ? 1.5 : 0,
+    },
+  });
+
+  const option: BiEChartsOption = {
+    grid: {
+      left: 4,
+      right: 24,
+      top: 12,
+      bottom: secondaryLabel ? 24 : 4,
+      containLabel: true,
+    },
+    ...(secondaryLabel
+      ? { legend: { bottom: 0, type: "scroll" as const } }
+      : {}),
+    xAxis: { type: "category", data: labels },
+    yAxis: {
+      type: "value",
+      min,
+      max,
+      axisLine: { show: false },
+      axisLabel: { formatter: (value: number) => `${Math.round(value)}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(labels, (value) => `${value.toFixed(2)}%`, {
+        note: (index) => (data[index]?.stored === false ? "inline" : undefined),
+      }),
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        name: primaryLabel,
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        lineStyle: { color: primaryColor, width: 2 },
+        markLine:
+          thresholds.length > 0 ? thresholdMarkLine(thresholds) : undefined,
+        data: data.map(pointStyle(primaryColor)),
+      },
+      ...(secondaryLabel
+        ? [
+            {
+              ...LINE_SERIES_BASE,
+              name: secondaryLabel,
+              smooth: true,
+              showSymbol: true,
+              symbolSize: 5,
+              lineStyle: {
+                color: secondaryColor,
+                width: 1.5,
+                type: "dashed" as const,
+              },
+              data: data.map((point) => ({
+                value: point.secondary ?? null,
+                itemStyle: {
+                  color:
+                    point.stored === false ? tokens.surface : secondaryColor,
+                  borderColor: secondaryColor,
+                  borderWidth: point.stored === false ? 1.5 : 0,
+                },
+              })),
+            },
+          ]
+        : []),
+    ],
+  } as BiEChartsOption;
+
+  const inline = data.filter((point) => point.stored === false).length;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ ...chartMargins, right: 24 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} />
-        <YAxis
-          domain={[min, max]}
-          axisLine={false}
-          tickLine={false}
-          tick={axisProps.tick}
-          tickFormatter={(v: number) => `${Math.round(v)}%`}
-          width={48}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(v: number, name) => [`${v.toFixed(2)}%`, name]}
-        />
-        {secondaryLabel && <Legend {...chartLegendProps} verticalAlign="top" align="right" height={24} iconType="line" />}
-        {threshold !== null && (
-          <ReferenceLine
-            y={threshold}
-            stroke={CHART_CRIT}
-            strokeDasharray="4 4"
-            label={{
-              value: `${thresholdLabel} ${threshold}%`,
-              position: 'insideBottomRight',
-              fill: CHART_CRIT,
-              fontSize: 11,
-            }}
-          />
-        )}
-        {redFloor !== undefined && redFloor !== null && (
-          <ReferenceLine
-            y={redFloor}
-            stroke={CHART_WARN}
-            strokeDasharray="2 4"
-            label={{
-              value: `${redFloorLabel} ${redFloor}%`,
-              position: 'insideBottomLeft',
-              fill: CHART_WARN,
-              fontSize: 11,
-            }}
-          />
-        )}
-        <Line
-          type="monotone"
-          dataKey="primary"
-          name={primaryLabel}
-          stroke={primaryColor}
-          strokeWidth={2}
-          dot={trendDot(primaryColor)}
-          activeDot={{ r: 5 }}
-        />
-        {secondaryLabel && (
-          <Line
-            type="monotone"
-            dataKey="secondary"
-            name={secondaryLabel}
-            stroke={secondaryColor}
-            strokeWidth={1.5}
-            strokeDasharray="5 3"
-            dot={trendDot(secondaryColor)}
-            activeDot={{ r: 4 }}
-          />
-        )}
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`${primaryLabel}${
+        secondaryLabel ? ` and ${secondaryLabel}` : ""
+      } across ${data.length} periods${
+        threshold === null
+          ? ", with no regulatory minimum resolved"
+          : `, against a minimum of ${threshold}%`
+      }${inline > 0 ? `; ${inline} points computed inline` : ""}`}
+    />
   );
 }

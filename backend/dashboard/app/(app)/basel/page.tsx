@@ -15,6 +15,10 @@ import RatioTrendChart from "@/components/liquidity/charts/RatioTrendChart";
 import CapitalWaterfallChart from "@/components/basel/charts/CapitalWaterfallChart";
 import SdiCapitalView from "@/components/basel/SdiCapitalView";
 import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
+import {
+  LandingInsightStrip,
+  useKpiExplain,
+} from "@/components/bi/InsightStrip";
 import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
@@ -28,7 +32,7 @@ import {
   statusTone,
   type FloorAssessment,
 } from "@/lib/api/values";
-import { seriesColor } from "@/lib/chartTheme";
+import { cssSeriesColor } from "@/lib/svgChartPalette";
 import { fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
 function kpiStatus(status: "green" | "amber" | "red" | string): KpiStatus {
@@ -91,6 +95,10 @@ export default function BaselOverview() {
 
   const data = dashboard.data;
   const run = latestRun.data;
+  // The reporting date every BI surface on this page speaks about: the period
+  // the figures on screen were computed for, never today's date.
+  const asOf = data?.period.periodEnd ?? null;
+  const explain = useKpiExplain(bankId, asOf);
   // NEW-51. The CAR buffer ladder is tenant data: the capital service resolves
   // `car_min`, `car_early_warning` and `car_critical` from the institution's
   // regulatory parameter set and this endpoint refuses with 409
@@ -161,17 +169,17 @@ export default function BaselOverview() {
         {
           name: "Credit risk",
           value: num(data.rwaComposition.creditRwaGhs),
-          color: seriesColor(0),
+          colorIndex: 0,
         },
         {
           name: "Operational risk",
           value: num(data.rwaComposition.operationalRwaGhs),
-          color: seriesColor(1),
+          colorIndex: 1,
         },
         {
           name: "Market risk",
           value: num(data.rwaComposition.marketRwaGhs),
-          color: seriesColor(2),
+          colorIndex: 2,
         },
       ]
     : [];
@@ -269,6 +277,8 @@ export default function BaselOverview() {
       >
         {data && (
           <PageContainer className="py-6 space-y-6">
+            <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
             {/* Headline ratios */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
@@ -283,6 +293,7 @@ export default function BaselOverview() {
                     ? "No capital adequacy minimum on file — compliance not assessed"
                     : `${regShort()} minimum ${fmtFloorPct(carMin)}`
                 }
+                explain={explain.explainFor("car_pct")}
               />
               <KpiStat
                 label="Tier 1 ratio"
@@ -298,6 +309,7 @@ export default function BaselOverview() {
                   tier1Min,
                   "No Tier 1 minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("tier1_ratio_pct")}
               />
               <KpiStat
                 label="CET1 ratio"
@@ -310,6 +322,7 @@ export default function BaselOverview() {
                   cet1Min,
                   "No CET1 minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("cet1_ratio_pct")}
               />
               <KpiStat
                 label="Leverage ratio"
@@ -323,6 +336,7 @@ export default function BaselOverview() {
                   leverageMin,
                   "No leverage-ratio minimum on file — compliance not assessed",
                 )}
+                explain={explain.explainFor("leverage_ratio_pct")}
               />
             </div>
 
@@ -501,7 +515,7 @@ export default function BaselOverview() {
                       <li key={s.name} className="flex items-center gap-3">
                         <span
                           className="w-2 h-2 rounded-sm shrink-0"
-                          style={{ background: s.color }}
+                          style={{ background: cssSeriesColor(s.colorIndex) }}
                           aria-hidden
                         />
                         <span className="text-navy/85 flex-1">{s.name}</span>
@@ -611,6 +625,8 @@ export default function BaselOverview() {
             >
               <ValidationList validations={validations} />
             </SectionCard>
+
+            {explain.drawer}
           </PageContainer>
         )}
       </QueryBoundary>

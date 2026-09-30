@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -41,7 +42,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.domain.credit.dpd_bands import DPD_BAND_CODES
+from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.domain.ingestion.reference_schemas import business_units
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -50,6 +55,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    CanonicalReferenceRow,
     ParamCreditThreshold,
     RegulatoryMetricResult,
     RegulatoryRun,
@@ -59,6 +65,7 @@ from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_credit import (
     CreditActivityRead,
     CreditDashboardRead,
+    CreditDataScopeRead,
     CreditFacetCountRead,
     CreditLoanFacetsRead,
     CreditLoanRead,
@@ -88,10 +95,15 @@ from app.schemas.sdi import (
 from app.services import filing_reconciliation, jurisdictions
 from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
+from app.services.authorization import EffectiveDataScope
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409
 from app.services.live_types import LiveFindingSpec, LiveModuleResult, findings_from_validations
-from app.services.loan_classification import LoanClassificationReport, classify_loan_book
+from app.services.loan_classification import (
+    LoanClassificationReport,
+    classified_loans,
+    classify_loan_book,
+)
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
@@ -113,8 +125,6 @@ _AMBER_FRACTION = Decimal("0.8")
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
-
-_INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 
 
 class CreditRunError(Exception):
@@ -285,9 +295,13 @@ def _employer_par30_stats(
 
     (employer, par30_pct) rows plus the covered loan count. Loans without the
     documented ``attributes.employer`` key are excluded and the caller
-    discloses the coverage — an unstated employer is never grouped."""
+    discloses the coverage — an unstated employer is never grouped. A
+    foreign-currency loan with no ingested ``balance_ghs`` conversion is
+    unconverted (the same rule ``_event_amount_ghs`` applies to loan events):
+    it leaves BOTH the PAR30 numerator and the employer's total and is not
+    counted as covered — never its native face value in the reporting unit."""
     records = db.execute(
-        select(CanonicalPositionSnapshot)
+        select(CanonicalPositionSnapshot, CanonicalPosition.currency)
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
         .where(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
@@ -295,20 +309,23 @@ def _employer_par30_stats(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
-    ).scalars()
+    ).all()
+    base_ccy = jurisdictions.base_currency(bank)
     totals: dict[str, Decimal] = {}
     par30: dict[str, Decimal] = {}
     covered = 0
-    for snapshot in records:
+    for snapshot, currency in records:
         attributes = snapshot.attributes or {}
         employer = str(attributes.get("employer") or "").strip()
         if not employer:
             continue
         balance = _dec_or_none(attributes.get("balance_ghs"))
         if balance is None:
+            if currency != base_ccy:
+                continue
             balance = Decimal(str(snapshot.balance or 0))
         if balance <= 0:
             continue
@@ -387,8 +404,7 @@ def _board_threshold_rows(
                     met,
                     "warning",
                     (
-                        f"Provision coverage {coverage:.2f}% meets the Board floor of "
-                        f"{floor}%."
+                        f"Provision coverage {coverage:.2f}% meets the Board floor of {floor}%."
                         if met
                         else f"Provision coverage {coverage:.2f}% is below the Board "
                         f"floor of {floor}%."
@@ -480,7 +496,7 @@ def _load_snapshot_rows(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
@@ -672,9 +688,7 @@ def compute_live(
             employer.hhi if employer is not None and employer.bucket_count > 0 else None
         ),
         "largest_single_name_share_pct": _opt(
-            single.buckets[0].share_of_book_pct
-            if single is not None and single.buckets
-            else None
+            single.buckets[0].share_of_book_pct if single is not None and single.buckets else None
         ),
         "grades": [
             {
@@ -895,9 +909,7 @@ def _persist_success(  # noqa: PLR0913 - one call site; the analysis tuple sprea
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _all_validation_rows(
-            db, ctx, bank, as_of, report, limit_pct, restriction_pct
-        ),
+        _all_validation_rows(db, ctx, bank, as_of, report, limit_pct, restriction_pct),
         start=1,
     ):
         db.add(
@@ -1059,16 +1071,299 @@ def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# data scope: the filter the reader cannot remove
+# ---------------------------------------------------------------------------
+#
+# ``branch`` on the blotter is a filter the CLIENT chooses. A data scope is a
+# different thing in kind: the reduction of the reader's own bindings
+# (``authorization.effective_data_scope``), applied by the server, intersected
+# with whatever the client asked for, and never widened by anything the client
+# sends. Passing a branch outside the scope answers the intersection — no rows —
+# and never an error, because "that branch is not yours" and "that branch does
+# not exist" must be indistinguishable.
+#
+# Region is DECLARED, never inferred: the ``business_units`` register is the only
+# place a branch's region comes from (see that schema's module docstring). The BI
+# branch dimension reads the same field, so a region grant resolves to the same
+# code set in both planes — but this module must not read ``bi_*`` tables (BI is a
+# dispatch plane and the dependency only runs one way), so the register is read
+# here directly.
+
+
+#: The vocabulary a RESOLVED credit scope can carry. ``none`` is deliberately
+#: absent: it means nothing authorized the read, which cannot be true of a scope
+#: that reached a route body, so it is refused rather than represented.
+type CreditScopeKind = Literal["all", "branch", "region", "mixed"]
+
+
+@dataclass(frozen=True)
+class ResolvedDataScope:
+    """A declared scope resolved against one institution's own register.
+
+    ``branch_codes`` is ``None`` for whole-institution access — the ONLY value
+    that means "do not filter". Every other kind carries a concrete code set,
+    and an EMPTY set is a legitimate answer that yields no rows (a region the
+    register places no unit in). The two are deliberately different types so a
+    reader cannot fall from "no codes" into "no filter".
+    """
+
+    kind: CreditScopeKind
+    branch_codes: frozenset[str] | None
+    regions: tuple[str, ...]
+    unresolved_regions: tuple[str, ...]
+
+    @property
+    def whole_institution(self) -> bool:
+        return self.branch_codes is None
+
+    def admits(self, branch_id: str | None) -> bool:
+        """Whether a row stating ``branch_id`` is inside this scope.
+
+        A row that states NO branch is outside every narrowed scope: it is not
+        attributable to a granted branch, so serving it would be the fail-open.
+        """
+        if self.branch_codes is None:
+            return True
+        if branch_id is None:
+            return False
+        return branch_id.strip() in self.branch_codes
+
+    def read(self) -> CreditDataScopeRead:
+        return CreditDataScopeRead(
+            kind=self.kind,
+            branches=sorted(self.branch_codes or ()),
+            regions=list(self.regions),
+            unresolved_regions=list(self.unresolved_regions),
+        )
+
+
+WHOLE_INSTITUTION_SCOPE: ResolvedDataScope = ResolvedDataScope(
+    kind="all", branch_codes=None, regions=(), unresolved_regions=()
+)
+
+
+def _business_unit_regions(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> list[tuple[str, str | None]]:
+    """``(business_unit_id, declared region)`` from the latest register on/before ``as_of``.
+
+    The "latest as-of, then latest BATCH within it" rule is the reference
+    dataset's own (a corrected re-push replaces rather than adds). It is stated
+    in three places — ``bog_forms.sources.reference_rows`` for form resolution,
+    ``bi.mart_builder.reference_rows`` for the mart, and here — because neither of
+    those is importable from the calculation plane: the first needs a form
+    ``ResolveContext``, and the second is inside the BI dispatch plane, which this
+    module must not import. Field names go through ``business_units.normalise_row``,
+    the one seam that resolves the documented aliases.
+    """
+    scope = (
+        CanonicalReferenceRow.organization_id == ctx.organization_id,
+        CanonicalReferenceRow.bank_id == bank.id,
+        CanonicalReferenceRow.dataset_kind == business_units.SCHEMA.kind,
+    )
+    latest = db.scalar(
+        select(func.max(CanonicalReferenceRow.as_of_date)).where(
+            *scope, CanonicalReferenceRow.as_of_date <= as_of
+        )
+    )
+    if latest is None:
+        return []
+    latest_batch = db.scalar(
+        select(CanonicalReferenceRow.ingestion_batch_id)
+        .where(*scope, CanonicalReferenceRow.as_of_date == latest)
+        .order_by(CanonicalReferenceRow.created_at.desc(), CanonicalReferenceRow.id.desc())
+        .limit(1)
+    )
+    if latest_batch is None:
+        return []
+    units: list[tuple[str, str | None]] = []
+    for payload in db.scalars(
+        select(CanonicalReferenceRow.payload)
+        .where(
+            *scope,
+            CanonicalReferenceRow.as_of_date == latest,
+            CanonicalReferenceRow.ingestion_batch_id == latest_batch,
+        )
+        .order_by(CanonicalReferenceRow.row_index)
+    ):
+        row = business_units.normalise_row(dict(payload or {}))
+        unit_id = str(row.get("business_unit_id") or "").strip()
+        if not unit_id:
+            continue
+        region = str(row.get("region") or "").strip() or None
+        units.append((unit_id, region))
+    return units
+
+
+def resolve_data_scope(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, scope: EffectiveDataScope
+) -> ResolvedDataScope:
+    """Resolve a declared scope against this institution's register.
+
+    ``kind="none"`` must be unreachable from an ALLOWED decision, so it is a
+    programming error here rather than an empty result: silently answering no
+    rows would hide a gate that failed to run.
+
+    Region matching is exact after whitespace stripping — the same comparison the
+    BI branch dimension stores, so one grant means one code set in both planes.
+    Casefolding would be WIDER than the grant, which is the wrong direction for a
+    dimension whose entire purpose is to narrow.
+    """
+    # ``EffectiveDataScope.serves_nothing``, spelt as the comparison so the
+    # remaining vocabulary is the narrow one this module stores.
+    if scope.kind == "none":
+        msg = "an allowed decision cannot carry a data scope of kind 'none'"
+        raise RuntimeError(msg)
+    if scope.whole_institution:
+        return WHOLE_INSTITUTION_SCOPE
+    codes: set[str] = {value.strip() for value in scope.branches if value.strip()}
+    unresolved: tuple[str, ...] = ()
+    if scope.regions:
+        wanted = {value.strip() for value in scope.regions if value.strip()}
+        matched: set[str] = set()
+        for unit_id, region in _business_unit_regions(db, ctx, bank, as_of):
+            if region is not None and region in wanted:
+                codes.add(unit_id)
+                matched.add(region)
+        unresolved = tuple(sorted(wanted - matched))
+    return ResolvedDataScope(
+        kind=scope.kind,
+        branch_codes=frozenset(codes),
+        regions=tuple(scope.regions),
+        unresolved_regions=unresolved,
+    )
+
+
+#: The IFRS 9 stages a canonical snapshot may state. Not a vocabulary of this
+#: module's making: it is the check constraint
+#: ``ck_canonical_position_snapshots_ifrs9_stage`` (``app/models/canonical.py``),
+#: so a stage outside it cannot exist on a row and asking for one is a mistake
+#: to name rather than a filter to drop.
+_IFRS9_STAGES: tuple[int, ...] = (1, 2, 3)
+
+
+def _require_stage(stage: int | None) -> int | None:
+    """``stage`` as the book states it, or refuse.
+
+    A filter the server cannot honour must never be silently ignored: the
+    blotter would then answer with a WIDER book than was asked for while the
+    heading — and the figure the reader followed in — says otherwise.
+    """
+    if stage is None or stage in _IFRS9_STAGES:
+        return stage
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error_code": "unknown_ifrs9_stage",
+            "message": (
+                "A loan's IFRS 9 stage is 1, 2 or 3. "
+                f"{stage} is not a stage the loan book can hold."
+            ),
+        },
+    )
+
+
+def _require_dpd_band(band: str | None) -> str | None:
+    """``band`` as ``app.domain.credit.dpd_bands`` defines it, or refuse.
+
+    The vocabulary is read from that module — the one band definition, shared
+    with the classification service, the migration engine and the roll-rate
+    matrix — so no boundary is restated here.
+    """
+    if band is None or band in DPD_BAND_CODES:
+        return band
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error_code": "unknown_dpd_band",
+            "message": (
+                f"That is not a days-past-due band. The bands are {', '.join(DPD_BAND_CODES)}."
+            ),
+        },
+    )
+
+
+def _blotter_period(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date | None
+) -> BankReportingPeriod:
+    """The computed position the blotter reads: the current one, or one date.
+
+    With no date the blotter reads the current live business date, as every
+    other credit read does. An EXPLICIT date goes through the platform's one
+    rule for "the book on this date" —
+    ``regulatory_reporting.common.get_snapshot_for_reporting_date`` — which
+    matches exactly for every cadence and refuses a miss by name rather than
+    filling it from the nearest earlier book. That rule is the point of this
+    parameter: a reader who followed a BI figure for one date into the rows
+    behind it must not land on another date's rows, which is a wrong answer
+    that looks right.
+
+    The refusal is worded here because that authority speaks for a REGULATORY
+    RETURN ("…then generate the return"), and a reader in the loan book is not
+    filing anything. Only the words are local: the rule, the 409 and the
+    ``no_computed_position`` code are the authority's, and the two facts it
+    insists on — the date required, and the nearest earlier computed position
+    named explicitly as NOT a substitute — are carried through.
+    """
+    if as_of is None:
+        return current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+
+    from app.services.regulatory_reporting.common import (  # noqa: PLC0415 - breaks an import cycle
+        get_snapshot_for_reporting_date,
+    )
+
+    try:
+        return get_snapshot_for_reporting_date(db, ctx, bank, as_of)
+    except HTTPException as refusal:
+        if refusal.status_code != status.HTTP_409_CONFLICT:
+            raise
+        nearest = db.scalar(
+            select(BankReportingPeriod.period_end)
+            .where(
+                BankReportingPeriod.organization_id == ctx.organization_id,
+                BankReportingPeriod.bank_id == bank.id,
+                BankReportingPeriod.period_end < as_of,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+            .limit(1)
+        )
+        context = (
+            "No earlier position has been computed for this institution."
+            if nearest is None
+            else (
+                f"The closest earlier position is {nearest.isoformat()}, and it is not a "
+                "substitute — an earlier book is not this date's loan book."
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "no_computed_position",
+                "message": (
+                    f"The loan book has not been computed as of {as_of.isoformat()}. "
+                    f"{context} Ingest the book as of {as_of.isoformat()} through the "
+                    "Data Engine to see the loans behind that date's figures."
+                ),
+            },
+        ) from refusal
+
+
 def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     *,
+    data_scope: EffectiveDataScope,
     limit: int = 100,
     offset: int = 0,
     grade: str | None = None,
     product: str | None = None,
     branch: str | None = None,
+    sector: str | None = None,
+    stage: int | None = None,
+    dpd_band: str | None = None,
+    as_of: date | None = None,
     q: str | None = None,
 ) -> CreditLoansPageRead:
     """The classified loan blotter, filtered and paged.
@@ -1080,11 +1375,45 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     the full position blotter. Revisit with SQL-side classification only if a
     tenant's LOAN book alone approaches the six-figure row counts that made
     ``/positions`` server-paginated.
+
+    That in-memory shape is also why every filter here reads the CLASSIFIED row
+    rather than a second query: the sector, the stage and the days-past-due band
+    a row is filtered by are the very values the row carries, so a filtered page
+    can never disagree with the grades shown beside it. ``dpd_band`` is the band
+    of ``row.days_past_due`` under ``app.domain.credit.dpd_bands`` — the same
+    pure function the migration engine and the BI fact row use, never a second
+    banding.
+
+    Two refusals, both deliberate. A stage or band outside the platform's own
+    vocabulary is rejected (``_require_stage`` / ``_require_dpd_band``), because
+    dropping it would answer with a wider book than was asked for. An explicit
+    ``as_of`` with no computed position is rejected by ``_blotter_period``,
+    because the latest book is not this date's book.
+
+    ``sector`` has no closed vocabulary — it is whatever the institution's own
+    book states — so it is matched exactly and cannot be dropped either; a
+    sector the book does not carry narrows the page to nothing, which is the
+    truthful answer and is never widened back out.
+
+    ``data_scope`` is required and has NO default: a caller that forgot it would
+    serve a branch-scoped reader the whole book, so the omission has to be a type
+    error rather than a silent widening. It is applied BEFORE ``total`` is taken,
+    because a total that counts rows the reader cannot see discloses the size of
+    the book outside their scope; and it is applied ALONGSIDE the client's own
+    ``branch``, so a request for an out-of-scope branch answers the intersection —
+    no rows — rather than that branch's rows or an error naming it.
     """
+    stage = _require_stage(stage)
+    dpd_band = _require_dpd_band(dpd_band)
     bank = _get_bank_or_404(db, ctx, bank_id)
-    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
-    as_of = period.period_end
-    rows = _classified_loan_rows(db, ctx, bank, as_of)
+    period = _blotter_period(db, ctx, bank, as_of)
+    resolved_as_of = period.period_end
+    scope = resolve_data_scope(db, ctx, bank, resolved_as_of, data_scope)
+    rows = [
+        entry.row
+        for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of)
+        if scope.admits(entry.row.branch_id)
+    ]
     total = len(rows)
     needle = (q or "").strip().lower()
     filtered_rows = [
@@ -1093,6 +1422,9 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
         if (grade is None or row.grade == grade)
         and (product is None or row.product_code == product)
         and (branch is None or row.branch_id == branch)
+        and (sector is None or row.sector == sector)
+        and (stage is None or row.ifrs9_stage == stage)
+        and (dpd_band is None or _dpd_bucket(row.days_past_due) == dpd_band)
         and (
             not needle
             or needle in row.source_reference.lower()
@@ -1101,19 +1433,34 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     ]
     page = filtered_rows[offset : offset + limit]
     return CreditLoansPageRead(
-        as_of=as_of.isoformat(),
+        as_of=resolved_as_of.isoformat(),
         total=total,
         filtered=len(filtered_rows),
         limit=limit,
         offset=offset,
         rows=page,
+        data_scope=scope.read(),
     )
 
 
-def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> CreditLoanFacetsRead:
+def get_credit_loan_facets(
+    db: Session, ctx: TenantContext, bank_id: str, *, data_scope: EffectiveDataScope
+) -> CreditLoanFacetsRead:
+    """The blotter's filter counts, over the SAME scoped set the blotter pages.
+
+    Every tally here is a count, and a count over the whole book would disclose
+    the size of the book outside the reader's scope just as plainly as the rows
+    would — including the ``branches`` facet, which would otherwise enumerate
+    every branch the institution has.
+    """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
-    rows = _classified_loan_rows(db, ctx, bank, period.period_end)
+    scope = resolve_data_scope(db, ctx, bank, period.period_end, data_scope)
+    rows = [
+        entry.row
+        for entry in _classified_loan_rows(db, ctx, bank, period.period_end)
+        if scope.admits(entry.row.branch_id)
+    ]
 
     def counts(values: list[str | None]) -> list[CreditFacetCountRead]:
         tally: dict[str, int] = {}
@@ -1130,14 +1477,39 @@ def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> Cre
         products=counts([row.product_code for row in rows]),
         branches=counts([row.branch_id for row in rows]),
         sectors=counts([row.sector for row in rows]),
+        data_scope=scope.read(),
     )
+
+
+@dataclass(frozen=True)
+class ClassifiedLoanRow:
+    """One blotter row plus the identity the wire row does not carry.
+
+    ``loan_key`` is the position natural key ``source_system:source_reference``
+    — ``source_reference`` alone is NOT an identity (``CanonicalPosition`` is
+    unique per source system), so month-to-month matching keys on this and
+    never merges two systems' facilities that happen to share a reference.
+    """
+
+    loan_key: str
+    row: CreditLoanRead
+
+
+def _loan_key(source_system: str, source_reference: str) -> str:
+    return f"{source_system}:{source_reference}"
 
 
 def _classified_loan_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> list[CreditLoanRead]:
-    report = classify_loan_book(db, ctx, bank, as_of)
-    if report.loan_count == 0:
+) -> list[ClassifiedLoanRow]:
+    """The classified blotter, ordered by reference, one entry per current LOAN.
+
+    Grades are joined to rows by ``CanonicalPositionSnapshot.id`` through
+    ``classified_loans`` — never by position in two separately ordered slices,
+    which is arbitrary between rows sharing a ``source_reference``.
+    """
+    classified = classified_loans(db, ctx, bank, as_of, record=True)
+    if not classified:
         raise ModuleDataUnavailable(
             error_code="no_loan_book",
             reason="No LOAN positions are in the current canonical book.",
@@ -1158,59 +1530,54 @@ def _classified_loan_rows(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
-    # The report's per-loan classifications are positional over the SAME ordered
-    # slice (classify_loan_book orders by source_reference too), so zip is safe;
-    # a count mismatch would mean the two queries diverged and must fail loud.
-    loans = report.result.loans
-    if len(loans) != len(records):
-        msg = (
-            f"classified {len(loans)} loans but the blotter query returned "
-            f"{len(records)} — the two canonical slices diverged"
-        )
-        raise RuntimeError(msg)
-    rows: list[CreditLoanRead] = []
-    for classified, (snapshot, position, counterparty, product_row) in zip(
-        loans, records, strict=True
-    ):
+    rows: list[ClassifiedLoanRow] = []
+    for snapshot, position, counterparty, product_row in records:
+        loan = classified.get(snapshot.id)
+        if loan is None:
+            # Same predicates, same session: a row here without a grade means
+            # the two canonical reads diverged — fail loud, never a blank grade.
+            msg = f"snapshot {snapshot.id} is in the blotter slice but was not classified"
+            raise RuntimeError(msg)
         attributes = snapshot.attributes or {}
+        row = CreditLoanRead(
+            source_reference=snapshot.source_reference,
+            counterparty_name=counterparty.name if counterparty is not None else None,
+            product_code=product_row.product_code if product_row is not None else None,
+            branch_id=_str_or_none(attributes.get("branch_id")),
+            sector=_str_or_none(attributes.get("sector")),
+            currency=position.currency,
+            exposure_ghs=loan.exposure_ghs,
+            days_past_due=_int_or_none(attributes.get("days_past_due")),
+            ifrs9_stage=snapshot.ifrs9_stage,
+            grade=loan.grade,
+            non_performing=loan.non_performing,
+            classification_basis=loan.classification_basis,
+            provision_required_ghs=loan.provision_required_ghs,
+            provision_held_ghs=_dec_or_none(attributes.get("ecl_provision_ghs")),
+            restructured=str(attributes.get("restructured", "")).strip().lower()
+            in ("true", "1", "yes"),
+            interest_rate=(
+                Decimal(str(snapshot.interest_rate)) if snapshot.interest_rate is not None else None
+            ),
+            contractual_maturity=(
+                snapshot.contractual_maturity.isoformat()
+                if snapshot.contractual_maturity is not None
+                else None
+            ),
+            origination_date=(
+                position.origination_date.isoformat()
+                if position.origination_date is not None
+                else None
+            ),
+        )
         rows.append(
-            CreditLoanRead(
-                source_reference=snapshot.source_reference,
-                counterparty_name=counterparty.name if counterparty is not None else None,
-                product_code=product_row.product_code if product_row is not None else None,
-                branch_id=_str_or_none(attributes.get("branch_id")),
-                sector=_str_or_none(attributes.get("sector")),
-                currency=position.currency,
-                exposure_ghs=classified.exposure_ghs,
-                days_past_due=_int_or_none(attributes.get("days_past_due")),
-                ifrs9_stage=snapshot.ifrs9_stage,
-                grade=classified.grade,
-                non_performing=classified.non_performing,
-                classification_basis=classified.classification_basis,
-                provision_required_ghs=classified.provision_required_ghs,
-                provision_held_ghs=_dec_or_none(attributes.get("ecl_provision_ghs")),
-                restructured=str(attributes.get("restructured", "")).strip().lower()
-                in ("true", "1", "yes"),
-                interest_rate=(
-                    Decimal(str(snapshot.interest_rate))
-                    if snapshot.interest_rate is not None
-                    else None
-                ),
-                contractual_maturity=(
-                    snapshot.contractual_maturity.isoformat()
-                    if snapshot.contractual_maturity is not None
-                    else None
-                ),
-                origination_date=(
-                    position.origination_date.isoformat()
-                    if position.origination_date is not None
-                    else None
-                ),
+            ClassifiedLoanRow(
+                loan_key=_loan_key(snapshot.source_system, snapshot.source_reference), row=row
             )
         )
     return rows
@@ -1309,7 +1676,7 @@ def _load_events(
                 CanonicalLoanEvent.bank_id == bank.id,
                 CanonicalLoanEvent.superseded_by.is_(None),
                 CanonicalLoanEvent.withdrawn_at.is_(None),
-                CanonicalLoanEvent.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                CanonicalLoanEvent.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
                 CanonicalLoanEvent.event_date >= start,
                 CanonicalLoanEvent.event_date <= end,
             )
@@ -1349,8 +1716,84 @@ def _trailing_flow_totals(
     return totals
 
 
-def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> CreditActivityRead:
-    """Restructures, write-offs, recoveries and monthly aggregates."""
+def _facility_branch_history(
+    db: Session, ctx: TenantContext, bank: Bank, references: set[str], as_of: date
+) -> dict[tuple[str, str], list[tuple[date, str | None]]]:
+    """Per facility, the ascending ``(computed date, stated branch)`` history to ``as_of``.
+
+    Keyed by the facility's own ``(source_system, source_reference)`` — the
+    identity D-018 fixes for event attribution, never a cross-system guess on the
+    reference alone (``ClassifiedLoanRow`` states why the reference is not an
+    identity by itself).
+    """
+    if not references:
+        return {}
+    history: dict[tuple[str, str], list[tuple[date, str | None]]] = {}
+    records = db.execute(
+        select(
+            CanonicalPosition.source_system,
+            CanonicalPosition.source_reference,
+            CanonicalPositionSnapshot.as_of_date,
+            CanonicalPositionSnapshot.attributes,
+        )
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date <= as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+            CanonicalPosition.source_reference.in_(references),
+        )
+        .order_by(CanonicalPositionSnapshot.as_of_date)
+    ).all()
+    for source_system, source_reference, snapshot_date, attributes in records:
+        branch = _str_or_none((attributes or {}).get("branch_id"))
+        history.setdefault((source_system, source_reference), []).append((snapshot_date, branch))
+    return history
+
+
+def _events_in_scope(
+    events: list[CanonicalLoanEvent],
+    history: dict[tuple[str, str], list[tuple[date, str | None]]],
+    scope: ResolvedDataScope,
+) -> list[CanonicalLoanEvent]:
+    """The events whose facility was in ``scope`` WHEN THE EVENT HAPPENED.
+
+    The branch is read from the facility's latest computed position on or before
+    the event date (D-018's rule), not from the current book: a facility written
+    off eight months ago has no current position, and attributing its write-off to
+    nothing would understate a branch's losses. An event whose facility has no
+    computed position on or before its date is admitted by no narrowed scope —
+    where the facility was is not stated, so it cannot be claimed as anyone's.
+    """
+    if scope.whole_institution:
+        return events
+    admitted: list[CanonicalLoanEvent] = []
+    for event in events:
+        entries = history.get((event.source_system, event.position_source_reference), ())
+        branch: str | None = None
+        stated = False
+        for when, value in entries:
+            if when > event.event_date:
+                break
+            branch, stated = value, True
+        if stated and scope.admits(branch):
+            admitted.append(event)
+    return admitted
+
+
+def get_credit_activity(
+    db: Session, ctx: TenantContext, bank_id: str, *, data_scope: EffectiveDataScope
+) -> CreditActivityRead:
+    """Restructures, write-offs, recoveries and monthly aggregates.
+
+    ``data_scope`` is required and undefaulted for the same reason the blotter's
+    is, and it narrows the event list BEFORE the two counts and the monthly flow
+    totals are taken — a count or a total over events the reader may not see is a
+    disclosure in its own right.
+    """
     from datetime import timedelta  # noqa: PLC0415
 
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -1358,6 +1801,15 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
     as_of = period.period_end
     base_ccy = jurisdictions.base_currency(bank)
     events = _load_events(db, ctx, bank, start=as_of - timedelta(days=365), end=as_of)
+    scope = resolve_data_scope(db, ctx, bank, as_of, data_scope)
+    if not scope.whole_institution:
+        events = _events_in_scope(
+            events,
+            _facility_branch_history(
+                db, ctx, bank, {event.position_source_reference for event in events}, as_of
+            ),
+            scope,
+        )
 
     def read(event: CanonicalLoanEvent) -> LoanEventRead:
         return LoanEventRead(
@@ -1398,6 +1850,7 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
             for month, amounts in sorted(monthly.items())
         ],
+        data_scope=scope.read(),
     )
 
 
@@ -1405,36 +1858,21 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
 # monthly migration (credit PR-5)
 # ---------------------------------------------------------------------------
 
-_ROLL_BAND_EDGES: tuple[tuple[str, int, int | None], ...] = (
-    ("current", 0, 0),
-    ("1_29", 1, 29),
-    ("30_59", 30, 59),
-    ("60_89", 60, 89),
-    ("90_179", 90, 179),
-    ("180_359", 180, 359),
-    ("360_plus", 360, None),
-)
+# ``_dpd_bucket`` is ``app.domain.credit.dpd_bands.dpd_band`` — the one band
+# definition, shared with the classification service and the migration engine.
 
 
-def _dpd_bucket(days_past_due: int | None) -> str | None:
-    if days_past_due is None:
-        return None
-    for code, low, high in _ROLL_BAND_EDGES:
-        if days_past_due >= low and (high is None or days_past_due <= high):
-            return code
-    return None
-
-
-def _loan_states(rows: list[CreditLoanRead]) -> list[LoanState]:
+def _loan_states(rows: list[ClassifiedLoanRow]) -> list[LoanState]:
+    """Month-end states keyed by the position natural key (see ``ClassifiedLoanRow``)."""
     return [
         LoanState(
-            loan_key=row.source_reference,
-            exposure_ghs=row.exposure_ghs,
-            dpd_bucket=_dpd_bucket(row.days_past_due),
-            non_performing=row.non_performing,
-            restructured_performing=row.restructured and not row.non_performing,
+            loan_key=entry.loan_key,
+            exposure_ghs=entry.row.exposure_ghs,
+            dpd_bucket=_dpd_bucket(entry.row.days_past_due),
+            non_performing=entry.row.non_performing,
+            restructured_performing=entry.row.restructured and not entry.row.non_performing,
         )
-        for row in rows
+        for entry in rows
     ]
 
 
@@ -1525,9 +1963,7 @@ _VINTAGE_WINDOW_MONTHS = 36
 _VINTAGE_MIN_MONTHS = 3
 
 
-def _month_end_as_ofs(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> list[date]:
+def _month_end_as_ofs(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> list[date]:
     """The latest LOAN-book as-of per calendar month, newest window first."""
     rows = db.execute(
         select(CanonicalPositionSnapshot.as_of_date)
@@ -1602,9 +2038,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
                 CanonicalPositionSnapshot.as_of_date == observed,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
                 CanonicalPositionSnapshot.withdrawn_at.is_(None),
-                CanonicalPositionSnapshot.validation_status.in_(
-                    _INCLUDED_VALIDATION_STATUSES
-                ),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
                 CanonicalPosition.position_type == "LOAN",
             )
         ).all()
@@ -1632,11 +2066,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
 
     result = compute_vintages(observations)
-    coverage = (
-        (with_origination / total_exposure * _HUNDRED)
-        if total_exposure > _ZERO
-        else _ZERO
-    )
+    coverage = (with_origination / total_exposure * _HUNDRED) if total_exposure > _ZERO else _ZERO
     return CreditVintagesRead(
         as_of=period.period_end.isoformat(),
         available=True,
@@ -1719,9 +2149,9 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
             min_loan_months=DEFAULT_MIN_LOAN_MONTHS,
         )
 
-    books: dict[date, list[CreditLoanRead]] = {}
+    books: dict[date, list[ClassifiedLoanRow]] = {}
 
-    def book(as_of: date) -> list[CreditLoanRead]:
+    def book(as_of: date) -> list[ClassifiedLoanRow]:
         if as_of not in books:
             books[as_of] = _classified_loan_rows(db, ctx, bank, as_of)
         return books[as_of]
@@ -1731,11 +2161,12 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
     pooled: list[TransitionObservation] = []
     exited = 0
     for opening_as_of, closing_as_of in pairs:
-        closing = {row.source_reference: row for row in book(closing_as_of)}
-        for row in book(opening_as_of):
+        closing = {entry.loan_key: entry.row for entry in book(closing_as_of)}
+        for entry in book(opening_as_of):
+            row = entry.row
             if row.non_performing:
                 continue
-            after = closing.get(row.source_reference)
+            after = closing.get(entry.loan_key)
             if after is None:
                 exited += 1
                 continue

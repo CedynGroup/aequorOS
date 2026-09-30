@@ -21,6 +21,18 @@ _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _OPEN_STATUSES = ("open", "needs_review")
 
+#: Live-engine findings served only to a principal holding an exact aggregated
+#: ``view`` binding on the engine's module, filtered in SQL before counts and
+#: the limit. Capital findings are still served to every tenant reader — the
+#: capital cutover owns that decision; this list must only ever grow.
+_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
+    ("liquidity", Module.LIQUIDITY),
+    ("credit", Module.CREDIT),
+    ("irr", Module.IRRBB),
+    ("fx", Module.FX),
+    ("ftp", Module.FTP),
+)
+
 
 def get_bank_alerts(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 50
@@ -33,12 +45,7 @@ def get_bank_alerts(
         LiveFinding.status.in_(_OPEN_STATUSES),
         LiveFinding.severity.in_(_ALERT_SEVERITIES),
     )
-    for engine, module in (
-        ("liquidity", Module.LIQUIDITY),
-        ("irr", Module.IRRBB),
-        ("fx", Module.FX),
-        ("ftp", Module.FTP),
-    ):
+    for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,

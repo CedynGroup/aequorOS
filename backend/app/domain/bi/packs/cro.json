@@ -1,0 +1,251 @@
+{
+  "id": "cro",
+  "title": "Chief risk officer",
+  "description": "Where credit risk sits and where it is moving: arrears and impairment by sector, product and branch, the provisions held against them, and concentration.",
+  "audience": "cro",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "npl_by_sector",
+      "kind": "bar",
+      "title": "Non-performing loans by sector",
+      "caption": "Sectors ranked by non-performing exposure, with each sector's ratio.",
+      "query": {
+        "measures": [
+          "loans.npl_exposure_rc",
+          "loans.npl_ratio_pct"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "loan.sector"
+        ],
+        "top_n": {
+          "dimension": "loan.sector",
+          "n": 10,
+          "other": true
+        },
+        "sort": [
+          {
+            "member": "loans.npl_exposure_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "series_dimension": "loan.sector",
+        "precision": 2
+      }
+    },
+    {
+      "id": "npl_by_product",
+      "kind": "bar",
+      "title": "Non-performing loans by product",
+      "caption": "The non-performing ratio by product family at the reporting date.",
+      "query": {
+        "measures": [
+          "loans.npl_ratio_pct"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "product.family"
+        ]
+      },
+      "display": {
+        "series_dimension": "product.family",
+        "precision": 2
+      }
+    },
+    {
+      "id": "npl_by_branch",
+      "kind": "bar",
+      "title": "Non-performing loans by branch",
+      "caption": "The non-performing ratio by branch. Branches appear once the loan book carries a branch identifier.",
+      "query": {
+        "measures": [
+          "loans.npl_exposure_rc",
+          "loans.npl_ratio_pct"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "branch.name"
+        ],
+        "top_n": {
+          "dimension": "branch.name",
+          "n": 10,
+          "other": true
+        },
+        "sort": [
+          {
+            "member": "loans.npl_exposure_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "series_dimension": "branch.name",
+        "precision": 2
+      },
+      "needs_data": "positions"
+    },
+    {
+      "id": "stage_mix",
+      "kind": "stacked_bar",
+      "title": "Impairment stage mix",
+      "caption": "Classified exposure by impairment stage, against the prior quarter. Loan-by-loan movement between stages is in the migration panel.",
+      "query": {
+        "measures": [
+          "loans.classification_exposure_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "loan.ifrs9_stage"
+        ],
+        "compare": "prior_quarter"
+      },
+      "display": {
+        "show_comparison": true,
+        "stacked": true,
+        "series_dimension": "loan.ifrs9_stage"
+      }
+    },
+    {
+      "id": "stage_migration",
+      "kind": "panel",
+      "title": "Stage migration",
+      "caption": "Loan-by-loan movement between classification grades across two dates.",
+      "panel": "credit_migration"
+    },
+    {
+      "id": "provision_coverage",
+      "kind": "line",
+      "title": "Provision coverage",
+      "caption": "Provisions held on non-performing loans over non-performing exposure, month by month.",
+      "query": {
+        "measures": [
+          "loans.provision_coverage_pct"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      },
+      "display": {
+        "show_trend": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "sector_concentration",
+      "kind": "kpi",
+      "title": "Sector concentration",
+      "caption": "Concentration of classified exposure across sectors.",
+      "query": {
+        "measures": [
+          "loans.sector_hhi"
+        ],
+        "window": "as_of"
+      },
+      "display": {
+        "precision": 3
+      }
+    },
+    {
+      "id": "large_exposures",
+      "kind": "table",
+      "title": "Largest exposures",
+      "caption": "The largest obligors by classified exposure.",
+      "query": {
+        "measures": [
+          "loans.classification_exposure_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "counterparty.name"
+        ],
+        "top_n": {
+          "dimension": "counterparty.name",
+          "n": 20,
+          "other": true
+        },
+        "sort": [
+          {
+            "member": "loans.classification_exposure_rc",
+            "direction": "desc"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit_monitor",
+      "kind": "table",
+      "title": "Limit monitor",
+      "caption": "Risk appetite limits against current values. The limits are held in the bank's own register and are not yet resolved for display.",
+      "pending_capability": "governed_limit"
+    }
+  ],
+  "layout": [
+    {
+      "i": "npl_by_sector",
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "npl_by_product",
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "npl_by_branch",
+      "x": 0,
+      "y": 5,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "stage_mix",
+      "x": 6,
+      "y": 5,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "stage_migration",
+      "x": 0,
+      "y": 10,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "provision_coverage",
+      "x": 6,
+      "y": 10,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "sector_concentration",
+      "x": 0,
+      "y": 15,
+      "w": 3,
+      "h": 4
+    },
+    {
+      "i": "large_exposures",
+      "x": 3,
+      "y": 15,
+      "w": 5,
+      "h": 4
+    },
+    {
+      "i": "limit_monitor",
+      "x": 8,
+      "y": 15,
+      "w": 4,
+      "h": 4
+    }
+  ]
+}

@@ -7,7 +7,7 @@
  *
  * Every color token is stored as space-separated RGB channels so Tailwind
  * opacity modifiers keep working (`text-navy/85` → `rgb(var(--heading) / .85)`).
- * Chart tokens are full color values because they are handed to recharts /
+ * Chart tokens are full color values because they are handed to SVG sparklines /
  * SVG as `var(--chart-N)` strings.
  *
  * Dark is the DEFAULT theme; `:root[data-theme='light']` maps to the original
@@ -17,55 +17,56 @@
  * ------------------------------------------------------------------------- */
 
 :root,
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   /* Surfaces */
-  --bg: 10 15 26;              /* #0A0F1A page background */
-  --surface: 16 24 39;         /* #101827 base surface */
-  --surface-raised: 23 32 47;  /* #17202F cards, panels, popovers */
-  --surface-hover: 28 39 55;   /* #1C2737 hover / inset / table header */
+  --bg: 10 15 26; /* #0A0F1A page background */
+  --surface: 16 24 39; /* #101827 base surface */
+  --surface-raised: 23 32 47; /* #17202F cards, panels, popovers */
+  --surface-hover: 28 39 55; /* #1C2737 hover / inset / table header */
 
   /* Lines */
-  --line: 34 48 71;            /* #223047 hairline borders */
-  --line-strong: 46 62 88;     /* #2E3E58 emphasized borders */
+  --line: 34 48 71; /* #223047 hairline borders */
+  --line-strong: 46 62 88; /* #2E3E58 emphasized borders */
 
   /* Text */
-  --heading: 237 242 249;      /* #EDF2F9 headings + primary emphasis */
-  --text: 198 208 222;         /* #C6D0DE body */
-  --text-muted: 132 148 169;   /* #8494A9 secondary */
-  --text-faint: 92 107 128;    /* #5C6B80 tertiary / disabled */
+  --heading: 237 242 249; /* #EDF2F9 headings + primary emphasis */
+  --text: 198 208 222; /* #C6D0DE body */
+  --text-muted: 132 148 169; /* #8494A9 secondary */
+  --text-faint: 92 107 128; /* #5C6B80 tertiary / disabled */
 
   /* Accent */
-  --accent: 77 159 255;        /* #4D9FFF */
+  --accent: 77 159 255; /* #4D9FFF */
   --accent-hover: 116 180 255; /* #74B4FF */
-  --accent-soft: 23 40 65;     /* rgba(77,159,255,.12) flattened onto surface */
+  --accent-soft: 23 40 65; /* rgba(77,159,255,.12) flattened onto surface */
 
   /* Risk semantics */
-  --ok: 53 194 141;            /* #35C28D */
-  --ok-soft: 21 46 52;         /* rgba(53,194,141,.13) flattened */
-  --warn: 245 166 35;          /* #F5A623 */
-  --warn-soft: 46 42 38;       /* rgba(245,166,35,.13) flattened */
-  --crit: 242 109 109;         /* #F26D6D */
-  --crit-soft: 45 35 48;       /* rgba(242,109,109,.13) flattened */
+  --ok: 53 194 141; /* #35C28D */
+  --ok-soft: 21 46 52; /* rgba(53,194,141,.13) flattened */
+  --warn: 245 166 35; /* #F5A623 */
+  --warn-soft: 46 42 38; /* rgba(245,166,35,.13) flattened */
+  --crit: 242 109 109; /* #F26D6D */
+  --crit-soft: 45 35 48; /* rgba(242,109,109,.13) flattened */
 
   /* Navigation (always-dark rail in both themes) */
-  --nav-bg: 7 12 21;           /* #070C15 */
+  --nav-bg: 7 12 21; /* #070C15 */
   --nav-text: rgba(237, 242, 249, 0.75);
 
   /* Primary button — resolves the old dual-role `bg-navy` */
-  --btn-primary: 59 130 246;        /* #3B82F6 */
-  --btn-primary-hover: 96 165 250;  /* #60A5FA */
+  --btn-primary: 59 130 246; /* #3B82F6 */
+  --btn-primary-hover: 96 165 250; /* #60A5FA */
 
-  --focus: 116 180 255;        /* #74B4FF */
+  --focus: 116 180 255; /* #74B4FF */
 
-  /* Charts — full values, consumed as var(--chart-N) by recharts/SVG */
-  --chart-1: #5B9BFF;
-  --chart-2: #A78BFA;
-  --chart-3: #34D399;
-  --chart-4: #FBBF24;
-  --chart-5: #FB7185;
-  --chart-6: #2DD4BF;
+  /* Charts — full values, read as var(--chart-N) by SVG/DOM and RESOLVED
+     from the computed style for an ECharts canvas (components/bi/echartsTheme) */
+  --chart-1: #5b9bff;
+  --chart-2: #a78bfa;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #fb7185;
+  --chart-6: #2dd4bf;
   --chart-grid: rgba(150, 170, 200, 0.14);
 
   /* Elevation */
@@ -74,52 +75,54 @@
   --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.55);
 }
 
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: 250 251 252;           /* #FAFBFC */
-  --surface: 255 255 255;      /* #FFFFFF */
+  --bg: 250 251 252; /* #FAFBFC */
+  --surface: 255 255 255; /* #FFFFFF */
   --surface-raised: 255 255 255;
   --surface-hover: 245 247 250; /* #F5F7FA */
 
-  --line: 228 232 236;         /* #E4E8EC */
-  --line-strong: 208 215 222;  /* #D0D7DE */
+  --line: 228 232 236; /* #E4E8EC */
+  --line-strong: 208 215 222; /* #D0D7DE */
 
-  --heading: 10 37 64;         /* #0A2540 */
-  --text: 51 65 92;            /* #33415C */
-  --text-muted: 90 103 118;    /* #5A6776 */
-  --text-faint: 122 134 147;   /* #7A8693 */
+  --heading: 10 37 64; /* #0A2540 */
+  --text: 51 65 92; /* #33415C */
+  --text-muted: 90 103 118; /* #5A6776 */
+  --text-faint: 122 134 147; /* #7A8693 */
 
-  --accent: 45 127 249;        /* #2D7FF9 */
-  --accent-hover: 31 108 224;  /* #1F6CE0 */
-  --accent-soft: 232 240 254;  /* #E8F0FE */
+  --accent: 45 127 249; /* #2D7FF9 */
+  --accent-hover: 31 108 224; /* #1F6CE0 */
+  --accent-soft: 232 240 254; /* #E8F0FE */
 
-  --ok: 14 138 79;             /* #0E8A4F */
-  --ok-soft: 229 244 236;      /* #E5F4EC */
-  --warn: 201 124 0;           /* #C97C00 */
-  --warn-soft: 251 241 223;    /* #FBF1DF */
-  --crit: 179 38 30;           /* #B3261E */
-  --crit-soft: 251 233 231;    /* #FBE9E7 */
+  --ok: 14 138 79; /* #0E8A4F */
+  --ok-soft: 229 244 236; /* #E5F4EC */
+  --warn: 201 124 0; /* #C97C00 */
+  --warn-soft: 251 241 223; /* #FBF1DF */
+  --crit: 179 38 30; /* #B3261E */
+  --crit-soft: 251 233 231; /* #FBE9E7 */
 
-  --nav-bg: 10 37 64;          /* #0A2540 */
+  --nav-bg: 10 37 64; /* #0A2540 */
   --nav-text: rgba(255, 255, 255, 0.75);
 
-  --btn-primary: 10 37 64;         /* #0A2540 */
-  --btn-primary-hover: 20 48 85;   /* #143055 */
+  --btn-primary: 10 37 64; /* #0A2540 */
+  --btn-primary-hover: 20 48 85; /* #143055 */
 
-  --focus: 45 127 249;         /* #2D7FF9 */
+  --focus: 45 127 249; /* #2D7FF9 */
 
   /* Slightly deepened for a white background */
-  --chart-1: #3B82F6;
-  --chart-2: #7C3AED;
+  --chart-1: #3b82f6;
+  --chart-2: #7c3aed;
   --chart-3: #059669;
-  --chart-4: #D97706;
-  --chart-5: #E11D48;
-  --chart-6: #0D9488;
+  --chart-4: #d97706;
+  --chart-5: #e11d48;
+  --chart-6: #0d9488;
   --chart-grid: rgba(10, 37, 64, 0.08);
 
-  --shadow-card: 0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06);
-  --shadow-subtle: 0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06);
+  --shadow-card:
+    0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06);
+  --shadow-subtle:
+    0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06);
   --shadow-pop: 0 4px 12px rgba(10, 37, 64, 0.12);
 }
 
@@ -143,7 +146,9 @@ table {
 }
 
 .font-mono {
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
 }
 
 @layer components {
@@ -177,7 +182,9 @@ table {
   /* Numerical cells in data tables — right-aligned, monospaced */
   .num {
     font-family: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
-    font-feature-settings: 'tnum' 1, 'lnum' 1;
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
     text-align: right;
     white-space: nowrap;
   }
@@ -214,42 +221,12 @@ table {
   background-clip: padding-box;
 }
 
-/* Recharts theme overrides — read tokens at render time */
-.recharts-cartesian-axis-tick text,
-.recharts-legend-item-text,
-.recharts-tooltip-label,
-.recharts-tooltip-item {
-  font-family: var(--font-inter), sans-serif !important;
-  font-size: 11px !important;
-  fill: rgb(var(--text-muted)) !important;
-}
-
-.recharts-legend-item-text {
-  color: rgb(var(--text-muted)) !important;
-}
-
-.recharts-cartesian-grid line {
-  stroke: var(--chart-grid);
-}
-
-.recharts-default-tooltip {
-  background: rgb(var(--surface-raised)) !important;
-  border: 1px solid rgb(var(--line-strong)) !important;
-  border-radius: 6px !important;
-  box-shadow: var(--shadow-pop) !important;
-  font-family: var(--font-inter), sans-serif !important;
-}
-
-.recharts-default-tooltip .recharts-tooltip-label {
-  color: rgb(var(--heading)) !important;
-}
-
 /* Print base — white page, black text, no chrome. Full print styles land in
    the reporting workstream; this keeps ad-hoc prints legible. */
 @media print {
   :root,
-  :root[data-theme='dark'],
-  :root[data-theme='light'] {
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
     color-scheme: light;
     --bg: 255 255 255;
     --surface: 255 255 255;

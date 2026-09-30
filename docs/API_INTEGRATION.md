@@ -29,15 +29,35 @@ select the bank when issuing the key. It is shown exactly once at generation
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
+**A key is issued for one purpose, and the two purposes cannot substitute for
+one another.**
+
+| Purpose | Authority | Used by |
+|---|---|---|
+| `writer` (the default) | `DATA` / `restricted` / `ingest` | API Push, §2 below |
+| `reader` | every module at `aggregated`, `view` only | the analytics feed, §8 below |
+
+A `writer` key presented to the feed is refused, and a `reader` key presented to
+any push route is refused. Neither refusal depends on configuration: the two
+authorities carry disjoint permissions, so a push route asking for `ingest` and a
+feed asking for `view` each refuse the other's credential structurally. Issue one
+key per purpose; do not try to make one credential do both.
+
+A `reader` key may additionally be limited to selected branches or regions at
+issuance. It then serves only those branches on every dataset, and
+institution-wide ratios are refused to it outright.
+
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
 The platform does not infer a bank or backfill authority. A key used against a
 different bank returns `404` so the machine principal cannot probe which sibling
 institutions exist.
 
-Integration keys are accepted only on the four push-batch routes in §2; ordinary
-tenant reads and human-session endpoints return `401`. Human access tokens
-cannot call API Push (`403`). Use an authorized human session for mapping
+Integration keys are accepted only on the four push-batch routes in §2 and the
+analytics feed route in §8; every other tenant read and human-session endpoint
+returns `401`. Human access tokens cannot call API Push (`403`), and cannot call
+the feed either (`403`) — a feed is a machine surface even for a person who could
+run the same query in the dashboard. Use an authorized human session for mapping
 configuration and ingestion diagnostics.
 
 > **Production note.** Deployments may additionally front these endpoints
@@ -261,7 +281,68 @@ ingestion. Using an authorized human session, fetch them at
 | `pledged_as_collateral`      | boolean | no       | Deposit pledged to secure a credit facility (drives the concentration-netting rule).                                                                                                                                                           |
 | `lien_reference`             | string  | no       | Source reference of the facility the deposit secures.                                                                                                                                                                                          |
 | `deposit_account_type`       | enum    | no       | `CURRENT`, `CALL`, `SAVINGS`, `FIXED`, `OTHER` — classifies deposits for the liquidity monitoring tables (volatile = current + call).                                                                                                          |
-| `attributes`                 | object  | no       | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented liquidity-directive conventions below.                                                    |
+| `attributes`                 | object  | no       | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented conventions below: the four optional analytics keys (`officer_id`, `channel`, `account_status`, `arrears_amount`), the liquidity-directive keys, and the BoG prudential-return keys.                                                    |
+
+**Optional analytics attributes.** Four `attributes` keys let the platform break
+your book down by the officer who owns a facility, the channel it came through,
+the account's own state, and how much of it is overdue. All four are optional in
+the strongest sense — a push that omits them behaves exactly as it does today —
+but a value you DO send is normalised and checked, because an optional field with
+no discipline arrives from three banks in three shapes:
+
+| Attribute key    | Position types | Type / values                                                                                                                                                     | Meaning                                                                                                          |
+| ---------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `officer_id`     | any            | string, up to 120 characters                                                                                                                                       | Your own code for the relationship / credit officer who owns the account. Stored verbatim (see below).            |
+| `channel`        | any            | `branch` · `agent` · `atm` · `pos` · `mobile_app` · `ussd` · `internet_banking` · `mobile_money` · `call_centre` · `direct_sales` · `partner` · `api` · `other`     | The origination or servicing channel. Use `other` when none of the listed values fits.                           |
+| `account_status` | any            | `active` · `inactive` · `dormant` · `blocked` · `closed` · `matured` · `written_off` · `other`                                                                      | The account's own lifecycle state as your core system holds it.                                                   |
+| `arrears_amount` | `LOAN`         | number, zero or greater                                                                                                                                            | The overdue portion of `balance`, **in the position's own `currency`** — see the three rules below.               |
+
+How the two enumerated keys are read: matched case-insensitively, with spaces,
+hyphens, dots and slashes read as underscores, and a short list of unambiguous
+synonyms resolved onto the values above (`MOMO` and `Mobile Money` → `mobile_money`;
+`Over the counter` and `teller` → `branch`; `online` → `internet_banking`;
+`frozen` → `blocked`; `WRITE OFF` → `written_off`). Deliberately NOT resolved,
+because each could mean two different things: a bare `mobile` (app, wallet or
+USSD?), a bare `card` (ATM or terminal?), and `suspended` on a loan (blocked, or
+interest in suspense?). Send one of the listed values for those.
+
+`arrears_amount`, being money, has three rules worth stating plainly:
+
+1. **It is in the position's own `currency`**, exactly like `balance`. There is no
+   per-attribute currency. If your core system reports arrears in your reporting
+   currency for a foreign-currency facility, convert it to the facility's currency
+   or leave the key out.
+2. **It is a PART of `balance`, not an addition to it.** `balance` is the whole
+   outstanding amount; `arrears_amount` is the overdue slice of it. Never send the
+   arrears figure as `balance`, and never expect the two to be summed.
+3. **Absent is not zero.** A position with no `arrears_amount` is a position whose
+   arrears you have not stated, and the platform reports it as unstated rather
+   than as up to date. Send `0` only when you mean the facility is genuinely
+   current.
+
+`officer_id` is an open identifier, so unlike the two enumerated keys it is NOT
+case-folded: it is matched against your own staff register, and folding the case
+would make the platform's idea of the code differ from yours (the same reason
+`branch_id` is carried verbatim). It is trimmed, and runs of whitespace inside it
+are collapsed to one space, so `RM  014` and `RM 014` agree — but `RM-014` and
+`rm-014` are two officers. Pick one spelling per officer, as you already do for
+`employer`.
+
+**What happens to a value the platform cannot use.** It is dropped — never stored
+as free text — the key is then absent (which reads as "not stated", never as a
+default), and the batch's validation report carries a finding naming the position,
+the key, the value you sent and what is accepted. The position itself still lands:
+deleting a facility from your balance sheet because its `channel` was misspelled
+would be a much larger error than the misspelling. The default severity is
+`WARNING` (rule `optional_position_attributes`), which flags the record and leaves
+it in every calculation; an institution that reports on these fields can raise it.
+
+A second rule, `position_attribute_consistency`, reports readable values that sit
+oddly beside the position carrying them — an `arrears_amount` above `balance`
+(the fingerprint of a unit error, or of the whole balance copied into the arrears
+column), an `arrears_amount` on a position type with no repayment schedule, and an
+`account_status` of `closed` on a non-zero balance. It changes nothing: your
+figures are reported exactly as you sent them. Its default severity is `INFO`.
 
 **Liquidity-directive attribute conventions.** The Liquidity Monitoring Tools
 return reads these documented `attributes` keys when present (all optional;
@@ -390,7 +471,7 @@ as-is by the calculation modules. Valid keys under `"reference"`:
 | `fx_rates_historical`    | `pair`, `rate`, `quote_date`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `historical_cashflows`   | `date`, `inflow`, `outflow`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `historical_financials`  | `month`, `total_assets`, `net_income`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `business_units`         | `unit_id`, `name`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `business_units`         | `business_unit_id`, `business_unit_name` (**canonical** — the names every reader keys on); optional `region` (the bank's own region for the unit; **the only source of a branch's region** — nothing is inferred from an address, and until the field is supplied the region reads as unassigned), `parent_unit_id` (never the unit itself), `outlet_number`, `cost_centre`, `notes` — the branch / business-unit register: one row per unit, the whole register per push (latest as-of wins). A position's `attributes.branch_id` is matched against `business_unit_id`. The spelling this table used to document, `unit_id` / `name`, is accepted as an alias of the canonical pair (a row must not give both spellings with different values), but reference rows are preserved verbatim and a mapping config can only drop columns, never rename one (§4) — so send the canonical names. Schema: `app/domain/ingestion/reference_schemas/business_units.py`.                                                                                                                           |
 | `institution`            | `institution_id`, `name`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `gl_mapping_bsd7`        | `gl_account_code` \| `gl_prefix` (one of the two), `bsd7_item` (`1a` … `32`, the official BSD7A/BSD7B item tags), `sign` (`1` \| `-1`), `balance_basis` (`ytd` \| `period`), `gl_account_name`, `notes` — the bank's chart-of-accounts → P&L item register; a register (re-push whole; latest as-of wins). Spec: `docs/data_engine/datasets/gl_mapping_bsd7.md`. Pairs with INCOME/EXPENSE `gl_account` records (§3.1) pushed once per month-end.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `interest_accruals`      | `as_of_date`, `bsd2_row` (row number of the "Accrued interest" line on the official BSD2 sheet: `20`, `29`, `32`, `141`, `145`, `151`, `156`, `161`, `166`, `177`, `195`, `204`, `211`, `218`, `225`, `234`, `242`, `250`, `258`), `side` (`asset` \| `liability`), `currency`, `accrued_interest_ghs`, `accrued_interest_native`, `gl_account_code`, `position_reference`, `counterparty_reference`, `notes` — accrual balances at the reporting date; one reporting date per push (batch `as_of_date` = that date). Spec: `docs/data_engine/datasets/interest_accruals.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -399,6 +480,8 @@ as-is by the calculation modules. Valid keys under `"reference"`:
 | `remittance_flows`       | `month` (ISO month-end = the batch `as_of_date`), `direction` (`inbound` \| `outbound`), `corridor_country` (ISO-3166 alpha-2), `region` (`uk` \| `usa_canada` \| `eu` \| `ecowas` \| `rest_of_africa` \| `other` — BSD17 Sheet 2 roll-up), `recipient_class` (`individual` \| `exporter` \| `service_provider` \| `ngo` \| `embassy` \| `other` — BSD17 Sheet 1), `channel` (`bank` \| `mto` \| `mobile_money` \| `other`), `currency`, `amount_fx`, `amount_usd` (the bank's own US$ equivalent — the reported figure), `amount_ghs`, `transaction_count`, `operator_name`, `notes` — monthly aggregate per (direction, corridor, recipient class, channel, currency); ONE reporting month per push. Spec: `docs/data_engine/datasets/remittance_flows.md`.                                                                                                                                                                                                                                                                                                                              |
 | `subsidiaries`           | `reporting_date` (ISO date = the batch `as_of_date`), `subsidiary_id` (the bank's stable id), `name`, `country_code`, `entity_type` (`bank` \| `nbfi` \| `insurance` \| `other`), `functional_currency`, `ownership_pct` (0–100), `consolidation_method` (`full` \| `equity` \| `none`), `control_via_board` (`true` \| `false`), `total_assets_ghs`, `total_liabilities_ghs`, `equity_ghs`, `net_profit_ytd_ghs`, `intercompany_receivable_ghs` (due FROM the subsidiary), `intercompany_payable_ghs` (due TO it); optional `tier1_capital_ghs`, `rwa_ghs`, `minority_interest_ghs` (required when `full` and ownership < 100 — the group's own working), `minority_interest_tier2_pref_ghs`, `investment_carrying_ghs`, `intercompany_receivable_type`, `intercompany_payable_type`, `regulator`, `licence_number`, `notes` — the subsidiary register + book, one row per subsidiary per reporting date; the whole register at one date per push (latest as-of wins). Feeds BSD9 minority interests + Annexure and BSD5B rows 3 / 18. Spec: `docs/data_engine/datasets/subsidiaries.md`. |
 | `capital_expenditure`    | `period_end` (ISO date = the batch `as_of_date`), `asset_class` (`land_buildings` \| `staff_land_premises` \| `furniture_equipment` \| `computers` \| `other_office_equipment` \| `motor_vehicles` \| `other_property_legal_rights`), `opening_nbv_ghs`, `additions_purchased_ghs`, `additions_finance_lease_ghs`, `additions_hire_purchase_ghs`, `disposal_proceeds_ghs`, `disposals_nbv_ghs`, `depreciation_ghs`, `closing_cost_ghs`, `accumulated_depreciation_ghs`, `closing_nbv_ghs` (= cost − accumulated depreciation, validated); optional `currency` (booking currency; blank = base ⇒ BSD2 Domestic), `capital_wip_ghs`, `wip_closing_ghs`, `contracted_not_provided_ghs`, `authorised_not_contracted_ghs`, `forecast_next_6m_ghs`, `forecast_0_3m_ghs`, `forecast_3_6m_ghs`, `budget_ghs`, `notes` — the fixed-asset / capex register, one row per (period, asset class); one period per push (half-year movements for BSD10 A–H, period-end stock for BSD2 item 12 rows 115–121 / 123). Spec: `docs/data_engine/datasets/capital_expenditure.md`.                              |
+| `performance_targets`    | `period` (ISO date: the **last day** of the window; must agree with `grain`), `grain` (`month` \| `quarter` \| `half_year` \| `year`), `measure_id` (the BI measure targeted — `loans.balance_rc`, `engine.car_pct.crd.official`), `time_behaviour` (`stock` \| `flow`; **required, never defaulted** — a stock target is the level to be standing at `period`, a flow target the amount to accumulate over the window `grain` names; reading one as the other is silently wrong by a period), `value` (in the measure's own unit: reporting currency for an amount, percentage points for a `_pct`; the row carries no unit), `version` (`budget` \| `reforecast`); optional `scope_dimension` / `scope_value` (which dimension the target applies to and its value, e.g. `branch.code` / `BR-001`; given together or not at all — a bank-wide target names neither) and `notes` — the bank's budget / reforecast figures, one row per (period, grain, measure, scope, version); re-push whole, latest as-of wins. Schema: `app/domain/ingestion/reference_schemas/performance_targets.py`.  |
+| `gl_segment_balances`    | `as_of_date` (ISO date = the batch `as_of_date`), `gl_account_code` (must match an `INCOME` / `EXPENSE` `gl_account.account_code` for the same month), `branch_id` (matched against `business_units.business_unit_id`, exactly as `position.attributes.branch_id` is; `__UNALLOCATED__` is **reserved** for the remainder the platform computes and is refused), `ytd_balance` (the branch's fiscal-year-to-date balance of that account, same convention and sign as the account's own `balance`); optional `currency` (blank = the reporting currency, as on a `gl_account` record), `gl_account_name`, `branch_name`, `notes` — the bank's branch breakdown of its profit-and-loss ledger. One row per (`as_of_date`, `gl_account_code`, `branch_id`, `currency`); ONE reporting date per push, the whole breakdown in that batch, and the batch must fall in the same calendar month as the ledger balances it breaks down. The breakdown may be partial: the platform adds an explicit unallocated line so the branches sum to the institution's ledger. Spec: `docs/data_engine/datasets/gl_segment_balances.md`. Schema: `app/domain/ingestion/reference_schemas/gl_segment_balances.py`. |
 
 ---
 
@@ -525,3 +608,82 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
     gl_account → gl_account   40 extracted / 40 accepted
     product    → product      12 extracted / 12 accepted
 ```
+
+---
+
+## 8. Pulling analytics out: the Stage B feed
+
+The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
+**curated** analytics dataset, streamed, so a report server (Power BI Report
+Server, or any HTTP-capable BI tool) can build a model on the same numbers the
+platform files — without a database login, which is not offered and cannot be
+made safe (`backend/docs/powerbi_stage_b.md` §1 explains why).
+
+**Your BI team should read `backend/docs/powerbi_stage_b.md`**, not this section:
+it carries the dataset columns, the loader contract, a worked Power Query
+example, and the data-residency caveat your institution signs off on. What is
+here is the wire contract.
+
+### Request
+
+```
+GET /api/v1/banks/{bank_id}/bi/feeds/{dataset}?format=ndjson&cursor=<token>
+Authorization: Bearer aeq_live_…        # a `reader` key for THIS bank
+```
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `dataset` (path) | `loan_book`, `deposit_book`, `regulatory_metrics` | One of the curated datasets. Anything else is `404`. |
+| `format` | `ndjson` (default), `csv` | One JSON object per line, or a header row then data rows. |
+| `cursor` | a token a previous pull returned | Omit it for a full synchronisation. |
+
+There is no way to name a table, a column, a filter, a row limit or an as-of
+date. The dataset declaration decides all of them, which is what makes the
+surface safe to expose to a machine at all.
+
+### Response
+
+`200` with the payload as the body. Column names are AequorOS catalogue member
+ids (`loans.balance_rc`); amounts are exact decimals in the institution's
+reporting currency; **an empty cell or a JSON `null` means "nothing to measure",
+never zero.** Provenance travels in headers, never in the payload:
+
+| Header | Meaning |
+|---|---|
+| `X-Bi-Feed-Dataset` / `X-Bi-Feed-Grain` | Which dataset, and what one row is. |
+| `X-Bi-Feed-Columns` | The column list, in payload order. Validate against this. |
+| `X-Bi-Feed-Cursor` / `X-Bi-Feed-Next-Cursor` | The cursor you sent, and the one to send next. `none` means **do not advance**. |
+| `X-Bi-Feed-More-Available` | `true` when older reporting dates remain unserved: pull again at once. |
+| `X-Bi-Feed-Reporting-Dates` / `-Reporting-Date-Count` | Exactly which reporting dates the payload covers. |
+| `X-Bi-Feed-Data-Scope` | The slice of the institution this credential covers. A change here means your dataset changed shape. |
+| `X-Bi-Feed-Trust` | **Removed by founder decision 2026-09-29.** It carried a reconciliation verdict (`green` / `amber` / `red` / `grey`) of the feed's figures against the regulatory returns; BI carries no such verdict. A loader must not require this header. Freshness is `X-Bi-Feed-Build`. |
+| `X-Bi-Feed-Build` / `X-Bi-Feed-Catalogue-Version` | Which analytics build and which measure definitions produced the rows. |
+| `X-Bi-Feed-Unit` | The reporting currency. It is deliberately not in any column name. |
+
+### The cursor, and the one thing your loader must do
+
+The cursor is a position in **build** time, not a business date, because a bank's
+book is restated: a correction to March arrives in September and the platform
+rebuilds March. So:
+
+> **Replace by reporting date.** For every date in `X-Bi-Feed-Reporting-Dates`,
+> delete your rows for that date and insert the payload's. Never append.
+
+That is what makes a restatement land. Because replacement is idempotent, the
+feed errs towards re-sending: `X-Bi-Feed-Next-Cursor: none` means send the same
+cursor again next time, and a date may legitimately arrive twice. Only reporting
+dates whose analytics build fully succeeded are served — a partial date is absent,
+never present with zeros.
+
+### Refusals
+
+| Status | When |
+|---|---|
+| `401` | The credential is missing, unknown or revoked. |
+| `403` | A human token; a `writer` key; a `reader` key without the authority the dataset's figures need; a branch-scoped key asking for institution-wide ratios. |
+| `404` | BI is not enabled for the deployment; the institution belongs to another tenant; the key names a different institution; the dataset is not in the registry. |
+| `422` | The cursor is not a token this feed issued. It is never treated as "start from the beginning". |
+
+**Every pull is recorded** — the credential, the dataset, the cursor in and out,
+the reporting dates, the row count and whether it was allowed or refused. Ask
+your AequorOS administrator for that record whenever you need it.

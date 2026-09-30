@@ -22,7 +22,9 @@ from app.api.deps import (
     Tenant,
     TenantContext,
 )
-from app.models import Bank, CanonicalPosition
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.models import Bank, CanonicalPositionSnapshot
+from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     CapitalCheckRead,
     DelinquencyBucketRead,
@@ -61,20 +63,39 @@ from app.services import (
 router = APIRouter(tags=["sdi-diagnostics"])
 
 
-def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
-    """Resolve the as-of date: the caller's, else the LATEST ingested data date
-    (not ``date.today()`` — an S&L's core-banking feed lags the calendar, so a
-    diagnostic keyed on today would read an empty future). Falls back to today
-    when the bank has no canonical positions yet."""
-    if requested is not None:
-        return requested
-    latest = db.scalar(
-        select(func.max(CanonicalPosition.as_of_date)).where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
+def _latest_book_as_of(db: DbSession, ctx: TenantContext, bank: Bank) -> date | None:
+    """The LATEST business date the bank's current book carries — the newest
+    current-generation, accepted or warning position SNAPSHOT.
+
+    ``CanonicalPosition.as_of_date`` is the date a facility was FIRST seen,
+    which lags every month no new facility is booked, and ``date.today()`` reads
+    an empty future when an S&L's core-banking feed lags the calendar. ``None``
+    for a bank whose current book is empty: there is no business date to report.
+    """
+    return db.scalar(
+        select(func.max(CanonicalPositionSnapshot.as_of_date)).where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            *is_current_generation(CanonicalPositionSnapshot),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
     )
-    return latest or date.today()
+
+
+def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
+    """The caller's as-of, else the current book's latest business date, else
+    today.
+
+    Today is a fabricated reporting date and the responses below say so only
+    where their contract can: loan classification answers ``as_of: null``
+    (``_loan_classification_read``) and so does liquidity monitoring. The
+    remaining diagnostics still type ``as_of`` as required, so they keep the
+    pre-existing fallback; they answer an empty book as not-computable, which
+    is what keeps it merely untidy rather than wrong.
+    """
+    if requested is not None:
+        return requested
+    return _latest_book_as_of(db, ctx, bank) or date.today()
 
 
 @router.get(
@@ -145,16 +166,25 @@ def _loan_classification_read(
     bank: Bank,
     as_of: date | None,
 ) -> SdiLoanClassificationRead:
-    when = _effective_as_of(db, ctx, bank, as_of)
-    report = loan_classification.classify_loan_book(db, ctx, bank, when)
+    """The classified book — and, for a bank with no book, an answer that says so.
+
+    An empty current book has no business date, so the response carries
+    ``as_of: null`` and no NPL ratio: today's date against a 0.00% ratio reads
+    as a clean book measured today, which is the one thing it is not. The grid
+    and its provenance are still resolved, and the probe date cannot change the
+    classification itself — every snapshot read matches ``as_of_date`` exactly
+    and an empty book has nothing to match.
+    """
+    when = as_of if as_of is not None else _latest_book_as_of(db, ctx, bank)
+    report = loan_classification.classify_loan_book(db, ctx, bank, when or date.today())
     result = report.result
     return SdiLoanClassificationRead(
-        as_of=report.as_of.isoformat(),
+        as_of=when.isoformat() if when is not None else None,
         institution_class=report.institution_class,
         loan_count=report.loan_count,
         total_exposure_ghs=result.total_exposure_ghs,
         npl_exposure_ghs=result.npl_exposure_ghs,
-        npl_ratio=result.npl_ratio,
+        npl_ratio=result.npl_ratio if report.loan_count else None,
         total_provision_required_ghs=result.total_provision_required_ghs,
         stage_proxy_count=report.stage_proxy_count,
         dpd_covered_count=report.dpd_covered_count,

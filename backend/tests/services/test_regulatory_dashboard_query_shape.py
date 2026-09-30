@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
+from app.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -34,6 +35,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.fixtures.live_plane import materialize_live_plane
 
 _CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 _MODULES = {
@@ -43,18 +45,46 @@ _MODULES = {
     "fx": regulatory_fx,
     "ftp": regulatory_ftp,
 }
+# Period mode (explicit ``reporting_period_id``). Re-measured after BI Phase 0
+# items 2 and 3 (2026-09-21): unchanged — item 2 touches only current mode and
+# item 3's window selection is in-memory. See ``_CURRENT_MODE_HTTP_QUERY_COUNTS``.
 _FULL_HTTP_QUERY_COUNTS = {
     # Router-level tenant-bank resolution adds one organization-scoped bank SELECT.
     "liquidity": 15,
-    # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
-    "capital": 19,
+    # Scoped CAP view adds bank resolution plus principal, binding, and institution
+    # checks, and — since the Phase 4 data-scope dimension — one re-read of the
+    # bindings that MATCHED the decision (``authorization.effective_data_scope``,
+    # which deliberately does not trust the caller's id list as authority). Every
+    # surface on ``deps._require_institution_permission`` pays that one query;
+    # capital and FX are the two dashboards in this suite that do.
+    "capital": 20,
     # Prefetched scoped IRRBB view reuses the dashboard's resolved bank.
     "irr": 16,
     # Scoped FX view reuses the router-resolved tenant bank, then adds principal,
-    # binding, and institution checks.
-    "fx": 15,
+    # binding, and institution checks, plus the same data-scope re-read.
+    "fx": 16,
     # Prefetched scoped FTP view reuses the dashboard's resolved bank.
     "ftp": 12,
+}
+# Current mode (no ``reporting_period_id``) is the period-mode count + 2 for every
+# module, and BOTH deltas are named so the next change cannot hide inside them:
+#   +1  ``current_fact_period_or_409``'s business-date probe on
+#       ``current_financial_facts`` (its period lookup by ``period_end`` REPLACES
+#       period mode's lookup by id, so that pair nets to zero);
+#   +1  ``load_current_facts`` — the one query BI Phase 0 item 2 added, so the
+#       headline computes from the live plane instead of the batch's official
+#       ``bank_financial_facts`` (which a tenant with no official run for its
+#       latest date does not have). The batch prefetch is unchanged: the trend
+#       still reads the official spine. The month-window trend selection (item 3)
+#       is in-memory and moves no count.
+_CURRENT_MODE_HTTP_QUERY_COUNTS = {
+    "liquidity": 17,
+    # +1 over the pre-Phase-4 21 for the data-scope re-read, as above.
+    "capital": 22,
+    "irr": 18,
+    # +1 over the pre-Phase-4 17 for the data-scope re-read, as above.
+    "fx": 18,
+    "ftp": 14,
 }
 
 
@@ -67,7 +97,9 @@ def _legacy_trend(  # noqa: PLR0912, PLR0915 - faithful five-module legacy oracl
     """The pre-batching per-period loop, retained as an equivalence oracle."""
     service = _MODULES[module_name]
     points: list[object] = []
-    for period in periods[-service._TREND_MAX_POINTS :]:
+    # The window is the ONE shared selection (BI Phase 0 item 3) — the oracle
+    # must cover the same periods the batched path covers, or it proves nothing.
+    for period in period_windows.trailing_month_end_window(periods):
         run = service._latest_succeeded_baseline_run(db, _CTX, bank, period.id)
         if module_name == "liquidity":
             if run is not None:
@@ -501,6 +533,32 @@ def test_record_full_http_dashboard_query_count(db_client: TestClient, module_na
     assert response.status_code == 200, response.text
     print(f"{module_name}: full HTTP dashboard SQL={len(statements)}")
     assert len(statements) == _FULL_HTTP_QUERY_COUNTS[module_name]
+
+
+@pytest.mark.parametrize("module_name", _MODULES)
+def test_record_full_http_current_mode_query_count(db_client: TestClient, module_name: str) -> None:
+    """Pin current mode (no ``reporting_period_id``) — the live plane is the source.
+
+    Current mode resolves the period from the live plane's business date and,
+    since BI Phase 0 item 2, computes the headline from ``current_financial_facts``
+    rather than from the official ``bank_financial_facts`` the batch prefetches.
+    """
+    with get_sessionmaker()() as session:
+        materialize_canonical_test_book(session)
+        materialize_live_plane(session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
+        session.commit()
+        engine = session.get_bind()
+
+    with _capture_sql(engine) as statements:
+        response = db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/{module_name}/dashboard",
+            headers=headers(),
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json().get("available", True) is not False, response.text
+    print(f"{module_name}: full HTTP current-mode dashboard SQL={len(statements)}")
+    assert len(statements) == _CURRENT_MODE_HTTP_QUERY_COUNTS[module_name]
 
 
 @pytest.mark.parametrize(

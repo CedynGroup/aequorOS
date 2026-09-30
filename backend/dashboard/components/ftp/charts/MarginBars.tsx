@@ -1,39 +1,37 @@
-'use client';
+"use client";
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  CHART_AXIS,
-  CHART_CRIT,
-  CHART_GRID,
-  axisProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtCurrencySigned, fmtPct } from '@/lib/format';
+  BAR_SERIES_BASE,
+  thresholdMarkLine,
+  tooltipHtml,
+} from "@/lib/echartsOptions";
+import { fmtCurrencySigned, fmtPct } from "@/lib/format";
 
 export type MarginBarPoint = {
   label: string;
-  /** Signed value (margin % or contribution GHS). */
+  /** Signed value (margin %, or contribution in the bank's currency). */
   value: number;
-  side: 'asset' | 'liability' | 'mixed';
+  side: "asset" | "liability" | "mixed";
   /** Highlights the bar in the critical tone (e.g. below the margin floor). */
   flagged?: boolean;
 };
 
+const SIDE_LABEL: Record<MarginBarPoint["side"], string> = {
+  asset: "Asset book",
+  liability: "Funding book",
+  mixed: "Mixed",
+};
+
 /**
- * Horizontal signed bars for product / business-line profitability. Asset
- * books and liability books get distinct series colors; flagged rows (below
- * the margin floor) render in the critical tone.
+ * Horizontal signed bars for product / business-line profitability. Asset books
+ * and liability books get distinct series colors; flagged rows (below the margin
+ * floor) render in the critical tone.
+ *
+ * The category axis is `inverse` because ECharts stacks a category axis upwards
+ * from the origin, and these rows arrive ranked — the first row belongs at the
+ * top, which is where Recharts put it.
  */
 export default function MarginBars({
   data,
@@ -42,75 +40,94 @@ export default function MarginBars({
   height = 300,
 }: {
   data: MarginBarPoint[];
-  /** 'pct' formats as margin %, 'ghs' as GHS contribution. */
-  mode: 'pct' | 'ghs';
+  /** 'pct' formats as margin %, 'ghs' as a currency contribution. */
+  mode: "pct" | "ghs";
   /** Optional margin-floor reference line (pct mode). */
   floorPct?: number;
   height?: number;
 }) {
-  const fmt = (v: number) =>
-    mode === 'pct' ? fmtPct(v, 2) : fmtCurrencySigned(v);
-  const axisFmt = (v: number) =>
-    mode === 'pct' ? `${v}%` : `${(v / 1_000_000).toFixed(0)}M`;
+  const tokens = useChartTokens();
+  const fmt = (value: number) =>
+    mode === "pct" ? fmtPct(value, 2) : fmtCurrencySigned(value);
 
-  const fill = (p: MarginBarPoint): string => {
-    if (p.flagged) return CHART_CRIT;
-    return p.side === 'asset' ? seriesColor(0) : p.side === 'liability' ? seriesColor(1) : seriesColor(2);
+  const fill = (point: MarginBarPoint): string => {
+    if (point.flagged) return tokens.adverse;
+    if (point.side === "asset") return seriesColor(tokens, 0);
+    return point.side === "liability"
+      ? seriesColor(tokens, 1)
+      : seriesColor(tokens, 2);
   };
 
+  const thresholds = [
+    { axis: "x" as const, value: 0, color: tokens.axis, solid: true },
+    ...(mode === "pct" && floorPct !== undefined
+      ? [
+          {
+            axis: "x" as const,
+            value: floorPct,
+            label: `Floor ${floorPct.toFixed(1)}%`,
+            color: tokens.adverse,
+            labelPosition: "end" as const,
+          },
+        ]
+      : []),
+  ];
+
+  const option: BiEChartsOption = {
+    grid: { left: 8, right: 24, top: 8, bottom: 4, containLabel: true },
+    xAxis: {
+      type: "value",
+      axisLabel: {
+        formatter: (value: number) =>
+          mode === "pct" ? `${value}%` : `${(value / 1_000_000).toFixed(0)}M`,
+      },
+      splitLine: { show: true, lineStyle: { color: tokens.grid } },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: data.map((point) => point.label),
+      axisLine: { show: false },
+      splitLine: { show: false },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: (params: unknown) => {
+        const index = (params as { dataIndex: number }).dataIndex;
+        const point = data[index];
+        if (!point) return "";
+        return tooltipHtml(point.label, [
+          {
+            label: SIDE_LABEL[point.side],
+            value: fmt(point.value),
+            color: fill(point),
+            note: point.flagged ? "below floor" : undefined,
+          },
+        ]);
+      },
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        barWidth: 14,
+        markLine: thresholdMarkLine(thresholds),
+        data: data.map((point) => ({
+          value: point.value,
+          itemStyle: { color: fill(point), borderRadius: 2 },
+        })),
+      },
+    ],
+  } as BiEChartsOption;
+
+  const flagged = data.filter((point) => point.flagged).length;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ top: 8, right: 24, bottom: 4, left: 8 }}
-      >
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" {...axisProps} tickFormatter={axisFmt} />
-        <YAxis
-          type="category"
-          dataKey="label"
-          {...axisProps}
-          axisLine={false}
-          width={168}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(value: number | string, _name, item) => {
-            const point = item?.payload as MarginBarPoint | undefined;
-            const v = typeof value === 'number' ? value : Number(value);
-            return [
-              `${fmt(v)}${point?.flagged ? ' · below floor' : ''}`,
-              point
-                ? point.side === 'asset'
-                  ? 'Asset book'
-                  : point.side === 'liability'
-                  ? 'Funding book'
-                  : 'Mixed'
-                : '',
-            ];
-          }}
-        />
-        <ReferenceLine x={0} stroke={CHART_AXIS} />
-        {mode === 'pct' && floorPct !== undefined && (
-          <ReferenceLine
-            x={floorPct}
-            stroke={CHART_CRIT}
-            strokeDasharray="5 4"
-            label={{
-              value: `Floor ${floorPct.toFixed(1)}%`,
-              position: 'insideTopRight',
-              fontSize: 11,
-              fill: CHART_CRIT,
-            }}
-          />
-        )}
-        <Bar dataKey="value" barSize={14} radius={[2, 2, 2, 2]}>
-          {data.map((p) => (
-            <Cell key={p.label} fill={fill(p)} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`${mode === "pct" ? "Margin" : "Contribution"} by book across ${data.length} lines${
+        flagged > 0 ? `, ${flagged} below the margin floor` : ""
+      }`}
+    />
   );
 }

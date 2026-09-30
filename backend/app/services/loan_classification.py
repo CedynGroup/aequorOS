@@ -18,6 +18,12 @@ falls back to the IFRS 9 stage in the pure engine, never to "performing".
 
 Fail-loud: an unseeded required parameter raises ``RegulatoryParameterError``
 straight out of the resolver — a regulatory number is never invented.
+
+Two public entry points share ONE query path: ``classify_loan_book`` (the
+report — totals, buckets, provenance; always records parameter consumption)
+and ``classified_loans`` (the per-loan grades keyed by snapshot id, with an
+explicit ``record`` flag so the dispatch plane can read without touching a
+sealed run's ``parameter_provenance``).
 """
 
 from __future__ import annotations
@@ -26,20 +32,20 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.capital import loan_classification as engine
+from app.domain.credit.dpd_bands import DPD_BANDS as _DPD_BANDS
 from app.domain.credit.restructure import restructure_holds_npl
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
 from app.services import institution_types, jurisdictions
 from app.services import regulatory_parameters as rp
 
-# Mirrors fact_derivation / le_generation: the derivation slice is the current
-# (non-superseded) generation with accepted/warning status.
-_INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _LOAN_POSITION_TYPE = "LOAN"
 _ZERO = Decimal("0")
 
@@ -107,17 +113,9 @@ class _DpdExposure:
     days_past_due: int
 
 
-# These are analytical portfolio-at-risk bands, not regulatory classification
-# boundaries. The latter are always resolved from the control plane.
-_DPD_BANDS: tuple[tuple[str, str, int, int | None], ...] = (
-    ("current", "Current", 0, 0),
-    ("1_29", "1–29 days", 1, 29),
-    ("30_59", "30–59 days", 30, 59),
-    ("60_89", "60–89 days", 60, 89),
-    ("90_179", "90–179 days", 90, 179),
-    ("180_359", "180–359 days", 180, 359),
-    ("360_plus", "360+ days", 360, None),
-)
+# The analytical portfolio-at-risk bands (``_DPD_BANDS``) are the ONE definition
+# in ``app.domain.credit.dpd_bands`` — not regulatory classification boundaries,
+# which are always resolved from the control plane.
 _PAR_THRESHOLDS: tuple[tuple[str, str, int], ...] = (
     ("par_30", "PAR 30+", 30),
     ("par_60", "PAR 60+", 60),
@@ -200,6 +198,7 @@ def _load_loan_exposures(
     int,
     list[tuple[Decimal | None, Decimal | None]],
     list[_RestructureState],
+    list[UUID],
 ]:
     """Current-generation LOAN exposures for ``as_of`` (+ unconverted count).
 
@@ -209,7 +208,12 @@ def _load_loan_exposures(
 
     The third element is position-aligned ``(ecl_provision_ghs,
     interest_in_suspense_ghs)`` — each ``None`` when the loan does not state it,
-    so the caller can tell an unstated provision from a stated zero.
+    so the caller can tell an unstated provision from a stated zero. The last
+    element is the position-aligned ``CanonicalPositionSnapshot.id`` list: the
+    ONE identity a caller may pair per-loan results back to a row with.
+    ``source_reference`` is not one — the position natural key is
+    ``(source_system, source_reference)``, so two systems can carry the same
+    reference, and the ordering below is arbitrary between such ties.
     """
     records = db.execute(
         select(CanonicalPositionSnapshot, CanonicalPosition)
@@ -220,7 +224,7 @@ def _load_loan_exposures(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == _LOAN_POSITION_TYPE,
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
@@ -230,8 +234,10 @@ def _load_loan_exposures(
     exposures: list[engine.LoanExposure] = []
     provisions: list[tuple[Decimal | None, Decimal | None]] = []
     restructures: list[_RestructureState] = []
+    snapshot_ids: list[UUID] = []
     unconverted = 0
     for snapshot, position in records:
+        snapshot_ids.append(snapshot.id)
         attributes = snapshot.attributes or {}
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
         if balance_ghs is None:
@@ -265,7 +271,7 @@ def _load_loan_exposures(
                 ),
             )
         )
-    return exposures, unconverted, provisions, restructures
+    return exposures, unconverted, provisions, restructures, snapshot_ids
 
 
 def _dec_or_none(value: Any) -> Decimal | None:
@@ -290,7 +296,7 @@ def _load_raw_dpd_exposures(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == _LOAN_POSITION_TYPE,
         )
     ).all()
@@ -352,14 +358,14 @@ def _portfolio_at_risk(
 
 
 def _resolve_parameters(
-    db: Session, bank: Bank, institution_class: str, as_of: date
+    db: Session, bank: Bank, institution_class: str, as_of: date, *, record: bool
 ) -> tuple[dict[str, Decimal], tuple[ParameterProvenance, ...]]:
     """Resolve every parameter the class grid needs (fail-loud if unseeded)."""
     codes = engine.param_codes_for_class(institution_class)
     values: dict[str, Decimal] = {}
     provenance: list[ParameterProvenance] = []
     for code in codes:
-        resolved = rp.resolve(db, bank, code, as_of=as_of)
+        resolved = rp.resolve(db, bank, code, as_of=as_of, record=record)
         values[code] = resolved.decimal
         provenance.append(
             ParameterProvenance(
@@ -406,7 +412,12 @@ def _provisions_held(
 
 
 def _restructure_holds(
-    db: Session, bank: Bank, restructures: list[_RestructureState], as_of: date
+    db: Session,
+    bank: Bank,
+    restructures: list[_RestructureState],
+    as_of: date,
+    *,
+    record: bool,
 ) -> list[bool]:
     """Per-loan Notice ¶12 holds, from the governed cure counts.
 
@@ -416,8 +427,10 @@ def _restructure_holds(
     """
     if not any(state.restructured for state in restructures):
         return [False] * len(restructures)
-    cure = rp.try_resolve(db, bank, "restructure_cure_payments", as_of=as_of)
-    cure_semi = rp.try_resolve(db, bank, "restructure_cure_payments_semi_annual", as_of=as_of)
+    cure = rp.try_resolve(db, bank, "restructure_cure_payments", as_of=as_of, record=record)
+    cure_semi = rp.try_resolve(
+        db, bank, "restructure_cure_payments_semi_annual", as_of=as_of, record=record
+    )
     if cure is None or cure_semi is None:
         return [state.restructured for state in restructures]
     return [
@@ -432,21 +445,19 @@ def _restructure_holds(
     ]
 
 
-def classify_loan_book(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> LoanClassificationReport:
-    """Classify ``bank``'s LOAN book at ``as_of`` against its class grid.
-
-    Resolves the institution class, builds the class-aware grid from the
-    control plane, loads the current-generation LOAN snapshots, runs the pure
-    engine, and returns the classified book with full parameter provenance.
-    """
+def _classify(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, *, record: bool
+) -> tuple[LoanClassificationReport, list[UUID]]:
+    """The one classification path: the report plus its position-aligned
+    snapshot ids (``report.result.loans[i]`` classifies ``snapshot_ids[i]``)."""
     institution_class = institution_types.institution_class(db, bank)
-    values, provenance = _resolve_parameters(db, bank, institution_class, as_of)
+    values, provenance = _resolve_parameters(db, bank, institution_class, as_of, record=record)
     grid = engine.grid_from_params(institution_class, values)
 
-    exposures, unconverted, provisions, restructures = _load_loan_exposures(db, ctx, bank, as_of)
-    holds = _restructure_holds(db, bank, restructures, as_of)
+    exposures, unconverted, provisions, restructures, snapshot_ids = _load_loan_exposures(
+        db, ctx, bank, as_of
+    )
+    holds = _restructure_holds(db, bank, restructures, as_of, record=record)
     result = engine.classify_book(exposures, grid, restructure_holds=holds)
     raw_dpd_exposures = _load_raw_dpd_exposures(db, ctx, bank, as_of)
     held = _provisions_held(result.loans, provisions)
@@ -455,7 +466,7 @@ def classify_loan_book(
         coverage = held.specific_ghs / result.npl_exposure_ghs * Decimal("100")
 
     pending = tuple(item.param_code for item in provenance if item.is_pending)
-    return LoanClassificationReport(
+    report = LoanClassificationReport(
         institution_class=institution_class,
         grid=grid,
         result=result,
@@ -485,3 +496,42 @@ def classify_loan_book(
         ),
         restructure_held_count=sum(1 for flag in holds if flag),
     )
+    return report, snapshot_ids
+
+
+def classify_loan_book(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> LoanClassificationReport:
+    """Classify ``bank``'s LOAN book at ``as_of`` against its class grid.
+
+    Resolves the institution class, builds the class-aware grid from the
+    control plane, loads the current-generation LOAN snapshots, runs the pure
+    engine, and returns the classified book with full parameter provenance.
+
+    Every parameter read is RECORDED into the calculation plane's consumption
+    ledger: the credit run and the NPL return seal this report, and their
+    ``parameter_provenance`` must name the grid that produced it.
+    """
+    report, _snapshot_ids = _classify(db, ctx, bank, as_of, record=True)
+    return report
+
+
+def classified_loans(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, *, record: bool
+) -> dict[UUID, engine.ClassifiedLoan]:
+    """Per-loan classifications keyed by ``CanonicalPositionSnapshot.id``.
+
+    The same single query path and the same grid as :func:`classify_loan_book`
+    (the report's totals are byte-identical), paired by row identity rather
+    than by position in an ordered slice — ``source_reference`` alone is not an
+    identity, and a second query ordered by it can interleave two systems'
+    ties differently.
+
+    ``record`` has no default on purpose (mirror of
+    ``PrefetchedParameterResolver.load``): the calculation plane passes
+    ``True`` so a sealed run cites the grid it used; a dispatch/analytics
+    reader passes ``False`` so its reads never reach a run's
+    ``parameter_provenance``.
+    """
+    report, snapshot_ids = _classify(db, ctx, bank, as_of, record=record)
+    return dict(zip(snapshot_ids, report.result.loans, strict=True))

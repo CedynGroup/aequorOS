@@ -123,7 +123,7 @@ def run_icaap_ai_draft(session: Session, job: Job) -> None:
         _finalize(session, row, status="failed", failure_code="framework_unavailable")
         return
 
-    result: ModelResult[Any] = ai_client.get_model(settings).generate(request)
+    result: ModelResult[Any] = ai_client.complete_structured(request, settings)
     _record(session, row, result)
 
 
@@ -154,7 +154,14 @@ def _build_request(session: Session, row: IcaapAiSuggestion):
 
 
 def _record(session: Session, row: IcaapAiSuggestion, result: ModelResult[Any]) -> None:
-    usage = result.usage.as_dict() if result.usage is not None else None
+    # The call record, not just the token counts: which vendor served the draft,
+    # where it sat in the tier, and what it could not honour. It is written for
+    # EVERY outcome, because the provenance of a refused or failed call is
+    # evidence too — and since D-053 identical inputs can produce different text
+    # depending on who was up, which a reader of a filed report must be able to
+    # tell. ``output_tokens`` keeps its key, so the quota source reads it
+    # unchanged.
+    usage = result.call_record()
     status = _OUTCOME_STATUS.get(result.outcome, "failed")
     output: dict[str, Any] | None = None
     validation_errors: list[dict[str, Any]] = []
@@ -179,6 +186,7 @@ def _record(session: Session, row: IcaapAiSuggestion, result: ModelResult[Any]) 
         row,
         status=status,
         failure_code=result.failure_code,
+        model_requested=result.model_requested,
         model_served=result.model_served,
         fallback_used=result.fallback_used,
         request_id=result.request_id,
@@ -209,9 +217,17 @@ def _record(session: Session, row: IcaapAiSuggestion, result: ModelResult[Any]) 
         fallback_used=result.fallback_used,
         request_id=result.request_id,
         latency_ms=result.latency_ms,
+        vendor=result.vendor,
+        model_source=result.model_source,
+        tier_position=result.tier_position,
+        degraded_capabilities=sorted(result.degraded),
+        tier_attempts=list(result.tier_attempts),
         **_usage_fields(usage),
     )
-    if usage is not None:
+    # Only the vendor whose prompt cache the platform actually instructs can
+    # report a cold prefix. On another tier the cache was never requested, so a
+    # zero read is the recorded degradation, not a silent invalidator.
+    if result.usage is not None and not result.degraded:
         observability.log_cache_miss_if_cold(
             cache_read_input_tokens=usage.get("cache_read_input_tokens"),
             feature=ai_drafting.FEATURE,
@@ -221,9 +237,7 @@ def _record(session: Session, row: IcaapAiSuggestion, result: ModelResult[Any]) 
         )
 
 
-def _usage_fields(usage: dict[str, Any] | None) -> dict[str, Any]:
-    if usage is None:
-        return {}
+def _usage_fields(usage: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_tokens": usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
@@ -278,6 +292,7 @@ def _finalize(  # noqa: PLR0913 - one terminal write carries every result column
     *,
     status: str,
     failure_code: str | None = None,
+    model_requested: str | None = None,
     model_served: str | None = None,
     fallback_used: bool = False,
     request_id: str | None = None,
@@ -291,6 +306,15 @@ def _finalize(  # noqa: PLR0913 - one terminal write carries every result column
     """ONE update to the terminal status. After this the row is sealed."""
     row.status = status
     row.failure_code = failure_code
+    # The model the VENDOR THAT ANSWERED was asked for — not the enqueue-time
+    # default (audit A7-04). ``model_requested`` is stamped at enqueue from the
+    # first vendor in the tier, so on any failover the sealed row would otherwise
+    # read "requested claude-opus-5, served gpt-…", which is a filed ICAAP
+    # artifact describing a call that never happened. ``None`` leaves the
+    # enqueue-time value alone, which is right for a row that never reached a
+    # vendor at all.
+    if model_requested is not None:
+        row.model_requested = model_requested
     row.model_served = model_served
     row.fallback_used = fallback_used
     row.request_id = request_id

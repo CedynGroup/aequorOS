@@ -85,6 +85,59 @@ def get_sessionmaker() -> sessionmaker:
     )
 
 
+@lru_cache
+def get_bi_engine(database_url: str) -> Engine:
+    """The BI query pool: a small, separately named sibling of :func:`get_engine`.
+
+    Interactive BI queries are long relative to an API request and are capped
+    by ``statement_timeout``; letting them queue behind (or starve) the
+    request pool would turn one slow dashboard into API latency. So when
+    ``BI_DATABASE_URL`` is set they get their own pool, sized for a handful of
+    concurrent dashboards, and announce themselves as ``aequoros-bi`` in
+    ``pg_stat_activity`` so an operator can see — and cancel — them by name.
+    Keepalives and recycle match the primary pool for the same remote-primary
+    reasons documented there.
+    """
+    if database_url.startswith("postgresql"):
+        return create_engine(
+            database_url,
+            pool_pre_ping=True,
+            pool_size=3,
+            max_overflow=2,
+            pool_timeout=30,
+            pool_recycle=1800,
+            connect_args={
+                "application_name": "aequoros-bi",
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+            },
+        )
+    return create_engine(database_url, pool_pre_ping=True)
+
+
+def get_bi_sessionmaker() -> sessionmaker | None:
+    """Sessionmaker for BI reads, or ``None`` when the request session is used.
+
+    ``None`` is the hermetic and single-database default: the rollback-
+    isolated test fixture knows exactly one URL, and a second engine would
+    open a real connection outside its savepoint transaction. Callers set
+    ``session.info["organization_id"]`` on any session they make here exactly
+    as ``get_tenant_db_session`` does — the ``after_begin`` listener below is
+    registered on :class:`Session` globally, so BI sessions get the tenant GUC
+    (and therefore RLS) through the same single mechanism.
+    """
+    url = get_settings().bi.database_url
+    if url is None:
+        return None
+    return sessionmaker(
+        bind=get_bi_engine(url),
+        autoflush=False,
+        expire_on_commit=False,
+    )
+
+
 def get_worker_sessionmaker() -> sessionmaker:
     """Sessionmaker for the cross-tenant background worker.
 

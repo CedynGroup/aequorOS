@@ -31,9 +31,7 @@ def test_run_once_passes_runtime_identity_to_job_claim(monkeypatch: Any) -> None
 def test_run_once_binds_the_claimed_tenant_before_invoking_a_handler(
     monkeypatch: Any,
 ) -> None:
-    job = SimpleNamespace(
-        id=uuid4(), organization_id="OR-TEST0001", job_type="pipeline_refresh"
-    )
+    job = SimpleNamespace(id=uuid4(), organization_id="OR-TEST0001", job_type="pipeline_refresh")
 
     class FakeSession:
         def __init__(self, claimed: object | None = None) -> None:
@@ -173,6 +171,88 @@ def test_inprocess_worker_refuses_to_start_when_it_cannot_claim(monkeypatch: Any
         worker.start_inprocess_worker()
 
     assert started == []
+
+
+def test_inprocess_worker_never_selects_the_bi_lane(monkeypatch: Any) -> None:
+    """The API process is pinned to the core lane whatever WORKER_JOB_TYPES says.
+
+    A request handler's neighbour thread must never stream a bank's book into
+    a mart, so the pin that keeps AI work out of the API keeps BI work out too.
+    """
+    monkeypatch.setattr(
+        worker,
+        "get_settings",
+        lambda: SimpleNamespace(worker=SimpleNamespace(run_inprocess_worker=True)),
+    )
+    monkeypatch.setattr(worker, "assert_worker_database_access", lambda: None)
+    captured: dict[str, Any] = {}
+
+    def fake_thread(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return SimpleNamespace(start=lambda: None)
+
+    monkeypatch.setattr(worker.threading, "Thread", fake_thread)
+
+    worker.start_inprocess_worker()
+
+    selected = captured["kwargs"]["job_types"]
+    assert "bi_mart_refresh" not in selected
+    assert "bi_mart_backfill" not in selected
+    assert "bi_retention" not in selected
+    assert "pipeline_refresh" in selected
+
+
+def test_run_once_dispatches_a_bi_job_through_handlers(monkeypatch: Any) -> None:
+    """A BI worker's claim selection reaches the BI handler on a tenant-bound session."""
+    job = SimpleNamespace(id=uuid4(), organization_id="OR-TEST0001", job_type="bi_mart_refresh")
+
+    class FakeSession:
+        def __init__(self, claimed: object | None = None) -> None:
+            self.claimed = claimed
+            self.info: dict[str, str] = {}
+
+        def __enter__(self) -> FakeSession:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def get(self, _model: object, _id: object) -> object | None:
+            return self.claimed
+
+        def rollback(self) -> None:
+            return None
+
+    sessions = iter((FakeSession(), FakeSession(job)))
+    monkeypatch.setattr(worker, "get_worker_sessionmaker", lambda: lambda: next(sessions))
+    claimed_types: list[tuple[str, ...]] = []
+
+    def claim_next(_db: object, _now: object, types: tuple[str, ...], **_kw: Any) -> object:
+        claimed_types.append(types)
+        return job
+
+    monkeypatch.setattr(worker.job_queue, "claim_next", claim_next)
+    monkeypatch.setattr(worker.job_queue, "complete", lambda *_args, **_kwargs: None)
+    seen: list[tuple[dict[str, str], object]] = []
+    monkeypatch.setitem(
+        worker.HANDLERS,
+        "bi_mart_refresh",
+        lambda session, claimed: seen.append((dict(session.info), claimed)),
+    )
+
+    assert worker.run_once(worker.resolve_job_types("lane:bi"), worker_id="risk-worker-bi")
+    assert claimed_types == [
+        (
+            "bi_mart_refresh",
+            "bi_mart_backfill",
+            "bi_retention",
+            "bi_export",
+            "bi_alert_evaluate",
+            "bi_subscription_scan",
+            "bi_subscription_run",
+        )
+    ]
+    assert seen == [({"organization_id": "OR-TEST0001"}, job)]
 
 
 def test_heartbeat_records_work_and_error(db_session: Any) -> None:

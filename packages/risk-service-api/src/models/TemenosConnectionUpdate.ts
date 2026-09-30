@@ -53,13 +53,6 @@ import {
   ConnectionCompaniesUpdateToJSON,
   ConnectionCompaniesUpdateToJSONTyped,
 } from "./ConnectionCompaniesUpdate";
-import type { DisplayName } from "./DisplayName";
-import {
-  DisplayNameFromJSON,
-  DisplayNameFromJSONTyped,
-  DisplayNameToJSON,
-  DisplayNameToJSONTyped,
-} from "./DisplayName";
 import type { ConnectionCredentials } from "./ConnectionCredentials";
 import {
   ConnectionCredentialsFromJSON,
@@ -74,6 +67,13 @@ import {
   ConnectionDomainsUpdateToJSON,
   ConnectionDomainsUpdateToJSONTyped,
 } from "./ConnectionDomainsUpdate";
+import type { DisplayName1 } from "./DisplayName1";
+import {
+  DisplayName1FromJSON,
+  DisplayName1FromJSONTyped,
+  DisplayName1ToJSON,
+  DisplayName1ToJSONTyped,
+} from "./DisplayName1";
 
 /**
  * Post-onboarding management and credential rotation.
@@ -120,10 +120,10 @@ export interface TemenosConnectionUpdate {
   defaultCurrency?: DefaultCurrency;
   /**
    *
-   * @type {DisplayName}
+   * @type {DisplayName1}
    * @memberof TemenosConnectionUpdate
    */
-  displayName?: DisplayName;
+  displayName?: DisplayName1;
   /**
    *
    * @type {ConnectionDomainsUpdate}
@@ -191,7 +191,7 @@ export function TemenosConnectionUpdateFromJSONTyped(
     displayName:
       json["display_name"] == null
         ? undefined
-        : DisplayNameFromJSON(json["display_name"]),
+        : DisplayName1FromJSON(json["display_name"]),
     domains:
       json["domains"] == null
         ? undefined
@@ -229,7 +229,7 @@ export function TemenosConnectionUpdateToJSONTyped(
     ),
     credentials: ConnectionCredentialsToJSON(value["credentials"]),
     default_currency: DefaultCurrencyToJSON(value["defaultCurrency"]),
-    display_name: DisplayNameToJSON(value["displayName"]),
+    display_name: DisplayName1ToJSON(value["displayName"]),
     domains: ConnectionDomainsUpdateToJSON(value["domains"]),
     endpoint: EndpointToJSON(value["endpoint"]),
     schedule: ConnectionScheduleInputToJSON(value["schedule"]),

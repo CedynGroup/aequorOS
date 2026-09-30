@@ -2533,6 +2533,55 @@ export function fixConfig(
 }
 
 // --------------------------------------------------------------------------
+// BI mart backfill — the Tenant Inspector's BI write side.
+//
+// POST /operator/v1/tenants/{org}/bi/backfill. Its own router
+// (backend/app/operator/features/bi_backfill.py), NOT under /fix/, but the same
+// contract as every fix: an ACTIVE inspection session for the org (403
+// `inspection_required`), a REQUIRED `note`, exactly one `bi.backfill` operator
+// audit row, org-scoped (a sibling tenant's bank is a 404). It enqueues ONE
+// `bi_mart_backfill` job that re-enqueues itself hop by hop, newest-first,
+// from `from_date` (default: the bank's latest canonical snapshot) back to
+// `until_date` inclusive. 409 when BI mart builds are off in the deployment,
+// when there is no snapshot to start from and no `from_date`, when the window
+// runs the wrong way, or when a chain for the bank is already queued/running.
+//
+// This is the ONLY enqueue site for `bi_mart_backfill` (audit A360-2 M4):
+// without it a tenant that switches BI on gets only the live date built.
+// --------------------------------------------------------------------------
+
+export interface BiBackfillRequest {
+  bank_id: string;
+  /** The oldest date to build, inclusive (ISO date). */
+  until_date: string;
+  /** The newest date to build; omitted = the bank's latest canonical snapshot. */
+  from_date?: string;
+  note: string;
+}
+
+/** Mirrors backend `BiBackfillRead`; `cursor_date` is the resolved from_date. */
+export interface BiBackfillRead {
+  job_id: string;
+  job_type: string;
+  status: string;
+  bank_id: string;
+  cursor_date: string; // date
+  until_date: string; // date
+  builder_version: number;
+}
+
+/** POST …/bi/backfill — walk one bank's mart history newest-first (session-gated, audited). */
+export function fixBiBackfill(
+  orgId: string,
+  body: BiBackfillRequest,
+): Promise<BiBackfillRead> {
+  return request<BiBackfillRead>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/bi/backfill`,
+    { method: "POST", body },
+  );
+}
+
+// --------------------------------------------------------------------------
 // Workforce session (console-local /api/auth routes, not the operator API)
 // --------------------------------------------------------------------------
 

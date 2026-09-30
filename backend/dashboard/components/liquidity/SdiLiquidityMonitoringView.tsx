@@ -1,15 +1,6 @@
 "use client";
 
 import PageContainer from "@/components/ui/PageContainer";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import PageHeader from "@/components/ui/PageHeader";
 import { useModuleScope } from "@/components/shell/BankContext";
 import KpiStat from "@/components/ui/KpiStat";
@@ -25,12 +16,13 @@ import {
   type SdiMaturityBucket,
 } from "@/components/basel/sdiHooks";
 import { useLiquidityDashboard } from "@/lib/api/hooks";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  axisProps,
-  CHART_GRID,
-  chartTooltipProps,
-  seriesColor,
-} from "@/lib/chartTheme";
+  axisTooltip,
+  BAR_SERIES_BASE,
+  itemTooltip,
+} from "@/lib/echartsOptions";
 import { num, numOrNull } from "@/lib/api/values";
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from "@/lib/format";
 
@@ -354,53 +346,7 @@ export default function SdiLiquidityMonitoringView({
                   title="Contractual maturity ladder"
                   subtitle="Net and cumulative contractual mismatches from the LMTD maturity buckets."
                 >
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={ladderChart}
-                      layout="vertical"
-                      margin={{ top: 6, right: 16, bottom: 4, left: 8 }}
-                    >
-                      <CartesianGrid
-                        horizontal={false}
-                        stroke={CHART_GRID}
-                        strokeDasharray="3 3"
-                      />
-                      <XAxis
-                        type="number"
-                        {...axisProps}
-                        tickFormatter={(value: number) => fmtCurrency(value)}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="label"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={axisProps.tick}
-                        width={150}
-                      />
-                      <Tooltip
-                        {...chartTooltipProps}
-                        formatter={(value: number, name: string) => [
-                          fmtCurrencySigned(value),
-                          name,
-                        ]}
-                      />
-                      <Bar
-                        dataKey="net"
-                        name="Net mismatch"
-                        fill={seriesColor(1)}
-                        maxBarSize={14}
-                        radius={[0, 2, 2, 0]}
-                      />
-                      <Bar
-                        dataKey="cumulative"
-                        name="Cumulative mismatch"
-                        fill={seriesColor(0)}
-                        maxBarSize={14}
-                        radius={[0, 2, 2, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <MaturityLadderChart data={ladderChart} />
                 </SectionCard>
                 {isSdi ? (
                   <SectionCard
@@ -477,48 +423,7 @@ export default function SdiLiquidityMonitoringView({
                   subtitle="Top connected providers as a share of current deposit liabilities."
                 >
                   {providerChart.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart
-                        data={providerChart}
-                        layout="vertical"
-                        margin={{ top: 6, right: 16, bottom: 4, left: 8 }}
-                      >
-                        <CartesianGrid
-                          horizontal={false}
-                          stroke={CHART_GRID}
-                          strokeDasharray="3 3"
-                        />
-                        <XAxis
-                          type="number"
-                          {...axisProps}
-                          tickFormatter={(value: number) =>
-                            `${value.toFixed(0)}%`
-                          }
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={axisProps.tick}
-                          width={150}
-                        />
-                        <Tooltip
-                          {...chartTooltipProps}
-                          formatter={(value: number) => [
-                            `${value.toFixed(2)}%`,
-                            "Deposit share",
-                          ]}
-                        />
-                        <Bar
-                          dataKey="share"
-                          name="Deposit share"
-                          fill={seriesColor(0)}
-                          maxBarSize={20}
-                          radius={[0, 2, 2, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <DepositProviderChart data={providerChart} />
                   ) : (
                     <p className="text-body text-slate">
                       No attributable deposit providers are available for
@@ -737,5 +642,140 @@ export default function SdiLiquidityMonitoringView({
         </PageContainer>
       </QueryBoundary>
     </>
+  );
+}
+
+/**
+ * Contractual maturity ladder: net and cumulative mismatch per bucket.
+ *
+ * Both figures are nullable — `numOrNull` keeps an absent mismatch absent — and a
+ * bucket with no figure draws no bar and says "no figure" in the tooltip. The
+ * category axis is `inverse` so the shortest bucket stays at the top, where the
+ * LMTD table puts it.
+ */
+function MaturityLadderChart({
+  data,
+}: {
+  data: ReadonlyArray<{
+    label: string;
+    net: number | null;
+    cumulative: number | null;
+  }>;
+}) {
+  const tokens = useChartTokens();
+  const labels = data.map((bucket) => bucket.label);
+  const option: BiEChartsOption = {
+    grid: { left: 8, right: 16, top: 6, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: {
+      type: "value",
+      axisLabel: {
+        hideOverlap: true,
+        formatter: (value: number) => fmtCurrency(value),
+      },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: labels,
+      axisLine: { show: false },
+      splitLine: { show: false },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: axisTooltip(labels, (value) => fmtCurrencySigned(value), {
+        absent: "no figure for this bucket",
+      }),
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        name: "Net mismatch",
+        barMaxWidth: 14,
+        itemStyle: {
+          color: seriesColor(tokens, 1),
+          borderRadius: [0, 2, 2, 0],
+        },
+        data: data.map((bucket) => bucket.net),
+      },
+      {
+        ...BAR_SERIES_BASE,
+        name: "Cumulative mismatch",
+        barMaxWidth: 14,
+        itemStyle: {
+          color: seriesColor(tokens, 0),
+          borderRadius: [0, 2, 2, 0],
+        },
+        data: data.map((bucket) => bucket.cumulative),
+      },
+    ],
+  } as BiEChartsOption;
+
+  return (
+    <EChart
+      option={option}
+      height={300}
+      ariaLabel={`Contractual net and cumulative maturity mismatch across ${data.length} buckets`}
+    />
+  );
+}
+
+/** Largest deposit funding providers as a share of current deposit liabilities. */
+function DepositProviderChart({
+  data,
+}: {
+  data: ReadonlyArray<{ name: string; share: number }>;
+}) {
+  const tokens = useChartTokens();
+  const labels = data.map((provider) => provider.name);
+  const option: BiEChartsOption = {
+    grid: { left: 8, right: 16, top: 6, bottom: 4, containLabel: true },
+    xAxis: {
+      type: "value",
+      axisLabel: { formatter: (value: number) => `${value.toFixed(0)}%` },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: labels,
+      axisLine: { show: false },
+      splitLine: { show: false },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: itemTooltip(labels, (index) => {
+        const provider = data[index];
+        return provider === undefined
+          ? []
+          : [
+              {
+                label: "Deposit share",
+                value: `${provider.share.toFixed(2)}%`,
+                color: seriesColor(tokens, 0),
+              },
+            ];
+      }),
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        name: "Deposit share",
+        barMaxWidth: 20,
+        itemStyle: {
+          color: seriesColor(tokens, 0),
+          borderRadius: [0, 2, 2, 0],
+        },
+        data: data.map((provider) => provider.share),
+      },
+    ],
+  } as BiEChartsOption;
+
+  return (
+    <EChart
+      option={option}
+      height={260}
+      ariaLabel={`Deposit share of the ${data.length} largest connected funding providers`}
+    />
   );
 }

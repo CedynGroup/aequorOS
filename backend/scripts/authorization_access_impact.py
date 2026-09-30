@@ -39,6 +39,27 @@ carries ``submit``, nothing backfilled it, and the ``role`` column beside it is
 the pre-cutover answer (``admin``/``approver`` could file; nobody else could).
 An organization with no filing row after the cutover cannot file until its Org
 Owner grants one; see ``docs/filing_submit_authority_rollout.md``.
+
+The ``data scope`` column answers the Phase 4 cutover of 2026-09-27 (migration
+``202609270073``, ``docs/bi.md`` §Phase 4): WHICH SLICE of each institution's
+book this user's ``view`` capabilities read. Before that migration every grant
+meant the whole institution; since it, a binding may name branches or regions
+and the BI, credit-blotter and feed surfaces inject that slice as a filter the
+reader cannot remove. A cutover can therefore change what a person SEES without
+changing which module they may open, and a diff of the module columns alone
+would miss it — this column is what shows a narrowing or a widening on release.
+
+The scope is read off the SAME projection as the modules: each
+``EffectiveCapabilityRead.data_scope`` is reduced by
+``authorization.reduce_data_scope`` from the bindings that matched THAT
+capability's own resource, which is the reduction ``effective_data_scope``
+performs. It is deliberately not recomputed here from the user's whole binding
+set — reducing ids matched against different resources in one pass is audit
+finding A10-01 (an ``all`` binding on one module would erase a branch
+restriction on another). The JSON output carries every ``view`` capability's
+scope so an ``all`` that becomes ``branch`` — or the reverse — is a changed
+value, never a vanished row; the table summarises per institution and flags
+``scoped_reader`` when any capability is narrower than the whole book.
 """
 
 from __future__ import annotations
@@ -47,7 +68,9 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import create_engine, select
@@ -80,6 +103,11 @@ class UserAccess:
     active_bindings: int
     account_administer: bool
     institutions: dict[str, list[str]] = field(default_factory=dict)
+    #: Per institution, the declared slice EVERY ``view`` capability reads, keyed
+    #: ``"<module>/<sensitivity>"`` → ``{"kind", "branches", "regions"}``. Complete
+    #: rather than only-the-narrow ones, so a before/after diff shows an ``all``
+    #: that became ``branch`` as a changed value rather than as a missing key.
+    data_scopes: dict[str, dict[str, dict[str, object]]] = field(default_factory=dict)
     #: Institutions this user may transmit a return to the regulator for.
     filing_institutions: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
@@ -138,6 +166,21 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
             for entry in projection.institution_capabilities
         }
         institutions = {bank_id: modules for bank_id, modules in institutions.items() if modules}
+        # The slice each view capability reads, as the projection already reduced
+        # it (see the module docstring for why it is not recomputed here).
+        data_scopes: dict[str, dict[str, dict[str, object]]] = {
+            entry.institution_id: {
+                f"{capability.module.value}/{capability.sensitivity.value}": {
+                    "kind": capability.data_scope.kind,
+                    "branches": sorted(capability.data_scope.branches),
+                    "regions": sorted(capability.data_scope.regions),
+                }
+                for capability in entry.capabilities
+                if capability.permission == "view"
+            }
+            for entry in projection.institution_capabilities
+        }
+        data_scopes = {bank_id: scopes for bank_id, scopes in data_scopes.items() if scopes}
         filing_institutions = sorted(
             entry.institution_id
             for entry in projection.institution_capabilities
@@ -154,6 +197,10 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
             flags.append("no_product_view")
         if account_administer and not institutions:
             flags.append("account_plane_only")
+        if any(
+            scope["kind"] != "all" for scopes in data_scopes.values() for scope in scopes.values()
+        ):
+            flags.append("scoped_reader")
         report.append(
             UserAccess(
                 organization_id=organization_id,
@@ -164,6 +211,7 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 active_bindings=binding_count,
                 account_administer=account_administer,
                 institutions=institutions,
+                data_scopes=data_scopes,
                 filing_institutions=filing_institutions,
                 flags=flags,
             )
@@ -173,6 +221,46 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
 
 def _modules_label(modules: list[str]) -> str:
     return "all" if len(modules) == len(INSTITUTION_MODULES) else ",".join(modules)
+
+
+def _scope_label(scope: dict[str, object]) -> str:
+    """One capability's slice: ``branches B1,B2``, ``regions North``, or both."""
+
+    kind = str(scope["kind"])
+    branches = [str(value) for value in cast("Sequence[object]", scope["branches"])]
+    regions = [str(value) for value in cast("Sequence[object]", scope["regions"])]
+    if kind == "all":
+        return "whole institution"
+    if kind == "none":
+        return "none"
+    parts: list[str] = []
+    if branches:
+        parts.append("branches " + ",".join(branches))
+    if regions:
+        parts.append("regions " + ",".join(regions))
+    return "; ".join(parts) or kind
+
+
+def _data_scope_label(scopes: dict[str, dict[str, object]]) -> str:
+    """One institution's scopes for the table: the narrow ones named, the rest folded.
+
+    The JSON output carries every capability; the table would not survive
+    thirteen modules times four sensitivities per row, so it groups the
+    capabilities by their slice and prints only the slices that are narrower than
+    the whole book, naming the ``module/sensitivity`` pairs each applies to.
+    """
+
+    if all(scope["kind"] == "all" for scope in scopes.values()):
+        return "whole institution"
+    by_label: dict[str, list[str]] = {}
+    for pair, scope in scopes.items():
+        if scope["kind"] == "all":
+            continue
+        by_label.setdefault(_scope_label(scope), []).append(pair)
+    narrow = "; ".join(f"{','.join(sorted(pairs))}={label}" for label, pairs in by_label.items())
+    if any(scope["kind"] == "all" for scope in scopes.values()):
+        return f"{narrow}; rest whole institution"
+    return narrow
 
 
 def render_table(rows: list[UserAccess]) -> str:
@@ -187,6 +275,7 @@ def render_table(rows: list[UserAccess]) -> str:
         "grants",
         "account",
         "product view",
+        "data scope",
         "filing",
         "flags",
     )
@@ -199,6 +288,13 @@ def render_table(rows: list[UserAccess]) -> str:
             )
             or "-"
         )
+        data_scope = (
+            " | ".join(
+                f"{bank_id}: {_data_scope_label(scopes)}"
+                for bank_id, scopes in row.data_scopes.items()
+            )
+            or "-"
+        )
         lines.append(
             (
                 row.organization_id,
@@ -207,6 +303,7 @@ def render_table(rows: list[UserAccess]) -> str:
                 str(row.active_bindings),
                 "administer" if row.account_administer else "-",
                 product,
+                data_scope,
                 ",".join(row.filing_institutions) or "-",
                 ",".join(row.flags) or "-",
             )
@@ -256,12 +353,24 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps([asdict(row) for row in rows], indent=2))
         return 0
     print(render_table(rows))
-    flagged = [row for row in rows if row.flags]
+    flagged = [
+        row for row in rows if any(flag in row.flags for flag in ("no_bindings", "no_product_view"))
+    ]
+    scoped = [row for row in rows if "scoped_reader" in row.flags]
     filers = [row for row in rows if row.filing_institutions]
     print()
     print(
         f"{len(rows)} active human user(s); {len(flagged)} with no product view or no bindings"
         + (" — these people cannot open a module after the cutover." if flagged else ".")
+    )
+    print(
+        f"{len(scoped)} read a branch or region slice rather than the whole institution"
+        + (
+            " — compare the data-scope column against the BEFORE run: a slice that"
+            " widened is a disclosure, one that narrowed is a lost figure."
+            if scoped
+            else "; every view capability covers the whole book."
+        )
     )
     print(
         f"{len(filers)} can transmit a return to the regulator"

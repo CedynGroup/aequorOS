@@ -67,7 +67,25 @@ _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
     RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
     RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
     RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
+    # The analytics feed credential READS and does nothing else. INGEST is
+    # absent as deliberately as VIEW is absent from the writer above: the two
+    # machine bundles are disjoint by construction, so neither integration can
+    # acquire the other's authority by being issued.
+    RoleBundle.BI_READER: frozenset({Permission.VIEW}),
 }
+
+#: The bundles a machine principal may hold, restated independently of
+#: ``core.MACHINE_ROLE_BUNDLES`` for the same reason the permission map above is
+#: restated: importing the production tuple would make this oracle agree with a
+#: mistake in it.
+_REFERENCE_MACHINE_BUNDLES: frozenset[RoleBundle] = frozenset(
+    {RoleBundle.INTEGRATION_WRITER, RoleBundle.BI_READER}
+)
+
+
+def test_the_reference_policy_covers_every_bundle_the_enum_offers() -> None:
+    """Otherwise a new bundle makes the oracle raise instead of disagreeing."""
+    assert set(_REFERENCE_ROLE_PERMISSIONS) == set(RoleBundle)
 
 
 def _reference_match(
@@ -84,10 +102,10 @@ def _reference_match(
     )
     bundle_compatible = (
         binding.principal_type is PrincipalType.MACHINE
-        and binding.role_bundle is RoleBundle.INTEGRATION_WRITER
+        and binding.role_bundle in _REFERENCE_MACHINE_BUNDLES
     ) or (
         binding.principal_type is PrincipalType.HUMAN
-        and binding.role_bundle is not RoleBundle.INTEGRATION_WRITER
+        and binding.role_bundle not in _REFERENCE_MACHINE_BUNDLES
     )
     permission_matches = (
         bundle_compatible and permission in _REFERENCE_ROLE_PERMISSIONS[binding.role_bundle]

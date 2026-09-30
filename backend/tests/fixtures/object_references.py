@@ -100,6 +100,8 @@ from app.models import (
     TemenosConnection,
     User,
 )
+from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
+from app.models.bi_notifications import BiAlert, BiSubscription
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -1283,6 +1285,189 @@ def _icaap_suggestion(session: Session, tenant: TenantSeed, objects: ObjectSet) 
     )
 
 
+#: One valid widget for a saved dashboard's canvas. The BI content routes
+#: re-validate a stored canvas on the way out, so the seeded row has to be a
+#: canvas a reader could actually be served rather than an empty placeholder.
+_BI_CANVAS: Final[dict[str, Any]] = {
+    "widgets": [
+        {
+            "id": "loans",
+            "kind": "kpi",
+            "title": "Loan book",
+            "caption": "",
+            "query": {
+                "measures": ["loans.balance_rc"],
+                "dimensions": [],
+                "filters": [],
+                "window": "as_of",
+                "compare": "none",
+                "top_n": None,
+                "sort": [],
+                "limit": None,
+                "offset": 0,
+                "pivot": None,
+                "subtotals": False,
+            },
+            "panel": None,
+            "display": {
+                "show_trend": False,
+                "show_comparison": False,
+                "stacked": False,
+                "show_limit": False,
+                "series_dimension": None,
+                "precision": 0,
+            },
+            "needs_data": None,
+            "pending_capability": None,
+        }
+    ],
+    "layout": [
+        {
+            "i": "loans",
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4,
+            "min_w": None,
+            "min_h": None,
+            "static": False,
+        }
+    ],
+}
+
+
+def _bi_dashboard(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A saved dashboard with its first (append-only) version.
+
+    Organization-wide visibility on purpose: the sweep's question is whether a
+    FOREIGN tenant's dashboard id can be reached, and a private one would answer
+    404 for a reason that has nothing to do with tenancy.
+    """
+    dashboard = BiDashboard(
+        organization_id=tenant.organization_id,
+        bank_id=tenant.bank_id,
+        owner_user_id=tenant.actor_id,
+        title=tenant.marker,
+        description="",
+        visibility="org",
+        visibility_role=None,
+        badge="personal",
+        current_version=1,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    dashboard_id = _uuid(session, dashboard)
+    session.add(
+        BiDashboardVersion(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            dashboard_id=dashboard.id,
+            version=1,
+            title=tenant.marker,
+            description="",
+            spec=_BI_CANVAS,
+            spec_digest=hashlib.sha256(tenant.marker.encode()).hexdigest(),
+            change_note="",
+            created_by_user_id=tenant.actor_id,
+            created_at=_NOW,
+        )
+    )
+    session.flush()
+    return dashboard_id
+
+
+def _bi_measure(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A personal calculated measure, with the formula the server would have parsed."""
+    expression = "[m:loans.balance_rc] * 2"
+    return _uuid(
+        session,
+        BiMeasure(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            measure_key=f"custom.{tenant.bank_id.lower().replace('-', '_')}",
+            owner_user_id=tenant.actor_id,
+            label=tenant.marker,
+            description="",
+            expression=expression,
+            expression_digest=hashlib.sha256(expression.encode()).hexdigest(),
+            referenced_members=["loans.balance_rc"],
+            value_type="amount",
+            favourable_direction="neutral",
+            state="personal",
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
+def _bi_alert(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A threshold alert owned by the tenant's own actor.
+
+    Owned rather than merely addressed: the sweep asks whether a FOREIGN tenant's
+    alert id can be reached under this bank, and an alert the caller has no
+    relationship with answers 404 for a reason that has nothing to do with
+    tenancy.
+    """
+    return _uuid(
+        session,
+        BiAlert(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            name=f"{tenant.marker} threshold",
+            measure_id="loans.balance_rc",
+            filters=[],
+            direction="above",
+            threshold_basis="stated",
+            threshold=Decimal("1000"),
+            owner_user_id=tenant.actor_id,
+            notify_user_ids=[],
+            is_active=True,
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
+def _bi_subscription(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A daily scheduled report owned by the tenant's own actor.
+
+    The stored query is a complete ``BiQuery`` because the read routes re-validate
+    a stored question on the way out; a placeholder would refuse for the wrong
+    reason.
+    """
+    return _uuid(
+        session,
+        BiSubscription(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            name=f"{tenant.marker} daily pack",
+            owner_user_id=tenant.actor_id,
+            query={
+                "measures": ["loans.balance_rc"],
+                "dimensions": [],
+                "filters": [],
+                "time": {"as_of": "2026-08-31"},
+                "top_n": None,
+                "sort": [],
+                "limit": None,
+                "offset": 0,
+                "pivot": None,
+                "subtotals": False,
+            },
+            artifact_format="csv",
+            cadence="daily",
+            hour=7,
+            minute=30,
+            day_of_week=None,
+            day_of_month=None,
+            recipient_user_ids=[str(tenant.actor_id)],
+            is_active=True,
+            created_at=_NOW,
+            updated_at=_NOW,
+        ),
+    )
+
+
 _BANK_PREFIX: Final = "/api/v1/banks/{bank_id}"
 _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 
@@ -1290,7 +1475,16 @@ _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 #: covenant its obligation).  ``path_prefixes`` bind path identifiers; body and
 #: query identifiers resolve through :data:`REFERENCE_FIELDS`.
 OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
-    ObjectKind("bank", _bank, bank_scoped=False),
+    # The account-plane institution directory addresses a bank by
+    # ``{institution_id}``, so that path prefix resolves to the bank identity
+    # kind — the same object ``bank_id`` names elsewhere, reached under a
+    # different parameter name.
+    ObjectKind(
+        "bank",
+        _bank,
+        ("/api/v1/organization/institutions/{institution_id}",),
+        bank_scoped=False,
+    ),
     ObjectKind("user", _user, bank_scoped=False),
     ObjectKind("period", _period, (f"{_BANK_PREFIX}/reporting-periods/{{period_id}}",)),
     ObjectKind(
@@ -1509,7 +1703,26 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         ("/api/v1/notifications/{notification_id}",),
         bank_scoped=False,
     ),
-    ObjectKind("job", _job, ("/api/v1/jobs/{job_id}",), bank_scoped=False),
+    ObjectKind(
+        "job",
+        _job,
+        (
+            "/api/v1/jobs/{job_id}",
+            # A governed BI export is collected by its QUEUE ROW, so the
+            # export route takes a job id too. It answers 404 for a job of
+            # another tenant, another institution, another type or another
+            # principal — the last of those because a presigned download
+            # link carries no identity of its own.
+            "/api/v1/banks/{bank_id}/bi/exports/{job_id}",
+            # A natural-language question is collected by its QUEUE ROW too, for the
+            # same reason: the proposal is one reader's, translated over the members
+            # THAT reader may see, so both routes answer 404 for a job of another
+            # tenant, another institution, another type or another principal.
+            "/api/v1/banks/{bank_id}/bi/ask/{job_id}",
+            "/api/v1/banks/{bank_id}/bi/ask/{job_id}/run",
+        ),
+        bank_scoped=False,
+    ),
     ObjectKind(
         "integration_key",
         _integration_key,
@@ -1584,6 +1797,20 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
         ),
     ),
+    # BI content (docs/bi.md §Phase 3). Both surfaces are behind ``BI_ENABLED``,
+    # which these suites leave unset, so the refusal they currently observe is the
+    # deployment flag's 404 rather than the tenancy check's. The ownership and
+    # cross-tenant refusals are proven directly, with the flag ON, in
+    # tests/api/test_bi_content_routes.py; the catalogue entries are here so the
+    # sweep covers them the moment the flag is part of its fixture.
+    ObjectKind("bi_dashboard", _bi_dashboard, (f"{_BANK_PREFIX}/bi/dashboards/{{dashboard_id}}",)),
+    ObjectKind("bi_measure", _bi_measure, (f"{_BANK_PREFIX}/bi/measures/{{measure_id}}",)),
+    ObjectKind("bi_alert", _bi_alert, (f"{_BANK_PREFIX}/bi/alerts/{{alert_id}}",)),
+    ObjectKind(
+        "bi_subscription",
+        _bi_subscription,
+        (f"{_BANK_PREFIX}/bi/subscriptions/{{subscription_id}}",),
+    ),
 )
 
 KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OBJECT_KINDS}
@@ -1657,6 +1884,10 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "integration_key": IntegrationKey,
     "binding": AuthorizationBinding,
     "access_request": User,
+    "bi_dashboard": BiDashboard,
+    "bi_measure": BiMeasure,
+    "bi_alert": BiAlert,
+    "bi_subscription": BiSubscription,
 }
 
 #: Body and query identifier fields, resolved by the most specific route path

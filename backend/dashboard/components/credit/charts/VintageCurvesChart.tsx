@@ -1,32 +1,23 @@
-'use client';
+"use client";
 
 /**
  * Cohort PAR30+ curves: x = months on book, one line per cohort. The four
  * most recent cohorts take the series palette; older cohorts render as thin
  * grid-toned context lines. Holes in a cohort's observation history stay
- * holes (connectNulls off) — never interpolated.
+ * holes — never interpolated. `gapAwareData` adds the other half of that rule:
+ * a cohort observed in exactly one month still shows that month.
  */
 
+import type { VintageCohortRead } from "@aequoros/risk-service-api";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import type { VintageCohortRead } from '@aequoros/risk-service-api';
-import {
-  CHART_GRID,
-  axisProps,
-  chartLegendProps,
-  chartMargins,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { num } from '@/lib/api/values';
+  axisTooltip,
+  gapAwareData,
+  LINE_SERIES_BASE,
+  type SeriesValue,
+} from "@/lib/echartsOptions";
+import { num } from "@/lib/api/values";
 
 export default function VintageCurvesChart({
   cohorts,
@@ -35,58 +26,67 @@ export default function VintageCurvesChart({
   cohorts: VintageCohortRead[];
   height?: number;
 }) {
+  const tokens = useChartTokens();
   const maxAge = Math.max(
     0,
-    ...cohorts.flatMap((cohort) => cohort.points.map((point) => point.monthsOnBook))
+    ...cohorts.flatMap((cohort) =>
+      cohort.points.map((point) => point.monthsOnBook),
+    ),
   );
-  const rows: Record<string, number | null | string>[] = [];
-  for (let age = 0; age <= maxAge; age += 1) {
-    const row: Record<string, number | null | string> = { monthsOnBook: age };
-    for (const cohort of cohorts) {
-      const point = cohort.points.find((p) => p.monthsOnBook === age);
-      row[cohort.cohort] = point ? num(point.par30Pct) : null;
-    }
-    rows.push(row);
-  }
+  const ages = Array.from({ length: maxAge + 1 }, (_, age) => age);
+  const labels = ages.map((age) => String(age));
+  const titles = ages.map((age) => `Month ${age} on book`);
   const recent = cohorts.slice(-4).map((cohort) => cohort.cohort);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 12, top: 12, bottom: 24, containLabel: true },
+    legend: {
+      bottom: 0,
+      type: "scroll",
+      // Only the highlighted cohorts are named; the context lines are there for
+      // shape, and a legend of twenty vintages would be noise.
+      data: recent,
+    },
+    xAxis: { type: "category", data: labels, axisLabel: { hideOverlap: true } },
+    yAxis: {
+      type: "value",
+      axisLabel: { formatter: (value: number) => `${value.toFixed(0)}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(titles, (value) => `${value.toFixed(2)}%`, {
+        absent: "not yet observed",
+        hideAbsent: true,
+      }),
+    },
+    series: cohorts.map((cohort) => {
+      const highlightIndex = recent.indexOf(cohort.cohort);
+      const highlighted = highlightIndex >= 0;
+      const color = highlighted
+        ? seriesColor(tokens, highlightIndex)
+        : tokens.grid;
+      const byAge = new Map(
+        cohort.points.map((point) => [
+          point.monthsOnBook,
+          num(point.par30Pct) as SeriesValue,
+        ]),
+      );
+      return {
+        ...LINE_SERIES_BASE,
+        name: cohort.cohort,
+        smooth: true,
+        lineStyle: { color, width: highlighted ? 2 : 1 },
+        itemStyle: { color },
+        data: gapAwareData(ages.map((age) => byAge.get(age) ?? null)),
+      };
+    }),
+  } as BiEChartsOption;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={rows} margin={chartMargins}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis
-          dataKey="monthsOnBook"
-          type="number"
-          domain={[0, maxAge]}
-          allowDecimals={false}
-          {...axisProps}
-        />
-        <YAxis {...axisProps} tickFormatter={(value: number) => `${value.toFixed(0)}%`} width={48} />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(value: number | string, name: string) => [
-            `${Number(value).toFixed(2)}%`,
-            name,
-          ]}
-          labelFormatter={(age) => `Month ${age} on book`}
-        />
-        <Legend {...chartLegendProps} />
-        {cohorts.map((cohort) => {
-          const highlightIndex = recent.indexOf(cohort.cohort);
-          const highlighted = highlightIndex >= 0;
-          return (
-            <Line
-              key={cohort.cohort}
-              dataKey={cohort.cohort}
-              type="monotone"
-              connectNulls={false}
-              dot={false}
-              strokeWidth={highlighted ? 2 : 1}
-              stroke={highlighted ? seriesColor(highlightIndex) : CHART_GRID}
-              legendType={highlighted ? 'line' : 'none'}
-            />
-          );
-        })}
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`PAR30 plus curves for ${cohorts.length} origination cohorts over up to ${maxAge} months on book`}
+    />
   );
 }

@@ -1,13 +1,19 @@
 """Structural guards on the one part of the platform that talks to the outside.
 
-Three properties that cannot be left to code review, because a violation looks
+Four properties that cannot be left to code review, because a violation looks
 harmless at the diff level and is expensive in production:
 
-1. ``anthropic`` is imported in exactly ONE module, and only inside a function,
-   so no ordinary process loads the SDK or parses a credential.
+1. **Per vendor**, the transport is imported in exactly ONE module inside
+   ``app/services/ai``, and only inside a function, so no ordinary process loads
+   an SDK, an HTTP client or a credential. D-053 made this a per-vendor rule
+   rather than a rule about ``anthropic``: the tier has three adapters now, and a
+   module-level import in any one of them puts that vendor's transport in the API
+   process.
 2. No request may carry a parameter Opus 5 rejects with a 400.
 3. Every AI tunable lives in ``core/config.py``: no numeric literal, model id or
    effort level may be written into the AI logic (D-024).
+4. Failover is decided on a closed vocabulary of failure codes, so no adapter can
+   smuggle in a decision based on a vendor's message text.
 """
 
 from __future__ import annotations
@@ -20,8 +26,24 @@ import pytest
 _BACKEND = Path(__file__).resolve().parents[2]
 _APP = _BACKEND / "app"
 
-#: The one module allowed to import the SDK.
+#: The one module allowed to import the Anthropic SDK. Also the module whose
+#: request shape the Opus-5 parameter scan below reads.
 _SDK_MODULE = _APP / "services" / "ai" / "client.py"
+
+_AI_PACKAGE = _APP / "services" / "ai"
+
+#: vendor transport -> the ONE module inside ``app/services/ai`` allowed to import
+#: it. ``httpx`` is imported at module scope in several other services (the ORASS
+#: channel, the market desk, OpenBao), so the rule is scoped to the AI package:
+#: inside it, each vendor's transport belongs to that vendor's adapter alone.
+_VENDOR_TRANSPORTS: dict[str, Path] = {
+    "anthropic": _AI_PACKAGE / "client.py",
+    "httpx": _AI_PACKAGE / "openai_model.py",
+}
+
+#: The Gemini adapter shares ``httpx`` with the OpenAI one, so its rule is the
+#: lazy-import half only, checked per module below.
+_HTTP_ADAPTERS = (_AI_PACKAGE / "openai_model.py", _AI_PACKAGE / "google_model.py")
 
 #: Files the D-024 numeric scan covers. Every one of them is AI logic; the
 #: settings module is deliberately NOT here, because that is where the numbers
@@ -51,28 +73,69 @@ def _python_files() -> list[Path]:
     return [path for path in _APP.rglob("*.py") if "__pycache__" not in path.parts]
 
 
+def _imports(path: Path, module: str) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return any(_names_module(node, module) for node in ast.walk(tree))
+
+
+def _names_module(node: ast.AST, module: str) -> bool:
+    if isinstance(node, ast.Import):
+        return any(
+            alias.name == module or alias.name.startswith(f"{module}.") for alias in node.names
+        )
+    if isinstance(node, ast.ImportFrom):
+        return (node.module or "") == module or (node.module or "").startswith(f"{module}.")
+    return False
+
+
 def test_the_sdk_is_imported_in_exactly_one_module() -> None:
-    importers: list[str] = []
-    for path in _python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "anthropic" or alias.name.startswith("anthropic.")
-                for alias in node.names
-            ) or isinstance(node, ast.ImportFrom) and (node.module or "").startswith("anthropic"):
-                importers.append(str(path.relative_to(_BACKEND)))
+    importers = [
+        str(path.relative_to(_BACKEND)) for path in _python_files() if _imports(path, "anthropic")
+    ]
     assert sorted(set(importers)) == [str(_SDK_MODULE.relative_to(_BACKEND))]
 
 
-def test_the_sdk_import_is_lazy() -> None:
-    """A module-level import would load the SDK into every process that imports
-    the client module — including, transitively, the API."""
-    tree = ast.parse(_SDK_MODULE.read_text(encoding="utf-8"))
+def test_each_vendor_transport_has_exactly_one_importer_in_the_ai_package() -> None:
+    """D-053's extension of the single-importer rule to the other two vendors.
+
+    ``httpx`` is the transport for both HTTP adapters; the OpenAI one owns the
+    shared name and the Gemini one is asserted beside it, so a third module in
+    this package that reached for a vendor's transport would fail here.
+    """
+    for module, owner in _VENDOR_TRANSPORTS.items():
+        importers = sorted(
+            path.name
+            for path in sorted(_AI_PACKAGE.glob("*.py"))
+            if _imports(path, module) and path not in (owner, *_HTTP_ADAPTERS)
+        )
+        assert not importers, f"{module} is imported in {importers} as well as {owner.name}"
+    for adapter in _HTTP_ADAPTERS:
+        assert _imports(adapter, "httpx"), f"{adapter.name} must own its own transport import"
+
+
+@pytest.mark.parametrize(
+    ("path", "module"),
+    [
+        (_SDK_MODULE, "anthropic"),
+        (_AI_PACKAGE / "openai_model.py", "httpx"),
+        (_AI_PACKAGE / "google_model.py", "httpx"),
+    ],
+    ids=lambda value: getattr(value, "name", value),
+)
+def test_every_vendor_transport_import_is_lazy(path: Path, module: str) -> None:
+    """A module-level import would load the transport into every process that
+    imports the adapter — including, transitively, the API and the core worker.
+
+    ``if TYPE_CHECKING`` blocks are exempt: they are annotations only and are
+    never executed. Everything else at module scope is not.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in tree.body:
-        assert not isinstance(node, ast.Import | ast.ImportFrom) or not (
-            (getattr(node, "module", "") or "").startswith("anthropic")
-            or any(alias.name.startswith("anthropic") for alias in getattr(node, "names", []))
-        ), "anthropic must be imported inside a function, never at module scope"
+        if isinstance(node, ast.If):
+            continue
+        assert not _names_module(node, module), (
+            f"{module} must be imported inside a function in {path.name}, never at module scope"
+        )
 
 
 def test_the_model_request_passes_no_parameter_opus_5_rejects() -> None:
@@ -159,6 +222,39 @@ def test_the_pure_ai_domain_touches_no_infrastructure() -> None:
         for token in forbidden:
             assert f"import {token}" not in source, f"{path.name} imports {token}"
             assert f"from {token}" not in source, f"{path.name} imports from {token}"
+
+
+def test_failover_is_decided_on_codes_not_on_vendor_messages() -> None:
+    """D-053: an ungrounded draft must never advance the tier, and the decision
+    must be structural.
+
+    The three sets are disjoint and closed, and ``advances`` reads nothing else —
+    so a vendor cannot talk the platform into a second attempt, and a content
+    outcome cannot be mistaken for an outage.
+    """
+    from app.services.ai import vendors  # noqa: PLC0415 - an architecture assertion
+
+    assert not vendors.AVAILABILITY_FAILURE_CODES & vendors.CONFIGURATION_FAILURE_CODES
+    assert not vendors.CONTENT_OUTCOMES & vendors.AVAILABILITY_FAILURE_CODES
+    # A 400 is our own malformed request: it would be malformed everywhere.
+    assert "bad_request" not in vendors.AVAILABILITY_FAILURE_CODES
+    assert "bad_request" not in vendors.CONFIGURATION_FAILURE_CODES
+    source = (_AI_PACKAGE / "tiered.py").read_text(encoding="utf-8")
+    for leak in ("error.message", ".text", "detail"):
+        assert leak not in source, f"the tier must not branch on {leak}"
+
+
+def test_every_tier_vendor_has_an_adapter_module() -> None:
+    """``AI_PROVIDER_TIER`` validates against ``AI_VENDORS``; this pins that every
+    accepted name actually resolves to code, so a permitted value can never be a
+    silent no-op."""
+    from app.core.config import AI_VENDORS  # noqa: PLC0415 - an architecture assertion
+    from app.services.ai.tiered import ADAPTER_MODULES  # noqa: PLC0415
+
+    assert sorted(ADAPTER_MODULES) == sorted(AI_VENDORS)
+    for module in ADAPTER_MODULES.values():
+        relative = Path(module.replace(".", "/") + ".py")
+        assert (_BACKEND / relative).exists(), f"{module} does not exist"
 
 
 def test_the_approved_configurations_file_ships_empty() -> None:

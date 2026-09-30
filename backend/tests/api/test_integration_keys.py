@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import INTEGRATION_KEY_ROUTES
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -400,7 +401,25 @@ def test_integration_key_cannot_read_ordinary_tenant_data(
     )
 
     assert response.status_code == 401
-    assert response.json()["error"]["message"] == ("Integration keys are valid only for API Push.")
+    # The message changed 2026-09-28 because its subject did: "valid only for API
+    # Push" stopped being true when the Power BI feed became a second surface a
+    # machine credential may reach. The PROPERTY the old assertion was really
+    # protecting is that this route is unreachable for a machine principal, and
+    # it is now pinned three ways rather than by one English sentence.
+    message = response.json()["error"]["message"]
+    assert message == "This integration key is not valid for this endpoint."
+    # 1. The refusal names no surface, so a caller cannot enumerate what a machine
+    #    credential COULD reach by collecting 401 bodies.
+    for surface in ("push-batches", "feeds", "bi", "API Push"):
+        assert surface not in message, message
+    # 2. The route genuinely is not in the reachable set, rather than merely
+    #    answering 401 for some other reason.
+    assert (
+        "GET",
+        "/api/v1/banks/{bank_id}/reporting-periods/{reporting_period_id}/facts",
+    ) not in INTEGRATION_KEY_ROUTES
+    # 3. Refused at the authentication boundary, so the key is not even recorded
+    #    as used — the original test's real teeth, unchanged.
     with _session() as db:
         key = db.get(IntegrationKey, UUID(issued["record"]["id"]))
         assert key is not None

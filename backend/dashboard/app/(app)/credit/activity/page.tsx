@@ -4,12 +4,22 @@
  * Loan-book activity: restructures, write-offs and recoveries over the
  * trailing year — the events behind the monthly asset-quality report.
  * Ships with an honest empty state until loan events are ingested.
+ *
+ * EVERY COUNT HERE IS OVER THE READER'S OWN SLICE. This is the second of only two
+ * surfaces that serve a branch- or region-scoped grant instead of refusing it: an
+ * event is attributed through the facility it names and that facility's latest
+ * computed position on or before the event date, so a scoped reader is shown the
+ * events of their own branches and the two counts are computed over them. The
+ * payload's `data_scope` is therefore stated on screen — and the empty state has
+ * to say which emptiness it means, because "no loan events recorded yet" is a
+ * claim about the institution that a scoped reader is in no position to make.
  */
 
 import { FileClock } from 'lucide-react';
 import Link from 'next/link';
 import type { Column } from '@/components/ui/DataTable';
 import type { LoanEventRead } from '@aequoros/risk-service-api';
+import CoverageNotice from '@/components/access/CoverageNotice';
 import CreditWorkspace from '@/components/credit/CreditWorkspace';
 import DataTable from '@/components/ui/DataTable';
 import EmptyState from '@/components/ui/EmptyState';
@@ -18,6 +28,7 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import { useBankContext } from '@/components/shell/BankContext';
+import { coverageFigureLabel, coverageFromPayload } from '@/lib/api/dataScope';
 import { useCreditActivity } from '@/lib/api/hooks';
 import { labelize, num } from '@/lib/api/values';
 import { centralBankName, fmtCurrency, fmtInt } from '@/lib/format';
@@ -70,6 +81,11 @@ function eventColumns(kind: 'restructure' | 'write_off' | 'recovery'): Column<Lo
 export default function CreditActivityPage() {
   const { bank } = useBankContext();
   const activity = useCreditActivity(bank?.id);
+  // The scope the SERVER applied to these events and both counts. Authoritative;
+  // absent means undeterminable, never the whole institution.
+  const coverage = coverageFromPayload(activity.data, {
+    pending: activity.isLoading,
+  });
 
   return (
     <CreditWorkspace
@@ -100,23 +116,33 @@ export default function CreditActivityPage() {
                 );
                 return (
                   <>
+                    <CoverageNotice coverage={coverage} />
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                       <KpiStat
-                        label="Restructures (12m)"
+                        label={coverageFigureLabel('Restructures (12m)', coverage)}
                         value={fmtInt(data.restructures.length)}
+                        hint={coverage.hint ?? undefined}
                       />
                       <KpiStat
-                        label="Write-offs (12m)"
+                        label={coverageFigureLabel('Write-offs (12m)', coverage)}
                         value={empty ? '—' : fmtCurrency(writeOffTotal)}
-                        hint={empty ? 'No events ingested yet' : `${fmtInt(data.writeOffs.length)} events`}
+                        hint={
+                          empty
+                            ? 'No events ingested yet'
+                            : `${fmtInt(data.writeOffs.length)} events`
+                        }
                       />
                       <KpiStat
-                        label="Recoveries (12m)"
+                        label={coverageFigureLabel('Recoveries (12m)', coverage)}
                         value={empty ? '—' : fmtCurrency(recoveryTotal)}
-                        hint={empty ? 'No events ingested yet' : `${fmtInt(data.recoveries.length)} events`}
+                        hint={
+                          empty
+                            ? 'No events ingested yet'
+                            : `${fmtInt(data.recoveries.length)} events`
+                        }
                       />
                       <KpiStat
-                        label="Disbursements / repayments"
+                        label={coverageFigureLabel('Disbursements / repayments', coverage)}
                         value={
                           empty
                             ? '—'
@@ -129,12 +155,21 @@ export default function CreditActivityPage() {
                     {empty ? (
                       <EmptyState
                         Icon={FileClock}
-                        title="No loan events recorded yet"
-                        description="Restructure, write-off and recovery events populate this page once loan events are ingested. Until then the book's stock measures live on the Overview tab."
+                        title={
+                          coverage.qualified
+                            ? 'No loan events in the part of the book you can see'
+                            : 'No loan events recorded yet'
+                        }
+                        description={
+                          coverage.emptyMeaning ??
+                          "Restructure, write-off and recovery events populate this page once loan events are ingested. Until then the book's stock measures live on the Overview tab."
+                        }
                         action={
-                          <Link href="/data-engine" className="btn-primary">
-                            Open the Data Engine
-                          </Link>
+                          coverage.qualified ? undefined : (
+                            <Link href="/data-engine" className="btn-primary">
+                              Open the Data Engine
+                            </Link>
+                          )
                         }
                       />
                     ) : (

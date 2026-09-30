@@ -80,10 +80,15 @@ name: Risk Service CI
 # skipped` for months and how the concurrency tests ran in no environment at
 # all. Each suite now writes a JUnit report via PYTEST_ADDOPTS — no task command
 # changes — and a following step asserts a floor of tests actually executed
-# (.github/scripts/assert_pytest_ran.py). The storage job additionally allows
-# ZERO skips, because the MinIO it starts is supposed to satisfy the whole
-# suite; the Postgres full-suite job sets no skip ceiling, because the opt-in
-# tiers below legitimately skip there.
+# (.github/scripts/assert_pytest_ran.py). The storage job, the schema/RLS job
+# and the lock job additionally allow ZERO skips, because the environment each
+# stands up is supposed to satisfy its whole suite — and an RLS proof can
+# abstain one test at a time (a role that bypasses RLS, a missing CREATEROLE),
+# which a floor of "at least N ran" cannot see (audit A360-4). The Postgres
+# full-suite job sets no skip ceiling, because the opt-in tiers below
+# legitimately skip there. Floors are set so that a whole test MODULE vanishing
+# trips them: at least (collected − the largest module); recount when the suite
+# changes shape.
 #
 # EXCLUDED from every job, with the reason — the honest complement of the list
 # above. None of these is a scheduling oversight:
@@ -365,6 +370,17 @@ jobs:
       # that exist to prove tenant isolation are the ones that go red, which
       # invites "fix" by relaxing the assertion. Never point this job at a
       # superuser connection, and never at the primary.
+      # CREATEROLE, and only CREATEROLE, was added 2026-09-27 (audit A9-06). The
+      # BI foundation suite proves that a NON-OWNER worker can drop and recreate
+      # partitions ONLY through the SECURITY DEFINER functions — the property that
+      # makes `bi_retention` possible at all — and to have a non-owner it must
+      # create a second role. Without CREATEROLE that one test skipped on every
+      # run, invisibly: the `--min-executed` guard below counts a suite, not a
+      # single abstention. CREATEROLE does NOT imply BYPASSRLS, so every
+      # tenant-isolation assertion this job exists for is exercised exactly as
+      # before, and on PostgreSQL 16+ a CREATEROLE role may administer only the
+      # roles it created itself, so it gains nothing over `postgres`. The test
+      # now FAILS rather than skips when POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.
       - name: Create restricted migration test role
         env:
           PGPASSWORD: postgres
@@ -372,20 +388,30 @@ jobs:
           psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE risk_service_test
             LOGIN PASSWORD 'risk_service_test'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+            NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
           SQL
       - name: Migration chain, RLS policies and schema defaults
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          POSTGRES_PRIVILEGE_TESTS_REQUIRED: "1"
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-schema.xml
         run: mise run risk-service:test-postgres-schema
       # tests/db self-skips wholesale when TEST_DATABASE_URL is unset, so a
       # typo in the URL above would produce a green job that never touched a
       # migration or an RLS policy. It is the only place row-level security is
-      # exercised at all; it does not get to pass by abstention.
+      # exercised at all; it does not get to pass by abstention — and not by
+      # PARTIAL abstention either: every RLS proof in tests/db self-skips when
+      # the connected role bypasses RLS or when TEST_DATABASE_URL is not
+      # exported, at exit 0. `--max-skipped 0` is what makes those visible; the
+      # role above and POSTGRES_PRIVILEGE_TESTS_REQUIRED are what make it
+      # satisfiable. The floor was 80 against 332 collected (audit A360-4):
+      # not a gate. tests/db collects 351 and its largest module holds 35,
+      # so 320 trips when any one module vanishes. Measured 2026-09-29 on a
+      # NOSUPERUSER NOBYPASSRLS CREATEROLE role (PostgreSQL 16): 351 collected,
+      # 351 executed, 0 skipped.
       - name: The schema and RLS suite must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-schema.xml" --min-executed 80
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-schema.xml" --min-executed 320 --max-skipped 0
       # Dedicated row-lock and advisory-lock coverage. SQLite cannot exercise
       # these semantics; this step keeps failures distinct from the full
       # Postgres suite below.
@@ -394,8 +420,12 @@ jobs:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks.xml
         run: mise run risk-service:test-postgres-locks
+      # The three lock modules collect 64 tests and every one of them runs on
+      # Postgres (the only skip in them is "not Postgres"), measured 2026-09-29:
+      # 64 passed, 0 skipped. The largest module holds 33, so 60 trips when any
+      # one vanishes; zero skips because this job exists to run exactly these.
       - name: The concurrency tests must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks.xml" --min-executed 20
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks.xml" --min-executed 60 --max-skipped 0
 
   postgres-suite:
     name: Full suite on Postgres

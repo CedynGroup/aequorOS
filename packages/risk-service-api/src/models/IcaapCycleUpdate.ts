@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Title } from "./Title";
-import {
-  TitleFromJSON,
-  TitleFromJSONTyped,
-  TitleToJSON,
-  TitleToJSONTyped,
-} from "./Title";
 import type { DueDate } from "./DueDate";
 import {
   DueDateFromJSON,
@@ -25,6 +18,13 @@ import {
   DueDateToJSON,
   DueDateToJSONTyped,
 } from "./DueDate";
+import type { Title1 } from "./Title1";
+import {
+  Title1FromJSON,
+  Title1FromJSONTyped,
+  Title1ToJSON,
+  Title1ToJSONTyped,
+} from "./Title1";
 import type { SubsidiariesDeclared } from "./SubsidiariesDeclared";
 import {
   SubsidiariesDeclaredFromJSON,
@@ -59,10 +59,10 @@ export interface IcaapCycleUpdate {
   subsidiariesDeclared?: SubsidiariesDeclared;
   /**
    *
-   * @type {Title}
+   * @type {Title1}
    * @memberof IcaapCycleUpdate
    */
-  title?: Title;
+  title?: Title1;
 }
 
 /**
@@ -95,7 +95,7 @@ export function IcaapCycleUpdateFromJSONTyped(
       json["subsidiaries_declared"] == null
         ? undefined
         : SubsidiariesDeclaredFromJSON(json["subsidiaries_declared"]),
-    title: json["title"] == null ? undefined : TitleFromJSON(json["title"]),
+    title: json["title"] == null ? undefined : Title1FromJSON(json["title"]),
   };
 }
 
@@ -117,6 +117,6 @@ export function IcaapCycleUpdateToJSONTyped(
     subsidiaries_declared: SubsidiariesDeclaredToJSON(
       value["subsidiariesDeclared"],
     ),
-    title: TitleToJSON(value["title"]),
+    title: Title1ToJSON(value["title"]),
   };
 }

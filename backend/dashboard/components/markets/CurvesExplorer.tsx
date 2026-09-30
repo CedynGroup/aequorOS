@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Curves explorer (FC-5) — the bank/client-facing single-curve workbench inside
@@ -20,40 +20,36 @@
  * re-derived. Only this bank's overlays are ever visible.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { Activity, ArrowRight, BookOpen, CalendarClock, SlidersHorizontal } from 'lucide-react';
-import type { YieldCurveViewRead } from '@aequoros/risk-service-api';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SubTabs from '@/components/ui/SubTabs';
+  Activity,
+  ArrowRight,
+  BookOpen,
+  CalendarClock,
+  SlidersHorizontal,
+} from "lucide-react";
+import type { YieldCurveViewRead } from "@aequoros/risk-service-api";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SubTabs from "@/components/ui/SubTabs";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  axisProps,
-  chartLegendProps,
-  chartMargins,
-  chartTooltipProps,
-  CHART_ACCENT,
-  CHART_GRID,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { num, fmtDateUTC } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
-import { tenorLabel } from './CurveBoard';
-import MethodologyDrawer from './MethodologyDrawer';
-import AttributionChip from './AttributionChip';
-import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from './chips';
+  axisTooltip,
+  gapAwareData,
+  LINE_SERIES_BASE,
+} from "@/lib/echartsOptions";
+import { num, fmtDateUTC } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
+import { tenorLabel } from "./CurveBoard";
+import MethodologyDrawer from "./MethodologyDrawer";
+import AttributionChip from "./AttributionChip";
+import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
 /** Prefer a forward curve as the default focus, else the first published curve. */
-function preferredCurve(curves: YieldCurveViewRead[]): YieldCurveViewRead | undefined {
-  return curves.find((c) => c.curveType === 'forward') ?? curves[0];
+function preferredCurve(
+  curves: YieldCurveViewRead[],
+): YieldCurveViewRead | undefined {
+  return curves.find((c) => c.curveType === "forward") ?? curves[0];
 }
 
 type ChartRow = { tenorMonths: number; official: number; adjusted?: number };
@@ -75,13 +71,14 @@ export default function CurvesExplorer({
   onOpenForward: (curveName: string) => void;
   onEditOverlays: (curveName: string) => void;
 }) {
-  const [view, setView] = useState<'official' | 'adjusted'>('official');
+  const [view, setView] = useState<"official" | "adjusted">("official");
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   // Derive the effective curve every render with a fallback, so an as-of change
   // that drops the selected curve name never strands the view on nothing.
   const selectedCurve =
-    curves.find((c) => c.curveName === selectedCurveName) ?? preferredCurve(curves);
+    curves.find((c) => c.curveName === selectedCurveName) ??
+    preferredCurve(curves);
 
   if (!selectedCurve) return null;
 
@@ -91,22 +88,25 @@ export default function CurvesExplorer({
     .sort((a, b) => a.curveName.localeCompare(b.curveName));
 
   const hasAdjusted = selectedCurve.adjustedPoints.length > 0;
-  const showAdjusted = view === 'adjusted';
+  const showAdjusted = view === "adjusted";
 
   const adjustedByTenor = new Map(
-    selectedCurve.adjustedPoints.map((p) => [p.tenorMonths, num(p.rate) * 100])
+    selectedCurve.adjustedPoints.map((p) => [p.tenorMonths, num(p.rate) * 100]),
   );
   const chartData: ChartRow[] = [...selectedCurve.points]
     .sort((a, b) => a.tenorMonths - b.tenorMonths)
     .map((p) => {
-      const row: ChartRow = { tenorMonths: p.tenorMonths, official: num(p.rate) * 100 };
+      const row: ChartRow = {
+        tenorMonths: p.tenorMonths,
+        official: num(p.rate) * 100,
+      };
       const adj = adjustedByTenor.get(p.tenorMonths);
       if (showAdjusted && adj !== undefined) row.adjusted = adj;
       return row;
     });
 
   const selectClass =
-    'w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy';
+    "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy";
 
   return (
     <div className="space-y-4">
@@ -119,7 +119,9 @@ export default function CurvesExplorer({
           <select
             value={selectedCurve.currency}
             onChange={(event) => {
-              const first = curves.find((c) => c.currency === event.target.value);
+              const first = curves.find(
+                (c) => c.currency === event.target.value,
+              );
               if (first) onSelectCurve(first.curveName);
             }}
             className={selectClass}
@@ -153,34 +155,43 @@ export default function CurvesExplorer({
       <div
         className={`rounded-lg border px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 ${
           isReproduction
-            ? 'border-warning/30 bg-warning-light'
-            : 'border-border-light bg-surface'
+            ? "border-warning/30 bg-warning-light"
+            : "border-border-light bg-surface"
         }`}
       >
         <span className="inline-flex items-center gap-2 text-body min-w-0">
           {isReproduction ? (
-            <CalendarClock size={15} className="text-warning shrink-0" aria-hidden />
+            <CalendarClock
+              size={15}
+              className="text-warning shrink-0"
+              aria-hidden
+            />
           ) : (
             <Activity size={15} className="text-action shrink-0" aria-hidden />
           )}
           <span className="text-navy">
             {isReproduction ? (
               <>
-                Reproduced as published on{' '}
-                <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span> — the golden
-                copy as it stood then, not re-derived.
+                Reproduced as published on{" "}
+                <span className="font-mono font-medium">
+                  {fmtDateUTC(asOfDate)}
+                </span>{" "}
+                — the golden copy as it stood then, not re-derived.
               </>
             ) : (
               <>
-                Live — latest published values as of{' '}
-                <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span>.
+                Live — latest published values as of{" "}
+                <span className="font-mono font-medium">
+                  {fmtDateUTC(asOfDate)}
+                </span>
+                .
               </>
             )}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5 flex-wrap ml-auto">
           <CurveTypeBadge curveType={selectedCurve.curveType} />
-          {selectedCurve.curveType === 'discount' && <SyntheticProxyBadge />}
+          {selectedCurve.curveType === "discount" && <SyntheticProxyBadge />}
           <AttributionChip attribution={selectedCurve.attribution} />
         </span>
       </div>
@@ -189,11 +200,11 @@ export default function CurvesExplorer({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <SubTabs
           items={[
-            { key: 'official', label: 'Official published' },
-            { key: 'adjusted', label: 'Your adjusted' },
+            { key: "official", label: "Official published" },
+            { key: "adjusted", label: "Your adjusted" },
           ]}
           active={view}
-          onChange={(key) => setView(key as 'official' | 'adjusted')}
+          onChange={(key) => setView(key as "official" | "adjusted")}
         />
         <div className="flex items-center gap-2">
           <button
@@ -220,15 +231,16 @@ export default function CurvesExplorer({
             <SlidersHorizontal size={13} aria-hidden />
             {selectedCurve.overlayComponents.length > 0
               ? `Edit spreads (${selectedCurve.overlayComponents.length})`
-              : 'Edit spreads'}
+              : "Edit spreads"}
           </button>
         </div>
       </div>
 
       {showAdjusted && !hasAdjusted && (
         <p className="text-caption text-slate">
-          No active spreads on this curve. Your adjusted curve equals the official published curve
-          until you add overlay spreads via &ldquo;Edit spreads&rdquo;.
+          No active spreads on this curve. Your adjusted curve equals the
+          official published curve until you add overlay spreads via &ldquo;Edit
+          spreads&rdquo;.
         </p>
       )}
 
@@ -242,60 +254,25 @@ export default function CurvesExplorer({
         }
         subtitle={
           showAdjusted
-            ? 'Official published (solid) vs your adjusted composition (dashed)'
-            : 'Published curve at the reproduced as-of date'
+            ? "Official published (solid) vs your adjusted composition (dashed)"
+            : "Published curve at the reproduced as-of date"
         }
         height={280}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={chartMargins}>
-            <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-            <XAxis
-              {...axisProps}
-              dataKey="tenorMonths"
-              tickFormatter={(value: number) => tenorLabel(value)}
-            />
-            <YAxis
-              {...axisProps}
-              tickFormatter={(value: number) => `${value.toFixed(1)}%`}
-              width={52}
-            />
-            <Tooltip
-              {...chartTooltipProps}
-              labelFormatter={(value) => `Tenor ${tenorLabel(Number(value))}`}
-              formatter={(value: number | string, name: string) => [fmtPct(Number(value), 2), name]}
-            />
-            <Legend {...chartLegendProps} />
-            <Line
-              type="monotone"
-              dataKey="official"
-              name="Official published"
-              stroke={seriesColor(0)}
-              strokeWidth={2}
-              dot={{ r: 2.5 }}
-              connectNulls
-            />
-            {showAdjusted && hasAdjusted && (
-              <Line
-                type="monotone"
-                dataKey="adjusted"
-                name="Your adjusted"
-                stroke={CHART_ACCENT}
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                dot={{ r: 2.5 }}
-                connectNulls
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+        <SelectedCurveLines
+          chartData={chartData}
+          showAdjusted={showAdjusted && hasAdjusted}
+        />
       </ChartFrame>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border border-border rounded-lg bg-surface/45 px-4 py-3">
         <div>
-          <p className="text-body font-medium text-navy">Need forecast periods or discount factors?</p>
+          <p className="text-body font-medium text-navy">
+            Need forecast periods or discount factors?
+          </p>
           <p className="mt-0.5 text-caption text-slate">
-            Open the published forward grid for the exact calendar-adjusted Start / End / DF / Yield rows.
+            Open the published forward grid for the exact calendar-adjusted
+            Start / End / DF / Yield rows.
           </p>
         </div>
         <button
@@ -309,8 +286,89 @@ export default function CurvesExplorer({
       </div>
 
       {methodologyOpen && (
-        <MethodologyDrawer curve={selectedCurve} onClose={() => setMethodologyOpen(false)} />
+        <MethodologyDrawer
+          curve={selectedCurve}
+          onClose={() => setMethodologyOpen(false)}
+        />
       )}
     </div>
+  );
+}
+
+/**
+ * One curve, official against this bank's adjusted composition.
+ *
+ * A tenor the adjusted series does not reach stays a GAP (the Recharts version
+ * used `connectNulls`, which spanned it). `hideAbsent` keeps the tooltip from
+ * listing a series that has no quote at the hovered tenor.
+ */
+function SelectedCurveLines({
+  chartData,
+  showAdjusted,
+}: {
+  chartData: ChartRow[];
+  showAdjusted: boolean;
+}) {
+  const tokens = useChartTokens();
+  const labels = chartData.map((row) => tenorLabel(row.tenorMonths));
+  const officialColor = seriesColor(tokens, 0);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 12, top: 16, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: { type: "category", data: labels, axisLabel: { hideOverlap: true } },
+    yAxis: {
+      type: "value",
+      scale: true,
+      axisLabel: { formatter: (value: number) => `${value.toFixed(1)}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(
+        labels.map((label) => `Tenor ${label}`),
+        (value) => fmtPct(value, 2),
+        { absent: "not published at this tenor", hideAbsent: true },
+      ),
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        name: "Official published",
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 5,
+        lineStyle: { color: officialColor, width: 2 },
+        itemStyle: { color: officialColor },
+        data: gapAwareData(chartData.map((row) => row.official)),
+      },
+      ...(showAdjusted
+        ? [
+            {
+              ...LINE_SERIES_BASE,
+              name: "Your adjusted",
+              smooth: true,
+              showSymbol: true,
+              symbolSize: 5,
+              lineStyle: {
+                color: tokens.accent,
+                width: 2,
+                type: "dashed" as const,
+              },
+              itemStyle: { color: tokens.accent },
+              data: gapAwareData(chartData.map((row) => row.adjusted)),
+            },
+          ]
+        : []),
+    ],
+  } as BiEChartsOption;
+
+  return (
+    <EChart
+      option={option}
+      height={280}
+      ariaLabel={`Published curve across ${chartData.length} tenors${
+        showAdjusted ? ", against this bank's adjusted composition" : ""
+      }`}
+    />
   );
 }

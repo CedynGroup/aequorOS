@@ -11,18 +11,20 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Final, Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    DATA_SCOPE_VALUE_MAX_LENGTH,
     AuthorizationDecision,
     BindingGrant,
     BindingStatus,
     ConditionCheck,
     ConditionKind,
+    DataScope,
     GrantorType,
     InstitutionScope,
     Module,
@@ -34,6 +36,7 @@ from app.core.authorization import (
     RoleBundle,
     Sensitivity,
     SensitivityScope,
+    normalise_data_scope_values,
     principal_bundle_compatible,
 )
 from app.core.authorization import (
@@ -44,6 +47,7 @@ from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
 from app.models import AuditEvent, AuthorizationBinding, Bank, OperatorUser, User
 from app.schemas.authorization import (
+    DataScopeRead,
     EffectiveAuthorityRead,
     EffectiveCapabilityRead,
     InstitutionCapabilitiesRead,
@@ -67,15 +71,167 @@ class BindingScope:
     institution_id: str | None
     module_scope: ModuleScope
     sensitivity_scope: SensitivityScope
+    #: WHICH SLICE of the institution's book.  Defaulted at the END of the
+    #: dataclass so every existing positional construction keeps meaning the
+    #: whole institution, which is what those grants have always meant.
+    data_scope: DataScope = DataScope.ALL
+    data_scope_values: tuple[str, ...] = ()
 
 
-def binding_scope_details(binding: AuthorizationBinding) -> dict[str, str | None]:
+def binding_scope_details(binding: AuthorizationBinding) -> dict[str, object]:
     return {
         "institution_scope": binding.institution_scope,
         "institution_id": binding.institution_id,
         "module_scope": binding.module_scope,
         "sensitivity_scope": binding.sensitivity_scope,
+        "data_scope_kind": binding.data_scope_kind,
+        "data_scope_values": list(binding.data_scope_values or ()),
     }
+
+
+# ---------------------------------------------------------------------------
+# effective data scope: the one authority on WHICH SLICE a principal reads
+# ---------------------------------------------------------------------------
+
+#: ``mixed`` and ``none`` are deliberately NOT storable (the column vocabulary
+#: is :class:`~app.core.authorization.DataScope`).  They only ever describe a
+#: derived union.
+DataScopeKind = Literal["all", "branch", "region", "mixed", "none"]
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveDataScope:
+    """The union of one principal's matched bindings' data scopes, as DECLARED.
+
+    Resolving a declared scope to rows is the BI layer's job, not this one's: a
+    region becomes branch codes through ``bi_dim_branch.region``, and the
+    account plane must not read ``bi_*`` tables.  So this says what the bindings
+    SAY, and the BI compiler turns it into an unremovable filter.
+    """
+
+    kind: DataScopeKind = "all"
+    branches: tuple[str, ...] = ()
+    regions: tuple[str, ...] = ()
+
+    @property
+    def whole_institution(self) -> bool:
+        return self.kind == "all"
+
+    @property
+    def serves_nothing(self) -> bool:
+        return self.kind == "none"
+
+
+ALL_INSTITUTION_DATA: Final[EffectiveDataScope] = EffectiveDataScope(kind="all")
+#: Nothing authorized the read.  Explicit rather than ``all`` so a reader cannot
+#: reach the whole institution by accident: ``whole_institution`` is False, so a
+#: forgetful reader falls into the scoped path where an empty value set yields
+#: no rows.
+NO_INSTITUTION_DATA: Final[EffectiveDataScope] = EffectiveDataScope(kind="none")
+
+
+def reduce_data_scope(grants: Sequence[BindingGrant]) -> EffectiveDataScope:
+    """Reduce already-loaded, already-matched bindings to one effective scope.
+
+    The reduction rules, in order:
+
+    1. **No grants at all → nothing.**  Returning the whole institution here
+       would be the fail-open this phase exists to close.
+    2. **Any grant of kind ``all`` → the whole institution.**  Bindings OR, so
+       the WIDEST wins; narrowing them would revoke authority the Org Owner
+       granted.
+    3. Otherwise union the ``branch`` rows' values and the ``region`` rows',
+       and name the union ``branch`` / ``region`` / ``mixed`` accordingly.
+    """
+
+    if not grants:
+        return NO_INSTITUTION_DATA
+    if any(grant.data_scope is DataScope.ALL for grant in grants):
+        return ALL_INSTITUTION_DATA
+    branches: set[str] = set()
+    regions: set[str] = set()
+    for grant in grants:
+        target = branches if grant.data_scope is DataScope.BRANCH else regions
+        target.update(grant.data_scope_values)
+    if branches and regions:
+        kind: DataScopeKind = "mixed"
+    elif regions:
+        kind = "region"
+    else:
+        kind = "branch"
+    return EffectiveDataScope(
+        kind=kind,
+        branches=tuple(sorted(branches)),
+        regions=tuple(sorted(regions)),
+    )
+
+
+def load_effective_grants(
+    db: Session,
+    *,
+    organization_id: str,
+    binding_ids: Sequence[UUID],
+) -> dict[UUID, BindingGrant]:
+    """The EFFECTIVE grants among the named ids, keyed by id, in one query.
+
+    Exists so a caller that must reduce SEVERAL groups of ids — one per resource
+    it evaluated — pays one query rather than one per group, and still reduces
+    through the same pure :func:`reduce_data_scope` rather than reading the
+    columns a second time. ``authorize_query`` is that caller: unioning its
+    groups before reducing was audit finding A10-01.
+
+    The id list is a SELECTOR, never authority. Rows are filtered to the
+    organization, to ``status = 'active'`` and to the validity window, so an id
+    belonging to another tenant, or one since revoked or expired, is simply
+    absent from the result.
+    """
+
+    if not binding_ids:
+        return {}
+    rows = db.scalars(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.organization_id == organization_id,
+            AuthorizationBinding.id.in_(set(binding_ids)),
+            AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+        )
+    )
+    return {row.id: _binding_grant(row) for row in rows if binding_is_effective(row)}
+
+
+def effective_data_scope(
+    db: Session,
+    *,
+    organization_id: str,
+    binding_ids: Sequence[UUID],
+) -> EffectiveDataScope:
+    """The declared slice the named bindings admit, re-read from the database.
+
+    For ONE resource's matched bindings. Reducing ids matched against DIFFERENT
+    resources through this function is the A10-01 defect: rule 2 of
+    :func:`reduce_data_scope` ("any ``all`` wins") is sound only within a single
+    resource's matches, because across resources an ``all`` binding that
+    authorized one of them would discard the narrowing that applies to another.
+    A caller with several groups uses :func:`load_effective_grants` and reduces
+    each group, then combines the results with a narrowest-wins rule.
+
+    The caller's id list is a SELECTOR, never authority. The rows are re-read
+    and filtered to the organization, to ``status = 'active'`` and to the
+    validity window, so a binding id belonging to another tenant — or one that
+    has since been revoked or expired — contributes nothing, and a list whose
+    every id falls away is indistinguishable from an empty list: both serve
+    nothing.
+    """
+
+    grants = load_effective_grants(db, organization_id=organization_id, binding_ids=binding_ids)
+    return reduce_data_scope(list(grants.values()))
+
+
+def data_scope_read(scope: EffectiveDataScope) -> DataScopeRead:
+    return DataScopeRead(
+        kind=scope.kind,
+        branches=list(scope.branches),
+        regions=list(scope.regions),
+    )
 
 
 def binding_is_effective(
@@ -235,6 +391,7 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
     request_conditions: Sequence[ConditionCheck],
 ) -> list[EffectiveCapabilityRead]:
     capabilities: list[EffectiveCapabilityRead] = []
+    by_id = {grant.binding_id: grant for grant in bindings}
     for module in modules:
         for sensitivity in Sensitivity:
             resource = ResourceLocator(
@@ -245,13 +402,20 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
                 sensitivity,
             )
             for permission in Permission:
-                if evaluate_grants(
+                decision = evaluate_grants(
                     principal,
                     permission,
                     resource,
                     bindings,
                     conditions=request_conditions,
-                ).allowed:
+                )
+                if decision.allowed:
+                    # Reduced from the bindings that matched THIS capability's
+                    # own resource, so the scope cannot overstate: a principal
+                    # holding Credit by branch and Liquidity institution-wide
+                    # gets the true answer on each row rather than one answer
+                    # standing for both.  No extra query — the grants are the
+                    # ones already loaded for the evaluation.
                     capabilities.append(
                         EffectiveCapabilityRead(
                             module=module,
@@ -259,6 +423,15 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
                             permission=permission,
                             requires_contextual_authorization=bool(
                                 _REQUIRED_RUNTIME_CONDITIONS.get(permission)
+                            ),
+                            data_scope=data_scope_read(
+                                reduce_data_scope(
+                                    [
+                                        by_id[binding_id]
+                                        for binding_id in decision.matching_binding_ids
+                                        if binding_id in by_id
+                                    ]
+                                )
                             ),
                         )
                     )
@@ -357,6 +530,10 @@ def project_examiner_authority(
             sensitivity=sensitivity,
             permission=Permission.VIEW,
             requires_contextual_authorization=False,
+            # An examiner reads the whole book by construction — the position is
+            # a read-everything supervisory seat with no binding behind it, so
+            # there is no declared slice to narrow to and none may be invented.
+            data_scope=data_scope_read(ALL_INSTITUTION_DATA),
         )
         for module in _INSTITUTION_MODULES
         for sensitivity in Sensitivity
@@ -394,10 +571,60 @@ def _binding_grant(binding: AuthorizationBinding) -> BindingGrant:
         valid_from=binding.valid_from,
         valid_until=binding.valid_until,
         revoked_at=binding.revoked_at,
+        data_scope=DataScope(binding.data_scope_kind),
+        data_scope_values=tuple(binding.data_scope_values or ()),
     )
 
 
+def data_scope_column_values(scope: BindingScope) -> list[str] | None:
+    """The ``data_scope_values`` column for ``scope``, or refuse the shape.
+
+    ``all`` is the only kind whose list is NULL, and a narrow kind must name at
+    least one value: the database CHECK says the same thing, but a caller
+    deserves a sentence rather than an IntegrityError, and the service must not
+    depend on the CHECK to be the only guard.
+    """
+
+    values = normalise_data_scope_values(scope.data_scope_values)
+    if scope.data_scope is DataScope.ALL:
+        if values:
+            raise AuthorizationInvariantError(
+                "a whole-institution data scope must not name branches or regions"
+            )
+        return None
+    if not values:
+        raise AuthorizationInvariantError(
+            "a branch or region data scope must name at least one branch or region"
+        )
+    overlong = sorted(value for value in values if len(value) > DATA_SCOPE_VALUE_MAX_LENGTH)
+    if overlong:
+        raise AuthorizationInvariantError(
+            "a branch or region longer than "
+            f"{DATA_SCOPE_VALUE_MAX_LENGTH} characters cannot match any branch"
+        )
+    return list(values)
+
+
 def _validate_scope(db: Session, organization_id: str, scope: BindingScope) -> None:
+    # A NARROW data scope requires exact institution coverage, and this is where
+    # that is enforced rather than only in the request schema (audit A10-05). A
+    # branch code belongs to one institution's core banking system, so two sibling
+    # banks of one organization can share a code that means two different books;
+    # an organization-wide binding naming ``B1`` therefore does not describe a
+    # slice anybody can resolve. The Pydantic layer already refuses it with a
+    # sentence, but a schema only guards the one route that uses it — any other
+    # service caller could write the shape the composer calls impossible.
+    #
+    # The DATABASE check deliberately still permits it, so that an
+    # organization-wide REGION grant (regions being declared per bank in the same
+    # register, and plausibly shared) can be designed later without a migration.
+    # Until that is designed, the service refuses it.
+    if scope.data_scope is not DataScope.ALL and (
+        scope.institution_scope is InstitutionScope.ORGANIZATION
+    ):
+        raise AuthorizationInvariantError(
+            "a branch or region data scope requires exact institution coverage"
+        )
     if scope.institution_scope is InstitutionScope.ORGANIZATION:
         if scope.institution_id is not None:
             raise AuthorizationInvariantError(
@@ -546,12 +773,14 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
         or scope.institution_id is not None
         or scope.module_scope is not ModuleScope.ACCOUNT
         or scope.sensitivity_scope is not SensitivityScope.RESTRICTED
+        or scope.data_scope is not DataScope.ALL
         or valid_until is not None
     ):
         raise AuthorizationInvariantError(
             "baseline membership requires a permanent system-granted "
             "organization-wide Account/restricted human binding"
         )
+    data_scope_values = data_scope_column_values(scope)
     _validate_scope(db, organization_id, scope)
     _validate_grantor(db, organization_id, grantor)
 
@@ -567,6 +796,8 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
         institution_id=scope.institution_id,
         module_scope=scope.module_scope.value,
         sensitivity_scope=scope.sensitivity_scope.value,
+        data_scope_kind=scope.data_scope.value,
+        data_scope_values=data_scope_values,
         granted_by_type=grantor.kind.value,
         granted_by_id=grantor.identifier.strip(),
         grant_reason=grant_reason,

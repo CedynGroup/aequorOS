@@ -161,6 +161,7 @@ def test_an_approved_configuration_admits_exactly_its_own_tuple(
     entry = approvals.ApprovedConfiguration(
         feature="icaap_drafting",
         prompt_version=_PROMPT,
+        vendor="anthropic",
         model=settings.ai.model,
         effort=settings.ai.effort,
         app_env="production",
@@ -221,6 +222,7 @@ def test_recorded_backend_is_refused_in_a_deployed_environment(
     entry = approvals.ApprovedConfiguration(
         feature="icaap_drafting",
         prompt_version=_PROMPT,
+        vendor="anthropic",
         model=settings.ai.model,
         effort=settings.ai.effort,
         app_env="production",

@@ -123,9 +123,7 @@ def tenant_deny_terms(db: Session, organization_id: str, bank: Bank) -> frozense
     # A single short token would fire on ordinary prose; multi-word names are
     # safe at any length because the whole phrase must match.
     minimum = get_settings().ai.min_deny_term_chars
-    return frozenset(
-        term for term in terms if term and (" " in term or len(term) >= minimum)
-    )
+    return frozenset(term for term in terms if term and (" " in term or len(term) >= minimum))
 
 
 def _previous_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
@@ -177,21 +175,29 @@ def jurisdiction_deny_terms(db: Session) -> frozenset[str]:
     return frozenset(term for term in terms if term)
 
 
-def scrub_label(  # noqa: PLR0911 - one return per reason to drop the label
-    label: str | None, deny_terms: frozenset[str]
+def sendable_free_text(  # noqa: PLR0911 - one return per reason to withhold the text
+    value: str | None, deny_terms: frozenset[str], *, max_chars: int
 ) -> str | None:
-    """A manual-table label, or None if it may not be sent.
+    """User-typed text, stripped, or ``None`` if it may not leave the platform.
 
-    Manual labels are the one free-text field a user can put into a fact sheet,
-    so they are the one prompt-injection channel. Dropping the fact is always an
-    option: the draft loses one figure, not its integrity.
+    The ONE place the content rules for a free-text field live. Two surfaces have
+    such a field and their LENGTH bounds differ — a manual table label is short by
+    nature, a natural-language question is a sentence — so the bound is a parameter
+    and the rules are not. Extracted rather than copied for exactly that reason: a
+    second implementation of "may this reach a model" is a second thing to keep
+    right.
+
+    Withheld for: nothing, control characters, the ``{{``/``}}`` placeholder channel
+    (the only way model output can ask the platform to substitute a value), an email
+    address, a URL, or any term in ``deny_terms`` — every real name the tenant's own
+    registers hold, plus the global jurisdiction names.
     """
-    if label is None:
+    if value is None:
         return None
-    text = label.strip()
+    text = value.strip()
     if not text:
         return None
-    if len(text) > get_settings().ai.max_manual_label_chars:
+    if len(text) > max_chars:
         return None
     if _CONTROL_RE.search(text) or "{{" in text or "}}" in text:
         return None
@@ -205,11 +211,22 @@ def scrub_label(  # noqa: PLR0911 - one return per reason to drop the label
     return text
 
 
+def scrub_label(label: str | None, deny_terms: frozenset[str]) -> str | None:
+    """A manual-table label, or None if it may not be sent.
+
+    Manual labels are one of two free-text fields a user can put into a model
+    request, so they are a prompt-injection channel. Dropping the fact is always an
+    option: the draft loses one figure, not its integrity.
+    """
+    return sendable_free_text(label, deny_terms, max_chars=get_settings().ai.max_manual_label_chars)
+
+
 __all__ = [
     "ENTITY_ROLES",
     "EntityMap",
     "build_entity_map",
     "jurisdiction_deny_terms",
     "scrub_label",
+    "sendable_free_text",
     "tenant_deny_terms",
 ]

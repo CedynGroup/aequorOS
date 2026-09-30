@@ -8,6 +8,7 @@ import ChartFrame from '@/components/ui/ChartFrame';
 import ValidationList from '@/components/ui/ValidationList';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FtpModuleFrame, { type FtpFrameContext } from '@/components/ftp/FtpModuleFrame';
+import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
 import TransferCurveChart from '@/components/ftp/charts/TransferCurveChart';
 import TrendChart from '@/components/ftp/charts/TrendChart';
 import { num } from '@/lib/api/values';
@@ -24,7 +25,10 @@ export default function FtpCurvePage() {
 }
 
 function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
-  const { data, metrics: m } = ctx;
+  const { data, metrics: m, bankId } = ctx;
+  // The reporting date every BI surface on this page speaks about.
+  const asOf = data.period.periodEnd;
+  const explain = useKpiExplain(bankId, asOf);
 
   const trend = data.trend;
   const nimSpark = trend.map((p) => num(p.portfolioNimPct));
@@ -84,6 +88,8 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
 
   return (
     <>
+      <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label="Blended assigned FTP"
@@ -97,16 +103,19 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
           status={nim >= marginFloor ? 'ok' : 'crit'}
           sparkline={nimSpark.length >= 2 ? <Sparkline data={nimSpark} /> : undefined}
           hint={`Margin floor ${fmtPct(marginFloor, 1)}`}
+          explain={explain.explainFor('portfolio_nim_pct')}
         />
         <KpiStat
           label="Weighted asset yield"
           value={fmtPct(num(m.weightedAssetYieldPct), 2)}
           hint="Customer rate net of FTP, asset books"
+          explain={explain.explainFor('weighted_asset_yield_pct')}
         />
         <KpiStat
           label="Weighted funding credit"
           value={fmtPct(num(m.weightedFundingCreditPct), 2)}
           hint="FTP credit net of customer rate, funding books"
+          explain={explain.explainFor('weighted_funding_credit_pct')}
         />
       </div>
 
@@ -157,6 +166,8 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
           />
         </ChartFrame>
       )}
+
+      {explain.drawer}
     </>
   );
 }

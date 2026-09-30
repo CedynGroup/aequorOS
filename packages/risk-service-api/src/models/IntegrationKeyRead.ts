@@ -25,6 +25,20 @@ import {
   LastUsedAtToJSON,
   LastUsedAtToJSONTyped,
 } from "./LastUsedAt";
+import type { Purpose } from "./Purpose";
+import {
+  PurposeFromJSON,
+  PurposeFromJSONTyped,
+  PurposeToJSON,
+  PurposeToJSONTyped,
+} from "./Purpose";
+import type { IntegrationKeyReadDataScopeKind } from "./IntegrationKeyReadDataScopeKind";
+import {
+  IntegrationKeyReadDataScopeKindFromJSON,
+  IntegrationKeyReadDataScopeKindFromJSONTyped,
+  IntegrationKeyReadDataScopeKindToJSON,
+  IntegrationKeyReadDataScopeKindToJSONTyped,
+} from "./IntegrationKeyReadDataScopeKind";
 import type { IntegrationKeyBankID } from "./IntegrationKeyBankID";
 import {
   IntegrationKeyBankIDFromJSON,
@@ -66,6 +80,18 @@ export interface IntegrationKeyRead {
   createdBy: CreatedBy;
   /**
    *
+   * @type {IntegrationKeyReadDataScopeKind}
+   * @memberof IntegrationKeyRead
+   */
+  dataScopeKind?: IntegrationKeyReadDataScopeKind;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof IntegrationKeyRead
+   */
+  dataScopeValues?: Array<string>;
+  /**
+   *
    * @type {string}
    * @memberof IntegrationKeyRead
    */
@@ -88,6 +114,12 @@ export interface IntegrationKeyRead {
    * @memberof IntegrationKeyRead
    */
   lastUsedAt: LastUsedAt;
+  /**
+   *
+   * @type {Purpose}
+   * @memberof IntegrationKeyRead
+   */
+  purpose?: Purpose;
   /**
    *
    * @type {RevokedAt}
@@ -130,10 +162,18 @@ export function IntegrationKeyReadFromJSONTyped(
     bankId: IntegrationKeyBankIDFromJSON(json["bank_id"]),
     createdAt: new Date(json["created_at"]),
     createdBy: CreatedByFromJSON(json["created_by"]),
+    dataScopeKind:
+      json["data_scope_kind"] == null
+        ? undefined
+        : IntegrationKeyReadDataScopeKindFromJSON(json["data_scope_kind"]),
+    dataScopeValues:
+      json["data_scope_values"] == null ? undefined : json["data_scope_values"],
     id: json["id"],
     keyPrefix: json["key_prefix"],
     label: json["label"],
     lastUsedAt: LastUsedAtFromJSON(json["last_used_at"]),
+    purpose:
+      json["purpose"] == null ? undefined : PurposeFromJSON(json["purpose"]),
     revokedAt: RevokedAtFromJSON(json["revoked_at"]),
   };
 }
@@ -154,10 +194,15 @@ export function IntegrationKeyReadToJSONTyped(
     bank_id: IntegrationKeyBankIDToJSON(value["bankId"]),
     created_at: value["createdAt"].toISOString(),
     created_by: CreatedByToJSON(value["createdBy"]),
+    data_scope_kind: IntegrationKeyReadDataScopeKindToJSON(
+      value["dataScopeKind"],
+    ),
+    data_scope_values: value["dataScopeValues"],
     id: value["id"],
     key_prefix: value["keyPrefix"],
     label: value["label"],
     last_used_at: LastUsedAtToJSON(value["lastUsedAt"]),
+    purpose: PurposeToJSON(value["purpose"]),
     revoked_at: RevokedAtToJSON(value["revokedAt"]),
   };
 }

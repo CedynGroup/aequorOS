@@ -47,6 +47,7 @@ from app.domain.ingestion.contracts import (
     MappingConfig,
 )
 from app.domain.ingestion.enrichment import apply_manual_override
+from app.domain.ingestion.optional_position_fields import normalize_positions
 from app.domain.ingestion.validation import (
     Finding,
     ValidationContext,
@@ -96,6 +97,7 @@ from app.schemas.ingestion import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
+from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,
@@ -404,6 +406,13 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
 
     batch.status = "translating"
     records = adapter.translate(extraction, mapping)
+    # The ONE seam every source passes through for the optional position
+    # attributes: two closed vocabularies resolved to one spelling, the officer
+    # code trimmed and bounded, the arrears figure parsed exactly. Applied here
+    # rather than in each adapter so an Excel sheet, an API push and a
+    # core-banking extract cannot disagree about what "momo" means, and before
+    # validation so both the rules and persistence see the normalised bag.
+    attribute_problems = normalize_positions(records)
     batch.records_translated = records.record_count
     translate_node = _lineage(
         db,
@@ -439,6 +448,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
         known_products=known_products,
         known_gl_accounts=known_gl_accounts,
         known_positions=known_positions,
+        attribute_problems=attribute_problems,
     )
     outcome = run_validation(
         records,
@@ -499,6 +509,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     storage.flush_access_log()
     _record_batch_event(db, ctx, batch, payload.reason)
     _enqueue_live_refresh(db, ctx, bank, payload, batch)
+    _enqueue_bi_mart_refresh(db, ctx, bank, payload, batch)
     if not etl_inline_dedup:
         _enqueue_etl_dedup(db, ctx, bank, batch)
     if commit:
@@ -538,6 +549,33 @@ def _enqueue_live_refresh(
         payload=job_payload,
         run_after=utc_now() + timedelta(seconds=debounce),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
+    )
+
+
+def _enqueue_bi_mart_refresh(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    payload: IngestionBatchCreate,
+    batch: IngestionBatch,
+) -> None:
+    """Ask the BI lane to rebuild this batch's ``(bank, as_of)`` mart slice.
+
+    Sibling of :func:`_enqueue_live_refresh`: same accepted-status guard (a
+    rejected batch changed no canonical row, so no mart slice moved), same
+    single trigger point for every source, and keyed on the batch's OWN
+    ``as_of_date`` — that is the slice whose inputs just changed, whether or
+    not it is the bank's live date. The seam coalesces a multi-file burst for
+    one day into one build and is inert unless ``BI_MART_ENQUEUE_ENABLED``.
+    """
+    if batch.status not in BATCH_ACCEPTED_STATUSES:
+        return
+    enqueue_mart_refresh(
+        db,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        as_of=payload.as_of_date,
+        reason="ingestion",
     )
 
 

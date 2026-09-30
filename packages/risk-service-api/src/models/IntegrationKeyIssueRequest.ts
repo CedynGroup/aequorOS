@@ -11,6 +11,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { DataScope } from "./DataScope";
+import {
+  DataScopeFromJSON,
+  DataScopeFromJSONTyped,
+  DataScopeToJSON,
+  DataScopeToJSONTyped,
+} from "./DataScope";
+
 /**
  *
  * @export
@@ -25,11 +33,39 @@ export interface IntegrationKeyIssueRequest {
   bankId: string;
   /**
    *
+   * @type {DataScope}
+   * @memberof IntegrationKeyIssueRequest
+   */
+  dataScopeKind?: DataScope;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof IntegrationKeyIssueRequest
+   */
+  dataScopeValues?: Array<string>;
+  /**
+   *
    * @type {string}
    * @memberof IntegrationKeyIssueRequest
    */
   label: string;
+  /**
+   *
+   * @type {string}
+   * @memberof IntegrationKeyIssueRequest
+   */
+  purpose?: IntegrationKeyIssueRequestPurposeEnum;
 }
+
+/**
+ * @export
+ */
+export const IntegrationKeyIssueRequestPurposeEnum = {
+  Writer: "writer",
+  Reader: "reader",
+} as const;
+export type IntegrationKeyIssueRequestPurposeEnum =
+  (typeof IntegrationKeyIssueRequestPurposeEnum)[keyof typeof IntegrationKeyIssueRequestPurposeEnum];
 
 /**
  * Check if a given object implements the IntegrationKeyIssueRequest interface.
@@ -58,7 +94,14 @@ export function IntegrationKeyIssueRequestFromJSONTyped(
   return {
     ...json,
     bankId: json["bank_id"],
+    dataScopeKind:
+      json["data_scope_kind"] == null
+        ? undefined
+        : DataScopeFromJSON(json["data_scope_kind"]),
+    dataScopeValues:
+      json["data_scope_values"] == null ? undefined : json["data_scope_values"],
     label: json["label"],
+    purpose: json["purpose"] == null ? undefined : json["purpose"],
   };
 }
 
@@ -78,6 +121,9 @@ export function IntegrationKeyIssueRequestToJSONTyped(
 
   return {
     bank_id: value["bankId"],
+    data_scope_kind: DataScopeToJSON(value["dataScopeKind"]),
+    data_scope_values: value["dataScopeValues"],
     label: value["label"],
+    purpose: value["purpose"],
   };
 }

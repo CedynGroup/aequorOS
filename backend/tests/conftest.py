@@ -138,10 +138,20 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # asserts the switched-off path — and an autouse fixture below makes a real
     # model client unconstructable, so no suite run can ever call out.
     monkeypatch.setenv("AI_COMMENTARY_ENABLED", "0")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("AI_PRODUCTION_APPROVAL_REF", "")
-    monkeypatch.setenv("AI_MODEL_BACKEND", "anthropic")
+    monkeypatch.setenv("AI_MODEL_BACKEND", "tiered")
     monkeypatch.setenv("AI_RECORDED_FIXTURE_PATH", "")
+    # Every vendor credential in the tier (D-053), blanked for the same reason as
+    # the Anthropic one: all four names are in a developer's untracked .env, so a
+    # machine that has them would otherwise take the "configured" branch of the
+    # run gate and of ``backend_configured`` while CI took the other one. The
+    # autouse fixture below additionally makes each real client unconstructable,
+    # so no suite run can call out even with a key present.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_URL", "")
+    monkeypatch.setenv("AI_PROVIDER_TIER", "anthropic,openai,google")
     # The worker lane selection: unset means the core lane, which never claims
     # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
     monkeypatch.setenv("WORKER_JOB_TYPES", "")
@@ -150,6 +160,16 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
     monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
+    # Same .env-leak guard for every BI switch (D-008). All three ship OFF; a
+    # developer who has enabled BI locally would otherwise flip the run-gate
+    # "skipped" assertions, the feature-flags projection, and — once the
+    # scheduler sweep lands — the "inert when disabled" tick tests. The BI
+    # database URL is blanked for the same reason the primary one is: a second
+    # real connection must never open outside the rollback fixture.
+    monkeypatch.setenv("BI_ENABLED", "0")
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "0")
+    monkeypatch.setenv("BI_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("BI_DATABASE_URL", "")
     # Same guard for the OpenBao backend's endpoint and AppRole: a developer who
     # points their .env at a live OpenBao would otherwise flip the tests that
     # assert "this deployment cannot sign" into the configured branch. The
@@ -170,7 +190,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_engine.cache_clear()
 
 
-
 @pytest.fixture(autouse=True)
 def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test may construct a real model client.
@@ -182,15 +201,21 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     is checked before the backend is ever resolved.
     """
     from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.services.ai import google_model, openai_model  # noqa: PLC0415 - same boundary
 
     def _refuse(self: object, *args: object, **kwargs: object) -> None:
         message = (
-            "A real AnthropicModel was constructed in a test. Use the "
+            f"A real {type(self).__name__} was constructed in a test. Use the "
             "recorded_model fixture or app.services.ai.client.use_model(...)."
         )
         raise ai_client.RealModelForbiddenError(message)
 
-    monkeypatch.setattr(ai_client.AnthropicModel, "__init__", _refuse)
+    # Every vendor in the tier, not just the first: a failover test that reached
+    # tier 2 or 3 for real would bill somebody's account, and the guard has to
+    # grow with D-053 or it silently stops covering the feature.
+    for real in (ai_client.AnthropicModel, openai_model.OpenAiModel, google_model.GoogleModel):
+        monkeypatch.setattr(real, "__init__", _refuse)
+
 
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:
@@ -605,6 +630,38 @@ def irrbb_run_authority(db_session: Session) -> None:
         reason="Authorize the integration fixture IRRBB calculations",
         commit=False,
     )
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    user.authorization_version = 1
+    db_session.commit()
+
+
+@pytest.fixture
+def credit_run_authority(db_session: Session) -> None:
+    """Opt-in credit calculation authority for integration fixtures using USER_1.
+
+    The hermetic baseline sentence is ``viewer / all / all``, which carries no
+    ``run``: after the P4-C cutover
+    (``backend/docs/credit_enforcement_rollout.md``) sealing a credit baseline
+    needs an Analyst CREDIT/confidential row, exactly as FX, IRRBB and FTP do.
+    """
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION,
+            None,
+            ModuleScope.CREDIT,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "credit-calculation-fixture"),
+        reason="Authorize the integration fixture credit calculations",
+        commit=False,
+    )
+    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
     user = db_session.get(User, USER_1)
     assert user is not None
     user.authorization_version = 1

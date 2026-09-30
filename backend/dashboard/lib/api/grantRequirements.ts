@@ -24,13 +24,13 @@
  * disagree — fix the mirror, never the test.
  */
 
-import type { GrantDraft } from './grants';
+import type { GrantDraft } from "./grants";
 
 /** The module a filing-chain decision is evaluated against. */
-export const CHAIN_DECISION_MODULE = 'reg';
+export const CHAIN_DECISION_MODULE = "reg";
 
 /** The sensitivity a filing-chain decision is evaluated against. */
-export const CHAIN_DECISION_SENSITIVITY = 'restricted';
+export const CHAIN_DECISION_SENSITIVITY = "restricted";
 
 /**
  * Bundles whose whole purpose is deciding on a return in the filing chain.
@@ -40,16 +40,16 @@ export const CHAIN_DECISION_SENSITIVITY = 'restricted';
  * legitimate choice there rather than a mistake worth interrupting.
  */
 const CHAIN_DECISION_BUNDLES: Record<string, string> = {
-  approver: 'approve returns or send them back',
-  validator: 'file returns with the regulator',
+  approver: "approve returns or send them back",
+  validator: "file returns with the regulator",
 };
 
 function coversModule(scope: string): boolean {
-  return scope === CHAIN_DECISION_MODULE || scope === 'all';
+  return scope === CHAIN_DECISION_MODULE || scope === "all";
 }
 
 function coversSensitivity(scope: string): boolean {
-  return scope === CHAIN_DECISION_SENSITIVITY || scope === 'all';
+  return scope === CHAIN_DECISION_SENSITIVITY || scope === "all";
 }
 
 /**
@@ -69,14 +69,43 @@ export function grantShortfall(draft: GrantDraft): string | null {
   if (moduleOk && sensitivityOk) return null;
 
   const missing: string[] = [];
-  if (!moduleOk) missing.push('Regulatory Reporting (or all modules)');
-  if (!sensitivityOk) missing.push('Restricted (or all sensitivity levels)');
+  if (!moduleOk) missing.push("Regulatory Reporting (or all modules)");
+  if (!sensitivityOk) missing.push("Restricted (or all sensitivity levels)");
 
   return (
     `This grant will not let them ${work}. Deciding on a return is evaluated ` +
-    `against ${missing.join(' and ')}, and scopes are matched exactly — a ` +
+    `against ${missing.join(" and ")}, and scopes are matched exactly — a ` +
     `narrower level does not include a wider one. They will be able to sign ` +
     `in and see the return, then be refused when they act on it.`
+  );
+}
+
+/**
+ * What a narrowed book coverage costs, or null when the grant takes the whole
+ * institution.
+ *
+ * Same doctrine as `grantShortfall`: say it where the choice is made. A grant
+ * limited to some branches or regions is a complete, legitimate sentence — and
+ * it does not authorise the institution's own ratios, because a ratio for the
+ * institution computed over part of its book is a wrong number with a
+ * right-looking name. The server refuses those questions outright rather than
+ * answering them from a slice, so the grantee meets a refusal on a figure they
+ * can see named on screen.
+ *
+ * Bindings OR, so a second grant covering the whole book restores those
+ * figures. The sentence says so rather than implying this grant is broken.
+ */
+export function dataScopeShortfall(draft: GrantDraft): string | null {
+  if (draft.institutionScope !== "institution") return null;
+  if (draft.dataScope.kind === "all") return null;
+  const chosen =
+    draft.dataScope.kind === "branch" ? "the branches" : "the regions";
+  return (
+    `Limiting this grant to ${chosen} you chose also limits what can be ` +
+    `answered: figures for the institution as a whole are refused rather than ` +
+    `computed from part of its book. That is deliberate — a whole-institution ` +
+    `ratio taken over a few branches would read as a real measurement. If they ` +
+    `need those figures, give them the whole book here or in a second grant.`
   );
 }
 
@@ -110,17 +139,19 @@ export function overlappingGrantNotice(
   held: readonly HeldGrant[],
 ): string | null {
   const target =
-    draft.institutionScope === 'institution' ? (draft.institutionId ?? null) : null;
+    draft.institutionScope === "institution"
+      ? (draft.institutionId ?? null)
+      : null;
   const same = held.filter(
     (grant) =>
-      grant.status === 'active' &&
+      grant.status === "active" &&
       grant.roleBundle === draft.roleBundle &&
       (grant.institutionId ?? null) === target,
   );
   if (same.length === 0) return null;
 
   return (
-    `They already hold ${same.length === 1 ? 'an active' : `${same.length} active`} ` +
+    `They already hold ${same.length === 1 ? "an active" : `${same.length} active`} ` +
     `${draft.roleBundle} grant here. A new grant is a SEPARATE row — scopes do ` +
     `not merge across rows, so this one has to be complete on its own, and the ` +
     `existing one keeps whatever it already allows. If you meant to widen the ` +

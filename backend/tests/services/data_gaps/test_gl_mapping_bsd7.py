@@ -356,6 +356,67 @@ def test_bsd7a_and_bsd7b_carry_the_ledger_through_the_register(push_client: Test
         assert abs(_num(b_cells, f"C{row + 2}") - _num(b_cells, f"D{row + 2}")) < Decimal("0.01")
 
 
+def test_period_basis_account_in_a_weekly_book_is_not_double_counted(
+    push_client: TestClient,
+) -> None:
+    """H-006: the Data Engine admits any ``as_of_date`` (a Friday-close book is
+    the weekly returns' steady state) and the adapters carry the whole GL with
+    each book, so a P&L account lands several current generations a month. For
+    a register row with ``balance_basis="period"`` the month's movement is the
+    latest generation in the month — an intra-month generation is a month-to-
+    date figure superseded by it, never added to it; a ``ytd`` account ignores
+    the intra-month row. Pushed through the real API with the register."""
+    _prepare(push_client)
+    rows = _mapping_rows()
+    occupancy = next(r for r in rows if r.get("gl_account_code") == "5301")  # item 16, GHS
+    assert occupancy["balance_basis"] == "ytd"
+    occupancy["balance_basis"] = "period"
+
+    def accepted(result: dict[str, Any]) -> None:
+        batch = result["batch"]
+        assert batch["status"] == "accepted", batch["validation_report"]["summary"]
+
+    for as_of in LEDGER_DATES:
+        ledger = {"gl_account": _ledger_rows(as_of)}
+        accepted(_push(as_of=as_of, key=f"pl-{as_of}", entities=ledger))
+    # the Friday 13 March book: occupancy (period) and travel (ytd) month-to-date
+    friday = [
+        {**r, "balance": round(float(r["balance"]) / 2, 2)}
+        for r in _ledger_rows(REPORTING_DATE)
+        if str(r["account_code"]) in ("5301", "5302")
+    ]
+    assert len(friday) == 2
+    accepted(_push(as_of="2026-03-13", key="pl-2026-03-13", entities={"gl_account": friday}))
+    accepted(_push(as_of=REPORTING_DATE, key="gl-mapping", references={"gl_mapping_bsd7": rows}))
+
+    snapshot = _generate(push_client, "BSD7A", REPORTING_DATE)
+    payload = snapshot["bog_form"]
+    assert not payload["errors"], payload["errors"]
+    cells = payload["cells"]["BSD7A"]
+
+    def balance(code: str, as_of: str) -> Decimal:
+        return next(
+            Decimal(str(r["balance"]))
+            for r in _ledger_rows(as_of)
+            if str(r["account_code"]) == code
+        )
+
+    # occupancy (period basis): month = the 31 March generation alone, period to
+    # date = the fiscal year's three month-end movements; 13 March counted nowhere
+    row = ROW_OF_ITEM["16"]
+    assert _num(cells, f"C{row}") == balance("5301", "2026-03-31")
+    assert _num(cells, f"F{row}") == sum(
+        (balance("5301", as_of) for as_of in ("2026-01-31", "2026-02-28", "2026-03-31")), Decimal(0)
+    )
+    assert _num(cells, f"D{row}") == 0 and _num(cells, f"G{row}") == 0
+    # travel (ytd basis): the Friday book changes nothing
+    row = ROW_OF_ITEM["17"]
+    assert _num(cells, f"F{row}") == _expected("17", "2026-03-31", "GHS")
+    assert _num(cells, f"C{row}") == _expected("17", "2026-03-31", "GHS") - _expected(
+        "17", "2026-02-28", "GHS"
+    )
+
+
 def test_without_the_register_untagged_ledger_lines_stay_input_required(
     push_client: TestClient,
 ) -> None:

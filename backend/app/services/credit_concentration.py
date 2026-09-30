@@ -39,7 +39,7 @@ from app.models import (
     CanonicalProduct,
     ParamConcentrationLimit,
 )
-from app.services import institution_types, sdi_capital
+from app.services import institution_types, jurisdictions, sdi_capital
 from app.services.live_state import load_current_facts
 from app.services.params import get_active_params
 
@@ -79,6 +79,12 @@ def load_credit_exposures(
     ``employer`` reads the documented ``attributes.employer`` key (payroll /
     check-off lending; docs/API_INTEGRATION.md §3.4). Unstated dimensions stay
     ``None`` — the monitor discloses coverage instead of grouping unknowns.
+
+    EAD is the ingested ``balance_ghs`` conversion, else the native balance
+    ONLY for a base-currency position. A foreign-currency position with no
+    conversion is unconverted (the rule ``regulatory_credit._event_amount_ghs``
+    applies to loan events): it leaves the book, every total and every share —
+    never its native face value in the reporting unit.
     """
     records = db.execute(
         select(
@@ -101,11 +107,14 @@ def load_credit_exposures(
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
+    base_ccy = jurisdictions.base_currency(bank)
     exposures: list[ConcentrationExposure] = []
-    for snapshot, _position, counterparty, product_row in records:
+    for snapshot, position, counterparty, product_row in records:
         attributes = snapshot.attributes or {}
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
         if balance_ghs is None:
+            if position.currency != base_ccy:
+                continue
             balance_ghs = Decimal(str(snapshot.balance or _ZERO))
         if balance_ghs <= _ZERO:
             continue

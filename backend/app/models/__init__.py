@@ -13,6 +13,45 @@ from app.models.attestation import (
 )
 from app.models.audit_event import AuditEvent
 from app.models.authorization import AuthorizationBinding, OrganizationOwnerAssignment
+from app.models.bi import (
+    BiAggPositionDaily,
+    BiDimBranch,
+    BiDimCounterparty,
+    BiDimDate,
+    BiDimGlAccount,
+    BiDimProduct,
+    BiFactEngineMetric,
+    BiFactGlBranchMonthly,
+    BiFactGlMonthly,
+    BiFactLoanEvent,
+    BiFactPositionDaily,
+    BiFactPositionEom,
+    BiMartBuild,
+    BiQueryLog,
+)
+
+# ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
+# without it ``ai_commentary_drafts`` is absent from ``Base.metadata`` for any
+# caller that imports ``app.models`` rather than the whole app, so
+# ``Base.metadata.create_all`` silently builds a schema without it. That is the
+# AGENTS.md hazard — anything built with ``create_all`` runs no migration, so it
+# must contain what a migration would have written — and it was invisible to the
+# hermetic pytest suite, which imports the app and therefore registers the model
+# before ``create_all`` runs. It surfaced as ``POST /bi/ask`` answering 500 with
+# ``no such table: ai_commentary_drafts`` on the Playwright schema.
+from app.models.bi_commentary import AiCommentaryDraft
+from app.models.bi_content import (
+    BiDashboard,
+    BiDashboardShare,
+    BiDashboardVersion,
+    BiMeasure,
+)
+from app.models.bi_notifications import (
+    BiAlert,
+    BiAlertEvent,
+    BiSubscription,
+    BiSubscriptionDelivery,
+)
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -212,6 +251,29 @@ __all__ = [
     "Bank",
     "BankFinancialFact",
     "BankSupervisoryAddon",
+    "BiAggPositionDaily",
+    "BiAlert",
+    "BiAlertEvent",
+    "AiCommentaryDraft",
+    "BiDashboard",
+    "BiDashboardShare",
+    "BiDashboardVersion",
+    "BiDimBranch",
+    "BiDimCounterparty",
+    "BiDimDate",
+    "BiDimGlAccount",
+    "BiDimProduct",
+    "BiFactEngineMetric",
+    "BiFactGlBranchMonthly",
+    "BiFactGlMonthly",
+    "BiFactLoanEvent",
+    "BiFactPositionDaily",
+    "BiFactPositionEom",
+    "BiMartBuild",
+    "BiMeasure",
+    "BiQueryLog",
+    "BiSubscription",
+    "BiSubscriptionDelivery",
     "FinancialFactRow",
     "IcaapAiSuggestion",
     "IcaapAiSuggestionDecision",

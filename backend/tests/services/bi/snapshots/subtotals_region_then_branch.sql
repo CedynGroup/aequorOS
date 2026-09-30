@@ -1,0 +1,9 @@
+SELECT levels.k0, levels.k1, levels.__level, levels.m0
+FROM (SELECT bi_dim_branch.region AS k0, bi_dim_branch.branch_code AS k1, ? AS __level, sum(CASE WHEN (bi_agg_position_daily.position_type IN (?)) THEN bi_agg_position_daily.balance_rc_sum END) AS m0
+FROM bi_agg_position_daily LEFT OUTER JOIN bi_dim_branch ON bi_dim_branch.organization_id = bi_agg_position_daily.organization_id AND bi_dim_branch.bank_id = bi_agg_position_daily.bank_id AND bi_dim_branch.branch_code = bi_agg_position_daily.branch_code
+WHERE bi_agg_position_daily.organization_id = ? AND bi_agg_position_daily.bank_id = ? AND bi_agg_position_daily.as_of_date = ? GROUP BY bi_dim_branch.region, bi_dim_branch.branch_code UNION ALL SELECT bi_dim_branch.region AS k0, NULL AS k1, ? AS __level, sum(CASE WHEN (bi_agg_position_daily.position_type IN (?)) THEN bi_agg_position_daily.balance_rc_sum END) AS m0
+FROM bi_agg_position_daily LEFT OUTER JOIN bi_dim_branch ON bi_dim_branch.organization_id = bi_agg_position_daily.organization_id AND bi_dim_branch.bank_id = bi_agg_position_daily.bank_id AND bi_dim_branch.branch_code = bi_agg_position_daily.branch_code
+WHERE bi_agg_position_daily.organization_id = ? AND bi_agg_position_daily.bank_id = ? AND bi_agg_position_daily.as_of_date = ? GROUP BY bi_dim_branch.region UNION ALL SELECT NULL AS k0, NULL AS k1, ? AS __level, sum(CASE WHEN (bi_agg_position_daily.position_type IN (?)) THEN bi_agg_position_daily.balance_rc_sum END) AS m0
+FROM bi_agg_position_daily LEFT OUTER JOIN bi_dim_branch ON bi_dim_branch.organization_id = bi_agg_position_daily.organization_id AND bi_dim_branch.bank_id = bi_agg_position_daily.bank_id AND bi_dim_branch.branch_code = bi_agg_position_daily.branch_code
+WHERE bi_agg_position_daily.organization_id = ? AND bi_agg_position_daily.bank_id = ? AND bi_agg_position_daily.as_of_date = ?) AS levels ORDER BY levels.__level ASC, levels.k0 ASC NULLS FIRST, levels.k1 ASC NULLS FIRST
+ LIMIT ? OFFSET ?

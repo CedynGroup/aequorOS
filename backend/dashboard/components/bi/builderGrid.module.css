@@ -1,0 +1,31 @@
+/*
+ * Two overrides on react-grid-layout's own stylesheet, scoped to the builder.
+ *
+ * The library's class names are its runtime contract — it writes them onto the
+ * elements it creates — so they are reached through `:global()` rather than
+ * re-declared, and only the two rules this product disagrees with are changed:
+ *
+ *  * the placeholder showing where a tile will land ships as `background: red`,
+ *    which in this palette reads as a breach rather than as a destination;
+ *  * the resize handle ships at `opacity: 0` until the tile is hovered, which
+ *    hides the one affordance a builder has to advertise — and makes the handle
+ *    unfindable from a keyboard or on a touch screen.
+ *
+ * Everything else — the placement transform, the transition, the handle's hit
+ * area and its corner positions — stays the library's.
+ */
+
+.canvas :global(.react-grid-item.react-grid-placeholder) {
+  background: rgb(var(--accent));
+  opacity: 0.18;
+  border-radius: 0.5rem;
+}
+
+.canvas :global(.react-grid-item > .react-resizable-handle) {
+  opacity: 1;
+}
+
+.canvas :global(.react-grid-item > .react-resizable-handle::after) {
+  border-right-color: rgb(var(--text-muted));
+  border-bottom-color: rgb(var(--text-muted));
+}

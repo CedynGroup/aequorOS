@@ -13,6 +13,7 @@ carrying the AI marker that becomes the badge.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from typing import Any
 
@@ -115,7 +116,12 @@ def bound_cycle(
 def _result(draft: SectionDraft | None, **kwargs: Any) -> ai_client.ModelResult[SectionDraft]:
     return ai_client.ModelResult(
         outcome=kwargs.pop("outcome", "ok"),
-        model_requested=get_settings().ai.model,
+        # Defaults are the tier-1 shape. A failover case MUST override both:
+        # the adapter that answers sets ``model_requested`` from its OWN
+        # descriptor (``openai_model.py`` / ``google_model.py``), so a result
+        # carrying vendor="openai" and the Anthropic model requested is a shape
+        # the production code never produces (audit A7-04).
+        model_requested=kwargs.pop("model_requested", get_settings().ai.model),
         model_served=kwargs.pop("model_served", get_settings().ai.model),
         parsed=draft,
         usage=ai_client.UsageRecord(
@@ -316,6 +322,101 @@ def test_the_happy_path_validates_and_serves_a_preview(
     segments = served.draft.paragraphs[0].segments
     assert any(segment.kind == "fact" and segment.display for segment in segments)
     assert served.draft.open_questions
+
+
+def test_the_sealed_row_records_which_vendor_served_the_draft(
+    canonical_book: Session,
+    access: IcaapAccess,
+    bound_cycle: IcaapCycleRead,
+    tenant_consented: AiCommentarySettings,
+) -> None:
+    """D-053: the vendor stamp rides a FILED artifact, so it has to be on the
+    sealed row — where the served geography already lives — and not only in a log.
+
+    This is the tier-2 case: Anthropic was out of credit, OpenAI answered, and
+    three of the request's features could not be honoured there.
+    """
+    _ = tenant_consented
+    read, _created = ai_drafting.enqueue(canonical_book, access, bound_cycle.id, SECTION)
+    failed_over = dataclasses.replace(
+        _result(
+            _grounded_draft(),
+            model_requested="gpt-test-requested",
+            model_served="gpt-test",
+        ),
+        vendor="openai",
+        tier_position=2,
+        degraded=("adaptive_thinking", "prompt_cache_control", "server_side_fallbacks"),
+        tier_attempts=(
+            {
+                "vendor": "anthropic",
+                "tier_position": 1,
+                "outcome": "rate_limited",
+                "failure_code": "insufficient_quota",
+                "failure_class": "availability",
+            },
+        ),
+    )
+    with ai_client.use_model(ai_client.RecordedModel([failed_over])):
+        row = _run(canonical_book, read.id)
+
+    assert row.status == "validated"
+    assert row.usage is not None
+    assert row.usage["vendor"] == "openai"
+    assert row.usage["tier_position"] == 2
+    assert "prompt_cache_control" in row.usage["degraded_capabilities"]
+    assert row.usage["tier_attempts"][0]["failure_class"] == "availability"
+    # The row names the call THAT HAPPENED, not the one that was enqueued
+    # (audit A7-04). ``model_requested`` is stamped at enqueue from tier 1, so
+    # without the sealing write updating it, a filed ICAAP artifact would read
+    # "requested <the Anthropic model>, served gpt-test" — evidence for a call
+    # nobody made. Which vendor was tried first, and why it failed, is carried
+    # by ``tier_attempts`` above, where it belongs.
+    assert (row.model_requested, row.model_served) == ("gpt-test-requested", "gpt-test")
+    assert row.model_requested != get_settings().ai.model
+
+
+def test_a_failed_call_still_records_its_provenance(
+    canonical_book: Session,
+    access: IcaapAccess,
+    bound_cycle: IcaapCycleRead,
+    tenant_consented: AiCommentarySettings,
+) -> None:
+    """Every vendor was out. The row must say so by name rather than carry a null
+    where the evidence should be."""
+    _ = tenant_consented
+    read, _created = ai_drafting.enqueue(canonical_book, access, bound_cycle.id, SECTION)
+    exhausted = ai_client.ModelResult(
+        outcome="rate_limited",
+        model_requested=get_settings().ai.model,
+        failure_code="insufficient_quota",
+        vendor="google",
+        tier_position=3,
+        tier_attempts=(
+            {
+                "vendor": "anthropic",
+                "tier_position": 1,
+                "outcome": "rate_limited",
+                "failure_code": "insufficient_quota",
+                "failure_class": "availability",
+            },
+            {
+                "vendor": "openai",
+                "tier_position": 2,
+                "outcome": "failed",
+                "failure_code": "not_configured",
+                "failure_class": "availability",
+            },
+        ),
+    )
+    with ai_client.use_model(ai_client.RecordedModel([exhausted])):
+        row = _run(canonical_book, read.id)
+
+    assert row.status == "rate_limited"
+    assert row.output is None, "a rate-limited request produced nothing to store"
+    assert row.usage is not None
+    assert row.usage["vendor"] == "google"
+    assert [entry["vendor"] for entry in row.usage["tier_attempts"]] == ["anthropic", "openai"]
 
 
 def test_a_refusal_shows_a_status_and_no_draft(
@@ -855,10 +956,21 @@ def test_committing_records_which_paragraphs_were_ai_assisted(
         IcaapSectionCommit(base_rev=saved.working_rev, note="First pass."),
     )
     assert version.ai_provenance is not None
-    assert version.ai_provenance["schema"] == "icaap-ai-provenance-v1"
+    assert version.ai_provenance["schema"] == "icaap-ai-provenance-v2"
     assert version.ai_provenance["ai_paragraph_count"] == 1
     assert version.ai_provenance["suggestion_ids"] == [str(row.id)]
     assert version.ai_provenance["prompt_versions"] == ["icaap-draft-v1"]
+    # v2 (D-053): the vendor half rides the FILED artifact's evidence, because
+    # identical inputs can now be drafted by a different company's model.
+    stamp = version.ai_provenance["models"][0]
+    assert set(stamp) == {
+        "vendor",
+        "requested",
+        "served",
+        "fallback_used",
+        "tier_position",
+        "degraded_capabilities",
+    }
 
 
 def test_a_wholly_human_section_records_no_provenance(

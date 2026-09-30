@@ -92,6 +92,11 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 3,
   },
+  // Its own identity since 2026-09-22: this entry carried the `board` UUID
+  // (from PR #204), so the bootstrap could not enrol two signing keys for one
+  // user and aborted before seeding anything. The ids here and in
+  // `scripts/e2e_bootstrap.py` must agree — a cookie minted for the wrong
+  // subject authenticates as the other fixture's authority.
   macro_viewer: {
     id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
     roles: ["viewer"],

@@ -1,26 +1,15 @@
-'use client';
+"use client";
 
+import type { FtpCurvePointRead } from "@aequoros/risk-service-api";
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  Area,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import type { FtpCurvePointRead } from '@aequoros/risk-service-api';
-import {
-  CHART_GRID,
-  axisProps,
-  chartLegendProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+  gapAwareData,
+  LINE_SERIES_BASE,
+  tooltipHtml,
+} from "@/lib/echartsOptions";
+import { num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
 
 type StackPoint = {
   tenorLabel: string;
@@ -35,6 +24,10 @@ type StackPoint = {
  * liquidity-premium and funding-spread bands stacked on top (bps converted to
  * percentage points for display only), and the resulting FTP rate traced as a
  * line along the top of the stack.
+ *
+ * The three bands are stacked LINE series with `areaStyle`, which is how ECharts
+ * expresses a stacked area. They stay line series so the gap rule keeps holding:
+ * an area that bridged an unpriced tenor would fill the gap as well as span it.
  */
 export default function TransferCurveChart({
   curve,
@@ -43,79 +36,118 @@ export default function TransferCurveChart({
   curve: FtpCurvePointRead[];
   height?: number;
 }) {
-  const data: StackPoint[] = curve.map((c) => ({
-    tenorLabel: c.tenorLabel,
-    baseYieldPct: num(c.baseYieldPct),
-    liquidityPremiumPct: num(c.liquidityPremiumBps) / 100,
-    fundingSpreadPct: num(c.fundingSpreadBps) / 100,
-    ftpRatePct: num(c.ftpRatePct),
+  const tokens = useChartTokens();
+  const data: StackPoint[] = curve.map((point) => ({
+    tenorLabel: point.tenorLabel,
+    baseYieldPct: num(point.baseYieldPct),
+    liquidityPremiumPct: num(point.liquidityPremiumBps) / 100,
+    fundingSpreadPct: num(point.fundingSpreadBps) / 100,
+    ftpRatePct: num(point.ftpRatePct),
   }));
 
-  const minBase = Math.min(...data.map((d) => d.baseYieldPct));
-  const maxFtp = Math.max(...data.map((d) => d.ftpRatePct));
+  const minBase = Math.min(...data.map((point) => point.baseYieldPct));
+  const maxFtp = Math.max(...data.map((point) => point.ftpRatePct));
+
+  const bands = [
+    {
+      name: "Base market yield",
+      values: data.map((point) => point.baseYieldPct),
+      color: seriesColor(tokens, 0),
+      opacity: 0.25,
+      /** Basis points rather than percentage points, in the tooltip. */
+      bps: false,
+    },
+    {
+      name: "Liquidity premium",
+      values: data.map((point) => point.liquidityPremiumPct),
+      color: seriesColor(tokens, 1),
+      opacity: 0.35,
+      bps: true,
+    },
+    {
+      name: "Funding spread",
+      values: data.map((point) => point.fundingSpreadPct),
+      color: seriesColor(tokens, 2),
+      opacity: 0.35,
+      bps: true,
+    },
+  ];
+  const ftpColor = seriesColor(tokens, 3);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 20, top: 8, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: {
+      type: "category",
+      data: data.map((point) => point.tenorLabel),
+      boundaryGap: false,
+    },
+    yAxis: {
+      type: "value",
+      min: Math.floor(minBase - 1),
+      max: Math.ceil(maxFtp + 1),
+      axisLabel: { formatter: (value: number) => `${value}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: unknown) => {
+        const points = params as ReadonlyArray<{
+          dataIndex: number;
+          seriesName: string;
+          color: string;
+          value: number | null;
+        }>;
+        const first = points[0];
+        if (!first) return "";
+        const point = data[first.dataIndex];
+        return tooltipHtml(
+          point ? point.tenorLabel : null,
+          points.map((entry) => {
+            const band = bands.find((item) => item.name === entry.seriesName);
+            const value = entry.value;
+            return {
+              label: entry.seriesName,
+              color: entry.color,
+              value:
+                value === null || value === undefined
+                  ? "not priced"
+                  : band?.bps
+                    ? `${(value * 100).toFixed(0)} bp`
+                    : fmtPct(value, 2),
+            };
+          }),
+        );
+      },
+    },
+    series: [
+      ...bands.map((band) => ({
+        ...LINE_SERIES_BASE,
+        name: band.name,
+        stack: "curve",
+        smooth: true,
+        data: gapAwareData(band.values),
+        lineStyle: { color: band.color, width: 1.5 },
+        itemStyle: { color: band.color },
+        areaStyle: { color: band.color, opacity: band.opacity },
+      })),
+      {
+        ...LINE_SERIES_BASE,
+        name: "FTP rate",
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        data: gapAwareData(data.map((point) => point.ftpRatePct)),
+        lineStyle: { color: ftpColor, width: 2 },
+        itemStyle: { color: ftpColor },
+      },
+    ],
+  } as BiEChartsOption;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 8, right: 20, bottom: 4, left: 4 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="tenorLabel" {...axisProps} />
-        <YAxis
-          {...axisProps}
-          domain={[Math.floor(minBase - 1), Math.ceil(maxFtp + 1)]}
-          tickFormatter={(v: number) => `${v}%`}
-          width={48}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(value: number | string, name) => {
-            const v = typeof value === 'number' ? value : Number(value);
-            if (name === 'Liquidity premium' || name === 'Funding spread') {
-              return [`${(v * 100).toFixed(0)} bp`, name];
-            }
-            return [fmtPct(v, 2), name];
-          }}
-        />
-        <Legend {...chartLegendProps} />
-        <Area
-          type="monotone"
-          dataKey="baseYieldPct"
-          name="Base market yield"
-          stackId="curve"
-          stroke={seriesColor(0)}
-          fill={seriesColor(0)}
-          fillOpacity={0.25}
-          isAnimationActive={false}
-        />
-        <Area
-          type="monotone"
-          dataKey="liquidityPremiumPct"
-          name="Liquidity premium"
-          stackId="curve"
-          stroke={seriesColor(1)}
-          fill={seriesColor(1)}
-          fillOpacity={0.35}
-          isAnimationActive={false}
-        />
-        <Area
-          type="monotone"
-          dataKey="fundingSpreadPct"
-          name="Funding spread"
-          stackId="curve"
-          stroke={seriesColor(2)}
-          fill={seriesColor(2)}
-          fillOpacity={0.35}
-          isAnimationActive={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="ftpRatePct"
-          name="FTP rate"
-          stroke={seriesColor(3)}
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          isAnimationActive={false}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Transfer curve across ${data.length} tenors: base market yield with liquidity premium and funding spread stacked, and the resulting FTP rate`}
+    />
   );
 }

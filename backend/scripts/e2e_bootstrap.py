@@ -3,13 +3,22 @@
 Creates the schema, the GLOBAL reference registries a deployment gets from
 its migrations (jurisdictions, institution types, the regulatory-parameter
 control plane — ``tests/fixtures/reference_data.py``, shared with the
-hermetic pytest suite), the tenant scaffolding the API's zero-trust layer
-requires before any request can succeed (the demo organization and one user
-per role), and the canonical Sample Bank book (``tests/fixtures/
-canonical_bank_fixture.py``), carried forward to the reporting anchor
-currently due. Everything downstream — the liquidity baseline run, the
-institution profile, every package — flows through the API in the Playwright
-global setup and the journeys themselves: the same paths the product uses.
+hermetic pytest suite), and the tenant scaffolding the API's zero-trust layer
+requires before any request can succeed: the demo organization and one user
+per role.
+
+It then lays down the fixture BOOK, in the order a deployment would arrive at
+it: the canonical test book (the bank, its reporting-period spine and its
+governed parameter registers) carried forward to the reporting anchor currently
+due, the canonical position and GL sub-ledger the Data Engine would have
+ingested, the live fact plane the worker's ``pipeline_refresh`` would have
+derived, and the ``bi_*`` marts the ``bi`` worker lane would have built. The
+e2e stack runs no worker and no migration, so each of those has a fixture
+standing in for it; each one is a mirror of what the product writes, never a
+second source of numbers. Everything downstream — the liquidity baseline run,
+the institution profile, every package — flows through the API in the
+Playwright global setup and the journeys themselves: the same paths the product
+uses.
 
 The book is carried forward because the Returns workspace opens on the
 regulator's anchor (the last month end on or before today for a monthly return —
@@ -18,8 +27,8 @@ generated from an EXACT snapshot as of that date. The canonical book ends at
 a fixed month; without the carry-forward every anchor after it reads "no
 position has been computed", correctly, and the generate journeys have
 nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
-month end through the last month end on or before today, each repeating the canonical
-latest fact set unchanged.
+month end through the last month end on or before today, each repeating the
+canonical latest fact set unchanged.
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:
@@ -47,7 +56,7 @@ import os
 from datetime import date, timedelta
 from uuid import UUID
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -61,11 +70,19 @@ from app.core.authorization import (
 )
 from app.core.security import hash_password
 from app.db.base import Base
-from app.models import IntegrationKey, Organization, RegulatoryParameter, User
+from app.models import (
+    CanonicalPositionSnapshot,
+    IntegrationKey,
+    Organization,
+    RegulatoryParameter,
+    User,
+)
 from app.services import authorization, membership
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
+from tests.factories.canonical import seed_canonical_fixture
+from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     extend_canonical_test_book,
@@ -109,6 +126,43 @@ E2E_USERS = {
     # the defect the split closed, and the tenant grant surface blocks it.
     "validator": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
 }
+
+
+def _assert_one_identity_per_role() -> None:
+    """Every fixture role must be its OWN identity, checked before anything runs.
+
+    From ``a4223447`` (PR #204) until 2026-09-22 ``macro_viewer`` carried the
+    ``board`` UUID, and the consequences were nowhere near the cause. Two of
+    them:
+
+    * ``_enrol_signing_keys`` walks these entries and issues one software key
+      per signer identity, so the second visit to the shared id raised
+      ``SignerKeyError`` and the WHOLE bootstrap aborted — no canonical book, no
+      live plane, no marts, every Playwright journey unrunnable.
+    * Worse if it had not crashed: the loop below would have created one user
+      and then hung BOTH authority fixtures on it, so a test asserting that a
+      Macro-only viewer cannot reach Capital would have been silently asserting
+      it about a Capital approver.
+
+    Checked at import, so the failure names the collision instead of surfacing
+    three stages later as a key-enrolment error. ``dashboard/e2e/support/mint.ts``
+    mints cookies from its own copy of this table: the two must agree, exactly
+    as they must for ``E2E_PASSWORD``.
+    """
+    seen: dict[UUID, str] = {}
+    for role, user_id in E2E_USERS.items():
+        if (owner := seen.get(user_id)) is not None:
+            msg = (
+                f"E2E_USERS['{role}'] reuses the '{owner}' UUID {user_id}. Each fixture "
+                "role is a distinct authority fixture and needs its own identity: a "
+                "shared id makes the two roles one user, which merges their grants and "
+                "breaks signing-key enrolment."
+            )
+            raise SystemExit(msg)
+        seen[user_id] = role
+
+
+_assert_one_identity_per_role()
 
 #: The governed date from which an ICAAP report may be filed.
 #:
@@ -221,6 +275,8 @@ def main() -> None:
         session.commit()
         _enrol_signing_keys(session)
         _materialize_book(session)
+        session.flush()
+        _seed_canonical_positions(session)
         legacy_service_user = User(
             organization_id=DEMO_ORG_ID,
             email="e2e.legacy.integration@service.aequoros.invalid",
@@ -418,7 +474,61 @@ def main() -> None:
         )
         session.commit()
         _materialize_live_plane(session)
+        _materialize_bi_plane(session)
     print("e2e database bootstrapped")
+
+
+def _seed_canonical_positions(session: Session) -> None:
+    """Layer the canonical POSITION book on top of the period fact spine.
+
+    ``materialize_canonical_test_book`` writes the 12-period
+    ``bank_financial_facts`` spine and the governed parameter registers, but no
+    ``canonical_position_snapshots`` at all — so before this the position and
+    loan-level half of the product had nothing to read, and the BI marts built
+    from an empty book (H-013: ``materialize_bi_plane`` returned "no position
+    snapshots to build from" and every BI page would have opened on its empty
+    state).
+
+    ``tests/factories/canonical.py`` is the same fixture every hermetic suite
+    layers on the test book — the GL chart, one product per regulatory category,
+    retail and corporate counterparties, and one position per type with
+    hand-checkable aggregates — so the browser sees the book the unit tests are
+    written against rather than a second, unverified one. Fixture data on a
+    throwaway sqlite file, exactly as ``live_plane.py`` and ``bi_plane.py`` are:
+    it stands in for what the Data Engine and the worker would have written, and
+    it exists nowhere near a product code path.
+
+    **The position book is seeded at the date the FACT SPINE reaches, not at the
+    fixture's own default (H-015).** ``_materialize_book`` carries the spine
+    forward to ``latest_month_end_on_or_before()``, and the live plane therefore
+    computes at that date, while ``seed_canonical_fixture``'s default
+    ``FIXTURE_AS_OF`` is fixed. Left alone the two halves of one fixture sit at
+    different dates, and the consequences are silent rather than loud:
+    ``materialize_bi_plane`` builds at the latest POSITION date, looks for live
+    metrics there, finds them two months later, and copies **zero**
+    ``bi_fact_engine_metric`` rows — so every engine measure in BI is empty. A
+    browser journey asserting an engine figure would then be vacuous, or would
+    assert the broken state as if it were the product's. (Until 2026-09-29 this
+    also greyed the R1–R4 reconciliation checks; those are gone, but the empty
+    engine mart they were the loud symptom of is not.)
+    A real bank's book and its fact spine advance together;
+    passing the date explicitly is what makes the fixture behave that way. The
+    hermetic suite keeps the default, so nothing there moves.
+    """
+    as_of = latest_month_end_on_or_before()
+    seed_canonical_fixture(
+        session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=as_of
+    )
+    session.flush()
+    snapshots = session.scalar(
+        select(func.count())
+        .select_from(CanonicalPositionSnapshot)
+        .where(
+            CanonicalPositionSnapshot.organization_id == DEMO_ORG_ID,
+            CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+        )
+    )
+    print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
 
 
 def _materialize_book(session: Session) -> None:
@@ -458,6 +568,25 @@ def _materialize_live_plane(session: Session) -> None:
     print(f"live plane: {facts} current facts, modules ok: {', '.join(modules_ok) or 'none'}")
     for module, error in sorted(modules_failed.items()):
         print(f"live plane: module {module} failed: {error}")
+
+
+def _materialize_bi_plane(session: Session) -> None:
+    """Stand in for the ``bi`` worker lane's ``bi_mart_refresh`` job.
+
+    The BI surfaces read the ``bi_*`` marts, which only that lane writes — and
+    the e2e stack runs no worker. Runs the product's own builder for the
+    bank's latest snapshot date, AFTER the live plane so the engine tier and
+    the freshness signal has a build to report.
+    """
+    outcome = materialize_bi_plane(session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
+    session.commit()
+    if outcome is None:
+        print("bi plane: no position snapshots to build from")
+        return
+    print(
+        f"bi plane: {outcome.status}, {outcome.row_counts.get('bi_fact_position_daily', 0)} "
+        "position rows"
+    )
 
 
 def _govern_icaap_commencement(session: Session) -> None:

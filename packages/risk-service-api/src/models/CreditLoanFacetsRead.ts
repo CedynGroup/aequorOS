@@ -18,9 +18,17 @@ import {
   CreditFacetCountReadToJSON,
   CreditFacetCountReadToJSONTyped,
 } from "./CreditFacetCountRead";
+import type { CreditDataScopeRead } from "./CreditDataScopeRead";
+import {
+  CreditDataScopeReadFromJSON,
+  CreditDataScopeReadFromJSONTyped,
+  CreditDataScopeReadToJSON,
+  CreditDataScopeReadToJSONTyped,
+} from "./CreditDataScopeRead";
 
 /**
- *
+ * The blotter's own filter counts — every tally over the SAME scoped set the
+ * blotter pages, so a facet can never offer a value the page cannot show.
  * @export
  * @interface CreditLoanFacetsRead
  */
@@ -37,6 +45,12 @@ export interface CreditLoanFacetsRead {
    * @memberof CreditLoanFacetsRead
    */
   branches: Array<CreditFacetCountRead>;
+  /**
+   *
+   * @type {CreditDataScopeRead}
+   * @memberof CreditLoanFacetsRead
+   */
+  dataScope: CreditDataScopeRead;
   /**
    *
    * @type {Array<CreditFacetCountRead>}
@@ -65,6 +79,7 @@ export function instanceOfCreditLoanFacetsRead(
 ): value is CreditLoanFacetsRead {
   if (!("asOf" in value) || value["asOf"] === undefined) return false;
   if (!("branches" in value) || value["branches"] === undefined) return false;
+  if (!("dataScope" in value) || value["dataScope"] === undefined) return false;
   if (!("grades" in value) || value["grades"] === undefined) return false;
   if (!("products" in value) || value["products"] === undefined) return false;
   if (!("sectors" in value) || value["sectors"] === undefined) return false;
@@ -88,6 +103,7 @@ export function CreditLoanFacetsReadFromJSONTyped(
     branches: (json["branches"] as Array<any>).map(
       CreditFacetCountReadFromJSON,
     ),
+    dataScope: CreditDataScopeReadFromJSON(json["data_scope"]),
     grades: (json["grades"] as Array<any>).map(CreditFacetCountReadFromJSON),
     products: (json["products"] as Array<any>).map(
       CreditFacetCountReadFromJSON,
@@ -111,6 +127,7 @@ export function CreditLoanFacetsReadToJSONTyped(
   return {
     as_of: value["asOf"],
     branches: (value["branches"] as Array<any>).map(CreditFacetCountReadToJSON),
+    data_scope: CreditDataScopeReadToJSON(value["dataScope"]),
     grades: (value["grades"] as Array<any>).map(CreditFacetCountReadToJSON),
     products: (value["products"] as Array<any>).map(CreditFacetCountReadToJSON),
     sectors: (value["sectors"] as Array<any>).map(CreditFacetCountReadToJSON),

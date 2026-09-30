@@ -13,6 +13,7 @@ plus per-module daily aggregates over the ``LiveMetricSnapshot`` ladder.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -68,15 +69,42 @@ _MAX_WINDOW_MONTHS = 36
 _QUANT = Decimal("0.000001")
 
 # Mirror of the dashboard's components/live/moduleDisplay.ts PRIMARY_METRIC —
-# the one headline metric per live module. Keep the two maps in sync.
+# the one headline metric per live module, in LIVE_MODULES order (``_daily_stats``
+# emits rows in this order). ``tests/services/test_primary_metric_parity.py``
+# reads both maps and fails when they drift.
 _PRIMARY_METRIC_KEY: dict[str, str] = {
     "liquidity": "lcr_pct",
     "capital": "car_pct",
-    "irr": "eve_limit_pct",
+    "credit": "npl_ratio_pct",
+    # ΔEVE / Tier 1 is stored SIGNED (a loss is negative) and the engine judges
+    # it on magnitude; ``eve_limit_pct`` is the limit, a parameter, not a metric.
+    "irr": "worst_eve_change_pct_tier1",
     "fx": "nop_pct_tier1",
     "ftp": "portfolio_nim_pct",
+    # ``pit_pd_upper_pct`` is ADVISORY_ONLY in the authority registry, which is
+    # a reason to label it, not a reason to drop the module: leaving it out made
+    # the rating ladder silently absent from every window a Treasurer opened
+    # while the pulse card headlined the same figure. The window-analysis panel
+    # marks it (and FTP, and forecast) advisory — ``ADVISORY_HEADLINE_MODULES``
+    # in ``components/live/moduleDisplay.ts``, pinned against this registry by
+    # ``tests/services/test_primary_metric_parity.py``.
+    "rating": "pit_pd_upper_pct",
     "forecast": "year5_car_pct",
 }
+
+#: Daily-snapshot modules served only to a principal holding an exact aggregated
+#: ``view`` binding on the engine's module, filtered in SQL before aggregation.
+#: Capital, rating and forecast rows are still served to every tenant reader —
+#: their module cutovers own that decision, and this list stays identical to
+#: ``live_view._GATED_ENGINE_MODULES`` so the two surfaces cannot disagree about
+#: who may read an engine. It must only ever grow.
+_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
+    ("liquidity", Module.LIQUIDITY),
+    ("credit", Module.CREDIT),
+    ("irr", Module.IRRBB),
+    ("fx", Module.FX),
+    ("ftp", Module.FTP),
+)
 
 
 def compute_window(
@@ -90,13 +118,8 @@ def compute_window(
     """Ratio series + window statistics + daily aggregates for [start, end]."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
-    allowed = {}
-    for engine, module in (
-        ("liquidity", Module.LIQUIDITY),
-        ("irr", Module.IRRBB),
-        ("fx", Module.FX),
-        ("ftp", Module.FTP),
-    ):
+    allowed: dict[str, bool] = {}
+    for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,
@@ -107,13 +130,9 @@ def compute_window(
             surface="window_analytics",
         )
         allowed[engine] = decision is not None and decision.allowed
-    liquidity_allowed = allowed["liquidity"]
-    irrbb_allowed = allowed["irr"]
-    fx_allowed = allowed["fx"]
-    ftp_allowed = allowed["ftp"]
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
-        *(_liquidity_series(db, ctx, bank, periods) if liquidity_allowed else []),
+        *(_liquidity_series(db, ctx, bank, periods) if allowed["liquidity"] else []),
         *_capital_series(db, ctx, bank, periods),
     ]
     return WindowAnalyticsRead(
@@ -122,17 +141,7 @@ def compute_window(
         end_date=end_date,
         period_count=len(periods),
         ratios=ratios,
-        daily=_daily_stats(
-            db,
-            ctx,
-            bank,
-            start_date,
-            end_date,
-            liquidity_allowed=liquidity_allowed,
-            irrbb_allowed=irrbb_allowed,
-            fx_allowed=fx_allowed,
-            ftp_allowed=ftp_allowed,
-        ),
+        daily=_daily_stats(db, ctx, bank, start_date, end_date, allowed=allowed),
     )
 
 
@@ -163,6 +172,24 @@ def _validate_window(start_date: date, end_date: date) -> None:
 def _periods_in_window(
     db: Session, ctx: TenantContext, bank: Bank, start_date: date, end_date: date
 ) -> list[BankReportingPeriod]:
+    """EVERY reporting period whose ``period_end`` falls in [start, end], ascending.
+
+    Deliberately NOT ``domain.reporting.period_windows.trailing_month_end_window``,
+    which the five module dashboards select their sparkline through. That helper
+    exists because their fixed 13-ROW slice stood in for a 13-month horizon, so
+    its span changed meaning with the bank's feed cadence; it is anchored on the
+    latest period, looks back a number of MONTHS, and has no earlier bound to
+    respect.
+
+    Nothing stands in for anything here: the horizon is the caller's own two
+    dates, and ``period_count`` reports this count ON THE WIRE (the window
+    analysis footer reads "N periods"). Thinning the selection to month-ends
+    would drop periods the caller explicitly asked for and cap the 36-month
+    window at 13 points — a change to what an API field means, not a tidier
+    selection. A daily feeder returning ~250 points a year is the honest answer
+    to the dates it was given. Pinned by
+    ``tests/services/test_window_analytics.py::test_period_count_counts_every_period_the_caller_asked_for``.
+    """
     return list(
         db.scalars(
             select(BankReportingPeriod)
@@ -259,11 +286,14 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     start_date: date,
     end_date: date,
     *,
-    liquidity_allowed: bool,
-    irrbb_allowed: bool,
-    fx_allowed: bool,
-    ftp_allowed: bool,
+    allowed: Mapping[str, bool],
 ) -> list[WindowDailyStatRead]:
+    """``allowed`` carries one verdict per gated engine (``_GATED_ENGINE_MODULES``).
+
+    A gated engine absent from ``allowed`` is excluded: the gate list and the
+    verdicts come from the same tuple, so a missing key can only mean the
+    caller skipped the evaluation, and that must not read as permission.
+    """
     query = (
         select(LiveMetricSnapshot)
         .where(
@@ -274,14 +304,11 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
         )
         .order_by(LiveMetricSnapshot.snapshot_date)
     )
-    if not liquidity_allowed:
-        query = query.where(LiveMetricSnapshot.module != "liquidity")
-    if not irrbb_allowed:
-        query = query.where(LiveMetricSnapshot.module != "irr")
-    if not fx_allowed:
-        query = query.where(LiveMetricSnapshot.module != "fx")
-    if not ftp_allowed:
-        query = query.where(LiveMetricSnapshot.module != "ftp")
+    for engine, _module in _GATED_ENGINE_MODULES:
+        if not allowed.get(engine, False):
+            query = query.where(LiveMetricSnapshot.module != engine)
+    # capital carries no module gate here (``live-summary`` exposes it ungated
+    # today); the capital cutover owns that decision.
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

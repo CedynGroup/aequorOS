@@ -25,6 +25,7 @@ from app.db.session import get_sessionmaker
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RegulatoryPackage, User
+from app.services.authorization import EffectiveDataScope
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -71,6 +72,13 @@ class IntegrationPushAccess:
 class InstitutionPermissionAccess:
     ctx: TenantContext
     bank: Bank
+    #: The union of the DECLARED data scopes of the bindings that allowed this
+    #: request (``authorization.effective_data_scope``). It is deliberately
+    #: required rather than defaulted to whole-institution: a construction site
+    #: that forgot it would serve the whole book to a branch-scoped reader, which
+    #: is the fail-open this dimension exists to close. ``_require_institution_permission``
+    #: is the only construction site, so the field is always the evaluator's answer.
+    data_scope: EffectiveDataScope
 
 
 # HTTP methods the boundary treats as state-changing. GET/HEAD/OPTIONS are the
@@ -96,12 +104,27 @@ IMPERSONATION_READ_ONLY_ROUTES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+#: Routes an ``aeq_live_…`` machine credential may reach at all. Checked at the
+#: AUTHENTICATION boundary, before any flag or handler, so a route absent from
+#: this set refuses the credential however correct its own authorization is —
+#: which is how the Power BI feed came to refuse the only credential it accepts.
+#:
+#: Membership here is reachability, never authority: a feed key still has to hold
+#: its own complete ``bi_reader`` binding, and a push key its
+#: ``integration_writer`` one. The two bundles are disjoint by construction, so
+#: adding the feed route does not let a push key read it.
 INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         ("POST", "/api/v1/banks/{bank_id}/push-batches"),
         ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records"),
         ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit"),
         ("GET", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}"),
+        # The Power BI Stage B feed. Spelled literally because ``read_bi_feeds``
+        # imports THIS module, so importing its ``FEED_INTEGRATION_KEY_ROUTE``
+        # here would be a cycle. The duplication is pinned instead: a test in
+        # ``tests/api/test_bi_feeds.py`` asserts this entry equals that constant,
+        # so the two strings cannot drift apart silently.
+        ("GET", "/api/v1/banks/{bank_id}/bi/feeds/{dataset}"),
     }
 )
 
@@ -163,7 +186,11 @@ def get_current_principal(
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Integration keys are valid only for API Push.",
+                # Was "valid only for API Push", which stopped being true when the
+                # BI feed became the second surface a machine credential may reach.
+                # It says nothing about which key this is or what it COULD reach:
+                # that would let a caller enumerate the surface from a 401.
+                detail="This integration key is not valid for this endpoint.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     if principal.authorization_version is not None:
@@ -292,6 +319,10 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_account_administration",
         "require_integration_push_ingest",
         "require_capital_run",
+        "require_credit_run",
+        # BI reads are POST because a BiQuery does not fit a query string
+        # (D-027); the dependency is the human-principal gate, not a role.
+        "require_bi_read",
         "require_capital_plan_write",
         "require_capital_plan_approve",
         "require_ilaap_refresh",
@@ -916,8 +947,32 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     surface: str,
     detail: str,
     conditions: tuple[ConditionCheck, ...] = (),
+    require_whole_institution: bool = True,
 ) -> InstitutionPermissionAccess:
-    """Require one complete active binding for an exact tenant institution."""
+    """Require one complete active binding for an exact tenant institution.
+
+    ``require_whole_institution`` is the DATA-scope half of the sentence, and it
+    is a refusal rather than a narrowing. A figure that is the institution's —
+    a regulatory ratio against an institution limit, a sealed run over the
+    institution's book, a return addressed to the regulator — computed over one
+    branch is a wrong number with a right-looking name, so a principal whose
+    bindings declare a branch or region scope is denied
+    (``institution_grain_requires_whole_institution``) instead of being served a
+    slice under an institution heading.
+
+    **It defaults to True, so a surface that does not APPLY a data scope refuses a
+    narrowed one.** The alternative default would make a branch grant silently void
+    on every surface that has not been converted: the Org Owner would compose a
+    sentence restricting a reader to one branch, the server would store it, and
+    thirteen institution surfaces would serve the whole book anyway — a grant that
+    lies. Every surface this gate guards today is an institution figure (capital
+    adequacy, liquidity coverage, an FX position, a funds-transfer-price, a
+    regulatory package), so refusing is not merely the safe answer for them, it is
+    the correct one. A surface whose rows ARE branch-attributable opts out
+    explicitly and must then apply ``access.data_scope`` to the rows, the page and
+    every count; the credit blotter, its facets and the activity grid are the
+    first three (``backend/docs/credit_enforcement_rollout.md``).
+    """
 
     from app.services import authorization as authorization_service  # noqa: PLC0415
 
@@ -985,7 +1040,31 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
             surface=surface,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-    return InstitutionPermissionAccess(ctx=ctx, bank=bank)
+    # The scope is re-read from the bindings that MATCHED this decision; the id
+    # list is a selector, never the grant (``effective_data_scope``).
+    data_scope = authorization_service.effective_data_scope(
+        db,
+        organization_id=ctx.organization_id,
+        binding_ids=decision.matching_binding_ids,
+    )
+    if require_whole_institution and not data_scope.whole_institution:
+        authorization_denied(
+            reason="institution_grain_requires_whole_institution",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This figure is the institution's, so it requires a binding covering the "
+                "whole institution. A branch- or region-scoped grant cannot produce it."
+            ),
+        )
+    return InstitutionPermissionAccess(ctx=ctx, bank=bank, data_scope=data_scope)
 
 
 def require_capital_aggregated_view(
@@ -1053,6 +1132,140 @@ def require_capital_run(
         permission=Permission.RUN,
         surface="capital_run",
         detail="Running Capital calculations requires an active scoped binding.",
+    )
+
+
+#: Every credit dependency answers with the same sentence, so a denied reader is
+#: never told WHICH half of the sentence it is missing.
+_CREDIT_DETAIL = "Credit access requires an active scoped binding."
+
+
+def require_credit_aggregated_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``aggregated`` / ``view``, whole institution.
+
+    The dashboard, the migration matrix, the vintage curves and the advisory PDs
+    are the institution's portfolio figures: the dashboard's NPL ratio is
+    measured against the resolved prudential ceiling, and the other three are
+    rates over the institution's whole book. None of them says in its payload
+    what population it was computed over, so a branch-scoped slice would read as
+    the institution's number — refused instead.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="credit_aggregated_view",
+        detail=_CREDIT_DETAIL,
+    )
+
+
+def require_credit_concentration_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``restricted`` / ``view``, whole institution.
+
+    The concentration monitor's ``single_name`` dimension buckets on
+    ``cp:<counterparty name>`` / ``group:<reference>`` and its breach list
+    carries those keys, so the payload names obligors — ``restricted``, the same
+    sensitivity as the blotter, not the ``aggregated`` its route line once
+    assumed. It also compares each bucket against a Board limit expressed as a
+    share of the institution's capital, which is an institution-grain measure a
+    branch slice cannot produce.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_concentration_view",
+        detail=_CREDIT_DETAIL,
+    )
+
+
+def require_credit_blotter_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``restricted`` / ``view``, data scope APPLIED.
+
+    The blotter and its facet counts are named obligor-level rows, each carrying
+    its own branch, so they are the surface a branch or region grant was written
+    for: the caller applies ``access.data_scope`` to the rows AND to every count.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_blotter_view",
+        detail=_CREDIT_DETAIL,
+        require_whole_institution=False,
+    )
+
+
+def require_credit_activity_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``confidential`` / ``view``, data scope APPLIED.
+
+    Loan activity is a record-level grid — one row per restructure, write-off and
+    recovery, with the facility reference and the amount — and it carries no
+    counterparty name. ``confidential`` is what the platform's own sensitivity
+    rule says a record-level grid without an obligor identity is; it is NOT the
+    blotter's ``restricted``, so neither sentence implies the other. Each event
+    is attributable to a branch through the facility it names, so the scope
+    applies to the rows, the two counts and the monthly flows.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="credit_activity_view",
+        detail=_CREDIT_DETAIL,
+        require_whole_institution=False,
+    )
+
+
+def require_credit_run(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``confidential`` / ``run``, whole institution.
+
+    Running the credit scenario batch MINTS immutable ``RegulatoryRun`` rows —
+    the provenance a filed credit figure cites — so it is ``run``, never ``view``,
+    and the whole institution, because a run sealed over one branch would be a
+    filing record that claims to be the institution's book.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="credit_run",
+        detail="Running Credit calculations requires an active scoped binding.",
     )
 
 
@@ -2108,6 +2321,15 @@ CapitalRestrictedView = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_restricted_view)
 ]
 CapitalRun = Annotated[InstitutionPermissionAccess, Depends(require_capital_run)]
+CreditAggregatedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_credit_aggregated_view)
+]
+CreditConcentrationView = Annotated[
+    InstitutionPermissionAccess, Depends(require_credit_concentration_view)
+]
+CreditBlotterView = Annotated[InstitutionPermissionAccess, Depends(require_credit_blotter_view)]
+CreditActivityView = Annotated[InstitutionPermissionAccess, Depends(require_credit_activity_view)]
+CreditRun = Annotated[InstitutionPermissionAccess, Depends(require_credit_run)]
 IcaapView = Annotated[IcaapAccess, Depends(require_icaap_view)]
 IcaapCreate = Annotated[IcaapAccess, Depends(require_icaap_create)]
 IcaapEdit = Annotated[IcaapAccess, Depends(require_icaap_edit)]

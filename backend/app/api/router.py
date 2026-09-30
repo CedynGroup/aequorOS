@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
+from app.features.ask_bi import router as bi_ask_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.examiner_surfaces import router as examiner_router
+from app.features.export_bi import router as bi_export_router
 from app.features.export_icaap_drafts import router as icaap_draft_exports_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
@@ -18,6 +20,9 @@ from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_authorization import router as authorization_router
 from app.features.manage_banks import router as banks_router
+from app.features.manage_bi_commentary import router as bi_commentary_router
+from app.features.manage_bi_content import router as bi_content_router
+from app.features.manage_bi_notifications import router as bi_notifications_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
@@ -67,8 +72,12 @@ from app.features.manage_temenos_connections import router as temenos_connection
 from app.features.market_data_sources import router as market_data_sources_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
+from app.features.read_bi import require_bi_enabled
+from app.features.read_bi import router as bi_read_router
+from app.features.read_bi_feeds import router as bi_feeds_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
+from app.features.read_feature_flags import router as feature_flags_router
 from app.features.read_financial_workspace import router as financial_workspace_router
 from app.features.read_liquidity_monitoring import router as liquidity_monitoring_router
 from app.features.read_market_data_views import router as market_data_views_router
@@ -98,6 +107,8 @@ api_router.include_router(health_router)
 v1_router = APIRouter(prefix="/v1")
 
 v1_router.include_router(auth_router)
+# Mounted unconditionally: it is how the dashboard learns whether BI is on.
+v1_router.include_router(feature_flags_router)
 v1_router.include_router(attestation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(authorization_router)
 v1_router.include_router(banks_router, dependencies=BANK_ROUTE_DEPENDENCIES)
@@ -207,6 +218,74 @@ v1_router.include_router(window_analytics_router, dependencies=BANK_ROUTE_DEPEND
 v1_router.include_router(cashflow_window_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(liquidity_monitoring_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(sdi_diagnostics_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+# BI reads. ``BANK_ROUTE_DEPENDENCIES`` first, so a sibling tenant's BK- is
+# ``404 Bank not found.`` whatever the deployment flag says (the cross-tenant
+# sweep asserts that exact answer on every bank route); ``require_bi_enabled``
+# second, so a deployment without BI answers 404 for its own banks too. The flag
+# is a per-request dependency rather than a conditional mount because
+# ``get_settings()`` is cached for the life of the process: an import-time
+# decision could never be restated, including by the suites that pin the flag
+# per test, and the routes would then be invisible to the impersonation and
+# cross-tenant route sweeps.
+v1_router.include_router(
+    bi_read_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Governed exports, on the same two dependencies and in the same order: the
+# institution resolves (a sibling tenant's BK-* is 404) before the deployment
+# flag, which answers 404 for a deployment without BI. An export is a BI read
+# that leaves the platform, so it may never be reachable where a BI read is not.
+v1_router.include_router(
+    bi_export_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Saved dashboards and calculated measures, on the same two dependencies and in
+# the same order, for the same two reasons: a sibling tenant's BK-* is 404 before
+# anything else runs, and a deployment without BI has no dashboards to save. The
+# content surface writes no figure and serves none — it stores questions — but it
+# may never be reachable where a BI read is not.
+v1_router.include_router(
+    bi_content_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Threshold alerts and scheduled report subscriptions, on the same two
+# dependencies and in the same order. These are the only BI surface that makes
+# the platform act — judge a figure, mail a report — without anybody present, so
+# a deployment where a BI read is 404 must not be one where a subscription can be
+# created: it would keep sending after the feature was switched off.
+v1_router.include_router(
+    bi_notifications_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# AI commentary on a reader's own insights, on the same two dependencies and in
+# the same order. The commentary engine shipped complete — job type, exclusive
+# ``ai`` lane, handler, model, migration, service package, 105 tests — and with
+# NO ROUTE, so no user could ask for a draft and ``request_commentary`` was
+# called by nobody. ``tests/architecture/test_job_enqueue_reachability.py`` is
+# what convicted it and is what keeps this mount honest: a job type whose only
+# enqueue site sits in a function no route reaches fails that guard by design.
+v1_router.include_router(
+    bi_commentary_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# Natural-language questions (docs/bi.md §Phase 5), on the same two dependencies and
+# in the same order. It is the one BI surface that sends a READER'S OWN WORDS to a
+# vendor, so a deployment where a BI read is 404 must not be one where a question can
+# be asked; ``BI_NLQ_ENABLED`` is a third switch checked inside the route, because a
+# 404 there would make a surface that is merely switched off indistinguishable from
+# one that does not exist — and that is the flag an Org Owner may be waiting on.
+v1_router.include_router(
+    bi_ask_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
+# The Power BI Stage B feed, on the same two dependencies and in the same order.
+# A feed is a BI read pulled by a machine, so it may never be reachable where an
+# interactive BI read is not: a deployment that switched BI off must not keep
+# serving a report server that was configured while it was on.
+v1_router.include_router(
+    bi_feeds_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, Depends(require_bi_enabled)),
+)
 # ICAAP draft exports. No ``require_module_access``: that dependency answers
 # 403 for an institution class without the module, and the ICAAP surface has to
 # answer 404 for an SDI — the workspace is banks-only and its existence is not

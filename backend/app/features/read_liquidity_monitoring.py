@@ -9,7 +9,9 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.api.deps import DbSession, LiquidityMonitoringResource, TenantContext
-from app.models import Bank, CanonicalPosition
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.models import Bank, CanonicalPositionSnapshot
+from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     LiquidityMonitoringRead,
     ModuleReadinessRead,
@@ -23,16 +25,29 @@ from app.services import institution_types, sdi_readiness, sdi_views
 router = APIRouter(tags=["liquidity-monitoring"])
 
 
-def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
+def _effective_as_of(
+    db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None
+) -> date | None:
+    """The caller's as-of, else the newest business date the current book
+    carries (mirror of ``read_sdi_diagnostics._latest_book_as_of``): the latest
+    current-generation, accepted/warning position snapshot — never the
+    position's first-seen date.
+
+    ``None`` for a bank whose current book is empty. The route reports that as
+    ``as_of: null`` rather than today's date: an empty book has no business date,
+    and claiming one turns "nothing has been fed yet" into a position measured
+    today.
+    """
     if requested is not None:
         return requested
-    latest = db.scalar(
-        select(func.max(CanonicalPosition.as_of_date)).where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
+    return db.scalar(
+        select(func.max(CanonicalPositionSnapshot.as_of_date)).where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            *is_current_generation(CanonicalPositionSnapshot),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
     )
-    return latest or date.today()
 
 
 @router.get(
@@ -50,10 +65,13 @@ def get_liquidity_monitoring(
     ctx = access.ctx
     bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
-    monitoring = sdi_views.get_liquidity_monitoring(db, ctx, bank, when)
-    readiness = sdi_readiness.assess_sdi_readiness(db, ctx, bank, when)
+    # An empty book is probed at today's date so the readiness rows still name
+    # what has to be fed, but that date is never reported as the book's own.
+    probe = when or date.today()
+    monitoring = sdi_views.get_liquidity_monitoring(db, ctx, bank, probe)
+    readiness = sdi_readiness.assess_sdi_readiness(db, ctx, bank, probe)
     return LiquidityMonitoringRead(
-        as_of=monitoring.as_of.isoformat(),
+        as_of=when.isoformat() if when is not None else None,
         institution_class=institution_types.get_type(db, bank).institution_class,
         maturity_ladder=[
             SdiMaturityBucketRead(

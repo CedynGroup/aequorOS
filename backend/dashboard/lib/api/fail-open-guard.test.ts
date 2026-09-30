@@ -11,9 +11,9 @@
  * Run: `pnpm --filter @aequoros/dashboard test`
  */
 
-import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 
 /**
  * The dashboard package root. Resolved by walking up from this module rather
@@ -23,14 +23,14 @@ import { dirname, join, relative, resolve } from 'node:path';
 function dashboardRoot(): string {
   let dir = __dirname;
   for (let i = 0; i < 8; i += 1) {
-    const manifest = join(dir, 'package.json');
+    const manifest = join(dir, "package.json");
     if (existsSync(manifest)) {
-      const name = JSON.parse(readFileSync(manifest, 'utf8')).name as string;
-      if (name === '@aequoros/dashboard') return dir;
+      const name = JSON.parse(readFileSync(manifest, "utf8")).name as string;
+      if (name === "@aequoros/dashboard") return dir;
     }
     dir = dirname(dir);
   }
-  throw new Error('could not locate the @aequoros/dashboard package root');
+  throw new Error("could not locate the @aequoros/dashboard package root");
 }
 
 const ROOT = dashboardRoot();
@@ -62,59 +62,84 @@ const ROOT = dashboardRoot();
  * `settings`, `impersonation`, and the ingestion/connection consoles.
  */
 const SCANNED_DIRS = [
-  'components/stress',
-  'components/liquidity',
-  'components/basel',
-  'components/credit',
-  'components/irr',
-  'components/fx',
-  'components/ftp',
-  'components/forecasting',
-  'components/sdi',
-  'components/workbench',
-  'components/risk',
-  'components/reports',
-  'components/alerts',
-  'components/home',
-  'components/live',
-  'components/submissions',
-  'components/behavioral',
-  'components/charts',
-  'components/institution',
-  'components/markets',
-  'components/positions',
+  "components/stress",
+  "components/liquidity",
+  "components/basel",
+  "components/credit",
+  "components/irr",
+  "components/fx",
+  "components/ftp",
+  "components/forecasting",
+  "components/sdi",
+  "components/workbench",
+  "components/risk",
+  "components/reports",
+  "components/alerts",
+  "components/home",
+  "components/live",
+  "components/submissions",
+  "components/behavioral",
+  "components/charts",
+  "components/institution",
+  "components/markets",
+  "components/positions",
   // The ICAAP workspace publishes the institution's own capital assessment:
   // every figure it shows is a regulatory one, and the block cards decide what
   // a preparer believes about staleness. `lib/api/icaap.ts` is listed as a file
   // because the hooks and the display types live there.
-  'components/icaap',
-  'app/(app)',
+  "components/icaap",
+  // The BI widgets decide what a reader sees where the server refused a view or
+  // answered with nothing. Both of those states are one `?? 0` away from being
+  // a fabricated measurement on a board pack, which is exactly this guard's
+  // subject — so the whole tree is in scope from the day it exists.
+  "components/bi",
+  // The coverage notice is the only thing on a scoped reader's screen that says
+  // the totals beside it are not the institution's. It renders no figure itself,
+  // but it DECIDES how a figure is read — which is the half of the P0-19 finding
+  // that was outside the scan for the whole remediation programme — so it is in
+  // scope from the day it exists.
+  "components/access",
+  "app/(app)",
 ];
 const SCANNED_FILES: string[] = [
-  'lib/api/icaap.ts',
+  "lib/api/icaap.ts",
+  // The natural-language surface's reader and its transport. They are listed for
+  // the same reason `icaapRiskCapitalNormalize.ts` is: the fail-closed rules for
+  // that surface live HERE, not in the components. `ask.ts` decides what a reader
+  // is told when a confirmed question measured nothing — and "nothing measured"
+  // becoming a zero is precisely this guard's subject.
+  "lib/api/ask.ts",
+  "lib/api/askTransport.ts",
   // P2's risk & capital hooks and the declared contract types. Same reason
   // as P1's: the display types and every figure's nullability live there, so
   // a `?? 0` introduced on the transport would never be seen by a scan of
   // `components/` alone.
-  'lib/api/icaapRiskCapital.ts',
+  "lib/api/icaapRiskCapital.ts",
   // The adapter itself. It is where the fail-closed rules live — an absent
   // figure stays absent, an unknown verdict is never a pass — so a `?? 0`
   // introduced HERE would reach every P2 screen at once.
-  'lib/api/icaapRiskCapitalNormalize.ts',
-  'lib/icaap/appetite.ts',
+  "lib/api/icaapRiskCapitalNormalize.ts",
+  "lib/icaap/appetite.ts",
   // P3's filing adapter. Same reason again: the fail-closed rules for "can
   // this be filed", "may this officer decide" and "is this document attached"
   // all live here, so a `?? true` introduced HERE would offer a filing button
   // on every ICAAP screen at once.
-  'lib/api/icaapFilingNormalize.ts',
-  'lib/api/icaapFiling.ts',
+  "lib/api/icaapFilingNormalize.ts",
+  "lib/api/icaapFiling.ts",
   // The IRRBB standardised framework's adapter and hooks. Same reason a third
   // time: every figure on that screen arrives as text or null and is decided
   // here, so a `?? 0` introduced HERE would turn an unmeasured economic-value
   // loss into a measured zero on every panel at once — and zero is a real,
   // excellent answer for that figure.
-  'lib/api/irrbbSfNormalize.ts',
-  'lib/api/irrbbSf.ts',
+  "lib/api/irrbbSfNormalize.ts",
+  "lib/api/irrbbSf.ts",
+  // The reader-coverage adapter. Same reason a fifth time: it decides whether a
+  // total may be presented as the institution's own, and every fail-closed rule
+  // for that decision lives here — so a `?? "all"` or a silent whole-book
+  // default introduced HERE would present a branch-scoped slice as the bank's
+  // whole book on every surface at once. `lib/api/dataScope.test.ts` holds the
+  // behavioural half; this guard holds the shape.
+  "lib/api/dataScope.ts",
 ];
 
 type Rule = {
@@ -131,12 +156,83 @@ type Rule = {
   allow?: Record<string, string>;
 };
 
+function walk(dir: string, out: string[]): void {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      walk(full, out);
+      continue;
+    }
+    if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+  }
+}
+
+const files: string[] = [];
+for (const dir of SCANNED_DIRS) walk(join(ROOT, dir), files);
+for (const file of SCANNED_FILES) files.push(join(ROOT, file));
+
+/**
+ * Every field the scanned surfaces DECLARE as nullable.
+ *
+ * P0-23 used to carry a hand-written list of eleven field names, which meant the
+ * rule policed exactly those eleven and nothing else. That is how
+ * `total_regulatory_capital` reached the stress board as `value == null ? 0 :
+ * num(value)` — a null final-year capital figure drawing the headroom bridge to a
+ * fabricated wipe-out (audit A360-6). The list was not wrong; it was a list.
+ *
+ * So the field set is now READ from the type declarations in the same tree the
+ * rule scans: anything declared `foo: … | null` is, by the payload's own
+ * admission, a figure that can be absent. A new nullable field is policed the day
+ * it is declared, with nobody remembering to add it here.
+ */
+function nullableFieldNames(sources: readonly string[]): ReadonlySet<string> {
+  const found = new Set<string>();
+  for (const file of sources) {
+    const text = readFileSync(file, "utf8");
+    for (const match of text.matchAll(
+      /^\s*([a-z][A-Za-z0-9_]*)\??\s*:\s*[^;\n]*\|\s*null/gm,
+    )) {
+      // SNAKE_CASE only, deliberately. These are the server's wire field names,
+      // and they are specific enough to be unambiguous inside an expression. A
+      // camelCase declaration is as likely to be a local or a view-model field —
+      // `value`, `net`, `run` — and matching those turns the rule into noise that
+      // buries its own findings. Narrow and true beats broad and ignored.
+      if (match[1].includes("_")) found.add(match[1]);
+    }
+  }
+  return found;
+}
+
+/**
+ * The eleven P0-23 was born with. Kept as a FLOOR, not as the rule: if a type
+ * moves out of the scanned tree the rule must not quietly stop covering the
+ * figure that caused the original finding.
+ */
+const P0_23_FLOOR: readonly string[] = [
+  "stressed_lcr_pct",
+  "baseline_lcr_pct",
+  "cet1_ratio_pct",
+  "car_min_pct",
+  "lcr_min_pct",
+  "car_target_pct",
+  "cumulative_mismatch_ghs",
+  "pct_total_deposits",
+  "top_five_pct",
+  "value_pct",
+  "car_pct",
+];
+
+const NULLABLE_FIELDS: readonly string[] = [
+  ...new Set([...P0_23_FLOOR, ...nullableFieldNames(files)]),
+].sort();
+
 const RULES: Rule[] = [
   {
-    id: 'P0-21 hardcoded regulatory floor',
-    pattern: /^\s*(?:export\s+)?const\s+[A-Z][A-Z0-9_]*(?:FLOOR|MINIMUM|MIN_PCT|TARGET_PCT)[A-Z0-9_]*\s*=\s*-?\d/m,
+    id: "P0-21 hardcoded regulatory floor",
+    pattern:
+      /^\s*(?:export\s+)?const\s+[A-Z][A-Z0-9_]*(?:FLOOR|MINIMUM|MIN_PCT|TARGET_PCT)[A-Z0-9_]*\s*=\s*-?\d/m,
     message:
-      'A regulatory threshold is hardcoded as a module constant. Read the floor from the run/summary payload instead — an SDI s.29 floor is 10%, a universal bank 13%, and display code cannot know which tenant it is rendering.',
+      "A regulatory threshold is hardcoded as a module constant. Read the floor from the run/summary payload instead — an SDI s.29 floor is 10%, a universal bank 13%, and display code cannot know which tenant it is rendering.",
   },
   {
     // TWO SPELLINGS, ONE DEFECT (NEW-51). This rule originally matched only the
@@ -157,25 +253,29 @@ const RULES: Rule[] = [
     // The camelCase half also covers the shape with no `_pct` suffix at all
     // (`tier1Min ?? 8`, `cet1Min ?? 6.5`), which is how an "assumed minimum"
     // gets written down. Keep BOTH halves whenever this rule is edited.
-    id: 'P0-19 zero-on-absence floor fallback',
+    id: "P0-19 zero-on-absence floor fallback",
     pattern:
       /(?:_min_pct|_floor|_target_pct|_critical_pct|_early_warning_pct|_limit_pct|Min|Minimum|Floor|Threshold|Limit|Target|Critical|Warning)(?:Pct|Ratio|Bps)?\s*(?:\?\?|\|\|)\s*['"`]?-?\d/,
     message:
       "A missing regulatory floor is being defaulted to a number (e.g. `?? '0'`, `?? '10'`, `?? 8`). Every ratio clears a 0% floor and a written-down floor is judged against a bar nobody set, so this renders breaches as compliant — or compliance as a breach. Both spellings are covered: the wire's `car_min_pct` and the generated client's `carMinPct`. Use `numOrNull` and `assessAgainstFloor` — an absent floor must render as \"not assessed\", never a substituted ladder.",
   },
   {
-    id: 'P0-23 num() applied to a nullable regulatory figure',
-    pattern:
-      /\bnum\(\s*[A-Za-z0-9_.?!\[\]]*\b(?:stressed_lcr_pct|baseline_lcr_pct|cet1_ratio_pct|car_min_pct|lcr_min_pct|car_target_pct|cumulative_mismatch_ghs|pct_total_deposits|top_five_pct|value_pct|car_pct)\b/g,
+    id: "P0-23 num() applied to a nullable regulatory figure",
+    pattern: new RegExp(
+      String.raw`\bnum\(\s*[A-Za-z0-9_.?!\[\]]*\b(?:` +
+        NULLABLE_FIELDS.join("|") +
+        String.raw`)\b`,
+      "g",
+    ),
     message:
-      '`num()` maps null to 0, and this field is nullable — a missing ratio would plot and compare as a real 0%. Use `numOrNull`, or test the field for null on the same expression and render the absence.',
+      "`num()` maps null to 0, and this field is nullable — a missing ratio would plot and compare as a real 0%. Use `numOrNull`, or test the field for null on the same expression and render the absence.",
     acceptExplicitNullGuard: true,
   },
   {
-    id: 'P0-21 hardcoded floor in a caption',
+    id: "P0-21 hardcoded floor in a caption",
     pattern: /\bfloor \d+(?:\.\d+)?%/,
     message:
-      'A column or chart caption states a numeric floor literally. Derive the caption from the floor on the payload (`fmtFloorPct`) so it cannot disagree with the threshold actually applied.',
+      "A column or chart caption states a numeric floor literally. Derive the caption from the floor on the payload (`fmtFloorPct`) so it cannot disagree with the threshold actually applied.",
   },
   {
     // NEW-53. A FLOOR HAS ONE AUTHORITY, AND IT IS NOT A STORED RUN.
@@ -197,7 +297,7 @@ const RULES: Rule[] = [
     // that genuinely wants to state what a PAST run applied (a run-detail or
     // audit view) is a legitimate use: add it to this rule's `allow` map with
     // that reason, so the exception is recorded rather than assumed.
-    id: 'NEW-53 stored-run threshold used as the current floor',
+    id: "NEW-53 stored-run threshold used as the current floor",
     // Calls only — the lookbehind lets the helper's own definition (and its
     // docstring, which names this trap) stay in `components/liquidity/runData.ts`.
     pattern: /(?<!function\s)\brunMetricThreshold\s*\(/,
@@ -213,7 +313,7 @@ const RULES: Rule[] = [
     // — a client-computed margin whose divide-guard returned a REAL, and
     // unusually good, 0%. It survived every earlier sweep because
     // `components/ftp/` was outside the scan.
-    id: '§5 client-side ratio with a fabricated zero',
+    id: "§5 client-side ratio with a fabricated zero",
     pattern:
       /(?:Pct|Ratio|Margin|Nim|Coverage|Headroom)\b\s*[:=]\s*[^;]{0,240}\?[^;]{0,240}\/[^;]{0,120}:\s*-?\d/,
     message:
@@ -242,7 +342,7 @@ function matches(source: string, pattern: RegExp): Hit[] {
 }
 
 function lineOf(source: string, index: number): number {
-  return source.slice(0, index).split('\n').length;
+  return source.slice(0, index).split("\n").length;
 }
 
 /**
@@ -253,46 +353,57 @@ function hasNullGuard(lines: string[], source: string, hit: Hit): boolean {
   const field = /\b([a-z0-9_]+)\b\s*\)?\s*$/.exec(hit.text)?.[1];
   if (!field) return false;
   const line = lineOf(source, hit.index) - 1;
-  const window = lines.slice(Math.max(0, line - 5), line + 3).join('\n');
+  const window = lines.slice(Math.max(0, line - 5), line + 3).join("\n");
   return (
-    new RegExp(`${field}\\s*(?:===|!==)\\s*null`).test(window) ||
+    // `!= null` / `== null` too: the loose form is the idiomatic JS test for
+    // "null or undefined" and is exactly as correct as the strict one. Accepting
+    // only `!==` reported `classification.data?.npl_ratio != null ? … : "—"` as a
+    // fail-open when it is the very shape this rule asks for.
+    new RegExp(`${field}\\s*(?:===|!==|==|!=)\\s*null`).test(window) ||
     new RegExp(`${field}\\s*!==\\s*undefined`).test(window) ||
     new RegExp(`numOrNull\\([^)]*${field}`).test(window)
   );
 }
 
-function walk(dir: string, out: string[]): void {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
-  }
+// P0-23's derived field set must be real. If the declaration scan ever returns
+// nothing, the rule silently narrows to the eleven names it was born with and the
+// whole point of deriving it is lost — so require that it found meaningfully more,
+// and that it found the figure whose absence the original finding was about.
+assert.ok(
+  NULLABLE_FIELDS.length > P0_23_FLOOR.length + 20,
+  `P0-23 derived only ${NULLABLE_FIELDS.length} nullable fields from the scanned ` +
+    `types (floor is ${P0_23_FLOOR.length}). The declaration scan has stopped ` +
+    `finding them — fix the scan, do not lower this number.`,
+);
+for (const proof of [
+  "total_regulatory_capital",
+  "total_rwa",
+]) {
+  assert.ok(
+    NULLABLE_FIELDS.includes(proof),
+    `P0-23 does not cover ${proof}, the field that reached the stress board as a ` +
+      `fabricated zero (audit A360-6). The derivation is not reading its types.`,
+  );
 }
-
-const files: string[] = [];
-for (const dir of SCANNED_DIRS) walk(join(ROOT, dir), files);
-for (const file of SCANNED_FILES) files.push(join(ROOT, file));
 
 const failures: string[] = [];
 
 for (const file of files) {
-  const rel = relative(ROOT, file).split('\\').join('/');
-  const source = readFileSync(file, 'utf8');
+  const rel = relative(ROOT, file).split("\\").join("/");
+  const source = readFileSync(file, "utf8");
   // Comments explain the defect by name in several of these files; strip line
   // comments and block comments so prose about the bug is not read as the bug.
   const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^[ \t]*\/\/.*$/gm, '');
-  const lines = code.split('\n');
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+  const lines = code.split("\n");
   for (const rule of RULES) {
     if (rule.allow && rel in rule.allow) continue;
     for (const hit of matches(code, rule.pattern)) {
-      if (rule.acceptExplicitNullGuard && hasNullGuard(lines, code, hit)) continue;
+      if (rule.acceptExplicitNullGuard && hasNullGuard(lines, code, hit))
+        continue;
       failures.push(
-        `${rel}:${lineOf(code, hit.index)} [${rule.id}] matched ${JSON.stringify(hit.text.trim())}\n    → ${rule.message}`
+        `${rel}:${lineOf(code, hit.index)} [${rule.id}] matched ${JSON.stringify(hit.text.trim())}\n    → ${rule.message}`,
       );
       break;
     }
@@ -302,11 +413,98 @@ for (const file of files) {
 // The guard must actually be looking at something. The floor is raised with
 // every widening so a directory silently dropping out of the scan fails here
 // rather than quietly shrinking the covered surface.
-assert.ok(files.length >= 300, `expected to scan the regulatory UI, found ${files.length} files`);
+assert.ok(
+  files.length >= 300,
+  `expected to scan the regulatory UI, found ${files.length} files`,
+);
+
+// --- the negative control (audit A8-10) ---------------------------------------
+//
+// Everything above this line can pass while proving nothing. A scan whose
+// regexes have silently stopped matching — because a field was renamed, because
+// a `?? 0` moved onto the next line, because a rule was edited and its
+// alternation broke — reports "368 regulatory UI files clean" forever, and that
+// sentence reads exactly like a guard that is working. This file's own comments
+// record being bitten by that three times: the camelCase half of the floor
+// fallback was unpoliced while this printed clean, `components/ftp/` was outside
+// the scan, and the stale count in CI's gate inventory said 220 when it was 368.
+//
+// So every rule is required to convict a KNOWN violation. One snippet per rule,
+// written to look like the defect it names, and a rule with no snippet fails
+// here — a new rule cannot be added without a proof that it can fire.
+const SELF_PROOFS: Record<string, string> = {
+  "P0-21 hardcoded regulatory floor": "export const CAR_FLOOR_PCT = 13;",
+  "P0-19 zero-on-absence floor fallback":
+    "const floor = num(data?.buffers.carMinPct ?? '10');",
+  "P0-23 num() applied to a nullable regulatory figure":
+    "const car = num(summary.car_pct);",
+  "P0-21 hardcoded floor in a caption":
+    'const caption = "against a floor 13% today";',
+  "NEW-53 stored-run threshold used as the current floor":
+    "const t = runMetricThreshold(run, key);",
+  "§5 client-side ratio with a fabricated zero":
+    "const provisionCoverage = denominator ? held / denominator : 0;",
+};
+
+const unproven = RULES.filter((rule) => !(rule.id in SELF_PROOFS)).map(
+  (rule) => rule.id,
+);
+assert.deepEqual(
+  unproven,
+  [],
+  `every fail-open rule needs a snippet in SELF_PROOFS proving it still fires; missing: ${unproven.join(", ")}`,
+);
+
+const stale = Object.keys(SELF_PROOFS).filter(
+  (id) => !RULES.some((rule) => rule.id === id),
+);
+assert.deepEqual(
+  stale,
+  [],
+  `SELF_PROOFS names rules that no longer exist, so it proves nothing about the live set: ${stale.join(", ")}`,
+);
+
+const inert: string[] = [];
+for (const rule of RULES) {
+  if (matches(SELF_PROOFS[rule.id], rule.pattern).length === 0) {
+    inert.push(rule.id);
+  }
+}
+assert.deepEqual(
+  inert,
+  [],
+  `these rules did NOT match their own known violation, so they are no longer policing anything and every "clean" result above is meaningless: ${inert.join(", ")}`,
+);
+
+// And the controls must not be so loose that they convict innocent code, or the
+// proof above is satisfied by a rule that matches everything.
+const INNOCENT = [
+  "const shown = numOrNull(data?.buffers.carMinPct);",
+  "const provisionCoverage = denominator ? held / denominator : null;",
+  'const caption = "measured against the regulatory minimum";',
+  "export const COLUMN_WIDTH_PX = 240;",
+];
+for (const rule of RULES) {
+  for (const line of INNOCENT) {
+    assert.equal(
+      matches(line, rule.pattern).length,
+      0,
+      `rule ${rule.id} matched code that is correct, so it will be disabled by whoever hits the false positive: ${line}`,
+    );
+  }
+}
+
+console.log(
+  `fail-open guard: ${RULES.length} rules, each proven to convict its own violation.`,
+);
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
-  console.error(`\n${failures.length} fail-open pattern(s) found in the regulatory UI.`);
+  console.error(
+    `\n${failures.length} fail-open pattern(s) found in the regulatory UI.`,
+  );
   process.exit(1);
 }
-console.log(`fail-open-guard.test.ts: ${files.length} regulatory UI files clean.`);
+console.log(
+  `fail-open-guard.test.ts: ${files.length} regulatory UI files clean.`,
+);

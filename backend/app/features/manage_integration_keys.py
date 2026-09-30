@@ -1,9 +1,19 @@
-"""Integration keys: issue/list/revoke credentials for bank middleware.
+"""Integration keys: issue/list/revoke machine credentials for one institution.
+
+Two purposes, one flow. A ``writer`` key pushes canonical data (Data Engine →
+API Push); a ``reader`` key pulls the curated analytics feed
+(``docs/bi.md`` §Phase 4) and may optionally be narrowed to branches or regions.
+Both are issued through the same atomic path in
+``app/services/integration_keys.py``, which creates the service identity, the
+credential and the ONE binding that carries its authority together — so there is
+no second mechanism to review, and revoking either ends all three.
 
 The raw key is returned exactly once at issuance; listing exposes only the
-display prefix and lifecycle metadata. Requests authenticated WITH an
-integration key cannot list or revoke keys (scoped account-administration
-authority requires a human principal).
+display prefix, the lifecycle metadata and the DERIVED purpose and slice.
+Requests authenticated WITH an integration key cannot list or revoke keys
+(scoped account-administration authority requires a human principal), and every
+one of these three reads is explicitly organization-filtered in the service
+because ``integration_keys`` is deliberately not RLS-forced.
 """
 
 from __future__ import annotations
@@ -50,7 +60,23 @@ def list_integration_keys(db: DbSession, ctx: AdminCtx) -> IntegrationKeyListRea
 def issue_integration_key(
     payload: IntegrationKeyIssueRequest, db: DbSession, ctx: AdminCtx
 ) -> IntegrationKeyIssued:
-    return integration_keys.issue_key(db, ctx, payload.bank_id, payload.label)
+    """Issue one credential for one exact institution, for one purpose.
+
+    The authority required is unchanged by the second purpose: one
+    organization-wide ACCOUNT/restricted ``administer`` binding
+    (``require_account_administration``) plus an exact ``BK-*`` target, which the
+    service resolves inside the caller's tenant.
+    """
+
+    return integration_keys.issue_key(
+        db,
+        ctx,
+        payload.bank_id,
+        payload.label,
+        purpose=payload.purpose,
+        data_scope=payload.data_scope_kind,
+        data_scope_values=payload.data_scope_values,
+    )
 
 
 @router.post(

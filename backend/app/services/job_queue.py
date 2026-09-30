@@ -57,18 +57,57 @@ JOB_TYPES = (
     "database_direct_health",
     "desk_capture",
     "icaap_ai_draft",
+    "bi_commentary",
+    "bi_nlq_translate",
+    "bi_mart_refresh",
+    "bi_mart_backfill",
+    "bi_retention",
+    "bi_export",
+    "bi_alert_evaluate",
+    "bi_subscription_scan",
+    "bi_subscription_run",
 )
 
 #: The lane a worker process must be running to claim a job type.
 #:
-#: Lanes exist for ONE reason: ``icaap_ai_draft`` is the only job that holds an
-#: external model credential, and adding it to ``HANDLERS`` (which the parity
-#: test above requires) would otherwise make EVERY worker able to claim it —
+#: Lanes exist for ONE reason: the AI types are the only jobs that hold an
+#: external model credential, and adding them to ``HANDLERS`` (which the parity
+#: test above requires) would otherwise make EVERY worker able to claim them —
 #: including the API's in-process thread. The default lane never contains an AI
 #: type, so the core fleet is unchanged by construction rather than by
-#: configuration. BI commentary adds its own ``"bi"`` entries here.
+#: configuration. ``bi_commentary`` is an AI type for exactly that reason and NOT
+#: a BI-lane one: it is the BI surface's job, but the process that runs it is the
+#: process holding the model key, and that process must run nothing else.
+#:
+#: The ``bi`` lane reuses that mechanism for a different reason: mart builds
+#: are heavy and the queue is FIFO across every type in a worker's selection,
+#: so a BI job in the core selection would sit ahead of a bank's
+#: ``pipeline_refresh``. Keeping BI out of the default lane means the core
+#: fleet's latency is unchanged by construction, and the API's in-process
+#: thread can never run a mart build.
 DEFAULT_LANE = "core"
-JOB_LANES: Mapping[str, str] = MappingProxyType({"icaap_ai_draft": "ai"})
+JOB_LANES: Mapping[str, str] = MappingProxyType(
+    {
+        "icaap_ai_draft": "ai",
+        "bi_commentary": "ai",
+        "bi_nlq_translate": "ai",
+        "bi_mart_refresh": "bi",
+        "bi_mart_backfill": "bi",
+        "bi_retention": "bi",
+        "bi_export": "bi",
+        "bi_alert_evaluate": "bi",
+        "bi_subscription_scan": "bi",
+        "bi_subscription_run": "bi",
+    }
+)
+
+#: Lanes whose process must run NOTHING else. ``ai`` is exclusive because the
+#: process holding the model credential must not host any other handler (a
+#: compromise of one handler cannot reach the key). ``bi`` is deliberately NOT
+#: exclusive: it is separated for scheduling, not for secrecy, so a developer
+#: may run ``lane:core,lane:bi`` in one local process while production pins
+#: ``lane:bi`` to its own service (D-007).
+EXCLUSIVE_LANES: frozenset[str] = frozenset({"ai"})
 
 
 def lane_of(job_type: str) -> str:
@@ -78,6 +117,7 @@ def lane_of(job_type: str) -> str:
 def job_types_in_lane(lane: str) -> tuple[str, ...]:
     """Every declared job type belonging to ``lane``, in JOB_TYPES order."""
     return tuple(job_type for job_type in JOB_TYPES if lane_of(job_type) == lane)
+
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
 _BACKOFF_BASE_SECONDS = 5
@@ -116,7 +156,47 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     # does not recover it, it duplicates it — and here the duplicate was
     # abusive traffic to the regulator this platform reports to.
     "desk_capture": 6 * 60 * 60,
+    # ``bi_export`` renders up to ``BI_EXPORT_ROW_CAP`` rows (100 000) into a
+    # PDF or a workbook. Only HALF of that is bounded by a setting: the SQL runs
+    # under ``BI_EXPORT_TIMEOUT_MS`` (120 s), and the layout that follows it is
+    # not timed at all — reportlab lays out every row of a 100 000-row table.
+    # There is no measurement yet, so the window is set well above any plausible
+    # render rather than at a number anyone has observed; that is the honest
+    # position, and it errs the safe way. A reclaimed export re-renders to the
+    # SAME object path and is therefore wasteful rather than corrupting, but it
+    # would also write a second ``bi_query_log`` row for one file, which is the
+    # reason not to leave it on the fleet default.
+    "bi_export": 30 * 60,
+    # ``bi_subscription_run`` renders one artifact PER RECIPIENT, up to
+    # ``MAX_RECIPIENTS``. Unlike ``bi_export`` its runtime is bounded on BOTH
+    # halves: a delivery renders under the INTERACTIVE caps (5 000 rows, a 10 s
+    # statement timeout), not the export caps, so the worst case is fifty renders
+    # of a five-thousand-row summary. The window is roughly 2.4x that bound, which
+    # is the ``etl_dedup`` lesson applied rather than a number picked: a reclaim
+    # that fires on a live job does not recover it, and the duplicate here would
+    # mail a bank its board pack twice. The alert evaluation and the subscription
+    # scan stay on the fleet default, because each is a single bounded pass that
+    # ENQUEUES work rather than doing it.
+    "bi_subscription_run": 30 * 60,
 }
+
+#: ``bi_commentary`` and ``bi_nlq_translate`` take NO entry here on purpose: both are
+#: ``ai``-lane types, so
+#: ``stale_after_for`` derives its window from the AI settings below — one model
+#: call per vendor in the tier plus a margin — which is exactly the bound its
+#: runtime has. An entry here would pin a second, competing number.
+#:
+#: The one BI job whose runtime is a SETTING rather than a measurement:
+#: ``bi_mart_backfill`` processes dates for ``BI_BACKFILL_HOP_SECONDS`` and
+#: then re-enqueues itself, so its window is derived from that bound in
+#: ``BiSettings.backfill_stale_after_seconds`` (the AI-lane shape below) rather
+#: than pinned here, where a retuned hop would silently outgrow it.
+#: ``bi_mart_refresh`` (one bank, one as-of) and ``bi_retention`` (partition
+#: drops) stay on the fleet default and therefore assert they finish inside it;
+#: neither has a measurement yet that says otherwise, and a refresh that is
+#: reclaimed alive re-runs an idempotent slice replace rather than duplicating
+#: a side effect — a real cost, not a corrupting one.
+_BACKFILL_JOB_TYPE = "bi_mart_backfill"
 
 
 def stale_after_for(job_type: str, default: timedelta) -> timedelta:
@@ -127,7 +207,8 @@ def stale_after_for(job_type: str, default: timedelta) -> timedelta:
     so one model call can legitimately occupy a worker for
     ``AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1)``, and a window shorter
     than that would reclaim a live job and send the request twice. Deriving it
-    keeps the two in step when either setting is tuned.
+    keeps the two in step when either setting is tuned. The BI backfill hop is
+    derived for the same reason, from ``BI_BACKFILL_HOP_SECONDS``.
     """
     override = STALE_AFTER_OVERRIDES_SECONDS.get(job_type)
     if override is not None:
@@ -136,6 +217,10 @@ def stale_after_for(job_type: str, default: timedelta) -> timedelta:
         from app.core.config import get_settings  # noqa: PLC0415 - avoid an import cycle
 
         return timedelta(seconds=get_settings().ai.stale_after_seconds)
+    if job_type == _BACKFILL_JOB_TYPE:
+        from app.core.config import get_settings  # noqa: PLC0415 - avoid an import cycle
+
+        return timedelta(seconds=get_settings().bi.backfill_stale_after_seconds)
     return default
 
 

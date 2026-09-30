@@ -13,6 +13,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import KpiStat from '@/components/ui/KpiStat';
 import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
+import { numOrNull } from '@/lib/api/values';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { num } from '@/lib/api/values';
 import type { EnterpriseStressRead, ManagementActionsRow } from './types';
@@ -25,6 +26,11 @@ export default function ManagementActionsPanel({ run }: { run: EnterpriseStressR
   const summary = run.summary;
   const t1 = run.appendix_ii.table1_summary;
   const ma = t1.management_actions;
+  // null, not 0: an uncomputed capital gap must not read as 'ok' (audit A360-6).
+  const t1CapitalGap = numOrNull(t1.capital_gap);
+  const residualAfterActions = numOrNull(
+    summary.residual_capital_required_after_actions,
+  );
 
   if (!ma) {
     return (
@@ -79,13 +85,19 @@ export default function ManagementActionsPanel({ run }: { run: EnterpriseStressR
           <KpiStat
             label="Capital gap (pre-action)"
             value={`GHS'000 ${ghs(t1.capital_gap)}`}
-            status={num(t1.capital_gap ?? '0') > 0 ? 'warn' : 'ok'}
+            status={t1CapitalGap === null ? undefined : t1CapitalGap > 0 ? 'warn' : 'ok'}
             hint="Worst-year residual before actions"
           />
           <KpiStat
             label="Residual after actions"
             value={`GHS'000 ${ghs(summary.residual_capital_required_after_actions)}`}
-            status={num(summary.residual_capital_required_after_actions ?? '0') > 0 ? 'warn' : 'ok'}
+            status={
+              residualAfterActions === null
+                ? undefined
+                : residualAfterActions > 0
+                  ? 'warn'
+                  : 'ok'
+            }
             hint="Capital still required post-plan"
           />
         </div>

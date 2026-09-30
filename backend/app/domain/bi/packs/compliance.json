@@ -1,0 +1,86 @@
+{
+  "id": "compliance",
+  "title": "Compliance",
+  "description": "What is due, what has been signed, and where the incoming data is incomplete.",
+  "audience": "compliance",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "filing_calendar",
+      "kind": "panel",
+      "title": "Filing calendar",
+      "caption": "Upcoming and overdue returns, from the filing workspace.",
+      "panel": "return_calendar"
+    },
+    {
+      "id": "attestation_status",
+      "kind": "panel",
+      "title": "Attestation status",
+      "caption": "Which returns have been signed, by whom, and what is still outstanding.",
+      "panel": "attestation_status"
+    },
+    {
+      "id": "limit_monitor",
+      "kind": "table",
+      "title": "Limit monitor",
+      "caption": "Supervisory and internal limits against current values. The limits are held in the bank's own register and are not yet resolved for display.",
+      "pending_capability": "governed_limit"
+    },
+    {
+      "id": "conversion_completeness",
+      "kind": "table",
+      "title": "Conversion completeness",
+      "caption": "Positions carried without a reporting-currency conversion, by position type. They are excluded from balances and counted here.",
+      "query": {
+        "measures": [
+          "positions.count",
+          "positions.unconverted_count",
+          "positions.unconverted_share_pct"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.type"
+        ],
+        "sort": [
+          {
+            "member": "positions.unconverted_count",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      }
+    }
+  ],
+  "layout": [
+    {
+      "i": "filing_calendar",
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "attestation_status",
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "limit_monitor",
+      "x": 0,
+      "y": 5,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "conversion_completeness",
+      "x": 0,
+      "y": 10,
+      "w": 12,
+      "h": 5
+    }
+  ]
+}

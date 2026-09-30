@@ -18,6 +18,16 @@
  * is read from Appendix II Tables 1 & 3 — a labelled client-side decomposition,
  * per the design system's "derivations are labelled" rule.
  *
+ * A MISSING INPUT IS NOT A ZERO. Every figure the bridge reads is nullable on
+ * the wire, and this component used to map each null to 0 before subtracting.
+ * A null final-year post-adverse capital then drew the stressed headroom at
+ * −(CAR target × RWA): a fabricated wipe-out, on the stress board, in the
+ * colour of a real one. The fail-open guard's rule P0-23 lists ten field names
+ * and knows none of these, so nothing caught it. Now every input is read with
+ * `numOrNull`, and a run with any of them absent is told which figure is
+ * missing and gets no bridge — the same treatment the CAR requirement already
+ * had.
+ *
  * UNITS. Appendix II amounts are in THOUSANDS of the reporting currency
  * (`appendix_ii.unit`), but `WaterfallChart` and `fmtCurrency` apply their own
  * K/M/B compaction to a value in CURRENCY UNITS. Passing thousands straight
@@ -30,19 +40,41 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import WaterfallChart, { type WaterfallStep } from '@/components/forecasting/charts/WaterfallChart';
 import SectionCard from '@/components/ui/SectionCard';
-import { fmtFloorPct, labelize, num, numOrNull } from '@/lib/api/values';
+import { fmtFloorPct, labelize, numOrNull } from '@/lib/api/values';
 import { fmtCurrency } from '@/lib/format';
 import type { EnterpriseStressRead } from '../types';
-
-function n(value: string | null | undefined): number {
-  return value == null ? 0 : num(value);
-}
 
 /** Appendix II thousands → currency units, for the currency formatters. */
 const THOUSANDS_TO_UNITS = 1_000;
 function toUnits(thousands: number): number {
   return thousands * THOUSANDS_TO_UNITS;
 }
+
+/**
+ * The impairment losses of one projection, summed across its horizon — or null
+ * when any year is absent, or when there are no years at all. An empty set of
+ * rows is not "no losses": it is a P&L table that was not computed, and summing
+ * it to 0 would attribute the whole capital movement to earnings.
+ */
+function impairmentTotal(
+  rows: readonly { impairment_losses: string | null }[],
+): number | null {
+  if (rows.length === 0) return null;
+  let total = 0;
+  for (const row of rows) {
+    const value = numOrNull(row.impairment_losses);
+    if (value === null) return null;
+    total += value;
+  }
+  return total;
+}
+
+function listMissing(names: readonly string[]): string {
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+const SUBTITLE = "Capital headroom over the run's CAR requirement, decomposed — final horizon year";
 
 export default function DriverWaterfall({ run }: { run: EnterpriseStressRead }) {
   const [open, setOpen] = useState(false);
@@ -61,10 +93,7 @@ export default function DriverWaterfall({ run }: { run: EnterpriseStressRead }) 
   const carTargetPct = numOrNull(t1.car_target_pct);
   if (carTargetPct === null || carTargetPct <= 0) {
     return (
-      <SectionCard
-        title="Driver attribution"
-        subtitle="Capital headroom over the run's CAR requirement, decomposed — final horizon year"
-      >
+      <SectionCard title="Driver attribution" subtitle={SUBTITLE}>
         <p className="text-body text-slate">
           This run carries no capital-adequacy requirement, so the headroom bridge cannot be
           derived. No requirement is assumed on the institution&apos;s behalf.
@@ -76,18 +105,44 @@ export default function DriverWaterfall({ run }: { run: EnterpriseStressRead }) 
   const lastBase = base[base.length - 1];
   const lastStress = stress[stress.length - 1];
 
-  const Cb = n(lastBase.total_regulatory_capital);
-  const Cs = n(lastStress.total_regulatory_capital);
-  const Db = n(lastBase.total_rwa);
-  const Ds = n(lastStress.total_rwa);
+  const Cb = numOrNull(lastBase.total_regulatory_capital);
+  const Cs = numOrNull(lastStress.total_regulatory_capital);
+  const Db = numOrNull(lastBase.total_rwa);
+  const Ds = numOrNull(lastStress.total_rwa);
+
+  // Cumulative impairment across the horizon, in the Appendix II unit
+  // (thousands) like every figure above.
+  const baseImp = impairmentTotal(t3.filter((r) => r.label.startsWith('base_')));
+  const stressImp = impairmentTotal(t3.filter((r) => r.label.startsWith('stress_')));
+
+  const missing: string[] = [];
+  if (Cb === null) missing.push('total regulatory capital before the adverse scenario');
+  if (Cs === null) missing.push('total regulatory capital after the adverse scenario');
+  if (Db === null) missing.push('risk-weighted assets before the adverse scenario');
+  if (Ds === null) missing.push('risk-weighted assets after the adverse scenario');
+  if (baseImp === null) missing.push('impairment losses in the base projection');
+  if (stressImp === null) missing.push('impairment losses in the adverse projection');
+  if (
+    Cb === null ||
+    Cs === null ||
+    Db === null ||
+    Ds === null ||
+    baseImp === null ||
+    stressImp === null
+  ) {
+    return (
+      <SectionCard title="Driver attribution" subtitle={SUBTITLE}>
+        <p className="text-body text-slate">
+          The headroom bridge cannot be derived for this run: it carries no final-year figure
+          for {listMissing(missing)}. Nothing is drawn in its place — a missing figure is not a
+          zero.
+        </p>
+      </SectionCard>
+    );
+  }
 
   const sBase = Cb - carTarget * Db;
   const sStress = Cs - carTarget * Ds;
-
-  // Cumulative incremental impairment (stress − base) across the horizon,
-  // in the Appendix II unit (thousands) like every figure above.
-  const baseImp = t3.filter((r) => r.label.startsWith('base_')).reduce((a, r) => a + n(r.impairment_losses), 0);
-  const stressImp = t3.filter((r) => r.label.startsWith('stress_')).reduce((a, r) => a + n(r.impairment_losses), 0);
   const cumIncrImpairment = stressImp - baseImp;
 
   const creditStep = -cumIncrImpairment;
@@ -106,9 +161,12 @@ export default function DriverWaterfall({ run }: { run: EnterpriseStressRead }) 
   ];
 
   const impact = t1.impact_of_adverse[t1.impact_of_adverse.length - 1];
+  // An exposure class with no allocated loss is left out, never drawn as 0.
   const losses = (impact?.losses ?? [])
-    .map((l) => ({ cls: l.exposure_class, loss: n(l.loss) }))
-    .filter((l) => l.loss > 0)
+    .flatMap((l) => {
+      const loss = numOrNull(l.loss);
+      return loss === null || loss <= 0 ? [] : [{ cls: l.exposure_class, loss }];
+    })
     .sort((a, b) => b.loss - a.loss);
   const maxLoss = Math.max(...losses.map((l) => l.loss), 1);
 

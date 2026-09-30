@@ -1,29 +1,18 @@
-'use client';
+"use client";
 
 /**
- * Tokenized copy of components/charts/RatioHistoryChart for the IRR
- * workspace (the original is shared by other modules and carries hardcoded
- * hex). Colors come from lib/chartTheme so dark and light both work. The
- * threshold here is a ceiling (supervisory ΔEVE/Tier-1 limit), not a floor.
+ * Ratio trend line for the IRR workspace. Colours are resolved from the design
+ * tokens by `components/bi/echartsTheme`, so dark and light both work. The
+ * threshold here is a CEILING (supervisory ΔEVE/Tier-1 limit), not a floor.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  CHART_ACCENT,
-  CHART_AXIS,
-  CHART_CRIT,
-  CHART_GRID,
-  chartTooltipProps,
-} from '@/lib/chartTheme';
+  axisTooltip,
+  LINE_SERIES_BASE,
+  thresholdMarkLine,
+} from "@/lib/echartsOptions";
 
 export type TrendPoint = {
   label: string;
@@ -35,11 +24,11 @@ export type TrendPoint = {
 export default function TrendChart({
   data,
   threshold,
-  thresholdLabel = 'Limit',
+  thresholdLabel = "Limit",
   yMin,
   yMax,
-  color = CHART_ACCENT,
-  label = 'Ratio',
+  colorIndex,
+  label = "Ratio",
   height = 260,
 }: {
   data: TrendPoint[];
@@ -48,79 +37,88 @@ export default function TrendChart({
   thresholdLabel?: string;
   yMin?: number;
   yMax?: number;
-  color?: string;
+  /**
+   * Categorical palette index; the accent token when omitted. Deliberately an
+   * INDEX and not a colour string: the Recharts version took a CSS string, and
+   * `var(--chart-n)` resolves to nothing on a canvas.
+   */
+  colorIndex?: number;
   label?: string;
   height?: number;
 }) {
-  const values = data.map((d) => d.value);
+  const tokens = useChartTokens();
+  const lineColor =
+    colorIndex === undefined ? tokens.accent : seriesColor(tokens, colorIndex);
+  const values = data.map((point) => point.value);
   const min =
     yMin ?? Math.floor(Math.min(...values, threshold ?? Infinity) - 2);
   const max =
     yMax ?? Math.ceil(Math.max(...values, threshold ?? -Infinity) + 2);
+  const labels = data.map((point) => point.label);
+
+  const option: BiEChartsOption = {
+    grid: { left: 0, right: 24, top: 12, bottom: 8, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: labels,
+      axisLine: { show: true, lineStyle: { color: tokens.axis } },
+    },
+    yAxis: {
+      type: "value",
+      min,
+      max,
+      axisLine: { show: false },
+      axisLabel: { formatter: (value: number) => `${Math.round(value)}%` },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: axisTooltip(labels, (value) => `${value.toFixed(2)}%`, {
+        note: (index) => (data[index]?.stored === false ? "inline" : undefined),
+      }),
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        name: label,
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        lineStyle: { color: lineColor, width: 2 },
+        markLine:
+          threshold === undefined
+            ? undefined
+            : thresholdMarkLine([
+                {
+                  axis: "y",
+                  value: threshold,
+                  label: `${thresholdLabel} ${threshold}%`,
+                  color: tokens.adverse,
+                  labelPosition: "insideEndTop",
+                },
+              ]),
+        data: data.map((point) => ({
+          value: point.value,
+          itemStyle: {
+            color: point.stored === false ? tokens.surface : lineColor,
+            borderColor: lineColor,
+            borderWidth: point.stored === false ? 1.5 : 0,
+          },
+        })),
+      },
+    ],
+  } as BiEChartsOption;
+
+  const inline = data.filter((point) => point.stored === false).length;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis
-          dataKey="label"
-          axisLine={{ stroke: CHART_AXIS }}
-          tickLine={false}
-          tick={{ fontSize: 11 }}
-        />
-        <YAxis
-          domain={[min, max]}
-          axisLine={false}
-          tickLine={false}
-          tick={{ fontSize: 11 }}
-          tickFormatter={(v: number) => `${Math.round(v)}%`}
-          width={48}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(v: number) => [`${v.toFixed(2)}%`, label]}
-        />
-        {threshold !== undefined && (
-          <ReferenceLine
-            y={threshold}
-            stroke={CHART_CRIT}
-            strokeDasharray="4 4"
-            label={{
-              value: `${thresholdLabel} ${threshold}%`,
-              position: 'insideTopRight',
-              fill: CHART_CRIT,
-              fontSize: 11,
-            }}
-          />
-        )}
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2}
-          dot={(props) => {
-            const { key, cx, cy, payload } = props as {
-              key?: string;
-              cx?: number;
-              cy?: number;
-              payload?: TrendPoint;
-            };
-            const hollow = payload?.stored === false;
-            return (
-              <circle
-                key={key}
-                cx={cx}
-                cy={cy}
-                r={3}
-                fill={hollow ? 'rgb(var(--surface-raised))' : color}
-                stroke={color}
-                strokeWidth={hollow ? 1.5 : 0}
-              />
-            );
-          }}
-          activeDot={{ r: 5 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`${label} across ${data.length} periods${
+        threshold === undefined
+          ? ""
+          : `, against a supervisory limit of ${threshold}%`
+      }${inline > 0 ? `; ${inline} points computed inline` : ""}`}
+    />
   );
 }

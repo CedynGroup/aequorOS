@@ -59,3 +59,13 @@ def live_db() -> Iterator[Session]:
     finally:
         session.close()
         engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _end_each_read_transaction(live_db: Session) -> Iterator[None]:
+    """One session serves the whole suite, so one failed statement would abort
+    its transaction and turn every later test into ``InFailedSqlTransaction`` —
+    a cascade that reads as thirty findings and is one. Each test ends its own
+    read transaction; there is never anything to commit."""
+    yield
+    live_db.rollback()

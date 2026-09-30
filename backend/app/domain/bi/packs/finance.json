@@ -1,0 +1,101 @@
+{
+  "id": "finance",
+  "title": "Finance",
+  "description": "The reported result and the shape of the balance sheet behind it, with the ledger views that are still waiting on the bank's account mapping named in place.",
+  "audience": "finance",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "profit_and_loss",
+      "kind": "table",
+      "title": "Profit and loss",
+      "caption": "The income statement by reported line. It needs the bank's general ledger account mapping, and the ledger figures are not yet published as measures.",
+      "needs_data": "gl_mapping_bsd7",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "income_and_efficiency",
+      "kind": "kpi_row",
+      "title": "Interest income, margin, fees and cost to income",
+      "caption": "Earnings and efficiency read from the general ledger. They need the bank's account mapping, and the ledger figures are not yet published as measures.",
+      "needs_data": "gl_mapping_bsd7",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "balance_sheet_trend",
+      "kind": "area",
+      "title": "Balance sheet",
+      "caption": "Month-end balances by position type over the past two years.",
+      "query": {
+        "measures": [
+          "positions.balance_rc"
+        ],
+        "window": "trailing_24_months",
+        "dimensions": [
+          "time.calendar_month",
+          "position.type"
+        ]
+      },
+      "display": {
+        "stacked": true,
+        "series_dimension": "position.type"
+      }
+    },
+    {
+      "id": "profit_and_loss_by_branch",
+      "kind": "table",
+      "title": "Profit and loss by branch",
+      "caption": "The income statement split by branch, from the bank's own branch breakdown. It carries a line for the part of the ledger no branch was given, so the branches add up to the whole.",
+      "needs_data": "gl_segment_balances",
+      "query": {
+        "measures": [
+          "gl.branch_ytd_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "gl_account.pl_line",
+          "branch.name"
+        ],
+        "sort": [
+          {
+            "member": "gl.branch_ytd_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      }
+    }
+  ],
+  "layout": [
+    {
+      "i": "profit_and_loss",
+      "x": 0,
+      "y": 0,
+      "w": 12,
+      "h": 6
+    },
+    {
+      "i": "income_and_efficiency",
+      "x": 0,
+      "y": 6,
+      "w": 12,
+      "h": 3
+    },
+    {
+      "i": "balance_sheet_trend",
+      "x": 0,
+      "y": 9,
+      "w": 12,
+      "h": 5
+    },
+    {
+      "i": "profit_and_loss_by_branch",
+      "x": 0,
+      "y": 14,
+      "w": 12,
+      "h": 5
+    }
+  ]
+}

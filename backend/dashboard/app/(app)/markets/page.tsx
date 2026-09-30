@@ -23,6 +23,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import SubTabs from '@/components/ui/SubTabs';
+import { LandingInsightStrip } from '@/components/bi/InsightStrip';
 import { useBankContext } from '@/components/shell/BankContext';
 import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 import {
@@ -154,7 +155,7 @@ function Section({
 }
 
 export default function MarketsPage() {
-  const { bank } = useBankContext();
+  const { bank, period } = useBankContext();
   const [asOf, setAsOf] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('overview');
   const [marketDataView, setMarketDataView] = useState<MarketDataView>('forward');
@@ -630,6 +631,11 @@ export default function MarketsPage() {
       </SdiModuleContext>
 
       <PageContainer className="py-6 space-y-6">
+        {/* The institution's reporting date, not the market-data scrubber:
+            the statements are about the book, and the scrubber reproduces a
+            vendor surface. */}
+        <LandingInsightStrip bankId={bank?.id} asOf={period?.periodEnd} />
+
         <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />
 
         {tab === 'market-data' && (

@@ -9,11 +9,19 @@ send email, and an SMTP outage never fails a business action: undelivered
 rows simply wait for the next cycle.
 
 Disabled by default: activates only when SMTP_HOST and SMTP_FROM are set.
+
+The transport itself is not here: the relay connection, the sender resolution,
+the subject convention and the message builder live in ``app/services/mailer.py``
+(D-170), which was extracted FROM this module so BI subscriptions could reuse it
+without growing a second mail path. This module keeps what is its own — the
+outbox semantics, the recipient fan-out and the footer — and every observable
+behaviour is unchanged: the relay is still opened once per cycle, the transport
+exception still travels intact so ``job.progress["error"]`` remains its own class
+name, and the composed message is byte-for-byte what it was.
 """
 
 from __future__ import annotations
 
-import smtplib
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 
@@ -24,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
 from app.models import Job, Notification, User
-from app.services import job_queue
+from app.services import job_queue, mailer
 
 JOB_TYPE = "notification_email_mirror"
 # One batch per cycle; stragglers roll to the next tick.
@@ -38,7 +46,7 @@ _FOOTER = (
 
 
 def mirror_enabled() -> bool:
-    return get_settings().smtp.enabled
+    return mailer.relay_configured()
 
 
 def enqueue_due_notification_mirror(session: Session, org_id: str, *, now: datetime) -> bool:
@@ -103,12 +111,12 @@ def _recipient_emails(
 
 
 def _compose(notification: Notification, recipients: list[str], sender: str) -> EmailMessage:
-    message = EmailMessage()
-    message["Subject"] = f"[AequorOS] {notification.title}"
-    message["From"] = sender
-    message["To"] = ", ".join(recipients)
-    message.set_content(notification.body + _FOOTER)
-    return message
+    return mailer.compose(
+        subject=mailer.subject_line(notification.title),
+        body=notification.body + _FOOTER,
+        recipients=recipients,
+        sender_address=sender,
+    )
 
 
 def run_notification_email_mirror(session: Session, job: Job) -> None:
@@ -134,11 +142,7 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
         )
     )
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as client:
-            if settings.smtp_starttls:
-                client.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                client.login(settings.smtp_username, settings.smtp_password)
+        with mailer.open_relay() as relay:
             for row in rows:
                 recipients = _recipient_emails(session, row, admin_cache=org_wide_recipients)
                 if not recipients:
@@ -147,11 +151,11 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
                     row.emailed_at = now
                     skipped_no_recipient += 1
                     continue
-                client.send_message(_compose(row, recipients, settings.smtp_from))
+                relay.send_message(_compose(row, recipients, settings.smtp_from))
                 row.emailed_at = now
                 sent += 1
                 session.flush()
-    except (smtplib.SMTPException, OSError) as exc:
+    except mailer.TRANSPORT_ERRORS as exc:
         # Best-effort: keep what was stamped, surface the rest next cycle.
         logger.warning("notification email mirror interrupted: {}", exc)
         job.progress = {

@@ -26,6 +26,10 @@ import {
   ArrowRight,
   BookOpenCheck,
   ClipboardCheck,
+  Lightbulb,
+  LayoutGrid,
+  Table2,
+  MessageSquareQuote,
 } from "lucide-react";
 
 type Item = {
@@ -66,6 +70,42 @@ const items: Item[] = [
     icon: BellRing,
     group: "Command",
     keywords: "breach notification warning",
+  },
+
+  {
+    id: "bi-insights",
+    label: "Insights",
+    href: "/insights",
+    icon: Lightbulb,
+    group: "Intelligence",
+    keywords:
+      "business intelligence insight movement driver commentary what changed",
+  },
+  {
+    id: "bi-dashboards",
+    label: "Dashboards",
+    href: "/dashboards",
+    icon: LayoutGrid,
+    group: "Intelligence",
+    keywords: "business intelligence board alco cro branch pack widget kpi",
+  },
+  {
+    id: "bi-explore",
+    label: "Explore",
+    href: "/explore",
+    icon: Table2,
+    group: "Intelligence",
+    keywords:
+      "business intelligence self service query measure dimension ad hoc analysis",
+  },
+  {
+    id: "bi-ask",
+    label: "Ask a question",
+    href: "/explore/ask",
+    icon: MessageSquareQuote,
+    group: "Intelligence",
+    keywords:
+      "natural language question words ask assistant plain english translate",
   },
 
   {

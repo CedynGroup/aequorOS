@@ -1,0 +1,197 @@
+{
+  "id": "board",
+  "title": "Board",
+  "description": "The prudential position the board is accountable for: capital, liquidity, asset quality and the shape of the balance sheet, with what is still outstanding named rather than left blank.",
+  "audience": "board",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "capital_adequacy",
+      "kind": "kpi_row",
+      "title": "Capital adequacy",
+      "caption": "Filed capital ratios at the reporting date, against the prior quarter.",
+      "query": {
+        "measures": [
+          "engine.car_pct.crd.official",
+          "engine.cet1_ratio_pct.crd.official",
+          "engine.tier1_ratio_pct.crd.official"
+        ],
+        "window": "as_of",
+        "compare": "prior_quarter"
+      },
+      "display": {
+        "show_comparison": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "liquidity_coverage",
+      "kind": "kpi_row",
+      "title": "Liquidity and stable funding",
+      "caption": "Filed liquidity and stable-funding ratios, against the prior quarter.",
+      "query": {
+        "measures": [
+          "engine.lcr_pct.crd.official",
+          "engine.nsfr_pct.crd.official"
+        ],
+        "window": "as_of",
+        "compare": "prior_quarter"
+      },
+      "display": {
+        "show_comparison": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "asset_quality",
+      "kind": "kpi_row",
+      "title": "Asset quality",
+      "caption": "The non-performing share of classified exposure, and the provisions held against it.",
+      "query": {
+        "measures": [
+          "loans.npl_ratio_pct",
+          "loans.provision_coverage_pct"
+        ],
+        "window": "as_of",
+        "compare": "prior_quarter"
+      },
+      "display": {
+        "show_comparison": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "net_interest_margin",
+      "kind": "line",
+      "title": "Net interest margin",
+      "caption": "An analytical figure from the funds transfer pricing module. It is not part of a filed return.",
+      "query": {
+        "measures": [
+          "engine.portfolio_nim_pct.advisory_internal.official"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      },
+      "display": {
+        "show_trend": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "balance_sheet_trend",
+      "kind": "area",
+      "title": "Balance sheet",
+      "caption": "Month-end balances by position type over the past year.",
+      "query": {
+        "measures": [
+          "positions.balance_rc"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month",
+          "position.type"
+        ]
+      },
+      "display": {
+        "stacked": true,
+        "series_dimension": "position.type"
+      }
+    },
+    {
+      "id": "earnings_ratios",
+      "kind": "kpi_row",
+      "title": "Return on assets, return on equity and cost to income",
+      "caption": "Earnings ratios are read from the general ledger. They need the bank's account mapping, and the ledger figures are not yet published as measures.",
+      "needs_data": "gl_mapping_bsd7",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "open_breaches",
+      "kind": "kpi",
+      "title": "Open limit breaches",
+      "caption": "How many limits are currently breached. A count across limits is not yet published as a measure.",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "filing_calendar",
+      "kind": "panel",
+      "title": "Filing calendar",
+      "caption": "Upcoming and overdue returns, from the filing workspace.",
+      "panel": "return_calendar"
+    },
+    {
+      "id": "budget_variance",
+      "kind": "bar",
+      "title": "Performance against budget",
+      "caption": "Performance against the bank's own budget. Supply the performance targets dataset to turn it on.",
+      "needs_data": "performance_targets"
+    }
+  ],
+  "layout": [
+    {
+      "i": "capital_adequacy",
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "liquidity_coverage",
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "asset_quality",
+      "x": 0,
+      "y": 3,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "net_interest_margin",
+      "x": 6,
+      "y": 3,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "balance_sheet_trend",
+      "x": 0,
+      "y": 6,
+      "w": 12,
+      "h": 5
+    },
+    {
+      "i": "earnings_ratios",
+      "x": 0,
+      "y": 11,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "open_breaches",
+      "x": 6,
+      "y": 11,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "filing_calendar",
+      "x": 0,
+      "y": 14,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "budget_variance",
+      "x": 6,
+      "y": 14,
+      "w": 6,
+      "h": 5
+    }
+  ]
+}

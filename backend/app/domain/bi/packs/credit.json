@@ -1,0 +1,251 @@
+{
+  "id": "credit",
+  "title": "Credit and collections",
+  "description": "The working view of the loan book: what was written, what is in arrears, what came back, what was written off, and how each origination cohort is behaving.",
+  "audience": "credit",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "portfolio_by_product",
+      "kind": "table",
+      "title": "Portfolio by product",
+      "caption": "Balances, the non-performing ratio and account count by product family.",
+      "query": {
+        "measures": [
+          "loans.balance_rc",
+          "loans.npl_ratio_pct",
+          "loans.count"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "product.family"
+        ],
+        "sort": [
+          {
+            "member": "loans.balance_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      }
+    },
+    {
+      "id": "disbursements",
+      "kind": "bar",
+      "title": "Disbursements",
+      "caption": "Loan disbursements month by month over the past year.",
+      "query": {
+        "measures": [
+          "events.disbursement_rc"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      },
+      "display": {
+        "show_trend": true
+      }
+    },
+    {
+      "id": "portfolio_at_risk",
+      "kind": "kpi_row",
+      "title": "Portfolio at risk",
+      "caption": "Exposure past due as a share of classified exposure. It reads as no value, never as zero, until the loan book carries days past due.",
+      "query": {
+        "measures": [
+          "loans.par_30_pct",
+          "loans.par_60_pct",
+          "loans.par_90_pct"
+        ],
+        "window": "as_of"
+      },
+      "display": {
+        "precision": 2
+      },
+      "needs_data": "positions"
+    },
+    {
+      "id": "disbursements_against_target",
+      "kind": "bar",
+      "title": "Disbursements against target",
+      "caption": "Disbursements against the bank's own plan. Supply the performance targets dataset to turn it on.",
+      "needs_data": "performance_targets"
+    },
+    {
+      "id": "recoveries_and_write_offs",
+      "kind": "bar",
+      "title": "Recoveries and write-offs",
+      "caption": "Recovered and written-off amounts month by month over the past year.",
+      "query": {
+        "measures": [
+          "events.recovery_rc",
+          "events.write_off_rc"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      }
+    },
+    {
+      "id": "balances_by_origination_month",
+      "kind": "bar",
+      "title": "Balances by origination month",
+      "caption": "Current balances of the loans written in each origination month.",
+      "query": {
+        "measures": [
+          "loans.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "loan.vintage_month"
+        ],
+        "sort": [
+          {
+            "member": "loan.vintage_month",
+            "direction": "desc"
+          }
+        ],
+        "limit": 36
+      },
+      "display": {
+        "series_dimension": "loan.vintage_month"
+      }
+    },
+    {
+      "id": "roll_rates",
+      "kind": "panel",
+      "title": "Roll rates",
+      "caption": "How exposure moved between arrears bands across two dates.",
+      "panel": "credit_migration"
+    },
+    {
+      "id": "vintage_performance",
+      "kind": "panel",
+      "title": "Vintage performance",
+      "caption": "How each origination cohort has performed since it was written.",
+      "panel": "credit_vintages"
+    },
+    {
+      "id": "officer_league_table",
+      "kind": "table",
+      "title": "Relationship officer league table",
+      "caption": "Book, arrears and account count by relationship officer. Officers appear once the loan book states an officer code.",
+      "needs_data": "positions",
+      "query": {
+        "measures": [
+          "loans.balance_rc",
+          "loans.arrears_amount_rc",
+          "loans.count"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.officer_code"
+        ],
+        "sort": [
+          {
+            "member": "loans.balance_rc",
+            "direction": "desc"
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      }
+    },
+    {
+      "id": "book_by_channel",
+      "kind": "bar",
+      "title": "Loan book by channel",
+      "caption": "Balances by how each account was opened or is serviced. It reads as no value, never as zero, until the loan book states a channel.",
+      "query": {
+        "measures": [
+          "loans.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.channel"
+        ]
+      },
+      "display": {
+        "series_dimension": "position.channel"
+      },
+      "needs_data": "positions"
+    }
+  ],
+  "layout": [
+    {
+      "i": "portfolio_by_product",
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "disbursements",
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "portfolio_at_risk",
+      "x": 0,
+      "y": 5,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "disbursements_against_target",
+      "x": 6,
+      "y": 5,
+      "w": 6,
+      "h": 3
+    },
+    {
+      "i": "recoveries_and_write_offs",
+      "x": 0,
+      "y": 8,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "balances_by_origination_month",
+      "x": 6,
+      "y": 8,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "roll_rates",
+      "x": 0,
+      "y": 13,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "vintage_performance",
+      "x": 6,
+      "y": 13,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "i": "officer_league_table",
+      "x": 0,
+      "y": 18,
+      "w": 12,
+      "h": 4
+    },
+    {
+      "i": "book_by_channel",
+      "x": 0,
+      "y": 22,
+      "w": 12,
+      "h": 5
+    }
+  ]
+}

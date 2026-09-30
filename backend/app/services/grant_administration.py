@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -12,15 +13,18 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     BindingStatus,
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
     PrincipalType,
     RoleBundle,
     SensitivityScope,
+    normalise_data_scope_values,
 )
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, Organization, User
+from app.schemas.authorization import DATA_SCOPE_LABELS
 from app.services import authentication, authorization, membership
 
 
@@ -81,12 +85,14 @@ _ROLE_LABELS = {
     RoleBundle.ACCOUNT_ADMIN: "Organization Administrator",
     RoleBundle.ORG_OWNER: "Organization Owner",
     RoleBundle.INTEGRATION_WRITER: "Integration Writer",
+    RoleBundle.BI_READER: "Analytics Feed Reader",
 }
 
 _MODULE_LABELS = {
     ModuleScope.ALL: "all modules",
     ModuleScope.LIQUIDITY: "Liquidity Monitoring",
     ModuleScope.CAPITAL: "Basel Capital",
+    ModuleScope.CREDIT: "Credit",
     ModuleScope.IRRBB: "IRRBB",
     ModuleScope.FX: "Foreign Exchange",
     ModuleScope.FTP: "Funds Transfer Pricing",
@@ -134,7 +140,30 @@ def _scope_overlaps(left: AuthorizationBinding, right: authorization.BindingScop
         or right.sensitivity_scope is SensitivityScope.ALL
         or left.sensitivity_scope == right.sensitivity_scope.value
     )
-    return institution_overlaps and module_overlaps and sensitivity_overlaps
+    return (
+        institution_overlaps
+        and module_overlaps
+        and sensitivity_overlaps
+        and _data_scopes_overlap(left, right)
+    )
+
+
+def _data_scopes_overlap(left: AuthorizationBinding, right: authorization.BindingScope) -> bool:
+    """Whether two data scopes can touch the same rows.
+
+    Deliberately conservative: it returns True unless the two are PROVABLY
+    disjoint, so the maker/checker warning is raised whenever it might apply.
+    Two narrow scopes of DIFFERENT kinds count as overlapping, because deciding
+    whether branch ``ACC-001`` sits in region ``Ashanti`` needs the branch
+    register — which is the BI plane's dimension, not the account plane's — and
+    guessing "no" would silently drop a real separation-of-duties finding.
+    """
+
+    if left.data_scope_kind == DataScope.ALL.value or right.data_scope is DataScope.ALL:
+        return True
+    if left.data_scope_kind != right.data_scope.value:
+        return True
+    return bool(set(left.data_scope_values or ()) & set(right.data_scope_values))
 
 
 #: Findings that refuse the grant outright. Everything else is a warning that
@@ -291,13 +320,48 @@ def check_sod_policy(
     return SodDecision(SodOutcome.ALLOW)
 
 
-def compose_authority_sentence(
+def _joined(values: Sequence[str]) -> str:
+    if len(values) == 1:
+        return values[0]
+    return f"{', '.join(values[:-1])} and {values[-1]}"
+
+
+def data_scope_label(data_scope: DataScope, data_scope_values: Sequence[str]) -> str:
+    """Ready-to-display copy for one binding's stored data scope."""
+
+    label = DATA_SCOPE_LABELS[data_scope]
+    if data_scope is DataScope.ALL:
+        return label
+    return f"{label}: {', '.join(data_scope_values)}"
+
+
+def _data_scope_clause(data_scope: DataScope, data_scope_values: Sequence[str]) -> str:
+    """The sentence's data-scope clause; EMPTY for the whole institution.
+
+    Whole-institution is what every grant written before data scopes meant, so
+    its sentence stays byte-identical: a stored sentence, an audit record and a
+    review confirmation from before this phase all still match.
+    """
+
+    if data_scope is DataScope.ALL or not data_scope_values:
+        return ""
+    named = _joined(list(data_scope_values))
+    if data_scope is DataScope.BRANCH:
+        noun = "branch" if len(data_scope_values) == 1 else "branches"
+        return f", limited to {noun} {named}"
+    noun = "region" if len(data_scope_values) == 1 else "regions"
+    return f", limited to the {named} {noun}"
+
+
+def compose_authority_sentence(  # noqa: PLR0913 - the complete sentence is explicit
     *,
     principal_name: str,
     role_bundle: RoleBundle,
     institution_name: str,
     module_scope: ModuleScope,
     sensitivity_scope: SensitivityScope,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: Sequence[str] = (),
 ) -> str:
     role = _ROLE_LABELS[role_bundle]
     article = "an" if role[0].lower() in "aeiou" else "a"
@@ -310,7 +374,7 @@ def compose_authority_sentence(
         sensitivity_phrase = f"covering {sensitivity} data"
     return (
         f"{principal_name} is {article} {role} {module_phrase} for {institution_name}, "
-        f"{sensitivity_phrase}."
+        f"{sensitivity_phrase}{_data_scope_clause(data_scope, data_scope_values)}."
     )
 
 
@@ -343,6 +407,8 @@ def authority_sentence(db: Session, binding: AuthorizationBinding) -> str:
         institution_name=institution_name,
         module_scope=ModuleScope(binding.module_scope),
         sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+        data_scope=DataScope(binding.data_scope_kind),
+        data_scope_values=tuple(binding.data_scope_values or ()),
     )
 
 
@@ -394,15 +460,26 @@ def scoped_authority_sentence(  # noqa: PLR0913
         institution_name=institution_name,
         module_scope=scope.module_scope,
         sensitivity_scope=scope.sensitivity_scope,
+        data_scope=scope.data_scope,
+        data_scope_values=normalise_data_scope_values(scope.data_scope_values),
     )
 
 
-def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
-    if role_bundle in {
+#: Never grantable from the Members composer. The two machine bundles are here
+#: because a human may not hold one at all: the database CHECK refuses the row,
+#: and this refuses the request with a sentence first.
+_NON_GRANTABLE_BUNDLES = frozenset(
+    {
         RoleBundle.MEMBER,
         RoleBundle.ORG_OWNER,
         RoleBundle.INTEGRATION_WRITER,
-    }:
+        RoleBundle.BI_READER,
+    }
+)
+
+
+def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
+    if role_bundle in _NON_GRANTABLE_BUNDLES:
         raise GrantAdministrationError("this role bundle is not grantable from Members")
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and (
         scope.institution_scope is not InstitutionScope.ORGANIZATION
@@ -460,6 +537,12 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
             )
         )
     )
+    # Every dimension, the data scope included: two grants that differ only by
+    # which branches they name are different authority and must both exist,
+    # while a re-submission of the same set — in any order or spelling — is the
+    # duplicate this refuses, because the values are normalised before they get
+    # here.
+    requested_values = normalise_data_scope_values(scope.data_scope_values)
     duplicate = next(
         (
             binding
@@ -470,6 +553,8 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
             and binding.institution_id == scope.institution_id
             and binding.module_scope == scope.module_scope.value
             and binding.sensitivity_scope == scope.sensitivity_scope.value
+            and binding.data_scope_kind == scope.data_scope.value
+            and tuple(binding.data_scope_values or ()) == requested_values
         ),
         None,
     )
@@ -544,10 +629,14 @@ def revoke_scoped_grant(  # noqa: PLR0913 - complete actor and target context is
         raise GrantAdministrationError(
             "baseline membership ends only when the member is deactivated"
         )
-    if binding.role_bundle == RoleBundle.INTEGRATION_WRITER.value:
-        raise GrantAdministrationError(
-            "integration-writer authority must be revoked with its integration key"
-        )
+    if binding.role_bundle in {
+        RoleBundle.INTEGRATION_WRITER.value,
+        RoleBundle.BI_READER.value,
+    }:
+        # A machine binding's lifecycle belongs to its key: revocation
+        # deactivates the key, the binding and the service identity together, so
+        # cutting only the binding here would leave a live credential behind.
+        raise GrantAdministrationError("machine authority must be revoked with its integration key")
     if binding.status != BindingStatus.ACTIVE.value:
         raise GrantAdministrationError("only an active scoped grant can be revoked")
 

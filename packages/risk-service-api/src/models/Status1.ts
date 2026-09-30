@@ -15,17 +15,15 @@
  * @export
  * @interface Status1
  */
-export type Status1 =
-  "active" | "inactive" | "closed" | "matured" | "defaulted" | "unknown" | null;
+export type Status1 = "active" | "inactive" | "closed" | "unknown" | null;
 
 /**
  * Check if a given object implements the Status1 interface.
  */
 export function instanceOfStatus1(value: unknown): value is Status1 {
   return (
-    ["active", "inactive", "closed", "matured", "defaulted", "unknown"].indexOf(
-      value as never,
-    ) !== -1 || value === null
+    ["active", "inactive", "closed", "unknown"].indexOf(value as never) !==
+      -1 || value === null
   );
 }
 

@@ -13,14 +13,18 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
+    CurrentFinancialFact,
     IngestionBatch,
+    Job,
     LineageRecord,
     User,
 )
@@ -301,6 +305,171 @@ def test_the_full_governed_path_from_declaration_to_withdrawal(  # noqa: PLR0915
     assert reversed_response.status_code == 200, reversed_response.text
     assert reversed_response.json()["status"] == "reversed"
     assert reversed_response.json()["rows_restored"] == 3
+
+
+#: The live plane's business date — deliberately LATER than the withdrawn book's
+#: date, so the test can tell "refresh the live date" from "refresh the
+#: withdrawn date" (the latter would roll the live plane back a month).
+LIVE_AS_OF = date(2026, 7, 31)
+
+
+def _stand_in_for_the_live_plane(bank_id: str) -> None:
+    session = get_sessionmaker()()
+    try:
+        session.add(
+            CurrentFinancialFact(
+                organization_id=ORG_1,
+                bank_id=bank_id,
+                source_as_of_date=LIVE_AS_OF,
+                source_generation=1,
+                fact_group="balance_sheet",
+                category="cash_vault",
+                amount=Decimal("1"),
+                currency="GHS",
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _queued_refreshes(bank_id: str, *, job_type: str = "pipeline_refresh") -> list[Job]:
+    session = get_sessionmaker()()
+    try:
+        return list(
+            session.scalars(
+                select(Job)
+                .where(
+                    Job.organization_id == ORG_1,
+                    Job.bank_id == bank_id,
+                    Job.job_type == job_type,
+                    Job.status == "queued",
+                )
+                .order_by(Job.queued_at)
+            )
+        )
+    finally:
+        session.close()
+
+
+def test_approving_and_reversing_a_withdrawal_refresh_the_live_plane_on_its_own_date(
+    db_client: TestClient,
+) -> None:
+    """A withdrawal changes the book the live plane was derived from, so both
+    governed acts enqueue one coalesced ``pipeline_refresh`` — keyed on the
+    bank's LIVE date, never on the withdrawal's own ``as_of_date``."""
+    bank_id = _seed(db_client, duplicate=True)
+    _stand_in_for_the_live_plane(bank_id)
+    assert _queued_refreshes(bank_id) == []
+
+    requested = db_client.post(
+        WITHDRAWALS_URL.format(bank_id=bank_id),
+        headers=headers(user_id=USER_1, roles=("analyst",)),
+        json={
+            "entity": "position",
+            "source_system": SECOND_SOURCE,
+            "as_of_date": FIXTURE_AS_OF.isoformat(),
+            "reason": "Duplicate of the LOAN book of record.",
+            "requested_by": "analyst@bank.test",
+            "position_type": "LOAN",
+        },
+    )
+    assert requested.status_code == 201, requested.text
+    withdrawal_id = requested.json()["id"]
+    # Requesting stamps nothing and so refreshes nothing.
+    assert _queued_refreshes(bank_id) == []
+
+    applied = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/approve",
+        headers=headers(user_id=APPROVER_USER, roles=("approver",)),
+        json={"approved_by": "cro@bank.test"},
+    )
+    assert applied.status_code == 200, applied.text
+    (job,) = _queued_refreshes(bank_id)
+    assert job.coalesce_key == f"refresh:{bank_id}:{LIVE_AS_OF.isoformat()}"
+    assert job.payload["as_of_date"] == LIVE_AS_OF.isoformat()
+    assert job.payload["as_of_date"] != FIXTURE_AS_OF.isoformat()
+    assert job.payload["reason"] == "withdrawal_applied"
+
+    reversed_response = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/reverse",
+        headers=headers(user_id=APPROVER_USER, roles=("approver",)),
+        json={"reversed_by": "cro@bank.test", "reason": "Wrong system named."},
+    )
+    assert reversed_response.status_code == 200, reversed_response.text
+    # Still one un-started job: the reversal coalesced into it on the same key.
+    (job,) = _queued_refreshes(bank_id)
+    assert job.coalesce_key == f"refresh:{bank_id}:{LIVE_AS_OF.isoformat()}"
+    assert job.payload["as_of_date"] == LIVE_AS_OF.isoformat()
+    assert job.payload["reason"] == "withdrawal_reversed"
+    # BI_MART_ENQUEUE_ENABLED is pinned off: no mart build was asked for.
+    assert _queued_refreshes(bank_id, job_type="bi_mart_refresh") == []
+
+
+def test_withdrawal_acts_ask_the_bi_lane_for_the_withdrawn_date_and_the_live_date(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mart is per-date slices, so D-025's rollback hazard does not apply
+    to it: the WITHDRAWN date's slice is what changed and is rebuilt on its
+    own date, while the live-plane trigger separately asks for the LIVE
+    date's slice (its engine metrics move). Two dates, two coalesced jobs;
+    the reversal merges into the same two."""
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        bank_id = _seed(db_client, duplicate=True)
+        _stand_in_for_the_live_plane(bank_id)
+        assert _queued_refreshes(bank_id, job_type="bi_mart_refresh") == []
+
+        requested = db_client.post(
+            WITHDRAWALS_URL.format(bank_id=bank_id),
+            headers=headers(user_id=USER_1, roles=("analyst",)),
+            json={
+                "entity": "position",
+                "source_system": SECOND_SOURCE,
+                "as_of_date": FIXTURE_AS_OF.isoformat(),
+                "reason": "Duplicate of the LOAN book of record.",
+                "requested_by": "analyst@bank.test",
+                "position_type": "LOAN",
+            },
+        )
+        assert requested.status_code == 201, requested.text
+        withdrawal_id = requested.json()["id"]
+        assert _queued_refreshes(bank_id, job_type="bi_mart_refresh") == []
+
+        applied = db_client.post(
+            f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/approve",
+            headers=headers(user_id=APPROVER_USER, roles=("approver",)),
+            json={"approved_by": "cro@bank.test"},
+        )
+        assert applied.status_code == 200, applied.text
+        by_key = {
+            job.coalesce_key: job for job in _queued_refreshes(bank_id, job_type="bi_mart_refresh")
+        }
+        assert set(by_key) == {
+            f"bi:{bank_id}:{LIVE_AS_OF.isoformat()}",
+            f"bi:{bank_id}:{FIXTURE_AS_OF.isoformat()}",
+        }
+        for job in by_key.values():
+            assert job.payload["reason"] == "withdrawal_applied"
+            assert job.payload["bank_id"] == bank_id
+            assert "builder_version" in job.payload
+
+        reversed_response = db_client.post(
+            f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/reverse",
+            headers=headers(user_id=APPROVER_USER, roles=("approver",)),
+            json={"reversed_by": "cro@bank.test", "reason": "Wrong system named."},
+        )
+        assert reversed_response.status_code == 200, reversed_response.text
+        after = {
+            job.coalesce_key: job for job in _queued_refreshes(bank_id, job_type="bi_mart_refresh")
+        }
+        assert set(after) == set(by_key)  # still two: the reversal coalesced
+        for key, job in after.items():
+            assert job.id == by_key[key].id
+            assert job.payload["reason"] == "withdrawal_reversed"
+    finally:
+        get_settings.cache_clear()
 
 
 def test_a_withdrawal_scope_that_matches_nothing_is_refused(db_client: TestClient) -> None:

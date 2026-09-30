@@ -12,6 +12,17 @@ suggestion that is not this cycle's, or one nobody accepted, is refused at save.
 Without that check the badge would be a claim the editor could forge — in either
 direction, since a bank might want text to look human-written just as easily as
 the reverse.
+
+**v2 (D-053) names the VENDOR.** The platform now fails over between providers on
+availability, so two runs of the same cycle with the same figures can be drafted
+by different companies' models. On a FILED report that is not a logging detail:
+the stamp rides the committed section version, which is what the frozen package
+and its export are built from, so a supervisor asking "who wrote this" gets the
+vendor, the model it served, the tier position it was reached at, and the request
+features that vendor could not honour. ``degraded_capabilities`` is how the
+Anthropic-only behaviour — prompt caching on the static prompt, the server-side
+fallback beta, adaptive thinking, effort control — stays visible instead of
+vanishing when another tier answers.
 """
 
 from __future__ import annotations
@@ -28,7 +39,7 @@ from app.domain.icaap import ai_convert
 from app.models.icaap import IcaapCycle
 from app.models.icaap_ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
 
-PROVENANCE_SCHEMA = "icaap-ai-provenance-v1"
+PROVENANCE_SCHEMA = "icaap-ai-provenance-v2"
 
 
 def accepted_suggestion_ids(
@@ -65,6 +76,26 @@ def unknown_markers(
     return tuple(sorted(claimed - accepted_suggestion_ids(db, access, cycle)))
 
 
+def _model_entry(row: IcaapAiSuggestion) -> dict[str, Any]:
+    """One suggestion's model provenance, vendor included.
+
+    The vendor half lives in the sealed row's call record rather than in a column
+    of its own, beside the served geography that is already kept there for the
+    same reason: it is evidence about the call, not a parameter of it. A row
+    written before the tier existed has no call record and reports ``None``, which
+    is honest — that draft came from the single-vendor path.
+    """
+    record = row.usage if isinstance(row.usage, dict) else {}
+    return {
+        "vendor": record.get("vendor"),
+        "requested": row.model_requested,
+        "served": row.model_served,
+        "fallback_used": bool(row.fallback_used),
+        "tier_position": record.get("tier_position"),
+        "degraded_capabilities": list(record.get("degraded_capabilities") or []),
+    }
+
+
 def provenance_for_doc(
     db: Session, access: IcaapAccess, cycle: IcaapCycle, doc: Mapping[str, Any]
 ) -> dict[str, Any] | None:
@@ -89,15 +120,12 @@ def provenance_for_doc(
         "paragraph_count": ai_convert.count_paragraphs(doc),
         "suggestion_ids": list(suggestion_ids),
         "models": sorted(
-            (
-                {
-                    "requested": row.model_requested,
-                    "served": row.model_served,
-                    "fallback_used": bool(row.fallback_used),
-                }
-                for row in rows
+            (_model_entry(row) for row in rows),
+            key=lambda entry: (
+                str(entry["vendor"] or ""),
+                str(entry["requested"]),
+                str(entry["served"] or ""),
             ),
-            key=lambda entry: (entry["requested"], entry["served"] or ""),
         ),
         "prompt_versions": sorted({row.prompt_version for row in rows}),
     }

@@ -1,4 +1,11 @@
-"""The model client: the ONLY module that imports the Anthropic SDK.
+"""The Anthropic adapter, and the provider-agnostic contract every adapter fills.
+
+Two jobs in one file, deliberately: ``ModelRequest``/``ModelResult``/
+``DraftModel`` are the seam every vendor adapter implements (``openai_model``,
+``google_model``), and ``AnthropicModel`` is the first vendor's implementation of
+it — kept here because this is the module the architecture test pins as the ONE
+importer of the ``anthropic`` SDK. ``tiered`` walks the adapters; nothing else
+constructs one.
 
 Three properties this file exists to hold:
 
@@ -34,6 +41,12 @@ scalar form REQUIRES the ``-2026-07-01`` beta (the ``-2026-06-01`` header gates
 the older array form, and pairing either header with the other form is a 400).
 Never set ``temperature``/``top_p``/``top_k`` or ``budget_tokens``: all four are
 rejected with a 400 on Opus 5.
+
+Three of the things this request does are Anthropic-only and do NOT transfer to
+another vendor: ``cache_control`` on the static system blocks, the server-side
+``fallbacks="default"`` beta, and ``thinking={"type": "adaptive"}``. That is why
+the other adapters record them as degraded capabilities on every draft rather
+than quietly sending a weaker request (D-053).
 """
 
 from __future__ import annotations
@@ -42,14 +55,21 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings
 
-from app.core.config import SETTINGS_CONFIG, Settings, get_settings, is_undeployed_environment
+from app.core.config import (
+    SETTINGS_CONFIG,
+    AiVendor,
+    Settings,
+    get_settings,
+    is_undeployed_environment,
+)
 from app.services.ai.features import AiFeature
+from app.services.ai.vendors import VendorDescriptor, VendorUnavailable, resolve_effort
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from typing import Literal
@@ -60,6 +80,13 @@ T = TypeVar("T", bound=BaseModel)
 #: constant, not a tunable: the value is fixed by the provider, and pairing it
 #: with the array form is a 400.
 SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+#: This module's vendor (audit A7-02). Every adapter exposes the same
+#: module-level name — ``openai_model.VENDOR``, ``google_model.VENDOR`` — so the
+#: three can be handled uniformly, which is exactly how the tier walks them.
+#: ``AnthropicModel.VENDOR`` mirrors this rather than restating it, so the two
+#: can never drift apart.
+VENDOR: AiVendor = "anthropic"
 
 
 class RealModelForbiddenError(RuntimeError):
@@ -103,6 +130,10 @@ class ModelRequest[T: BaseModel]:
     """A feature-agnostic request. BI commentary will build these too."""
 
     feature: AiFeature
+    #: The caller's prompt version. Part of the approved-configuration key, so the
+    #: request has to carry it: the tier checks the approval PER VENDOR before it
+    #: opens a socket, and it has nothing else to look the approval up by.
+    prompt_version: str
     #: Stable prefix first, per-section addendum second. The volatile fact sheet
     #: is the user turn, so the cached prefix is never disturbed by it.
     system: tuple[SystemBlock, ...]
@@ -155,6 +186,47 @@ class ModelResult[T: BaseModel]:
     failure_code: str | None = None
     usage: UsageRecord | None = None
     latency_ms: int = 0
+    #: Which vendor produced this, and where it sat in ``AI_PROVIDER_TIER``. Load
+    #: bearing since D-053: identical inputs now yield different text depending on
+    #: who was up, so a reader of a FILED report must be able to tell which.
+    vendor: str | None = None
+    tier_position: int | None = None
+    #: Where ``model_requested`` came from (D-061): ``feature_override`` or
+    #: ``vendor_default``. Recorded on the call, not in the filed provenance dict,
+    #: because it is how the deployment was configured rather than part of what the
+    #: document says about itself.
+    model_source: str | None = None
+    #: Request features this vendor could not honour (``vendors.CAP_*``).
+    degraded: tuple[str, ...] = ()
+    #: Every vendor tried before this one: ``{vendor, tier_position, outcome,
+    #: failure_code, failure_class}``. Empty when the first vendor answered.
+    tier_attempts: tuple[dict[str, Any], ...] = ()
+
+    def call_record(self) -> dict[str, Any]:
+        """The audit record of the call: token usage PLUS vendor provenance.
+
+        ALWAYS a dict, even when the vendor returned no usage block, because the
+        provenance of a failed or refused call is evidence too — and the tier
+        that produced it is the part a supervisor would ask about.
+        """
+        record = self.usage.as_dict() if self.usage is not None else _EMPTY_USAGE.as_dict()
+        record.update(
+            {
+                "vendor": self.vendor,
+                "model_requested": self.model_requested,
+                "model_served": self.model_served,
+                "model_source": self.model_source,
+                "tier_position": self.tier_position,
+                "degraded_capabilities": list(self.degraded),
+                "tier_attempts": list(self.tier_attempts),
+            }
+        )
+        return record
+
+
+#: The shape ``call_record`` falls back to, so a failed call still records the
+#: same keys as a successful one instead of a differently-shaped dict.
+_EMPTY_USAGE: UsageRecord = UsageRecord()
 
 
 class DraftModel(Protocol):
@@ -174,6 +246,12 @@ def use_model(model: DraftModel) -> Iterator[None]:
         _OVERRIDE.reset(token)
 
 
+#: What a replayed draft records as its vendor. A fixture is not a vendor, and a
+#: recorded run must not read like one answered — D-053 requires the stamp on
+#: EVERY draft, including this path.
+RECORDED_VENDOR = "recorded"
+
+
 class RecordedModel:
     """A canned model. Records every request so tests can assert on the prompt."""
 
@@ -188,20 +266,45 @@ class RecordedModel:
     def generate(self, request: ModelRequest[T]) -> ModelResult[T]:
         self.requests.append(request)
         if callable(self._results):
-            return self._results(request)
+            return self._stamped(self._results(request))
         if self._index >= len(self._results):
             message = "RecordedModel ran out of canned results"
             raise AssertionError(message)
         result = self._results[self._index]
         self._index += 1
-        return result
+        return self._stamped(result)
+
+    def _stamped(self, result: ModelResult[Any]) -> ModelResult[Any]:
+        """Fill in the provenance a canned result left out, never overwrite it.
+
+        A tier test cans a result that already names its vendor; a plain fixture
+        replay does not, and gets ``recorded`` at position one rather than a blank
+        where the provenance should be.
+        """
+        if result.vendor is not None:
+            return result
+        return replace(result, vendor=RECORDED_VENDOR, tier_position=1)
 
 
 class AnthropicModel:
     """The real client. Constructed only on the AI worker."""
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    #: Tier position 1 in the default order, and the reference implementation of
+    #: every request feature — so nothing here is ever a degraded capability.
+    #: Mirrors the module-level constant; never a second literal.
+    VENDOR: AiVendor = VENDOR
+
+    @property
+    def descriptor(self) -> VendorDescriptor:
+        """What this adapter will send. A property, not a constructor field, so a
+        test may bypass ``__init__`` and still describe the request."""
+        return describe(self._settings, getattr(self, "_feature", None))
+
+    def __init__(
+        self, settings: Settings | None = None, *, feature: AiFeature | None = None
+    ) -> None:
         settings = settings or get_settings()
+        self._feature: AiFeature | None = feature
         credentials = AiCredentialSettings()
         if credentials.anthropic_api_key is None:
             message = "ANTHROPIC_API_KEY is not configured for this process."
@@ -233,8 +336,16 @@ class AnthropicModel:
 
     def generate(self, request: ModelRequest[T]) -> ModelResult[T]:  # noqa: PLR0911
         ai = self._settings.ai
+        # The DESCRIPTOR is what the socket sends — never ``ai.model`` (audit
+        # A7-01). The approval gate, ``ModelResult.model_requested`` and the
+        # filed ICAAP provenance all read ``descriptor.model``; sending anything
+        # else means the configuration that was approved and the configuration
+        # that ran are two different things, and the filed evidence names the
+        # wrong one. Both HTTP adapters already do this (``openai_model.py:180``,
+        # ``google_model.py``); tier 1 was the outlier.
+        descriptor = self.descriptor
         kwargs: dict[str, Any] = {
-            "model": ai.model,
+            "model": descriptor.model,
             "max_tokens": ai.max_output_tokens,
             "system": self._system_blocks(request),
             "messages": [{"role": "user", "content": request.user_content}],
@@ -242,7 +353,7 @@ class AnthropicModel:
             # one migration away from changing under us. ``display`` stays
             # omitted — we never want the reasoning text.
             "thinking": {"type": "adaptive"},
-            "output_config": {"effort": ai.effort},
+            "output_config": {"effort": descriptor.effort},
             "output_format": request.output_type,
         }
         if ai.fallbacks == "default":
@@ -288,14 +399,18 @@ class AnthropicModel:
         fallback_used = any(
             entry.get("type") == "fallback_message" for entry in (usage.iterations if usage else ())
         )
+        descriptor = self.descriptor
         common: dict[str, Any] = {
-            "model_requested": self._settings.ai.model,
+            "model_requested": descriptor.model,
             "model_served": getattr(response, "model", None),
             "fallback_used": fallback_used,
             "request_id": getattr(response, "_request_id", None),
             "stop_reason": getattr(response, "stop_reason", None),
             "usage": usage,
             "latency_ms": self._elapsed_ms(started),
+            "vendor": descriptor.vendor,
+            "degraded": descriptor.degraded,
+            "model_source": descriptor.model_source,
         }
         stop_reason = common["stop_reason"]
 
@@ -331,10 +446,14 @@ class AnthropicModel:
             headers = getattr(response, "headers", None)
             if headers is not None:
                 request_id = headers.get("request-id")
+        descriptor = self.descriptor
         common: dict[str, Any] = {
-            "model_requested": self._settings.ai.model,
+            "model_requested": descriptor.model,
             "request_id": request_id,
             "latency_ms": self._elapsed_ms(started),
+            "vendor": descriptor.vendor,
+            "degraded": descriptor.degraded,
+            "model_source": descriptor.model_source,
         }
         overloaded_status = 529
         # Most specific first. APITimeoutError before APIConnectionError: it is
@@ -358,6 +477,41 @@ class AnthropicModel:
         raise exc
 
 
+def describe(settings: Settings, feature: AiFeature | None = None) -> VendorDescriptor:
+    """Anthropic's descriptor: the reference implementation, nothing degraded.
+
+    Credential-free on purpose — the enqueue gate calls this in the API process.
+    ``feature`` selects the model (D-061); ``None`` asks the vendor-default
+    question, which is what the run gate's "can this process call anything" needs.
+    """
+    from app.services.ai import model_selection  # noqa: PLC0415 - avoids an import cycle
+
+    resolved = model_selection.resolve(feature, AnthropicModel.VENDOR, settings)
+    effort, _downgraded = resolve_effort(AnthropicModel.VENDOR, settings.ai.effort)
+    return VendorDescriptor(
+        vendor=AnthropicModel.VENDOR,
+        model=resolved.model,
+        effort=effort,
+        degraded=(),
+        model_source=resolved.source,
+    )
+
+
+def prepare(
+    settings: Settings, feature: AiFeature | None = None
+) -> tuple[VendorDescriptor, Callable[[], DraftModel]]:
+    """The tier's entry point for this vendor: describe first, build on demand.
+
+    Split in two so the tier can check the per-vendor approved configuration and
+    the credential BEFORE anything is constructed — a vendor with no key is
+    skipped by name, never by a caught exception from deep inside an SDK.
+    """
+    descriptor = describe(settings, feature)
+    if AiCredentialSettings().anthropic_api_key is None:
+        raise VendorUnavailable(AnthropicModel.VENDOR, "key_missing")
+    return descriptor, lambda: AnthropicModel(settings, feature=feature)
+
+
 def backend_configured(settings: Settings | None = None) -> bool:
     """Can THIS process actually call a model?
 
@@ -368,13 +522,19 @@ def backend_configured(settings: Settings | None = None) -> bool:
     An active ``use_model`` override counts as configured: it IS what this
     process will call. That keeps the question honest in tests and the offline
     eval harness, and changes nothing in production, where no override exists.
+
+    Since D-053 the question is "is ANY vendor in the tier usable", because the
+    whole point of the tier is that one vendor being out of credit is not the
+    feature being unconfigured.
     """
     if _OVERRIDE.get() is not None:
         return True
     settings = settings or get_settings()
     if settings.ai.model_backend == "recorded":
         return is_undeployed_environment(settings.app.app_env)
-    return AiCredentialSettings().anthropic_api_key is not None
+    from app.services.ai import tiered  # noqa: PLC0415 - avoids an import cycle
+
+    return bool(tiered.configured_vendors(settings))
 
 
 def get_model(settings: Settings | None = None) -> DraftModel:
@@ -388,7 +548,11 @@ def get_model(settings: Settings | None = None) -> DraftModel:
             message = "The recorded AI backend is refused outside local and test."
             raise RealModelForbiddenError(message)
         return _recorded_from_fixture(settings)
-    return AnthropicModel(settings)
+    from app.services.ai import tiered  # noqa: PLC0415 - avoids an import cycle
+
+    # ``anthropic`` pins the tier to one vendor in settings, so both real
+    # backends take the same path and the provenance stamp is never skipped.
+    return tiered.TieredModel(settings)
 
 
 def _recorded_from_fixture(settings: Settings) -> RecordedModel:
@@ -415,8 +579,22 @@ def _recorded_from_fixture(settings: Settings) -> RecordedModel:
     return RecordedModel(results)
 
 
+def complete_structured[R: BaseModel](
+    request: ModelRequest[R], settings: Settings | None = None
+) -> ModelResult[R]:
+    """THE provider-agnostic entry point. One prompt, one schema, one result.
+
+    Every AI feature calls this and nothing else. Which vendor served it, where
+    that vendor sat in the tier, and what it could not honour come back stamped
+    on the result; whether to fail over is decided in ``vendors``, never here and
+    never by a caller.
+    """
+    return get_model(settings).generate(request)
+
+
 __all__ = [
     "NO_OUTPUT_OUTCOMES",
+    "RECORDED_VENDOR",
     "SERVER_SIDE_FALLBACK_BETA",
     "AiCredentialSettings",
     "AnthropicModel",
@@ -429,6 +607,9 @@ __all__ = [
     "SystemBlock",
     "UsageRecord",
     "backend_configured",
+    "complete_structured",
+    "describe",
     "get_model",
+    "prepare",
     "use_model",
 ]

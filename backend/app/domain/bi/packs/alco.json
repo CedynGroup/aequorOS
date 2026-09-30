@@ -1,0 +1,275 @@
+{
+  "id": "alco",
+  "title": "Asset and liability committee",
+  "description": "The funding and interest-rate position: what the balance sheet is made of, what it costs, when it matures and reprices, and what it is worth under the base scenario.",
+  "audience": "alco",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "balance_sheet_mix",
+      "kind": "donut",
+      "title": "Balance sheet mix",
+      "caption": "Reporting-currency balances by position type at the reporting date.",
+      "query": {
+        "measures": [
+          "positions.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.type"
+        ]
+      },
+      "display": {
+        "series_dimension": "position.type"
+      }
+    },
+    {
+      "id": "deposit_mix",
+      "kind": "bar",
+      "title": "Deposit mix",
+      "caption": "Current, call and savings balances against fixed deposits.",
+      "query": {
+        "measures": [
+          "deposits.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.deposit_account_type"
+        ]
+      },
+      "display": {
+        "series_dimension": "position.deposit_account_type"
+      }
+    },
+    {
+      "id": "cost_of_funds",
+      "kind": "line",
+      "title": "Cost of funds",
+      "caption": "The balance-weighted contractual rate the deposit book carries. It is not interest expense over average funding.",
+      "query": {
+        "measures": [
+          "deposits.weighted_average_rate"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      },
+      "display": {
+        "show_trend": true,
+        "precision": 4
+      }
+    },
+    {
+      "id": "depositor_concentration",
+      "kind": "bar",
+      "title": "Largest depositor concentration",
+      "caption": "The share of deposits held by the largest depositors. A depositor concentration measure is not yet published.",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "loans_to_deposits",
+      "kind": "kpi",
+      "title": "Loans to deposits",
+      "caption": "Loans as a share of deposits. The ratio is not yet published as a measure.",
+      "pending_capability": "catalogue_member"
+    },
+    {
+      "id": "net_open_position",
+      "kind": "kpi_row",
+      "title": "Net open position",
+      "caption": "The aggregate and largest single-currency open positions. The limits that govern them are held in the bank's register and are not shown here.",
+      "query": {
+        "measures": [
+          "engine.nop_pct_tier1.crd.official",
+          "engine.single_ccy_max_pct.crd.official"
+        ],
+        "window": "as_of"
+      },
+      "display": {
+        "precision": 2
+      }
+    },
+    {
+      "id": "economic_value_and_earnings",
+      "kind": "kpi_row",
+      "title": "Economic value and earnings",
+      "caption": "Economic value of equity and net interest income under the base rate scenario, with the worst modelled change in value against Tier 1 capital.",
+      "query": {
+        "measures": [
+          "engine.eve_base_ghs.crd.official",
+          "engine.nii_base_ghs.crd.official",
+          "engine.worst_eve_change_pct_tier1.crd.official"
+        ],
+        "window": "as_of"
+      },
+      "display": {
+        "precision": 2
+      }
+    },
+    {
+      "id": "maturity_ladder",
+      "kind": "bar",
+      "title": "Contractual maturity ladder",
+      "caption": "Balances by contractual maturity bucket at the reporting date.",
+      "query": {
+        "measures": [
+          "positions.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.maturity_bucket"
+        ]
+      },
+      "display": {
+        "series_dimension": "position.maturity_bucket"
+      }
+    },
+    {
+      "id": "repricing_ladder",
+      "kind": "bar",
+      "title": "Repricing ladder",
+      "caption": "Balances by repricing bucket at the reporting date.",
+      "query": {
+        "measures": [
+          "positions.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "position.repricing_bucket"
+        ]
+      },
+      "display": {
+        "series_dimension": "position.repricing_bucket"
+      }
+    },
+    {
+      "id": "margin_decomposition",
+      "kind": "line",
+      "title": "Margin decomposition",
+      "caption": "Portfolio margin against asset yield and funding credit. Analytical figures from the funds transfer pricing module, not part of a filed return.",
+      "query": {
+        "measures": [
+          "engine.portfolio_nim_pct.advisory_internal.official",
+          "engine.weighted_asset_yield_pct.advisory_internal.official",
+          "engine.weighted_funding_credit_pct.advisory_internal.official"
+        ],
+        "window": "trailing_12_months",
+        "dimensions": [
+          "time.calendar_month"
+        ]
+      },
+      "display": {
+        "show_trend": true,
+        "precision": 2
+      }
+    },
+    {
+      "id": "dormant_deposits",
+      "kind": "bar",
+      "title": "Dormant deposit balances",
+      "caption": "Balances on accounts the bank has marked dormant, by product family. It reads as no value, never as zero, until deposits state an account status.",
+      "query": {
+        "measures": [
+          "deposits.balance_rc"
+        ],
+        "window": "as_of",
+        "dimensions": [
+          "product.family"
+        ],
+        "filters": [
+          {
+            "member": "position.account_status",
+            "op": "in",
+            "values": [
+              "dormant"
+            ]
+          }
+        ]
+      },
+      "display": {
+        "precision": 2
+      },
+      "needs_data": "positions"
+    }
+  ],
+  "layout": [
+    {
+      "i": "balance_sheet_mix",
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "deposit_mix",
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "cost_of_funds",
+      "x": 0,
+      "y": 4,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "depositor_concentration",
+      "x": 6,
+      "y": 4,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "loans_to_deposits",
+      "x": 0,
+      "y": 8,
+      "w": 4,
+      "h": 3
+    },
+    {
+      "i": "net_open_position",
+      "x": 4,
+      "y": 8,
+      "w": 4,
+      "h": 3
+    },
+    {
+      "i": "economic_value_and_earnings",
+      "x": 8,
+      "y": 8,
+      "w": 4,
+      "h": 3
+    },
+    {
+      "i": "maturity_ladder",
+      "x": 0,
+      "y": 11,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "repricing_ladder",
+      "x": 6,
+      "y": 11,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "margin_decomposition",
+      "x": 0,
+      "y": 15,
+      "w": 12,
+      "h": 4
+    },
+    {
+      "i": "dormant_deposits",
+      "x": 0,
+      "y": 19,
+      "w": 6,
+      "h": 4
+    }
+  ]
+}

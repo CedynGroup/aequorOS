@@ -25,6 +25,13 @@ import {
   BindingReadToJSON,
   BindingReadToJSONTyped,
 } from "./BindingRead";
+import type { DisplayName } from "./DisplayName";
+import {
+  DisplayNameFromJSON,
+  DisplayNameFromJSONTyped,
+  DisplayNameToJSON,
+  DisplayNameToJSONTyped,
+} from "./DisplayName";
 import type { JobTitle } from "./JobTitle";
 import {
   JobTitleFromJSON,
@@ -32,13 +39,6 @@ import {
   JobTitleToJSON,
   JobTitleToJSONTyped,
 } from "./JobTitle";
-import type { DisplayName1 } from "./DisplayName1";
-import {
-  DisplayName1FromJSON,
-  DisplayName1FromJSONTyped,
-  DisplayName1ToJSON,
-  DisplayName1ToJSONTyped,
-} from "./DisplayName1";
 
 /**
  *
@@ -66,10 +66,10 @@ export interface MemberRead {
   authenticationMethod: MemberReadAuthenticationMethodEnum;
   /**
    *
-   * @type {DisplayName1}
+   * @type {DisplayName}
    * @memberof MemberRead
    */
-  displayName: DisplayName1;
+  displayName: DisplayName;
   /**
    *
    * @type {string}
@@ -186,7 +186,7 @@ export function MemberReadFromJSONTyped(
     accessRequestState: json["access_request_state"],
     activeGrantCount: json["active_grant_count"],
     authenticationMethod: json["authentication_method"],
-    displayName: DisplayName1FromJSON(json["display_name"]),
+    displayName: DisplayNameFromJSON(json["display_name"]),
     email: json["email"],
     grants: (json["grants"] as Array<any>).map(BindingReadFromJSON),
     jobTitle: JobTitleFromJSON(json["job_title"]),
@@ -212,7 +212,7 @@ export function MemberReadToJSONTyped(
     access_request_state: value["accessRequestState"],
     active_grant_count: value["activeGrantCount"],
     authentication_method: value["authenticationMethod"],
-    display_name: DisplayName1ToJSON(value["displayName"]),
+    display_name: DisplayNameToJSON(value["displayName"]),
     email: value["email"],
     grants: (value["grants"] as Array<any>).map(BindingReadToJSON),
     job_title: JobTitleToJSON(value["jobTitle"]),

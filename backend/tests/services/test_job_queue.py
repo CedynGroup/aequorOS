@@ -241,12 +241,33 @@ def test_an_unlisted_job_type_stays_on_the_deployment_default(db_session: Sessio
     restarted the walk from the top — three attempts, eleven hours, roughly
     twenty thousand requests to the regulator this platform reports to. The
     handler was never at fault; the window was shorter than the work.
+
+    ``bi_export`` earned its entry by argument rather than by incident, which is
+    the weaker claim and is stated as such: only HALF of a governed export's
+    runtime is bounded by a setting. The statement runs under
+    ``BI_EXPORT_TIMEOUT_MS``; the reportlab layout that follows it is not timed
+    at all, and the export row cap is 100 000 rows. There is no measurement
+    behind the window yet (D-070).
+
+    ``bi_subscription_run`` earned its entry by a BOUNDED argument, which is the
+    stronger form of the same claim: it renders one artifact per recipient, and
+    both halves of a delivery ARE bounded — it renders under the interactive caps
+    (5 000 rows, a 10 s statement timeout) rather than the export caps, with a cap
+    on recipients. The window is about 2.4x that worst case. The cost of being
+    wrong here is not a wasted render: a reclaim firing on a live run mails a bank
+    its board pack a second time.
     """
-    assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"etl_dedup", "desk_capture"}
+    assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {
+        "etl_dedup",
+        "desk_capture",
+        "bi_export",
+        "bi_subscription_run",
+    }
     assert job_queue.stale_after_for("pipeline_refresh", timedelta(minutes=15)) == timedelta(
         minutes=15
     )
     assert job_queue.stale_after_for("etl_dedup", timedelta(minutes=15)) == timedelta(hours=4)
+    assert job_queue.stale_after_for("bi_export", timedelta(minutes=15)) == timedelta(minutes=30)
 
 
 # --------------------------------------------------------------------------

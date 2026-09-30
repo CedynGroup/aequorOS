@@ -1,12 +1,15 @@
-'use client';
+"use client";
 
-import type { ReactNode } from 'react';
-import { SkeletonLine } from './Skeleton';
+import type { ReactNode } from "react";
+import { SkeletonLine } from "./Skeleton";
 
 /**
- * Standard card wrapper for recharts visuals: title row + actions slot,
- * fixed-height body, and a built-in skeleton loading state. Pair with the
- * token-driven helpers in lib/chartTheme.ts for series/grid/tooltip colors.
+ * Standard card wrapper for a chart: title row + actions slot, fixed-height
+ * body, and a built-in skeleton loading state.
+ *
+ * Pass the SAME `height` to the chart inside it — `components/bi/EChart` sizes a
+ * canvas in pixels rather than to its container, so the two numbers agreeing is
+ * what keeps the card from clipping or leaving a gap.
  */
 export default function ChartFrame({
   title,
@@ -16,7 +19,7 @@ export default function ChartFrame({
   loading = false,
   footer,
   children,
-  className = '',
+  className = "",
 }: {
   title: ReactNode;
   subtitle?: ReactNode;

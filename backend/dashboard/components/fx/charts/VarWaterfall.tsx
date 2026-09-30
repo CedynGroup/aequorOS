@@ -1,22 +1,13 @@
-'use client';
+"use client";
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  CHART_GRID,
-  axisProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { fmtCurrency, fmtCurrencySigned } from '@/lib/format';
+  BAR_SERIES_BASE,
+  itemTooltip,
+  WATERFALL_PEDESTAL,
+} from "@/lib/echartsOptions";
+import { fmtCurrency, fmtCurrencySigned } from "@/lib/format";
 
 export type VarWaterfallInput = {
   /** Per-currency standalone VaR steps (all >= 0). */
@@ -32,7 +23,7 @@ type Step = {
   base: number;
   span: number;
   signed: number;
-  kind: 'currency' | 'benefit' | 'total';
+  kind: "currency" | "benefit" | "total";
 };
 
 /**
@@ -48,82 +39,99 @@ export default function VarWaterfall({
   input: VarWaterfallInput;
   height?: number;
 }) {
+  const tokens = useChartTokens();
   const steps: Step[] = [];
   let running = 0;
-  input.standalone.forEach((s) => {
+  input.standalone.forEach((entry) => {
     steps.push({
-      label: s.currency,
+      label: entry.currency,
       base: running,
-      span: s.varGhs,
-      signed: s.varGhs,
-      kind: 'currency',
+      span: entry.varGhs,
+      signed: entry.varGhs,
+      kind: "currency",
     });
-    running += s.varGhs;
+    running += entry.varGhs;
   });
   steps.push({
-    label: 'Diversification',
+    label: "Diversification",
     base: running - input.diversificationBenefitGhs,
     span: input.diversificationBenefitGhs,
     signed: -input.diversificationBenefitGhs,
-    kind: 'benefit',
+    kind: "benefit",
   });
   steps.push({
-    label: 'Portfolio VaR',
+    label: "Portfolio VaR",
     base: 0,
     span: input.portfolioVarGhs,
     signed: input.portfolioVarGhs,
-    kind: 'total',
+    kind: "total",
   });
 
+  const labels = steps.map((step) => step.label);
   const fill = (step: Step): string =>
-    step.kind === 'benefit'
-      ? seriesColor(2)
-      : step.kind === 'total'
-      ? seriesColor(1)
-      : seriesColor(0);
+    step.kind === "benefit"
+      ? seriesColor(tokens, 2)
+      : step.kind === "total"
+        ? seriesColor(tokens, 1)
+        : seriesColor(tokens, 0);
+  const stepLabel = (step: Step): string =>
+    step.kind === "benefit"
+      ? "Diversification benefit"
+      : step.kind === "total"
+        ? "Diversified portfolio VaR"
+        : `${step.label} standalone VaR`;
+
+  const option: BiEChartsOption = {
+    grid: { left: 8, right: 12, top: 8, bottom: 4, containLabel: true },
+    xAxis: { type: "category", data: labels, axisLabel: { interval: 0 } },
+    yAxis: {
+      type: "value",
+      axisLabel: {
+        formatter: (value: number) => `${(value / 1_000_000).toFixed(1)}M`,
+      },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: itemTooltip(labels, (index) => {
+        const step = steps[index];
+        return step === undefined
+          ? []
+          : [
+              {
+                label: stepLabel(step),
+                value:
+                  step.kind === "total"
+                    ? fmtCurrency(step.signed)
+                    : fmtCurrencySigned(step.signed),
+                color: fill(step),
+              },
+            ];
+      }),
+    },
+    series: [
+      // The invisible pedestal that lifts each visible span to its own level.
+      {
+        ...WATERFALL_PEDESTAL,
+        name: "Pedestal",
+        data: steps.map((step) => step.base),
+      },
+      {
+        ...BAR_SERIES_BASE,
+        name: "Contribution",
+        stack: WATERFALL_PEDESTAL.stack,
+        data: steps.map((step) => ({
+          value: step.span,
+          itemStyle: { color: fill(step), borderRadius: [2, 2, 0, 0] },
+        })),
+      },
+    ],
+  } as BiEChartsOption;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={steps} margin={{ top: 8, right: 12, bottom: 4, left: 8 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} interval={0} />
-        <YAxis
-          {...axisProps}
-          tickFormatter={(v: number) => `${(v / 1_000_000).toFixed(1)}M`}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(_value: number | string, _name, item) => {
-            const step = item?.payload as Step | undefined;
-            if (!step) return ['—', ''];
-            const text =
-              step.kind === 'total'
-                ? fmtCurrency(step.signed)
-                : fmtCurrencySigned(step.signed);
-            return [
-              text,
-              step.kind === 'benefit'
-                ? 'Diversification benefit'
-                : step.kind === 'total'
-                ? 'Diversified portfolio VaR'
-                : `${step.label} standalone VaR`,
-            ];
-          }}
-        />
-        {/* Invisible positioning bar, then the visible span. */}
-        <Bar
-          dataKey="base"
-          stackId="wf"
-          fill="transparent"
-          isAnimationActive={false}
-          tooltipType="none"
-        />
-        <Bar dataKey="span" stackId="wf" radius={[2, 2, 0, 0]}>
-          {steps.map((step) => (
-            <Cell key={step.label} fill={fill(step)} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Value-at-risk bridge from ${input.standalone.length} standalone currency positions, less the diversification benefit, to a diversified portfolio VaR of ${fmtCurrency(input.portfolioVarGhs)}`}
+    />
   );
 }

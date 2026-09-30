@@ -15,7 +15,10 @@ import SectionCard from '@/components/ui/SectionCard';
 import DeltaBadge from '@/components/ui/DeltaBadge';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { SkeletonLine } from '@/components/ui/Skeleton';
-import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
+import {
+  LIVE_MODULE_LABELS,
+  livePrimaryMetricIsAdvisory,
+} from '@/components/live/moduleDisplay';
 import { useWindowAnalytics } from '@/lib/api/hooks';
 import { labelize, num } from '@/lib/api/values';
 import { fmtPct } from '@/lib/format';
@@ -27,13 +30,19 @@ const RATIO_LABELS: Record<WindowRatio, string> = {
   cet1_ratio_pct: 'CET1 ratio',
 };
 
-/** Short labels for the daily primary-metric keys (mirrors moduleDisplay). */
+/**
+ * Short labels for the daily primary-metric keys. Mirrors `PRIMARY_METRIC` in
+ * `components/live/moduleDisplay.ts` (and the backend's `_PRIMARY_METRIC_KEY`);
+ * `moduleDisplay.test.ts` reads this map and fails when they drift.
+ */
 const METRIC_LABELS: Record<string, string> = {
   lcr_pct: 'LCR',
   car_pct: 'CAR',
-  eve_limit_pct: 'ΔEVE / Tier 1',
+  npl_ratio_pct: 'NPL ratio',
+  worst_eve_change_pct_tier1: 'ΔEVE / Tier 1',
   nop_pct_tier1: 'NOP / Tier 1',
   portfolio_nim_pct: 'Portfolio NIM',
+  pit_pd_upper_pct: 'PIT PD upper band',
   year5_car_pct: 'Year-5 CAR',
 };
 
@@ -58,6 +67,16 @@ function monthsAgoIso(months: number): string {
 
 function moduleLabel(module: string): string {
   return LIVE_MODULE_LABELS[module as LiveModule] ?? labelize(module);
+}
+
+/**
+ * Whether the module's daily figure has to be read as advisory rather than as a
+ * certified number (BI decision D-022). FTP's portfolio NIM and the rating
+ * engine's PD band are never filed with a regulator, and the five-year
+ * projected CAR is supervisory-monitoring only.
+ */
+function isAdvisory(module: string): boolean {
+  return livePrimaryMetricIsAdvisory(module as LiveModule);
 }
 
 export default function WindowAnalysis({
@@ -192,7 +211,10 @@ export default function WindowAnalysis({
                   <p key={row.module} className="text-caption text-slate">
                     {moduleLabel(row.module)}: {row.dayCount} daily{' '}
                     {row.dayCount === 1 ? 'close' : 'closes'} ·{' '}
-                    {METRIC_LABELS[row.metricKey] ?? labelize(row.metricKey)}{' '}
+                    {METRIC_LABELS[row.metricKey] ?? labelize(row.metricKey)}
+                    {isAdvisory(row.module) ? (
+                      <span className="text-warning"> (advisory)</span>
+                    ) : null}{' '}
                     avg{' '}
                     <span className="font-mono tnum">
                       {fmtPct(num(row.avg), 1)}

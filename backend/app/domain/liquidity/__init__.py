@@ -1,1 +1,1 @@
-"""Liquidity domain placeholder."""
+"""Pure liquidity engines: LCR/NSFR (``engine``) and the contractual ladder (``ladder``)."""

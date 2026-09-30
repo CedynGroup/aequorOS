@@ -14,6 +14,9 @@
     "lib/parameter-shapes.ts",
     "lib/parameter-shapes.test.ts",
     "lib/regulatory-parameters.ts",
-    "lib/regulatory-parameters.test.ts"
+    "lib/regulatory-parameters.test.ts",
+    "lib/api.ts",
+    "lib/bi-backfill.ts",
+    "lib/bi-backfill.test.ts"
   ]
 }

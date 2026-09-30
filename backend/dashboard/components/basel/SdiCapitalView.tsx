@@ -130,7 +130,9 @@ export default function SdiCapitalView({
   const assuranceHistory = (assurance.data?.history ?? []).map((point) => ({
     asOf: point.as_of,
     carPct: point.car_pct === null ? null : num(point.car_pct),
-    nplPct: num(point.npl_ratio) * 100,
+    // A null NPL ratio plotted as 0% — the best possible reading of a figure
+    // that was never computed. Null keeps the point off the line instead.
+    nplPct: numOrNull(point.npl_ratio) === null ? null : numOrNull(point.npl_ratio)! * 100,
   }));
   const currentAssurance = assurance.data?.current;
 
@@ -253,13 +255,19 @@ export default function SdiCapitalView({
                 <KpiStat
                   label="NPL ratio"
                   value={
-                    classification.data
+                    // A book with no loans has no ratio. There is deliberately
+                    // no fallback to 0.00%: that reads as a clean book.
+                    classification.data?.npl_ratio != null
                       ? (num(classification.data.npl_ratio) * 100).toFixed(2)
                       : "—"
                   }
                   unit="%"
                   status="ok"
-                  hint="Non-performing loans ÷ total exposure"
+                  hint={
+                    classification.data?.npl_ratio != null
+                      ? "Non-performing loans ÷ total exposure"
+                      : "No loans in the current book to measure"
+                  }
                 />
                 <KpiStat
                   label="Provisions required"

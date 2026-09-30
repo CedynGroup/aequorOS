@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.services.ai.features import AI_FEATURES
+from app.services.ai.features import AI_FEATURES, CONSENT_PENDING_FEATURES
 
 
 class ClosedModel(BaseModel):
@@ -61,6 +61,19 @@ class AiCommentarySettingsUpdate(ClosedModel):
         unknown = sorted(set(value) - set(AI_FEATURES))
         if unknown:
             message = f"Unknown AI features: {', '.join(unknown)}"
+            raise ValueError(message)
+        # A tenant may only consent to a surface their consent text DESCRIBES
+        # (audit A11-F2). The gate exists because the alternative was an accident:
+        # the consent version is checked for equality only, so a tenant who had
+        # accepted the current text for one surface could add another under it and
+        # never be asked again. Refusing here means the promise in
+        # ``services/ai/consent/`` is enforced rather than assumed.
+        pending = sorted(set(value) & set(CONSENT_PENDING_FEATURES))
+        if pending:
+            message = (
+                f"These AI features are not described by the current consent text, so "
+                f"they cannot be switched on yet: {', '.join(pending)}"
+            )
             raise ValueError(message)
         return sorted(set(value))
 

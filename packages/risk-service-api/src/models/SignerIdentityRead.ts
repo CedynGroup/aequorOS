@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { DisplayName } from "./DisplayName";
+import {
+  DisplayNameFromJSON,
+  DisplayNameFromJSONTyped,
+  DisplayNameToJSON,
+  DisplayNameToJSONTyped,
+} from "./DisplayName";
 import type { JobTitle } from "./JobTitle";
 import {
   JobTitleFromJSON,
@@ -18,13 +25,6 @@ import {
   JobTitleToJSON,
   JobTitleToJSONTyped,
 } from "./JobTitle";
-import type { DisplayName1 } from "./DisplayName1";
-import {
-  DisplayName1FromJSON,
-  DisplayName1FromJSONTyped,
-  DisplayName1ToJSON,
-  DisplayName1ToJSONTyped,
-} from "./DisplayName1";
 
 /**
  * The permanent signer identity. Opaque by design — it encodes nothing.
@@ -34,10 +34,10 @@ import {
 export interface SignerIdentityRead {
   /**
    *
-   * @type {DisplayName1}
+   * @type {DisplayName}
    * @memberof SignerIdentityRead
    */
-  displayName: DisplayName1;
+  displayName: DisplayName;
   /**
    *
    * @type {boolean}
@@ -101,7 +101,7 @@ export function SignerIdentityReadFromJSONTyped(
   }
   return {
     ...json,
-    displayName: DisplayName1FromJSON(json["display_name"]),
+    displayName: DisplayNameFromJSON(json["display_name"]),
     hasActiveKey: json["has_active_key"],
     jobTitle: JobTitleFromJSON(json["job_title"]),
     provisionedAt: new Date(json["provisioned_at"]),
@@ -123,7 +123,7 @@ export function SignerIdentityReadToJSONTyped(
   }
 
   return {
-    display_name: DisplayName1ToJSON(value["displayName"]),
+    display_name: DisplayNameToJSON(value["displayName"]),
     has_active_key: value["hasActiveKey"],
     job_title: JobTitleToJSON(value["jobTitle"]),
     provisioned_at: value["provisionedAt"].toISOString(),

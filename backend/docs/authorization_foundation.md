@@ -20,7 +20,8 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - permissions: `view`, `create`, `edit`, `run`, `review`, `approve`,
   `configure`, `export`, `validate`, `sign_off`, `submit`, `administer`, and
   `ingest`;
-- concrete resource modules: LIQ, CAP, IRRBB, FX, FTP, FCST, BEH, DATA, REG,
+- concrete resource modules: LIQ, CAP, CREDIT (added 2026-09-22, mirrored from
+  Risk by migration `202609220067`), IRRBB, FX, FTP, FCST, BEH, DATA, REG,
   Risk, Markets, Account, and Audit;
 - sensitivities: `published`, `aggregated`, `confidential`, and `restricted`;
 - static bundles and their exact granted actions: the executable
@@ -536,7 +537,12 @@ workbench entries, and deployment grants are owned by the
 [FTP rollout contract](ftp_enforcement_rollout.md). Regulatory filing — the
 submit and poll routes, the Validator bundle, and the grants that must exist
 before any return can be transmitted — is owned by the
-[filing submit authority rollout](filing_submit_authority_rollout.md). Existing
+[filing submit authority rollout](filing_submit_authority_rollout.md). Credit —
+the `credit` module, its `risk`-to-`credit` mirror migration, the credit rows
+of the shared live summary / alerts / window / snapshot surfaces, the direct
+`/credit/*` route cutover, and the first surfaces to apply a binding's
+branch/region `data_scope` to the rows AND to every count — is
+owned by the [credit rollout contract](credit_enforcement_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,

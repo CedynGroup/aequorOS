@@ -69,6 +69,8 @@ export const ReferenceMappingDatasetKindEnum = {
   RemittanceFlows: "remittance_flows",
   TellerWithdrawals: "teller_withdrawals",
   InterestAccruals: "interest_accruals",
+  PerformanceTargets: "performance_targets",
+  GlSegmentBalances: "gl_segment_balances",
 } as const;
 export type ReferenceMappingDatasetKindEnum =
   (typeof ReferenceMappingDatasetKindEnum)[keyof typeof ReferenceMappingDatasetKindEnum];

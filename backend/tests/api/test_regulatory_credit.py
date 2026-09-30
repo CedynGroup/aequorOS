@@ -113,7 +113,19 @@ def test_credit_loans_blotter_pages_and_facets_are_consistent(db_client: TestCli
         assert Decimal(row["provision_required_ghs"]) >= 0
 
 
-def test_credit_official_run_seals_a_reproducible_baseline(db_client: TestClient) -> None:
+def test_credit_official_run_seals_a_reproducible_baseline(
+    db_client: TestClient, credit_run_authority: None
+) -> None:
+    """Sealing a baseline needs the Analyst CREDIT/confidential ``run`` sentence.
+
+    ASSERTION CHANGED at the P4-C cutover: this test used to pass on the hermetic
+    ``viewer / all / all`` baseline because the route was gated on a scalar
+    mutation role. ``run`` is not in the Viewer bundle, so the fixture now grants
+    the sentence explicitly; the run's own properties below are unchanged, and
+    ``tests/api/test_credit_route_authorization.py`` pins that the SAME request
+    without that sentence is refused.
+    """
+    _ = credit_run_authority
     _seed_and_refresh(db_client)
     session = get_sessionmaker()()
     try:
@@ -217,3 +229,76 @@ def test_concentration_limits_register_roundtrip(db_client: TestClient) -> None:
 
     monitor = db_client.get(f"{_BASE}/credit/concentration", headers=headers()).json()
     assert monitor["limit_count"] == 2
+
+
+def test_blotter_route_carries_the_drill_slice_and_refuses_what_it_cannot_honour(
+    db_client: TestClient,
+) -> None:
+    """The contract a drill-through link relies on (P2-F7).
+
+    `sector`, `stage`, `dpd_band` and `as_of` narrow the page; a value outside
+    the platform's vocabulary is 422 and a date with no computed position is
+    409. Nothing is ever silently ignored — a dropped filter would answer with a
+    wider book than the heading the reader arrived under.
+    """
+    _seed_and_refresh(db_client)
+
+    whole = db_client.get(f"{_BASE}/credit/loans?limit=500", headers=headers())
+    assert whole.status_code == 200, whole.text
+    total = whole.json()["total"]
+    assert total > 0
+
+    # The fixture book carries stage 1 and stage 3 loans and no sectors.
+    staged = db_client.get(f"{_BASE}/credit/loans?stage=3&limit=500", headers=headers())
+    assert staged.status_code == 200, staged.text
+    staged_body = staged.json()
+    assert staged_body["total"] == total
+    assert staged_body["filtered"] >= 1
+    assert all(row["ifrs9_stage"] == 3 for row in staged_body["rows"])
+
+    # Current — every fixture loan states no days past due, so the band slice is
+    # empty rather than the whole book.
+    banded = db_client.get(f"{_BASE}/credit/loans?dpd_band=current&limit=500", headers=headers())
+    assert banded.status_code == 200, banded.text
+    assert banded.json()["filtered"] == 0
+
+    sectored = db_client.get(
+        f"{_BASE}/credit/loans?sector=Agriculture&limit=500", headers=headers()
+    )
+    assert sectored.status_code == 200, sectored.text
+    assert sectored.json()["filtered"] == 0
+
+    # Out-of-vocabulary values are refused by the contract, not dropped.
+    assert db_client.get(f"{_BASE}/credit/loans?stage=4", headers=headers()).status_code == 422
+    assert db_client.get(f"{_BASE}/credit/loans?stage=0", headers=headers()).status_code == 422
+    bad_band = db_client.get(f"{_BASE}/credit/loans?dpd_band=91_plus", headers=headers())
+    assert bad_band.status_code == 422, bad_band.text
+    assert "unknown_dpd_band" in bad_band.text
+
+    # The date the figure was measured on, exactly.
+    dated = db_client.get(
+        f"{_BASE}/credit/loans?as_of={FIXTURE_AS_OF.isoformat()}&limit=500", headers=headers()
+    )
+    assert dated.status_code == 200, dated.text
+    assert dated.json()["as_of"] == FIXTURE_AS_OF.isoformat()
+    assert dated.json()["total"] == total
+
+    missing = db_client.get(f"{_BASE}/credit/loans?as_of=2026-07-31", headers=headers())
+    assert missing.status_code == 409, missing.text
+    detail = missing.json()["error"]["details"]
+    assert detail["error_code"] == "no_computed_position"
+    assert "2026-07-31" in detail["message"]
+
+
+def test_the_new_filters_cannot_probe_another_tenants_institution(
+    db_client: TestClient,
+) -> None:
+    """Visibility decides FIRST. An institution this tenant cannot see answers
+    404 whatever the filters say — so a refusal that names a bad stage or band
+    is never a signal that the institution exists."""
+    _seed_and_refresh(db_client)
+    for suffix in ("", "?stage=4", "?dpd_band=91_plus", "?as_of=2026-06-30", "?sector=Agriculture"):
+        response = db_client.get(
+            f"/api/v1/banks/BK-NOPE0001/credit/loans{suffix}", headers=headers()
+        )
+        assert response.status_code == 404, f"{suffix}: {response.text}"

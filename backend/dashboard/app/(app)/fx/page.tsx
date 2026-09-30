@@ -9,6 +9,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import ChartFrame from '@/components/ui/ChartFrame';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFrame';
+import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
 import ExposureBars from '@/components/fx/charts/ExposureBars';
 import ScenarioStrip from '@/components/fx/ScenarioStrip';
 import { fxPositionSplits, type FxPositionSplit } from '@/components/fx/params';
@@ -26,7 +27,10 @@ export default function FxExposurePage() {
 }
 
 function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
-  const { data, metrics: m, run } = ctx;
+  const { data, metrics: m, run, bankId } = ctx;
+  // The reporting date every BI surface on this page speaks about.
+  const asOf = data.period.periodEnd;
+  const explain = useKpiExplain(bankId, asOf);
   const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null);
 
   const aggregateLimit = num(m.nopAggregateLimitPct);
@@ -109,6 +113,8 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
 
   return (
     <>
+      <LandingInsightStrip bankId={bankId} asOf={asOf} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label="Aggregate NOP / Tier 1"
@@ -118,17 +124,20 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
           status={statusFor(m.nopStatus)}
           sparkline={nopSpark.length >= 2 ? <Sparkline data={nopSpark} /> : undefined}
           hint={`Limit ${fmtPct(aggregateLimit, 0)}`}
+          explain={explain.explainFor('nop_pct_tier1')}
         />
         <KpiStat
           label={`Largest single currency (${m.singleCcyMaxCurrency})`}
           value={fmtPct(num(m.singleCcyMaxPct), 2)}
           status={statusFor(m.singleCcyStatus)}
           hint={`Single-currency limit ${fmtPct(singleLimit, 0)}`}
+          explain={explain.explainFor('single_ccy_max_pct')}
         />
         <KpiStat
           label="Net open position"
           value={fmtCurrency(num(m.nopGhs))}
           hint={`Long ${fmtCurrency(num(m.sumLongGhs))} · Short ${fmtCurrency(num(m.sumShortGhs))}`}
+          explain={explain.explainFor('nop_ghs')}
         />
         <KpiStat
           label="Tier 1 capital"
@@ -225,6 +234,8 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
       >
         <ScenarioStrip scenarios={data.scenarios} aggregateLimitPct={aggregateLimit} />
       </SectionCard>
+
+      {explain.drawer}
     </>
   );
 }

@@ -37,6 +37,10 @@ run = "uv run python -m app.worker"
 description = "Run the AI worker (the ai lane only — the one process with the model key)"
 run = "WORKER_JOB_TYPES=lane:ai RUN_INPROCESS_WORKER=0 uv run python -m app.worker"
 
+[tasks."risk-service:worker-bi"]
+description = "Run the BI mart worker (the bi lane only — mart refresh, backfill, retention)"
+run = "WORKER_JOB_TYPES=lane:bi RUN_INPROCESS_WORKER=0 uv run python -m app.worker"
+
 [tasks."risk-service:test"]
 description = "Run pytest"
 run = "uv run pytest"

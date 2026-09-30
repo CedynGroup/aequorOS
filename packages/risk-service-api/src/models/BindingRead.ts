@@ -74,6 +74,13 @@ import {
   ValidUntilToJSON,
   ValidUntilToJSONTyped,
 } from "./ValidUntil";
+import type { DataScope } from "./DataScope";
+import {
+  DataScopeFromJSON,
+  DataScopeFromJSONTyped,
+  DataScopeToJSON,
+  DataScopeToJSONTyped,
+} from "./DataScope";
 import type { BindingStatus } from "./BindingStatus";
 import {
   BindingStatusFromJSON,
@@ -115,6 +122,24 @@ export interface BindingRead {
    * @memberof BindingRead
    */
   authoritySentence: string;
+  /**
+   *
+   * @type {DataScope}
+   * @memberof BindingRead
+   */
+  dataScopeKind: DataScope;
+  /**
+   *
+   * @type {string}
+   * @memberof BindingRead
+   */
+  dataScopeLabel: string;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof BindingRead
+   */
+  dataScopeValues: Array<string>;
   /**
    *
    * @type {boolean}
@@ -270,6 +295,12 @@ export function instanceOfBindingRead(value: object): value is BindingRead {
     value["authoritySentence"] === undefined
   )
     return false;
+  if (!("dataScopeKind" in value) || value["dataScopeKind"] === undefined)
+    return false;
+  if (!("dataScopeLabel" in value) || value["dataScopeLabel"] === undefined)
+    return false;
+  if (!("dataScopeValues" in value) || value["dataScopeValues"] === undefined)
+    return false;
   if (!("effective" in value) || value["effective"] === undefined) return false;
   if (
     !("effectivePermissions" in value) ||
@@ -332,6 +363,9 @@ export function BindingReadFromJSONTyped(
   return {
     ...json,
     authoritySentence: json["authority_sentence"],
+    dataScopeKind: DataScopeFromJSON(json["data_scope_kind"]),
+    dataScopeLabel: json["data_scope_label"],
+    dataScopeValues: json["data_scope_values"],
     effective: json["effective"],
     effectivePermissions: json["effective_permissions"],
     grantReason: json["grant_reason"],
@@ -373,6 +407,9 @@ export function BindingReadToJSONTyped(
 
   return {
     authority_sentence: value["authoritySentence"],
+    data_scope_kind: DataScopeToJSON(value["dataScopeKind"]),
+    data_scope_label: value["dataScopeLabel"],
+    data_scope_values: value["dataScopeValues"],
     effective: value["effective"],
     effective_permissions: value["effectivePermissions"],
     grant_reason: value["grantReason"],

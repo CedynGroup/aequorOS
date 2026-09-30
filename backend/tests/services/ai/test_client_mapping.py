@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import httpx2
@@ -239,6 +240,56 @@ def test_a_programming_error_still_propagates(model: _Model) -> None:
 # --- request shape ----------------------------------------------------------
 
 
+#: Any real feature will do; the point is that a PER-FEATURE model resolves to
+#: something other than the settings default, which is the only way the two can
+#: be told apart on the wire.
+_FEATURE = "icaap_drafting"
+
+
+def test_the_wire_carries_the_descriptor_model_not_the_settings_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit A7-01: what is APPROVED and what is SENT must be one thing.
+
+    ``AnthropicModel.generate`` used to send ``settings.ai.model`` while the
+    approval gate, ``ModelResult.model_requested`` and the filed ICAAP
+    provenance all read ``descriptor.model``. With a per-feature model pinned,
+    the gate could admit on the reviewed model and the socket carry a different,
+    never-reviewed one — an approval bypass whose filed evidence names the wrong
+    configuration. Both HTTP adapters were always correct; tier 1 was not, and
+    nothing covered its wire.
+    """
+    monkeypatch.setenv("AI_FEATURE_MODELS", f"{_FEATURE}:anthropic=claude-pinned-for-this-feature")
+    get_settings.cache_clear()
+    model = _Model()
+    model._feature = _FEATURE  # noqa: SLF001 - the adapter reads its own feature
+    sent: dict[str, Any] = {}
+
+    class _Messages:
+        @staticmethod
+        def parse(**kwargs: Any) -> Any:
+            sent.update(kwargs)
+            return _StubResponse(parsed=None, parsed_raises=True)
+
+    model._client = SimpleNamespace(beta=SimpleNamespace(messages=_Messages()))  # type: ignore[assignment]
+    model.generate(
+        ai_client.ModelRequest(
+            system=(),
+            user_content="x",
+            output_type=_Draft,
+            prompt_version="v1",
+            feature=_FEATURE,
+        )
+    )
+
+    descriptor = model.descriptor
+    assert descriptor.model == "claude-pinned-for-this-feature"
+    assert sent["model"] == descriptor.model
+    assert sent["model"] != get_settings().ai.model
+    assert sent["output_config"]["effort"] == descriptor.effort
+    get_settings.cache_clear()
+
+
 def test_forbidden_sampling_parameters_appear_nowhere_in_the_request() -> None:
     """temperature/top_p/top_k/budget_tokens are all 400s on Opus 5."""
     source = inspect.getsource(ai_client.AnthropicModel.generate)
@@ -254,6 +305,7 @@ def test_the_fallback_beta_is_the_scalar_form_header() -> None:
 def test_system_blocks_carry_cache_control_in_order(model: _Model) -> None:
     request = ai_client.ModelRequest(
         feature="icaap_drafting",
+        prompt_version="icaap-draft-test",
         system=(
             ai_client.SystemBlock(text="static", cache=True),
             ai_client.SystemBlock(text="addendum", cache=True),
@@ -270,6 +322,7 @@ def test_system_blocks_carry_cache_control_in_order(model: _Model) -> None:
 def test_an_uncached_block_carries_no_cache_control(model: _Model) -> None:
     request = ai_client.ModelRequest(
         feature="icaap_drafting",
+        prompt_version="icaap-draft-test",
         system=(ai_client.SystemBlock(text="volatile", cache=False),),
         user_content="{}",
         output_type=_Draft,

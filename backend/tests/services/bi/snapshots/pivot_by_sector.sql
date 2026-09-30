@@ -1,0 +1,4 @@
+SELECT bi_dim_branch.branch_code AS k0, sum(CASE WHEN (bi_fact_position_daily.position_type IN (?) AND bi_fact_position_daily.sector = ?) THEN bi_fact_position_daily.balance_rc END) AS m0_0, sum(CASE WHEN (bi_fact_position_daily.position_type IN (?) AND bi_fact_position_daily.sector = ?) THEN bi_fact_position_daily.balance_rc END) AS m0_1
+FROM bi_fact_position_daily LEFT OUTER JOIN bi_dim_branch ON bi_dim_branch.organization_id = bi_fact_position_daily.organization_id AND bi_dim_branch.bank_id = bi_fact_position_daily.bank_id AND bi_dim_branch.branch_code = bi_fact_position_daily.branch_code
+WHERE bi_fact_position_daily.organization_id = ? AND bi_fact_position_daily.bank_id = ? AND bi_fact_position_daily.as_of_date = ? GROUP BY bi_dim_branch.branch_code ORDER BY k0 ASC NULLS LAST
+ LIMIT ? OFFSET ?

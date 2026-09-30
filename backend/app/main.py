@@ -11,7 +11,7 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
-from app.core.logging import configure_logging, logger
+from app.core.logging import REQUEST_ID_HEADER, configure_logging, logger
 from app.core.request_id import RequestIdMiddleware
 from app.worker import start_inprocess_worker
 
@@ -78,15 +78,32 @@ def _warn_if_trust_is_unanchored(settings: Settings) -> None:
     attestation = settings.attestation
     if attestation.signing_backend != "openbao" or attestation.trust_roots_configured:
         return
-    logger.bind(
-        pki_mount=attestation.openbao_pki_mount, missing="ATTESTATION_TRUST_ROOTS"
-    ).warning(
+    logger.bind(pki_mount=attestation.openbao_pki_mount, missing="ATTESTATION_TRUST_ROOTS").warning(
         "Officer certificates are issued by the OpenBao PKI mount, but "
         "ATTESTATION_TRUST_ROOTS is unset: verification will anchor on the chain "
         "each signature carries rather than on the institution's own root, and "
         "signed PDFs cannot embed long-term validation material. Run "
         "scripts/bootstrap_openbao_pki.py --trust-roots <path> to write the anchor."
     )
+
+
+#: Response headers a BROWSER is allowed to read.
+#:
+#: CORS exposes only a short safelist by default, so a header the server sets is
+#: invisible to the page unless it is named here. That is not theoretical: the
+#: export route sets the filename and the disclosure class, and the dashboard was
+#: silently falling back to a filename it composed itself while the server's
+#: choice never arrived, and could not tell a summary export from a record-level
+#: one. Measured on a real download.
+#:
+#: ``X-Request-ID`` is here for the same reason rather than for symmetry: it is
+#: what correlates a browser error with a server log, and a header nobody can read
+#: correlates nothing.
+EXPOSED_RESPONSE_HEADERS: tuple[str, ...] = (
+    "Content-Disposition",
+    "X-Bi-Export-Class",
+    REQUEST_ID_HEADER,
+)
 
 
 def create_app() -> FastAPI:
@@ -114,6 +131,15 @@ def create_app() -> FastAPI:
             allow_credentials=True,
             allow_methods=settings.cors.methods,
             allow_headers=settings.cors.headers,
+            # Without this a browser cannot READ these response headers at all.
+            # CORS exposes only a short safelist by default, so the dashboard was
+            # silently falling back to a filename it composed itself while the
+            # server's chosen one never arrived, and could not tell a summary
+            # export from a record-level one. Measured on a real download during
+            # the export wiring. `X-Request-Id` is here for the same reason: it is
+            # what correlates a browser error with a server log, and a header
+            # nobody can read correlates nothing.
+            expose_headers=list(EXPOSED_RESPONSE_HEADERS),
         )
 
     register_exception_handlers(app)

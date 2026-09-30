@@ -22,8 +22,10 @@ import type {
   BankRead,
   BankReadInstitutionTypeDetail,
   BankReportingPeriodRead,
+  EffectiveCapabilityRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useBiAvailability } from "@/lib/api/bi";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
@@ -66,6 +68,26 @@ type BankContextValue = {
   setPeriodId: (periodId: string) => void;
   isLoading: boolean;
   isEmpty: boolean;
+  /**
+   * The server-evaluated capabilities for the SELECTED institution, exactly as
+   * `/auth/me` projected them — each one carrying its OWN data scope (the slice
+   * of the book that (institution, module, sensitivity, permission) reads).
+   *
+   * Exposed because the BI query, grid and insights payloads disclose no
+   * scope even though the server resolves and applies one, so this projection is
+   * the only honest source in the browser for "does what is on screen cover the
+   * whole institution". Read it through `lib/api/dataScope.ts`, never by hand:
+   * one scope per institution would be wrong the moment an owner grants one
+   * module by branch and another institution-wide, and wrong in the dangerous
+   * direction.
+   */
+  institutionCapabilities: readonly EffectiveCapabilityRead[];
+  /**
+   * True until the projection has settled. An empty capability list means
+   * "nothing is granted" only once this is false — before that it means "not
+   * known yet", and the two must never be conflated by a coverage statement.
+   */
+  authorityPending: boolean;
 };
 
 const BankContext = createContext<BankContextValue | null>(null);
@@ -101,6 +123,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const isPersonalSelfService = isPersonalSettingsPath(pathname);
   const profileQuery = useUserProfile();
   const banksQuery = useBanks(!isPersonalSelfService);
+  const { biEnabled, nlqEnabled } = useBiAvailability(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities = useMemo(
@@ -329,11 +352,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      // A DEPLOYMENT FLAG, not a permission: with BI off every BI route answers
+      // 404, so the nav must not offer the door and the route guard must refuse
+      // it. `undefined` until `GET /feature-flags` answers — see ModuleScope.
+      biEnabled,
+      // A SECOND deployment flag, independent of the first: with BI on and this
+      // off the ask routes answer 409, not 404, so only the nav can decline to
+      // offer the door. `undefined` until the flags answer — see ModuleScope.
+      nlqEnabled,
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [
       bank,
       banksQuery.isLoading,
+      biEnabled,
+      nlqEnabled,
       institutionCapabilities,
       organizationCapabilities,
       profileQuery.isLoading,
@@ -365,8 +398,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       setPeriodId: setSelectedPeriodId,
       isLoading,
       isEmpty,
+      institutionCapabilities,
+      authorityPending: profileQuery.isLoading || banksQuery.isLoading,
     }),
-    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty],
+    [
+      bank,
+      banksQuery.isLoading,
+      institutionCapabilities,
+      institutionType,
+      isEmpty,
+      isLoading,
+      moduleScope,
+      period,
+      periods,
+      profileQuery.isLoading,
+    ],
   );
 
   if (banksQuery.error || profileQuery.error) {
@@ -386,13 +432,16 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     const staleSession = apiError?.status === 401;
     return (
       <FullScreenPanel
-        title={staleSession ? "Your access has changed" : "Risk service unreachable"}
+        title={
+          staleSession ? "Your access has changed" : "Risk service unreachable"
+        }
         description={
           staleSession
             ? (apiError?.message ??
               "Your permissions changed, so this session is out of date. Sign in again to pick them up.")
             : apiError
-              ? (apiError.message ?? "Effective authority is temporarily unavailable.")
+              ? (apiError.message ??
+                "Effective authority is temporarily unavailable.")
               : "Could not resolve effective authority from the risk service."
         }
         action={

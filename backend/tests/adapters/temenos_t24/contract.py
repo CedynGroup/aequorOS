@@ -18,6 +18,7 @@ a :class:`FixtureTransport`, so no live core is touched.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -40,6 +41,7 @@ from app.adapters.temenos_t24.transport import FixtureTransport
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES
 from app.domain.ingestion.contracts import AdapterConfig
+from app.domain.ingestion.reference_schemas import business_units
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -153,6 +155,45 @@ class TemenosContractSuite:
         return created.id
 
     @pytest.fixture
+    def fixtures_without_branch_field(self, fixtures_dir: Path, tmp_path: Path, mode: str) -> Path:
+        """The same recordings with the branch field removed from every record.
+
+        The branch field is OPTIONAL on a vendor integration — an installation's
+        enquiry or resource may simply not return it — so its absence must not
+        break a pull. Stripping it from the recordings is the only honest way to
+        test that: it exercises the real transport, extractor and ingestion spine
+        against a payload that genuinely lacks the field.
+        """
+        catalog = load_mode_catalog(mode)
+        branch_fields = {
+            t24
+            for entry in catalog.entries.values()
+            for t24, canonical in entry.field_map.items()
+            if canonical == "branch_id"
+        }
+        assert branch_fields, "no domain maps branch_id; this fixture would prove nothing"
+        target = tmp_path / "no-branch-fixtures"
+        target.mkdir()
+        for path in sorted(fixtures_dir.iterdir()):
+            if path.suffix == ".json":
+                document = json.loads(path.read_text(encoding="utf-8"))
+                records = document["records"] if isinstance(document, dict) else document
+                for record in records:
+                    for field in branch_fields:
+                        record.pop(field, None)
+                (target / path.name).write_text(json.dumps(document), encoding="utf-8")
+            else:
+                text = path.read_text(encoding="utf-8")
+                for field in branch_fields:
+                    text = re.sub(rf",{re.escape(field)}:[^,\n]*", "", text)
+                (target / path.name).write_text(text, encoding="utf-8")
+        for field in branch_fields:
+            assert not any(field in p.read_text(encoding="utf-8") for p in target.iterdir()), (
+                f"{field} survived the strip; the absence test would be vacuous"
+            )
+        return target
+
+    @pytest.fixture
     def run_pull(  # noqa: PLR0913 - a pull binds several test fixtures
         self,
         db_session: Session,
@@ -164,7 +205,7 @@ class TemenosContractSuite:
         enabled_domains: list[str] | None,
         mapping_id,
     ):
-        def _run(as_of: date = _AS_OF):
+        def _run(as_of: date = _AS_OF, *, recordings: Path | None = None):
             return pull_and_ingest(
                 db_session,
                 ctx,
@@ -173,7 +214,7 @@ class TemenosContractSuite:
                 mode=mode,
                 as_of=as_of,
                 company=_COMPANY,
-                transport=transport,
+                transport=FixtureTransport(recordings) if recordings else transport,
                 session_provider=SimulatedSessionProvider(),
                 credentials=TemenosCredentials(username="SVC.AEQUOROS"),
                 endpoint=_ENDPOINT,
@@ -227,6 +268,29 @@ class TemenosContractSuite:
         kinds = {row.dataset_kind for row in refs}
         assert "business_units" in kinds
         assert "institution" in kinds
+
+        # The kind existing is not enough, and asserting only that is how this
+        # broke: when `business_units` began enforcing its own schema, every T24
+        # branch row was refused because the adapter emitted the vendor's spelling
+        # (`COMPANY.CODE` / `BRANCH`), and the dataset simply never appeared. The
+        # pull still succeeded. So assert the row SATISFIES the register it is
+        # stored under, which is what a downstream consumer depends on.
+        units = [row for row in refs if row.dataset_kind == "business_units"]
+        problems: list[str] = []
+        for row in units:
+            payload = dict(row.payload or {})
+            normalised = business_units.normalise_row(payload)
+            problems.extend(business_units.SCHEMA.problems_for(normalised))
+            assert str(normalised.get("business_unit_id") or "").strip(), (
+                f"a business unit reached the register with no id: {payload}"
+            )
+            name = str(normalised.get("business_unit_name") or "").strip()
+            assert name, f"a business unit reached the register with no name: {payload}"
+            # The UNIT's name, not the legal entity's. Mapping the company name
+            # here would give every branch the same one and collapse the BI branch
+            # dimension to a single row.
+            assert name != str(normalised.get("institution_name") or ""), payload
+        assert not problems, f"T24 business units do not satisfy their register: {problems}"
 
     def test_position_snapshots_carry_lcy_balance_for_the_engines(
         self, run_pull, db_session: Session, bank: Bank
@@ -285,6 +349,93 @@ class TemenosContractSuite:
             assert keys <= set(by_type[position_type]), (
                 f"{position_type} snapshot missing {keys - set(by_type[position_type])}"
             )
+
+    def test_treasury_branch_ids_resolve_in_the_business_unit_register(
+        self, run_pull, db_session: Session, bank: Bank
+    ) -> None:
+        """Interbank and securities exposures land a branch the register knows.
+
+        The three treasury domains RECEIVED the company code and their
+        ``field_map`` dropped it, so a T24 bank's interbank placements, interbank
+        borrowings and securities holdings reached the book with no
+        ``branch_id``. Nothing failed: the BI branch dimension and
+        ``fact_derivation._business_unit_names`` join on that key, so the whole
+        treasury book was simply unassigned to any branch.
+
+        This asserts the two sides agree on VALUES, which is the claim that
+        matters and the one the catalog cannot make: the register's
+        ``business_unit_id`` and a position's ``branch_id`` come from differently
+        named T24 fields on different applications.
+        """
+        run_pull()
+        registered = {
+            str(business_units.normalise_row(dict(row.payload or {})).get("business_unit_id"))
+            for row in db_session.scalars(
+                select(CanonicalReferenceRow).where(
+                    CanonicalReferenceRow.organization_id == ORG_1,
+                    CanonicalReferenceRow.bank_id == bank.id,
+                    CanonicalReferenceRow.dataset_kind == "business_units",
+                )
+            ).all()
+        }
+        assert registered, "no business units registered; the join has nothing to resolve against"
+
+        checked = set()
+        for position_type in ("INTERBANK_PLACEMENT", "INTERBANK_BORROWING", "SECURITY_HOLDING"):
+            positions = db_session.scalars(
+                select(CanonicalPosition).where(
+                    CanonicalPosition.organization_id == ORG_1,
+                    CanonicalPosition.bank_id == bank.id,
+                    CanonicalPosition.position_type == position_type,
+                    CanonicalPosition.superseded_by.is_(None),
+                )
+            ).all()
+            assert positions, f"no {position_type} position persisted"
+            for position in positions:
+                snapshot = db_session.scalars(
+                    select(CanonicalPositionSnapshot).where(
+                        CanonicalPositionSnapshot.position_id == position.id,
+                        CanonicalPositionSnapshot.superseded_by.is_(None),
+                    )
+                ).first()
+                assert snapshot is not None
+                branch_id = str((snapshot.attributes or {}).get("branch_id") or "")
+                assert branch_id, f"{position_type} carries no branch_id"
+                assert branch_id in registered, (
+                    f"{position_type} branch_id {branch_id!r} is not a registered business unit "
+                    f"({sorted(registered)}); the branch dimension would report it unassigned."
+                )
+                checked.add(position_type)
+        assert checked == {"INTERBANK_PLACEMENT", "INTERBANK_BORROWING", "SECURITY_HOLDING"}
+
+    def test_pull_succeeds_when_the_branch_field_is_absent(
+        self, run_pull, fixtures_without_branch_field: Path, db_session: Session, bank: Bank
+    ) -> None:
+        """``branch_id`` is optional, so a core that omits it must still ingest.
+
+        Not just "no exception": the positions must still persist with their
+        LCY measure, because that is what the engines read. The branch is simply
+        unset, which the register-backed dimension reports as unassigned rather
+        than inventing one.
+        """
+        result = run_pull(recordings=fixtures_without_branch_field)
+        assert result.batch.status in BATCH_ACCEPTED_STATUSES
+        assert result.batch.records_accepted > 0
+
+        snapshots = db_session.scalars(
+            select(CanonicalPositionSnapshot).where(
+                CanonicalPositionSnapshot.organization_id == ORG_1,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+            )
+        ).all()
+        assert snapshots
+        assert all(
+            {"balance_ghs", "notional_ghs"} & set(snap.attributes or {}) for snap in snapshots
+        )
+        assert not any((snap.attributes or {}).get("branch_id") for snap in snapshots), (
+            "the strip did not take effect, so this test would pass vacuously"
+        )
 
     def test_restaging_identical_pull_does_not_duplicate(
         self, run_pull, db_session: Session, bank: Bank

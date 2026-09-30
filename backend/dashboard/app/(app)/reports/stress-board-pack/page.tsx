@@ -277,11 +277,30 @@ export default function StressBoardPack() {
                       }
                     />
                   )}
-                  <KpiStat
-                    label="Capital gap"
-                    value={`GHS'000 ${num(run.summary.capital_gap).toLocaleString()}`}
-                    status={num(run.summary.capital_gap) > 0 ? "warn" : "ok"}
-                  />
+                  {(() => {
+                    // A null capital gap is NOT a gap of zero. `num()` mapped it
+                    // to 0, which printed "GHS'000 0" with an "ok" status on a
+                    // BOARD PACK — a board told there is no shortfall when the
+                    // figure was never computed (audit A360-6, the DriverWaterfall
+                    // class). An uncomputed figure says so and carries no status.
+                    const gap = numOrNull(run.summary.capital_gap);
+                    return (
+                      <KpiStat
+                        label="Capital gap"
+                        value={
+                          gap === null
+                            ? "Not computed"
+                            : `GHS'000 ${gap.toLocaleString()}`
+                        }
+                        status={gap === null ? undefined : gap > 0 ? "warn" : "ok"}
+                        hint={
+                          gap === null
+                            ? "This run reported no capital gap figure. Nothing is shown in its place — an uncomputed figure is not a zero."
+                            : undefined
+                        }
+                      />
+                    );
+                  })()}
                 </div>
                 <p className="mt-4 text-micro text-slate">
                   Immutable run {shortId(run.run_id, 10)} · input hash{" "}

@@ -39,13 +39,6 @@ import {
   ChangeDescriptionToJSON,
   ChangeDescriptionToJSONTyped,
 } from "./ChangeDescription";
-import type { Title } from "./Title";
-import {
-  TitleFromJSON,
-  TitleFromJSONTyped,
-  TitleToJSON,
-  TitleToJSONTyped,
-} from "./Title";
 import type { RequestedDueDate } from "./RequestedDueDate";
 import {
   RequestedDueDateFromJSON,
@@ -53,6 +46,13 @@ import {
   RequestedDueDateToJSON,
   RequestedDueDateToJSONTyped,
 } from "./RequestedDueDate";
+import type { Title1 } from "./Title1";
+import {
+  Title1FromJSON,
+  Title1FromJSONTyped,
+  Title1ToJSON,
+  Title1ToJSONTyped,
+} from "./Title1";
 import type { IcaapBasis } from "./IcaapBasis";
 import {
   IcaapBasisFromJSON,
@@ -148,10 +148,10 @@ export interface IcaapCycleCreate {
   subsidiariesDeclared?: boolean;
   /**
    *
-   * @type {Title}
+   * @type {Title1}
    * @memberof IcaapCycleCreate
    */
-  title?: Title;
+  title?: Title1;
 }
 
 /**
@@ -215,7 +215,7 @@ export function IcaapCycleCreateFromJSONTyped(
       json["subsidiaries_declared"] == null
         ? undefined
         : json["subsidiaries_declared"],
-    title: json["title"] == null ? undefined : TitleFromJSON(json["title"]),
+    title: json["title"] == null ? undefined : Title1FromJSON(json["title"]),
   };
 }
 
@@ -246,6 +246,6 @@ export function IcaapCycleCreateToJSONTyped(
     ),
     requested_due_date: RequestedDueDateToJSON(value["requestedDueDate"]),
     subsidiaries_declared: value["subsidiariesDeclared"],
-    title: TitleToJSON(value["title"]),
+    title: Title1ToJSON(value["title"]),
   };
 }

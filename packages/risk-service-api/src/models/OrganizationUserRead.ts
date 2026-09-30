@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { DisplayName } from "./DisplayName";
+import {
+  DisplayNameFromJSON,
+  DisplayNameFromJSONTyped,
+  DisplayNameToJSON,
+  DisplayNameToJSONTyped,
+} from "./DisplayName";
 import type { JobTitle } from "./JobTitle";
 import {
   JobTitleFromJSON,
@@ -18,13 +25,6 @@ import {
   JobTitleToJSON,
   JobTitleToJSONTyped,
 } from "./JobTitle";
-import type { DisplayName1 } from "./DisplayName1";
-import {
-  DisplayName1FromJSON,
-  DisplayName1FromJSONTyped,
-  DisplayName1ToJSON,
-  DisplayName1ToJSONTyped,
-} from "./DisplayName1";
 
 /**
  *
@@ -34,10 +34,10 @@ import {
 export interface OrganizationUserRead {
   /**
    *
-   * @type {DisplayName1}
+   * @type {DisplayName}
    * @memberof OrganizationUserRead
    */
-  displayName: DisplayName1;
+  displayName: DisplayName;
   /**
    *
    * @type {string}
@@ -99,7 +99,7 @@ export function OrganizationUserReadFromJSONTyped(
   }
   return {
     ...json,
-    displayName: DisplayName1FromJSON(json["display_name"]),
+    displayName: DisplayNameFromJSON(json["display_name"]),
     email: json["email"],
     id: json["id"],
     isActive: json["is_active"],
@@ -121,7 +121,7 @@ export function OrganizationUserReadToJSONTyped(
   }
 
   return {
-    display_name: DisplayName1ToJSON(value["displayName"]),
+    display_name: DisplayNameToJSON(value["displayName"]),
     email: value["email"],
     id: value["id"],
     is_active: value["isActive"],

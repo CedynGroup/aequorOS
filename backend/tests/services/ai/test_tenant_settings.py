@@ -143,7 +143,9 @@ def test_the_consent_text_names_what_leaves_and_what_never_does() -> None:
         "people",  # individuals are never sent
         "descriptors only",  # the strict per-tenant mode
         "member of your staff",  # a person always reviews and accepts
-        "switch the feature off at any time",  # the tenant kill-switch
+        # v2 covers TWO features (drafting and questions), so the kill-switch
+        # promise names either one rather than "the feature".
+        "switch either feature off at any time",  # the tenant kill-switch
         "anthropic",  # the named sub-processor
         "monetary amounts and dates",  # withheld in both modes
         "does not run in africa",  # residency, recorded per call

@@ -22,6 +22,13 @@ import {
 } from "@/lib/api/hooks";
 import { fmtRelative } from "@/lib/api/values";
 import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
+import {
+  DATA_PUSH_PURPOSE,
+  INTEGRATION_KEY_PURPOSES,
+  keyAuthorizesNothing,
+  purposeLabel,
+  type IntegrationKeyPurpose,
+} from "@/lib/api/integrationKeys";
 import { downloadTextFile } from "@/lib/download";
 import {
   ENTITY_SPECS,
@@ -90,11 +97,14 @@ export function ConnectionCard() {
             <ShieldAlert size={13} aria-hidden /> Key handling
           </p>
           <p className="mt-1 text-body text-navy/80 leading-relaxed">
-            The key identifies + authorizes your institution as a service
-            account with one exact bank-scoped Integration Writer grant. It is
-            shown once at generation and stored only as a hash. It cannot push
-            for a sibling bank. If a key is exposed, revoke it here immediately;
-            rotate by generating a new key before revoking the old one.
+            A key identifies and authorizes your institution as a service
+            account with one exact bank-scoped grant for one purpose: a data
+            push key can only push records, and an analytics feed key can only
+            read the analytics feed. Neither can stand in for the other, and
+            neither works for a sibling bank. Each key is shown once at
+            generation and stored only as a hash. If a key is exposed, revoke it
+            here immediately; rotate by generating a new key before revoking
+            the old one.
           </p>
         </div>
       </div>
@@ -111,10 +121,16 @@ function IntegrationKeysPanel() {
   const issue = useIssueIntegrationKey();
   const revoke = useRevokeIntegrationKey();
   const [label, setLabel] = useState("");
+  // What the key is FOR. The server defaults an unstated purpose to a data
+  // push key, and the analytics feed refuses that key — so the choice is made
+  // here, explicitly, and posted with every request (audit A360-2 H4).
+  const [purpose, setPurpose] =
+    useState<IntegrationKeyPurpose>(DATA_PUSH_PURPOSE);
   // The one moment the raw key is visible — held in memory only, never listed.
   const [freshKey, setFreshKey] = useState<{
     value: string;
     bankId: string;
+    purposeName: string;
   } | null>(null);
 
   if (!isAdmin) {
@@ -125,6 +141,9 @@ function IntegrationKeysPanel() {
     );
   }
   const keys = keysQuery.data?.keys ?? [];
+  const chosen =
+    INTEGRATION_KEY_PURPOSES.find((option) => option.value === purpose) ??
+    INTEGRATION_KEY_PURPOSES[0];
 
   return (
     <div className="mt-5 border-t border-border-light pt-4">
@@ -136,7 +155,8 @@ function IntegrationKeysPanel() {
       {freshKey && (
         <div className="mt-3 rounded border border-success/40 bg-success-light/40 p-4">
           <p className="text-caption font-medium text-navy">
-            Key generated — copy it now. It will not be shown again.
+            {freshKey.purposeName} generated — copy it now. It will not be
+            shown again.
           </p>
           <p className="mt-1 text-caption text-slate">
             Authorized institution:{" "}
@@ -163,17 +183,20 @@ function IntegrationKeysPanel() {
       )}
 
       <form
-        className="mt-3 flex items-center gap-2"
+        className="mt-3 flex flex-col gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           if (!bank || !label.trim() || issue.isPending) return;
           issue.mutate(
-            { bankId: bank.id, label: label.trim() },
+            { bankId: bank.id, label: label.trim(), purpose },
             {
               onSuccess: (result) => {
                 setFreshKey({
                   value: result.key,
                   bankId: result.record.bankId!,
+                  // Named from what the SERVER recorded, not from what was
+                  // asked: if the two ever differ, the administrator sees it.
+                  purposeName: purposeLabel(result.record.purpose),
                 });
                 setLabel("");
               },
@@ -181,30 +204,73 @@ function IntegrationKeysPanel() {
           );
         }}
       >
-        <div className="rounded border border-border bg-surface px-3 py-2">
-          <p className="text-micro uppercase tracking-wider text-slate">
-            Authorized institution
-          </p>
-          <p className="text-caption font-medium text-navy">
-            {bank?.name ?? "No institution selected"}{" "}
-            {bank && <span className="font-mono text-slate">({bank.id})</span>}
-          </p>
+        <fieldset className="grid gap-2 md:grid-cols-2">
+          <legend className="mb-1 text-micro uppercase tracking-wider text-slate">
+            What this key is for
+          </legend>
+          {INTEGRATION_KEY_PURPOSES.map((option) => {
+            const selected = option.value === purpose;
+            return (
+              <label
+                key={option.value}
+                className={`flex cursor-pointer items-start gap-2.5 rounded border px-3 py-2.5 ${
+                  selected
+                    ? "border-action bg-action/5"
+                    : "border-border bg-surface hover:border-slate"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="integration-key-purpose"
+                  value={option.value}
+                  checked={selected}
+                  onChange={() => setPurpose(option.value)}
+                  className="mt-1 shrink-0 accent-action"
+                />
+                <span className="min-w-0">
+                  <span className="block text-caption font-medium text-navy">
+                    {option.label}
+                  </span>
+                  <span className="block text-caption text-slate leading-relaxed">
+                    {option.description}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+        <div className="flex items-center gap-2">
+          <div className="rounded border border-border bg-surface px-3 py-2">
+            <p className="text-micro uppercase tracking-wider text-slate">
+              Authorized institution
+            </p>
+            <p className="text-caption font-medium text-navy">
+              {bank?.name ?? "No institution selected"}{" "}
+              {bank && (
+                <span className="font-mono text-slate">({bank.id})</span>
+              )}
+            </p>
+          </div>
+          <input
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder={chosen.labelPlaceholder}
+            maxLength={80}
+            className="flex-1 rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
+            aria-label="Key label"
+          />
+          <button
+            type="submit"
+            disabled={!bank || !label.trim() || issue.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
+          >
+            {issue.isPending ? "Generating…" : `Generate ${chosen.label.toLowerCase()}`}
+          </button>
         </div>
-        <input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          placeholder="Key label — e.g. Core banking nightly push"
-          maxLength={80}
-          className="flex-1 rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
-          aria-label="Key label"
-        />
-        <button
-          type="submit"
-          disabled={!bank || !label.trim() || issue.isPending}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
-        >
-          {issue.isPending ? "Generating…" : "Generate key"}
-        </button>
+        <p className="text-caption text-slate">
+          The key covers the whole institution. Where a narrower slice is
+          needed, issue a key limited to branches or regions through the API.
+        </p>
       </form>
       {issue.isError && (
         <p className="mt-1 text-caption text-critical">
@@ -219,7 +285,12 @@ function IntegrationKeysPanel() {
           {keys.map((key) => (
             <li key={key.id} className="flex items-center gap-3 py-2.5">
               <div className="min-w-0 flex-1">
-                <p className="text-body text-navy truncate">{key.label}</p>
+                <p className="flex flex-wrap items-center gap-2 text-body text-navy">
+                  <span className="truncate">{key.label}</span>
+                  <StatusPill tone={key.purpose ? "action" : "slate"}>
+                    {purposeLabel(key.purpose)}
+                  </StatusPill>
+                </p>
                 <p className="text-caption text-slate font-mono">
                   {key.keyPrefix}
                   <span className="ml-2 font-sans">
@@ -230,9 +301,11 @@ function IntegrationKeysPanel() {
                       : " · never used"}
                   </span>
                 </p>
-                {!key.bankId && (
+                {!key.revokedAt && keyAuthorizesNothing(key) && (
                   <p className="mt-1 text-caption font-medium text-critical">
-                    Unscoped — rotate. This legacy key cannot push data.
+                    {key.bankId
+                      ? "No purpose recorded — rotate. This legacy key authorizes nothing: it can neither push data nor read the feed."
+                      : "Unscoped — rotate. This legacy key cannot push data."}
                   </p>
                 )}
               </div>

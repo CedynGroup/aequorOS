@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Stressed-ratio deltas vs the baseline run, per scenario. Negative bars
@@ -6,29 +6,22 @@
  * bar means the shock helped the ratio.
  */
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  Legend,
-} from 'recharts';
-import {
-  CHART_AXIS,
-  axisProps,
-  chartLegendProps,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
+  axisTooltip,
+  BAR_SERIES_BASE,
+  thresholdMarkLine,
+} from "@/lib/echartsOptions";
 
 export type ScenarioDelta = {
   scenario: string;
   lcrDelta: number | null;
   nsfrDelta: number | null;
 };
+
+const signedPts = (value: number) =>
+  `${value >= 0 ? "+" : ""}${value.toFixed(2)} pts`;
 
 export default function StressDeltaChart({
   data,
@@ -37,42 +30,59 @@ export default function StressDeltaChart({
   data: ScenarioDelta[];
   height?: number;
 }) {
+  const tokens = useChartTokens();
+  const scenarios = data.map((row) => row.scenario);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 16, top: 8, bottom: 24, containLabel: true },
+    legend: { bottom: 0, type: "scroll" },
+    xAxis: { type: "category", data: scenarios },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      axisLabel: {
+        formatter: (value: number) => `${value > 0 ? "+" : ""}${value} pts`,
+      },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      // A scenario whose stressed ratio did not resolve has no delta. Rendering
+      // that as 0.00 pts would report a shock that changed nothing.
+      formatter: axisTooltip(scenarios, signedPts, { absent: "not computed" }),
+    },
+    series: [
+      {
+        ...BAR_SERIES_BASE,
+        name: "ΔLCR vs baseline",
+        barMaxWidth: 36,
+        itemStyle: {
+          color: seriesColor(tokens, 0),
+          borderRadius: [2, 2, 0, 0],
+        },
+        data: data.map((row) => row.lcrDelta),
+        markLine: thresholdMarkLine([
+          { axis: "y", value: 0, color: tokens.axis, solid: true },
+        ]),
+      },
+      {
+        ...BAR_SERIES_BASE,
+        name: "ΔNSFR vs baseline",
+        barMaxWidth: 36,
+        itemStyle: {
+          color: seriesColor(tokens, 1),
+          borderRadius: [2, 2, 0, 0],
+        },
+        data: data.map((row) => row.nsfrDelta),
+      },
+    ],
+  } as BiEChartsOption;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-        <XAxis dataKey="scenario" {...axisProps} />
-        <YAxis
-          axisLine={false}
-          tickLine={false}
-          tick={axisProps.tick}
-          tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v} pts`}
-          width={64}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          cursor={{ fill: 'rgb(var(--surface-hover))' }}
-          formatter={(v: number, name) => [
-            `${v >= 0 ? '+' : ''}${v.toFixed(2)} pts`,
-            name,
-          ]}
-        />
-        <Legend {...chartLegendProps} />
-        <ReferenceLine y={0} stroke={CHART_AXIS} strokeWidth={1} />
-        <Bar
-          dataKey="lcrDelta"
-          name="ΔLCR vs baseline"
-          fill={seriesColor(0)}
-          maxBarSize={36}
-          radius={[2, 2, 0, 0]}
-        />
-        <Bar
-          dataKey="nsfrDelta"
-          name="ΔNSFR vs baseline"
-          fill={seriesColor(1)}
-          maxBarSize={36}
-          radius={[2, 2, 0, 0]}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Change in LCR and NSFR against the baseline run across ${data.length} stress scenarios, in percentage points`}
+    />
   );
 }

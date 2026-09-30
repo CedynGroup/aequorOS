@@ -105,6 +105,46 @@ export default defineConfig({
         // ICAAP ceremony on locally must not change what these journeys see.
         // A journey that exercises the ICAAP ceremony sets it to 1 itself.
         ICAAP_SIGNING_ENABLED: "0",
+        // Business Intelligence. `BI_ENABLED` defaults off and is set in no
+        // deployment yet, and with it off every `/banks/{id}/bi/*` route answers
+        // 404 and the shell HIDES Insights, Dashboards and Explore — so without
+        // this the four `bi-*` journeys would navigate to walled-up doors and
+        // pass on an empty state. It is set HERE and not in `backend/.env` so a
+        // developer's own flag state cannot change what the journeys see, in
+        // either direction: `bi-authorization.spec.ts` asserts both the flag-on
+        // and the flag-off shell, the second by intercepting `/feature-flags`.
+        //
+        // The other four BI flags stay OFF, which is the production-shaped
+        // configuration and deliberate. `BI_MART_ENQUEUE_ENABLED` would enqueue
+        // `bi_mart_refresh` into the `bi` worker lane, and this stack runs no
+        // worker at all — the marts are materialised synchronously by
+        // `tests/fixtures/bi_plane.py` during bootstrap, exactly as the live
+        // plane is, so an enqueue flag here would only orphan jobs in `queued`.
+        // `BI_SCHEDULER_ENABLED` / `BI_SUBSCRIPTIONS_ENABLED` add tick branches
+        // nothing here runs, and `BI_ALERTS_ENABLED` is evaluated by a succeeded
+        // mart build that no worker will perform.
+        BI_ENABLED: "1",
+        // Natural-language questions. A THIRD switch, independent of BI_ENABLED,
+        // and off in every deployment — so without this the ask routes answer 409
+        // and the shell hides the Explore "Ask a question" tab, and `bi-ask.spec.ts`
+        // would navigate to a walled-up door and pass on an empty state. Setting it
+        // sends nothing to any vendor: the AI gates are separate and all shut here
+        // (no approved configuration, no credential, no `ai`-lane worker), which is
+        // precisely the refusal the wire half of that spec asserts. It is set HERE
+        // rather than in `backend/.env` so a developer's own flag state cannot change
+        // what the journeys see, and the flag-OFF shell is asserted by intercepting
+        // `/feature-flags`, as the BI flag's own journey does.
+        BI_NLQ_ENABLED: "1",
+        // The journeys ARE the script the BI budget exists to bound. They drive
+        // roughly thirty BI journeys as ONE identity inside the 60-second window,
+        // so the suite trips the product's own limit of 120 reads and the failure
+        // lands on whichever spec happens to run last — a red suite that says
+        // nothing about the code, and a different spec each time the order shifts.
+        // Raising the CEILING here cannot switch the budget off: the window is not
+        // configurable, every read is still metered and still recorded, and
+        // `test_bi_routes.py` / `test_bi_query_log.py` prove the refusal itself
+        // against the product figure rather than against this one.
+        BI_RATE_LIMIT_MAX_QUERIES: "5000",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: "",

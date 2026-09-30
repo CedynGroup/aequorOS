@@ -39,13 +39,6 @@ import {
   InternalAmount1ToJSON,
   InternalAmount1ToJSONTyped,
 } from "./InternalAmount1";
-import type { Position } from "./Position";
-import {
-  PositionFromJSON,
-  PositionFromJSONTyped,
-  PositionToJSON,
-  PositionToJSONTyped,
-} from "./Position";
 import type { Explanation1 } from "./Explanation1";
 import {
   Explanation1FromJSON,
@@ -60,6 +53,13 @@ import {
   RegulatoryAmount1ToJSON,
   RegulatoryAmount1ToJSONTyped,
 } from "./RegulatoryAmount1";
+import type { Position1 } from "./Position1";
+import {
+  Position1FromJSON,
+  Position1FromJSONTyped,
+  Position1ToJSON,
+  Position1ToJSONTyped,
+} from "./Position1";
 
 /**
  *
@@ -99,10 +99,10 @@ export interface IcaapResourcesLineCreate {
   lineKey: string;
   /**
    *
-   * @type {Position}
+   * @type {Position1}
    * @memberof IcaapResourcesLineCreate
    */
-  position?: Position;
+  position?: Position1;
   /**
    *
    * @type {string}
@@ -182,7 +182,9 @@ export function IcaapResourcesLineCreateFromJSONTyped(
     label: json["label"],
     lineKey: json["line_key"],
     position:
-      json["position"] == null ? undefined : PositionFromJSON(json["position"]),
+      json["position"] == null
+        ? undefined
+        : Position1FromJSON(json["position"]),
     reason: json["reason"],
     regulatoryAmount:
       json["regulatory_amount"] == null
@@ -219,7 +221,7 @@ export function IcaapResourcesLineCreateToJSONTyped(
     internal_amount: InternalAmount1ToJSON(value["internalAmount"]),
     label: value["label"],
     line_key: value["lineKey"],
-    position: PositionToJSON(value["position"]),
+    position: Position1ToJSON(value["position"]),
     reason: value["reason"],
     regulatory_amount: RegulatoryAmount1ToJSON(value["regulatoryAmount"]),
     regulatory_component_key: RegulatoryComponentKeyToJSON(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.credit.dpd_bands import dpd_band
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -22,9 +24,10 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.regulatory_credit import CreditScenarioBatchCreate
+from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import fact_derivation, regulatory_credit
+from app.services import fact_derivation, regulatory_credit, reporting_periods
+from app.services.authorization import ALL_INSTITUTION_DATA
 from app.services.regulatory_reporting import generation as reporting_generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -244,7 +247,9 @@ def test_activity_read_groups_events_by_type_and_month(db_session: Session) -> N
             {"ref": "A4", "type": "DISBURSEMENT", "date": "2026-06-01", "amount": "5000"},
         ],
     )
-    read = regulatory_credit.get_credit_activity(db_session, CTX, SAMPLE_BANK_ID)
+    read = regulatory_credit.get_credit_activity(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA
+    )
     assert [event.source_reference for event in read.restructures] == ["A1"]
     assert [event.source_reference for event in read.write_offs] == ["A2"]
     assert [event.source_reference for event in read.recoveries] == ["A3"]
@@ -378,9 +383,7 @@ def test_npl_monthly_return_generates_from_the_sealed_run(db_session: Session) -
     assert Decimal(levels["npl_stock_ghs"]["value"]) == Decimal(
         str(run_metrics["npl_exposure_ghs"])
     )
-    assert Decimal(levels["npl_ratio_pct"]["value"]) == Decimal(
-        str(run_metrics["npl_ratio_pct"])
-    )
+    assert Decimal(levels["npl_ratio_pct"]["value"]) == Decimal(str(run_metrics["npl_ratio_pct"]))
     assert Decimal(levels["npl_ratio_pct"]["value"]) > 0
     # PR-1 fixture states provisions, so coverage rows are present.
     assert "npl_coverage_pct" in levels
@@ -621,9 +624,7 @@ def test_board_threshold_breaches_become_findings_on_both_tiers(
     persisted = {
         row.rule_code
         for row in db_session.scalars(
-            select(RegulatoryValidation).where(
-                RegulatoryValidation.run_id == batch.runs[0].id
-            )
+            select(RegulatoryValidation).where(RegulatoryValidation.run_id == batch.runs[0].id)
         )
     }
     assert {
@@ -725,3 +726,418 @@ def test_employer_par30_ewi_names_the_breaching_employer(db_session: Session) ->
     assert "Ghana Health Service" in ewi.message
     assert "Volta River Authority" not in ewi.message
     _ = period
+
+
+def _seed_employer_loans(
+    db_session: Session, loans: tuple[tuple[str, str, str, int, str | None], ...]
+) -> None:
+    """LOAN rows ``(reference, currency, native balance, dpd, balance_ghs)``
+    for one employer; ``balance_ghs=None`` means no ingested conversion."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="employer-fx-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": FIXTURE_AS_OF,
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    for ref, currency, balance, dpd, balance_ghs in loans:
+        position = CanonicalPosition(
+            **common, source_reference=ref, position_type="LOAN", currency=currency
+        )
+        db_session.add(position)
+        db_session.flush()
+        attributes: dict[str, object] = {"days_past_due": dpd, "employer": "Ghana Health Service"}
+        if balance_ghs is not None:
+            attributes["balance_ghs"] = balance_ghs
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=ref,
+                position_id=position.id,
+                balance=Decimal(balance),
+                ifrs9_stage=1,
+                attributes=attributes,
+            )
+        )
+    db_session.commit()
+
+
+def test_employer_par30_excludes_an_unconverted_foreign_currency_loan(
+    db_session: Session,
+) -> None:
+    """A foreign-currency loan with no ingested ``balance_ghs`` is UNCONVERTED:
+    it leaves both legs of the employer's PAR30 and the covered count, exactly
+    as ``_event_amount_ghs`` treats an unconverted loan event. It used to fall
+    back to the native face value — USD 1m counted as 1m in the reporting
+    unit — which diluted the employer's PAR30 from 50% to 8.33% and turned a
+    breach of the 10% EWI into a pass. A base-currency loan with no
+    ``balance_ghs`` still counts at its (base-currency) face value."""
+    _prepare(db_session)
+    _set_thresholds(db_session, {"employer_par30_ewi_pct": Decimal("10")})
+    _seed_employer_loans(
+        db_session,
+        (
+            ("LOAN/FX/1", "GHS", "100000", 60, "100000"),
+            ("LOAN/FX/2", "GHS", "100000", 0, None),
+            ("LOAN/FX/3", "USD", "1000000", 0, None),
+        ),
+    )
+    bank = _bank(db_session)
+
+    rows, covered = regulatory_credit._employer_par30_stats(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert rows == [("Ghana Health Service", Decimal("50"))]
+    assert covered == 2
+
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    dashboard = regulatory_credit.get_credit_dashboard(db_session, CTX, SAMPLE_BANK_ID)
+    ewi = {row.rule_code: row for row in dashboard.validations}["employer_par30_within_ewi"]
+    assert ewi.passed is False
+    assert "Ghana Health Service (50.0%)" in ewi.message
+    assert "2 loan(s) state an employer" in ewi.message
+
+
+# ---------------------------------------------------------------------------
+# loan identity: (source_system, source_reference), never the bare reference
+# ---------------------------------------------------------------------------
+
+SECOND_SYSTEM = "API_PUSH"
+
+
+def _seed_second_system_loan(  # noqa: PLR0913 - one keyword per stated attribute
+    db_session: Session,
+    *,
+    as_of: date_type,
+    reference: str,
+    balance: str,
+    dpd: int,
+    sector: str | None = None,
+) -> None:
+    """A LOAN from a SECOND source system carrying a reference the fixture's
+    EXCEL_CSV book already uses — legal, because the position natural key is
+    ``(org, bank, source_system, source_reference)``.
+
+    ``sector`` is optional because the compact fixture states none: the
+    blotter's sector slice needs a book that does.
+    """
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system=SECOND_SYSTEM,
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=as_of,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="second-system-loan",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "source_system": SECOND_SYSTEM,
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    position = db_session.scalar(
+        select(CanonicalPosition).where(
+            CanonicalPosition.organization_id == ORG_1,
+            CanonicalPosition.bank_id == SAMPLE_BANK_ID,
+            CanonicalPosition.source_system == SECOND_SYSTEM,
+            CanonicalPosition.source_reference == reference,
+            CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
+        )
+    )
+    if position is None:
+        position = CanonicalPosition(
+            **common,
+            as_of_date=as_of,
+            source_reference=reference,
+            position_type="LOAN",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+    db_session.add(
+        CanonicalPositionSnapshot(
+            **common,
+            as_of_date=as_of,
+            source_reference=reference,
+            position_id=position.id,
+            balance=Decimal(balance),
+            ifrs9_stage=3 if dpd >= 90 else 1,
+            attributes={
+                "balance_ghs": balance,
+                "days_past_due": dpd,
+                **({"sector": sector} if sector is not None else {}),
+            },
+        )
+    )
+    db_session.commit()
+
+
+def test_blotter_keeps_two_systems_apart_when_they_share_a_reference(
+    db_session: Session,
+) -> None:
+    """Two facilities, one reference, two source systems, two grades: each row
+    on the blotter carries ITS OWN grade and provision. Pairing grades to rows
+    by position in a reference-ordered slice was arbitrary between such ties."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    # The fixture's EXCEL_CSV LOAN/1: 30M, stage 1, no DPD -> standard (1%).
+    _seed_second_system_loan(
+        db_session, as_of=FIXTURE_AS_OF, reference="LOAN/1", balance="777", dpd=400
+    )
+
+    page = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, q="LOAN/1", limit=500
+    )
+
+    twins = [row for row in page.rows if row.source_reference == "LOAN/1"]
+    assert len(twins) == 2
+    by_dpd = {row.days_past_due: row for row in twins}
+    assert set(by_dpd) == {None, 400}
+    fixture_loan, pushed_loan = by_dpd[None], by_dpd[400]
+    assert fixture_loan.exposure_ghs == Decimal("30000000")
+    assert fixture_loan.grade == "standard"
+    assert fixture_loan.non_performing is False
+    assert fixture_loan.provision_required_ghs == Decimal("300000")  # 1% of 30M
+    assert pushed_loan.exposure_ghs == Decimal("777")
+    assert pushed_loan.grade == "loss"
+    assert pushed_loan.non_performing is True
+    assert pushed_loan.provision_required_ghs == Decimal("777")  # 100%
+
+    # The facets count both, under their own grades.
+    facets = regulatory_credit.get_credit_loan_facets(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA
+    )
+    grades = {facet.value: facet.count for facet in facets.grades}
+    assert grades["loss"] >= 1
+    assert sum(grades.values()) == page.total
+
+
+def test_migration_matches_loans_on_their_natural_key_not_the_bare_reference(
+    db_session: Session,
+) -> None:
+    """A second system's ``LOAN/1`` performing in May and non-performing in June
+    is ONE more matched loan and one more performing→npl flow — not a
+    collision with the fixture's ``LOAN/1`` that merges two facilities."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    before = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+    assert before.available is True
+
+    _seed_second_system_loan(
+        db_session, as_of=date_type(2026, 5, 31), reference="LOAN/1", balance="777", dpd=0
+    )
+    _seed_second_system_loan(
+        db_session, as_of=FIXTURE_AS_OF, reference="LOAN/1", balance="777", dpd=400
+    )
+    after = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+
+    assert after.matched_loan_count == before.matched_loan_count + 1
+    assert after.entry_loan_count == before.entry_loan_count
+    assert after.exit_loan_count == before.exit_loan_count
+    assert before.opening_total_ghs is not None and before.closing_total_ghs is not None
+    assert after.opening_total_ghs == before.opening_total_ghs + Decimal("777")
+    assert after.closing_total_ghs == before.closing_total_ghs + Decimal("777")
+
+    def flow(read, from_state: str, to_state: str) -> Decimal:  # noqa: ANN001
+        return next(
+            (
+                cell.exposure_ghs
+                for cell in read.matrix
+                if cell.from_state == from_state and cell.to_state == to_state
+            ),
+            Decimal(0),
+        )
+
+    assert flow(after, "performing", "npl") == flow(before, "performing", "npl") + Decimal("777")
+
+
+# ---------------------------------------------------------------------------
+# drill-through: the blotter must be able to honour the slice it is sent (P2-F7)
+# ---------------------------------------------------------------------------
+
+
+def test_blotter_narrows_to_the_sector_stage_and_dpd_band_it_is_sent(
+    db_session: Session,
+) -> None:
+    """A reader who follows a BI figure into the rows behind it lands on that
+    figure's slice. Each filter reads the CLASSIFIED row, so the page can never
+    disagree with the grades shown on it, and the band is the one
+    ``app.domain.credit.dpd_bands`` definition rather than a restated boundary."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    for reference, balance, dpd, sector in (
+        ("AGRI/1", "500000", 45, "Agriculture"),
+        ("AGRI/2", "250000", 200, "Agriculture"),
+        ("MFG/1", "100000", 45, "Manufacturing"),
+    ):
+        _seed_second_system_loan(
+            db_session,
+            as_of=FIXTURE_AS_OF,
+            reference=reference,
+            balance=balance,
+            dpd=dpd,
+            sector=sector,
+        )
+
+    def page(
+        *, sector: str | None = None, stage: int | None = None, dpd_band: str | None = None
+    ) -> CreditLoansPageRead:
+        return regulatory_credit.list_credit_loans(
+            db_session,
+            CTX,
+            SAMPLE_BANK_ID,
+            data_scope=ALL_INSTITUTION_DATA,
+            limit=500,
+            sector=sector,
+            stage=stage,
+            dpd_band=dpd_band,
+        )
+
+    whole = page()
+    assert whole.filtered == whole.total
+
+    sector_slice = page(sector="Agriculture")
+    assert {row.source_reference for row in sector_slice.rows} == {"AGRI/1", "AGRI/2"}
+    # ``total`` stays the whole book — it is the denominator the page reports
+    # alongside the slice, never the slice itself.
+    assert sector_slice.total == whole.total
+    assert sector_slice.filtered == 2
+
+    band = dpd_band(45)
+    assert band is not None
+    band_slice = page(dpd_band=band)
+    assert {"AGRI/1", "MFG/1"} <= {row.source_reference for row in band_slice.rows}
+    assert all(dpd_band(row.days_past_due) == band for row in band_slice.rows)
+
+    stage_slice = page(stage=3)
+    assert stage_slice.filtered >= 1
+    assert all(row.ifrs9_stage == 3 for row in stage_slice.rows)
+
+    # Two filters intersect. A union here would show a wider book than asked.
+    assert {row.source_reference for row in page(sector="Agriculture", dpd_band=band).rows} == {
+        "AGRI/1"
+    }
+
+    # A sector the book does not carry narrows to nothing and is never widened
+    # back out to the whole book.
+    assert page(sector="Aquaculture").filtered == 0
+
+
+def test_blotter_refuses_a_stage_or_band_it_cannot_honour(db_session: Session) -> None:
+    """A filter outside the platform's vocabulary is REFUSED, never dropped: a
+    dropped filter answers with a wider book than the heading claims."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+
+    for stage, band, error_code in (
+        (4, None, "unknown_ifrs9_stage"),
+        (0, None, "unknown_ifrs9_stage"),
+        (None, "91_plus", "unknown_dpd_band"),
+        (None, "30-59", "unknown_dpd_band"),
+    ):
+        with pytest.raises(HTTPException) as refusal:
+            regulatory_credit.list_credit_loans(
+                db_session,
+                CTX,
+                SAMPLE_BANK_ID,
+                data_scope=ALL_INSTITUTION_DATA,
+                stage=stage,
+                dpd_band=band,
+            )
+        assert refusal.value.status_code == 422
+        detail = cast("dict[str, str]", refusal.value.detail)
+        assert detail["error_code"] == error_code
+
+
+def test_blotter_reads_one_named_date_exactly_and_never_substitutes_another(
+    db_session: Session,
+) -> None:
+    """``as_of`` resolves through the platform's exact-or-refuse rule.
+
+    The May snapshot key is built through ``reporting_periods`` — the one
+    construction site the ingestion pipeline and fact derivation both use — so
+    the test asks for a date the data path could genuinely have produced.
+    """
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    may_end = date_type(2026, 5, 31)
+    db_session.add(
+        reporting_periods.new_snapshot_period(
+            organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=may_end
+        )
+    )
+    db_session.commit()
+
+    current = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, limit=500
+    )
+    assert current.as_of == FIXTURE_AS_OF.isoformat()
+
+    may = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, data_scope=ALL_INSTITUTION_DATA, as_of=may_end, limit=500
+    )
+    assert may.as_of == may_end.isoformat()
+    assert {row.source_reference for row in may.rows} == {"LOAN/1", "LOAN/6", "MAY-ONLY"}
+    assert may.total == 3
+
+
+def test_blotter_refuses_a_date_with_no_computed_position(db_session: Session) -> None:
+    """A date the platform has computed no position for is a 409 that NAMES the
+    date and the closest earlier one — never the latest book under another
+    date's heading, which is a wrong answer that looks right."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+
+    with pytest.raises(HTTPException) as refusal:
+        regulatory_credit.list_credit_loans(
+            db_session,
+            CTX,
+            SAMPLE_BANK_ID,
+            data_scope=ALL_INSTITUTION_DATA,
+            as_of=date_type(2026, 7, 31),
+        )
+    assert refusal.value.status_code == 409
+    detail = cast("dict[str, str]", refusal.value.detail)
+    assert detail["error_code"] == "no_computed_position"
+    message = detail["message"]
+    assert "2026-07-31" in message
+    assert FIXTURE_AS_OF.isoformat() in message
+    assert "not a substitute" in message

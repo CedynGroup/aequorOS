@@ -92,12 +92,15 @@ export type PortfolioAtRisk = {
 };
 
 export type SdiLoanClassification = {
-  as_of: string;
+  // null = the bank's current book is empty, so there is no business date to
+  // report — rendered as unavailable, never as today.
+  as_of: string | null;
   institution_class: string;
   loan_count: number;
   total_exposure_ghs: string;
   npl_exposure_ghs: string;
-  npl_ratio: string;
+  // null = no loans in the book, so there is no ratio to show.
+  npl_ratio: string | null;
   total_provision_required_ghs: string;
   stage_proxy_count: number;
   dpd_covered_count: number;
@@ -229,7 +232,9 @@ export type SdiCounterbalancingCapacity = {
 };
 
 export type LiquidityMonitoring = {
-  as_of: string;
+  // null = the bank's current book is empty; the readiness rows say what is
+  // still needed to fill it.
+  as_of: string | null;
   institution_class: string;
   maturity_ladder: SdiMaturityBucket[];
   funding_concentration: SdiFundingConcentration;

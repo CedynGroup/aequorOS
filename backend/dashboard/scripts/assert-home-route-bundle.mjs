@@ -43,8 +43,8 @@ if (missingHomeEntries.length > 0) {
 const initialJavaScript = [
   ...new Set(homeEntries.flatMap((entry) => entry[1])),
 ].filter((file) => file.endsWith(".js"));
-const offendingChunks = [];
 const offendingEditorChunks = [];
+const offendingBiChunks = [];
 let rawBytes = 0;
 let gzipBytes = 0;
 
@@ -53,26 +53,75 @@ let gzipBytes = 0;
 // they survive production minification wherever the library itself is bundled.
 const EDITOR_MARKERS = ["ProseMirror-hideselection", "ProseMirror-focused"];
 
+/**
+ * Runtimes the BI workspace uses that must never reach the Command Center.
+ *
+ * `data-zr-dom-id` is the attribute zrender writes onto every canvas layer it
+ * creates, and `_echarts_instance_` the one ECharts writes onto a chart's host
+ * element; both are DOM contracts, so they survive production minification
+ * wherever the libraries are bundled. The AG Grid markers are the class names it
+ * writes onto its own root element and onto every header cell, on the same
+ * principle.
+ *
+ * The AG Grid pair was carried here BEFORE the library was a dependency, so that
+ * the first import of it could not land in the home bundle unnoticed. It is a
+ * dependency now (Phase 3, `ag-grid-community` 36.2.0, Community edition, no
+ * licence key — D-030), and one of the two markers has been replaced: the second
+ * was `ag-theme-quartz`, which is a class name of the RETIRED CSS-file themes
+ * and appears nowhere in the v36 JavaScript bundle. Under the Theming API
+ * (`themeQuartz.withParams`) it could never have matched, so it was a guard that
+ * could not fail. `ag-header-cell` is written at runtime and is present in the
+ * installed bundle, minified and not.
+ *
+ * The react-grid-layout pair is the same kind of contract: `react-grid-item` is
+ * written onto every tile it places and `react-resizable-handle` onto every
+ * resize grip, and its own stylesheet keys off both. It arrived with the saved
+ * dashboard builder (Phase 3, `react-grid-layout` 2.2.4, whose peer range
+ * `>= 16.3.0` admits React 19), and it belongs here because the builder's grid
+ * is a client-only runtime reached through `components/bi/BuilderGrid.tsx`. This
+ * guard already earned its keep on it once: the first draft imported one
+ * CONSTANT from `BuilderGridCanvas.tsx` into the tile renderer, which put the
+ * whole library in `/dashboards/new`'s initial bundle — deferred in name only.
+ *
+ * The home insight strip uses the lightweight SVG `components/ui/Sparkline`.
+ * Any BI chart must be reached through `components/bi/EChart.tsx`, the BI grid
+ * through `components/bi/PivotGrid.tsx`, and the builder's canvas through
+ * `components/bi/BuilderGrid.tsx`; all three load with
+ * `dynamic(..., { ssr: false })`.
+ */
+const BI_RUNTIME_MARKERS = [
+  ["ECharts", "_echarts_instance_"],
+  ["zrender", "data-zr-dom-id"],
+  ["AG Grid", "ag-root-wrapper"],
+  ["AG Grid", "ag-header-cell"],
+  ["react-grid-layout", "react-grid-item"],
+  ["react-grid-layout", "react-resizable-handle"],
+];
+
+/** The AG Grid markers, for the positive half of the rule. */
+const AG_GRID_MARKERS = BI_RUNTIME_MARKERS.filter(
+  ([library]) => library === "AG Grid",
+).map(([, marker]) => marker);
+
+/** The react-grid-layout markers, for the positive half of the rule. */
+const GRID_LAYOUT_MARKERS = BI_RUNTIME_MARKERS.filter(
+  ([library]) => library === "react-grid-layout",
+).map(([, marker]) => marker);
+
 for (const chunk of initialJavaScript) {
   const source = readFileSync(resolve(distDir, chunk));
   rawBytes += source.byteLength;
   gzipBytes += gzipSync(source).byteLength;
 
   const text = source.toString("utf8");
-  // Recharts' rendered SVG/HTML class names are part of its runtime contract,
-  // survive production minification, and occur throughout each library chunk.
-  if (text.includes("recharts-")) {
-    offendingChunks.push(chunk);
-  }
   if (EDITOR_MARKERS.some((marker) => text.includes(marker))) {
     offendingEditorChunks.push(chunk);
   }
-}
-
-if (offendingChunks.length > 0) {
-  throw new Error(
-    `Command Center initial entry graph contains Recharts chunk(s): ${offendingChunks.join(", ")}`,
-  );
+  for (const [library, marker] of BI_RUNTIME_MARKERS) {
+    if (text.includes(marker)) {
+      offendingBiChunks.push(`${chunk} (${library})`);
+    }
+  }
 }
 
 if (offendingEditorChunks.length > 0) {
@@ -83,6 +132,39 @@ if (offendingEditorChunks.length > 0) {
       "imports it with dynamic(..., { ssr: false }).",
   );
 }
+
+if (offendingBiChunks.length > 0) {
+  throw new Error(
+    "Command Center initial entry graph contains a BI charting or grid " +
+      `runtime: ${offendingBiChunks.join(", ")}. Charts must be reached only ` +
+      "through components/bi/EChart.tsx, which imports the canvas with " +
+      "dynamic(..., { ssr: false }); the home insight strip uses the SVG " +
+      "components/ui/Sparkline.",
+  );
+}
+
+/**
+ * The Command Center's ratio chart, and the two things that must be true of it.
+ *
+ * It is the ONLY chart on the home route, and it is reached through
+ * `components/home/DeferredRatioTrendChart.tsx`, so the route must have exactly
+ * one deferred entry. That entry's chunk then has to satisfy BOTH halves of a
+ * rule, which is why reading it is not optional:
+ *
+ * - it must contain `EChart`'s loading label, proving the chart really is in the
+ *   deferred chunk rather than having quietly moved into the initial bundle (the
+ *   negative assertions above only say what is ABSENT from the entry graph, and
+ *   would pass just as happily if the chart were deleted); and
+ * - it must NOT contain a charting runtime. `components/bi/EChart.tsx` defers the
+ *   canvas a SECOND time, inside the already-deferred chart, so the Command
+ *   Center pays for an 8 KB component and pays for ECharts only when it draws.
+ *   Under Recharts this chunk carried the whole library.
+ *
+ * Together with the `/explore` assertion further down — which proves the ECharts
+ * runtime does exist in a deferred chunk of a route that draws one — neither half
+ * can pass vacuously.
+ */
+const CHART_BOUNDARY_MARKER = "Drawing the chart";
 
 const loadableManifestPath = resolve(routeDir, "react-loadable-manifest.json");
 const loadableManifest = JSON.parse(readFileSync(loadableManifestPath, "utf8"));
@@ -97,13 +179,36 @@ if (ratioChartEntries.length !== 1) {
 const deferredChartChunks = ratioChartEntries[0].files.filter((file) =>
   file.endsWith(".js"),
 );
-const deferredChunkHasRecharts = deferredChartChunks.some((chunk) =>
-  readFileSync(resolve(distDir, chunk), "utf8").includes("recharts-"),
+const deferredChartSources = deferredChartChunks.map((chunk) => ({
+  chunk,
+  text: readFileSync(resolve(distDir, chunk), "utf8"),
+}));
+
+if (
+  !deferredChartSources.some(({ text }) => text.includes(CHART_BOUNDARY_MARKER))
+) {
+  throw new Error(
+    "The Command Center's deferred chart chunks no longer contain the EChart " +
+      `loading label ${JSON.stringify(CHART_BOUNDARY_MARKER)}: ` +
+      `${deferredChartChunks.join(", ")}. Either the label was reworded (update ` +
+      "CHART_BOUNDARY_MARKER after checking the new build output), or the ratio " +
+      "chart no longer reaches the canvas through components/bi/EChart.tsx.",
+  );
+}
+
+const chartChunksCarryingRuntime = deferredChartSources.flatMap(
+  ({ chunk, text }) =>
+    BI_RUNTIME_MARKERS.filter(([, marker]) => text.includes(marker)).map(
+      ([library]) => `${chunk} (${library})`,
+    ),
 );
 
-if (!deferredChunkHasRecharts) {
+if (chartChunksCarryingRuntime.length > 0) {
   throw new Error(
-    `Deferred RatioTrendChart chunks no longer expose a Recharts runtime marker: ${deferredChartChunks.join(", ")}`,
+    "The Command Center's deferred chart chunk carries a charting runtime: " +
+      `${chartChunksCarryingRuntime.join(", ")}. components/bi/EChart.tsx must ` +
+      "load the canvas with dynamic(..., { ssr: false }) so the home route pays " +
+      "for the runtime only when it draws.",
   );
 }
 
@@ -146,6 +251,103 @@ if (!deferredEditorHasProseMirror) {
   );
 }
 
+// The positive half of the BI rule: the ECharts canvas must EXIST in a deferred
+// chunk of a route that draws one, so the negative check above cannot pass
+// vacuously — for example because the import path changed, or because the chart
+// stopped being rendered at all.
+const exploreLoadableManifestPath = resolve(
+  distDir,
+  "server/app/(app)/explore/page",
+  "react-loadable-manifest.json",
+);
+const exploreEntries = Object.values(
+  JSON.parse(readFileSync(exploreLoadableManifestPath, "utf8")),
+);
+
+if (exploreEntries.length === 0) {
+  throw new Error(
+    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. components/bi/EChart.tsx must load the canvas with next/dynamic.`,
+  );
+}
+
+const deferredBiChunks = exploreEntries
+  .flatMap((entry) => entry.files)
+  .filter((file) => file.endsWith(".js"));
+const deferredBiHasEcharts = deferredBiChunks.some((chunk) => {
+  const text = readFileSync(resolve(distDir, chunk), "utf8");
+  return text.includes("data-zr-dom-id") || text.includes("_echarts_instance_");
+});
+
+if (!deferredBiHasEcharts) {
+  throw new Error(
+    "Deferred BI chart chunks no longer expose an ECharts or zrender runtime " +
+      `marker: ${deferredBiChunks.join(", ")}. Either the markers changed in ` +
+      "an echarts upgrade (update BI_RUNTIME_MARKERS after checking the new " +
+      "build output) or the chart no longer bundles it.",
+  );
+}
+
+// The same positive half for the grid. Explore is the route that draws one, so
+// the AG Grid runtime must exist in one of its DEFERRED chunks: if it stopped
+// being deferred it would be in the route's initial bundle instead, and the
+// negative check above only watches the Command Center.
+const deferredBiHasAgGrid = deferredBiChunks.some((chunk) => {
+  const text = readFileSync(resolve(distDir, chunk), "utf8");
+  return AG_GRID_MARKERS.some((marker) => text.includes(marker));
+});
+
+if (!deferredBiHasAgGrid) {
+  throw new Error(
+    "Deferred BI chunks no longer expose an AG Grid runtime marker " +
+      `(${AG_GRID_MARKERS.join(", ")}): ${deferredBiChunks.join(", ")}. Either ` +
+      "the markers changed in an ag-grid-community upgrade (update " +
+      "BI_RUNTIME_MARKERS after checking the new build output), or the grid is " +
+      "no longer loaded through components/bi/PivotGrid.tsx with " +
+      "dynamic(..., { ssr: false }) and has moved into an initial bundle.",
+  );
+}
+
+// The same positive half for the saved-dashboard builder's grid. `/dashboards/new`
+// is the route that renders one, so the react-grid-layout runtime must live in one
+// of its DEFERRED chunks: if it stopped being deferred it would be in that route's
+// initial bundle instead, and the negative check above only watches the Command
+// Center. This is not a hypothetical — a single `import { CONST } from
+// "./BuilderGridCanvas"` in the tile renderer did exactly that, and this assertion
+// is what named it.
+const builderLoadableManifestPath = resolve(
+  distDir,
+  "server/app/(app)/dashboards/new/page",
+  "react-loadable-manifest.json",
+);
+const builderEntries = Object.values(
+  JSON.parse(readFileSync(builderLoadableManifestPath, "utf8")),
+);
+
+if (builderEntries.length === 0) {
+  throw new Error(
+    `Expected a deferred BI builder entry in ${builderLoadableManifestPath}; found none. components/bi/BuilderGrid.tsx must load the canvas with next/dynamic.`,
+  );
+}
+
+const deferredBuilderChunks = builderEntries
+  .flatMap((entry) => entry.files)
+  .filter((file) => file.endsWith(".js"));
+const deferredBuilderHasGridLayout = deferredBuilderChunks.some((chunk) => {
+  const text = readFileSync(resolve(distDir, chunk), "utf8");
+  return GRID_LAYOUT_MARKERS.some((marker) => text.includes(marker));
+});
+
+if (!deferredBuilderHasGridLayout) {
+  throw new Error(
+    "Deferred BI builder chunks no longer expose a react-grid-layout runtime " +
+      `marker (${GRID_LAYOUT_MARKERS.join(", ")}): ${deferredBuilderChunks.join(", ")}. ` +
+      "Either the markers changed in a react-grid-layout upgrade (update " +
+      "BI_RUNTIME_MARKERS after checking the new build output), or the grid is no " +
+      "longer loaded through components/bi/BuilderGrid.tsx with " +
+      "dynamic(..., { ssr: false }) and has moved into an initial bundle.",
+  );
+}
+
 console.log(
-  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; Recharts deferred to ${deferredChartChunks.join(", ")}; ICAAP editor deferred to ${deferredEditorChunks.join(", ")}.`,
+  `Command Center initial JS: ${rawBytes} B raw, ${gzipBytes} B gzip; the ratio chart deferred to ${deferredChartChunks.join(", ")} (runtime-free); ICAAP editor deferred to ${deferredEditorChunks.join(", ")}; ECharts and AG Grid deferred to ${deferredBiChunks.join(", ")}; the dashboard builder's grid deferred to ${deferredBuilderChunks.join(", ")}.`,
 );

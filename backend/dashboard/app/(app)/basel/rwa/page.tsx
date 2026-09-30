@@ -16,7 +16,7 @@ import RwaBucketChart from "@/components/basel/charts/RwaBucketChart";
 import { useBankContext } from "@/components/shell/BankContext";
 import { isNoBaselineRunError, useRwaBreakdown } from "@/lib/api/hooks";
 import { num, shortId } from "@/lib/api/values";
-import { seriesColor } from "@/lib/chartTheme";
+import { cssSeriesColor } from "@/lib/svgChartPalette";
 import { currencyCode, fmtCurrency, regShort } from "@/lib/format";
 
 type Row = {
@@ -100,13 +100,13 @@ export default function RWABreakdown() {
 
   const splitSlices = data
     ? [
-        { name: "Credit risk", value: creditRwa, color: seriesColor(0) },
+        { name: "Credit risk", value: creditRwa, colorIndex: 0 },
         {
           name: "Operational risk",
           value: operationalRwa,
-          color: seriesColor(1),
+          colorIndex: 1,
         },
-        { name: "Market risk", value: marketRwa, color: seriesColor(2) },
+        { name: "Market risk", value: marketRwa, colorIndex: 2 },
       ]
     : [];
 
@@ -196,7 +196,7 @@ export default function RWABreakdown() {
                         <li key={s.name} className="flex items-center gap-3">
                           <span
                             className="w-2 h-2 rounded-sm shrink-0"
-                            style={{ background: s.color }}
+                            style={{ background: cssSeriesColor(s.colorIndex) }}
                             aria-hidden
                           />
                           <span className="text-navy/85 flex-1">{s.name}</span>

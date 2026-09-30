@@ -255,8 +255,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   gates itself. **`family_hooks` is the one seam a family may use** — lazy
   `importlib` dispatch, a no-op default per hook, deliberately not
   `if return_family == "icaap"` in five services. **The `ai` job lane exists**
-  (`icaap_ai_draft` its only member; the default lane excludes it by construction
-  and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
+  (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them by
+  construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
   process holding the model key must run nothing else. **Jurisdiction is data
   under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and
   the Nigeria and Kenya manifests were built WITHOUT reading their primary texts
@@ -335,6 +335,42 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `app__schemas__x__Name` component keys the generator cannot map back), and a
   `Decimal` form field (Pydantic types it `number | string`, and the alias lands in an
   operation request interface, not in `src/models/`).
+  **A STALE GENERATED CLIENT DROPS A NEW REQUEST FIELD SILENTLY, AND THE SERVER THEN
+  DEFAULTS IT (2026-09-27).** The two directions degrade differently, and only one of
+  them is visible. `<Model>FromJSON` opens with `...json`, so an unknown RESPONSE field
+  survives under its snake_case wire name — a frontend reading the camelCase property
+  gets `undefined`, which surfaces as an obvious bug. `<Model>ToJSON` has **no spread**:
+  it returns a hand-enumerated object literal of exactly the keys the generator knew
+  about, so a REQUEST field added to an existing schema is stripped in the browser, the
+  server applies its column default, and the API answers 201. That is not a type error
+  and no frontend test sees it. Caught on `BindingCreateRequest` while Phase 4 added
+  `data_scope_kind` / `data_scope_values` to `ScopedGrantInput`: posting through the
+  generated `authorizationApi` would have stored a grant an Org Owner narrowed to two
+  branches as **the whole institution, with a success dialog** — privilege widening
+  reported as success. So after adding a field to a schema an existing route already
+  accepts, either regenerate before the surface ships, or post through a hand-written
+  transport that reuses the generated `FromJSON` parsers plus `normalizeApiError`, and
+  pin a test that FAILS if the generated write operation is called again. Delete the
+  transport at regeneration; an interim one that outlives it is a second contract nobody
+  is checking. **When you delete it, invert the tripwire rather than dropping it**
+  (2026-09-28, `grantTransport.ts` retired): the test that forbade the generated
+  operation becomes one asserting the transport is gone AND that every field the
+  generated serializer emits is one the caller states — a field the contract carries and
+  the caller leaves unset is still decided by the server's column default, so the same
+  widening returns the next time the schema grows. Give the builders the generated
+  request-model TYPES; then the compiler checks the shape instead of a second literal.
+  **But not every hand-written transport is the interim kind.** `lib/api/askTransport.ts`
+  is permanent, and its docstring told the next reader to delete it — which would have
+  broken the feature. The test is which way the serializer hurts you. An INTERIM
+  transport exists because the client does not yet know a FIELD, and a fresh client
+  retires it. A PERMANENT one exists because a value must travel **unmodified** through a
+  layer that rewrites every value it understands, and no generation changes that: BI's
+  confirm-what-you-were-shown contract digests the proposal on both sides, `ToJSON` drops
+  what it does not know (digest mismatch) and `FromJSON` spreads the raw JSON and then
+  re-adds known fields under camelCase (so `top_n` returns as `top_n` AND `topN`, and
+  `BiQuery` is `extra="forbid"` — a 422 on a question the reader confirmed). Carry such a
+  value as opaque JSON end to end, and pin BOTH directions against the generated
+  package's own source.
 - Keep `packages/risk-service-api/src` excluded centrally from style linting and
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally
@@ -619,6 +655,109 @@ with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   Note there is **no bank-creation path** outside `sample_bank_seed`: ingestion
   requires the bank to exist (`_get_bank_or_404`), so onboarding a non-Ghana
   institution needs that path built, not just these leaks fixed.
+
+- **BI plane (built from 2026-09-21; spec `docs/bi.md`, shape ARCHITECTURE.md §3e, ledger the
+  gitignored `.ai/BI_*.md`).** Governed analytics over the same numbers the platform files, so a bank can
+  drop its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows (current
+  generation only), `live_metrics`, `regulatory_runs` and the registers, and writes **the `bi_*` tables
+  plus `ai_commentary_drafts`** (D-191, from `app/jobs/bi_commentary.py`; A360-1 M1 found the write scan
+  covered `services/bi` + `domain/bi` only — the guard now scans every BI-owned module and names that one
+  permitted write); the regulatory plane never imports BI except the two enqueue-seam modules
+  (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder, catalogue or
+  compiler. `tests/architecture/test_bi_plane_boundary.py` pins it, `derive_facts` included.
+  **Engine metrics are COPIED, never recomputed**, and portfolio measures reuse the engines' own pure
+  functions out of `app/domain/` — one definition, not a BI copy. **Nothing is mounted by default:**
+  all six `BiSettings` booleans (`BI_ENABLED`, `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`,
+  `BI_ALERTS_ENABLED`, `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`) ship off and are set in no
+  deployment file, so every BI route 404s today; `GET /feature-flags` projects all six. Turning it on is
+  the ten-step ORDERED sequence in `backend/docs/bi_turn_on_runbook.md`, and `risk-worker-bi` (seven `bi`-lane job
+  types) must be DEPLOYED before the enqueue flag flips or every job it produces strands in `queued`
+  (the shared `jobs` table hazard). **`CATALOGUE_VERSION` and `BUILDER_VERSION` both enter the build fingerprint**,
+  so bumping either forces a full mart rebuild per tenant — bump deliberately.
+  Four things here are easy to assume away:
+  **(1) Postgres does not inherit RLS onto partitions.** The marts' monthly and yearly children are
+  created and dropped ONLY by migration-owned `SECURITY DEFINER` functions (`bi_ensure_month_partition`
+  and siblings) that apply ENABLE+FORCE RLS and the tenant policy to every child; the app role runs no
+  raw `CREATE TABLE`. A cross-tenant read must return zero rows through the parent, a named child and
+  the DEFAULT partition alike. **A green Postgres run is not evidence of this** — an RLS test self-skips
+  at exit 0 when the `TEST_DATABASE_URL` role bypasses RLS (the shared one does) or when
+  `TEST_DATABASE_URL` is not EXPORTED, and one more self-skips without `CREATEROLE`. Check the
+  passed-count and that skips are ZERO; the local recipe is in `.ai/BI_TEST_MATRIX.md`.
+  **(2) Missing data is never zero, structurally.** A measure with no target has no `bi_fact_target`
+  row; a widget with no data says `needs_data: <dataset>` (or `pending_capability` when the gap is
+  platform work, not the bank's book); an insight may only restate a typed fact, so it cannot describe a
+  missing figure as flat; the ratio bridge refuses rather than emitting a leg worth nothing. Never
+  "fix" one of these by defaulting to 0 — that is the defect they exist to prevent.
+  **(3) A filter can itself disclose**, so `authorize_query` evaluates every distinct (module,
+  sensitivity) across measures, dimensions AND filters, deny-by-default, and export authority is
+  derived from the member set the query touches — never a client flag, and re-checked after compilation
+  where the second check can only refuse. **(4) No `text()` in `app/services/bi` or `app/domain/bi`**
+  (an AST guard that proves itself), no currency/regulator literal in BI code or pack JSON — though
+  `eve_base_ghs` and `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_`
+  fact categories and the `refinitiv` vendor id.
+  **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a different
+  capital regime and is refused the packs surface until its own pack set ships (the gate resolves through the
+  authority registry and opens by itself).
+  **Phase 3 (2026-09-27) added eight more tables across `app/models/bi_content.py` and `bi_notifications.py`,
+  which changes where you must register one.** Three registries span the BI model modules and each will convict
+  you by name if you miss it: the plane guard's `BI_OWNED` globs and its writable-table derivation, and the
+  table census that requires every `bi_*` table to be named by exactly one module's tuple. **And check which
+  Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py` reads `app/models/bi.py`
+  ALONE, so the Phase 3 tables needed `tests/db/test_bi_phase3_migration.py` to get column, CHECK and
+  FORCE-RLS parity at all. That absence is precisely how a column four characters too narrow for the values
+  copied into it reached a commit, failing a tenant's WHOLE nightly build every night: the model and the
+  migration agreed on the wrong number, and SQLite ignores VARCHAR lengths.
+  Two more Phase 3 properties worth not breaking: a shared dashboard carries **no** owner authority (the widget
+  resolver is not given the owner), and a subscription delivery is rendered **as each recipient**, asserted by
+  the recipient's name appearing in the artifact's own provenance bytes. A range query over a stock measure
+  carries a REDUNDANT static window bound beside its subquery — do not "simplify" it away: Postgres prunes
+  partitions at plan time and cannot see a subquery, so without it a twelve-month question scans every month
+  the mart holds.
+  **A CALCULATED MEASURE IS AUTHORIZED AS THE FIGURES ITS TEXT NAMES, never as itself** — the walk re-parses
+  the APPROVED expression server-side every time and never reads the stored member column. And **the alert
+  and on-new-data triggers live in the `bi_mart_refresh` HANDLER, not in `refresh_bank_as_of`**: the backfill
+  calls the builder once per date, so a hook inside it would mail a bank a thousand board packs, and the
+  builder's `skipped` outcome is what makes both triggers idempotent.
+  **Phase 4/5 (2026-09-27..28) made the binding a five-dimension sentence — and the spec lagged the code
+  in a dozen places (audit A360-7).** Data scope is REAL: `authorization_bindings.data_scope_kind/values`
+  (migration `202609270073`), reduced PER CAPABILITY by `authorization.reduce_data_scope` — never union ids
+  matched against different resources (audit blocker A10-01 in `authorize_query`; A360 H8 found the same
+  union in `services/bi/feeds/authorization.py`, moved onto the shared `combine_pair_scopes` 2026-09-29) — resolved by `services/bi/data_scope.py` and injected
+  BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py` reports it
+  (`data scope` column, `scoped_reader` flag) and is the gate for any change that touches it. `bi_reader`
+  is the second machine bundle (`{view}`, disjoint from `integration_writer`'s `{ingest}`, `202609270074`)
+  for the Stage B feed (`backend/docs/powerbi_stage_b.md`); Stage A is `powerbi_stage_a.md`.
+  **BI carries NO reconciliation to the regulatory returns (founder decision 2026-09-29):** treasury/ALM and
+  the regulatory spine are different planes, and BI is intelligence over the bank's own treasury data. The
+  R1–R12 checks (R4 compared the GL mart with BSD7A, a BoG return), `bi_reconciliation_results`,
+  `GET …/bi/trust`, the trust badge on every BI payload and card, the export "Data confidence" field and
+  `X-Bi-Feed-Trust` were all removed by that decision. **Build FRESHNESS stays** (`bi_mart_builds`,
+  fingerprints, `provenance.stale_dates`) — a stale build is about the bank's data, not a regulator — and
+  the stale-date signal needs its own surface now that the badge is gone (A360 H2). Never put a regulatory
+  verdict on a BI surface again. `docs/bi.md`, the spec whose pitch line produced the mistake, is gitignored
+  (`.gitignore:62`) and not reviewable in the repository. NLQ (`ask` routes, `bi_nlq_translate` on the `ai` lane) is built, and the
+  consent text was amended on 2026-09-29 (`ai-consent-2026-09-v2`) so `bi_nlq` is now in
+  `CONSENT_COVERED_FEATURES`. **The rule it exists for is enforced at the EGRESS gate, not in a
+  request schema**: `gates.evaluate` refuses any feature the shipped consent text does not describe,
+  at enqueue AND run, so a settings row written by any other path cannot out-rank the document
+  (audit A360-5 M2). Adding a feature to that tuple without a consent section covering it is the
+  defect. Reaching a tenant still needs the deployment flags, `risk-worker-ai`, a non-empty
+  `approved_configurations.json` and the Owner's consent. Recharts is gone from `backend/dashboard`
+  (0 importers; `console/` keeps 3, out of scope). When a BI document and the code disagree, check the
+  dated as-built notes in `docs/bi.md` before trusting a mechanism the prose describes — the code won
+  every time in A360-7.
+- **A REGISTERED JOB WITH NO ENQUEUE SITE IS AN INERT FEATURE, AND NOTHING REPORTS IT (2026-09-27).** BI's
+  threshold alerts shipped with a job type, a worker lane, a reclaim-window decision, a handler and passing
+  handler tests — and no caller anywhere. No alert was ever evaluated; `on_new_data` reports never fired.
+  Every gate was green, because each half was correct. **When you add a job type, the same change must add its
+  enqueue site, and a test must assert the caller calls it** — `tests/services/test_bi_jobs.py` now asserts
+  both directions (a succeeded build asks, a skipped build does not) and the enqueue counts ride on the job's
+  progress record so "queued nothing" is distinguishable from "was never asked".
+  The same class bit this build three other ways, all worth knowing when you read a green suite: a guard whose
+  six rules were never proven able to fire; a route-count tripwire that had gone stale; a Postgres parity
+  suite iterating one model module while eight tables lived in two others; and three front-end surfaces whose
+  routes worked and which never called them. **"The endpoint exists" is not "the feature works", and a green
+  test suite is evidence about the code that was written, not about the code that was not.**
 
 ## Maintaining this file
 

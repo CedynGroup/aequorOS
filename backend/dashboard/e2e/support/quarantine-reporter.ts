@@ -79,7 +79,13 @@ export default class QuarantineReporter implements Reporter {
     }
   }
 
-  onEnd(result: FullResult): { status?: FullResult["status"] } {
+  // `async` so the declared return type is the `Promise<...>` arm of Playwright's
+  // own union. Returning the bare object compiled against an older Playwright and
+  // stopped compiling when the version moved; nothing caught it, because the gated
+  // `typecheck` script excludes `e2e/` (a separate tsconfig with its own settings).
+  // The script now checks both trees — see `package.json` — so this cannot rot
+  // again silently.
+  async onEnd(result: FullResult): Promise<{ status?: FullResult["status"] }> {
     if (this.executed < 20) {
       this.errors.push(
         `only ${this.executed} journeys executed; the CI gate expects at least 20`,

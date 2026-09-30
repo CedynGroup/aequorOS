@@ -9,6 +9,14 @@ so scheduled and on-demand filing runs mint the same immutable runs as before.
 
 Both are worker handlers: ``(session, job)`` where ``job.payload`` carries
 ``as_of_date`` (and, for official runs, an optional ``actor_user_id``).
+
+Both hand off to the BI lane once their own rows are durable: a
+``bi_mart_refresh`` for the same ``(bank, as_of)`` is enqueued INSIDE the
+commit that lands the live metrics / official runs, so the mart's copy of an
+engine figure (``bi_fact_engine_metric``) can never be requested before the
+figure exists, and the partial-failure raise at the end of ``run_refresh``
+cannot roll the request back. The enqueue is a plain queue insert — no
+computation — and inert unless ``BI_MART_ENQUEUE_ENABLED``.
 """
 
 from __future__ import annotations
@@ -51,6 +59,7 @@ from app.services import (
     scoped_authorization,
 )
 from app.services.audit import record_event
+from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.fact_derivation import DerivationError, derive_current_facts, derive_facts
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
 from app.services.reporting_periods import new_snapshot_period
@@ -321,6 +330,17 @@ def run_refresh(session: Session, job: Job) -> None:
             "reconciliation_blocked": outcome.reconciliation_block is not None,
         },
     )
+    # BI hand-off, inside this commit (module docstring): the live rows the
+    # mart copies and the request to copy them are one durable unit, and the
+    # partial-failure raise below cannot undo it — a partly refreshed live
+    # plane is still a changed one.
+    enqueue_mart_refresh(
+        session,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        as_of=as_of,
+        reason="live_refresh",
+    )
     session.commit()
     if outcome.modules_failed:
         raise TransientLiveRefreshError(outcome.modules_failed)
@@ -440,6 +460,16 @@ def run_official(session: Session, job: Job) -> None:
             "modules_succeeded": sum(1 for run in runs if run.status == "succeeded"),
             "modules_failed": sum(1 for run in runs if run.status in ("failed", "partial")),
         },
+    )
+    # BI hand-off, inside this commit: ``bi_fact_engine_metric``'s official
+    # tier copies sealed ``regulatory_runs``, so the request to copy them is
+    # committed with the runs themselves (module docstring).
+    enqueue_mart_refresh(
+        session,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        as_of=as_of,
+        reason="official_run",
     )
     session.commit()
     job.progress = {

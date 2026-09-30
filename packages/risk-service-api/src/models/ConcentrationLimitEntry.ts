@@ -18,13 +18,13 @@ import {
   BucketKeyToJSON,
   BucketKeyToJSONTyped,
 } from "./BucketKey";
-import type { Value } from "./Value";
+import type { Value1 } from "./Value1";
 import {
-  ValueFromJSON,
-  ValueFromJSONTyped,
-  ValueToJSON,
-  ValueToJSONTyped,
-} from "./Value";
+  Value1FromJSON,
+  Value1FromJSONTyped,
+  Value1ToJSON,
+  Value1ToJSONTyped,
+} from "./Value1";
 
 /**
  *
@@ -52,10 +52,10 @@ export interface ConcentrationLimitEntry {
   limitKind: string;
   /**
    *
-   * @type {Value}
+   * @type {Value1}
    * @memberof ConcentrationLimitEntry
    */
-  value: Value;
+  value: Value1;
 }
 
 /**
@@ -91,7 +91,7 @@ export function ConcentrationLimitEntryFromJSONTyped(
         : BucketKeyFromJSON(json["bucket_key"]),
     dimension: json["dimension"],
     limitKind: json["limit_kind"],
-    value: ValueFromJSON(json["value"]),
+    value: Value1FromJSON(json["value"]),
   };
 }
 
@@ -113,6 +113,6 @@ export function ConcentrationLimitEntryToJSONTyped(
     bucket_key: BucketKeyToJSON(value["bucketKey"]),
     dimension: value["dimension"],
     limit_kind: value["limitKind"],
-    value: ValueToJSON(value["value"]),
+    value: Value1ToJSON(value["value"]),
   };
 }

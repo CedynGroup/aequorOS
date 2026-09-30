@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal, get_args
 
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -55,6 +55,16 @@ class DatabaseSettings(BaseSettings):
         if value is not None and not value.strip():
             return None
         return value
+
+
+#: Origin of the authenticated bank product (``bank.aequoros.com``). Read by TWO
+#: settings classes from the SAME environment variable — the staff console needs
+#: it to hand an operator off to the read-only examiner view, and BI
+#: subscriptions need it for the sign-in link that stands in for an attachment
+#: the platform will not email. Declared once here so the two cannot drift to
+#: different hosts, which would send half the platform's links to the wrong
+#: origin.
+DEFAULT_BANK_APP_BASE_URL = "https://bank.aequoros.com"
 
 
 class SmtpSettings(BaseSettings):
@@ -567,6 +577,107 @@ class IcaapSettings(BaseSettings):
         )
 
 
+#: Every model vendor the platform can call, and the ONLY names
+#: ``AI_PROVIDER_TIER`` accepts. Adding one means adding an adapter module under
+#: ``app/services/ai/`` and an ``approved_configurations.json`` entry per feature.
+AiVendor = Literal["anthropic", "openai", "google"]
+AI_VENDORS: Final[tuple[AiVendor, ...]] = get_args(AiVendor)
+
+#: The default failover order (D-053): Claude first, then OpenAI, then Gemini.
+AI_DEFAULT_PROVIDER_TIER: Final = "anthropic,openai,google"
+
+#: Effort levels each vendor NATIVELY accepts, ascending. The adapters map
+#: ``AI_EFFORT`` onto these rather than naming a level themselves, so the
+#: vocabulary stays here with every other AI tunable (D-024). An empty tuple
+#: means the vendor exposes no effort control at all, which the adapter records
+#: as a degraded capability rather than silently dropping.
+AI_VENDOR_EFFORT_LEVELS: Final[dict[str, tuple[str, ...]]] = {
+    "anthropic": ("low", "medium", "high", "xhigh", "max"),
+    "openai": ("low", "medium", "high"),
+    "google": (),
+}
+
+#: What a vendor with no effort control records as its effort. Part of the
+#: approval key, so it must be a stable, writable token rather than ``None``.
+AI_EFFORT_UNSUPPORTED: Final = "unsupported"
+
+
+#: Separator grammar of ``AI_FEATURE_MODELS``: ``feature:vendor=model``, comma
+#: separated. One setting rather than a variable per (feature, vendor) because
+#: ``extra="ignore"`` makes a mistyped variable name SILENT — the deployment
+#: would fall back to the vendor default and nobody would know. Here a typo is a
+#: boot-time error naming the offending entry.
+AI_FEATURE_MODEL_SEPARATOR: Final = ":"
+AI_FEATURE_MODEL_ASSIGN: Final = "="
+
+
+def parse_ai_feature_models(value: str) -> dict[tuple[str, str], str]:
+    """``"icaap_drafting:anthropic=claude-x"`` -> ``{("icaap_drafting", "anthropic"): "claude-x"}``.
+
+    Validates the GRAMMAR and the VENDOR here, where it is cheap and where the
+    settings object is built, so a malformed value cannot boot. The feature name
+    and the per-feature pinning policy are checked in
+    ``app.services.ai.model_selection``, which owns both — this module must not import
+    from the services layer.
+    """
+    resolved: dict[tuple[str, str], str] = {}
+    for entry in (item.strip() for item in value.split(",")):
+        if not entry:
+            continue
+        key, separator, model = entry.partition(AI_FEATURE_MODEL_ASSIGN)
+        if not separator or not model.strip():
+            message = (
+                f"AI_FEATURE_MODELS entry {entry!r} must read "
+                f"feature{AI_FEATURE_MODEL_SEPARATOR}vendor{AI_FEATURE_MODEL_ASSIGN}model."
+            )
+            raise ValueError(message)
+        feature, dot, vendor = key.strip().partition(AI_FEATURE_MODEL_SEPARATOR)
+        if not dot or not feature.strip():
+            message = (
+                f"AI_FEATURE_MODELS entry {entry!r} must name a feature and a vendor "
+                f"separated by {AI_FEATURE_MODEL_SEPARATOR!r}."
+            )
+            raise ValueError(message)
+        vendor = vendor.strip().casefold()
+        if vendor not in AI_VENDORS:
+            message = (
+                f"AI_FEATURE_MODELS entry {entry!r} names unknown vendor {vendor!r}; "
+                f"permitted values are {list(AI_VENDORS)}."
+            )
+            raise ValueError(message)
+        slot = (feature.strip().casefold(), vendor)
+        if slot in resolved:
+            message = f"AI_FEATURE_MODELS names {slot[0]}:{slot[1]} more than once."
+            raise ValueError(message)
+        resolved[slot] = model.strip()
+    return resolved
+
+
+def parse_ai_provider_tier(value: str) -> tuple[str, ...]:
+    """``"anthropic,openai"`` -> ``("anthropic", "openai")``.
+
+    Raises ``ValueError`` naming the offending token, so an unknown vendor is a
+    boot-time configuration error rather than a vendor silently skipped at the
+    moment a bank needed it.
+    """
+    names = [entry.strip().casefold() for entry in value.split(",") if entry.strip()]
+    if not names:
+        message = "AI_PROVIDER_TIER must name at least one vendor."
+        raise ValueError(message)
+    unknown = [name for name in names if name not in AI_VENDORS]
+    if unknown:
+        message = (
+            f"AI_PROVIDER_TIER names unknown vendor(s) {unknown}; "
+            f"permitted values are {list(AI_VENDORS)}."
+        )
+        raise ValueError(message)
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        message = f"AI_PROVIDER_TIER lists {duplicates} more than once."
+        raise ValueError(message)
+    return tuple(names)
+
+
 class AiSettings(BaseSettings):
     """Governed AI drafting and commentary (app/services/ai).
 
@@ -593,16 +704,46 @@ class AiSettings(BaseSettings):
     ``get_settings().ai.*``; no module under ``app/domain/ai`` or
     ``app/services/ai`` may contain a numeric tunable.
 
-    The API KEY is deliberately NOT here — see
-    ``app.services.ai.client.AiCredentialSettings``, which is instantiated only
-    inside the model client so the API, the core worker and the operator process
-    never parse the key into memory even if it were present in their env.
+    ``AI_PROVIDER_TIER`` is the failover order (D-053). Losing credit on one
+    vendor must not stop AI features, so the tier is walked until one vendor
+    answers — on AVAILABILITY failures only. A refused or ungrounded draft never
+    advances the tier; it goes to the feature's deterministic fallback.
+
+    ``AI_FEATURE_MODELS`` is per-FEATURE model selection (D-061), because
+    reproducibility requirements differ by surface: an ICAAP narrative rides a
+    FILED regulatory document and must pin an exact snapshot, while BI commentary
+    is advisory and regenerable and may track a vendor's floating alias. The
+    per-feature pinning policy lives with the resolution in
+    ``app.services.ai.model_selection``; only the operator's value lives here.
+
+    The API KEYS are deliberately NOT here — see the credential class local to
+    each adapter module (``client.AiCredentialSettings``,
+    ``openai_model.OpenAiCredentialSettings``,
+    ``google_model.GoogleCredentialSettings``), each instantiated only when that
+    vendor is actually prepared, so the API, the core worker and the operator
+    process never parse a key into memory even if one were present in their env.
     """
 
     model_config = SETTINGS_CONFIG
 
     commentary_enabled: bool = Field(default=False, alias="AI_COMMENTARY_ENABLED")
+    #: Failover order, first to last. Unknown or repeated names fail validation.
+    provider_tier: str = Field(default=AI_DEFAULT_PROVIDER_TIER, alias="AI_PROVIDER_TIER")
     model: str = Field(default="claude-opus-5", alias="AI_MODEL")
+    #: The other two vendors' model ids. Each was current at implementation time
+    #: (2026-09-22) and is an operator setting for exactly that reason: an id the
+    #: vendor has retired answers 404, which skips that tier with
+    #: ``model_unavailable`` rather than failing the request.
+    openai_model: str = Field(default="gpt-5.1", alias="AI_OPENAI_MODEL")
+    google_model: str = Field(default="gemini-2.5-pro", alias="AI_GOOGLE_MODEL")
+    #: PER-FEATURE overrides (D-061), ``feature:vendor=model`` comma separated.
+    #: Empty by default, so a deployment that has only ever set the three
+    #: vendor-level ids above keeps behaving exactly as it did. Resolution is
+    #: ``feature override -> vendor default -> unset`` in
+    #: ``app.services.ai.model_selection.resolve``, and the RESOLVED id is what the
+    #: approved-configuration key is looked up with — an override cannot route
+    #: around a review.
+    feature_models: str = Field(default="", alias="AI_FEATURE_MODELS")
     effort: Literal["low", "medium", "high", "xhigh", "max"] = Field(
         default="high", alias="AI_EFFORT"
     )
@@ -641,13 +782,18 @@ class AiSettings(BaseSettings):
     #: Served to the dashboard as ``poll_after_seconds`` so no interval literal
     #: lives in the browser bundle.
     client_poll_seconds: int = Field(default=5, alias="AI_CLIENT_POLL_SECONDS")
-    consent_version: str = Field(default="ai-consent-2026-09-v1", alias="AI_CONSENT_VERSION")
-    production_approval_ref: str | None = Field(
-        default=None, alias="AI_PRODUCTION_APPROVAL_REF"
-    )
-    #: ``recorded`` replays fixtures and is REFUSED outside local/test.
-    model_backend: Literal["anthropic", "recorded"] = Field(
-        default="anthropic", alias="AI_MODEL_BACKEND"
+    #: Bumping this SWITCHES AI ASSISTANCE OFF for every organisation until an
+    #: Owner accepts the new text — the consent document says so itself, and that
+    #: is the point. ``v2`` adds the natural-language question surface, which
+    #: sends a sentence a person typed; ``v1`` described only the drafting fact
+    #: sheet and could not honestly cover it.
+    consent_version: str = Field(default="ai-consent-2026-09-v2", alias="AI_CONSENT_VERSION")
+    production_approval_ref: str | None = Field(default=None, alias="AI_PRODUCTION_APPROVAL_REF")
+    #: ``tiered`` walks ``AI_PROVIDER_TIER``; ``anthropic`` pins every request to
+    #: the one vendor (what counsel may require, and what the platform did before
+    #: D-053); ``recorded`` replays fixtures and is REFUSED outside local/test.
+    model_backend: Literal["tiered", "anthropic", "recorded"] = Field(
+        default="tiered", alias="AI_MODEL_BACKEND"
     )
     recorded_fixture_path: str | None = Field(default=None, alias="AI_RECORDED_FIXTURE_PATH")
 
@@ -658,6 +804,39 @@ class AiSettings(BaseSettings):
             return None
         return value
 
+    @field_validator("feature_models")
+    @classmethod
+    def feature_models_parse(cls, value: str) -> str:
+        """Validate at BOOT. A typo here would otherwise be indistinguishable from
+        "no override set", and the deployment would quietly file a report drafted
+        by a model nobody chose."""
+        parse_ai_feature_models(value)
+        return value
+
+    @property
+    def feature_model_overrides(self) -> dict[tuple[str, str], str]:
+        """The validated ``(feature, vendor) -> model`` overrides."""
+        return parse_ai_feature_models(self.feature_models)
+
+    @field_validator("provider_tier")
+    @classmethod
+    def tier_names_known_vendors(cls, value: str) -> str:
+        """Validate at BOOT, not at the call.
+
+        A typo here would otherwise surface as a vendor quietly missing from the
+        chain on the day the first one ran out of credit — the exact failure the
+        tier exists to prevent.
+        """
+        parse_ai_provider_tier(value)
+        return value
+
+    @property
+    def provider_order(self) -> tuple[str, ...]:
+        """The validated failover order. ``anthropic`` alone when pinned."""
+        if self.model_backend == "anthropic":
+            return (AI_VENDORS[0],)
+        return parse_ai_provider_tier(self.provider_tier)
+
     @property
     def stale_after_seconds(self) -> float:
         """The reclaim window for an AI job.
@@ -666,8 +845,14 @@ class AiSettings(BaseSettings):
         worker for ``timeout x (retries + 1)``. A reclaim window shorter than
         that reclaims a live job and runs it twice — the ``etl_dedup`` lesson,
         applied before it can happen rather than after.
+
+        Multiplied by the TIER LENGTH since D-053: a handler that fails over
+        Claude to OpenAI to Gemini legitimately spends that budget once per
+        vendor, and a window sized for one would reclaim the job somewhere in the
+        middle of the second.
         """
-        return self.request_timeout_seconds * (self.max_retries + 1) + self.stale_margin_seconds
+        per_vendor = self.request_timeout_seconds * (self.max_retries + 1)
+        return per_vendor * len(self.provider_order) + self.stale_margin_seconds
 
 
 class DeskSettings(BaseSettings):
@@ -709,6 +894,159 @@ class DeskSettings(BaseSettings):
         return keys or None
 
 
+class BiSettings(BaseSettings):
+    """Business-intelligence marts, query surface and the ``bi`` worker lane.
+
+    EVERY switch here ships OFF and every limit ships at its safe value: a
+    deployment that sets nothing has no BI routers mounted, enqueues no mart
+    builds, runs no BI scheduler sweep, and serves nothing from a mart. Turning
+    BI on is an ORDERED sequence — the operator runbook is
+    ``backend/docs/bi_turn_on_runbook.md`` — whose spine is three explicit,
+    separately reviewable acts:
+
+    1. ``risk-worker-bi`` (``WORKER_JOB_TYPES=lane:bi``) is DEPLOYED and healthy.
+       The seven BI job types (``job_queue.job_types_in_lane("bi")``: mart
+       refresh, backfill, retention, export, alert evaluation, subscription scan
+       and subscription run) live in the ``bi`` lane, which the core worker and
+       the API's in-process thread never claim by construction. The API and
+       every worker share one ``jobs`` table, so a BI enqueue flag that flips
+       before that process exists orphans every job it produces in ``queued`` —
+       the exact ``notification_email_mirror`` failure this codebase already
+       paid for (D-008). Nothing here may be enabled before step 1.
+    2. ``BI_MART_ENQUEUE_ENABLED`` lets ingestion, withdrawals, the live and
+       official pipelines and the register triggers enqueue ``bi_mart_refresh``;
+       it is re-checked at run time by every BI handler (kill-switch idiom), so
+       flipping it off also drains the backlog as ``skipped``.
+    3. ``BI_ENABLED`` mounts the tenant-facing BI routers; ``BI_SCHEDULER_ENABLED``
+       adds the recovery sweep and retention to the hourly tick, and
+       ``BI_SUBSCRIPTIONS_ENABLED`` adds the subscription scan to it.
+       ``BI_ALERTS_ENABLED`` needs no tick at all: alerts are evaluated by a
+       succeeded mart build.
+
+    ``GET /api/v1/feature-flags`` projects four of this class's six booleans to
+    the dashboard (``enabled``, ``mart_enqueue_enabled``, ``scheduler_enabled``,
+    ``nlq_enabled``); ``alerts_enabled`` and ``subscriptions_enabled`` are not
+    served, and nothing else in this class is. There is deliberately no grid
+    licence key (D-030: AG Grid Community, grouping and pivot compiled
+    server-side).
+
+    ``BI_DATABASE_URL`` is optional: when set, BI queries run on their own small
+    pool; unset (the default, and "" reads as unset like every other URL here)
+    means the request's tenant session is used.
+
+    ``BI_BACKFILL_HOP_SECONDS`` bounds ONE hop of the self-re-enqueuing backfill
+    job, and :attr:`backfill_stale_after_seconds` derives that job's reclaim
+    window from it, so the two cannot drift apart when the hop is tuned.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    enabled: bool = Field(default=False, alias="BI_ENABLED")
+    mart_enqueue_enabled: bool = Field(default=False, alias="BI_MART_ENQUEUE_ENABLED")
+    scheduler_enabled: bool = Field(default=False, alias="BI_SCHEDULER_ENABLED")
+    #: How many BI reads one principal may put inside the 60-second budget window.
+    #: The default is the product's own figure and production should not change it:
+    #: a dashboard pack opens about a dozen queries at once and a user may walk
+    #: several packs in a minute, so what it bounds is a script, not a person.
+    #:
+    #: It is configurable for exactly one reason. The Playwright journeys ARE a
+    #: script: they drive ~30 BI journeys as one identity inside a minute, so the
+    #: suite trips its own product limit and the failure lands on whichever spec
+    #: happens to run last — a red suite that says nothing about the code. The
+    #: window is deliberately NOT configurable, so raising this cannot turn the
+    #: budget off, only widen it.
+    #: ``None`` means "use the product's own figure",
+    #: ``query_log.RATE_LIMIT_MAX_QUERIES``. Left unset rather than mirroring 120
+    #: here so there is ONE place the default lives, and so the six tests that
+    #: monkeypatch that constant keep working — a second copy here would silently
+    #: win over the patch and make those tests assert nothing.
+    rate_limit_max_queries: int | None = Field(
+        default=None, ge=1, alias="BI_RATE_LIMIT_MAX_QUERIES"
+    )
+    #: Threshold alerts (``docs/bi.md`` §Phase 3). Event-driven, not scheduled:
+    #: an evaluation is enqueued by a SUCCEEDED ``bi_mart_refresh`` and by
+    #: nothing else, which is why this flag is deliberately absent from
+    #: ``scheduler.any_scheduling_enabled`` — it owns no branch of the tick. If
+    #: an alert recovery sweep is ever added, it goes there in the same change.
+    alerts_enabled: bool = Field(default=False, alias="BI_ALERTS_ENABLED")
+    #: Scheduled subscriptions. This one DOES own a tick branch (the hourly
+    #: ``bi_subscription_scan``), so it is named in ``any_scheduling_enabled``:
+    #: a deployment that enabled only this would otherwise find the tick inert
+    #: and the feature silently never running.
+    subscriptions_enabled: bool = Field(default=False, alias="BI_SUBSCRIPTIONS_ENABLED")
+    #: Natural-language questions (docs/bi.md §Phase 5). It owns no tick branch —
+    #: a question is enqueued by a reader and by nobody else — so it is absent from
+    #: ``scheduler.any_scheduling_enabled`` for the ``alerts_enabled`` reason above.
+    #:
+    #: It is a SEPARATE switch from ``enabled`` because it is the only BI surface
+    #: that sends a reader's own words to an external vendor, and a deployment must
+    #: be able to run every other BI surface without that. Three further gates sit
+    #: behind it and all ship shut: ``AI_COMMENTARY_ENABLED`` (the deployment AI
+    #: kill-switch), an approved configuration for ``bi_nlq`` in
+    #: ``app/services/ai/approved_configurations.json`` (empty), and the tenant's own
+    #: consented ``enabled_features``. It also needs the ``ai``-lane worker
+    #: (``docker-compose.ai.prod.yml``) DEPLOYED before it is flipped, for the
+    #: shared-``jobs``-table reason stated at the top of this class.
+    nlq_enabled: bool = Field(default=False, alias="BI_NLQ_ENABLED")
+    #: The largest artifact a scheduled delivery will attach. Above it the
+    #: recipient is sent a sign-in link instead: an aggregated pack they are
+    #: entitled to must not be dropped merely because the relay would refuse it,
+    #: and a relay that bounces a 40 MB message fails the whole run. 5 MB is
+    #: comfortably inside the default limit of every relay this ships against;
+    #: a deployment whose relay allows more may raise it.
+    subscription_attachment_max_bytes: int = Field(
+        default=5_000_000, gt=0, alias="BI_SUBSCRIPTION_ATTACHMENT_MAX_BYTES"
+    )
+    #: Where a subscription's sign-in link points when the content may not be
+    #: attached. The SAME environment variable the staff console reads
+    #: (``BANK_APP_BASE_URL``, one constant above), read here rather than through
+    #: ``OperatorSettings`` so a tenant-facing service does not depend on the
+    #: staff control plane's configuration object. No host literal lives in the BI
+    #: code; this is the only place the origin is named.
+    bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
+    daily_retention_days: int = Field(default=95, gt=0, alias="BI_DAILY_RETENTION_DAYS")
+    database_url: str | None = Field(default=None, alias="BI_DATABASE_URL")
+    interactive_timeout_ms: int = Field(default=10_000, gt=0, alias="BI_INTERACTIVE_TIMEOUT_MS")
+    export_timeout_ms: int = Field(default=120_000, gt=0, alias="BI_EXPORT_TIMEOUT_MS")
+    ui_row_cap: int = Field(default=5_000, gt=0, alias="BI_UI_ROW_CAP")
+    grid_page_cap: int = Field(default=500, gt=0, alias="BI_GRID_PAGE_CAP")
+    export_row_cap: int = Field(default=100_000, gt=0, alias="BI_EXPORT_ROW_CAP")
+    export_async_threshold_rows: int = Field(
+        default=10_000, gt=0, alias="BI_EXPORT_ASYNC_THRESHOLD_ROWS"
+    )
+    backfill_hop_seconds: int = Field(default=600, gt=0, alias="BI_BACKFILL_HOP_SECONDS")
+
+    @field_validator("bank_app_base_url", mode="before")
+    @classmethod
+    def default_bank_app_base_url(cls, value: str | None) -> str:
+        """Blank reads as "unset"; trailing slashes are trimmed so a path joins safely."""
+        if value is None or not str(value).strip():
+            return DEFAULT_BANK_APP_BASE_URL
+        return str(value).strip().rstrip("/")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        """BI_DATABASE_URL="" means "use the tenant session" (the DatabaseSettings
+        rule: an empty env value neutralizes a .env entry without editing it)."""
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def backfill_stale_after_seconds(self) -> float:
+        """The reclaim window for one ``bi_mart_backfill`` hop.
+
+        A hop stops starting new dates once ``BI_BACKFILL_HOP_SECONDS`` has
+        elapsed, but the date already in flight runs to completion, so one hop
+        can legitimately overrun its budget by a single day's build. Three
+        budgets cover the hop, that overrun and a margin; a shorter window would
+        reclaim a live hop and build the same dates twice (the ``etl_dedup``
+        lesson, applied ahead of time as the AI lane does).
+        """
+        return float(self.backfill_hop_seconds * 3)
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -740,8 +1078,12 @@ class WorkerSettings(BaseSettings):
     # listed in ``job_queue.STALE_AFTER_OVERRIDES_SECONDS`` completes inside 15
     # minutes: pipeline_refresh, official_run, market_data_pull, temenos_pull,
     # scheduled_tick, reporting_deadline_scan, notification_email_mirror,
-    # database_direct_health and desk_capture. A handler that outgrows that gets
-    # its own entry in the override map — NOT a bigger global number, because
+    # database_direct_health, bi_mart_refresh, bi_retention, bi_alert_evaluate
+    # and bi_subscription_scan (desk_capture, etl_dedup, bi_export and
+    # bi_subscription_run have overrides; bi_mart_backfill derives its window
+    # from BI_BACKFILL_HOP_SECONDS; the AI lane derives its own from AI_*). A handler
+    # that outgrows that gets its own entry in the override map — NOT a bigger
+    # global number, because
     # this value also governs how fast a genuinely dead worker's jobs come back,
     # so widening it fleet-wide to suit one long handler slows recovery for the
     # nine short ones.
@@ -860,6 +1202,7 @@ class Settings(BaseSettings):
     desk: DeskSettings = Field(default_factory=DeskSettings)
     icaap: IcaapSettings = Field(default_factory=IcaapSettings)
     ai: AiSettings = Field(default_factory=AiSettings)
+    bi: BiSettings = Field(default_factory=BiSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)
@@ -988,7 +1331,7 @@ class OperatorSettings(BaseSettings):
     #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
-    bank_app_base_url: str = Field(default="https://bank.aequoros.com", alias="BANK_APP_BASE_URL")
+    bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
     #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
     #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
     #: the saga records the step as honestly skipped rather than pretending.
@@ -1014,7 +1357,7 @@ class OperatorSettings(BaseSettings):
         """Blank reads as "unset" (the documented default); trailing slashes are
         trimmed so the console can safely join a handoff path."""
         if value is None or not str(value).strip():
-            return "https://bank.aequoros.com"
+            return DEFAULT_BANK_APP_BASE_URL
         return str(value).strip().rstrip("/")
 
     @property

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app import worker
 from app.api.deps import TenantContext
+from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import (
     Bank,
@@ -691,3 +692,103 @@ def test_a_failing_module_does_not_erase_the_reporting_period(db_session: Sessio
         "the reporting period must survive a module failure — it is the key the "
         "derived facts are addressed by, not one module's output"
     )
+
+
+# ---------------------------------------------------------------------------
+# BI hand-off: both tiers ask the bi lane for the (bank, as_of) they computed
+# ---------------------------------------------------------------------------
+
+
+def _bi_refresh_jobs(db_session: Session) -> list[Job]:
+    db_session.expire_all()
+    return list(
+        db_session.scalars(
+            select(Job)
+            .where(Job.job_type == "bi_mart_refresh", Job.bank_id == SAMPLE_BANK_ID)
+            .order_by(Job.queued_at)
+        )
+    )
+
+
+def test_pipelines_enqueue_no_bi_job_when_the_switch_is_off(db_session: Session) -> None:
+    """BI_MART_ENQUEUE_ENABLED is pinned off in conftest: the hooks are inert."""
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    pipeline.run_official(db_session, _official_job(db_session))
+    assert _bi_refresh_jobs(db_session) == []
+
+
+def test_run_refresh_enqueues_one_bi_job_inside_its_commit(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        _seed(db_session)
+        pipeline.run_refresh(db_session, _refresh_job(db_session))
+
+        (job,) = _bi_refresh_jobs(db_session)
+        assert job.status == "queued"
+        assert job.coalesce_key == f"bi:{SAMPLE_BANK_ID}:{FIXTURE_AS_OF.isoformat()}"
+        assert job.payload["as_of_date"] == FIXTURE_AS_OF.isoformat()
+        assert job.payload["reason"] == "live_refresh"
+        assert job.payload["organization_id"] == ORG_1
+        assert job.payload["bank_id"] == SAMPLE_BANK_ID
+        assert isinstance(job.payload["builder_version"], int)
+        # Committed with the live rows: a fresh session sees it.
+        other = sessionmaker(bind=db_session.get_bind())()
+        try:
+            assert other.get(Job, job.id) is not None
+        finally:
+            other.close()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_run_official_enqueues_one_bi_job_after_the_runs_are_sealed(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        _seed(db_session)
+        pipeline.run_official(db_session, _official_job(db_session))
+
+        (job,) = _bi_refresh_jobs(db_session)
+        assert job.status == "queued"
+        assert job.coalesce_key == f"bi:{SAMPLE_BANK_ID}:{FIXTURE_AS_OF.isoformat()}"
+        assert job.payload["reason"] == "official_run"
+        assert (db_session.scalar(select(func.count()).select_from(RegulatoryRun)) or 0) > 0
+    finally:
+        get_settings.cache_clear()
+
+
+def test_a_partial_live_refresh_still_hands_off_to_bi(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hook sits INSIDE run_refresh's commit, so the transient raise that
+    follows a partly failed refresh cannot roll the mart request back — a
+    partly refreshed live plane is still a changed one."""
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        _seed(db_session)
+        original = pipeline._CHEAP_MODULES
+
+        def _boom(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("induced module failure")
+
+        pipeline._CHEAP_MODULES = tuple(
+            (module, _boom if module == "liquidity" else compute) for module, compute in original
+        )
+        try:
+            with pytest.raises(pipeline.TransientLiveRefreshError):
+                pipeline.run_refresh(db_session, _refresh_job(db_session))
+        finally:
+            pipeline._CHEAP_MODULES = original
+        db_session.rollback()  # what worker.run_once does on a handler raise
+
+        (job,) = _bi_refresh_jobs(db_session)
+        assert job.payload["reason"] == "live_refresh"
+    finally:
+        get_settings.cache_clear()

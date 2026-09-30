@@ -1,9 +1,17 @@
 """Authoritative non-ingestion triggers for the live calculation plane.
 
 Ingestion and market-data writers already enqueue their target bank directly.
-Governed methodology, parameter, entitlement, and reconciliation mutations fan
-out one coalesced refresh per affected bank here, in the same transaction as
-the mutation. Reads never heal or schedule the live plane.
+Governed methodology, parameter, entitlement, reconciliation, and withdrawal
+mutations fan out one coalesced refresh per affected bank here, in the same
+transaction as the mutation. The refresh is keyed on the bank's LIVE as-of
+date, never on the mutated row's own date: a withdrawal of a historical book
+must re-derive the current plane, not roll it back to the withdrawn date.
+Reads never heal or schedule the live plane.
+
+Every trigger that reflows the live plane also asks the BI lane to rebuild
+the same bank's mart slice for the same live date (``_enqueue_bank`` carries
+both enqueues), because the engine metrics the mart copies are about to
+change. That second enqueue is inert unless ``BI_MART_ENQUEUE_ENABLED``.
 """
 
 from __future__ import annotations
@@ -13,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Bank, CurrentFinancialFact, InstitutionType, Job, RegulatoryParameter
 from app.services import job_queue
+from app.services.bi.enqueue import enqueue_mart_refresh
 
 
 def _enqueue_bank(
@@ -21,7 +30,13 @@ def _enqueue_bank(
     *,
     reason: str,
 ) -> Job | None:
-    """Enqueue from the bank's current live input generation, if one exists."""
+    """Enqueue from the bank's current live input generation, if one exists.
+
+    Returns the ``pipeline_refresh`` job. The BI sibling is enqueued on the
+    same live date beside it — one insertion here covers every entitlement,
+    methodology, parameter, register and withdrawal trigger — and is never
+    the return value: callers count live refreshes, not mart builds.
+    """
     as_of = db.scalar(
         select(func.max(CurrentFinancialFact.source_as_of_date)).where(
             CurrentFinancialFact.organization_id == bank.organization_id,
@@ -30,7 +45,7 @@ def _enqueue_bank(
     )
     if as_of is None:
         return None
-    return job_queue.enqueue(
+    job = job_queue.enqueue(
         db,
         bank.organization_id,
         "pipeline_refresh",
@@ -38,6 +53,14 @@ def _enqueue_bank(
         payload={"as_of_date": as_of.isoformat(), "reason": reason},
         coalesce_key=f"refresh:{bank.id}:{as_of.isoformat()}",
     )
+    enqueue_mart_refresh(
+        db,
+        organization_id=bank.organization_id,
+        bank_id=bank.id,
+        as_of=as_of,
+        reason=reason,
+    )
+    return job
 
 
 def enqueue_entitlement_change(

@@ -69,10 +69,12 @@ import type {
   TemenosConnectionUpdate,
   WhatIfShockCode,
 } from "@aequoros/risk-service-api";
+import { FeatureFlagsApi } from "@aequoros/risk-service-api";
 import {
   ApiError,
   apiCall,
   attestationApi,
+  configuration,
   banksApi,
   behavioralModelsApi,
   capitalPlanApi,
@@ -103,7 +105,13 @@ import {
   regulatoryReportingApi,
   temenosApi,
 } from "./client";
+import { biFeatureKey, utcDay } from "./biKeys";
 import { ingestionApi } from "./ingestion";
+import {
+  integrationKeyIssueRequest,
+  type IntegrationKeyDraft,
+} from "./integrationKeys";
+import type { NotificationCapabilities } from "../modules";
 import {
   getForwardGrid,
   getMarketDataPlanes,
@@ -600,6 +608,19 @@ export type CreditLoanFilters = {
   grade?: string;
   product?: string;
   branch?: string;
+  /** The institution's own stated sector — matched exactly, never a prefix. */
+  sector?: string;
+  /** 1, 2 or 3. The server refuses anything else rather than dropping it. */
+  stage?: number;
+  /** A band code from the platform's own days-past-due vocabulary. */
+  dpdBand?: string;
+  /**
+   * The reporting date to read the book AS OF. The server matches it exactly
+   * and refuses a date it has computed no position for — a drill-through that
+   * silently fell back to the latest book would answer one date's figure with
+   * another date's rows.
+   */
+  asOf?: string;
   q?: string;
 };
 
@@ -616,6 +637,10 @@ export function useCreditLoansPage(
       filters.grade ?? null,
       filters.product ?? null,
       filters.branch ?? null,
+      filters.sector ?? null,
+      filters.stage ?? null,
+      filters.dpdBand ?? null,
+      filters.asOf ?? null,
       filters.q ?? null,
     ],
     queryFn: () =>
@@ -627,6 +652,10 @@ export function useCreditLoansPage(
           grade: filters.grade,
           product: filters.product,
           branch: filters.branch,
+          sector: filters.sector,
+          stage: filters.stage,
+          dpdBand: filters.dpdBand,
+          asOf: filters.asOf ? utcDay(filters.asOf) : undefined,
           q: filters.q,
         }),
       ),
@@ -1267,12 +1296,43 @@ export function useTrainBehavioralModel(
   });
 }
 
+/**
+ * Everything that changes once behavioral assumptions are applied: the
+ * model's own applied state, the engines that consume the assumptions
+ * (liquidity, FTP, IRR, forecasting — named through the same detail-prefix
+ * table the live generation signal uses — and the cash-flow forecast), and
+ * the live summary + snapshot ladders they feed. The previous list named
+ * prefixes (`liquidity`, `ftp`, `irr`, `forecasting`) that no query key ever
+ * used, so four of its five invalidations were no-ops.
+ */
+export const behavioralApplyInvalidationPrefixes: readonly string[] = [
+  "behavioral-model",
+  ...generationInvalidationPrefixes(["liquidity", "ftp", "irr", "forecast"]),
+  "cashflow-forecast",
+  "live-summary",
+];
+
+/** The refresh `useApplyBehavioralModel` performs on success (unit-tested). */
+export function invalidateBehavioralApply(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+): Promise<void[]> {
+  return invalidateScopedPrefixes(
+    queryClient,
+    behavioralApplyInvalidationPrefixes,
+    scope,
+    bankId,
+  );
+}
+
 /** Apply reviewed estimates as accepted behavioral assumptions the engines consume. */
 export function useApplyBehavioralModel(
   bankId: string | undefined,
   model: BehavioralModelSlug,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (products: BehavioralApplyProduct[]) =>
       apiCall(() =>
@@ -1283,12 +1343,9 @@ export function useApplyBehavioralModel(
         }),
       ),
     onSuccess: () => {
-      // Downstream ALM facts change once assumptions are applied.
-      ["behavioral-model", "liquidity", "ftp", "irr", "forecasting"].forEach(
-        (prefix) => {
-          void queryClient.invalidateQueries({ queryKey: [prefix] });
-        },
-      );
+      // Downstream ALM facts change once assumptions are applied — refresh
+      // only this tenant/authority/bank's copies of the affected surfaces.
+      void invalidateBehavioralApply(queryClient, scope, bankId);
     },
   });
 }
@@ -1948,6 +2005,12 @@ export type CanonicalPositionsPageParams = {
   offset: number;
   positionType?: string;
   currency?: string;
+  /**
+   * Keep only positions whose current snapshot carries this business date. The
+   * endpoint matches it exactly with no fallback, so a drill-through from a
+   * figure measured on one date cannot land on another date's book.
+   */
+  asOf?: string;
   q?: string;
 };
 
@@ -1959,7 +2022,14 @@ export type CanonicalPositionsPageParams = {
  */
 export function useCanonicalPositionsPage(
   bankId: string | undefined,
-  { limit, offset, positionType, currency, q }: CanonicalPositionsPageParams,
+  {
+    limit,
+    offset,
+    positionType,
+    currency,
+    asOf,
+    q,
+  }: CanonicalPositionsPageParams,
 ) {
   return useQuery({
     queryKey: [
@@ -1969,6 +2039,7 @@ export function useCanonicalPositionsPage(
       offset,
       positionType ?? null,
       currency ?? null,
+      asOf ?? null,
       q ?? null,
     ],
     queryFn: () =>
@@ -1977,6 +2048,7 @@ export function useCanonicalPositionsPage(
           bankId: bankId!,
           limit,
           offset,
+          asOfDate: asOf ? utcDay(asOf) : undefined,
           positionType: positionType || undefined,
           currency: currency || undefined,
           q: q || undefined,
@@ -3299,6 +3371,47 @@ export function useMarkAllNotificationsRead() {
 // middleware (account-admin-only surface; the raw key is returned exactly once).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Deployment capability for threshold alerts and scheduled reports.
+// ---------------------------------------------------------------------------
+
+const featureFlagsApi = new FeatureFlagsApi(configuration);
+
+/**
+ * Whether THIS deployment evaluates alerts and delivers scheduled reports.
+ *
+ * Same query key and fetch as `useBiAvailability` (`lib/api/bi.ts`), so the two
+ * share one cache entry and one request; this hook only reads two more flags
+ * off the same body — under their wire names, because the generated client
+ * predates them (see `notificationCapabilitiesFromFeatureFlags`). A failed read
+ * is `false` on both: the pages then say the platform has not enabled the
+ * capability rather than claim it is waiting for the bank's figures, which is
+ * the fail-closed direction for copy that attributes an absence.
+ */
+export function useBiNotificationCapabilities(
+  enabled = true,
+): NotificationCapabilities & { isLoading: boolean } {
+  const scope = useQueryAuthorityScope();
+  const query = useQuery({
+    queryKey: biFeatureKey(scope),
+    queryFn: () => apiCall(() => featureFlagsApi.readFeatureFlags()),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  if (query.isError) {
+    return { alerts: false, subscriptions: false, isLoading: false };
+  }
+  return {
+    // Typed fields, since the client was regenerated against the projection
+    // (2026-09-29). `undefined` while the answer has not arrived — three-valued
+    // on purpose: the pages say "Not judged here" only on an explicit `false`.
+    alerts: query.data?.biAlertsEnabled,
+    subscriptions: query.data?.biSubscriptionsEnabled,
+    isLoading: query.isPending,
+  };
+}
+
 export function useIntegrationKeys(enabled: boolean) {
   return useQuery({
     queryKey: ["integration-keys"],
@@ -3307,13 +3420,20 @@ export function useIntegrationKeys(enabled: boolean) {
   });
 }
 
+/**
+ * Issue one key for one purpose. The request is built by
+ * `integrationKeyIssueRequest`, never inline: it states every field the
+ * generated contract carries, including the purpose — the field this hook once
+ * omitted, which let the server default every key to a data push credential
+ * that the analytics feed then refused (audit A360-2 H4).
+ */
 export function useIssueIntegrationKey() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ bankId, label }: { bankId: string; label: string }) =>
+    mutationFn: (draft: IntegrationKeyDraft) =>
       apiCall(() =>
         integrationKeysApi.issueIntegrationKey({
-          integrationKeyIssueRequest: { bankId, label },
+          integrationKeyIssueRequest: integrationKeyIssueRequest(draft),
         }),
       ),
     onSuccess: () => {

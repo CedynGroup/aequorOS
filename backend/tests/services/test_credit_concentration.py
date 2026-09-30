@@ -11,7 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
+from app.models import (
+    Bank,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    IngestionBatch,
+    LineageRecord,
+)
 from app.schemas.regulatory_credit import (
     ConcentrationLimitEntry,
     ConcentrationLimitUpdate,
@@ -92,6 +98,111 @@ def test_board_limits_flow_from_the_register_into_breaches(db_session: Session) 
     result = credit_concentration.monitor(db_session, CTX, bank, FIXTURE_AS_OF)
     assert result.breaches, "a 0.5%-of-book employer limit must breach on this fixture"
     assert all(b.limit_status == "above_limit" for b in result.breaches)
+
+
+def _seed_sector_loans(
+    db_session: Session, loans: tuple[tuple[str, str, str, str, str | None], ...]
+) -> Bank:
+    """Sample Bank with ONLY these LOAN rows
+    ``(reference, currency, native balance, sector, balance_ghs)``;
+    ``balance_ghs=None`` means no ingested conversion."""
+    materialize_canonical_test_book(db_session)
+    db_session.flush()
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="sector-fx-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": FIXTURE_AS_OF,
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    for ref, currency, balance, sector, balance_ghs in loans:
+        position = CanonicalPosition(
+            **common, source_reference=ref, position_type="LOAN", currency=currency
+        )
+        db_session.add(position)
+        db_session.flush()
+        attributes: dict[str, object] = {"sector": sector}
+        if balance_ghs is not None:
+            attributes["balance_ghs"] = balance_ghs
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=ref,
+                position_id=position.id,
+                balance=Decimal(balance),
+                ifrs9_stage=1,
+                attributes=attributes,
+            )
+        )
+    db_session.commit()
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    assert bank is not None
+    return bank
+
+
+def test_concentration_excludes_an_unconverted_foreign_currency_loan(db_session: Session) -> None:
+    """A foreign-currency loan with no ingested ``balance_ghs`` is UNCONVERTED
+    and leaves every concentration total and share (H-010, the same rule as
+    ``regulatory_credit._employer_par30_stats`` / ``_event_amount_ghs``). It
+    used to fall back to the native face value — USD 1m entered the book as
+    1m in the reporting unit — so Mining read 91.67% of a 1.2m book and the
+    sector HHI 8472; over the two base-currency loans it is 50% of 200k and
+    5000. A base-currency loan with no ``balance_ghs`` still counts at its
+    (base-currency) face value."""
+    bank = _seed_sector_loans(
+        db_session,
+        (
+            ("LOAN/FX/1", "GHS", "100000", "Agriculture", "100000"),
+            ("LOAN/FX/2", "GHS", "100000", "Mining", None),
+            ("LOAN/FX/3", "USD", "1000000", "Mining", None),
+        ),
+    )
+
+    exposures = credit_concentration.load_credit_exposures(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert [e.exposure_id for e in exposures] == ["LOAN/FX/1", "LOAN/FX/2"], (
+        "the unconverted USD loan must not enter the exposure book (it used to, at USD face value)"
+    )
+    assert exposures[1].ead == Decimal("100000"), "a base-currency loan keeps its native balance"
+
+    result = credit_concentration.monitor(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert result.total_book_ghs == Decimal("200000"), (
+        f"total book {result.total_book_ghs} — the old face-value fallback gave 1200000"
+    )
+    sector = result.dimension("sector")
+    assert sector is not None
+    mining = {b.key: b for b in sector.buckets}["Mining"]
+    assert mining.exposure_ghs == Decimal("100000"), (
+        f"Mining exposure {mining.exposure_ghs} — the old fallback counted USD 1m as 1100000"
+    )
+    assert mining.share_of_book_pct == Decimal("50"), (
+        f"Mining share {mining.share_of_book_pct}% — the old fallback gave 91.666667%"
+    )
+    assert sector.hhi == Decimal("5000"), f"sector HHI {sector.hhi} — the old fallback gave 8472"
+    single = result.dimension("single_name")
+    assert single is not None
+    assert single.bucket_count == 2, "the unconverted loan is not a single-name bucket either"
 
 
 def test_threshold_register_rejects_unknown_codes(db_session: Session) -> None:

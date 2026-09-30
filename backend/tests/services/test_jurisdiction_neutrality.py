@@ -68,7 +68,46 @@ _CURRENCY_NEUTRAL_MODULES = (
     # economic value and an outlier verdict for a supervisor, so its copy must
     # name neither a currency nor a country. Joined the guard with the module.
     "app/services/regulatory_irr_sf.py",
+    # BI (2026-09-22, X-6): the marts and the catalogue label every figure a
+    # dashboard, an Explore grid or an export puts in front of a bank. A measure
+    # caption or a mart column comment that spells a unit out is the same defect
+    # as the LCR narrative one, and it reaches more surfaces. Whole TREES, not
+    # named files: BI is being written by several hands and a new module must be
+    # covered on the day it lands, not when someone remembers this list.
+    "app/services/bi/**/*.py",
+    "app/domain/bi/**/*.py",
+    # Phase 2's dashboard packs (P2-P1, `app/domain/bi/packs/<id>.json`) are
+    # DATA that carries user-visible titles and captions, so they are scanned
+    # too — the glob is live now and simply matches nothing until the packs
+    # land. `test_the_phase_2_pack_glob_is_not_silently_vacuous` fails if the
+    # directory appears without any file reaching the scan.
+    "app/domain/bi/packs/*.json",
 )
+
+#: Entries above may be a single file OR a glob. Globs exist so a directory
+#: written by several hands (BI) is covered as it grows, and so a path that does
+#: not exist yet (the Phase 2 packs) can be named now rather than remembered
+#: later. Expanded once, at collection time.
+PHASE_2_PACK_GLOB = "app/domain/bi/packs/*.json"
+
+
+def _expand_scan_targets(entries: tuple[str, ...]) -> tuple[str, ...]:
+    expanded: list[str] = []
+    for entry in entries:
+        if "*" not in entry:
+            expanded.append(entry)
+            continue
+        expanded.extend(
+            sorted(
+                path.relative_to(_BACKEND_ROOT).as_posix()
+                for path in _BACKEND_ROOT.glob(entry)
+                if path.is_file() and "__pycache__" not in path.parts
+            )
+        )
+    return tuple(dict.fromkeys(expanded))
+
+
+_CURRENCY_NEUTRAL_FILES = _expand_scan_targets(_CURRENCY_NEUTRAL_MODULES)
 
 #: Constructs that may name a currency, exempted BY NAME rather than by file.
 #:
@@ -157,7 +196,7 @@ def _without_exempt_constructs(source: str, module_path: str) -> str:
     return "\n".join(lines)
 
 
-@pytest.mark.parametrize("module_path", _CURRENCY_NEUTRAL_MODULES)
+@pytest.mark.parametrize("module_path", _CURRENCY_NEUTRAL_FILES)
 def test_calculation_modules_name_no_currency(module_path: str) -> None:
     """A Nigerian bank must never read "GHS" in its own LCR narrative.
 
@@ -173,6 +212,37 @@ def test_calculation_modules_name_no_currency(module_path: str) -> None:
     assert not leaks, (
         f"{module_path} names a currency in bank-facing text. Resolve it from "
         f"the bank via jurisdictions.base_currency instead:\n  " + "\n  ".join(leaks)
+    )
+
+
+def test_the_scan_list_expands_to_real_files() -> None:
+    """A glob that matches nothing turns a scanned tree into a vacuous pass.
+
+    Every non-glob entry must still be scanned verbatim, and the two BI trees —
+    which exist — must contribute files. The Phase 2 pack glob is allowed to be
+    empty until the packs land; that one is pinned separately.
+    """
+    literals = {entry for entry in _CURRENCY_NEUTRAL_MODULES if "*" not in entry}
+    assert literals <= set(_CURRENCY_NEUTRAL_FILES)
+    for tree in ("app/services/bi/", "app/domain/bi/"):
+        assert any(path.startswith(tree) for path in _CURRENCY_NEUTRAL_FILES), tree
+    missing = [path for path in _CURRENCY_NEUTRAL_FILES if not (_BACKEND_ROOT / path).is_file()]
+    assert missing == [], missing
+
+
+def test_the_phase_2_pack_glob_is_not_silently_vacuous() -> None:
+    """Once the packs exist, they must be in the scan.
+
+    The glob is named ahead of the packs deliberately (X-6 asks for the pack
+    JSON), and an entry that outlives — or precedes — its target is exactly how
+    a guard goes quietly blind. So: if the directory exists and holds JSON, at
+    least one of those files must be scanned.
+    """
+    packs = _BACKEND_ROOT / "app/domain/bi/packs"
+    if not packs.is_dir() or not list(packs.glob("*.json")):
+        pytest.skip("Phase 2 dashboard packs (P2-P1) do not exist yet")
+    assert any(path.startswith("app/domain/bi/packs/") for path in _CURRENCY_NEUTRAL_FILES), (
+        f"{PHASE_2_PACK_GLOB} matches no file although the packs exist"
     )
 
 
@@ -365,7 +435,7 @@ def test_the_lowercase_currency_unit_debt_never_grows() -> None:
     every path missed and the ceiling saw nothing (architecture audit L1).
     """
     offenders: set[str] = set()
-    for module_path in _CURRENCY_NEUTRAL_MODULES:
+    for module_path in _CURRENCY_NEUTRAL_FILES:
         path = _BACKEND_ROOT / module_path
         assert path.is_file(), (
             f"{module_path} is enrolled in the currency-neutrality ceiling but does "

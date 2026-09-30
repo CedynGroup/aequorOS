@@ -23,9 +23,10 @@ is zero), the direction, and the **favorability** — the substantive judgment
 layer. Favorability combines the observed direction with a governed
 favorable-direction registry (``FAVORABLE_DIRECTION`` below): a metric where more
 is stronger (CAR, LCR, CET1) going up is *favorable*; a risk or cost metric (NPL,
-RWA, VaR, cost-to-income) going up is *adverse*; a raw balance or signed exposure
-has no defined favorable direction and is always *neutral*. Unknown keys default
-to neutral, so the registry never guesses.
+RWA, VaR, cost-to-income) going up is *adverse*; a signed risk figure the engine
+judges on magnitude (ΔEVE) is *favorable* when it moves toward zero; a raw balance
+or signed exposure has no defined favorable direction and is always *neutral*.
+Unknown keys default to neutral, so the registry never guesses.
 
 Pure-ish: reads runs/periods from the DB, computes in memory, writes nothing.
 """
@@ -61,9 +62,10 @@ from app.schemas.report_comparison import (
 # Keyed on the run metric key. A key's membership answers one question: when this
 # figure INCREASES, is the bank stronger or weaker?
 #
-#   higher_better  → up is favorable, down is adverse  (buffers, coverage, returns)
-#   lower_better   → up is adverse,   down is favorable (risk, losses, cost)
-#   neutral        → no defined favorable direction     (raw balances, signed gaps)
+#   higher_better           → up is favorable, down is adverse  (buffers, coverage, returns)
+#   lower_better            → up is adverse,   down is favorable (risk, losses, cost)
+#   magnitude_lower_better  → |value| shrinking is favorable     (signed ΔEVE)
+#   neutral                 → no defined favorable direction     (raw balances, signed gaps)
 #
 # Everything not listed defaults to neutral (see ``favorable_direction``). Only
 # unambiguous outcome metrics are classified; raw balances, denominators and
@@ -71,7 +73,7 @@ from app.schemas.report_comparison import (
 # "better" direction depends on sign and context a line diff cannot see.
 # ---------------------------------------------------------------------------
 
-FavorableDirection = Literal["higher_better", "lower_better", "neutral"]
+FavorableDirection = Literal["higher_better", "lower_better", "magnitude_lower_better", "neutral"]
 
 #: Metrics where a higher value is the stronger position.
 HIGHER_BETTER: frozenset[str] = frozenset(
@@ -159,15 +161,8 @@ LOWER_BETTER: frozenset[str] = frozenset(
         "ecl_stage1_ghs",
         "ecl_stage2_ghs",
         "ecl_stage3_ghs",
-        # Interest-rate sensitivity — more rate risk in the banking book.
-        "delta_eve_pct_tier1",
-        "delta_eve_ghs",
-        "worst_eve_change_pct_tier1",
-        "worst_eve_change_ghs",
-        "ear_up_200_ghs",
-        "ear_up_450_ghs",
-        "ear_down_200_ghs",
-        "ear_down_450_ghs",
+        # Interest-rate sensitivity: ΔEVE and EaR are signed deltas and live in
+        # MAGNITUDE_LOWER_BETTER below.
         # FX open position & value at risk — larger exposure is riskier.
         "nop_pct_tier1",
         "single_ccy_max_pct",
@@ -184,19 +179,49 @@ LOWER_BETTER: frozenset[str] = frozenset(
     }
 )
 
+#: Signed metrics the engine judges on MAGNITUDE. ΔEVE is stored with its sign
+#: (``delta = eve - base_eve``, so a loss is negative) and the IRRBB outlier
+#: test compares |ΔEVE| to the limit (``app/domain/irr/engine.py`` picks the
+#: worst scenario by ``abs()``; ``regulatory_irr`` classifies status on ``abs()``).
+#: A move from −8% to −12% is therefore a WORSE position even though the figure
+#: went down, which plain ``lower_better`` would have read as favorable.
+#: Earnings-at-risk is the same shape: ``compute_ear`` returns the signed ΔNII
+#: of a parallel shock (a gain is positive) and the limit test compares
+#: ``max(|EaR up|, |EaR down|)`` to base NII, so a +5 → −10 move is adverse
+#: and a −10 → +5 move favorable — the sign alone says nothing.
+MAGNITUDE_LOWER_BETTER: frozenset[str] = frozenset(
+    {
+        "delta_eve_pct_tier1",
+        "delta_eve_ghs",
+        "worst_eve_change_pct_tier1",
+        "worst_eve_change_ghs",
+        "ear_up_200_ghs",
+        "ear_up_450_ghs",
+        "ear_down_200_ghs",
+        "ear_down_450_ghs",
+    }
+)
+
 # Documented family fallbacks, applied only when the exact key is unlisted. These
 # cover unambiguous families so future metric variants inherit the right judgment
 # instead of silently defaulting to neutral. Kept intentionally small.
 _LOWER_BETTER_SUFFIXES: tuple[str, ...] = ("_rwa_ghs",)
-_LOWER_BETTER_PREFIXES: tuple[str, ...] = ("ecl_", "ear_")
+_LOWER_BETTER_PREFIXES: tuple[str, ...] = ("ecl_",)
+
+
+#: Exact-key registries, consulted in order before any family fallback.
+_EXACT_DIRECTIONS: tuple[tuple[frozenset[str], FavorableDirection], ...] = (
+    (HIGHER_BETTER, "higher_better"),
+    (LOWER_BETTER, "lower_better"),
+    (MAGNITUDE_LOWER_BETTER, "magnitude_lower_better"),
+)
 
 
 def favorable_direction(key: str) -> FavorableDirection:
     """Which way is 'better' for this metric key? Defaults to neutral."""
-    if key in HIGHER_BETTER:
-        return "higher_better"
-    if key in LOWER_BETTER:
-        return "lower_better"
+    for members, direction in _EXACT_DIRECTIONS:
+        if key in members:
+            return direction
     if key.endswith(_LOWER_BETTER_SUFFIXES):
         return "lower_better"
     if key.startswith(_LOWER_BETTER_PREFIXES) and key.endswith("_ghs"):
@@ -477,15 +502,39 @@ def _numeric_metrics(metrics: dict[str, object]) -> dict[str, Decimal]:
     return parsed
 
 
-def _favorability(key: str, direction: LineDirection) -> LineFavorability:
-    if direction == "flat":
+def favorability_for_disposition(
+    disposition: str, left: Decimal, right: Decimal, direction: LineDirection
+) -> LineFavorability:
+    """Was the move from ``left`` to ``right`` good for the bank, given its
+    declared favourable direction?
+
+    Public and DIRECTION-keyed, not key-keyed, so a caller that already knows
+    the disposition can ask without owning a metric key. The BI catalogue is
+    such a caller: a portfolio measure has a ``favourable_direction`` but no
+    entry in this module's key registries, so before this it had to restate the
+    rule, and a restated rule is one that drifts. :func:`_favorability` resolves
+    the key and then defers here, so both planes read one definition.
+
+    D-013 lives here: ``magnitude_lower_better`` is judged on |value|, because
+    ΔEVE and Earnings-at-Risk are signed and a sign flip at equal magnitude is
+    no change in risk.
+    """
+    if direction == "flat" or disposition == "neutral":
         return "neutral"
-    disposition = favorable_direction(key)
-    if disposition == "neutral":
-        return "neutral"
+    if disposition == "magnitude_lower_better":
+        # −8% → −12% is adverse, −12% → −8% favorable, and −8% → +8% is neutral.
+        if abs(right) == abs(left):
+            return "neutral"
+        return "favorable" if abs(right) < abs(left) else "adverse"
     good_when_up = disposition == "higher_better"
     line_went_up = direction == "up"
     return "favorable" if good_when_up == line_went_up else "adverse"
+
+
+def _favorability(
+    key: str, left: Decimal, right: Decimal, direction: LineDirection
+) -> LineFavorability:
+    return favorability_for_disposition(favorable_direction(key), left, right, direction)
 
 
 def _build_line(key: str, left: Decimal | None, right: Decimal | None) -> ComparisonLineRead:
@@ -536,7 +585,7 @@ def _build_line(key: str, left: Decimal | None, right: Decimal | None) -> Compar
         delta_ccy=str(delta),
         delta_pct=delta_pct,
         direction=direction,
-        favorability=_favorability(key, direction),
+        favorability=_favorability(key, left, right, direction),
         new=is_new,
     )
 
@@ -699,8 +748,7 @@ def _resolve_period_mode(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                f"No succeeded {req.module}/{req.scenario_code} run for reporting period "
-                f"{missing}."
+                f"No succeeded {req.module}/{req.scenario_code} run for reporting period {missing}."
             ),
         )
     left_run = left_chain[-1]
@@ -736,6 +784,7 @@ def build_comparison(
 __all__ = [
     "HIGHER_BETTER",
     "LOWER_BETTER",
+    "MAGNITUDE_LOWER_BETTER",
     "build_comparison",
     "classify_unit",
     "favorable_direction",

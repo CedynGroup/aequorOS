@@ -550,7 +550,16 @@ def test_generated_bindings_never_cross_postgres_rls(
                 for route in organization_routes:
                     path, query = _route_request(route)
                     response = client.get(path, params=query, headers=auth_headers)
-                    assert response.status_code in (200, 403), (
+                    # 404 admitted 2026-09-28 (audit A10-02), matching the bank
+                    # loop above. Phase 4's
+                    # ``/organization/institutions/{institution_id}/branches`` is
+                    # the first ORGANIZATION-plane route to take an object id, and
+                    # an id this tenant does not own must be 404 rather than 403:
+                    # a 403 would confirm the institution exists. The route is
+                    # right and this list was stale. What the test is really
+                    # asserting is the line below — no identifier of the other
+                    # tenant appears in the body — and that is unchanged.
+                    assert response.status_code in (200, 403, 404), (
                         route.path,
                         response.status_code,
                         response.text,

@@ -13,7 +13,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.ingestion.constants import (
     CounterpartyType,
@@ -38,9 +38,7 @@ ENTITY_TYPES: tuple[EntityType, ...] = (
 # Raw records are either one of the canonical entity types or a reference-
 # dataset row ("reference"), which is preserved as a payload dict instead of
 # being translated field-by-field.
-RecordKind = Literal[
-    "gl_account", "counterparty", "product", "position", "loan_event", "reference"
-]
+RecordKind = Literal["gl_account", "counterparty", "product", "position", "loan_event", "reference"]
 
 
 class AdapterIdentity(BaseModel):
@@ -293,6 +291,20 @@ class PositionData(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
+#: Reference dataset kinds whose registered schema is ENFORCED on ingestion.
+#: Deliberately not every kind: nine of the eleven registered schemas describe
+#: their shape but have never been enforced, and tenants have rows stored under
+#: them today, so switching those on would refuse data that currently lands
+#: (H-027). These two are new in this release and have no stored rows anywhere,
+#: so enforcing them rejects nothing that already exists. ``gl_segment_balances``
+#: (P5-B) joins them on the same argument: it is new in this release, no tenant has
+#: a row under it, and an unenforced row there would become a silent orphan in the
+#: branch mart rather than a reported translation failure at the boundary.
+ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset(
+    {"performance_targets", "business_units", "gl_segment_balances"}
+)
+
+
 class ReferenceRowData(BaseModel):
     """One reference-dataset row, preserved as a stringified payload.
 
@@ -305,6 +317,39 @@ class ReferenceRowData(BaseModel):
     source_locator: str
     row_index: int
     payload: dict[str, str | None]
+
+    @model_validator(mode="after")
+    def _meets_its_registered_schema(self) -> ReferenceRowData:
+        """Enforce the kind's registered schema, for the kinds that enforce it.
+
+        Only the kinds in :data:`ENFORCED_REFERENCE_KINDS`. The other registers
+        describe their shape without refusing a row, and turning that on here
+        would start rejecting pushes that succeed today for every tenant with
+        rows already stored (H-027 — the wider question is not this contract's
+        to answer).
+
+        Enforcing here rather than at a call site is deliberate: every path that
+        produces a reference row — API push, Excel/CSV, every core-banking
+        adapter — builds this model, so there is one seam and no way to reach
+        storage around it.
+        """
+        if self.dataset_kind not in ENFORCED_REFERENCE_KINDS:
+            return self
+        # Lazy: the schema package sweeps its own modules at import, and this
+        # contract module is imported by some of them.
+        from app.domain.ingestion.reference_schemas import (  # noqa: PLC0415
+            schema_for,
+        )
+
+        schema = schema_for(self.dataset_kind)
+        if schema is None:
+            return self
+        problems = schema.problems_for(dict(self.payload))
+        if problems:
+            joined = "; ".join(problems)
+            message = f"{self.dataset_kind} row {self.row_index}: {joined}"
+            raise ValueError(message)
+        return self
 
 
 class TranslationFailureData(BaseModel):

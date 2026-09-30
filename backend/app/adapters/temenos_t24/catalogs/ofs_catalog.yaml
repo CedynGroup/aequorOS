@@ -16,6 +16,20 @@
 #     not that a given enquiry exists in a particular core.
 #   * Application/field names stay within documented, standard T24 vocabulary
 #     (KNOWN_TABLES in adapter.py); nothing here invents a T24 endpoint.
+#   * docs/data_engine.md §9 documents T24 TABLE names and not one field name,
+#     and forbids inventing more (lines 620, 630, 1045, 1063). So a field name
+#     may only be ADDED to a field_map where the identifier is already present
+#     in this repository — in the same entry's own `selection`, in a sibling
+#     domain's field_map, or in the adapter's fixtures — and a reviewer can
+#     check the addition without a Temenos portal account. `CO.CODE: branch_id`
+#     on the money-market and securities entries (added 2026-09-28) is exactly
+#     that: the field is already this entry's selection key, POSITIONS_LOANS /
+#     _DEPOSITS / _CURRENT_ACCOUNTS already map it to `branch_id`, and the
+#     fixtures for all three domains carry it. It lands
+#     `attributes.branch_id`, matched against `business_units.business_unit_id`
+#     (BUSINESS_UNITS below maps COMPANY.CODE to it), which is what the BI
+#     branch dimension and fact_derivation._business_unit_names resolve. An
+#     enquiry that does not return the field simply leaves it unpopulated.
 
 # ---------------------------------------------------------------------------
 # Priority domains — the pilotable core (supported now).
@@ -225,7 +239,10 @@ BUSINESS_UNITS:
   page_size: 500
   selection: {}
   dataset_key: business_units
-  field_map: {}
+  field_map:
+    COMPANY.CODE: business_unit_id
+    BRANCH: business_unit_name
+    REGION: region
   attribute_keys: []
   lcy_fields: {}
   enum_mappings: {}
@@ -266,8 +283,10 @@ POSITIONS_MM_PLACEMENTS:
     VALUE.DATE: origination_date
     MATURITY.DATE: contractual_maturity
     INTEREST.RATE: interest_rate
+    CO.CODE: branch_id
   attribute_keys:
     - balance_ghs
+    - branch_id
   lcy_fields:
     balance_ghs: LCY.PRINCIPAL
   constants:
@@ -289,8 +308,10 @@ POSITIONS_MM_BORROWINGS:
     VALUE.DATE: origination_date
     MATURITY.DATE: contractual_maturity
     INTEREST.RATE: interest_rate
+    CO.CODE: branch_id
   attribute_keys:
     - balance_ghs
+    - branch_id
   lcy_fields:
     balance_ghs: LCY.PRINCIPAL
   constants:
@@ -376,8 +397,10 @@ SECURITIES_HOLDINGS:
     NOMINAL: balance
     MATURITY.DATE: contractual_maturity
     COUPON.RATE: interest_rate
+    CO.CODE: branch_id
   attribute_keys:
     - balance_ghs
+    - branch_id
   lcy_fields:
     balance_ghs: LCY.MARKET.VALUE
   constants:
@@ -451,11 +474,52 @@ OFF_BALANCE_COMMITMENTS:
     credit_conversion_factor: "0.5"
 
 # ---------------------------------------------------------------------------
-# Reference/other domains still staged: LIMITS has no module consumer yet, and
-# the historical/cashflow reference kinds await their extractor shaping. Kept
-# supported:false so the adapter never claims data it cannot yet extract.
+# Reference/other domains still staged, kept supported:false so the adapter
+# never claims data it cannot yet extract. Reviewed 2026-09-28: all three stay
+# open, and the reason differs per domain — none of them is a missing field
+# name, so none of them closes by writing one.
+#
+# The loader now REFUSES a supported reference entry whose `dataset_key` is not
+# a registered reference dataset kind, and one that does not populate the fields
+# its register requires (catalog.py::_check_reference_destination). LIMITS
+# therefore cannot be flipped to supported — here or through a bank's
+# `catalog_overrides` — without that refusal naming it.
+#
+#   * LIMITS — its destination does not exist. `limits` is not a member of
+#     REFERENCE_DATASET_KINDS, so ReferenceMapping refuses it (a raw Pydantic
+#     error listing every internal dataset kind, raised while BUILDING a bank's
+#     mapping config) and the canonical_reference_rows CHECK constraint refuses
+#     it again. No module consumes a limit utilisation figure either. To close:
+#     register a `limits` dataset kind with a migration, name the module that
+#     reads it, then supply the LIMIT.REFERENCE field names — which the bank's
+#     own T24 team must give, since AequorOS has no field-level documentation.
+#   * CASHFLOWS_SCHEDULED — the destination is the WRONG ONE, which no field map
+#     can fix. AA payment schedules are forward-looking contractual amounts per
+#     arrangement; `historical_cashflows` is a realised bank-level daily deposit
+#     inflow/outflow series (fact_derivation._derive_cashflow_summary sums the
+#     last 90 days into facts, and app/ml/cashflow_history trains a per-tenant
+#     forecast on it). Feeding schedules there would report loan repayments due
+#     as deposit inflows that happened. To close: decide which dataset a
+#     contractual schedule belongs in — there is no register for one today —
+#     then map to that.
+#   * HISTORICAL_BALANCES — `historical_financials` wants a monthly P&L
+#     (period_end plus net_interest_income_ghs, non_interest_income_ghs,
+#     net_income_ghs, operating_expenses_ghs, provisions_ghs). Getting there
+#     from GL balance history needs the bank's own chart-of-accounts
+#     classification and a monthly aggregation; `field_map` is a rename and can
+#     do neither, and GL income balances are cumulative, so summing twelve of
+#     them double-counts. To close: shape it in the extractor against a supplied
+#     CoA mapping (the platform already treats that as a bank-supplied register
+#     — see `gl_mapping_bsd7`), not in a field_map.
+#
+# Phase 5 clause 5.6 ("fix the T24 mapping gaps", 2026-09-28) closed NONE of
+# these three. What it closed was the silently-dropped CO.CODE branch key on the
+# money-market and securities entries, plus the two loader rails named above.
+# The reasons live in comments rather than a `reason:` key because
+# catalog.py::_parse_entry refuses any key outside _META_KEYS.
 # ---------------------------------------------------------------------------
 
+# Unsupported: destination does not exist (see the LIMITS paragraph above).
 LIMITS:
   supported: false
   application: LIMIT.REFERENCE
@@ -466,6 +530,8 @@ LIMITS:
   dataset_key: limits
   field_map: {}
 
+# Unsupported: the destination is the wrong one (see the CASHFLOWS_SCHEDULED
+# paragraph above).
 CASHFLOWS_SCHEDULED:
   supported: false
   application: AA.ARRANGEMENT
@@ -476,6 +542,8 @@ CASHFLOWS_SCHEDULED:
   dataset_key: historical_cashflows
   field_map: {}
 
+# Unsupported: needs classification + aggregation a field_map cannot do (see
+# the HISTORICAL_BALANCES paragraph above).
 HISTORICAL_BALANCES:
   supported: false
   application: GENERAL.LEDGER

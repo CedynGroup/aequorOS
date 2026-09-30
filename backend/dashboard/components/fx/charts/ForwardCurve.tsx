@@ -1,26 +1,17 @@
-'use client';
+"use client";
 
+import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  CHART_GRID,
-  axisProps,
-  chartMargins,
-  chartTooltipProps,
-  seriesColor,
-} from '@/lib/chartTheme';
-import { currencyCode } from '@/lib/format';
+  gapAwareData,
+  itemTooltip,
+  LINE_SERIES_BASE,
+} from "@/lib/echartsOptions";
+import { currencyCode } from "@/lib/format";
 
 export type ForwardPoint = {
   tenorLabel: string;
-  /** Forward outright in GHS per unit of the base currency. */
+  /** Forward outright in the reporting currency per unit of the base currency. */
   outright: number;
 };
 
@@ -36,33 +27,52 @@ export default function ForwardCurve({
   data: ForwardPoint[];
   height?: number;
 }) {
+  const tokens = useChartTokens();
+  const labels = data.map((point) => point.tenorLabel);
+  const color = seriesColor(tokens, 0);
+
+  const option: BiEChartsOption = {
+    grid: { left: 4, right: 20, top: 8, bottom: 4, containLabel: true },
+    xAxis: { type: "category", data: labels },
+    yAxis: {
+      type: "value",
+      scale: true,
+      axisLabel: { formatter: (value: number) => value.toFixed(2) },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: itemTooltip(labels, (index) => {
+        const point = data[index];
+        return point === undefined
+          ? []
+          : [
+              {
+                label: `Forward outright (${currencyCode()})`,
+                value: point.outright.toFixed(4),
+                color,
+              },
+            ];
+      }),
+    },
+    series: [
+      {
+        ...LINE_SERIES_BASE,
+        name: "Forward outright",
+        smooth: true,
+        showSymbol: true,
+        symbolSize: 6,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+        data: gapAwareData(data.map((point) => point.outright)),
+      },
+    ],
+  } as BiEChartsOption;
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ ...chartMargins, right: 20 }}>
-        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="tenorLabel" {...axisProps} />
-        <YAxis
-          {...axisProps}
-          domain={['auto', 'auto']}
-          tickFormatter={(v: number) => v.toFixed(2)}
-          width={56}
-        />
-        <Tooltip
-          {...chartTooltipProps}
-          formatter={(value: number | string) => [
-            Number(value).toFixed(4),
-            `Forward outright (${currencyCode()})`,
-          ]}
-        />
-        <Line
-          type="monotone"
-          dataKey="outright"
-          stroke={seriesColor(0)}
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <EChart
+      option={option}
+      height={height}
+      ariaLabel={`Forward outright curve across ${data.length} tenors, quoted in ${currencyCode()}`}
+    />
   );
 }

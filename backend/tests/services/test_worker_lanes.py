@@ -20,11 +20,22 @@ from app.services import job_queue
 from app.worker import HANDLERS, WorkerConfigurationError, resolve_job_types
 from tests.api.helpers import ORG_1
 
+#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns. Every
+#: one holds an external model credential while it runs: ``bi_commentary`` and
+#: ``bi_nlq_translate`` are BI surfaces' jobs but belong to THIS lane, because the
+#: lane is about the KEY and not about the feature. This tuple is deliberately
+#: written out rather than read from ``JOB_LANES`` — a test that derived it from the
+#: thing it checks would pass for any lane assignment at all, and what it exists to
+#: catch is an AI type landing in the core lane, where the API process's own daemon
+#: thread would claim it.
+AI_TYPES = ("icaap_ai_draft", "bi_commentary", "bi_nlq_translate")
+
 
 def test_the_default_selection_never_includes_the_ai_lane() -> None:
     """The safety property: adding an AI handler cannot widen the core fleet."""
-    assert "icaap_ai_draft" not in resolve_job_types(None)
-    assert "pipeline_refresh" in resolve_job_types(None)
+    core = resolve_job_types(None)
+    assert not set(AI_TYPES) & set(core)
+    assert "pipeline_refresh" in core
 
 
 @pytest.mark.parametrize("raw", ["", "   ", None])
@@ -33,7 +44,15 @@ def test_an_unset_selection_is_the_core_lane(raw: str | None) -> None:
 
 
 def test_the_ai_lane_selects_exactly_the_ai_types() -> None:
-    assert resolve_job_types("lane:ai") == ("icaap_ai_draft",)
+    assert resolve_job_types("lane:ai") == AI_TYPES
+    assert job_queue.job_types_in_lane("ai") == AI_TYPES
+
+
+def test_every_ai_type_is_in_the_ai_lane() -> None:
+    """An AI type WITHOUT a lane entry would be claimed by the core worker — and
+    by the daemon thread inside the API process, which must never hold a key."""
+    for job_type in AI_TYPES:
+        assert job_queue.lane_of(job_type) == "ai"
 
 
 def test_the_core_lane_is_the_default_selection() -> None:
@@ -65,6 +84,62 @@ def test_mixing_the_ai_lane_with_another_lane_is_refused() -> None:
         resolve_job_types("icaap_ai_draft,official_run")
 
 
+# --- the bi lane (D-007: exclusivity is a property of a lane, not a literal) --
+
+
+#: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns.
+BI_TYPES = (
+    "bi_mart_refresh",
+    "bi_mart_backfill",
+    "bi_retention",
+    "bi_export",
+    "bi_alert_evaluate",
+    "bi_subscription_scan",
+    "bi_subscription_run",
+)
+
+
+def test_the_default_selection_never_includes_the_bi_lane() -> None:
+    """A mart build must never sit ahead of pipeline_refresh in the core FIFO."""
+    core = resolve_job_types(None)
+    assert not set(BI_TYPES) & set(core)
+    assert "pipeline_refresh" in core
+
+
+def test_the_bi_lane_selects_exactly_the_bi_types() -> None:
+    assert resolve_job_types("lane:bi") == BI_TYPES
+
+
+def test_the_bi_lane_may_share_a_process_with_the_core_lane() -> None:
+    """Local development runs both in one process; only ``ai`` is exclusive."""
+    selected = resolve_job_types("lane:core,lane:bi")
+    assert set(selected) == set(resolve_job_types(None)) | set(BI_TYPES)
+    # Order-independent and de-duplicated.
+    reordered = resolve_job_types("lane:bi,lane:core,bi_retention")
+    assert set(reordered) == set(selected)
+    assert len(reordered) == len(set(reordered))
+
+
+def test_the_bi_lane_may_not_share_a_process_with_the_ai_lane() -> None:
+    """Exclusivity is the AI lane's, whichever other lane it is mixed with."""
+    with pytest.raises(WorkerConfigurationError, match="mixes the ai lane"):
+        resolve_job_types("lane:ai,lane:bi")
+    with pytest.raises(WorkerConfigurationError, match="mixes the ai lane"):
+        resolve_job_types("bi_mart_refresh,icaap_ai_draft")
+
+
+def test_only_the_ai_lane_is_exclusive() -> None:
+    assert set(job_queue.EXCLUSIVE_LANES) == {"ai"}
+    assert "bi" not in job_queue.EXCLUSIVE_LANES
+
+
+def test_every_bi_type_is_in_the_bi_lane() -> None:
+    """A BI type WITHOUT a lane entry would be claimed by the core worker."""
+    for job_type in BI_TYPES:
+        assert job_queue.lane_of(job_type) == "bi"
+    assert job_queue.job_types_in_lane("bi") == BI_TYPES
+
+
 def test_the_inprocess_worker_uses_the_core_lane_whatever_the_environment_says(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -90,7 +165,7 @@ def test_the_inprocess_worker_uses_the_core_lane_whatever_the_environment_says(
     monkeypatch.setattr(threading, "Thread", _Thread)
     worker_module.start_inprocess_worker()
     job_types = captured["kwargs"]["job_types"]  # type: ignore[index]
-    assert "icaap_ai_draft" not in job_types
+    assert not set(AI_TYPES) & set(job_types)
 
 
 # --- lanes in the queue -----------------------------------------------------
@@ -106,17 +181,112 @@ def test_handlers_and_job_types_still_cover_each_other() -> None:
 
 
 def test_the_ai_reclaim_window_is_derived_from_settings() -> None:
-    """Shorter than one legitimate call would reclaim a live job and resend it."""
+    """Shorter than one legitimate call would reclaim a live job and resend it.
+
+    Multiplied by the TIER LENGTH since D-053: one handler legitimately spends
+    the per-vendor budget once per vendor while it fails over, so a window sized
+    for a single vendor would reclaim a live job somewhere in the second.
+    """
     ai = get_settings().ai
-    expected = ai.request_timeout_seconds * (ai.max_retries + 1) + ai.stale_margin_seconds
-    window = job_queue.stale_after_for("icaap_ai_draft", timedelta(seconds=900))
-    assert window == timedelta(seconds=expected)
-    assert window > timedelta(seconds=ai.request_timeout_seconds)
+    per_vendor = ai.request_timeout_seconds * (ai.max_retries + 1)
+    expected = per_vendor * len(ai.provider_order) + ai.stale_margin_seconds
+    for job_type in AI_TYPES:
+        window = job_queue.stale_after_for(job_type, timedelta(seconds=900))
+        assert window == timedelta(seconds=expected)
+        assert window > timedelta(seconds=per_vendor * len(ai.provider_order))
+        # Derived, never pinned: an entry in the static map would be a second,
+        # competing number for the same bound.
+        assert job_type not in job_queue.STALE_AFTER_OVERRIDES_SECONDS
 
 
 def test_core_job_types_keep_the_fleet_default() -> None:
     default = timedelta(seconds=900)
     assert job_queue.stale_after_for("pipeline_refresh", default) == default
+
+
+def test_the_backfill_reclaim_window_is_derived_from_the_hop_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A window shorter than one hop reclaims a live hop and builds dates twice.
+
+    Derived from ``BI_BACKFILL_HOP_SECONDS`` (the AI-lane shape) rather than
+    pinned in the static override map, so retuning the hop cannot outgrow it.
+    """
+    default = timedelta(seconds=900)
+    bi = get_settings().bi
+    window = job_queue.stale_after_for("bi_mart_backfill", default)
+    assert window == timedelta(seconds=bi.backfill_stale_after_seconds)
+    assert window > timedelta(seconds=bi.backfill_hop_seconds)
+    assert window == timedelta(seconds=1800)  # 3 x the 600 s default hop
+
+    monkeypatch.setenv("BI_BACKFILL_HOP_SECONDS", "1200")
+    get_settings.cache_clear()
+    assert job_queue.stale_after_for("bi_mart_backfill", default) == timedelta(seconds=3600)
+
+
+def test_the_other_bi_types_keep_the_fleet_default() -> None:
+    """Everything unlisted asserts it finishes inside the fleet default.
+
+    Three BI types take a window of their own, each for a stated reason:
+    ``bi_mart_backfill`` DERIVES one from ``BI_BACKFILL_HOP_SECONDS`` (above);
+    ``bi_export`` takes a static override because only half of a governed
+    export's runtime is bounded by a setting (D-070); and
+    ``bi_subscription_run`` takes one because it renders one artifact per
+    recipient, where a reclaim firing on a live job would mail a bank its board
+    pack twice. Refresh, retention, the alert evaluation and the subscription
+    scan take none, and that absence is the assertion that each finishes inside
+    the default — a bounded single pass that enqueues work rather than doing it.
+    """
+    default = timedelta(seconds=900)
+    assert job_queue.stale_after_for("bi_mart_refresh", default) == default
+    assert job_queue.stale_after_for("bi_retention", default) == default
+    assert job_queue.stale_after_for("bi_alert_evaluate", default) == default
+    assert job_queue.stale_after_for("bi_subscription_scan", default) == default
+    assert set(BI_TYPES) & set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {
+        "bi_export",
+        "bi_subscription_run",
+    }
+
+
+def test_a_core_worker_never_reaps_a_bi_hop(db_session: Session) -> None:
+    """The core worker's selection excludes the bi lane, so its reaper does too."""
+    now = datetime.now(UTC)
+    for job_type in ("pipeline_refresh", "bi_mart_backfill"):
+        db_session.add(
+            Job(
+                organization_id=ORG_1,
+                job_type=job_type,
+                status="running",
+                payload={},
+                attempts=0,
+                max_attempts=3,
+                started_at=now - timedelta(hours=6),
+            )
+        )
+    db_session.commit()
+
+    reclaimed = job_queue.reclaim_stale(
+        db_session,
+        now,
+        stale_after=timedelta(seconds=900),
+        job_types=resolve_job_types("lane:core"),
+    )
+    assert reclaimed == 1
+    hop = db_session.query(Job).filter(Job.job_type == "bi_mart_backfill").one()
+    assert hop.status == "running"
+
+    # The BI worker reaps its own lane against the derived window.
+    assert (
+        job_queue.reclaim_stale(
+            db_session,
+            now,
+            stale_after=timedelta(seconds=900),
+            job_types=resolve_job_types("lane:bi"),
+        )
+        == 1
+    )
+    db_session.refresh(hop)
+    assert hop.status == "queued"
 
 
 def test_reclaim_only_touches_the_callers_own_lane(db_session: Session) -> None:
