@@ -194,7 +194,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps 2-5:
   `backend/docs/filing_workflow_redesign.md`.
   **Every new `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration**
-  — see the [migration contract and Postgres regression guard](backend/docs/authorization_foundation.md#credit-and-institution-vocabulary-built-2026-09-20).
+  — see the [migration contract and Postgres regression guard](backend/docs/authorization_foundation.md#institution-vocabulary-built-2026-09-20).
 - **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
   Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
   for catalogue entries, exclusions, defect quarantine, and ICAAP deferral.

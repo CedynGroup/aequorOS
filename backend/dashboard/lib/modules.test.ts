@@ -601,6 +601,11 @@ for (const [capabilities, visible] of [
     sensitivity: "confidential",
     permission: "view",
     requiresContextualAuthorization: false,
+    dataScope: {
+      kind: "all",
+      branches: [] as string[],
+      regions: [] as string[],
+    },
   } as const;
   assert.deepEqual(
     effectiveInstitutionModules(null, [vocabularyOnly]),

@@ -225,9 +225,10 @@ test.describe("scoped grant administration", () => {
     );
   });
 
-  // Credit and Institution are grantable vocabulary ahead of their cutovers:
-  // the composer offers them, the server composes the sentence, and the saved
-  // grant lists under the member — while no product surface consumes it yet.
+  // Credit and Institution are grantable module scopes: the composer offers
+  // them, the server composes the sentence, and the saved grant lists under
+  // the member. Institution is vocabulary only — no product surface consumes
+  // it until the institution master-data cutover.
   test("the composer offers Credit and Institution Profile and saves one exact sentence for each", async ({
     page,
   }) => {
