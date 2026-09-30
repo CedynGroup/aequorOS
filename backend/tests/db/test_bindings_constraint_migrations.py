@@ -7,7 +7,8 @@ separation-of-duties decision — and then the INSERT hit
 the bundle existed. The module vocabulary has the same shape:
 ``ck_authorization_bindings_module_scope`` was written from a literal list by
 the foundation migration, so a module added to ``ModuleScope`` needs its own
-widening migration (``202609200066`` for ``credit`` and ``institution``).
+widening migration (``202609220067`` for ``credit``, ``202609300081`` for
+``institution``).
 
 The hermetic suite could not catch either: it builds its schema with
 ``Base.metadata.create_all``, and the model derives these constraints from

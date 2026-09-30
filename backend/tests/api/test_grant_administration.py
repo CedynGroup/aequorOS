@@ -285,10 +285,11 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
 def test_credit_and_institution_grants_round_trip_as_exact_vocabulary(
     grant_client: TestClient, module: Module, sentence: str
 ) -> None:
-    """The two modules are grantable vocabulary and nothing more.
+    """Credit and Institution grants are exact module scopes.
 
-    Nothing consumes either module yet, so the grant must be exact in every
-    dimension, must not reach a neighbouring module, and must revoke on its own.
+    Credit routes consume their own module and Institution is vocabulary only,
+    so either grant must be exact in every dimension, must not reach a
+    neighbouring module, and must revoke on its own.
     """
 
     created = grant_client.post(
