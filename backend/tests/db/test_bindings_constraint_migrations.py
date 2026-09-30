@@ -9,6 +9,9 @@ the bundle existed. The module vocabulary has the same shape:
 the foundation migration, so a module added to ``ModuleScope`` needs its own
 widening migration (``202609220067`` for ``credit``, ``202609300081`` for
 ``institution``).
+``ck_authorization_access_requests_module_scope`` carries the same module
+vocabulary, because a permission request names the exact module a denied page
+needs, so it is checked the same way.
 
 The hermetic suite could not catch either: it builds its schema with
 ``Base.metadata.create_all``, and the model derives these constraints from
@@ -49,18 +52,23 @@ pytestmark = [
 
 
 @pytest.mark.parametrize(
-    ("constraint", "vocabulary"),
+    ("table", "column", "vocabulary"),
     [
-        ("ck_authorization_bindings_role_bundle", RoleBundle),
-        ("ck_authorization_bindings_module_scope", ModuleScope),
+        ("authorization_bindings", "role_bundle", RoleBundle),
+        ("authorization_bindings", "module_scope", ModuleScope),
+        # A permission request names the exact module the denied page needs,
+        # so it must admit every module a binding can be scoped to.
+        ("authorization_access_requests", "module_scope", ModuleScope),
     ],
-    ids=["role_bundle", "module_scope"],
+    ids=["role_bundle", "module_scope", "access_request_module_scope"],
 )
 def test_the_bindings_constraint_accepts_every_vocabulary_value(
     migrated_postgres_schema: MigratedPostgresSchema,
-    constraint: str,
+    table: str,
+    column: str,
     vocabulary: type[StrEnum],
 ) -> None:
+    constraint = f"ck_{table}_{column}"
     with migrated_postgres_schema.app_engine.connect() as connection:
         expression = connection.execute(
             # Scoped to THIS migrated schema: the disposable test schemas are
@@ -71,12 +79,15 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
                 "JOIN pg_class t ON t.oid = c.conrelid "
                 "JOIN pg_namespace n ON n.oid = t.relnamespace "
                 "WHERE c.conname = :name AND n.nspname = :schema "
-                "AND t.relname = 'authorization_bindings' AND c.contype = 'c'"
+                "AND t.relname = :table AND c.contype = 'c'"
             ),
-            {"name": constraint, "schema": migrated_postgres_schema.schema_name},
+            {
+                "name": constraint,
+                "schema": migrated_postgres_schema.schema_name,
+                "table": table,
+            },
         ).scalar_one()
 
-        column = constraint.removeprefix("ck_authorization_bindings_")
         missing = []
         for member in vocabulary:
             with connection.begin_nested() as savepoint:

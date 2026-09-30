@@ -26,6 +26,15 @@
 
 import type { GrantDraft } from "./grants";
 
+type GrantScope = Pick<
+  GrantDraft,
+  | "roleBundle"
+  | "institutionScope"
+  | "institutionId"
+  | "moduleScope"
+  | "sensitivityScope"
+>;
+
 /** The module a filing-chain decision is evaluated against. */
 export const CHAIN_DECISION_MODULE = "reg";
 
@@ -60,7 +69,7 @@ function coversSensitivity(scope: string): boolean {
  * scoping deliberately. What it must not do is let the Owner believe they have
  * granted something they have not.
  */
-export function grantShortfall(draft: GrantDraft): string | null {
+export function grantShortfall(draft: GrantScope): string | null {
   const work = CHAIN_DECISION_BUNDLES[draft.roleBundle];
   if (work === undefined) return null;
 
@@ -135,7 +144,7 @@ export type HeldGrant = Readonly<{
 }>;
 
 export function overlappingGrantNotice(
-  draft: GrantDraft,
+  draft: GrantScope,
   held: readonly HeldGrant[],
 ): string | null {
   const target =

@@ -35,7 +35,6 @@ import {
   effectiveOrganizationModules,
   hasEffectiveCapability,
   hasStructuralCapability,
-  isPersonalSettingsPath,
   moduleSetFrom,
   type ModuleScope,
 } from "@/lib/modules";
@@ -120,7 +119,9 @@ export function useModuleScope(): ModuleScope {
 
 export default function BankProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isPersonalSelfService = isPersonalSettingsPath(pathname);
+  const isPersonalSelfService =
+    pathname === "/settings/profile" ||
+    pathname.startsWith("/settings/profile/");
   const profileQuery = useUserProfile();
   const banksQuery = useBanks(!isPersonalSelfService);
   const { biEnabled, nlqEnabled } = useBiAvailability(!isPersonalSelfService);

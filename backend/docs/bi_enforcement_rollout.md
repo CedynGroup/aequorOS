@@ -364,7 +364,8 @@ decisions:
     "institution_id": "<exact BK-*>",
     "module_scope": "credit",
     "sensitivity_scope": "aggregated",
-    "reason": "<institution-approved reason>",
+    "reason_category": "<structured reason category>",
+    "reason_detail": "<institution-approved reason>",
     "expected_authority_sentence": "<server preview response>"
   },
   {
@@ -374,7 +375,8 @@ decisions:
     "institution_id": "<same exact BK-*>",
     "module_scope": "credit",
     "sensitivity_scope": "restricted",
-    "reason": "<institution-approved reason naming why this reader needs obligor names>",
+    "reason_category": "<structured reason category>",
+    "reason_detail": "<institution-approved reason naming why this reader needs obligor names>",
     "expected_authority_sentence": "<server preview response>"
   }
 ]

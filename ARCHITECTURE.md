@@ -102,7 +102,7 @@ deployment transition are in
 
 Migration `202608290047` adds attributed revocation evidence. Org Owner-gated
 tenant routes now preview, create, list, and revoke one complete scalar binding
-at a time and aggregate Settings → Members. Create and revoke are audited,
+at a time and aggregate Access → Members. Create and revoke are audited,
 assignment SoD is authoritative, and each mutation invalidates the grantee's
 sessions transactionally. SSO request approval uses the same complete-grant
 path. This administration boundary is enforcing; ordinary product routes are

@@ -12,7 +12,11 @@ from app.models.attestation import (
     SigningAuthorization,
 )
 from app.models.audit_event import AuditEvent
-from app.models.authorization import AuthorizationBinding, OrganizationOwnerAssignment
+from app.models.authorization import (
+    AuthorizationAccessRequest,
+    AuthorizationBinding,
+    OrganizationOwnerAssignment,
+)
 from app.models.bi import (
     BiAggPositionDaily,
     BiDimBranch,
@@ -247,6 +251,7 @@ __all__ = [
     "AiCommentarySettings",
     "AttestationSignature",
     "AuthorizationBinding",
+    "AuthorizationAccessRequest",
     "AuditEvent",
     "Bank",
     "BankFinancialFact",

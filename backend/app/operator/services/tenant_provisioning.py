@@ -278,7 +278,7 @@ def _step_kms(
 def _step_sso_stub(db: Session, organization_id: str, state: _SagaState) -> None:
     # A disabled row with empty issuer/client_id and no secret is valid at the
     # model layer and inert at the auth layer (only enabled connections are
-    # ever matched); bank IT completes it via Settings → Authentication.
+    # ever matched); bank IT completes it via Access → Authentication.
     db.add(
         SsoConnection(
             organization_id=organization_id,
@@ -294,7 +294,7 @@ def _step_sso_stub(db: Session, organization_id: str, state: _SagaState) -> None
         "sso_stub",
         "succeeded",
         "disabled OIDC connection stub created; bank IT fills issuer/client id/secret in "
-        "Settings → Authentication (docs/sso-onboarding.md). Hand the bank BOTH redirect "
+        "Access → Authentication (docs/sso-onboarding.md). Hand the bank BOTH redirect "
         f"URIs: {SSO_REDIRECT_URI_PATHS[0]} (sign-in) and {SSO_REDIRECT_URI_PATHS[1]} "
         "(signing step-up) — registering only the first breaks certification.",
     )

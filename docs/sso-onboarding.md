@@ -24,12 +24,12 @@ different organization from the one that owns that connection.
 
 ## What AequorOS needs from you
 
-| Item                    | Example                                                                                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issuer URL              | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra)                                                                               |
-| Client ID               | issued by your IdP when you register the app                                                                                                                                        |
-| Client secret           | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Settings → Authentication), where it is stored encrypted and can never be read back |
-| Allowed email domain(s) | `yourbank.com.gh`                                                                                                                                                                   |
+| Item                    | Example                                                                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issuer URL              | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra)                                                                             |
+| Client ID               | issued by your IdP when you register the app                                                                                                                                      |
+| Client secret           | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Access → Authentication), where it is stored encrypted and can never be read back |
+| Allowed email domain(s) | `yourbank.com.gh`                                                                                                                                                                 |
 
 **The redirect URIs you must register in your IdP:**
 
@@ -38,7 +38,7 @@ https://bank.aequoros.com/api/auth/callback/sso
 https://bank.aequoros.com/api/attestation/step-up/callback
 ```
 
-(Shown, with a copy button, in AequorOS → Settings → Authentication.)
+(Shown, with a copy button, in AequorOS → Access → Authentication.)
 
 The first is sign-in. The second is **signing**: when an officer certifies a
 regulatory return, AequorOS sends them back to you for a fresh authentication
@@ -57,7 +57,7 @@ broken, so register both. Both use the same client, and no additional scopes.
    sign-in to your Workspace); scopes `openid`, `email`, `profile` only.
 5. Create → note the **Client ID** and **Client secret**.
 6. Hand both to your AequorOS account administrator to enter in
-   **Settings → Authentication** with Issuer `https://accounts.google.com` and
+   **Access → Authentication** with Issuer `https://accounts.google.com` and
    your email domain in _Allowed email domains_. Tick _Enable_, Save.
 
 ## Step-by-step: Microsoft Entra ID (Azure AD)
@@ -71,7 +71,7 @@ broken, so register both. Both use the same client, and no additional scopes.
    reminder for its expiry) → note the secret **Value**.
 5. Overview page → note the **Application (client) ID** and **Directory (tenant) ID**.
 6. Issuer URL is `https://login.microsoftonline.com/{Directory (tenant) ID}/v2.0`.
-7. Enter issuer / client ID / secret in AequorOS **Settings → Authentication** as above.
+7. Enter issuer / client ID / secret in AequorOS **Access → Authentication** as above.
 
 _Other OIDC IdPs (Okta, Ping, Keycloak, ForgeRock): register a Web/OIDC app with
 both redirect URIs and `openid email profile` scopes; the Issuer URL is your
@@ -86,11 +86,11 @@ separate AequorOS decision.
 - **Pre-provisioned only (default):** only people who already have an AequorOS
   account can sign in. Tightest control; onboarding each user is an explicit act.
 - **Request access on first sign-in (opt-in):** tick _Let employees request
-  access on first sign-in_ in Settings → Authentication. An employee whose
+  access on first sign-in_ in Access → Authentication. An employee whose
   verified email is on an **allowed domain** can sign in once to _request_
   access: a deactivated account stub is recorded, they see "an administrator
   must approve your account", and **they get no access at all** until an
-  AequorOS Organization Owner opens **Settings → Members**, defines one complete
+  AequorOS Organization Owner opens **Access → Members**, defines one complete
   grant (role, exact institution or organization-wide coverage, module,
   sensitivity, and reason), reviews the exact authority sentence, and approves
   it. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
@@ -101,7 +101,7 @@ separate AequorOS decision.
 
 ## Testing
 
-1. AequorOS account administrator: Settings → Authentication → Save with
+1. AequorOS account administrator: Access → Authentication → Save with
    _Enable SSO_ ticked.
 2. Open `https://bank.aequoros.com/login` in a private window — a **Sign in with
    SSO** button appears (within a minute of enabling).
@@ -111,7 +111,7 @@ separate AequorOS decision.
    - request-access **off** → rejected with "No AequorOS account is provisioned
      for this identity";
    - request-access **on** → "administrator must approve" message, a pending
-     identity appears under Settings → Members with "SSO approval needed · no
+     identity appears under Access → Members with "SSO approval needed · no
      access yet", and the account works only after an Organization Owner
      approves one complete scoped grant.
 

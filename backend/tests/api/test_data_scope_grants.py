@@ -203,7 +203,8 @@ def _payload(**overrides: Any) -> dict[str, Any]:
         "institution_id": BANK_A,
         "module_scope": "credit",
         "sensitivity_scope": "confidential",
-        "reason": "Branch manager scope approved by the Head of Retail",
+        "reason_category": "other",
+        "reason_detail": "Branch manager scope approved by the Head of Retail",
     }
     payload.update(overrides)
     return payload
