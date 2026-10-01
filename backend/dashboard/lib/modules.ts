@@ -813,24 +813,28 @@ function liquidityPermissionReason(
   return requirementsReason(liquidityRequirements(path, scope));
 }
 
-/** Basel routes split by exact CAP sensitivity: planning is confidential, the
- * overview and the RWA / structure / stress stack are aggregated. */
+/** Capital reads require whole-institution coverage at the exact sensitivity:
+ * planning is confidential, the overview and RWA / structure / stress aggregated. */
 function capitalRequirements(
   path: string,
   scope: ModuleScope,
 ): AccessRequirement[] {
-  if (
-    underRoute(path, ["/basel/planning", "/icaap"]) &&
-    scope.capitalConfidentialView !== true
-  ) {
-    return [CAPITAL_CONFIDENTIAL_VIEW];
+  if (underRoute(path, ["/basel/planning", "/icaap"])) {
+    return missingRouteRequirements(
+      path,
+      [CAPITAL_CONFIDENTIAL_VIEW],
+      scope.institutionCapabilities ?? [],
+    );
   }
   if (
-    (path === "/basel" ||
-      underRoute(path, ["/basel/rwa", "/basel/structure", "/basel/stress"])) &&
-    scope.capitalAggregatedView !== true
+    path === "/basel" ||
+    underRoute(path, ["/basel/rwa", "/basel/structure", "/basel/stress"])
   ) {
-    return [CAPITAL_AGGREGATED_VIEW];
+    return missingRouteRequirements(
+      path,
+      [CAPITAL_AGGREGATED_VIEW],
+      scope.institutionCapabilities ?? [],
+    );
   }
   return [];
 }
