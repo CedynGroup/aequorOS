@@ -8,6 +8,22 @@ import { E2E_USERS, mintBackendToken, writeStorageState } from "./support/mint";
 const evidence = process.env.E2E_EVIDENCE_DIR;
 const bank = "/banks/BK-SAMP0001";
 const moduleRequest = /\/banks\/[^/]+\/(?:forecast|reverse-stress)(?:\/|$)/;
+// Revoke every grant this journey creates: macro_viewer is shared with other journeys.
+const createdBindings: string[] = [];
+
+test.afterEach(async ({ request }) => {
+  const token = await mintBackendToken("admin");
+  for (const id of createdBindings.splice(0).reverse()) {
+    const revoked = await request.post(
+      `${E2E_API_ORIGIN}/api/v1/authorization/bindings/${id}/revoke`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { reason: "Remove Forecasting verification grant" },
+      },
+    );
+    expect(revoked.status(), await revoked.text()).toBe(200);
+  }
+});
 
 test("account-only and baseline members retain disabled Forecasting workspaces", async ({
   browser,
@@ -59,12 +75,12 @@ test("real Forecasting grants separate summary, confidential reading, and execut
 }) => {
   test.slow();
   const transcript: unknown[] = [];
-  let version = E2E_USERS.grant_member.authv;
+  let version = E2E_USERS.forecast_member.authv;
   async function api(
     method: string,
     route: string,
     data?: unknown,
-    role = "grant_member",
+    role = "forecast_member",
     authv = version,
   ) {
     const response = await request.fetch(`${E2E_API_ORIGIN}/api/v1${route}`, {
@@ -80,7 +96,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
   }
   async function grant(sensitivity: string, bundle = "viewer") {
     const data = {
-      principal_user_id: E2E_USERS.grant_member.id,
+      principal_user_id: E2E_USERS.forecast_member.id,
       role_bundle: bundle,
       institution_scope: "institution",
       institution_id: "BK-SAMP0001",
@@ -102,11 +118,12 @@ test("real Forecasting grants separate summary, confidential reading, and execut
       "admin",
     );
     expect(created.status).toBe(201);
+    createdBindings.push(created.body.binding.id);
     version += 1;
   }
   async function readerPage() {
     const state = await writeStorageState(
-      "grant_member",
+      "forecast_member",
       E2E_BASE_URL,
       E2E_TMP,
     );
@@ -116,7 +133,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     await context.addCookies([
       {
         name: "authjs.session-token",
-        value: await mintSessionCookie("grant_member", version),
+        value: await mintSessionCookie("forecast_member", version),
         domain: "127.0.0.1",
         path: "/",
       },
@@ -194,7 +211,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
         "GET",
         `${bank}/forecast/runs`,
         undefined,
-        "grant_member",
+        "forecast_member",
         staleVersion,
       )
     ).status,
@@ -240,19 +257,17 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     "admin",
   );
   expect(preview.status).toBe(200);
-  expect(
-    (
-      await api(
-        "POST",
-        "/authorization/bindings",
-        {
-          ...summaryGrant,
-          expected_authority_sentence: preview.body.authority_sentence,
-        },
-        "admin",
-      )
-    ).status,
-  ).toBe(201);
+  const summaryBinding = await api(
+    "POST",
+    "/authorization/bindings",
+    {
+      ...summaryGrant,
+      expected_authority_sentence: preview.body.authority_sentence,
+    },
+    "admin",
+  );
+  expect(summaryBinding.status).toBe(201);
+  createdBindings.push(summaryBinding.body.binding.id);
   const summaryVersion = E2E_USERS.macro_viewer.authv + 1;
   const summaries = await api(
     "GET",
