@@ -200,6 +200,19 @@ def _route_requirement(
         requirements = ((ModuleScope.FX, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
     elif normalized.startswith("/fx"):
         requirements = ((ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),)
+    elif normalized == "/credit/book":
+        requirements = ((ModuleScope.CREDIT, Sensitivity.RESTRICTED, Permission.VIEW),)
+    elif normalized in {"/credit/concentration", "/credit/activity"}:
+        requirements = (
+            (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
+            (
+                ModuleScope.CREDIT,
+                Sensitivity.RESTRICTED
+                if normalized == "/credit/concentration"
+                else Sensitivity.CONFIDENTIAL,
+                Permission.VIEW,
+            ),
+        )
     elif normalized == "/ftp/scenarios":
         requirements = ((ModuleScope.FTP, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
     elif normalized in {"/basel/planning", "/icaap"}:
@@ -676,8 +689,12 @@ def _access_request_binding(
     )
     if not decision.allowed:
         return None
+    scoped_rows = request.route == "/credit/book" or (
+        request.route == "/credit/activity"
+        and request.sensitivity_scope == Sensitivity.CONFIDENTIAL.value
+    )
     for binding_id in decision.matching_binding_ids:
-        if request.institution_id and request.route not in {"/credit/book", "/credit/activity"}:
+        if request.institution_id and not scoped_rows:
             data_scope = authorization.effective_data_scope(
                 db, organization_id=request.organization_id, binding_ids=[binding_id]
             )
