@@ -1206,7 +1206,10 @@ export function accessDeniedForPath(
       scope.modules &&
       !scope.modules.has(moduleKey)
     ) {
-      requirements = [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
+      requirements =
+        moduleKey === "credit"
+          ? creditRequestRequirements(path)
+          : [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
     }
   }
   if (requirements.length === 0) return null;
@@ -1215,6 +1218,21 @@ export function accessDeniedForPath(
     reason: requirementsReason(requirements)!,
     requirements,
   };
+}
+
+function creditRequestRequirements(path: string): AccessRequirement[] {
+  if (path === "/credit/book") {
+    return [requirement("credit", "Credit", "restricted", "Restricted")];
+  }
+  if (path === "/credit/concentration" || path === "/credit/activity") {
+    return [
+      CREDIT_AGGREGATED_VIEW,
+      path === "/credit/concentration"
+        ? requirement("credit", "Credit", "restricted", "Restricted")
+        : requirement("credit", "Credit", "confidential", "Confidential"),
+    ];
+  }
+  return [CREDIT_AGGREGATED_VIEW];
 }
 
 export function accessRequestRequirements(
@@ -1229,13 +1247,23 @@ export function accessRequestRequirements(
     institutionClass,
     isResolved: true,
   });
-  return (denied?.requirements ?? []).filter(
-    (required) =>
-      !hasEffectiveCapability(
-        capabilities,
-        required.moduleScope,
-        required.sensitivityScope,
-        required.permission,
-      ),
-  );
+  const path = normalize(pathname);
+  return (denied?.requirements ?? []).filter((required) => {
+    const scopedRows =
+      path === "/credit/book" ||
+      (path === "/credit/activity" &&
+        required.sensitivityScope === "confidential");
+    const eligible = capabilities.filter(
+      (capability) =>
+        required.moduleScope === "account" ||
+        scopedRows ||
+        capability.dataScope?.kind === "all",
+    );
+    return !hasEffectiveCapability(
+      eligible,
+      required.moduleScope,
+      required.sensitivityScope,
+      required.permission,
+    );
+  });
 }
