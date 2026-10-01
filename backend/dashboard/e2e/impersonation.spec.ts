@@ -32,7 +32,11 @@ test("examiner inspection loads read-only navigation without tenant profile", as
   await expect(
     page.getByText("Liquidity", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText("Settings", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Settings", exact: true }),
+  ).toHaveAttribute("href", "/settings");
   await expect(page.getByRole("button", { name: /recompute/i })).toHaveCount(0);
 
   if (process.env.E2E_EVIDENCE_SCREENSHOT) {
