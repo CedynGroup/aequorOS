@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
 import { execFileSync } from "node:child_process";
-import { accessRequestRequirements, PUBLIC_MODULE_ROUTES } from "./modules";
+import {
+  accessDeniedForPath,
+  accessRequestRequirements,
+  effectiveInstitutionModules,
+  isPathVisible,
+  isHrefVisible,
+  PUBLIC_MODULE_ROUTES,
+  type ModuleScope,
+} from "./modules";
 
 import { reasonDraftComplete } from "../components/access/GrantReasonFields";
 
@@ -169,5 +177,89 @@ assert.equal(
   ).length,
   1,
 );
+
+for (const [capabilities, route, missing] of [
+  [[capability("credit", "aggregated", "all")], "/credit/book", ["restricted"]],
+  [[capability("credit", "restricted", "branch")], "/credit/book", []],
+  [
+    [capability("credit", "aggregated", "all")],
+    "/credit/concentration",
+    ["restricted"],
+  ],
+  [
+    [capability("credit", "restricted", "all")],
+    "/credit/concentration",
+    ["aggregated"],
+  ],
+  [
+    [
+      capability("credit", "aggregated", "all"),
+      capability("credit", "restricted", "branch"),
+    ],
+    "/credit/concentration",
+    ["restricted"],
+  ],
+  [
+    [
+      capability("credit", "aggregated", "all"),
+      capability("credit", "restricted", "all"),
+    ],
+    "/credit/concentration",
+    [],
+  ],
+  [
+    [capability("credit", "aggregated", "all")],
+    "/credit/activity",
+    ["confidential"],
+  ],
+  [
+    [
+      capability("credit", "aggregated", "branch"),
+      capability("credit", "confidential", "branch"),
+    ],
+    "/credit/activity",
+    ["aggregated"],
+  ],
+  [
+    [
+      capability("credit", "aggregated", "all"),
+      capability("credit", "confidential", "branch"),
+    ],
+    "/credit/activity",
+    [],
+  ],
+  [[capability("credit", "aggregated", "branch")], "/credit", ["aggregated"]],
+  [[capability("credit", "aggregated", "all")], "/credit/vintages", []],
+  [
+    [capability("credit", "aggregated", "region")],
+    "/credit/delinquency",
+    ["aggregated"],
+  ],
+] as const) {
+  const scope: ModuleScope = {
+    modules: effectiveInstitutionModules(null, capabilities),
+    institutionCapabilities: capabilities,
+    organizationModules: new Set(),
+    hasInstitutionAuthority: true,
+    institutionClass: "bank",
+    isResolved: true,
+  };
+  assert.equal(isPathVisible(route, scope), missing.length === 0, route);
+  assert.equal(isHrefVisible(route, scope), missing.length === 0, route);
+  assert.deepEqual(
+    accessDeniedForPath(route, scope)?.requirements.map(
+      (item) => item.sensitivityScope,
+    ) ?? [],
+    missing,
+    route,
+  );
+  assert.deepEqual(
+    accessRequestRequirements(route, capabilities, "bank").map(
+      (item) => item.sensitivityScope,
+    ),
+    missing,
+    route,
+  );
+}
 
 console.log("accessRequests: dashboard and server route requirements agree");

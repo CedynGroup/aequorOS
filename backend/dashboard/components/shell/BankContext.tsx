@@ -201,6 +201,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   // fire out-of-scope requests during the load (the every-module-on-refresh race).
   const moduleScope = useMemo<ModuleScope>(
     () => ({
+      institutionCapabilities,
       modules: effectiveInstitutionModules(
         bank?.institutionTypeDetail?.defaultModules,
         institutionCapabilities,

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
 import NodeModule from "node:module";
 import React from "react";
 import { act, create } from "react-test-renderer";
 import * as modules from "../../lib/modules";
 
 let pathname = "/settings";
+let capabilities: EffectiveCapabilityRead[] = [];
 const bank = {
   id: "BK-AAAAAAAA",
   name: "Bank",
@@ -35,7 +37,7 @@ loader._load = (request, parent, isMain) => {
       useUserProfile: () => ({
         isLoading: false,
         effectiveAuthority: {
-          institutionCapabilities: [],
+          institutionCapabilities: [{ institutionId: bank.id, capabilities }],
           organizationCapabilities: [],
         },
       }),
@@ -58,8 +60,12 @@ loader._load = (request, parent, isMain) => {
 try {
   const { default: BankProvider, useBankContext } = require("./BankContext");
   function Consumer() {
-    const { bank: selected } = useBankContext();
-    return <span>{selected?.id ?? "no bank"}</span>;
+    const { bank: selected, moduleScope } = useBankContext();
+    return (
+      <span data-visible={modules.isPathVisible(pathname, moduleScope)}>
+        {selected?.id ?? "no bank"}
+      </span>
+    );
   }
   for (const [path, expected] of [
     ["/settings", true],
@@ -79,6 +85,31 @@ try {
     assert.equal(
       renderer!.root.findByType("span").children.join(""),
       expected ? bank.id : "no bank",
+    );
+    act(() => renderer.unmount());
+  }
+  pathname = "/credit/book";
+  for (const sensitivity of ["aggregated", "restricted"] as const) {
+    capabilities = [
+      {
+        module: "credit",
+        sensitivity,
+        permission: "view",
+        requiresContextualAuthorization: false,
+        dataScope: { kind: "branch", branches: ["HQ"], regions: [] },
+      },
+    ];
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <BankProvider>
+          <Consumer />
+        </BankProvider>,
+      );
+    });
+    assert.equal(
+      renderer!.root.findByType("span").props["data-visible"],
+      sensitivity === "restricted",
     );
     act(() => renderer.unmount());
   }

@@ -803,12 +803,15 @@ for (const [capabilities, visible] of [
   assert.equal(modules.has("credit"), visible);
   const scope = resolved(true, true, {
     modules,
+    institutionCapabilities: capabilities,
     entitledModules: creditEntitled,
     hasInstitutionAuthority: capabilities.length > 0,
   });
   for (const route of CREDIT_ROUTES) {
-    assert.equal(isPathVisible(route, scope), visible);
-    assert.equal(isHrefVisible(route, scope), visible);
+    const routeVisible =
+      route === "/credit" && capabilities.some((item) => item === creditView);
+    assert.equal(isPathVisible(route, scope), routeVisible);
+    assert.equal(isHrefVisible(route, scope), routeVisible);
   }
 }
 

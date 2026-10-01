@@ -154,6 +154,7 @@ export const CORE_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
 ]);
 
 export type ModuleScope = {
+  institutionCapabilities?: readonly EffectiveCapabilityRead[];
   /**
    * The scoped module set from the API `default_modules`, or `null` when the bank
    * carries no registry detail. Only meaningful once `isResolved` is true.
@@ -996,6 +997,7 @@ function bindingRequirements(
   return [
     ...liquidityRequirements(path, scope),
     ...capitalRequirements(path, scope),
+    ...creditRequirements(path, scope),
     ...scopedModuleRequirements(path, scope),
   ];
 }
@@ -1380,10 +1382,7 @@ export function accessDeniedForPath(
       scope.modules &&
       !scope.modules.has(moduleKey)
     ) {
-      requirements =
-        moduleKey === "credit"
-          ? creditRequestRequirements(path)
-          : [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
+      requirements = [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
     }
   }
   if (requirements.length === 0) return null;
@@ -1394,7 +1393,19 @@ export function accessDeniedForPath(
   };
 }
 
-function creditRequestRequirements(path: string): AccessRequirement[] {
+function creditRequirements(
+  path: string,
+  scope: ModuleScope,
+): AccessRequirement[] {
+  if (!underRoute(path, ["/credit"])) return [];
+  return missingRouteRequirements(
+    path,
+    creditRouteRequirements(path),
+    scope.institutionCapabilities ?? [],
+  );
+}
+
+function creditRouteRequirements(path: string): AccessRequirement[] {
   if (path === "/credit/book") {
     return [requirement("credit", "Credit", "restricted", "Restricted")];
   }
@@ -1421,8 +1432,19 @@ export function accessRequestRequirements(
     institutionClass,
     isResolved: true,
   });
-  const path = normalize(pathname);
-  return (denied?.requirements ?? []).filter((required) => {
+  return missingRouteRequirements(
+    normalize(pathname),
+    denied?.requirements ?? [],
+    capabilities,
+  );
+}
+
+function missingRouteRequirements(
+  path: string,
+  requirements: readonly AccessRequirement[],
+  capabilities: readonly EffectiveCapabilityRead[],
+): AccessRequirement[] {
+  return requirements.filter((required) => {
     const scopedRows =
       path === "/credit/book" ||
       (path === "/credit/activity" &&
