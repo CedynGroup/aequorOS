@@ -1,8 +1,9 @@
 # ICAAP workspace enforcement rollout
 
 The ICAAP workspace is part of the product for every bank tenant. It is served
-only to institutions inside the ICAAP regime, and only to principals holding one
-complete scoped binding. Run this inventory against each target deployment
+only to institutions inside the ICAAP regime, and only to principals holding the
+required scoped authority or using the [examiner branch](#examiner-access).
+Run this inventory against each target deployment
 immediately before release, and store the dated output with the deployment
 record. Do not copy production identities into this repository.
 
@@ -10,8 +11,9 @@ record. Do not copy production identities into this repository.
 
 Every `/api/v1/banks/{bank_id}/icaap/*` route applies the following gates (the
 object gate applies where an object is referenced), and
-the order is the policy. There is no deployment switch: the licence class and
-the caller's authority are what decide eligibility.
+the order is the policy. There is no workspace deployment switch: the licence
+class and the caller's authority decide workspace eligibility. AI drafting has
+additional gates described [below](#risk-and-capital-p2-the-four-additional-authorities).
 
 1. **Is the institution this tenant's?** An institution in another organization
    answers **404** and emits a cross-tenant telemetry record.
@@ -32,7 +34,8 @@ the caller's authority are what decide eligibility.
 
 ## Required authority
 
-Every route requires one complete binding on **CAPITAL** at sensitivity
+Outside the [examiner branch](#examiner-access), every route requires one
+complete binding on **CAPITAL** at sensitivity
 **CONFIDENTIAL** for that exact institution, with the permission below. A
 CAP/aggregated binding is not sufficient; neither is a binding on a sibling
 institution, and no route infers authority from `users.role`, token `roles[]`,
