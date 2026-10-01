@@ -75,6 +75,19 @@ const resolved = (
   ftpAggregatedView: true,
   ftpConfidentialView: true,
   ftpRun: true,
+  institutionCapabilities: (["aggregated", "confidential"] as const)
+    .filter((sensitivity) =>
+      sensitivity === "aggregated"
+        ? capabilities.capitalAggregatedView !== false
+        : capabilities.capitalConfidentialView !== false,
+    )
+    .map((sensitivity) => ({
+      module: "cap",
+      sensitivity,
+      permission: "view",
+      requiresContextualAuthorization: false,
+      dataScope: { kind: "all", branches: [], regions: [] },
+    })),
   ...capabilities,
   isResolved: true,
 });
@@ -243,6 +256,30 @@ const deniedCapital = resolved(true, true, {
 assert.equal(isHrefVisible("/basel", deniedCapital), false);
 assert.equal(isPathVisible("/basel/rwa", deniedCapital), false);
 assert.equal(isPathVisible("/basel/planning", deniedCapital), false);
+
+for (const kind of ["all", "branch", "region"] as const) {
+  const scope = resolved(true, true);
+  scope.institutionCapabilities = scope.institutionCapabilities!.map((item) => ({
+    ...item,
+    dataScope: {
+      kind,
+      branches: kind === "branch" ? ["ACC"] : [],
+      regions: kind === "region" ? ["GREATER_ACCRA"] : [],
+    },
+  }));
+  for (const route of [
+    "/basel",
+    "/basel/rwa",
+    "/basel/structure",
+    "/basel/stress",
+    "/basel/planning",
+    "/icaap",
+  ]) {
+    assert.equal(isPathVisible(route, scope), kind === "all");
+    assert.equal(isHrefVisible(route, scope), kind === "all");
+    assert.equal(accessDeniedForPath(route, scope) === null, kind === "all");
+  }
+}
 
 const aggregatedFxOnly = resolved(true, true, {
   fxConfidentialView: false,
