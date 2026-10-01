@@ -1,7 +1,5 @@
-# syntax=docker/dockerfile:1.7
-
 # Pinned for reproducible builds. Refresh this digest during routine security patching.
-ARG PYTHON_IMAGE=python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2
+ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2
 
 FROM ${PYTHON_IMAGE} AS builder
 
