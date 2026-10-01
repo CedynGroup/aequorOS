@@ -8,7 +8,7 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.describe("unbound Capital user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("disables navigation, redirects deep links, and sends no Capital requests", async ({
+  test("disables navigation, denies deep links, and sends no Capital requests", async ({
     page,
   }) => {
     const capitalRequests: string[] = [];
@@ -26,22 +26,18 @@ test.describe("unbound Capital user", () => {
     await expect(
       page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    // The shell renders its navigation landmark, and since #201 it also lists
-    // the modules a baseline member cannot reach — as `role="link"` spans with
-    // `aria-disabled="true"` and no href, each explaining why it is blocked.
-    // Counting landmarks or roles therefore says nothing. The invariant that
-    // matters is that NOTHING here is followable: every entry is disabled.
     // Since #201 the shell LISTS the modules a baseline member cannot reach,
     // as `role="link"` spans carrying `aria-disabled="true"` and no href, each
     // explaining why it is blocked. Counting landmarks or roles therefore says
     // nothing about authority. What must hold is that no MODULE is followable:
-    // the only enabled entry is the member's own settings, which
-    // `lib/modules.test.ts` pins as deliberately reachable.
+    // the only enabled entries are the member's own Access area and personal
+    // settings, which `lib/modules.test.ts` pins as reachable by every member.
     const followable = page.locator(
       'nav [role="link"]:not([aria-disabled="true"]), nav a[href]',
     );
-    await expect(followable).toHaveCount(1);
-    await expect(followable.first()).toHaveAttribute("href", "/settings");
+    await expect(followable).toHaveCount(2);
+    await expect(followable.nth(0)).toHaveAttribute("href", "/access");
+    await expect(followable.nth(1)).toHaveAttribute("href", "/settings");
     await expect(
       page
         .getByRole("navigation")
@@ -49,26 +45,21 @@ test.describe("unbound Capital user", () => {
     ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/basel");
-    // A baseline member deep-linking to a module they cannot reach is shown
-    // the empty-state panel explaining why, not a 404 — deliberate since
-    // #198/#201 and pinned by `hubRedirectFor` in lib/modules.test.ts. The
-    // security property is unchanged and still asserted below: the module is
-    // unreachable and no request for its data is made.
+    // A member deep-linking to a module route of their own organization is
+    // shown the access-denied page naming the grant to request, not a 404:
+    // 404 is kept for routes whose existence is itself the secret (cross-tenant,
+    // unknown, and object-detail routes). The security property is unchanged
+    // and still asserted below: no request for the module's data is made.
     await expect(
-      page.getByText(/404|not found|No authorized institutions yet/i).first(),
+      page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/basel$/);
 
     await page.goto("/basel/planning");
-    // A baseline member deep-linking to a module they cannot reach is shown
-    // the empty-state panel explaining why, not a 404 — deliberate since
-    // #198/#201 and pinned by `hubRedirectFor` in lib/modules.test.ts. The
-    // security property is unchanged and still asserted below: the module is
-    // unreachable and no request for its data is made.
     await expect(
-      page.getByText(/404|not found|No authorized institutions yet/i).first(),
+      page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/basel\/planning$/);
     expect(capitalRequests).toEqual([]);
 
     if (evidenceDir) {
