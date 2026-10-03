@@ -27,6 +27,7 @@ export const Module = {
   Reg: "reg",
   Risk: "risk",
   Markets: "markets",
+  Institution: "institution",
   Account: "account",
   Audit: "audit",
 } as const;

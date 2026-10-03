@@ -293,6 +293,14 @@ def test_organization_tenant_mismatch_denies_an_otherwise_exact_grant() -> None:
     assert not _evaluate(Permission.VIEW, other_tenant_resource, [exact]).allowed
 
 
+def test_module_scope_is_exactly_every_concrete_module_plus_all() -> None:
+    """A module a locator can name is a module a binding can be scoped to, and no more."""
+
+    assert {scope.value for scope in ModuleScope} == {"all", *(module.value for module in Module)}
+    assert Module.CREDIT.value == "credit"
+    assert Module.INSTITUTION.value == "institution"
+
+
 def test_module_and_sensitivity_dimensions_both_have_to_match() -> None:
     grant = _binding(role=RoleBundle.ANALYST, module=ModuleScope.LIQUIDITY)
 

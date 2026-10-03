@@ -20,7 +20,8 @@
 > audited and invalidates the grantee's sessions, and Settings → Members renders the
 > same authority sentence used by review, detail, revoke, and audit evidence.
 > Every other product route retains its existing authorization behavior until
-> its separate rollout.
+> its separate rollout. For the `institution` vocabulary added on 2026-09-20,
+> see the [as-built scope and rollout boundary](../backend/docs/authorization_foundation.md#institution-vocabulary-built-2026-09-20).
 >
 > **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, or FTP control is unavailable
 > only because the current user lacks an exact permission, keep it visible and
@@ -61,7 +62,8 @@ one or more **institutions/banks (`BK-*`)**. **Maker** = the person who
 creates/edits/runs. **Checker** = the independent person who reviews/approves.
 Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX**,
 **FTP**, **FCST** (Forecasting), **BEH** (Behavioral), **DATA** (Data Engine),
-**REG** (Regulatory Reporting), **RISK**, **MARKETS**, **ACCOUNT**, and **AUDIT**.
+**REG** (Regulatory Reporting), **RISK**, **MARKETS**, **CREDIT**, **INSTITUTION**
+(institution master data), **ACCOUNT**, and **AUDIT**.
 
 ---
 
@@ -390,7 +392,9 @@ institution-ratio dataset. Contracts:
 
 ### 7.1 Permission namespace (`resource:action`)
 
-**Domain (per module)** — `{module} ∈ liq | cap | credit | irrbb | fx | ftp | fcst | beh | data | reg | risk | markets`:
+**Domain (per module)** — `{module}` uses the executable
+[`Module` vocabulary](../backend/app/core/authorization.py), excluding the
+Account and Audit account-plane modules:
 
 _(`credit` added 2026-09-22: the credit engine, blotter and marts had been reachable
 under the `risk` label with no server-side consumer of a `risk` binding. Contract:

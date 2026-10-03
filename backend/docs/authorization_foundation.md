@@ -1,4 +1,4 @@
-# Authorization foundation (as built through 2026-09-16)
+# Authorization foundation (as built through 2026-09-20)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The policy kernel remains additive. Product enforcement is tracked in the
@@ -20,9 +20,10 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - permissions: `view`, `create`, `edit`, `run`, `review`, `approve`,
   `configure`, `export`, `validate`, `sign_off`, `submit`, `administer`, and
   `ingest`;
-- concrete resource modules: LIQ, CAP, CREDIT (added 2026-09-22, mirrored from
-  Risk by migration `202609220067`), IRRBB, FX, FTP, FCST, BEH, DATA, REG,
-  Risk, Markets, Account, and Audit;
+- concrete resource modules and binding scopes: the executable
+  [`Module` and `ModuleScope`](../app/core/authorization.py) definitions
+  (`credit` joined on 2026-09-22, mirrored from Risk by migration
+  `202609220067`);
 - sensitivities: `published`, `aggregated`, `confidential`, and `restricted`;
 - static bundles and their exact granted actions: the executable
   [`RoleBundle` and `ROLE_PERMISSIONS`](../app/core/authorization.py) definitions.
@@ -522,6 +523,25 @@ because the per-object condition that would catch approve-then-file at action
 time is still the stage engine's later work. The authoritative contract is
 [filing_submit_authority_rollout.md](filing_submit_authority_rollout.md); the
 design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.md).
+
+## Institution vocabulary (built 2026-09-20)
+
+`Module.INSTITUTION` (`institution`) is a grantable, institution-scoped module
+dimension with no consuming surface yet. Institution master data still
+enforces through Account until its own cutover lands (enforcement matrix PR
+21), so an Institution binding does not authorize that surface today. The
+evaluator projects it per institution like every other product module, the
+Members composer offers it, the authority sentence names it ("Institution
+Profile"), and the dashboard maps it to no navigation. No bundle changed and no
+binding was created. Migration `202609300081` widens
+`ck_authorization_bindings_module_scope`; like `202609200065` for the Validator
+bundle and `202609220067` for Credit, it exists because the hermetic schema
+derives that constraint from the enum while a migrated database keeps the
+literal list it was created with — `tests/db/test_bindings_constraint_migrations.py`
+pins both vocabularies against a migrated schema. When the cutover lands, the
+exact grants its surface requires belong in its own rollout contract, not here.
+Credit is its own module with its own cutover; see
+[credit_enforcement_rollout.md](credit_enforcement_rollout.md).
 
 ## Product rollout boundary
 

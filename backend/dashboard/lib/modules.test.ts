@@ -593,6 +593,27 @@ for (const [capabilities, visible] of [
   }
 }
 
+// Institution is grantable vocabulary ahead of its cutover: a binding on it
+// opens no module yet, because `/institution` still enforces through Account.
+{
+  const vocabularyOnly = {
+    module: "institution",
+    sensitivity: "confidential",
+    permission: "view",
+    requiresContextualAuthorization: false,
+    dataScope: {
+      kind: "all",
+      branches: [] as string[],
+      regions: [] as string[],
+    },
+  } as const;
+  assert.deepEqual(
+    effectiveInstitutionModules(null, [vocabularyOnly]),
+    new Set(),
+  );
+  assert.deepEqual(effectiveOrganizationModules([vocabularyOnly]), new Set());
+}
+
 // ---------------------------------------------------------------------------
 // Credit is its own module (2026-09-22,
 // backend/docs/credit_enforcement_rollout.md). A CREDIT/aggregated view admits
