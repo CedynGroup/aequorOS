@@ -1,3 +1,12 @@
+"""Balance-sheet forecasting routes.
+
+Every route names its exact Forecasting binding: aggregated view for the
+scenario presets and run summaries, confidential view for a full run, and
+confidential run for anything that mints a run. The service re-checks run
+authority before it computes, so the dependency here is the route's contract,
+not its only guard.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -5,7 +14,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    ForecastingAggregatedView,
+    ForecastingRun,
+    ForecastingRunDetailView,
+)
 from app.schemas.forecasting import (
     ForecastRunCreate,
     ForecastRunListRead,
@@ -26,8 +40,10 @@ router = APIRouter(tags=["forecasting"])
     response_model=ForecastScenarioListRead,
     operation_id="listForecastScenarios",
 )
-def list_forecast_scenarios(bank_id: str, db: DbSession, ctx: Tenant) -> ForecastScenarioListRead:
-    return regulatory_forecasting.list_forecast_scenarios(db, ctx, bank_id)
+def list_forecast_scenarios(
+    bank_id: str, db: DbSession, access: ForecastingAggregatedView
+) -> ForecastScenarioListRead:
+    return regulatory_forecasting.list_forecast_scenarios(db, access.ctx, bank_id)
 
 
 @router.post(
@@ -40,9 +56,9 @@ def create_forecast_run(
     bank_id: str,
     payload: ForecastRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: ForecastingRun,
 ) -> ForecastRunRead:
-    return regulatory_forecasting.create_forecast_run(db, ctx, bank_id, payload)
+    return regulatory_forecasting.create_forecast_run(db, access.ctx, bank_id, payload)
 
 
 @router.get(
@@ -53,11 +69,13 @@ def create_forecast_run(
 def list_forecast_runs(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: ForecastingAggregatedView,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ForecastRunListRead:
-    return regulatory_forecasting.list_forecast_runs(db, ctx, bank_id, limit=limit, offset=offset)
+    return regulatory_forecasting.list_forecast_runs(
+        db, access.ctx, bank_id, limit=limit, offset=offset
+    )
 
 
 @router.get(
@@ -65,8 +83,10 @@ def list_forecast_runs(
     response_model=ForecastRunRead,
     operation_id="getForecastRun",
 )
-def get_forecast_run(bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant) -> ForecastRunRead:
-    return regulatory_forecasting.get_forecast_run(db, ctx, bank_id, run_id)
+def get_forecast_run(
+    bank_id: str, run_id: UUID, db: DbSession, access: ForecastingRunDetailView
+) -> ForecastRunRead:
+    return regulatory_forecasting.get_forecast_run(db, access.ctx, bank_id, run_id)
 
 
 @router.post(
@@ -79,9 +99,9 @@ def run_strategic_optimizer(
     bank_id: str,
     payload: OptimizerRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: ForecastingRun,
 ) -> OptimizerResultRead:
-    return regulatory_forecasting.run_strategic_optimizer(db, ctx, bank_id, payload)
+    return regulatory_forecasting.run_strategic_optimizer(db, access.ctx, bank_id, payload)
 
 
 @router.post(
@@ -94,6 +114,6 @@ def run_whatif_analysis(
     bank_id: str,
     payload: WhatIfRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: ForecastingRun,
 ) -> WhatIfResultRead:
-    return regulatory_forecasting.run_whatif_analysis(db, ctx, bank_id, payload)
+    return regulatory_forecasting.run_whatif_analysis(db, access.ctx, bank_id, payload)

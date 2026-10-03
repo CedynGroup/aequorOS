@@ -45,8 +45,9 @@ separate restricted-view permission.
 In **Basel → Planning**, the **ICAAP and ILAAP governance** panel shows current
 and approved plan versions and the latest ILAAP snapshot. **Refresh ILAAP
 evidence** appears only when both refresh permissions above are present and a
-reporting period is selected. Forecast projections also require Forecasting
-access; the capital dashboard and illustrative planner require aggregated view.
+reporting period is selected. Forecast projections follow the
+[Forecasting rollout contract](forecasting_enforcement_rollout.md#dashboard-controls);
+the capital dashboard and illustrative planner require Capital aggregated view.
 After a grant change, sign in again to obtain the new authorization version.
 
 ## Inventory

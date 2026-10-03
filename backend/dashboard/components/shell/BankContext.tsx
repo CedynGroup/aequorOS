@@ -352,6 +352,24 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      forecastingAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "aggregated",
+        "view",
+      ),
+      forecastingConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "view",
+      ),
+      forecastingRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "run",
+      ),
       // A DEPLOYMENT FLAG, not a permission: with BI off every BI route answers
       // 404, so the nav must not offer the door and the route guard must refuse
       // it. `undefined` until `GET /feature-flags` answers — see ModuleScope.

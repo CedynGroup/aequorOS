@@ -67,6 +67,11 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 2,
   },
+  forecast_member: {
+    id: "eeeeeeee-0000-4eee-8eee-eeeeeeeeeee0",
+    roles: ["viewer"],
+    authv: 2,
+  },
   account_admin: {
     id: "eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6",
     roles: ["account_admin"],

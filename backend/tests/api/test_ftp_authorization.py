@@ -625,6 +625,11 @@ def test_mixed_execution_requires_ftp_only_in_plan(
         module=ModuleScope.FX,
         sensitivity=SensitivityScope.CONFIDENTIAL,
     )
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.FORECASTING,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(
         RoleBundle.ANALYST,
         module=ModuleScope.LIQUIDITY,
@@ -762,6 +767,11 @@ def test_queued_ftp_requires_run_before_any_execution(
 ) -> None:
     period_id = _seed_book()
     _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.FORECASTING,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(sensitivity=SensitivityScope.CONFIDENTIAL)
 
     def forbidden(*args: object, **kwargs: object) -> None:

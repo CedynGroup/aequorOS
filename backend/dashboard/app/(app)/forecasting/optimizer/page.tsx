@@ -24,6 +24,7 @@ import SectionCard from "@/components/ui/SectionCard";
 import ChartFrame from "@/components/ui/ChartFrame";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import RunProvenance from "@/components/forecasting/RunProvenance";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   useRegulatoryRun,
@@ -180,17 +181,23 @@ function fromStoredRun(run: RegulatoryRunRead): OptimizerView | null {
 }
 
 export default function StrategicOptimizer() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const canRun = moduleScope.forecastingRun === true;
+  // The stored optimizer run is Forecasting run detail; nothing is requested
+  // before the projection says the caller may open it.
+  const runsBankId = moduleScope.forecastingConfidentialView
+    ? bankId
+    : undefined;
 
   const runOptimizer = useRunOptimizer(bankId);
-  const runsQuery = useRegulatoryRuns(bankId, {
+  const runsQuery = useRegulatoryRuns(runsBankId, {
     module: "optimizer",
     limit: 1,
   });
   const latestStoredId = runsQuery.data?.runs[0]?.id ?? null;
-  const storedRun = useRegulatoryRun(bankId, latestStoredId);
+  const storedRun = useRegulatoryRun(runsBankId, latestStoredId);
 
   const view: OptimizerView | null = runOptimizer.data
     ? fromResult(runOptimizer.data)
@@ -199,21 +206,26 @@ export default function StrategicOptimizer() {
       : null;
 
   const runButton = (
-    <button
-      type="button"
-      disabled={runOptimizer.isPending || !periodId}
-      onClick={() =>
-        periodId && runOptimizer.mutate({ reportingPeriodId: periodId })
-      }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runOptimizer.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <Search size={13} aria-hidden />
+    <ForecastingRunGate canRun={canRun}>
+      {(descriptionId) => (
+        <button
+          type="button"
+          disabled={!canRun || runOptimizer.isPending || !periodId}
+          aria-describedby={descriptionId}
+          onClick={() =>
+            periodId && runOptimizer.mutate({ reportingPeriodId: periodId })
+          }
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {runOptimizer.isPending ? (
+            <Loader2 size={13} className="animate-spin" aria-hidden />
+          ) : (
+            <Search size={13} aria-hidden />
+          )}
+          Run optimizer
+        </button>
       )}
-      Run optimizer
-    </button>
+    </ForecastingRunGate>
   );
 
   return (

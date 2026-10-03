@@ -23,9 +23,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRead, ReverseStressRunCreate
-from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
+from app.services import (
+    regulatory_capital,
+    regulatory_liquidity,
+    regulatory_parameters,
+    scoped_authorization,
+)
 from app.services.audit import record_event
 
 ENGINE_VERSION = "reverse-stress-v1.0.0"
@@ -74,6 +80,17 @@ def run_reverse_stress(
 ) -> ReverseStressRead:
     """Compute and persist the reverse-stress frontier for one period."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # The frontier is a Forecasting run: one complete confidential/run binding
+    # decides it here, before the period lookup and before either engine searches.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="reverse_stress_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
 
     # Anchor the frontier to the exact canonical state it searched over: the
