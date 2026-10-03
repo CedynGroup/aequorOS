@@ -49,7 +49,7 @@ from app.services.bi.authorization import (
     REASON_BANK_WIDE_FIGURE,
     REASON_INSTITUTION_GRAIN,
 )
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.api.helpers import ORG_1, USER_1, error_envelope, headers
 from tests.api.test_bi_routes import AS_OF, BANK_ID, BASE, seed_bi_mart
 
 PORTFOLIO_MEASURE = "loans.balance_rc"
@@ -423,17 +423,26 @@ def test_an_institution_grain_measure_is_403_to_a_branch_scoped_reader(
     scoped = _grant(db_session, scope=DataScope.BRANCH, values=("B1",))
     response = _post(db_client, "/query", _query_body(measures=[INSTITUTION_MEASURE]), scoped)
     assert response.status_code == 403, response.text
-    detail = response.json()["error"]["details"]
     # The refusal NAMES the measure and its label, which is the existing contract
     # of every BI denial: what the reader needs is the grant they are missing, and
     # a member id is not a figure. The reason is the one the log and the telemetry
-    # carry, so an operator reading either sees the same rule.
-    assert detail["denied_members"] == [INSTITUTION_MEASURE]
-    assert detail["reason"] == REASON_INSTITUTION_GRAIN
-    assert detail["denied_member_labels"]
-    # No figure anywhere: the institution's CAR is 14.25 and its loans are 600.
-    assert "14.25" not in response.text
-    assert str(int(INSTITUTION_LOANS)) not in response.text
+    # carry, so an operator reading either sees the same rule. The body is matched
+    # exactly, so no figure (the institution's CAR of 14.25, its loans of 600)
+    # can ride along in it.
+    assert error_envelope(response) == {
+        "code": "forbidden",
+        "message": "Forbidden",
+        "details": {
+            "error_code": "bi_authorization_denied",
+            "message": (
+                "Your access does not cover every field this view needs. "
+                "An Org Owner can grant the fields listed here."
+            ),
+            "reason": REASON_INSTITUTION_GRAIN,
+            "denied_members": [INSTITUTION_MEASURE],
+            "denied_member_labels": ["Capital adequacy ratio (CAR) · Official"],
+        },
+    }
 
 
 def test_the_query_log_row_names_the_reason_and_the_denied_measure(
@@ -784,11 +793,21 @@ def test_two_irreconcilable_narrow_scopes_are_REFUSED_not_intersected(
 
     conflicted = _post(db_client, "/query", _query_body(dimensions=["branch.code"]), authv)
     assert conflicted.status_code == 403, conflicted.text
-    details = conflicted.json()["error"]["details"]
-    assert details["reason"] == "data_scope_conflict", details
-    # And nothing of the book leaks in the refusal.
-    assert str(B1_ONLY) not in conflicted.text
-    assert str(INSTITUTION_LOANS) not in conflicted.text
+    # The refusal is matched exactly, so nothing of the book leaks in it.
+    assert error_envelope(conflicted) == {
+        "code": "forbidden",
+        "message": "Forbidden",
+        "details": {
+            "error_code": "bi_authorization_denied",
+            "message": (
+                "Your access does not cover every field this view needs. "
+                "An Org Owner can grant the fields listed here."
+            ),
+            "reason": "data_scope_conflict",
+            "denied_members": ["loans.balance_rc", "branch.code"],
+            "denied_member_labels": ["Gross loans", "Branch code"],
+        },
+    }
 
 
 def test_the_query_answer_STATES_the_slice_it_covers(

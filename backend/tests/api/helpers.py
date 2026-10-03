@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
+
+import httpx
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.core.logging import REQUEST_ID_HEADER
 from app.core.security import create_token
 from app.db.session import get_sessionmaker
 from app.services.integration_keys import issue_key
@@ -55,3 +59,15 @@ def integration_key_headers(bank_id: str, organization_id: str = ORG_1) -> dict[
             "Test push feed",
         )
     return {"Authorization": f"Bearer {issued.key}"}
+
+
+def error_envelope(response: httpx.Response) -> dict[str, Any]:
+    """The response's ``error`` envelope, with its ``request_id`` checked and removed.
+
+    The request id is a fresh uuid4 on every request, so it is the one field an
+    exact body assertion cannot name. It is pinned to the ``X-Request-ID`` header
+    instead, and everything else is left for the caller to match exactly.
+    """
+    error = dict(response.json()["error"])
+    assert error.pop("request_id") == response.headers[REQUEST_ID_HEADER]
+    return error

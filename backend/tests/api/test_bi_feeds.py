@@ -71,7 +71,7 @@ from app.services.bi.authorization import REASON_DATA_SCOPE_CONFLICT
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, runner
-from tests.api.helpers import ORG_1, USER_1, headers, integration_key_headers
+from tests.api.helpers import ORG_1, USER_1, error_envelope, headers, integration_key_headers
 from tests.api.test_bi_routes import (
     AS_OF,
     BANK_ID,
@@ -94,6 +94,11 @@ B1_AUGUST = Decimal("400")
 B2_AUGUST = Decimal("200")
 
 LOAN_BOOK = f"/api/v1/banks/{BANK_ID}/bi/feeds/loan_book"
+# A refusal names every member the dataset serves, measures first.
+LOAN_BOOK_MEMBERS = [
+    *datasets.dataset("loan_book").measures,
+    *datasets.dataset("loan_book").dimensions,
+]
 METRICS = f"/api/v1/banks/{BANK_ID}/bi/feeds/regulatory_metrics"
 
 
@@ -565,8 +570,17 @@ def test_a_malformed_cursor_is_422_not_a_full_resynchronisation(
 ) -> None:
     response = _pull(db_client, _reader(), cursor=token)
     assert response.status_code == 422, response.text
-    assert response.json()["error"]["details"]["error_code"] == read_bi_feeds.ERROR_INVALID_CURSOR
-    assert str(B1_AUGUST) not in response.text
+    assert error_envelope(response) == {
+        "code": "http_error",
+        "message": "Unprocessable Content",
+        "details": {
+            "error_code": read_bi_feeds.ERROR_INVALID_CURSOR,
+            "message": (
+                "The cursor is not one this feed issued. "
+                "Omit it to resynchronise from the beginning."
+            ),
+        },
+    }
 
 
 # --- the cursor -----------------------------------------------------------------------------
@@ -742,10 +756,19 @@ def test_two_different_narrow_sentences_across_pairs_refuse_the_pull(
 
     response = _pull(db_client, reader)
     assert response.status_code == 403, response.text
-    details = response.json()["error"]["details"]
-    assert details["error_code"] == read_bi_feeds.ERROR_AUTHORIZATION_DENIED
-    assert str(B1_AUGUST) not in response.text
-    assert str(B2_AUGUST) not in response.text
+    # Matched exactly, so neither branch's balance rides along in the refusal.
+    assert error_envelope(response) == {
+        "code": "forbidden",
+        "message": "Forbidden",
+        "details": {
+            "error_code": read_bi_feeds.ERROR_AUTHORIZATION_DENIED,
+            "message": (
+                "This credential is not authorized for the figures in this dataset. "
+                "An Org Owner can widen or reissue it."
+            ),
+            "denied_members": LOAN_BOOK_MEMBERS,
+        },
+    }
     # The reason travels on the refusal's audit row (the 403 body names only the
     # error code and the refused members), and it is the interactive path's own
     # string, not a feed restatement.
@@ -842,7 +865,18 @@ def test_a_scope_that_matches_no_branch_serves_nothing_rather_than_everything(
         _reader(data_scope=DataScope.REGION, values=("Northern Territories",)),
     )
     assert response.status_code == 403, response.text
-    assert str(B1_AUGUST) not in response.text
+    assert error_envelope(response) == {
+        "code": "forbidden",
+        "message": "Forbidden",
+        "details": {
+            "error_code": read_bi_feeds.ERROR_AUTHORIZATION_DENIED,
+            "message": (
+                "This credential is not authorized for the figures in this dataset. "
+                "An Org Owner can widen or reissue it."
+            ),
+            "denied_members": LOAN_BOOK_MEMBERS,
+        },
+    }
 
 
 def test_a_branch_scoped_credential_is_refused_the_institution_ratios(
