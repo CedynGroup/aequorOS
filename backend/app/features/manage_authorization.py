@@ -167,75 +167,66 @@ _PUBLIC_ACCESS_REQUEST_ROUTES = frozenset(
 _BI_ROOTS = frozenset({"dashboards", "explore", "insights"})
 
 
-def _route_requirement(
-    route: str,
-) -> tuple[str, tuple[tuple[ModuleScope, Sensitivity, Permission], ...]]:
+_RouteRequirement = tuple[ModuleScope, Sensitivity, Permission]
+
+#: Routes whose requirements differ from their root's, matched exactly first.
+_EXACT_ROUTE_REQUIREMENTS: dict[str, tuple[_RouteRequirement, ...]] = {
+    "/liquidity": (
+        (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/liquidity/stress": (
+        (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+        (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/liquidity/forecast": ((ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/liquidity/monitoring": ((ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/liquidity/cfp": ((ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/irr/scenarios": ((ModuleScope.IRRBB, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/fx/scenarios": ((ModuleScope.FX, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/credit/book": ((ModuleScope.CREDIT, Sensitivity.RESTRICTED, Permission.VIEW),),
+    "/credit/concentration": (
+        (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.CREDIT, Sensitivity.RESTRICTED, Permission.VIEW),
+    ),
+    "/credit/activity": (
+        (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.CREDIT, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/ftp/scenarios": ((ModuleScope.FTP, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/basel/planning": ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/icaap": ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+}
+
+#: Every other route requires its root's single capability.
+_ROOT_REQUIREMENTS: dict[str, _RouteRequirement] = {
+    "alerts": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    "basel": (ModuleScope.CAPITAL, Sensitivity.AGGREGATED, Permission.VIEW),
+    "behavioral": (ModuleScope.BEHAVIORAL, Sensitivity.AGGREGATED, Permission.VIEW),
+    "credit": (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
+    "data-engine": (ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),
+    "forecasting": (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
+    "ftp": (ModuleScope.FTP, Sensitivity.AGGREGATED, Permission.VIEW),
+    "fx": (ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),
+    "institution": (ModuleScope.ACCOUNT, Sensitivity.RESTRICTED, Permission.VIEW),
+    "irr": (ModuleScope.IRRBB, Sensitivity.AGGREGATED, Permission.VIEW),
+    "liquidity": (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
+    "markets": (ModuleScope.MARKETS, Sensitivity.PUBLISHED, Permission.VIEW),
+    "positions": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    "reports": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),
+    "risk": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    "submissions": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),
+}
+
+
+def _route_requirement(route: str) -> tuple[str, tuple[_RouteRequirement, ...]]:
     normalized = "/" + route.strip("/").lower()
     if normalized not in _PUBLIC_ACCESS_REQUEST_ROUTES:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
-
-    if normalized == "/liquidity/stress":
-        requirements = (
-            (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-            (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-        )
-    elif normalized in {
-        "/liquidity/forecast",
-        "/liquidity/monitoring",
-        "/liquidity/cfp",
-    }:
-        requirements = ((ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
-    elif normalized == "/liquidity":
-        requirements = (
-            (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
-            (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-        )
-    elif normalized.startswith("/liquidity"):
-        requirements = ((ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),)
-    elif normalized == "/irr/scenarios":
-        requirements = ((ModuleScope.IRRBB, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
-    elif normalized.startswith("/irr"):
-        requirements = ((ModuleScope.IRRBB, Sensitivity.AGGREGATED, Permission.VIEW),)
-    elif normalized == "/fx/scenarios":
-        requirements = ((ModuleScope.FX, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
-    elif normalized.startswith("/fx"):
-        requirements = ((ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),)
-    elif normalized == "/credit/book":
-        requirements = ((ModuleScope.CREDIT, Sensitivity.RESTRICTED, Permission.VIEW),)
-    elif normalized in {"/credit/concentration", "/credit/activity"}:
-        requirements = (
-            (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
-            (
-                ModuleScope.CREDIT,
-                Sensitivity.RESTRICTED
-                if normalized == "/credit/concentration"
-                else Sensitivity.CONFIDENTIAL,
-                Permission.VIEW,
-            ),
-        )
-    elif normalized == "/ftp/scenarios":
-        requirements = ((ModuleScope.FTP, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
-    elif normalized in {"/basel/planning", "/icaap"}:
-        requirements = ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
-    else:
-        root = normalized.split("/", 2)[1]
-        requirement_by_root = {
-            "alerts": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-            "basel": (ModuleScope.CAPITAL, Sensitivity.AGGREGATED, Permission.VIEW),
-            "behavioral": (ModuleScope.BEHAVIORAL, Sensitivity.AGGREGATED, Permission.VIEW),
-            "credit": (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
-            "data-engine": (ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),
-            "forecasting": (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
-            "ftp": (ModuleScope.FTP, Sensitivity.AGGREGATED, Permission.VIEW),
-            "institution": (ModuleScope.ACCOUNT, Sensitivity.RESTRICTED, Permission.VIEW),
-            "markets": (ModuleScope.MARKETS, Sensitivity.PUBLISHED, Permission.VIEW),
-            "positions": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-            "reports": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),
-            "risk": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
-            "submissions": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),
-        }
-        requirements = () if root in _BI_ROOTS else (requirement_by_root[root],)
-    return normalized, requirements
+    if normalized in _EXACT_ROUTE_REQUIREMENTS:
+        return normalized, _EXACT_ROUTE_REQUIREMENTS[normalized]
+    root = normalized.split("/", 2)[1]
+    return normalized, () if root in _BI_ROOTS else (_ROOT_REQUIREMENTS[root],)
 
 
 def _route_title(route: str) -> str:
