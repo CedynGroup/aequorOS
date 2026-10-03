@@ -232,26 +232,12 @@ test.describe("the certification ceremony", () => {
         }
 
         // SSO step-up is a full redirect to the bank's IdP, so the only thing that
-        // can prove the round trip is a browser. This stack has no SSO connection
-        // (SSO_INTERNAL_KEY is empty), so the leg under test is the RETURN leg:
-        // the signer must come back to this ceremony, on this return, with an
-        // honest explanation — not a JSON error page, and not a silent no-op.
-        await Promise.all([
-          page.waitForURL(/\/submissions\/returns/, { timeout: 30_000 }),
-          page.getByRole("button", { name: /single sign-on/i }).click(),
-        ]);
-        await expect(
-          page.getByText(/Re-authentication did not complete/i),
-        ).toBeVisible({ timeout: 30_000 });
-        await expect(
-          page.getByText(/not configured for this institution/i),
-        ).toBeVisible();
-        // Nothing was signed, and the ceremony is still open on the same return.
+        // can prove the round trip is a browser. Both legs — the return with an
+        // authorisation held, and the honest "not configured" return when the
+        // connection is off — are proved against the local issuer in
+        // sso-sign-in.spec.ts. Nothing was signed here, and the ceremony is
+        // still open on the same return.
         await expect(page.getByText(/section 93\(3\)/i)).toBeVisible();
-        // The markers are consumed, not left in the address bar: a reload must not
-        // reopen a signing dialog, and an outcome must not outlive its round trip.
-        expect(page.url()).not.toContain("stepUp=");
-        expect(page.url()).not.toContain("certify=");
       } finally {
         // Hand the gate back however this ends, or every other submission
         // journey in the run inherits a locked return.

@@ -108,12 +108,16 @@ separate AequorOS decision.
 3. Sign in with a work account that has been provisioned in AequorOS → lands on
    the dashboard.
 4. Sign in with a work account that has **not** been provisioned:
-   - request-access **off** → rejected with "No AequorOS account is provisioned
-     for this identity";
-   - request-access **on** → "administrator must approve" message, a pending
+   - request-access **off** → refused, with no session;
+   - request-access **on** → a pending
      identity appears under Settings → Members with "SSO approval needed · no
      access yet", and the account works only after an Organization Owner
      approves one complete scoped grant.
+
+Both refusals return to the login page with a single sign-on failure message
+explaining that access requests need administrator approval; otherwise, the
+user should contact their administrator. The page does not expose the backend's
+specific refusal reason.
 
 ## Security notes your reviewers will ask about
 

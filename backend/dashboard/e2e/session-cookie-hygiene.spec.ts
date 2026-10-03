@@ -30,7 +30,7 @@ async function signIn(
         { timeout: 5_000 },
       )
       .catch(() => null);
-    await page.getByRole("button", { name: /^Sign in/ }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     submitted = (await callback) !== null;
   }
   expect(submitted).toBe(true);
@@ -278,7 +278,7 @@ test.describe("session cookie hygiene", () => {
     await page.waitForLoadState("networkidle");
     await page.getByLabel("Email").fill("e2e.analyst@aequoros.example");
     await page.getByLabel("Password").fill("wrong-password");
-    await page.getByRole("button", { name: /^Sign in/ }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.locator('form p[role="alert"]')).toContainText(
       "Invalid email or password",
     );
@@ -388,7 +388,7 @@ test.describe("session cookie hygiene", () => {
       await page.goto(`${origin}/login`);
       await page.getByLabel("Email").fill("e2e.analyst@aequoros.example");
       await page.getByLabel("Password").fill(E2E_PASSWORD);
-      await page.getByRole("button", { name: /^Sign in/ }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page.locator('form p[role="alert"]')).toContainText(
         "Could not reach the AequorOS service",
       );
