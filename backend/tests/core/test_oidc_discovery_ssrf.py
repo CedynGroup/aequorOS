@@ -268,9 +268,10 @@ def test_jwks_client_fetches_through_the_guarded_opener(
 ) -> None:
     """PyJWKClient's own ``fetch_data`` uses urllib's default opener, which
     follows redirects unvalidated. Pin that our client does not."""
-    opener = _serve(monkeypatch, {_JWKS_URI: {"keys": []}})
+    _, jwks = _rsa_idp()
+    opener = _serve(monkeypatch, {_JWKS_URI: jwks})
     client = security._jwks_client(_JWKS_URI)
-    assert client.fetch_data() == {"keys": []}
+    assert client.fetch_data() == jwks
     assert opener.opened == [_JWKS_URI]
 
 
