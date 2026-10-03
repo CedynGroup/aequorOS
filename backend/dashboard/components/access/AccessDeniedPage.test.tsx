@@ -16,6 +16,7 @@ const capability = (module: string) => ({
   sensitivity: "confidential",
   permission: "view",
   requiresContextualAuthorization: false,
+  dataScope: { kind: "all", branches: [], regions: [] },
 });
 const submitted: Record<string, unknown>[] = [];
 const loader = NodeModule as typeof NodeModule & {
