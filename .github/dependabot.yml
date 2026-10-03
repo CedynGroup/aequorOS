@@ -8,6 +8,12 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      # Held on 5.x: TypeScript 7 is unsupported by typescript-eslint and drops
+      # the compiler JS API the dashboard tests use. Revisit once
+      # typescript-eslint supports 7.
+      - dependency-name: typescript
+        versions: [">=6"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
