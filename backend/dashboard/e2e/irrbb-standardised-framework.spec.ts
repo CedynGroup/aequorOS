@@ -100,7 +100,9 @@ test.describe("unbound IRRBB user", () => {
     });
 
     await page.goto("/irr/standardised");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     expect(frameworkReads).toEqual([]);
   });
 });

@@ -11,9 +11,7 @@ test.describe("unbound IRRBB user", () => {
   // access in another module to exercise the IRRBB-specific denial boundary.
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("hides navigation and 404s the deep link without product queries", async ({
-    page,
-  }) => {
+  test("denies the deep link without product queries", async ({ page }) => {
     // Bank discovery can finish before effective authority resolves. Exercise
     // that ordering with a real, delayed profile response.
     await page.route("**/auth/me", async (route) => {
@@ -29,7 +27,9 @@ test.describe("unbound IRRBB user", () => {
     });
 
     await page.goto("/irr");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     expect(irrRequests).toEqual([]);
 
     if (evidenceDir) {

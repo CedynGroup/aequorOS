@@ -30,6 +30,7 @@ import {
   LayoutGrid,
   Table2,
   MessageSquareQuote,
+  UserRoundCog,
 } from "lucide-react";
 
 type Item = {
@@ -459,12 +460,20 @@ const items: Item[] = [
     keywords: "bog filing returns calendar approvals templates",
   },
   {
+    id: "access",
+    label: "Access control",
+    href: "/access",
+    icon: UserRoundCog,
+    group: "Governance",
+    keywords: "members grants permissions authentication sso integration keys",
+  },
+  {
     id: "settings",
     label: "Settings",
     href: "/settings",
     icon: Settings,
     group: "Governance",
-    keywords: "configuration limits thresholds admin",
+    keywords: "appearance profile preferences compute about",
   },
 ];
 

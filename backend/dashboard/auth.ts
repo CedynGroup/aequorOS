@@ -5,7 +5,7 @@
  * verifies (zero-trust): a Credentials provider (email + password → backend
  * `/auth/login`) and AequorOS' own OIDC SSO — the bank's IdP (Google Workspace,
  * Entra, Okta, …) is configured per-org in the backend (`sso_connections`,
- * Settings → Authentication), and NextAuth loads that client config lazily via an
+ * Access → Authentication), and NextAuth loads that client config lazily via an
  * internal server-to-server endpoint gated by SSO_INTERNAL_KEY. No third-party
  * auth broker. The backend independently re-verifies every id_token via
  * `/auth/sso`, then its access/refresh tokens live in the NextAuth session; the
@@ -144,7 +144,7 @@ const SSO_CACHE_MS = 60_000;
 /**
  * Refuse an SSO config whose issuer is not a routable public destination.
  *
- * `issuer` is set by an account admin (Settings → Authentication) and openid-client
+ * `issuer` is set by an account admin (Access → Authentication) and openid-client
  * fetches it from INSIDE this Node process — its discovery request and its
  * token-endpoint exchange are server-side fetches the backend's Python egress
  * guard structurally cannot see, because they happen in a different runtime in

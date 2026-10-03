@@ -227,33 +227,10 @@ An Analyst FX/confidential row grants `view`, `create`, `edit`, and `run`, but
 does not grant FX/aggregated because sensitivity is exact. Add the aggregated
 row only when the institution confirms dashboard access.
 
-The common least-privilege operator therefore needs two independently complete
-rows:
-
-```json
-[
-  {
-    "principal_user_id": "<confirmed human user UUID>",
-    "role_bundle": "viewer",
-    "institution_scope": "institution",
-    "institution_id": "<exact BK-*>",
-    "module_scope": "fx",
-    "sensitivity_scope": "aggregated",
-    "reason": "<institution-approved reason>",
-    "expected_authority_sentence": "<server preview response>"
-  },
-  {
-    "principal_user_id": "<same confirmed human user UUID>",
-    "role_bundle": "analyst",
-    "institution_scope": "institution",
-    "institution_id": "<same exact BK-*>",
-    "module_scope": "fx",
-    "sensitivity_scope": "confidential",
-    "reason": "<institution-approved reason>",
-    "expected_authority_sentence": "<server preview response>"
-  }
-]
-```
+An FX operator needs two separate grants at the same exact institution:
+Viewer / FX / aggregated and Analyst / FX / confidential.
+Use the [grant submission contract](authorization_foundation.md#structured-grant-reasons)
+for the payload, reason fields, and preview/create sequence.
 
 Do not replace these with incomplete rows, combine fields across rows, copy
 production users into code, or widen scope to `all` to compensate for a missing

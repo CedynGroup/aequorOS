@@ -203,7 +203,7 @@ test.describe("ICAAP workspace", () => {
 test.describe("a user without Capital confidential authority", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("sees no ICAAP entry, 404s the deep link, and sends no ICAAP request", async ({
+  test("sees no ICAAP entry, is denied the deep link, and sends no ICAAP request", async ({
     page,
   }) => {
     const icaapRequests: string[] = [];
@@ -217,7 +217,9 @@ test.describe("a user without Capital confidential authority", () => {
     await expect(page.getByRole("link", { name: "ICAAP" })).toHaveCount(0);
 
     await page.goto("/icaap");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     expect(
       icaapRequests.filter((url) => url.includes("/api/v1/")),
     ).toEqual([]);

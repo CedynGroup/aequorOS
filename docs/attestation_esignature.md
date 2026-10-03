@@ -1171,7 +1171,7 @@ must not be represented as working:
    Bank IT must also register a second redirect URI
    (`/api/attestation/step-up/callback`); until they do, sign-in works and
    signing fails at re-authentication. Both URIs are now shown in
-   Settings → Authentication and in `docs/sso-onboarding.md`.
+   Access → Authentication and in `docs/sso-onboarding.md`.
 
    One residual weakness, unchanged: `verify_step_up` checks `auth_time`
    freshness **only when the claim is present**. An IdP that omits it yields no

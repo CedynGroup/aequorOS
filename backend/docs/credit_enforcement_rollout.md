@@ -291,11 +291,14 @@ families are revoked in the same transaction.
   "institution_id": "<exact BK-*>",
   "module_scope": "credit",
   "sensitivity_scope": "aggregated",
-  "reason": "<institution-approved reason>",
+  "reason_category": "<structured reason category>",
+  "reason_detail": "<institution-approved reason>",
   "expected_authority_sentence": "<server preview response>"
 }
 ```
 
+The reason fields follow the
+[structured reason contract](authorization_foundation.md#structured-grant-reasons).
 Do not widen to `all` to compensate for a missing decision, and do not encode a
 branch, region or portfolio in the reason as if it were enforced scope — data
 scope is a later, separately migrated dimension.
@@ -329,10 +332,10 @@ Before deployment, attach:
 Before this release, the entire direct credit surface was served to any
 authenticated tenant user:
 
-| Route                           | Gate BEFORE                                | What that admitted                                                    |
-| ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
-| every `GET /credit/*`           | `Tenant` + `require_module_access("credit")` | Any authenticated user of the tenant — including the loan blotter, which returns `counterparty_name` per row |
-| `POST /credit/run-all-scenarios` | `MutationTenant` + the same entitlement    | Any token carrying the scalar `analyst` role or higher; it mints immutable `RegulatoryRun` rows |
+| Route                            | Gate BEFORE                                  | What that admitted                                                                                           |
+| -------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| every `GET /credit/*`            | `Tenant` + `require_module_access("credit")` | Any authenticated user of the tenant — including the loan blotter, which returns `counterparty_name` per row |
+| `POST /credit/run-all-scenarios` | `MutationTenant` + the same entitlement      | Any token carrying the scalar `analyst` role or higher; it mints immutable `RegulatoryRun` rows              |
 
 `require_module_access` is a per-tenant CONFIGURATION gate: it asks whether this
 institution's licence class is entitled to the module, never whether this person
@@ -346,17 +349,17 @@ Sensitivity is declared from what the RESPONSE discloses, per route, not once fo
 the module. Two orthogonal axes are decided per route: the permission tuple, and
 whether the surface refuses a narrowed data scope or applies it.
 
-| Route                                                   | Module / sensitivity / permission | Data scope    | Dependency                          |
-| ------------------------------------------------------- | --------------------------------- | ------------- | ----------------------------------- |
-| `GET /api/v1/banks/{bank_id}/credit/dashboard`          | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
-| `GET /api/v1/banks/{bank_id}/credit/migration`          | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
-| `GET /api/v1/banks/{bank_id}/credit/vintages`           | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
-| `GET /api/v1/banks/{bank_id}/credit/pd`                 | CREDIT / `aggregated` / `view`     | whole institution | `require_credit_aggregated_view`    |
-| `GET /api/v1/banks/{bank_id}/credit/concentration`      | CREDIT / `restricted` / `view`     | whole institution | `require_credit_concentration_view` |
-| `GET /api/v1/banks/{bank_id}/credit/loans`              | CREDIT / `restricted` / `view`     | **applied**   | `require_credit_blotter_view`       |
-| `GET /api/v1/banks/{bank_id}/credit/loans/facets`       | CREDIT / `restricted` / `view`     | **applied**   | `require_credit_blotter_view`       |
-| `GET /api/v1/banks/{bank_id}/credit/activity`           | CREDIT / `confidential` / `view`   | **applied**   | `require_credit_activity_view`      |
-| `POST /api/v1/banks/{bank_id}/credit/run-all-scenarios` | CREDIT / `confidential` / `run`    | whole institution | `require_credit_run`                |
+| Route                                                   | Module / sensitivity / permission | Data scope        | Dependency                          |
+| ------------------------------------------------------- | --------------------------------- | ----------------- | ----------------------------------- |
+| `GET /api/v1/banks/{bank_id}/credit/dashboard`          | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/migration`          | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/vintages`           | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/pd`                 | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view`    |
+| `GET /api/v1/banks/{bank_id}/credit/concentration`      | CREDIT / `restricted` / `view`    | whole institution | `require_credit_concentration_view` |
+| `GET /api/v1/banks/{bank_id}/credit/loans`              | CREDIT / `restricted` / `view`    | **applied**       | `require_credit_blotter_view`       |
+| `GET /api/v1/banks/{bank_id}/credit/loans/facets`       | CREDIT / `restricted` / `view`    | **applied**       | `require_credit_blotter_view`       |
+| `GET /api/v1/banks/{bank_id}/credit/activity`           | CREDIT / `confidential` / `view`  | **applied**       | `require_credit_activity_view`      |
+| `POST /api/v1/banks/{bank_id}/credit/run-all-scenarios` | CREDIT / `confidential` / `run`   | whole institution | `require_credit_run`                |
 
 The reasoning, route by route:
 
@@ -505,12 +508,12 @@ Measured read-only against the primary deployment on 2026-09-27
 `202609210066`, so neither the Phase 1 mirror `202609220067` nor the Phase 4
 migrations are applied there yet). 12 active principal × institution pairs:
 
-| Population                                                                | Pairs | Before                                     | After                         | Why correct                                                                                                          |
-| ------------------------------------------------------------------------- | ----- | ------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Holds an `all` / `all` operational row (scalar `admin` / `analyst`)        | 2     | every credit route                         | every credit route            | `all` covers `credit` and every sensitivity; unchanged                                                                |
-| Holds an `all` / `all` row but not `analyst` (`account_admin` scalar role) | 4     | every read; run already refused (see note) | every read                    | unchanged                                                                                                            |
-| `account_admin` with only an Account-plane row                             | 2     | every credit read                          | **nothing**                   | the defect being fixed: administering the account is not reading the loan book, and the blotter returns obligor names |
-| Service identities (`auth_provider = 'service'`)                          | 4     | nothing                                    | nothing                       | integration keys are confined to API Push at the auth boundary and never reached a credit route                       |
+| Population                                                                 | Pairs | Before                                     | After              | Why correct                                                                                                           |
+| -------------------------------------------------------------------------- | ----- | ------------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Holds an `all` / `all` operational row (scalar `admin` / `analyst`)        | 2     | every credit route                         | every credit route | `all` covers `credit` and every sensitivity; unchanged                                                                |
+| Holds an `all` / `all` row but not `analyst` (`account_admin` scalar role) | 4     | every read; run already refused (see note) | every read         | unchanged                                                                                                             |
+| `account_admin` with only an Account-plane row                             | 2     | every credit read                          | **nothing**        | the defect being fixed: administering the account is not reading the loan book, and the blotter returns obligor names |
+| Service identities (`auth_provider = 'service'`)                           | 4     | nothing                                    | nothing            | integration keys are confined to API Push at the auth boundary and never reached a credit route                       |
 
 Two facts worth stating precisely:
 
@@ -541,19 +544,19 @@ binding row changed: the inventory SQL above reproduces it at any time.
 
 ### How an Org Owner grants what is needed
 
-Settings → Members, one indivisible sentence per row. Sensitivity is mandatory and
+Access → Members, one indivisible sentence per row. Sensitivity is mandatory and
 institution coverage is exact or explicitly organization-wide
 (`app/features/manage_authorization.py`).
 
-| Need                                                          | `role_bundle`                                              | `module_scope` | `sensitivity_scope` | `data_scope_kind`         |
-| ------------------------------------------------------------- | ---------------------------------------------------------- | -------------- | ------------------- | ------------------------- |
-| Credit dashboard, migration, vintages, PD                     | `viewer`, `auditor`, `analyst`, `approver`, or `validator`  | `credit`       | `aggregated`        | `all` (required)          |
-| Concentration monitor                                          | the same set                                               | `credit`       | `restricted`        | `all` (required)          |
-| Loan blotter and its facets, whole institution                 | the same set                                               | `credit`       | `restricted`        | `all`                     |
-| Loan blotter and its facets, one or more branches              | the same set                                               | `credit`       | `restricted`        | `branch` + branch codes   |
-| Loan blotter and its facets, one or more regions               | the same set                                               | `credit`       | `restricted`        | `region` + region names   |
-| Loan activity grid                                             | the same set                                               | `credit`       | `confidential`      | `all`, `branch` or `region` |
-| Seal the credit baseline                                       | `analyst`                                                  | `credit`       | `confidential`      | `all` (required)          |
+| Need                                              | `role_bundle`                                              | `module_scope` | `sensitivity_scope` | `data_scope_kind`           |
+| ------------------------------------------------- | ---------------------------------------------------------- | -------------- | ------------------- | --------------------------- |
+| Credit dashboard, migration, vintages, PD         | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `credit`       | `aggregated`        | `all` (required)            |
+| Concentration monitor                             | the same set                                               | `credit`       | `restricted`        | `all` (required)            |
+| Loan blotter and its facets, whole institution    | the same set                                               | `credit`       | `restricted`        | `all`                       |
+| Loan blotter and its facets, one or more branches | the same set                                               | `credit`       | `restricted`        | `branch` + branch codes     |
+| Loan blotter and its facets, one or more regions  | the same set                                               | `credit`       | `restricted`        | `region` + region names     |
+| Loan activity grid                                | the same set                                               | `credit`       | `confidential`      | `all`, `branch` or `region` |
+| Seal the credit baseline                          | `analyst`                                                  | `credit`       | `confidential`      | `all` (required)            |
 
 An `analyst` CREDIT/`confidential` row grants `view`, `create`, `edit`, `run`,
 `validate` and `export` at `confidential` ONLY: it opens the activity grid and the
@@ -568,26 +571,26 @@ section of this document said so; there is now.
 
 ### Executable verification
 
-| Property                                                                     | Pinned by                                                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Each route names its dependency and carries no scalar gate                   | `tests/architecture/test_credit_route_authorization.py`                         |
-| **Every** `/credit/` route is in the authority table (a new one cannot ship ungated) | the same file, `test_every_credit_route_is_in_the_authority_table`      |
-| `require_credit_run` is a recognized mutation gate (impersonation boundary)   | the same file                                                                   |
-| The correct sentence is admitted, per route                                  | `tests/api/test_credit_route_authorization.py`                                  |
-| A scalar role alone is refused, per route, for five roles                    | the same file, `test_a_scalar_role_alone_is_refused`                            |
-| A `risk`, `liquidity` or `capital` binding is refused, per route             | the same file                                                                   |
-| Every OTHER sensitivity is refused, per route; `all` admits every route      | the same file                                                                   |
-| A sibling institution's sentence does not reach this one, and vice versa      | the same file (both directions, 403)                                            |
-| A bank of another tenant is 404, even with an organization-wide sentence      | the same file (plus the real cross-tenant case)                                  |
-| Institution-grain routes refuse a `branch` and a `region` scope              | the same file, `test_an_institution_figure_refuses_a_narrowed_scope`             |
-| A branch-scoped reader sees only their branch, and `total` is scoped         | the same file                                                                   |
-| An out-of-scope `branch` answers the intersection, byte-identically to a nonexistent one | the same file                                                        |
-| Pagination, facet counts and activity counts run over the scoped set         | the same file                                                                   |
-| A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                  |
-| `mixed` unions branches and regions; one `all` row beside a branch row wins  | the same file                                                                   |
-| Activity attribution follows D-018 and refuses a cross-system or pre-book event | the same file                                                                |
-| The blotter's pre-existing filter, date and refusal contract is unchanged     | `tests/services/test_regulatory_credit.py`, `tests/api/test_regulatory_credit.py` |
-| Object references under `/credit/*` are catalogued and refuse a foreign object | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
+| Property                                                                                       | Pinned by                                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                     |
+| **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                          |
+| `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                               |
+| The correct sentence is admitted, per route                                                    | `tests/api/test_credit_route_authorization.py`                                                                              |
+| A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                        |
+| A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                               |
+| Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                               |
+| A sibling institution's sentence does not reach this one, and vice versa                       | the same file (both directions, 403)                                                                                        |
+| A bank of another tenant is 404, even with an organization-wide sentence                       | the same file (plus the real cross-tenant case)                                                                             |
+| Institution-grain routes refuse a `branch` and a `region` scope                                | the same file, `test_an_institution_figure_refuses_a_narrowed_scope`                                                        |
+| A branch-scoped reader sees only their branch, and `total` is scoped                           | the same file                                                                                                               |
+| An out-of-scope `branch` answers the intersection, byte-identically to a nonexistent one       | the same file                                                                                                               |
+| Pagination, facet counts and activity counts run over the scoped set                           | the same file                                                                                                               |
+| A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                               |
+| `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                               |
+| Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                               |
+| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/services/test_regulatory_credit.py`, `tests/api/test_regulatory_credit.py`                                           |
+| Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
 
 ### Deployment order and release record (Phase 4)
 
