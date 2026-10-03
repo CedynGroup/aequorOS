@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Connection health — the one screen a bank's IT team reads when a feed breaks.
@@ -9,28 +9,28 @@
  * integration's own tab.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { Activity, Loader2 } from 'lucide-react';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import EmptyState from '@/components/ui/EmptyState';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
-import { isApiError } from '@/lib/api/client';
+import { useState } from "react";
+import Link from "next/link";
+import { Activity, Loader2 } from "lucide-react";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import EmptyState from "@/components/ui/EmptyState";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { isApiError } from "@/lib/api/client";
 import {
   useDatabaseConnections,
   useTestDatabaseConnection,
-} from '@/lib/api/database-direct';
+} from "@/lib/api/database-direct";
 import {
   useMarketDataConnections,
   useTemenosConnections,
   useTestMarketDataConnection,
   useTestTemenosConnection,
-} from '@/lib/api/hooks';
-import { fmtRelative, labelize } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtRelative, labelize } from "@/lib/api/values";
 
-type SourceKind = 'database' | 'temenos' | 'market-data';
+type SourceKind = "database" | "temenos" | "market-data";
 
 interface HealthRow {
   id: string;
@@ -46,9 +46,9 @@ interface HealthRow {
 }
 
 type TestOutcome =
-  | { state: 'running' }
-  | { state: 'passed'; detail: string }
-  | { state: 'failed'; detail: string };
+  | { state: "running" }
+  | { state: "passed"; detail: string }
+  | { state: "failed"; detail: string };
 
 /** Generated models vary between Date and ISO-string for timestamps — normalize. */
 function asDate(value: Date | string | null | undefined): Date | null {
@@ -61,33 +61,35 @@ const EXPIRY_WARN_DAYS = 30;
 
 function tone(status: string): StatusTone {
   const s = status.toLowerCase();
-  if (s === 'active') return 'success';
-  if (s === 'testing' || s === 'disabled' || s === 'replaced_pending_deletion') return 'slate';
-  if (s === 'expiring_soon') return 'amber';
-  return 'critical'; // expired / revoked / invalid
+  if (s === "active") return "success";
+  if (s === "testing" || s === "disabled" || s === "replaced_pending_deletion")
+    return "slate";
+  if (s === "expiring_soon") return "amber";
+  return "critical"; // expired / revoked / invalid
 }
 
 /** Plain-language "what your IT should do" — no vendor jargon, no stack traces. */
 function remediation(row: HealthRow): string | null {
   const s = row.status.toLowerCase();
-  if (s === 'expired' || s === 'revoked') {
-    return 'Service credential no longer valid — rotate it at the source system and update it in the connection tab.';
+  if (s === "expired" || s === "revoked") {
+    return "Service credential no longer valid — rotate it at the source system and update it in the connection tab.";
   }
-  if (s === 'invalid') {
+  if (s === "invalid") {
     return (
       row.validationError ??
-      'Connection test failed — check host, port, and network access from AequorOS to the source.'
+      "Connection test failed — check host, port, and network access from AequorOS to the source."
     );
   }
-  if (s === 'expiring_soon') {
-    return 'Service credential expires soon — rotate it before syncs start failing.';
+  if (s === "expiring_soon") {
+    return "Service credential expires soon — rotate it before syncs start failing.";
   }
   if (row.lastStatus && /fail|error|reject/i.test(row.lastStatus)) {
-    return 'The last sync did not complete — open the connection tab for record-level diagnostics.';
+    return "The last sync did not complete — open the connection tab for record-level diagnostics.";
   }
   if (
     row.credentialExpiresAt &&
-    row.credentialExpiresAt.getTime() - Date.now() < EXPIRY_WARN_DAYS * MS_PER_DAY
+    row.credentialExpiresAt.getTime() - Date.now() <
+      EXPIRY_WARN_DAYS * MS_PER_DAY
   ) {
     return `Credential expires ${fmtRelative(row.credentialExpiresAt)} — plan the rotation.`;
   }
@@ -95,10 +97,14 @@ function remediation(row: HealthRow): string | null {
 }
 
 export default function ConnectionHealthPanel() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const dbDirect = useDatabaseConnections(bank?.id);
   const temenos = useTemenosConnections(bank?.id);
-  const marketData = useMarketDataConnections(bank?.id);
+  // Market-data connection metadata is Markets/restricted: without that exact
+  // grant the panel lists the other sources and issues no market-data request.
+  const marketData = useMarketDataConnections(
+    moduleScope.marketsRestrictedView ? bank?.id : undefined,
+  );
 
   // Read-only reachability probes — the same test endpoints the source tabs use.
   const testDatabase = useTestDatabaseConnection(bank?.id);
@@ -108,51 +114,52 @@ export default function ConnectionHealthPanel() {
 
   const runTest = async (row: HealthRow) => {
     const key = `${row.source}-${row.id}`;
-    setTests((prev) => ({ ...prev, [key]: { state: 'running' } }));
+    setTests((prev) => ({ ...prev, [key]: { state: "running" } }));
     try {
       let outcome: TestOutcome;
-      if (row.source === 'database') {
+      if (row.source === "database") {
         const result = await testDatabase.mutateAsync(row.id);
         outcome = result.reachable
           ? {
-              state: 'passed',
+              state: "passed",
               detail: `Reachable${
-                result.latencyMs != null ? ` · ${result.latencyMs} ms` : ''
+                result.latencyMs != null ? ` · ${result.latencyMs} ms` : ""
               }`,
             }
           : {
-              state: 'failed',
-              detail: result.error ?? 'Connection test failed.',
+              state: "failed",
+              detail: result.error ?? "Connection test failed.",
             };
       } else {
         const result =
-          row.source === 'temenos'
+          row.source === "temenos"
             ? await testTemenos.mutateAsync(row.id)
             : await testMarketData.mutateAsync(row.id);
         outcome = result.success
-          ? { state: 'passed', detail: 'Test pull succeeded.' }
-          : { state: 'failed', detail: result.error ?? 'Test pull failed.' };
+          ? { state: "passed", detail: "Test pull succeeded." }
+          : { state: "failed", detail: result.error ?? "Test pull failed." };
       }
       setTests((prev) => ({ ...prev, [key]: outcome }));
     } catch (error) {
       setTests((prev) => ({
         ...prev,
         [key]: {
-          state: 'failed',
-          detail: isApiError(error) ? error.message : 'Connection test failed.',
+          state: "failed",
+          detail: isApiError(error) ? error.message : "Connection test failed.",
         },
       }));
     }
   };
 
-  const loading = dbDirect.isLoading || temenos.isLoading || marketData.isLoading;
+  const loading =
+    dbDirect.isLoading || temenos.isLoading || marketData.isLoading;
 
   const rows: HealthRow[] = [
     ...(dbDirect.data?.connections ?? []).map((c) => ({
       id: c.id,
-      source: 'database' as const,
+      source: "database" as const,
       kind: `Core database · ${labelize(c.backend)}`,
-      href: '/data-engine/database',
+      href: "/data-engine/database",
       name: c.displayName,
       status: c.status,
       lastAt: asDate(c.lastSyncedAt),
@@ -162,9 +169,9 @@ export default function ConnectionHealthPanel() {
     })),
     ...(temenos.data?.connections ?? []).map((c) => ({
       id: c.id,
-      source: 'temenos' as const,
+      source: "temenos" as const,
       kind: `Core banking · ${labelize(c.coreSystem)}`,
-      href: '/data-engine/t24',
+      href: "/data-engine/t24",
       name: c.displayName,
       status: c.status,
       lastAt: asDate(c.lastPullAt),
@@ -174,9 +181,9 @@ export default function ConnectionHealthPanel() {
     })),
     ...(marketData.data?.connections ?? []).map((c) => ({
       id: c.id,
-      source: 'market-data' as const,
+      source: "market-data" as const,
       kind: `Market data · ${labelize(c.vendor)}`,
-      href: '/data-engine/market-data',
+      href: "/data-engine/market-data",
       name: c.displayName,
       status: c.status,
       lastAt: asDate(c.lastPullAt),
@@ -195,8 +202,8 @@ export default function ConnectionHealthPanel() {
         subtitle="Live status of every configured data source — the first stop when a feed breaks"
         action={
           loading ? undefined : rows.length === 0 ? undefined : (
-            <StatusPill tone={attention === 0 ? 'success' : 'amber'}>
-              {attention === 0 ? 'All healthy' : `${attention} need attention`}
+            <StatusPill tone={attention === 0 ? "success" : "amber"}>
+              {attention === 0 ? "All healthy" : `${attention} need attention`}
             </StatusPill>
           )
         }
@@ -228,11 +235,15 @@ export default function ConnectionHealthPanel() {
             {rows.map((row) => {
               const hint = remediation(row);
               const test = tests[`${row.source}-${row.id}`];
-              const testing = test?.state === 'running';
+              const testing = test?.state === "running";
               return (
                 <li key={`${row.kind}-${row.id}`} className="px-5 py-3">
                   <div className="flex items-center gap-3">
-                    <Activity size={15} className="text-slate shrink-0" aria-hidden />
+                    <Activity
+                      size={15}
+                      className="text-slate shrink-0"
+                      aria-hidden
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <Link
@@ -241,14 +252,18 @@ export default function ConnectionHealthPanel() {
                         >
                           {row.name}
                         </Link>
-                        <span className="text-caption text-slate shrink-0">{row.kind}</span>
+                        <span className="text-caption text-slate shrink-0">
+                          {row.kind}
+                        </span>
                       </div>
                       <p className="mt-0.5 text-caption text-slate">
                         {row.lastAt
                           ? `Last sync ${fmtRelative(row.lastAt)}${
-                              row.lastStatus ? ` · ${labelize(row.lastStatus)}` : ''
+                              row.lastStatus
+                                ? ` · ${labelize(row.lastStatus)}`
+                                : ""
                             }`
-                          : 'Never synced'}
+                          : "Never synced"}
                       </p>
                     </div>
                     <StatusPill tone={tone(row.status)} className="shrink-0">
@@ -261,15 +276,21 @@ export default function ConnectionHealthPanel() {
                       className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {testing && (
-                        <Loader2 size={11} className="animate-spin" aria-hidden />
+                        <Loader2
+                          size={11}
+                          className="animate-spin"
+                          aria-hidden
+                        />
                       )}
                       Test
                     </button>
                   </div>
-                  {test && test.state !== 'running' && (
+                  {test && test.state !== "running" && (
                     <p
                       className={`mt-2 ml-7 text-caption leading-relaxed ${
-                        test.state === 'passed' ? 'text-success' : 'text-critical'
+                        test.state === "passed"
+                          ? "text-success"
+                          : "text-critical"
                       }`}
                     >
                       {test.detail}

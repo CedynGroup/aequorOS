@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared vocabulary for the Market Data Sources console: vendor metadata,
@@ -11,11 +11,11 @@
  * fingerprint, and expiry.
  */
 
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { apiBaseUrl } from '@/lib/api/client';
-import { getAccessToken } from '@/lib/api/token';
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { apiBaseUrl } from "@/lib/api/client";
+import { getAccessToken } from "@/lib/api/token";
 
-export type VendorKey = 'bloomberg' | 'refinitiv' | 'manual_upload';
+export type VendorKey = "bloomberg" | "refinitiv" | "manual_upload";
 
 export const VENDORS: {
   key: VendorKey;
@@ -23,20 +23,20 @@ export const VENDORS: {
   description: string;
 }[] = [
   {
-    key: 'bloomberg',
-    name: 'Bloomberg',
+    key: "bloomberg",
+    name: "Bloomberg",
     description:
-      'Save onboarding details for a Bloomberg B-PIPE or Data License subscription. Live requests are not enabled in this deployment.',
+      "Save onboarding details for a Bloomberg B-PIPE or Data License subscription. Live requests are not enabled in this deployment.",
   },
   {
-    key: 'refinitiv',
-    name: 'LSEG (formerly Refinitiv)',
+    key: "refinitiv",
+    name: "LSEG (formerly Refinitiv)",
     description:
-      'Save onboarding details for an LSEG Data Platform subscription. Live requests are not enabled in this deployment.',
+      "Save onboarding details for an LSEG Data Platform subscription. Live requests are not enabled in this deployment.",
   },
   {
-    key: 'manual_upload',
-    name: 'Manual upload',
+    key: "manual_upload",
+    name: "Manual upload",
     description:
       "Upload market data files directly. Use if you don't have Bloomberg or LSEG, or as a backup source.",
   },
@@ -59,77 +59,77 @@ export type CredentialField = {
 
 /** §6.1 Bloomberg and §7.1 Refinitiv credential structures. */
 export const CREDENTIAL_FIELDS: Record<
-  Exclude<VendorKey, 'manual_upload'>,
+  Exclude<VendorKey, "manual_upload">,
   CredentialField[]
 > = {
   bloomberg: [
-    { key: 'application_identifier', label: 'Application identifier' },
-    { key: 'serial_number', label: 'Serial number' },
-    { key: 'authentication_endpoint', label: 'Authentication endpoint' },
+    { key: "application_identifier", label: "Application identifier" },
+    { key: "serial_number", label: "Serial number" },
+    { key: "authentication_endpoint", label: "Authentication endpoint" },
     {
-      key: 'certificate',
-      label: 'SSL client certificate (PEM)',
+      key: "certificate",
+      label: "SSL client certificate (PEM)",
       secret: true,
       multiline: true,
-      placeholder: '-----BEGIN CERTIFICATE-----',
+      placeholder: "-----BEGIN CERTIFICATE-----",
     },
-    { key: 'subscription_tier', label: 'Subscription tier' },
+    { key: "subscription_tier", label: "Subscription tier" },
     {
-      key: 'contact_admin',
-      label: 'Bloomberg administrator contact',
-      hint: 'Surfaced in error messages so operators know who to contact.',
+      key: "contact_admin",
+      label: "Bloomberg administrator contact",
+      hint: "Surfaced in error messages so operators know who to contact.",
     },
   ],
   refinitiv: [
     {
-      key: 'client_id',
-      label: 'Client ID',
-      hint: 'Provided when you create an OAuth application in your LSEG Data Platform account (formerly Refinitiv Data Platform).',
+      key: "client_id",
+      label: "Client ID",
+      hint: "Provided when you create an OAuth application in your LSEG Data Platform account (formerly Refinitiv Data Platform).",
     },
-    { key: 'client_secret', label: 'Client secret', secret: true },
-    { key: 'scope', label: 'Scope' },
-    { key: 'subscription_type', label: 'Subscription type' },
-    { key: 'refresh_token', label: 'Refresh token', secret: true },
-    { key: 'token_endpoint', label: 'Token endpoint' },
-    { key: 'contact_admin', label: 'LSEG administrator contact' },
+    { key: "client_secret", label: "Client secret", secret: true },
+    { key: "scope", label: "Scope" },
+    { key: "subscription_type", label: "Subscription type" },
+    { key: "refresh_token", label: "Refresh token", secret: true },
+    { key: "token_endpoint", label: "Token endpoint" },
+    { key: "contact_admin", label: "LSEG administrator contact" },
   ],
 };
 
 /** §10.2 credential-state chip tones. */
 const STATUS_TONES: Record<string, StatusTone> = {
-  ACTIVE: 'success',
-  TESTING: 'action',
-  EXPIRING_SOON: 'amber',
-  EXPIRED: 'critical',
-  REVOKED: 'critical',
-  INVALID: 'critical',
-  REPLACED_PENDING_DELETION: 'amber',
-  DISABLED: 'slate',
+  ACTIVE: "success",
+  TESTING: "action",
+  EXPIRING_SOON: "amber",
+  EXPIRED: "critical",
+  REVOKED: "critical",
+  INVALID: "critical",
+  REPLACED_PENDING_DELETION: "amber",
+  DISABLED: "slate",
 };
 
 export function ConnectionStatusPill({ status }: { status: string }) {
   return (
-    <StatusPill tone={STATUS_TONES[status] ?? 'pending'}>
-      {status.replaceAll('_', ' ')}
+    <StatusPill tone={STATUS_TONES[status] ?? "pending"}>
+      {status.replaceAll("_", " ")}
     </StatusPill>
   );
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  YIELD_CURVE: 'Yield curves',
-  FX_SPOT: 'FX spot rates',
-  FX_FORWARD: 'FX forwards',
-  SECURITY_MASTER: 'Security master',
-  CREDIT_RATING: 'Credit ratings',
-  MACRO_FORECAST: 'Macro forecasts',
+  YIELD_CURVE: "Yield curves",
+  FX_SPOT: "FX spot rates",
+  FX_FORWARD: "FX forwards",
+  SECURITY_MASTER: "Security master",
+  CREDIT_RATING: "Credit ratings",
+  MACRO_FORECAST: "Macro forecasts",
 };
 
 export const FREQUENCY_OPTIONS = [
-  { value: 'ON_DEMAND', label: 'On demand' },
-  { value: 'HOURLY', label: 'Hourly (market hours)' },
-  { value: 'END_OF_DAY', label: 'End of day' },
-  { value: 'WEEKLY', label: 'Weekly' },
-  { value: 'MONTHLY', label: 'Monthly' },
+  { value: "ON_DEMAND", label: "On demand" },
+  { value: "HOURLY", label: "Hourly (market hours)" },
+  { value: "END_OF_DAY", label: "End of day" },
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "MONTHLY", label: "Monthly" },
 ];
 
 export function frequencyLabel(value: string): string {
@@ -141,50 +141,58 @@ export function frequencyLabel(value: string): string {
 /** "YIELD_CURVE_GHS" -> "GHS", "FX_SPOT_USD_GHS" -> "USD/GHS". */
 export function scopeShortLabel(scope: string, category: string): string {
   const rest = scope
-    .replace(new RegExp(`^${category}_`), '')
-    .replace(/^MACRO_/, '');
-  if (category === 'FX_SPOT') return rest.replace('_', '/');
-  if (category === 'FX_FORWARD') {
-    const parts = rest.split('_');
-    return `${parts[0]}/${parts[1]} ${parts[2] ?? ''}`.trim();
+    .replace(new RegExp(`^${category}_`), "")
+    .replace(/^MACRO_/, "");
+  if (category === "FX_SPOT") return rest.replace("_", "/");
+  if (category === "FX_FORWARD") {
+    const parts = rest.split("_");
+    return `${parts[0]}/${parts[1]} ${parts[2] ?? ""}`.trim();
   }
-  return rest.replaceAll('_', ' ');
+  return rest.replaceAll("_", " ");
 }
 
 export function fmtWhen(value: Date | null | undefined): string {
-  if (!value) return 'never';
-  return value.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
+  if (!value) return "never";
+  return value.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
   });
 }
 
 /** §8.2 template kinds served by getMarketDataTemplate. */
 export const TEMPLATE_KINDS: { kind: string; label: string }[] = [
-  { kind: 'yield_curve', label: 'Yield curves' },
-  { kind: 'fx_rates', label: 'FX rates' },
-  { kind: 'credit_ratings', label: 'Credit ratings' },
-  { kind: 'macro_forecasts', label: 'Macro forecasts' },
+  { kind: "yield_curve", label: "Yield curves" },
+  { kind: "fx_rates", label: "FX rates" },
+  { kind: "credit_ratings", label: "Credit ratings" },
+  { kind: "macro_forecasts", label: "Macro forecasts" },
 ];
 
 /**
  * Download one upload template. The endpoint is tenant-scoped, so a plain
  * anchor cannot carry the headers — fetch the bytes and hand them to the
- * browser as a Blob download.
+ * browser as a Blob download. The workbook is bank-neutral, but the download
+ * is authorized by the caller's Markets view grant on the named bank.
  */
-export async function downloadTemplate(kind: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/market-data/templates/${kind}`, {
-    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-  });
+export async function downloadTemplate(
+  kind: string,
+  bankId: string,
+): Promise<void> {
+  const query = new URLSearchParams({ bank_id: bankId });
+  const response = await fetch(
+    `${apiBaseUrl}/market-data/templates/${kind}?${query}`,
+    {
+      headers: { Authorization: `Bearer ${getAccessToken() ?? ""}` },
+    },
+  );
   if (!response.ok) {
     throw new Error(`Template download failed (${response.status}).`);
   }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${kind}_template.xlsx`;
   document.body.appendChild(anchor);

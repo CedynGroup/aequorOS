@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -300,6 +301,7 @@ def test_views_emit_every_current_curve_by_name(db_client: TestClient) -> None:
         assert curve["attribution"]["source_system"] == "AEQUOR_DESK"
 
 
+@pytest.mark.usefixtures("markets_analyst_authority")
 def test_views_compose_active_overlays_read_time(db_client: TestClient) -> None:
     """Overlays adjust the served curve without touching golden data."""
     _ = db_client

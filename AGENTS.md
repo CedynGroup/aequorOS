@@ -179,6 +179,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   authority. Ownership and directory view remain unassigned; explicit staff owner
   designation is still required. The authoritative rollout contract is
   `backend/docs/account_administration_enforcement_rollout.md`.
+  **Markets authority follows the data, not the page.** Manual market-data
+  uploads belong to Markets, not Data Engine. The authoritative tier, projection,
+  template-target, and held-configuration contracts live in
+  [the Markets rollout](backend/docs/markets_enforcement_rollout.md), pinned by
+  `backend/tests/architecture/test_markets_authorization.py`.
   **Filing is its OWN authority (built 2026-09-20; no migration).** Approving a return
   and transmitting it to the regulator shared `Permission.APPROVE`, and on an ungated
   family the scalar `approver` role alone satisfied submit — so whoever approved could

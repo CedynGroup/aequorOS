@@ -1,10 +1,11 @@
-"""Overlay lifecycle API: CRUD, RBAC, versioned edits, audit, isolation."""
+"""Overlay lifecycle API: CRUD, exact bindings, versioned edits, audit, isolation."""
 
 from __future__ import annotations
 
 from datetime import date
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +16,10 @@ from tests.api.helpers import ORG_1, ORG_2, headers
 
 AS_OF = date(2026, 7, 15)
 CURVE = "AEQ.GHS.SOV.ZERO"
+
+# Every lifecycle test writes through USER_1, who holds only the hermetic
+# organization-wide viewer row until this analyst grant is added.
+pytestmark = pytest.mark.usefixtures("markets_analyst_authority")
 
 
 def _seed_bank(session: Session, org_id: str = ORG_1) -> str:
@@ -137,27 +142,25 @@ def test_overlay_versioned_edit_supersedes_prior_row(db_client: TestClient) -> N
     assert end_old.status_code == 409, end_old.text
 
 
-def test_overlay_rbac_viewers_read_analysts_mutate(db_client: TestClient) -> None:
+def test_overlay_token_roles_never_decide_access(db_client: TestClient) -> None:
+    """The binding decides; the scalar role claim on the token is ignored."""
     bank_id = _bank_id(db_client)
     viewer = headers(roles=("viewer",))
     analyst = headers(roles=("analyst",))
 
-    denied = db_client.post(_url(bank_id), headers=viewer, json=_payload())
-    assert denied.status_code == 403, denied.text
+    created = db_client.post(_url(bank_id), headers=viewer, json=_payload())
+    assert created.status_code == 201, created.text
 
-    allowed = db_client.post(_url(bank_id), headers=analyst, json=_payload())
-    assert allowed.status_code == 201, allowed.text
-
-    readable = db_client.get(_url(bank_id), headers=viewer)
+    readable = db_client.get(_url(bank_id), headers=analyst)
     assert readable.status_code == 200, readable.text
     assert readable.json()["total"] == 1
 
-    end_denied = db_client.post(
-        f"{_url(bank_id)}/{allowed.json()['id']}/end",
+    ended = db_client.post(
+        f"{_url(bank_id)}/{created.json()['id']}/end",
         headers=viewer,
         json={"effective_to": "2026-12-31"},
     )
-    assert end_denied.status_code == 403, end_denied.text
+    assert ended.status_code == 200, ended.text
 
 
 def test_overlay_validation_rejects_malformed_shapes(db_client: TestClient) -> None:
