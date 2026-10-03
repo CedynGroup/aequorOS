@@ -195,7 +195,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `backend/docs/filing_workflow_redesign.md`.
 - **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
   Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
-  for catalogue entries, exclusions, defect quarantine, and ICAAP deferral.
+  for catalogue entries, exclusions and defect quarantine.
   `backend/tests/architecture/test_object_reference_census.py` guards catalogue
   completeness and stale route decisions without Postgres.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through

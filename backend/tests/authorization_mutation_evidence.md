@@ -156,9 +156,10 @@ Catalogued with seeded fixtures: `filing_workflow_template`
 `/withdraw`). The filing-chain routes under `/regulatory-packages/{package_id}/workflow`
 and the attachment list/upload routes reference only `package_id` and joined the
 census through the existing `package` kind. Every ICAAP route carrying an object
-identifier (86 routes) is listed one by one in `ICAAP_DEFERRED`, folded into
-`KNOWN_UNCOVERED`, under the captain's 2026-09-20 deferral of ICAAP. The ongoing
-[catalogue and deferral contract](../docs/authorization_foundation.md#executable-verification)
+identifier (86 routes) was listed one by one in `ICAAP_DEFERRED`, folded into
+`KNOWN_UNCOVERED`, under the captain's 2026-09-20 deferral of ICAAP; the
+deferral was lifted on 2026-09-30 (next section). The ongoing
+[catalogue contract](../docs/authorization_foundation.md#executable-verification)
 owns the requirements for extending coverage.
 
 Guard result: **3 passed** (~24s). `test_every_object_reference_is_catalogued`
@@ -183,3 +184,70 @@ leaked and the control failed with "the weakened package guard went unnoticed".
 It now weakens both layers under the same rolled-back `monkeypatch`, the sweep
 reports the sibling-bank leak, and passes once the patch is undone. No product
 code was changed. The disposable schemas were dropped by the fixture.
+
+## ICAAP object references join the census
+
+2026-09-30, Python 3.13, disposable local PostgreSQL 17 (Homebrew `initdb`,
+`postgres` role, UTF-8) for the generative layer. `ICAAP_DEFERRED` is deleted;
+its 86 routes (every ICAAP route/method carrying an object identifier) are
+enumerated by the census through the ICAAP kinds already seeded in
+`tests/fixtures/object_references.py`. `KNOWN_UNCOVERED` holds no ICAAP entry.
+
+```sh
+uv run pytest tests/architecture/test_object_reference_census.py -q
+uv run pytest tests/api/test_authorization_object_reference_coverage.py -q
+TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
+  tests/db/test_authorization_object_reference_properties.py -q
+```
+
+Three sweep blind spots were closed first, because a refusal raised before the
+lookup proves nothing about the lookup:
+
+- the entitled caller now also holds the organisation-wide Audit/confidential
+  ANALYST grant, so the independent-review routes reach their lookups instead of
+  stopping at 403;
+- `POST …/attachments` is sent as multipart with a PDF part
+  (`_MULTIPART_FORMS`), so it reaches the cycle lookup instead of a 422;
+- the strict ICAAP test runs with AI drafting switched on and consented, so the
+  AI-draft request, accept and reject routes answer from their lookups instead
+  of the deployment gate's 404.
+
+`test_icaap_refusal_is_the_unknown_object_answer` then compares each foreign
+reference with a twin naming an identifier nobody holds (`unknown_request`),
+after normalising the request id and the sent identifiers: the answers must be
+identical, never 403 or a validation error, and 404 for a path reference.
+
+It found three defects, all fixed in this change. Each was a pre-authorization
+condition that resolved its object more loosely than the route:
+
+- **Stage decisions** (`POST …/cycles/{cycle_id}/stages/{seq}/decisions`):
+  `workflow.stage_authority` returned no condition for a cycle this
+  institution does not hold, and `approve` requires a maker-checker condition,
+  so a fully entitled approver got **403** where the route answers 404. It now
+  returns a passed condition, as the Pillar 2 and add-on conditions already did.
+  Negative control: without the fix the strict test fails 2 cases (cross-org and
+  sibling-bank).
+- **Supervisory add-on confirm/withdraw**: `supervisory_addons.confirmation_conditions`
+  filtered by organization only, so the recorder of a sibling bank's add-on got
+  403 instead of 404 addressing it under this bank. It now filters the bank.
+- **Disclosure decision**: `disclosure.approval_conditions` filtered organization,
+  cycle and status but not the bank; same shape, same fix.
+
+The add-on and disclosure cases need the caller to be the sibling object's own
+recorder, which the sweep's caller is not, so they are pinned by service tests
+(`test_the_four_eyes_condition_reads_only_this_institutions_add_on`,
+`…_disclosure`). The AI-draft negative control dropped the cycle filter from
+`ai_drafting._suggestion_or_404`; the strict test failed its three
+single-foreign-child cases (read, accept, reject), then passed with the filter
+restored.
+
+A foreign attachment named in a request body answers **422**
+(`evidence_required` / `unknown_attachment`) byte-for-byte like an unknown one,
+which the strict test accepts: the path object exists, so a 404 would misstate
+it, and the identical answer is no existence oracle.
+
+Results: census guard **3 passed**; coverage layer **895 passed, 0 skipped**,
+of which the ICAAP cases are **416** (206 sweep, 206 strict, 4 home
+reachability); generative layer **2 passed** (48s); architecture suite
+**1815 passed**; ICAAP API and service suites with the coverage layer
+**1536 passed**. `KNOWN_DEFECTS` is unchanged.

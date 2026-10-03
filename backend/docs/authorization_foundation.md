@@ -430,10 +430,17 @@ and checks for persisted side effects.
 Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
 excluded because they record who acted, not an object whose data is read.
 `KNOWN_UNCOVERED` in `tests/fixtures/object_reference_routes.py` owns the
-excluded-route list, including routes that need multi-step fixtures and, one
-explicit entry per route, the ICAAP workspace routes deferred on 2026-09-20
-(`ICAAP_DEFERRED`); each must be deleted and its kind seeded before ICAAP ships.
-Never replace these explicit decisions with a prefix wildcard. A third
+excluded-route list, one explicit entry per route with its reason (routes that
+need multi-step fixtures, for example). Never replace these explicit decisions
+with a prefix wildcard. ICAAP routes are held to a stricter shape as well:
+`test_icaap_refusal_is_the_unknown_object_answer` requires each foreign
+reference to be answered exactly as an identifier nobody holds, never a 403 or a
+validation error raised before the lookup, and 404 when the reference is in the
+path. It runs with AI drafting switched on and consented, so the AI-draft
+mutations answer from their lookups rather than the deployment gate's 404. A
+pre-authorization condition (four eyes, maker-checker) must resolve its object
+the way the route does, bank included, or it answers 403 where the route would
+answer 404. A third
 `single_foreign_child` layout enumerates each eligible child
 on multi-reference routes, holding every other reference at home and substituting
 only that child from A2. This covers same-organization cross-parent nesting,

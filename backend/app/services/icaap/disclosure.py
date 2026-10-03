@@ -34,6 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
+from app.core.authorization import ConditionCheck, ConditionKind
 from app.db.base import utc_now
 from app.domain.icaap import disclosure as domain
 from app.domain.icaap.frameworks.schema import Framework
@@ -311,14 +312,13 @@ def submit_disclosure(
 
 def approval_conditions(
     db: Session, access: IcaapAccess, cycle_id: UUID | None
-) -> tuple[object, ...]:
-    from app.core.authorization import ConditionCheck, ConditionKind  # noqa: PLC0415
-
+) -> tuple[ConditionCheck, ...]:
     if cycle_id is None:
         return ()
     row = db.scalar(
         select(IcaapDisclosure).where(
             IcaapDisclosure.organization_id == access.ctx.organization_id,
+            IcaapDisclosure.bank_id == access.bank.id,
             IcaapDisclosure.cycle_id == cycle_id,
             IcaapDisclosure.status == "pending_approval",
         )

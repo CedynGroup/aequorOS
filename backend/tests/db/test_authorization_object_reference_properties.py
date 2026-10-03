@@ -79,6 +79,7 @@ from tests.fixtures.object_reference_routes import (
     leaked,
     object_routes,
 )
+from tests.fixtures.object_reference_routes import Request as RouteRequest
 from tests.fixtures.object_references import ObjectSet, TenantSeed, bank_row, seed_objects
 
 __all__ = ["forward_migrated_postgres_schema"]
@@ -242,8 +243,10 @@ class Sweep:
     routes: list[ObjectRoute]
     statement: str = field(default_factory=_digest_statement)
 
-    def _send(self, route: ObjectRoute, path: str, query: dict[str, str], body: Any, auth) -> Any:
-        return self.client.request(route.method, path, params=query, json=body, headers=auth)
+    def _send(self, route: ObjectRoute, request: RouteRequest, auth: dict[str, str]) -> Any:
+        return self.client.request(
+            route.method, request.path, **request.send_arguments(), headers=auth
+        )
 
     def run(self, auth: dict[str, str], layout: Layout) -> list[str]:
         """Sweep every route for ``layout`` as ``auth``; return refusal failures."""
@@ -264,7 +267,7 @@ class Sweep:
                 if built is None:
                     continue
                 request, requested = built
-                response = self._send(route, request.path, request.query, request.body, auth)
+                response = self._send(route, request, auth)
                 leak = leaked(response.text, self.tenants.owner(layout).identifiers(), requested)
                 if leak:
                     failures.append(f"{route.label} [{layout}]: leaked {leak}")

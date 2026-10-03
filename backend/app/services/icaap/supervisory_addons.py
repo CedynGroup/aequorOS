@@ -477,22 +477,26 @@ __all__ = [
 ]
 
 
-def confirmation_conditions(db: Session, ctx: Any, addon_id: UUID) -> tuple[Any, ...]:
+def confirmation_conditions(db: Session, access: IcaapAccess, addon_id: UUID) -> tuple[Any, ...]:
     """Four eyes on a supervisory add-on, resolved before authority is evaluated.
 
     The database enforces ``confirmed_by <> created_by`` as well. This layer
     exists so the caller is told they are not an eligible approver, rather than
     meeting a constraint error after the authority check has already passed.
+    The add-on is resolved under the route's institution, as the route resolves
+    it: another institution's add-on passes here and meets the route's 404.
     """
     from app.core.authorization import ConditionCheck, ConditionKind  # noqa: PLC0415
 
     row = db.scalar(
         select(BankSupervisoryAddon).where(
             BankSupervisoryAddon.id == addon_id,
-            BankSupervisoryAddon.organization_id == ctx.organization_id,
+            BankSupervisoryAddon.organization_id == access.ctx.organization_id,
+            BankSupervisoryAddon.bank_id == access.bank.id,
         )
     )
-    distinct = row is None or ctx.actor_user_id is None or row.created_by != ctx.actor_user_id
+    actor = access.ctx.actor_user_id
+    distinct = row is None or actor is None or row.created_by != actor
     return (
         ConditionCheck(
             kind=ConditionKind.MAKER_CHECKER,
