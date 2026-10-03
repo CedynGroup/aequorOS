@@ -76,7 +76,7 @@ export function CurveResultCharts({ result }: { result: DeskCurveConstructRespon
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={termData} margin={chartMargins}>
-            <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid yAxisId="yield" stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
             <XAxis {...axisProps} dataKey="tenor" minTickGap={16} />
             <YAxis
               yAxisId="yield"
@@ -94,7 +94,7 @@ export function CurveResultCharts({ result }: { result: DeskCurveConstructRespon
             />
             <Tooltip
               {...chartTooltipProps}
-              formatter={(value: number | string, name) =>
+              formatter={(value, name) =>
                 name === 'Discount factor'
                   ? [Number(value).toFixed(6), name]
                   : [`${Number(value).toFixed(3)}%`, name]
@@ -133,7 +133,7 @@ export function CurveResultCharts({ result }: { result: DeskCurveConstructRespon
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={pillarData} margin={chartMargins}>
-            <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid yAxisId="quote" stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
             <XAxis {...axisProps} dataKey="label" minTickGap={8} angle={-15} textAnchor="end" height={48} />
             <YAxis
               yAxisId="quote"
@@ -151,7 +151,7 @@ export function CurveResultCharts({ result }: { result: DeskCurveConstructRespon
             />
             <Tooltip
               {...chartTooltipProps}
-              formatter={(value: number | string, name) =>
+              formatter={(value, name) =>
                 name === 'Discount factor'
                   ? [Number(value).toFixed(6), name]
                   : [`${Number(value).toFixed(3)}%`, name]

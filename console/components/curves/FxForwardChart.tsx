@@ -53,7 +53,7 @@ export function FxForwardChart({ result }: { result: FxForwardConstructResponse 
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={chartMargins}>
-          <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid yAxisId="rate" stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
           <XAxis {...axisProps} dataKey="date" minTickGap={16} />
           <YAxis
             yAxisId="rate"
@@ -71,7 +71,7 @@ export function FxForwardChart({ result }: { result: FxForwardConstructResponse 
           />
           <Tooltip
             {...chartTooltipProps}
-            formatter={(value: number | string, name) =>
+            formatter={(value, name) =>
               name === 'Forward points'
                 ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(4)}`, name]
                 : [Number(value).toFixed(4), name]
