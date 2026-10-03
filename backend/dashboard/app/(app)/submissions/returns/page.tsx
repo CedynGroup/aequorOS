@@ -232,13 +232,18 @@ function ReturnsWorkspace() {
   // The reporting dates come from the RETURN — the regulator's cadence — not
   // from the bank's ingested reporting periods. Selecting from the latter made
   // the filing calendar a function of data arrival. The window runs BOTH ways,
-  // so a bank a quarter behind is still offered the dates it already owes.
+  // so a bank a quarter behind is still offered the dates it already owes. The
+  // one exception is an event-driven pack (the LRT corporate family): the
+  // regulator sets no reporting date for it, so the backend offers the bank's
+  // computed position dates instead and labels them as such.
   const anchorsQuery = useReturnAnchors(bankId, code);
   const anchors = useMemo<ReturnAnchorRead[]>(
     () => anchorsQuery.data?.anchors ?? [],
     [anchorsQuery.data]
   );
   const dateOptions = useMemo(() => toReportingDateOptions(anchors), [anchors]);
+  const snapshotDated =
+    anchorsQuery.data?.reportingDateSource === 'computed_snapshot';
   const anchorDates = useMemo(
     () => dateOptions.map((option) => option.date),
     [dateOptions]
@@ -350,6 +355,16 @@ function ReturnsWorkspace() {
                 )}
               </select>
             </label>
+            {snapshotDated && (
+              <p
+                data-testid="reporting-date-source"
+                className="basis-full text-caption text-slate"
+              >
+                Event-driven pack — the regulator sets no reporting date for
+                it. The dates offered are your computed position dates; the
+                pack reports your institution as of the one you choose.
+              </p>
+            )}
           </div>
         }
       />

@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.schemas.regulatory_reporting import (
     ObligationAnnexRead,
+    ReportingDateSource,
     ReportingObligationListRead,
     ReportingObligationRead,
     ReportingObligationSummaryRead,
@@ -45,6 +46,7 @@ from app.services.regulatory_reporting.anchors import (
     DEFAULT_LOOKBACK_MONTHS,
     anchor_dates,
     anchor_window,
+    computed_snapshot_dates,
     snapshot_coverage,
 )
 from app.services.regulatory_reporting.common import get_bank_or_404
@@ -542,6 +544,11 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
     an overdue return is the one the bank still owes. It is the mirror of
     ``horizon_months`` and both resolve through the one window the calendar
     uses (``anchors.anchor_window``), so the two surfaces cannot disagree.
+
+    An event-driven pack has no regulator anchor to list, so it offers the
+    bank's computed position dates instead (``anchors.computed_snapshot_dates``)
+    — every one ``computed`` by construction, none carrying a deadline — and the
+    payload says which kind of date it is offering (``reporting_date_source``).
     """
     bank = get_bank_or_404(db, ctx, bank_id)
     today = as_of or date.today()
@@ -551,6 +558,9 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Return {return_code!r} is not registered.",
         )
+    reporting_date_source: ReportingDateSource = (
+        "computed_snapshot" if definition.event_driven else "regulator_anchor"
+    )
 
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
     decision = eligibility.decide(definition, reporting_date=today)
@@ -576,13 +586,19 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
             as_of=today,
             horizon_months=horizon_months,
             lookback_months=lookback_months,
+            reporting_date_source=reporting_date_source,
             anchors=[],
             ineligible_reason=" ".join(hard_failures),
             effective_from=effective_from,
         )
 
-    window = anchor_window(today, lookback_months=lookback_months, horizon_months=horizon_months)
-    reporting_dates = anchor_dates(definition, window)
+    if definition.event_driven:
+        reporting_dates = computed_snapshot_dates(db, ctx, bank, today)
+    else:
+        window = anchor_window(
+            today, lookback_months=lookback_months, horizon_months=horizon_months
+        )
+        reporting_dates = anchor_dates(definition, window)
     coverage = snapshot_coverage(db, ctx, bank, reporting_dates)
     overrides = _deadline_overrides(db, ctx, bank.id)
     governed = _governed_deadlines(db, bank, as_of=today, resolver=eligibility.parameter_resolver)
@@ -593,7 +609,14 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
     anchors: list[ReturnAnchorRead] = []
     deadline_note: str | None = None
     for reporting_date in reporting_dates:
-        due_date, missing_parameter = _due_date(definition, reporting_date, overrides, governed)
+        # The registry's nominal deadline rule on an event-driven pack exists
+        # only to satisfy the package row shape; surfacing it would claim a
+        # remittance date the regulator never set.
+        due_date, missing_parameter = (
+            (None, None)
+            if definition.event_driven
+            else _due_date(definition, reporting_date, overrides, governed)
+        )
         if missing_parameter is not None:
             deadline_note = (
                 "The filing deadline for this return is a governed value that has not "
@@ -632,6 +655,7 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
         as_of=today,
         horizon_months=horizon_months,
         lookback_months=lookback_months,
+        reporting_date_source=reporting_date_source,
         anchors=anchors,
         effective_from=effective_from,
         deadline_note=deadline_note,

@@ -71,9 +71,11 @@ import {
 /**
  * One reporting date a return reports on, with what exists for it.
  *
- * ``reporting_date`` comes from the return definition — BoG's cadence — not
- * from the bank's ingestion history, so this list is identical for two banks
- * filing the same return and is never empty for an eligible return.
+ * For a periodic return ``reporting_date`` comes from the return definition —
+ * BoG's cadence — not from the bank's ingestion history, so this list is
+ * identical for two banks filing the same return and is never empty for an
+ * eligible return. For an event-driven pack it is one of the bank's computed
+ * position dates, and there is no regulator deadline to report.
  * @export
  * @interface ReturnAnchorRead
  */

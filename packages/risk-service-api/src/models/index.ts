@@ -1697,6 +1697,7 @@ export * from "./ReportComparisonRead";
 export * from "./ReportDecision";
 export * from "./ReportFinding";
 export * from "./ReportScore";
+export * from "./ReportingDateSource";
 export * from "./ReportingObligationListRead";
 export * from "./ReportingObligationRead";
 export * from "./ReportingObligationSummaryRead";

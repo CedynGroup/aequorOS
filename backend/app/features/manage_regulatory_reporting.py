@@ -152,6 +152,8 @@ def list_return_anchors(  # noqa: PLR0913 - tenant scope + return + both window 
     the forward half. Elapsed reporting dates are offered because an overdue
     return is exactly the one still owed to the regulator; each carries its true
     ``data_status``, and a date with no computed position is listed, never hidden.
+    An event-driven pack has no regulator date and offers the bank's computed
+    position dates instead; ``reporting_date_source`` says which.
     """
     return regulatory_reporting.list_return_anchors(
         db,
