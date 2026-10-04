@@ -9,7 +9,8 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import RegulatoryPackage
+from app.api.deps import IcaapAccess
+from app.models import Bank, RegulatoryPackage
 from app.models.icaap import IcaapCycle, IcaapStageDecision
 from app.schemas.icaap import (
     IcaapCloneCreate,
@@ -307,12 +308,9 @@ class TestPostFreezeReturn:
                 db,
                 reviewer,
                 cycle.id,
-                return_payload(
-                    db, reviewer, cycle.id, return_to_seq=1, reason="Nothing to undo."
-                ),
+                return_payload(db, reviewer, cycle.id, return_to_seq=1, reason="Nothing to undo."),
             )
         assert _error(caught.value) == "cycle_not_returnable"
-
 
     def test_the_officer_who_froze_it_cannot_be_the_one_who_unseals_it(
         self, canonical_book: Session, extra_frameworks: None
@@ -333,9 +331,7 @@ class TestPostFreezeReturn:
                 db,
                 access,
                 cycle.id,
-                return_payload(
-                    db, access, cycle.id, return_to_seq=1, reason="Undo my own seal."
-                ),
+                return_payload(db, access, cycle.id, return_to_seq=1, reason="Undo my own seal."),
             )
         assert _error(caught.value) == "maker_checker"
         assert "froze this ICAAP" in str(_detail(caught.value)["message"])
@@ -452,6 +448,35 @@ class TestDisclosure:
                 IcaapDisclosureDecision(decision="approved", reason="Approving my own selection."),
             )
         assert _error(caught.value) == "maker_checker"
+
+    def test_the_four_eyes_condition_reads_only_this_institutions_disclosure(
+        self, canonical_book: Session, extra_frameworks: None
+    ) -> None:
+        """A proposer addressing the cycle under a sibling bank meets its 404, not a 403.
+
+        The pre-authorization condition must resolve the disclosure the way the
+        route does, or it tells its proposer that the sibling's cycle exists.
+        """
+        db = canonical_book
+        access, _r, _a, cycle, _out = _frozen(db)
+        _board_approve(db, cycle.id)
+        disclosure.put_disclosure(
+            db,
+            access,
+            cycle.id,
+            IcaapDisclosurePut(
+                selected_section_keys=["executive_summary"],
+                reason="Publishing the summary of the outcome.",
+            ),
+        )
+        disclosure.submit_disclosure(
+            db, access, cycle.id, IcaapDisclosureSubmit(reason="Ready for approval.")
+        )
+        (home,) = disclosure.approval_conditions(db, access, cycle.id)
+        sibling = IcaapAccess(ctx=access.ctx, bank=Bank(id="BK-SIBLING1"))
+        (elsewhere,) = disclosure.approval_conditions(db, sibling, cycle.id)
+        assert home.passed is False
+        assert elsewhere.passed is True
 
     def test_approval_mints_the_disclosure_return_from_the_filed_report(
         self, canonical_book: Session, extra_frameworks: None

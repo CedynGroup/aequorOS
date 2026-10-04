@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
-from app.models import User
+from app.models import Bank, User
 from app.schemas.icaap import IcaapCycleRead
 from app.schemas.icaap_risk_capital import (
     IcaapAuditFindingWrite,
@@ -317,6 +317,22 @@ def test_the_person_who_recorded_a_letter_cannot_confirm_it(
             canonical_book, access, created.id, IcaapReason(reason="Confirm my own.")
         )
     assert _detail(caught)["error_code"] == "self_approval"
+
+
+def test_the_four_eyes_condition_reads_only_this_institutions_add_on(
+    canonical_book: Session, access: IcaapAccess, storage: InMemoryStorageClient
+) -> None:
+    """Its recorder addressing the add-on under a sibling bank meets a 404, not a 403.
+
+    The pre-authorization condition must resolve the add-on the way the route
+    does, or it tells the recorder that the sibling's letter exists.
+    """
+    created = _record(canonical_book, access, storage)
+    (home,) = supervisory_addons.confirmation_conditions(canonical_book, access, created.id)
+    sibling = IcaapAccess(ctx=access.ctx, bank=Bank(id="BK-SIBLING1"))
+    (elsewhere,) = supervisory_addons.confirmation_conditions(canonical_book, sibling, created.id)
+    assert home.passed is False
+    assert elsewhere.passed is True
 
 
 def test_a_confirmed_letter_is_in_force_from_its_own_date(

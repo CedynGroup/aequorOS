@@ -1062,6 +1062,9 @@ direct `/credit/*` routes sit on per-route scoped bindings
 (`app/api/deps.py::require_credit_*`) with the blotter applying the reader's
 data scope; and — 2026-09-23 — [BI](../backend/docs/bi_enforcement_rollout.md),
 where the sentence is declared on the catalogue member rather than the route).
+[ICAAP](../backend/docs/icaap_enforcement_rollout.md) uses per-route scoped
+`require_icaap_*` bindings; its rollout contract owns the separated authorities
+and object-reference refusal rules.
 Remaining Phase-0 work is further endpoint cutovers, their matching
 module-action controls, and per-persona default landings (the root already
 routes to the first authorized surface)

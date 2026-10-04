@@ -27,6 +27,7 @@ The RLS backstop and the generative authorization-dimension coverage live in
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -37,13 +38,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base
+from app.core.config import get_settings
+from app.db.base import Base, utc_now
 from app.features.ingest_data import get_ingestion_storage
 from app.features.manage_icaap_attachments import get_icaap_storage as get_attachment_storage
 from app.features.manage_icaap_supervisory_addons import get_icaap_storage as get_addon_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
+from app.models.ai import AiCommentarySettings
 from tests.api.helpers import headers
 from tests.fixtures.object_reference_routes import (
     KNOWN_DEFECTS,
@@ -61,6 +64,7 @@ from tests.fixtures.object_reference_routes import (
     layout_children,
     leaked,
     object_routes,
+    unknown_request,
 )
 from tests.fixtures.object_references import (
     MODEL_BY_KIND,
@@ -94,6 +98,24 @@ _CASES = [
 class Outcome:
     problems: list[str]
     detail: str
+
+
+_REQUEST_ID = re.compile(r'"request_id":"[^"]*"')
+
+
+@dataclass(frozen=True)
+class Refusal:
+    """A response reduced to what a caller can compare between two requests."""
+
+    status: int
+    body: str
+
+    @classmethod
+    def of(cls, response: Any, requested: set[str]) -> Refusal:
+        body = _REQUEST_ID.sub('"request_id":""', response.text)
+        for identifier in requested:
+            body = body.replace(identifier, "<sent>")
+        return cls(status=response.status_code, body=body)
 
 
 @dataclass
@@ -145,12 +167,25 @@ class Coverage:
             problems.append(f"leaked {leak}")
         return Outcome(problems=problems, detail=response.text[:300])
 
+    def refusals(
+        self, route: ObjectRoute, layout: Layout, child: Reference | None
+    ) -> tuple[Refusal, Refusal]:
+        """The answers to a foreign reference and to an unknown one, normalised."""
+        built = foreign_request(
+            route, self.document, layout, home=self.home, owner=self.owner(layout), child=child
+        )
+        assert built is not None, f"{route.label} [{layout}] has no foreign reference"
+        foreign = Refusal.of(self._send(route, built[0]), built[1])
+        request, requested = unknown_request(
+            route, self.document, layout, home=self.home, child=child
+        )
+        return foreign, Refusal.of(self._send(route, request), requested)
+
     def _send(self, route: ObjectRoute, request: Request) -> Any:
         return self.client.request(
             route.method,
             request.path,
-            params=request.query,
-            json=request.body,
+            **request.send_arguments(),
             headers=headers(
                 org_id=TENANT_A.organization_id,
                 user_id=TENANT_A.actor_id,
@@ -180,6 +215,40 @@ def _seed_tenant(session: Session, tenant: TenantSeed, *, with_users: bool) -> O
     return seed_objects(session, tenant)
 
 
+#: ICAAP is held to the strict refusal shape (``test_icaap_refusal_...`` below).
+_ICAAP_PREFIX = "/api/v1/banks/{bank_id}/icaap/"
+_ICAAP_CASES = [
+    case
+    for case in _CASES
+    if isinstance(route := case.values[0], ObjectRoute) and route.path.startswith(_ICAAP_PREFIX)
+]
+
+
+def _icaap_drafting_consent() -> AiCommentarySettings:
+    """Tenant A's consent to ICAAP drafting; inert until a test switches AI on."""
+    settings = get_settings()
+    return AiCommentarySettings(
+        organization_id=TENANT_A.organization_id,
+        enabled=True,
+        enabled_features=["icaap_drafting"],
+        descriptor_only=False,
+        consent_version=settings.ai.consent_version,
+        consented_by=TENANT_A.actor_id,
+        consented_at=utc_now(),
+        updated_by=TENANT_A.actor_id,
+    )
+
+
+@pytest.fixture
+def ai_drafting_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Open the AI deployment gate, so the AI-draft mutations reach their lookups."""
+    monkeypatch.setenv("AI_COMMENTARY_ENABLED", "1")
+    get_settings.cache_clear()
+    yield
+    monkeypatch.undo()
+    get_settings.cache_clear()
+
+
 @pytest.fixture(scope="module")
 def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
     import app.api.deps as deps_mod  # noqa: PLC0415
@@ -198,6 +267,7 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
         sibling = _seed_tenant(session, TENANT_A2, with_users=False)
         other_org = _seed_tenant(session, TENANT_B, with_users=True)
         session.add_all(full_authority_bindings(TENANT_A, owner=True))
+        session.add(_icaap_drafting_consent())
         session.commit()
 
     # Bind the app to this SQLite engine directly, the way the hermetic conftest
@@ -244,6 +314,32 @@ def test_foreign_object_reference_is_refused(
         pytest.skip("quarantined product defect; see test_known_defects_are_still_reproduced")
     outcome = coverage.exercise(route, layout, child)
     assert not outcome.problems, f"{route.label} [{layout}]: {outcome.problems} {outcome.detail}"
+
+
+@pytest.mark.parametrize(("route", "layout", "child"), _ICAAP_CASES)
+@pytest.mark.usefixtures("ai_drafting_on")
+def test_icaap_refusal_is_the_unknown_object_answer(
+    coverage: Coverage, route: ObjectRoute, layout: Layout, child: Reference | None
+) -> None:
+    """ICAAP answers a foreign object exactly as it answers one nobody holds.
+
+    The sweep above accepts any refusal, including a 403 or a validation error
+    raised before the lookup runs. For ICAAP the refusal must come from the
+    lookup itself: a foreign object in the path is 404, a foreign body reference
+    gets the same answer the route gives an unknown identifier, and neither is
+    an authorization refusal the fully entitled caller should never see. AI is
+    switched on and consented, so the AI-draft mutations answer from their
+    lookups rather than from the deployment gate's blanket 404.
+    """
+    foreign, unknown = coverage.refusals(route, layout, child)
+    in_path = any(
+        reference.location == "path" for reference in foreign_references(route, layout, child)
+    )
+    assert foreign == unknown, f"{route.label} [{layout}]: {foreign} differs from {unknown}"
+    assert foreign.status != 403, f"{route.label} [{layout}]: {foreign}"
+    assert '"validation_error"' not in foreign.body, f"{route.label} [{layout}]: {foreign}"
+    if in_path:
+        assert foreign.status == 404, f"{route.label} [{layout}]: {foreign}"
 
 
 def test_known_defects_are_still_reproduced(coverage: Coverage) -> None:
