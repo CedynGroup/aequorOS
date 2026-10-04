@@ -194,6 +194,24 @@ _EXACT_ROUTE_REQUIREMENTS: dict[str, tuple[_RouteRequirement, ...]] = {
         (ModuleScope.CREDIT, Sensitivity.CONFIDENTIAL, Permission.VIEW),
     ),
     "/ftp/scenarios": ((ModuleScope.FTP, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    "/forecasting/scenario": (
+        (ModuleScope.FORECASTING, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/forecasting/reverse-stress": (
+        (ModuleScope.FORECASTING, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/forecasting/nii": (
+        (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.FORECASTING, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/forecasting/optimizer": (
+        (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.FORECASTING, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
+    "/forecasting/whatif": (
+        (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
+        (ModuleScope.FORECASTING, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    ),
     "/basel/planning": ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
     "/icaap": ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
 }

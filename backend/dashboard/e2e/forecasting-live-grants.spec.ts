@@ -57,7 +57,9 @@ test("account-only and baseline members retain disabled Forecasting workspaces",
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip).toContainText(/Requires Forecasting .* View/);
       await expect(tooltip).toContainText("Org Owner");
-      await expect(tooltip).toContainText("Ask your organization owner or admin");
+      await expect(tooltip).toContainText(
+        "Ask your organization owner or admin",
+      );
     }
     expect(requests).toEqual([]);
     if (evidence)

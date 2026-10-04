@@ -287,14 +287,16 @@ assert.equal(isPathVisible("/basel/planning", deniedCapital), false);
 
 for (const kind of ["all", "branch", "region"] as const) {
   const scope = resolved(true, true);
-  scope.institutionCapabilities = scope.institutionCapabilities!.map((item) => ({
-    ...item,
-    dataScope: {
-      kind,
-      branches: kind === "branch" ? ["ACC"] : [],
-      regions: kind === "region" ? ["GREATER_ACCRA"] : [],
-    },
-  }));
+  scope.institutionCapabilities = scope.institutionCapabilities!.map(
+    (item) => ({
+      ...item,
+      dataScope: {
+        kind,
+        branches: kind === "branch" ? ["ACC"] : [],
+        regions: kind === "region" ? ["GREATER_ACCRA"] : [],
+      },
+    }),
+  );
   for (const route of [
     "/basel",
     "/basel/rwa",
