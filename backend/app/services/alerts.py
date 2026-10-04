@@ -31,6 +31,7 @@ _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
     ("ftp", Module.FTP),
+    ("forecast", Module.FORECASTING),
 )
 
 

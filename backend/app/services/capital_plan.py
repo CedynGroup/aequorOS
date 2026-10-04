@@ -23,7 +23,7 @@ from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import ConditionCheck, ConditionKind, Permission
+from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.policy import PolicyUnresolvedError
 from app.models import (
@@ -50,7 +50,12 @@ from app.schemas.capital_plan import (
     IlaapSnapshotRead,
     ProjectionUnavailableRead,
 )
-from app.services import institution_types, regulatory_forecasting, regulatory_parameters
+from app.services import (
+    institution_types,
+    regulatory_forecasting,
+    regulatory_parameters,
+    scoped_authorization,
+)
 from app.services.audit import record_event
 from app.services.institution_types import InstitutionTypeUnresolved
 from app.services.liquidity_cfp import get_cfp
@@ -199,6 +204,15 @@ def _unresolved_institution_type() -> _ProjectionUnavailable:
         "The institution's licence type is not recognised, so the regulatory capital "
         "minima that apply to it cannot be determined and the projection is not "
         "measured. The plan itself is unaffected.",
+    )
+
+
+def _forecasting_view_required() -> _ProjectionUnavailable:
+    return _ProjectionUnavailable(
+        "forecasting_view_required",
+        "The projection is read from this institution's Forecasting runs, which your "
+        "authority does not cover. It requires Forecasting · Aggregated · View; ask your "
+        "organization owner or admin to grant it. The plan itself is unaffected.",
     )
 
 
@@ -381,6 +395,20 @@ def _headroom(value: Decimal | None, floor: Decimal | None) -> Decimal | None:
 def _projection(
     db: Session, ctx: TenantContext, bank: Bank, content: CapitalPlanContent | None
 ) -> CapitalPlanProjectionRead | None:
+    # The projection is Forecasting output rendered against capital floors, so
+    # it answers to Forecasting authority even though the plan is a capital
+    # document: the plan stays readable and only this section is withheld.
+    forecasting = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="capital_plan_projection",
+    )
+    if forecasting is None or not forecasting.allowed:
+        raise _forecasting_view_required()
     runs = _forecast_runs(db, ctx, bank)
     if not runs:
         return None

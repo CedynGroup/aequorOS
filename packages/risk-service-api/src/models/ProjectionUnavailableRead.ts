@@ -32,6 +32,9 @@ import {
  * The plan document, the approval state and the ILAAP evidence stay readable:
  * only the projection — whose headroom needs a resolved capital minimum —
  * refuses (ICAAP P0 fix round; QA P0-QA-004, architecture M1).
+ * ``forecasting_view_required`` is the authorization case: the projection is
+ * read from Forecasting runs, so a caller without Forecasting view gets the
+ * plan without it.
  * @export
  * @interface ProjectionUnavailableRead
  */

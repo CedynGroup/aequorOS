@@ -23,7 +23,7 @@
 > its separate rollout. For the `institution` vocabulary added on 2026-09-20,
 > see the [as-built scope and rollout boundary](../backend/docs/authorization_foundation.md#institution-vocabulary-built-2026-09-20).
 >
-> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, or FTP control is unavailable
+> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, or Forecasting control is unavailable
 > only because the current user lacks an exact permission, keep it visible and
 > disabled. Its hover/focus tooltip must name the required product permission
 > (module, sensitivity, and action) and direct the user to their organization
@@ -568,7 +568,8 @@ organization and per-institution capabilities from the binding evaluator; `/bank
 filters out uncovered institutions before presentation. The shell, command palette,
 module tabs, and route guard consume that projection without consulting token or
 scalar roles. Unauthorized direct routes resolve as 404 and do not mount product
-queries, except for the hubs and baseline-only public routes described below.
+queries, except for the hubs and baseline-only public routes described below
+and the [Forecasting workspace behavior](../backend/docs/forecasting_enforcement_rollout.md#dashboard-controls).
 The root `/` is the post-sign-in landing, not a deep link: for users with separate
 institution or organization capabilities, when the Command Center lies outside
 their authority the route guard sends them to the first surface they can see
@@ -600,7 +601,8 @@ module catalogue remains visible but disabled, with exact permission tooltips;
 personal settings stay available. Tooltips use route-specific requirements before
 falling back to module-entry requirements for catalogue entries. Public module
 landing/workspace deep links on the explicit `PUBLIC_MODULE_ROUTES` allow-list in
-`backend/dashboard/lib/modules.ts` return to `/`. Object-detail paths (including
+`backend/dashboard/lib/modules.ts` return to `/`, except for Forecasting, whose
+workspace behavior is owned by the linked rollout contract above. Object-detail paths (including
 cross-tenant and unknown objects), structurally excluded paths, and non-existent
 routes remain 404. `backend/dashboard/lib/modules.test.ts` and
 `backend/dashboard/e2e/baseline-membership.spec.ts` pin this boundary.

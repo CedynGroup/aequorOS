@@ -120,6 +120,9 @@ E2E_USERS = {
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
     "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
     "fx_member": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
+    # Forecasting's live-grant journey revokes what it grants, but revoked rows stay
+    # in a member's history, so it needs an identity no other journey counts.
+    "forecast_member": UUID("eeeeeeee-0000-4eee-8eee-eeeeeeeeeee0"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
     # A board member: Capital/confidential APPROVER on the sample bank and
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
@@ -230,6 +233,7 @@ def main() -> None:
                         in {
                             "grant_member",
                             "fx_member",
+                            "forecast_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",

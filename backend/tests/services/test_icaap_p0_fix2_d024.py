@@ -88,9 +88,12 @@ __all__ = ["storage"]
 
 # The enterprise stress run this suite prepares requires scoped FX and IRRBB
 # calculation authority (an unconditional IRRBB check landed on the run
-# service), so it takes the same two fixtures as the suite it borrows
-# ``_run_enterprise_stress`` from.
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+# service), and the capital-plan forecast it drives through ``_run_forecast``
+# requires scoped Forecasting ``run`` authority, so it takes the same fixtures
+# as the suites it borrows ``_run_enterprise_stress`` and ``_run_forecast`` from.
+pytestmark = pytest.mark.usefixtures(
+    "fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"
+)
 
 #: The date the console action is taken on in the flow-through tests: before
 #: the fixture's as-of (2026-03-31), so a generation effective from 2026-01-01 is
