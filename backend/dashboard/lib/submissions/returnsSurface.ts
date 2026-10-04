@@ -179,7 +179,7 @@ function preparerAction(input: SurfaceInput): PrimaryAction {
     // act, one name, wherever it is offered from.
     label: "Certify and freeze",
     caption:
-      "Freezes these figures and hands the return to whoever holds approval authority for this institution — you do not choose the person. Nothing can be regenerated for this reporting date until they decide.",
+      "Freezes these figures and sends the return to the approver you name. Nothing can be regenerated for this reporting date until they decide.",
     enabled: !blocked,
     reason: !blocked
       ? null
@@ -254,8 +254,8 @@ function transmitAction(input: SurfaceInput): PrimaryAction {
       : null;
   return {
     kind: "transmit",
-    label: `Approve and file with ${input.regulatorName}`,
-    caption: `Records your approval as the final stage decision and sends the signed return to ${input.regulatorName}. This is the filing — it leaves the bank when you press it.`,
+    label: `File with ${input.regulatorName}`,
+    caption: `Sends the approved, signed return to ${input.regulatorName}. This is the filing — it leaves the bank when you press it.`,
     enabled:
       input.status === "approved" && input.clearedToSubmit && !input.isRehearsal,
     reason:

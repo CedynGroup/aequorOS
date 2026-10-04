@@ -133,13 +133,14 @@ export async function certifyAsPreparer(
 }
 
 /**
- * Approve and sign as the checker, from the queue — the founder's one act.
+ * Approve and sign as the checker from the queue, then send the return on.
  *
  * Entered through the Approvals tab on purpose: that page is the queue and its
  * only action routes into the ceremony, so this also proves there is no bare
  * approve button left to bypass signing with. One press records the signature AND
- * the approval decision, which is why the return reaches `approved` without any
- * second visit anywhere.
+ * the approval decision. Releasing the return to the Validator is the second act
+ * (docs/filing_workflow_redesign.md, founder decision 2026-09-20), so the
+ * approval alone leaves it with this officer until they send it on.
  */
 export async function approveAndSignAsChecker(
   browser: Browser,
@@ -169,9 +170,20 @@ export async function approveAndSignAsChecker(
     await workspace.getByLabel('Your password').fill(E2E_PASSWORD);
     await workspace.getByRole('button', { name: 'Approve and sign' }).click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
-    // Signing IS approving: the checker queue clears without a second decision.
+    // Signing IS approving: the return comes back to the queue approved and
+    // waiting to be sent on, with no second decision to take.
     await page.goto('/submissions/approvals');
-    await expect(page.getByText('Queue is clear')).toBeVisible({ timeout: 30_000 });
+    await row.first().click();
+    await expect(page.getByTestId('awaiting-hand-off')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('review-and-sign')).toHaveCount(0);
+    await page.getByTestId('send-to-validator').click();
+    // Filing is the Validator's authority alone, so the approver is left with
+    // nothing to do on it.
+    await expect(page.getByTestId('with-validator')).toBeVisible({
+      timeout: 30_000,
+    });
   } finally {
     await context.close();
   }

@@ -384,6 +384,36 @@ function DecidePanel({
     isoDate(pkg.reportingDate),
   )}&sign=approver`;
 
+  // The hand-off follows the approval whichever act recorded it: the bare
+  // decision, or the approver's signature in the ceremony.
+  const awaitingHandOffNote = chain?.awaitingHandOff ? (
+    <p
+      data-testid="awaiting-hand-off"
+      className="rounded border border-success/30 bg-success-light/40 px-3.5 py-2.5 text-caption leading-relaxed text-navy/85"
+    >
+      <span className="font-medium text-navy">Your approval is recorded.</span>{" "}
+      The return is still with you until you send it to the Validator.
+    </p>
+  ) : null;
+  const sendToValidator = (
+    <button
+      type="button"
+      data-testid="send-to-validator"
+      disabled={handOff.isPending || decide.isPending || !chain?.awaitingHandOff}
+      title={chain?.awaitingHandOff ? undefined : "Approve this return first."}
+      onClick={() => handOff.mutate({ packageId: pkg.id })}
+      className="inline-flex items-center gap-1.5 rounded-md border border-action/40 bg-action-light/40 px-3 py-2 text-caption font-medium text-navy hover:bg-action-light/60 disabled:opacity-50"
+    >
+      {handOff.isPending && (
+        <Loader2 size={13} className="animate-spin" aria-hidden />
+      )}
+      Send to Validator
+    </button>
+  );
+  const handOffError = handOff.error ? (
+    <ErrorPanel error={handOff.error} title="The return was not sent on" />
+  ) : null;
+
   return (
     <SectionCard
       title={
@@ -733,6 +763,15 @@ function DecidePanel({
               </div>
             ) : null}
           </div>
+        ) : signingRequired && chain?.awaitingHandOff ? (
+          // Signing IS approving, so a signed return arrives here already
+          // approved. Releasing it is still the second act, and the review
+          // link would only reopen a ceremony with nothing left to sign.
+          <>
+            {awaitingHandOffNote}
+            <div>{sendToValidator}</div>
+            {handOffError}
+          </>
         ) : signingRequired ? (
           <>
             <Link
@@ -798,18 +837,7 @@ function DecidePanel({
               </div>
 
 
-              {chain?.awaitingHandOff && (
-                <p
-                  data-testid="awaiting-hand-off"
-                  className="rounded border border-success/30 bg-success-light/40 px-3.5 py-2.5 text-caption leading-relaxed text-navy/85"
-                >
-                  <span className="font-medium text-navy">
-                    Your approval is recorded.
-                  </span>{" "}
-                  The return is still with you until you send it to the
-                  Validator.
-                </p>
-              )}
+              {awaitingHandOffNote}
 
               {/* Three acts, in the order the bank works in: approve the
                   figures, or send them back — and only once approved, pass the
@@ -862,35 +890,10 @@ function DecidePanel({
                 </button>
 
                 {/* Third, and unavailable until the approval exists. */}
-                <button
-                  type="button"
-                  data-testid="send-to-validator"
-                  disabled={
-                    handOff.isPending ||
-                    decide.isPending ||
-                    !chain?.awaitingHandOff
-                  }
-                  title={
-                    chain?.awaitingHandOff
-                      ? undefined
-                      : "Approve this return first."
-                  }
-                  onClick={() => handOff.mutate({ packageId: pkg.id })}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-action/40 bg-action-light/40 px-3 py-2 text-caption font-medium text-navy hover:bg-action-light/60 disabled:opacity-50"
-                >
-                  {handOff.isPending && (
-                    <Loader2 size={13} className="animate-spin" aria-hidden />
-                  )}
-                  Send to Validator
-                </button>
+                {sendToValidator}
               </div>
 
-              {handOff.error ? (
-                <ErrorPanel
-                  error={handOff.error}
-                  title="The return was not sent on"
-                />
-              ) : null}
+              {handOffError}
 
               <p className="text-caption text-slate leading-relaxed">
                 An administrator has relaxed signing for this return, so there is

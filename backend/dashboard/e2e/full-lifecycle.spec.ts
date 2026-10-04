@@ -195,6 +195,10 @@ type FilingSession = { page: Page; close: () => Promise<void> };
  * Validator — which neither the preparer nor the approver holds. The journeys
  * are therefore three sessions, not two, and they assert the new rule rather
  * than being relaxed to pass (docs/filing_workflow_redesign.md §1 finding 3).
+ *
+ * The Validator's stage is itself two acts: they approve the figures from the
+ * queue, and only then release them to the regulator. The session approves
+ * first and opens the return's workspace, where the release is offered.
  */
 async function openFilingSession(
   browser: Browser,
@@ -202,6 +206,19 @@ async function openFilingSession(
 ): Promise<FilingSession> {
   const context = await browser.newContext({ storageState: validatorState });
   const page = await context.newPage();
+  await page.goto("/submissions/approvals");
+  await page
+    .getByRole("row", { name: new RegExp(fmtDateGB(date)) })
+    .first()
+    .click();
+  await expect(page.getByTestId("validator-surface")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByTestId("validator-approve").click();
+  // Approved, not yet filed: the release is now offered, and the approval
+  // cannot be given twice.
+  await expect(page.getByTestId("open-transmit")).toBeEnabled();
+  await expect(page.getByTestId("validator-approve")).toBeDisabled();
   await page.goto(returnsUrl("LCR-NSFR", date));
   return { page, close: () => context.close() };
 }
@@ -323,8 +340,12 @@ test.describe("full lifecycle", () => {
         hasText: "Sent by the downtime bundle, and not yet complete",
       });
       await expect(reuploadPanel).toBeVisible();
+      // The events feed lives in the Trail row, which stays collapsed until
+      // it is opened.
+      const trail = filingPage.getByTestId("events-row");
+      await trail.getByRole("button", { expanded: false }).click();
       await expect(
-        filingPage.locator("span", { hasText: "Pending ORASS re-upload" }),
+        trail.locator("span", { hasText: "Pending ORASS re-upload" }),
       ).toBeVisible();
       // The re-upload is the Validator's one act while the filing is
       // incomplete — it is the primary action, not a button hidden in a card.
@@ -388,8 +409,11 @@ test.describe("full lifecycle", () => {
     await expect(
       page.getByText("What the supervisor said about this return"),
     ).toBeVisible();
-    // And nothing on the preparer's screen reaches the regulator.
-    await expect(page.getByText(/ORASS/i)).toHaveCount(0);
+    // And nothing on the preparer's screen reaches the regulator. The
+    // supervisor's own comment, quoted above, may name the portal, so this is
+    // asserted on the controls rather than on every word of text.
+    await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /ORASS/i })).toHaveCount(0);
     await expect(page.getByLabel("Channel")).toHaveCount(0);
 
     // Hygiene: leave the sandbox on its happy-path default for later specs.
@@ -421,7 +445,13 @@ test.describe("full lifecycle", () => {
     await expect(page.getByTestId("transmission-row")).toHaveCount(0);
     await expect(page.getByTestId("sent-back-notice")).toContainText(note);
     // The preparer's signature is history, not deleted — the withdrawn cycle is
-    // named rather than silently dropped.
+    // named rather than silently dropped. It is stated inside the Certification
+    // row, which the workspace keeps collapsed until it is opened.
+    const certification = page.getByTestId("certification-row");
+    await certification.getByRole("button", { expanded: false }).click();
+    await expect(
+      certification.getByRole("button", { expanded: true }),
+    ).toBeVisible();
     await expect(
       page.getByText(/retained in the append-only trail/i),
     ).toBeVisible();
