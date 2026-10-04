@@ -61,7 +61,7 @@ async function expectDisabledWorkspace(page: Page, reason: RegExp) {
     page.getByRole("navigation", { name: "Module sections" }),
   ).toBeVisible();
   await expectDisabledWithReason(page, "View Forecasting", reason);
-  await expect(page.getByRole("tooltip")).toContainText("Org Owner");
+  await expect(page.getByRole("tooltip")).toContainText("organization owner");
   await expect(page.getByRole("tooltip")).toContainText(
     "Ask your organization owner or admin",
   );

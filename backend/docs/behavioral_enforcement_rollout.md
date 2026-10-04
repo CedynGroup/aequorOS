@@ -48,7 +48,8 @@ cutover.
 Every `/behavioral` page requires aggregated view. Without it the Behavioral
 navigation entry stays visible but disabled with “Requires Behavioral Models ·
 Aggregated · View. Ask your organization owner or admin to grant it.” Deep links
-answer 404, and no Behavioral request is issued. The Retrain control on each model page consumes the exact confidential
+show the access-denied page naming that grant, and no Behavioral request is
+issued. The Retrain control on each model page consumes the exact confidential
 run capability from effective authority. Without it the control remains visible
 and disabled with “Requires Behavioral Models · Confidential · Run. Ask your
 organization owner or admin to grant it.” The shared permission-only
@@ -140,13 +141,16 @@ Example least-privilege request for a model trainer:
   "institution_id": "<exact BK-* ID>",
   "module_scope": "beh",
   "sensitivity_scope": "confidential",
-  "reason": "<institution-approved reason>",
+  "reason_category": "<structured reason category>",
+  "reason_detail": "<institution-approved detail>",
   "expected_authority_sentence": "<server preview response>"
 }
 ```
 
 Do not infer rows from scalar roles, combine partial rows, grant machine
-principals, or reuse authority approved for another module.
+principals, or reuse authority approved for another module. The
+[structured reason contract](authorization_foundation.md#structured-grant-reasons)
+names the reason categories and which ones require detail or an expiry.
 
 ## Release record
 

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { E2E_USERS, mintBackendToken } from "./support/mint";
 
@@ -96,11 +96,13 @@ test("request expiry and route guards reject malformed authority; equivalent req
       ids.includes(r.id),
     ),
   ).toEqual([]);
-  if (evidence)
+  if (evidence) {
+    mkdirSync(evidence, { recursive: true });
     writeFileSync(
       path.join(evidence, "access-request-api-regressions.json"),
       JSON.stringify(observations, null, 2),
     );
+  }
 });
 
 test("Settings loads institutions and grant reason picker requires expiry", async ({

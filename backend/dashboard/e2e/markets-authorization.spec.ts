@@ -182,7 +182,7 @@ test.describe("Markets analyst", () => {
 test.describe("unbound Markets user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("hides navigation and 404s deep links without Markets requests", async ({
+  test("disables navigation, denies deep links, and sends no Markets requests", async ({
     page,
   }) => {
     const marketRequests: string[] = [];
@@ -193,7 +193,8 @@ test.describe("unbound Markets user", () => {
     });
 
     // The module stays in the catalogue, disabled with the grant to ask for
-    // (permission-only policy); the route itself resolves as not found.
+    // (permission-only policy); the route itself shows the access-denied page
+    // naming that grant.
     await page.goto("/liquidity");
     const marketsEntry = page
       .getByRole("navigation")
@@ -205,7 +206,12 @@ test.describe("unbound Markets user", () => {
       /Requires Markets · Published · View/i,
     );
     await page.goto("/markets");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Markets · Published · View", { exact: true }),
+    ).toBeVisible();
     expect(marketRequests).toEqual([]);
 
     if (evidenceDir) {

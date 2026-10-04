@@ -226,7 +226,7 @@ test.describe("fresh active member baseline", () => {
       ownerPage.getByText("Requested access", { exact: true }),
     ).toBeVisible();
     await expect(
-      ownerPage.getByText("E2E Invite_fresh · Foreign Exchange", {
+      ownerPage.getByText("E2E Invite Fresh · Foreign Exchange", {
         exact: true,
       }),
     ).toBeVisible();
