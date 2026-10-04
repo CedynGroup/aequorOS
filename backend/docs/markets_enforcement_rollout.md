@@ -74,7 +74,8 @@ Markets grants do not open the Data Engine.
 
 `/markets` requires MARKETS/`published`/`view`; without it the navigation entry stays visible but disabled with
 “Requires Markets · Published · View. Ask your organization owner or admin to
-grant it.” A deep link resolves as 404, and no market-data request is issued. Within the hub:
+grant it.” A deep link shows the access-denied page naming that grant, and no
+market-data request is issued. Within the hub:
 
 - **Edit spreads** (curve board and curves explorer) needs
   MARKETS/`confidential`/`view`. Without it the control stays visible and
@@ -196,13 +197,16 @@ Example least-privilege request for a market-data uploader:
   "institution_id": "<exact BK-* ID>",
   "module_scope": "markets",
   "sensitivity_scope": "published",
-  "reason": "<institution-approved reason>",
+  "reason_category": "<structured reason category>",
+  "reason_detail": "<institution-approved detail>",
   "expected_authority_sentence": "<server preview response>"
 }
 ```
 
 Do not infer rows from scalar roles, combine partial rows, grant machine
-principals, or reuse authority approved for another module.
+principals, or reuse authority approved for another module. The
+[structured reason contract](authorization_foundation.md#structured-grant-reasons)
+names the reason categories and which ones require detail or an expiry.
 
 ## Release record
 

@@ -119,7 +119,11 @@ export function filingAuthorityFor(
     )?.capabilities ?? [];
 
   if (options.readOnly) {
-    return { ...UNRESOLVED_FILING_AUTHORITY, isResolved: true, isReadOnly: true };
+    return {
+      ...UNRESOLVED_FILING_AUTHORITY,
+      isResolved: true,
+      isReadOnly: true,
+    };
   }
 
   return {
@@ -134,17 +138,13 @@ export function filingAuthorityFor(
     // had the button offered to them and was then refused. A screen must not
     // offer an act the server will not accept.
     mayApprove: holds(capabilities, TRANSMISSION_SENSITIVITY, "approve"),
-    mayTransmit: holds(
-      capabilities,
-      TRANSMISSION_SENSITIVITY,
-      "submit",
-    ),
+    mayTransmit: holds(capabilities, TRANSMISSION_SENSITIVITY, "submit"),
   };
 }
 
 /**
  * The permission sentence an Org Owner would have to write, named the way
- * Settings → Members names it. Used to explain an absence when an officer asks
+ * Access → Members names it. Used to explain an absence when an officer asks
  * why a surface is not theirs — never to imply they can grant it themselves.
  */
 export const TRANSMISSION_SENTENCE =

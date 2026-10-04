@@ -14,6 +14,7 @@
  */
 
 import type {
+  AccessRequestApprove,
   BindingCreateRequest,
   BindingCreateRequestRoleBundleEnum,
   BindingPreviewRequest,
@@ -22,6 +23,7 @@ import type {
   MemberRead,
   ModuleScope,
   SensitivityScope,
+  GrantReasonCategory,
   SsoAccessRequestApprove,
 } from "@aequoros/risk-service-api";
 import { scopedQueryKey, type QueryAuthorityScope } from "./queryPolicy";
@@ -78,7 +80,10 @@ export type GrantDraft = Readonly<{
   /** Which part of the institution's book. Never optional: the widest scope is
    *  a decision, and a missing one would be indistinguishable from it. */
   dataScope: GrantDataScope;
-  reason: string;
+  reasonCategory: GrantReasonCategory;
+  reasonDetail: string;
+  reference: string;
+  validUntil: string;
 }>;
 
 export const ROLE_OPTIONS = [
@@ -249,9 +254,12 @@ type GrantScopeFields = Pick<
   | "institutionId"
   | "institutionScope"
   | "moduleScope"
-  | "reason"
+  | "reasonCategory"
+  | "reasonDetail"
+  | "reference"
   | "roleBundle"
   | "sensitivityScope"
+  | "validUntil"
 >;
 
 function scopeFields(draft: GrantDraft): GrantScopeFields {
@@ -267,9 +275,15 @@ function scopeFields(draft: GrantDraft): GrantScopeFields {
         ? draft.institutionId
         : undefined,
     moduleScope: draft.moduleScope,
-    reason: draft.reason.trim(),
+    reasonCategory: draft.reasonCategory,
+    reasonDetail: draft.reasonDetail.trim(),
+    reference: draft.reference.trim() || undefined,
     roleBundle: draft.roleBundle,
     sensitivityScope: draft.sensitivityScope,
+    // A `datetime-local` value, sent as the instant it names in the browser.
+    validUntil: draft.validUntil
+      ? new Date(draft.validUntil).toISOString()
+      : undefined,
     dataScopeKind: narrowed ? scope.kind : undefined,
     dataScopeValues: narrowed ? [...scope.values] : undefined,
   };
@@ -298,6 +312,14 @@ export function ssoApprovalRequest(
   return { ...scopeFields(draft), expectedAuthoritySentence };
 }
 
+/** Approving a permission request: the same sentence, with the request in the path. */
+export function accessRequestApprovalRequest(
+  draft: GrantDraft,
+  expectedAuthoritySentence: string,
+): AccessRequestApprove {
+  return { ...scopeFields(draft), expectedAuthoritySentence };
+}
+
 /** Everything that decides which grant the preview describes. */
 export function grantPreviewFingerprint(
   draft: GrantDraft,
@@ -313,6 +335,11 @@ export function grantPreviewFingerprint(
     draft.sensitivityScope,
     scope.kind,
     scope.values.join(","),
+    // Reason and expiry edits must invalidate the preview because they
+    // affect whether the server accepts the grant.
+    draft.reasonCategory,
+    draft.reasonDetail.trim(),
+    draft.validUntil,
   ].join("|");
 }
 

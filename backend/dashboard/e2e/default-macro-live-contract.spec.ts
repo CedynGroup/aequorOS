@@ -239,7 +239,8 @@ test("system contracts, governed clones, and real denied authority", async ({
     institution_scope: "organization",
     module_scope: "all",
     sensitivity_scope: "all",
-    reason: "Read-only live verification",
+    reason_category: "other",
+    reason_detail: "Read-only live verification",
   };
   const preview = await api(
     "POST",

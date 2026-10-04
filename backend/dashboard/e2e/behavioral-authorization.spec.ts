@@ -50,9 +50,15 @@ async function expectModelLoaded(page: Page, title: string) {
   ).toBeVisible();
 }
 
-async function expectNotFound(page: Page, href: string) {
+/** A module route of the member's own organization names the grant to request. */
+async function expectAccessRequired(page: Page, href: string) {
   await page.goto(href);
-  await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Access required" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Behavioral Models · Aggregated · View", { exact: true }),
+  ).toBeVisible();
 }
 
 test.afterEach(async ({ page }) => {
@@ -62,7 +68,7 @@ test.afterEach(async ({ page }) => {
 test.describe("unbound Behavioral user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("disables navigation and 404s deep links without Behavioral requests", async ({
+  test("disables navigation, denies deep links, and sends no Behavioral requests", async ({
     page,
   }) => {
     const requests = recordBehavioralRequests(page);
@@ -90,9 +96,9 @@ test.describe("unbound Behavioral user", () => {
         fullPage: true,
       });
     }
-    await expectNotFound(page, "/behavioral");
-    await expectNotFound(page, "/behavioral/nmd-duration");
-    await expectNotFound(page, "/behavioral/liquidity");
+    await expectAccessRequired(page, "/behavioral");
+    await expectAccessRequired(page, "/behavioral/nmd-duration");
+    await expectAccessRequired(page, "/behavioral/liquidity");
     expect(requests).toEqual([]);
 
     if (evidenceDir) {
@@ -118,8 +124,8 @@ test.describe("Behavioral run-only analyst without view", () => {
     );
     const requests = recordBehavioralRequests(page);
 
-    await expectNotFound(page, "/behavioral/prepayment");
-    await expectNotFound(page, "/behavioral");
+    await expectAccessRequired(page, "/behavioral/prepayment");
+    await expectAccessRequired(page, "/behavioral");
     expect(requests).toEqual([]);
 
     if (evidenceDir) {

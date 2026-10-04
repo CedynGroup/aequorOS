@@ -56,8 +56,10 @@ test("account-only and baseline members retain disabled Forecasting workspaces",
       await button.locator("..").focus();
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip).toContainText(/Requires Forecasting .* View/);
-      await expect(tooltip).toContainText("Org Owner");
-      await expect(tooltip).toContainText("Settings → Members");
+      await expect(tooltip).toContainText("organization owner");
+      await expect(tooltip).toContainText(
+        "Ask your organization owner or admin",
+      );
     }
     expect(requests).toEqual([]);
     if (evidence)
@@ -102,7 +104,8 @@ test("real Forecasting grants separate summary, confidential reading, and execut
       institution_id: "BK-SAMP0001",
       module_scope: "fcst",
       sensitivity_scope: sensitivity,
-      reason: "Live Forecasting authorization verification",
+      reason_category: "other",
+      reason_detail: "Live Forecasting authorization verification",
     };
     const preview = await api(
       "POST",
@@ -248,7 +251,8 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     institution_id: "BK-SAMP0001",
     module_scope: "fcst",
     sensitivity_scope: "aggregated",
-    reason: "Live aggregated-only Forecasting verification",
+    reason_category: "other",
+    reason_detail: "Live aggregated-only Forecasting verification",
   };
   const preview = await api(
     "POST",

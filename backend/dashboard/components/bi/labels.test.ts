@@ -26,7 +26,11 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { MODULE_OPTIONS, ROLE_OPTIONS, SENSITIVITY_OPTIONS } from "../../lib/api/grants";
+import {
+  MODULE_OPTIONS,
+  ROLE_OPTIONS,
+  SENSITIVITY_OPTIONS,
+} from "../../lib/api/grants";
 import { roleLabel } from "../../lib/api/identity";
 import {
   AGGREGATION_LABELS,
@@ -91,8 +95,12 @@ function needsDataKeysIn(text: string): string[] {
 
 function needsDataKeys(): string[] {
   const keys = new Set<string>();
-  for (const file of readdirSync(PACKS_DIR).filter((name) => name.endsWith(".json"))) {
-    for (const key of needsDataKeysIn(readFileSync(join(PACKS_DIR, file), "utf8"))) {
+  for (const file of readdirSync(PACKS_DIR).filter((name) =>
+    name.endsWith(".json"),
+  )) {
+    for (const key of needsDataKeysIn(
+      readFileSync(join(PACKS_DIR, file), "utf8"),
+    )) {
       keys.add(key);
     }
   }
@@ -104,16 +112,22 @@ function needsDataKeys(): string[] {
 // dataset one digit away from a mapped one passed this file while rendering
 // "Gl Mapping Bsd9".
 assert.deepEqual(
-  needsDataKeysIn('{"needs_data": "gl_mapping_bsd9", "needs_data":"positions"}'),
+  needsDataKeysIn(
+    '{"needs_data": "gl_mapping_bsd9", "needs_data":"positions"}',
+  ),
   ["gl_mapping_bsd9", "positions"],
   "the needs_data extraction cannot see a key containing a digit",
 );
 
 // And the class it accepts is the server's own, read from the schema.
-const schemaSource = readFileSync(join(BACKEND_DIR, "app", "schemas", "bi.py"), "utf8");
-const serverPattern = /needs_data:\s*str \| None = Field\([^)]*pattern=r"([^"]+)"/.exec(
-  schemaSource,
-)?.[1];
+const schemaSource = readFileSync(
+  join(BACKEND_DIR, "app", "schemas", "bi.py"),
+  "utf8",
+);
+const serverPattern =
+  /needs_data:\s*str \| None = Field\([^)]*pattern=r"([^"]+)"/.exec(
+    schemaSource,
+  )?.[1];
 assert.equal(
   serverPattern,
   "^[a-z][a-z0-9_]*$",
@@ -125,7 +139,9 @@ const keys = needsDataKeys();
 // Anti-vacuity: if the packs moved or the field were renamed, the loop below
 // would iterate nothing and this file would pass over an empty set.
 if (keys.length < 3) {
-  throw new Error(`only ${keys.length} needs_data keys found in ${PACKS_DIR}; expected several`);
+  throw new Error(
+    `only ${keys.length} needs_data keys found in ${PACKS_DIR}; expected several`,
+  );
 }
 // And at least one pack key carries a digit, or the digit fix above is guarding
 // nothing the packs exercise.
@@ -154,7 +170,10 @@ if (untitled.length > 0) {
 
 // And prove the check can fire, on a key no pack uses.
 const invented = datasetRequirement("some_unmapped_dataset");
-if (invented.label !== "Some unmapped dataset" && invented.label !== "Some Unmapped Dataset") {
+if (
+  invented.label !== "Some unmapped dataset" &&
+  invented.label !== "Some Unmapped Dataset"
+) {
   throw new Error(
     `the fallback no longer titleises, so the comparison above cannot detect a ` +
       `missing label: got "${invented.label}"`,
@@ -168,7 +187,11 @@ if (invented.label !== "Some unmapped dataset" && invented.label !== "Some Unmap
 // and 26 pack widgets then blamed an empty answer on a positions upload the bank
 // makes nightly, when what was missing was an official run.
 
-assert.equal(namedDataset(undefined), null, "an absent key must not name a dataset");
+assert.equal(
+  namedDataset(undefined),
+  null,
+  "an absent key must not name a dataset",
+);
 assert.equal(namedDataset(null), null);
 assert.equal(namedDataset(""), null, "a blank key must not name a dataset");
 assert.equal(namedDataset("   "), null);
@@ -194,10 +217,11 @@ function walk(dir: string): string[] {
 
 const aggregations = [
   ...new Set(
-    walk(join(BACKEND_DIR, "app", "domain", "bi", "catalogue")).flatMap((file) =>
-      [...readFileSync(file, "utf8").matchAll(/aggregation="([a-z_]+)"/g)].map(
-        (match) => match[1],
-      ),
+    walk(join(BACKEND_DIR, "app", "domain", "bi", "catalogue")).flatMap(
+      (file) =>
+        [
+          ...readFileSync(file, "utf8").matchAll(/aggregation="([a-z_]+)"/g),
+        ].map((match) => match[1]),
     ),
   ),
 ].sort();
@@ -212,8 +236,11 @@ for (const aggregation of aggregations) {
   );
 }
 
-const roleLiteral = /role: Literal\[((?:"[a-z_]+",?\s*)+)\]/.exec(schemaSource)?.[1] ?? "";
-const componentRoles = [...roleLiteral.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+const roleLiteral =
+  /role: Literal\[((?:"[a-z_]+",?\s*)+)\]/.exec(schemaSource)?.[1] ?? "";
+const componentRoles = [...roleLiteral.matchAll(/"([a-z_]+)"/g)].map(
+  (match) => match[1],
+);
 assert.ok(
   componentRoles.length >= 3,
   "could not read BiExplainComponentRead.role from app/schemas/bi.py",
@@ -230,11 +257,16 @@ for (const role of componentRoles) {
 const tiers = [
   ...new Set(
     walk(join(BACKEND_DIR, "app", "domain", "bi")).flatMap((file) =>
-      [...readFileSync(file, "utf8").matchAll(/tier="([a-z_]+)"/g)].map((match) => match[1]),
+      [...readFileSync(file, "utf8").matchAll(/tier="([a-z_]+)"/g)].map(
+        (match) => match[1],
+      ),
     ),
   ),
 ].sort();
-assert.ok(tiers.length >= 2, "could not read the engine tiers from the catalogue source");
+assert.ok(
+  tiers.length >= 2,
+  "could not read the engine tiers from the catalogue source",
+);
 for (const tier of tiers) {
   assert.ok(
     hasProductionCopy(ENGINE_TIER_LABELS, tier),
@@ -249,7 +281,9 @@ const regimeSource = readFileSync(
   "utf8",
 );
 const regimeCodes = [
-  ...regimeSource.matchAll(/Capital regime: '([a-z0-9]+)'[^\n]*vs '([a-z0-9]+)'/g),
+  ...regimeSource.matchAll(
+    /Capital regime: '([a-z0-9]+)'[^\n]*vs '([a-z0-9]+)'/g,
+  ),
 ].flatMap((match) => [match[1], match[2]]);
 assert.equal(
   regimeCodes.length,
@@ -298,7 +332,12 @@ assert.equal(moduleLabel("future_module"), "Future Module");
 // Read from the migration's CHECK so a new scalar role fails here first.
 
 const migration = readFileSync(
-  join(BACKEND_DIR, "alembic", "versions", "202608280046_initial_org_owner_assignment.py"),
+  join(
+    BACKEND_DIR,
+    "alembic",
+    "versions",
+    "202608280046_initial_org_owner_assignment.py",
+  ),
   "utf8",
 );
 // The migration states the CHECK twice — the legacy vocabulary it replaces and
@@ -328,9 +367,13 @@ for (const role of scalarRoles) {
 // only, so this read "Account_admin" under every account administrator's name.
 assert.equal(/_/.test(roleLabel("account_admin")), false);
 // The bundle names are the grant composer's, so one authority is never called
-// two things between the avatar menu and Settings → Members.
+// two things between the avatar menu and Access → Members.
 for (const [code, label] of ROLE_OPTIONS) {
-  assert.equal(roleLabel(code), label, `role bundle "${code}" is named differently in the avatar menu`);
+  assert.equal(
+    roleLabel(code),
+    label,
+    `role bundle "${code}" is named differently in the avatar menu`,
+  );
 }
 assert.equal(roleLabel("account_admin"), "Organization Administrator");
 assert.equal(roleLabel(undefined), "Signed in");

@@ -13,9 +13,7 @@ test.afterEach(async ({ page }) => {
 test.describe("unbound FTP user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("hides navigation and 404s deep links without FTP requests", async ({
-    page,
-  }) => {
+  test("denies deep links without FTP requests", async ({ page }) => {
     const ftpRequests: string[] = [];
     page.on("request", (request) => {
       if (/\/banks\/[^/]+\/ftp(?:\/|$)/.test(request.url())) {
@@ -24,9 +22,13 @@ test.describe("unbound FTP user", () => {
     });
 
     await page.goto("/ftp");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     await page.goto("/ftp/scenarios");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     expect(ftpRequests).toEqual([]);
 
     if (evidenceDir) {

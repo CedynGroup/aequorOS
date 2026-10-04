@@ -76,7 +76,7 @@ they read a run index before opening full results.
 A missing view grant leaves the workspace and its navigation visible but
 disabled. Direct workspace links preserve the console shell and explain the
 missing Forecasting view permission in a hover/focus tooltip, directing the
-member to an Org Owner via Settings → Members. This includes unbound members
+member to their organization owner or admin. This includes unbound members
 and account-only administrators with no institution authority. The disabled
 workspace does not mount data consumers or issue Forecasting API requests;
 missing aggregated view is never presented as an empty run history.

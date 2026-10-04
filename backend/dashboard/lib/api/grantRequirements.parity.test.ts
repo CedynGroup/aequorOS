@@ -15,6 +15,7 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -60,15 +61,6 @@ function repoRoot(): string {
   throw new Error("could not locate the repository root from " + __dirname);
 }
 
-const GATE_SOURCE = join(
-  repoRoot(),
-  "backend",
-  "app",
-  "services",
-  "regulatory_reporting",
-  "family_access.py",
-);
-
 /**
  * The migration that created the data-scope columns. The contract
  * (`.ai/BI_PHASE4_CONTRACT.md`) names it authoritative and names its CHECK
@@ -99,36 +91,48 @@ function draft(over: Partial<GrantDraft>): GrantDraft {
     moduleScope: "all" as GrantDraft["moduleScope"],
     sensitivityScope: "all" as GrantDraft["sensitivityScope"],
     dataScope: WHOLE_INSTITUTION_BOOK,
-    reason: "test",
+    reasonCategory: "other",
+    reasonDetail: "test",
+    reference: "",
+    validUntil: "",
     ...over,
   };
 }
 
 test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
-  assert.ok(
-    existsSync(GATE_SOURCE),
-    `the backend gate is missing: ${GATE_SOURCE}. The dashboard cannot warn ` +
-      `about a requirement it cannot read.`,
-  );
-  const source = readFileSync(GATE_SOURCE, "utf8");
-  const match = source.match(
-    /CHAIN_DECISION_GATE[^=]*=\s*FamilyGate\(\s*module=Module\.(\w+),\s*sensitivity=Sensitivity\.(\w+)\s*\)/,
-  );
-  assert.ok(
-    match,
-    "could not find CHAIN_DECISION_GATE in family_access.py — if it was " +
-      "renamed or reshaped, update this test AND the mirror together.",
-  );
-  const [, backendModule, backendSensitivity] = match;
+  const backendRoot = join(repoRoot(), "backend");
+  const [backendModule, backendSensitivity] = JSON.parse(
+    execFileSync(
+      "uv",
+      [
+        "run",
+        "--frozen",
+        "python",
+        "-c",
+        `import json
+from app.services.regulatory_reporting.family_access import CHAIN_DECISION_GATE
+print(json.dumps([CHAIN_DECISION_GATE.module.value, CHAIN_DECISION_GATE.sensitivity.value]))`,
+      ],
+      {
+        cwd: backendRoot,
+        env: {
+          ...process.env,
+          PYTHONPATH: backendRoot,
+          APP_ENV: "test",
+          DATABASE_URL: "",
+        },
+        encoding: "utf8",
+      },
+    ),
+  ) as [string, string];
   assert.equal(
     CHAIN_DECISION_MODULE,
-    // Module.REGULATORY -> the wire/scope value the dashboard sends.
-    backendModule === "REGULATORY" ? "reg" : backendModule.toLowerCase(),
+    backendModule,
     "the mirrored module has drifted from the backend gate",
   );
   assert.equal(
     CHAIN_DECISION_SENSITIVITY,
-    backendSensitivity.toLowerCase(),
+    backendSensitivity,
     "the mirrored sensitivity has drifted from the backend gate",
   );
 });

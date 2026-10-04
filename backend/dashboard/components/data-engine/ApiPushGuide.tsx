@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { Download, KeyRound, ShieldAlert, Webhook } from "lucide-react";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -89,7 +90,7 @@ export function ConnectionCard() {
           <ConnectionField
             label="Authorization"
             value="Bearer aeq_live_…"
-            hint="Your integration key, sent as the bearer credential on every request — generate one below."
+            hint="Your integration key, sent as the bearer credential on every request — generated under Access → Integration keys."
           />
         </div>
         <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
@@ -103,17 +104,19 @@ export function ConnectionCard() {
             read the analytics feed. Neither can stand in for the other, and
             neither works for a sibling bank. Each key is shown once at
             generation and stored only as a hash. If a key is exposed, revoke it
-            here immediately; rotate by generating a new key before revoking
-            the old one.
+            immediately under{" "}
+            <Link href="/access/integration-keys" className="underline">
+              Access → Integration keys
+            </Link>
+            ; rotate by generating a new key before revoking the old one.
           </p>
         </div>
       </div>
-      <IntegrationKeysPanel />
     </section>
   );
 }
 
-function IntegrationKeysPanel() {
+export function IntegrationKeysPanel() {
   const { bank } = useBankContext();
   const { effectiveAuthority } = useUserProfile();
   const isAdmin = hasAccountAdministrationAuthority(effectiveAuthority);
@@ -155,8 +158,8 @@ function IntegrationKeysPanel() {
       {freshKey && (
         <div className="mt-3 rounded border border-success/40 bg-success-light/40 p-4">
           <p className="text-caption font-medium text-navy">
-            {freshKey.purposeName} generated — copy it now. It will not be
-            shown again.
+            {freshKey.purposeName} generated — copy it now. It will not be shown
+            again.
           </p>
           <p className="mt-1 text-caption text-slate">
             Authorized institution:{" "}
@@ -264,7 +267,9 @@ function IntegrationKeysPanel() {
             disabled={!bank || !label.trim() || issue.isPending}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
           >
-            {issue.isPending ? "Generating…" : `Generate ${chosen.label.toLowerCase()}`}
+            {issue.isPending
+              ? "Generating…"
+              : `Generate ${chosen.label.toLowerCase()}`}
           </button>
         </div>
         <p className="text-caption text-slate">

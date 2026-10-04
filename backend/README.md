@@ -28,7 +28,7 @@ the tenant API).
   designation. App access and refresh tokens carry `authv`, so authorization
   migrations and later authorization changes can invalidate every session
   immediately. Org Owners can preview, create, list, and revoke one complete
-  scoped grant at a time; Settings → Members aggregates tenant identities and
+  scoped grant at a time; Access → Members aggregates tenant identities and
   binding evidence, and SSO request approval atomically activates the identity
   with one grant. See `docs/authorization_foundation.md`.
 - Data Engine: Excel/CSV upload, push API, market-data adapters, and the

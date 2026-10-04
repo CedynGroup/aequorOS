@@ -18,7 +18,9 @@
 
 import { usePathname, notFound, redirect } from "next/navigation";
 import { useModuleScope } from "./BankContext";
+import AccessDeniedPage from "@/components/access/AccessDeniedPage";
 import {
+  accessDeniedForPath,
   forecastingWorkspaceAccess,
   hubRedirectFor,
   isPathVisible,
@@ -59,6 +61,8 @@ export default function ModuleGuard({
   if (!isPathVisible(pathname, moduleScope)) {
     const destination = hubRedirectFor(pathname, moduleScope);
     if (destination) redirect(destination);
+    const denied = accessDeniedForPath(pathname, moduleScope);
+    if (denied) return <AccessDeniedPage denied={denied} route={pathname} />;
     notFound();
   }
   return <>{children}</>;

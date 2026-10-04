@@ -75,7 +75,10 @@ function draft(over: Partial<GrantDraft> = {}): GrantDraft {
     moduleScope: "liq" as GrantDraft["moduleScope"],
     sensitivityScope: "confidential" as GrantDraft["sensitivityScope"],
     dataScope: WHOLE_INSTITUTION_BOOK,
-    reason: "Treasury monitoring responsibilities",
+    reasonCategory: "other",
+    reasonDetail: "Treasury monitoring responsibilities",
+    reference: "",
+    validUntil: "",
     ...over,
   };
 }
