@@ -85,13 +85,7 @@ test.describe("the certification ceremony", () => {
   // certify, so the steps are genuinely ordered rather than independent.
   test.describe.configure({ mode: "serial" });
 
-  // Quarantined (e2e/support/quarantine.ts): the SSO step-up return leg
-  // bounces through request.nextUrl.origin, which Next dev resolves to
-  // localhost, so the redirect crosses the 127.0.0.1 cookie jar and lands on
-  // /login. The requestOrigin fix for both step-up routes is committed on
-  // fm/aeq-sso-local-issuer-e2e-journey (stacked on PR #205); this journey is
-  // un-quarantined once that lands.
-  test.fail(
+  test(
     "opting in locks submission, and the ceremony enforces what it shows",
     async ({ browser }) => {
       const admin = await mintBackendToken("admin");
