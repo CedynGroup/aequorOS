@@ -125,6 +125,9 @@ E2E_USERS = {
     # Forecasting's live-grant journey revokes what it grants, but revoked rows stay
     # in a member's history, so it needs an identity no other journey counts.
     "forecast_member": UUID("eeeeeeee-0000-4eee-8eee-eeeeeeeeeee0"),
+    # The same journey's aggregated-only reader. `macro_viewer` cannot play it:
+    # the macro journey leaves that member an organization-wide read grant.
+    "forecast_summary_member": UUID("eeeeeeee-0001-4eee-8eee-eeeeeeeee001"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
     # A board member: Capital/confidential APPROVER on the sample bank and
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
@@ -238,6 +241,7 @@ def main() -> None:
                             "forecast_member",
                             "access_request_member",
                             "access_extra_member",
+                            "forecast_summary_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",

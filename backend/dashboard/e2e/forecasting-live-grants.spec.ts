@@ -8,7 +8,8 @@ import { E2E_USERS, mintBackendToken, writeStorageState } from "./support/mint";
 const evidence = process.env.E2E_EVIDENCE_DIR;
 const bank = "/banks/BK-SAMP0001";
 const moduleRequest = /\/banks\/[^/]+\/(?:forecast|reverse-stress)(?:\/|$)/;
-// Revoke every grant this journey creates: macro_viewer is shared with other journeys.
+// Revoke every grant this journey creates. Revoked rows stay in a member's history,
+// so both Forecasting members are identities no other journey grants or counts.
 const createdBindings: string[] = [];
 
 test.afterEach(async ({ request }) => {
@@ -245,7 +246,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     ).status,
   ).toBe(404);
   const summaryGrant = {
-    principal_user_id: E2E_USERS.macro_viewer.id,
+    principal_user_id: E2E_USERS.forecast_summary_member.id,
     role_bundle: "viewer",
     institution_scope: "institution",
     institution_id: "BK-SAMP0001",
@@ -272,12 +273,12 @@ test("real Forecasting grants separate summary, confidential reading, and execut
   );
   expect(summaryBinding.status).toBe(201);
   createdBindings.push(summaryBinding.body.binding.id);
-  const summaryVersion = E2E_USERS.macro_viewer.authv + 1;
+  const summaryVersion = E2E_USERS.forecast_summary_member.authv + 1;
   const summaries = await api(
     "GET",
     `${bank}/forecast/runs`,
     undefined,
-    "macro_viewer",
+    "forecast_summary_member",
     summaryVersion,
   );
   expect(summaries.status).toBe(200);
@@ -288,18 +289,22 @@ test("real Forecasting grants separate summary, confidential reading, and execut
         "GET",
         `${bank}/forecast/runs/${summaries.body.runs[0].id}`,
         undefined,
-        "macro_viewer",
+        "forecast_summary_member",
         summaryVersion,
       )
     ).status,
   ).toBe(404);
-  const state = await writeStorageState("macro_viewer", E2E_BASE_URL, E2E_TMP);
+  const state = await writeStorageState(
+    "forecast_summary_member",
+    E2E_BASE_URL,
+    E2E_TMP,
+  );
   const { mintSessionCookie } = await import("./support/mint");
   const context = await browser.newContext({ storageState: state });
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("macro_viewer", summaryVersion),
+      value: await mintSessionCookie("forecast_summary_member", summaryVersion),
       domain: "127.0.0.1",
       path: "/",
     },
