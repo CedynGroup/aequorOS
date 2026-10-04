@@ -224,6 +224,37 @@ async function openFilingSession(
 }
 
 /**
+ * The command bar keeps the return's identity readable beside its artifacts.
+ *
+ * On one row (the `xl` layout) the identity column is the one that flexes, and
+ * once a return is signed its artifacts carry a long signature line. That line
+ * and the act used to squeeze the identity to a few pixels, its words spilling
+ * over the artifacts. Asserted on the Validator's screen because it is the
+ * widest case: a signed return and the filing act with its notice.
+ */
+async function expectReadableCommandBar(page: Page): Promise<void> {
+  const bar = page.getByTestId("return-command-bar");
+  await expect(bar).toBeVisible();
+  for (const width of [1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() =>
+        bar.evaluate((element) => {
+          const [identity, artifacts] = Array.from(element.children);
+          const own = identity.getBoundingClientRect();
+          return {
+            row: getComputedStyle(element).flexDirection === "row",
+            readable: own.width >= 240,
+            clear: own.right <= artifacts.getBoundingClientRect().left,
+            contained: identity.scrollWidth <= identity.clientWidth,
+          };
+        }),
+      )
+      .toEqual({ row: true, readable: true, clear: true, contained: true });
+  }
+}
+
+/**
  * File the approved, fully certified return through the ORASS sandbox.
  *
  * The filing act is the ONE primary action the Validator's screen offers. It is
@@ -238,6 +269,7 @@ async function fileViaSandbox(page: Page): Promise<void> {
   );
   const file = page.getByTestId("primary-filing-action");
   await expect(file).toBeEnabled();
+  await expectReadableCommandBar(page);
   // Stated in words before it is offered as a button.
   await expect(page.getByTestId("transmission-notice")).toContainText(
     /cannot be recalled/i,

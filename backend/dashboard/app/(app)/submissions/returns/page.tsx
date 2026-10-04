@@ -1406,14 +1406,16 @@ function SignedReturnLine({
 }) {
   const signer = version.signedBy;
   return (
-    <p className="mt-1.5 flex items-center gap-1.5 text-micro text-slate">
-      <ShieldCheck size={11} className="text-success shrink-0" aria-hidden />
-      {signer
-        ? `Signed by ${signer.signerDisplayName ?? 'an officer'}${
-            signer.officerTitle ? ` — ${signer.officerTitle}` : ''
-          }, ${fmtTimestamp(signer.signedAt)}`
-        : 'Signed'}
-      <span className="font-mono tnum">
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-micro text-slate">
+      <span className="inline-flex items-center gap-1.5">
+        <ShieldCheck size={11} className="text-success shrink-0" aria-hidden />
+        {signer
+          ? `Signed by ${signer.signerDisplayName ?? 'an officer'}${
+              signer.officerTitle ? ` — ${signer.officerTitle}` : ''
+            }, ${fmtTimestamp(signer.signedAt)}`
+          : 'Signed'}
+      </span>
+      <span className="font-mono tnum whitespace-nowrap">
         · {fmtBytes(version.sizeBytes)} · sha256{' '}
         {shortId(version.checksumSha256, 8)}
       </span>

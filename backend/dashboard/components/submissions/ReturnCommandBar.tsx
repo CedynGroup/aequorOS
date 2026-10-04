@@ -53,7 +53,10 @@ export function ReturnCommandBar({
       data-testid="return-command-bar"
       className="card px-5 py-4 flex flex-col xl:flex-row xl:items-start gap-5"
     >
-      <div className="min-w-0 xl:flex-1">
+      {/* The identity keeps a readable width. It used to be the only column
+          allowed to shrink, so on one row the artifacts' signature line and
+          the act squeezed it to nothing and its words spilled into them. */}
+      <div className="min-w-0 xl:flex-1 xl:min-w-[18rem]">
         <div className="flex items-baseline gap-3 flex-wrap">
           <h2 className="text-h3 text-navy min-w-0">{identity}</h2>
         </div>
@@ -61,7 +64,7 @@ export function ReturnCommandBar({
         <div className="mt-2 flex items-center gap-2 flex-wrap">{pills}</div>
       </div>
 
-      <div className="shrink-0 xl:border-l xl:border-border-light xl:pl-5">
+      <div className="min-w-0 xl:border-l xl:border-border-light xl:pl-5">
         <p className="text-micro font-medium uppercase tracking-wider text-slate">
           Artifacts
         </p>
