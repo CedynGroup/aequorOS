@@ -318,6 +318,7 @@ function DecidePanel({
   const stageTransmits = currentStage?.transmitOnApprove === true;
   const atTransmitStage = stageTransmits && filingAuthority.mayTransmit;
   const withValidatorNotMine = stageTransmits && !filingAuthority.mayTransmit;
+  const withApproverNotMine = !stageTransmits && !filingAuthority.mayApprove;
   const stageDecision = useDecidePackageFilingStage(bankId);
   const handOff = useHandOffPackageFilingStage(bankId);
   const filingSetQuery = usePackageFilingSet(bankId, pkg.id, atTransmitStage);
@@ -526,7 +527,7 @@ function DecidePanel({
           </div>
         )}
 
-        {!chainReady ? (
+        {!chainReady || !filingAuthority.isResolved ? (
           chainQuery.error ? (
             <ErrorPanel
               error={chainQuery.error}
@@ -773,6 +774,20 @@ function DecidePanel({
                 />
               </div>
             ) : null}
+          </div>
+        ) : withApproverNotMine ? (
+          <div
+            data-testid="with-approver"
+            className="rounded border border-border-light bg-surface px-3.5 py-3"
+          >
+            <p className="text-body font-medium text-navy">
+              This return is with the Approver.
+            </p>
+            <p className="mt-1 text-caption leading-relaxed text-navy/85">
+              An officer with approval authority reviews the figures, signs the
+              return, and sends it to the Validator. There is nothing for you to
+              do at this stage.
+            </p>
           </div>
         ) : signingRequired && chain?.awaitingHandOff ? (
           // Signing IS approving, so a signed return arrives here already
