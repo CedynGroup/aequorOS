@@ -218,8 +218,9 @@ export async function writeStorageState(
   role: keyof typeof E2E_USERS,
   baseURL: string,
   outDir: string,
+  authorizationVersion?: number,
 ): Promise<string> {
-  const cookie = await mintSessionCookie(role);
+  const cookie = await mintSessionCookie(role, authorizationVersion);
   const { hostname, origin } = new URL(baseURL);
   const state = {
     cookies: [

@@ -1,8 +1,13 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
 import { writeFileSync } from "fs";
-import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
-import { E2E_PASSWORD } from "./support/mint";
+import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
+import {
+  E2E_PASSWORD,
+  E2E_USERS,
+  mintBackendToken,
+  writeStorageState,
+} from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -12,6 +17,7 @@ test.describe("fresh active member baseline", () => {
   test("deep links land in the shell with the module catalogue disabled", async ({
     page,
     browser,
+    request,
   }) => {
     test.setTimeout(240_000);
     const productRequests: string[] = [];
@@ -248,6 +254,43 @@ test.describe("fresh active member baseline", () => {
       });
     }
     await ownerContext.close();
+
+    // Later journeys sign in as this member expecting baseline-only authority:
+    // revoke the approved grant and re-mint the stored session past the two
+    // authority changes (grant, revocation) this journey made.
+    const api = `${E2E_API_ORIGIN}/api/v1`;
+    const owner = {
+      Authorization: `Bearer ${await mintBackendToken("admin")}`,
+    };
+    const listed = await request.get(
+      `${api}/authorization/bindings?principal_user_id=${E2E_USERS.invite_fresh.id}`,
+      { headers: owner },
+    );
+    expect(listed.status()).toBe(200);
+    const approved = (
+      (await listed.json()).bindings as {
+        id: string;
+        module_scope: string;
+        status: string;
+      }[]
+    ).filter(
+      (binding) => binding.module_scope === "fx" && binding.status === "active",
+    );
+    expect(approved).toHaveLength(1);
+    const revoked = await request.post(
+      `${api}/authorization/bindings/${approved[0].id}/revoke`,
+      {
+        headers: owner,
+        data: { reason: "Restore the baseline member fixture" },
+      },
+    );
+    expect(revoked.status(), await revoked.text()).toBe(200);
+    await writeStorageState(
+      "invite_fresh",
+      E2E_BASE_URL,
+      E2E_TMP,
+      E2E_USERS.invite_fresh.authv + 2,
+    );
   });
 
   test("password sign-in grants self-service but no institution or directory authority", async ({
