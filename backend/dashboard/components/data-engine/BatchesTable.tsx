@@ -13,6 +13,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import EmptyState from '@/components/ui/EmptyState';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useIngestionBatches, type IngestionSourceSystem } from '@/lib/api/ingestion';
 import { BatchStatusPill, formatDate, formatDateTime } from './shared';
 
@@ -137,7 +138,11 @@ export default function BatchesTable({
           </p>
         )}
       </div>
-      {batches.length === 0 ? (
+      {batchesQuery.isPending ? (
+        <div className="card overflow-hidden">
+          <SkeletonTable rows={limit ?? 5} />
+        </div>
+      ) : batches.length === 0 ? (
         <EmptyState title="No ingestion batches yet" description={emptyDescription} />
       ) : (
         <div className="card overflow-hidden">
