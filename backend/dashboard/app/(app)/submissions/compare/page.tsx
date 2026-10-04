@@ -753,14 +753,7 @@ function ComparisonBody({
   return (
     <>
       {/* Summary header */}
-      <SectionCard
-        title="Comparison summary"
-        subtitle={
-          data.mode === 'version'
-            ? 'Two versions of the same period'
-            : 'One return across two periods'
-        }
-      >
+      <SectionCard title="Comparison summary">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col sm:flex-row items-stretch gap-4">
             <SideCard role="Baseline (left)" side={data.left} />

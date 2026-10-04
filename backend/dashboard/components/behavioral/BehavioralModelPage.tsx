@@ -338,7 +338,6 @@ export default function BehavioralModelPage({
 
             <SectionCard
               title="Per-product estimates"
-              subtitle="Learned from this bank's ingested canonical history"
               actions={
                 result.asOfDate ? (
                   <span className="text-caption text-slate">

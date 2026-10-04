@@ -392,7 +392,6 @@ export default function CapitalPlanning() {
                       SCENARIO_LABELS[activeScenario ?? ""] ??
                       labelize(activeScenario ?? "")
                     }`}
-                    subtitle="Five-year CAR / Tier 1 / CET1 path from the stored forecast run"
                     height={300}
                     loading={forecastRun.isLoading}
                     footer={
@@ -440,7 +439,6 @@ export default function CapitalPlanning() {
                   {pathRows.length > 0 && (
                     <SectionCard
                       title="Projection detail"
-                      subtitle="Per-year ratios and drivers from the forecast engine"
                       noPadding
                       computedAt={runComputedAt(forecastRun.data)}
                     >

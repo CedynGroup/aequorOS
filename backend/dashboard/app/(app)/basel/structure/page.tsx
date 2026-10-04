@@ -163,7 +163,6 @@ export default function CapitalStructurePage() {
               {/* Tier mix bar */}
               <SectionCard
                 title="Tier mix"
-                subtitle="Share of total qualifying capital by tier"
                 footer={
                   <span>
                     {data.runId ? (

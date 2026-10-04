@@ -267,14 +267,11 @@ export default function ContingencyFundingPlan() {
               <SectionCard
                 className="xl:col-span-2"
                 title="Early-warning distribution"
-                subtitle="Server-calculated indicator states; unconfigured and no-data signals remain visible control gaps."
+                subtitle="Unconfigured and no-data signals remain visible as control gaps."
               >
                 <EwiDistributionChart data={ewiDistribution} />
               </SectionCard>
-              <SectionCard
-                title="Plan execution readiness"
-                subtitle="Completeness is a decision-control issue, not a document cosmetic."
-              >
+              <SectionCard title="Plan execution readiness">
                 <dl className="space-y-3 text-caption">
                   <div className="flex items-center justify-between gap-3 border-b border-border-light pb-3">
                     <dt className="text-slate">Funding options</dt>
@@ -318,7 +315,7 @@ export default function ContingencyFundingPlan() {
 
             <SectionCard
               title="Early-warning indicators"
-              subtitle="The eight directive starter indicators plus any Board additions — values, trigger levels and states computed by the engine"
+              subtitle="The eight directive starter indicators plus any Board additions"
               noPadding
               footer={
                 <span>
@@ -399,11 +396,7 @@ export default function ContingencyFundingPlan() {
             </SectionCard>
 
             <div className="grid gap-6 xl:grid-cols-2">
-              <SectionCard
-                title="Funding action inventory"
-                subtitle="Board-approved funding options by activation horizon, capacity, and lead time."
-                noPadding
-              >
+              <SectionCard title="Funding action inventory" noPadding>
                 {fundingOptions.length > 0 ? (
                   <DataTable
                     columns={[
@@ -439,11 +432,7 @@ export default function ContingencyFundingPlan() {
                 )}
               </SectionCard>
 
-              <SectionCard
-                title="Action ownership and readiness"
-                subtitle="Asset and liability actions, with the accountable owner and stated execution timeline."
-                noPadding
-              >
+              <SectionCard title="Action ownership and readiness" noPadding>
                 {actionPlans.length > 0 ? (
                   <DataTable
                     columns={[
@@ -533,7 +522,7 @@ export default function ContingencyFundingPlan() {
 
             <SectionCard
               title="Exercise evidence"
-              subtitle="This release keeps exercise readiness honest: drills and test evidence require a recorded CFP exercise artifact before they can be represented as tested."
+              subtitle="Drills and test evidence count as tested only once a CFP exercise artifact is recorded."
             >
               <p className="text-caption text-slate">
                 No CFP exercise-evidence register is implemented yet. The

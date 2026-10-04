@@ -166,7 +166,6 @@ export default function IrrLimitsPage() {
 
             <SectionCard
               title="Limit rule evaluations"
-              subtitle="Engine validations for this period, including the earnings-at-risk limit check"
               noPadding
               computedAt={computedAt}
             >

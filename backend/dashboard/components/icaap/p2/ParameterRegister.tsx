@@ -77,8 +77,8 @@ export default function ParameterRegister({
             title="Governed values used by this assessment"
             subtitle={
               register.asOf
-                ? `As at ${fmtDateValue(register.asOf)}. Every value is a control-plane record, not a number written into the platform.`
-                : "Every value is a control-plane record, not a number written into the platform."
+                ? `As at ${fmtDateValue(register.asOf)}.`
+                : undefined
             }
             noPadding
           >

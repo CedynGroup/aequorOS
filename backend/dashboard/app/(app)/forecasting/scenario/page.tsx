@@ -187,7 +187,7 @@ export default function ScenariosPage() {
 
           <SectionCard
             title="Forecast run registry"
-            subtitle="Saved projections — pick A and B to compare"
+            subtitle="Pick A and B to compare"
             noPadding
           >
             <RunRegistryTable
@@ -279,7 +279,6 @@ function ScenarioDesigner({
   return (
     <SectionCard
       title="Scenario designer"
-      subtitle="Start from a preset, adjust any assumption, and save a new projection run"
       actions={
         <ForecastingRunGate canRun={canRun}>
           {(descriptionId) => (
@@ -702,7 +701,6 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <ChartFrame
           title="Path overlay"
-          subtitle="Both persisted paths on the selected metric"
           height={280}
           actions={
             <select
@@ -736,11 +734,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
           />
         </ChartFrame>
 
-        <SectionCard
-          title="Summary deltas"
-          subtitle="Saved projection summaries · Δ is B − A"
-          noPadding
-        >
+        <SectionCard title="Summary deltas" subtitle="Δ is B − A" noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-body border-collapse tnum">
               <thead>
@@ -790,7 +784,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
       {/* Per-year deltas for the selected metric */}
       <SectionCard
         title={`Per-year ${metric.label} deltas`}
-        subtitle="Difference between the two persisted paths, year by year (B − A)"
+        subtitle="Δ is B − A"
         noPadding
       >
         <div className="overflow-x-auto">
@@ -845,7 +839,6 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
       {/* Assumption diff */}
       <SectionCard
         title="Resolved assumption diff"
-        subtitle="Assumptions persisted on each run — differences highlighted"
         noPadding
         footer={
           changedAssumptions.length === 0 ? (

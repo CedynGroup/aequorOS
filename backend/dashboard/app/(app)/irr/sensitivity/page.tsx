@@ -148,10 +148,7 @@ export default function IrrSensitivityPage() {
               )}
             </SectionCard>
 
-            <SectionCard
-              title="Methodology"
-              subtitle="How the engine computes these figures (regulatory-irr engine)"
-            >
+            <SectionCard title="Methodology">
               <ul className="space-y-2.5 text-body text-navy/85 leading-relaxed list-disc pl-5">
                 <li>
                   <span className="font-medium text-navy">EVE</span> — every

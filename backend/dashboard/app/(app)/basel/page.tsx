@@ -353,7 +353,7 @@ export default function BaselOverview() {
               // regulator over a number it did not set is the attribution
               // defect this programme already corrected on the liquidity
               // screens.
-              subtitle="Each ratio against the minimum resolved from this institution's parameter set — compliant while it stays above its floor"
+              subtitle="Minimums from this institution's parameter set"
               computedAt={computedAt}
               footer={provenance}
             >
@@ -618,7 +618,6 @@ export default function BaselOverview() {
             {/* Validations */}
             <SectionCard
               title="Validations"
-              subtitle="Regulatory rule evaluation for this period"
               noPadding
               computedAt={computedAt}
               footer={provenance}

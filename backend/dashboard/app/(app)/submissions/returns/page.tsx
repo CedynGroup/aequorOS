@@ -1047,10 +1047,7 @@ function PackageWorkspace({
 
       {/* The return itself. Full width, because the figures are the content and
           an officer is about to attest to them. */}
-      <SectionCard
-        title="The return"
-        subtitle="The immutable figures this version carries — exactly what the artifacts render"
-      >
+      <SectionCard title="The return">
         <div>
           {pkgLoading ? (
             <SkeletonCard />

@@ -357,7 +357,6 @@ export default function StrategicOptimizer() {
                   {/* Full ranking table */}
                   <SectionCard
                     title="Full ranking"
-                    subtitle="Top strategies by 5-year average ROE, with the decision levers and constraint outcomes"
                     noPadding
                     computedAt={view.provenance.createdAt ?? undefined}
                   >
@@ -377,10 +376,7 @@ export default function StrategicOptimizer() {
 
 function MethodNote() {
   return (
-    <SectionCard
-      title="How the optimizer works"
-      subtitle="Method and scope of the persisted search"
-    >
+    <SectionCard title="How the optimizer works">
       <p className="text-body text-navy/80 leading-relaxed max-w-3xl">
         {SCOPE_COPY}
       </p>

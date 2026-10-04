@@ -186,11 +186,6 @@ export default function ForwardGrid({
   return (
     <SectionCard
       title="Forward grid"
-      subtitle={
-        isForward
-          ? 'Tenor-adjusted forward grid — the read-only desk deliverable'
-          : 'Tenor-adjusted grid derived from the published curve points'
-      }
       actions={<BasisSwitcher value={basis} onChange={setBasis} />}
       noPadding
       footer={

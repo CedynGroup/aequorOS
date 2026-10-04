@@ -105,7 +105,6 @@ export default function WindowAnalysis({
   return (
     <SectionCard
       title="Window analysis"
-      subtitle="Engine-computed over the selected dates — averages, extremes and the move across the window"
       footer={
         data ? (
           <span>

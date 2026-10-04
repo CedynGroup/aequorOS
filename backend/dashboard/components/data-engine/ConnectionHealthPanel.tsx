@@ -199,7 +199,6 @@ export default function ConnectionHealthPanel() {
     <Card>
       <CardHeader
         title="Connection health"
-        subtitle="Live status of every configured data source — the first stop when a feed breaks"
         action={
           loading ? undefined : rows.length === 0 ? undefined : (
             <StatusPill tone={attention === 0 ? "success" : "amber"}>

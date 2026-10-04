@@ -501,11 +501,7 @@ export default function WhatIfLab() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
             {/* Left panel — shock library */}
-            <SectionCard
-              title="Shock library"
-              subtitle="The four macro shocks the projection engine accepts"
-              className="xl:sticky xl:top-4"
-            >
+            <SectionCard title="Shock library" className="xl:sticky xl:top-4">
               <div className="space-y-3">
                 {SHOCKS.map((shock) => {
                   const view = viewFor(shock.code);
@@ -596,12 +592,6 @@ export default function WhatIfLab() {
                     </button>
                   )}
                 </ForecastingRunGate>
-
-                <p className="text-caption text-slate leading-relaxed">
-                  Each run re-projects the full 5-year path with the shocked
-                  assumption set and keeps the result as a saved what-if
-                  projection alongside the unshocked base.
-                </p>
 
                 <p className="text-caption text-slate leading-relaxed">
                   {carFloorPct === null
@@ -720,8 +710,8 @@ function ShockResult({
         title="Base vs shocked path"
         subtitle={
           metricCode === "carPct" && carFloorPct === null
-            ? `${shockLabel} · both paths persisted on the what-if run · no capital adequacy minimum on file, so no floor is drawn`
-            : `${shockLabel} · both paths persisted on the what-if run`
+            ? `${shockLabel} · no capital adequacy minimum on file, so no floor is drawn`
+            : shockLabel
         }
         height={280}
         actions={
@@ -760,11 +750,7 @@ function ShockResult({
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Per-year deltas */}
-        <SectionCard
-          title="Impact vs base by year"
-          subtitle="Persisted per-year deltas on the what-if run"
-          noPadding
-        >
+        <SectionCard title="Impact vs base by year" noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-caption border-collapse tnum">
               <thead>
@@ -812,11 +798,7 @@ function ShockResult({
         </SectionCard>
 
         {/* Assumption diff */}
-        <SectionCard
-          title="What the shock moved"
-          subtitle="Shocked vs base resolved assumptions, from the saved projection"
-          noPadding
-        >
+        <SectionCard title="What the shock moved" noPadding>
           {movedAssumptions.length === 0 ? (
             <p className="px-5 py-4 text-body text-slate">
               The stored payload for this run does not include an assumption

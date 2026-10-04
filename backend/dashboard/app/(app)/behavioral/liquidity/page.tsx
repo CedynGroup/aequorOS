@@ -164,10 +164,7 @@ export default function BehavioralLiquidityPage() {
               />
             </div>
 
-            <SectionCard
-              title="Observed deposit behavior"
-              subtitle="Switch dimensions to compare behavior across the same canonical history."
-            >
+            <SectionCard title="Observed deposit behavior">
               <div className="flex flex-wrap gap-2">
                 {DIMENSIONS.map((entry) => (
                   <button

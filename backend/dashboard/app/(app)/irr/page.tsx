@@ -151,7 +151,6 @@ export default function IrrOverviewPage() {
 
               <SectionCard
                 title="Repricing gap profile"
-                subtitle="Net gap per Basel IRRBB tenor bucket with cumulative overlay"
                 actions={
                   <Link
                     href="/irr/gaps"
@@ -186,7 +185,6 @@ export default function IrrOverviewPage() {
             {/* Trend */}
             <SectionCard
               title="Worst ΔEVE / Tier 1 — 12-period trend"
-              subtitle="Trailing-year path of the worst-case EVE sensitivity"
               actions={
                 <StatusPill tone={statusTone(m.eveStatus)}>
                   {fmtPct(worstPct, 2)} vs {eveLimit}% limit
@@ -222,7 +220,6 @@ export default function IrrOverviewPage() {
             {/* Validations */}
             <SectionCard
               title="Validations"
-              subtitle="IRRBB rule evaluation for this period"
               noPadding
               computedAt={computedAt}
             >

@@ -195,10 +195,7 @@ function OverviewBody({ ctx }: { ctx: CreditTabContext }) {
             </p>
           ) : null}
         </SectionCard>
-        <SectionCard
-          title="Loan quality and provision burden"
-          subtitle="Exposure and required provision by the active classification grid."
-        >
+        <SectionCard title="Loan quality and provision burden">
           <SdiLoanQualityChart
             data={data.grades.map((bucket) => ({
               grade: labelize(bucket.grade),
@@ -235,7 +232,7 @@ function OverviewBody({ ctx }: { ctx: CreditTabContext }) {
             }))}
           />
         </SectionCard>
-        <SectionCard title="Engine findings" subtitle="Validation rules from the credit engine." noPadding>
+        <SectionCard title="Engine findings" noPadding>
           <ValidationList
             validations={data.validations.map((row: CreditValidationRead) => ({
               ruleCode: row.ruleCode,

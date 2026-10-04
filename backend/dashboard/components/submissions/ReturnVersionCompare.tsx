@@ -109,10 +109,7 @@ export default function ReturnVersionCompare({
 
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="What to compare"
-        subtitle="Two versions of the same return and reporting date"
-      >
+      <SectionCard title="What to compare">
         <QueryBoundary
           contained
           isLoading={templatesQuery.isLoading || packagesQuery.isLoading}
@@ -191,10 +188,7 @@ export default function ReturnVersionCompare({
           />
         </SectionCard>
       ) : (
-        <SectionCard
-          title="Line-by-line delta"
-          subtitle="Computed server-side from the two immutable snapshots — never derived here."
-        >
+        <SectionCard title="Line-by-line delta">
           <QueryBoundary
             contained
             isLoading={comparison.isLoading}

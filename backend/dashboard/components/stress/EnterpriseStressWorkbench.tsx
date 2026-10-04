@@ -364,14 +364,7 @@ export default function EnterpriseStressWorkbench({
                 }}
               />
             ) : (
-              <SectionCard
-                title="Run enterprise stress"
-                subtitle={
-                  isSdiTenant
-                    ? "Run an approved scenario against the simplified Section 29 capital regime and material SDI risks"
-                    : "Drive an approved scenario through every engine into the immutable 3-year projection"
-                }
-              >
+              <SectionCard title="Run enterprise stress">
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label className="block">
@@ -772,21 +765,13 @@ function ResultsView({
         )}
         {!isSdiTenant && (
           <>
-            <ChartFrame
-              title="CET1 — base vs stress"
-              subtitle="Common equity Tier 1 ratio path"
-              height={240}
-            >
+            <ChartFrame title="CET1 — base vs stress" height={240}>
               <ProjectionPaths
                 projection={run.projection}
                 metricKey="cet1_ratio_pct"
               />
             </ChartFrame>
-            <ChartFrame
-              title="Tier 1 & leverage"
-              subtitle="Tier 1 ratio path over the horizon"
-              height={240}
-            >
+            <ChartFrame title="Tier 1 & leverage" height={240}>
               <ProjectionPaths
                 projection={run.projection}
                 metricKey="tier1_ratio_pct"
@@ -799,10 +784,7 @@ function ResultsView({
       <DriverWaterfall run={run} />
 
       {isSdiTenant ? (
-        <SectionCard
-          title="Liquidity regime"
-          subtitle="SDI liquidity stress (docs/sdi.md §4.6)"
-        >
+        <SectionCard title="Liquidity regime">
           <SdiLiquidityNotAssessed position={sdiLiquidity} />
         </SectionCard>
       ) : coupling ? (

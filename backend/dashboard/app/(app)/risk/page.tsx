@@ -370,10 +370,7 @@ export default function RiskLimitMonitorPage() {
 
           {tab === "checks" && isSdi && (
             <div className="space-y-6">
-              <SectionCard
-                title="SDI control coverage"
-                subtitle="The limit wall uses the binding SDI measures available from the current canonical book."
-              >
+              <SectionCard title="SDI control coverage">
                 <p className="text-body text-navy/85 leading-relaxed">
                   Liquidity controls cover LMTD Table 1 and reserve ratios.
                   Capital controls cover Section 29 CAR, paid-up capital,
@@ -392,7 +389,6 @@ export default function RiskLimitMonitorPage() {
                   <SectionCard
                     key={module}
                     title={MODULE_LABELS[module as LimitModule]}
-                    subtitle="Rule evaluations from the module dashboard for this period"
                     actions={
                       <Link
                         href={MODULE_HREFS[module as LimitModule]}

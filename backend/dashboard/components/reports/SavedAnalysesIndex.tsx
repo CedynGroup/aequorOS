@@ -159,7 +159,6 @@ export default function SavedAnalysesIndex() {
   return (
     <SectionCard
       title="Saved analyses"
-      subtitle="Every scenario analysis kept from the five treasury workbenches — snapshots recomputed server-side at save time"
       noPadding
       footer={
         unavailableModules.length > 0 ? (

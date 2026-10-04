@@ -66,7 +66,7 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
           >
             <ForwardCurve data={forwardPoints} />
           </ChartFrame>
-          <SectionCard title="Forward points" subtitle="Outright and points by tenor" noPadding>
+          <SectionCard title="Forward points" noPadding>
             <DataTable
               columns={[
                 { key: 'tenor', header: 'Tenor', render: (r: ForwardPoint) => r.tenorLabel },
@@ -100,7 +100,6 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
 
       <SectionCard
         title="Spot reference"
-        subtitle={`Period-end ${currencyCode()} fixes used by the NOP engine — from the FX dashboard payload`}
         noPadding
         footer={<span>Forward outrights will be monitored against these fixes.</span>}
       >

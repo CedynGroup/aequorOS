@@ -147,10 +147,7 @@ export default function ReverseStress() {
                 />
               </div>
 
-              <SectionCard
-                title="Reverse-stress frontier"
-                subtitle="The severity multiplier at which each hard floor breaks — searched by bisection over the stored engines"
-              >
+              <SectionCard title="Reverse-stress frontier">
                 <ReverseStressFrontier
                   axes={[
                     frontierAxis(
@@ -173,7 +170,6 @@ export default function ReverseStress() {
 
               <SectionCard
                 title="Frontier narrative"
-                subtitle="The most recent saved frontier for this period"
                 footer={
                   <span>
                     The frontier anchors to both engines&apos; baseline

@@ -227,7 +227,6 @@ export default function LiquidityBuffer() {
             {/* Haircut detail table */}
             <SectionCard
               title="Buffer detail"
-              subtitle="Market value vs post-haircut LCR value per instrument"
               noPadding
               computedAt={computedAt}
               footer={

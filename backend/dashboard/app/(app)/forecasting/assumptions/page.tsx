@@ -189,7 +189,6 @@ function ResolvedSection({
   return (
     <SectionCard
       title="Resolved on the latest run"
-      subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — saved with the projection, snapshot-bound`}
       computedAt={run.createdAt}
       footer={
         <span>
@@ -264,7 +263,7 @@ function PresetCatalogue({
   return (
     <SectionCard
       title="Preset catalogue"
-      subtitle="Assumption values served by the scenarios endpoint — presets fill most fields; the engine defaults cover the rest"
+      subtitle="Presets fill most fields; engine defaults cover the rest"
       noPadding
     >
       <div className="overflow-x-auto">

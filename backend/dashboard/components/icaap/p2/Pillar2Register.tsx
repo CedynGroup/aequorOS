@@ -175,10 +175,7 @@ export default function Pillar2Register({
           />
 
           {parameters.length > 0 && (
-            <SectionCard
-              title="Calibration and provenance"
-              subtitle="Every parameter these methods read, with its citation and confirmation status."
-            >
+            <SectionCard title="Calibration and provenance">
               <ParameterProvenance uses={parameters} />
             </SectionCard>
           )}

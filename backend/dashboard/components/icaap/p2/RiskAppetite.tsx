@@ -137,10 +137,7 @@ export default function RiskAppetite({
           )}
 
           {parameters.length > 0 && (
-            <SectionCard
-              title="Where the regulatory values come from"
-              subtitle="Each one is a control-plane row, shown with its citation and confirmation status."
-            >
+            <SectionCard title="Where the regulatory values come from">
               <ParameterProvenance uses={parameters} />
             </SectionCard>
           )}

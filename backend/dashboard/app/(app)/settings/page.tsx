@@ -135,7 +135,6 @@ function InstitutionProfile({
     <Card>
       <CardHeader
         title="Institution profile"
-        subtitle="Identity from the corporate register · reporting facts from the risk service"
         action={
           <Link
             href="/institution"
@@ -279,8 +278,7 @@ function AppearancePanel() {
           })}
         </div>
         <p className="mt-3 text-caption text-slate leading-relaxed">
-          Both themes run on the same semantic tokens; printed reports always
-          render in the light palette.
+          Printed reports always render in the light palette.
         </p>
       </CardBody>
     </Card>
@@ -335,10 +333,7 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
 
   return (
     <Card>
-      <CardHeader
-        title="Data & compute"
-        subtitle="Read-only view of the services and feeds behind this workspace"
-      />
+      <CardHeader title="Data & compute" />
       <CardBody className="space-y-3">
         <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
           <div className="min-w-0">
@@ -439,7 +434,6 @@ function AboutPanel({ bankId }: { bankId: string | undefined }) {
       <CardHeader
         className="flex-wrap"
         title="About"
-        subtitle="Engine versions from the persisted regulatory runs"
         action={latest ? <RunBadge run={latest} /> : undefined}
       />
       <CardBody className="p-0">

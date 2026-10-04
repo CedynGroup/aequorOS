@@ -153,14 +153,16 @@ function Section({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="space-y-3">
       <div>
         <h2 className="text-h2 text-navy">{title}</h2>
-        <p className="text-caption text-slate mt-0.5">{subtitle}</p>
+        {subtitle && (
+          <p className="text-caption text-slate mt-0.5">{subtitle}</p>
+        )}
       </div>
       {children}
     </section>
@@ -291,10 +293,7 @@ export default function MarketsPage() {
                   />
                 </div>
               </Section>
-              <Section
-                title="Agency observations"
-                subtitle="Market ratings used to frame the sovereign and counterparty context"
-              >
+              <Section title="Agency observations">
                 {data.ratings.length > 0 ? (
                   <RatingsStrip ratings={data.ratings} />
                 ) : (
@@ -392,10 +391,7 @@ export default function MarketsPage() {
                   )}
                 </Section>
 
-                <Section
-                  title="Agency observations"
-                  subtitle="Market ratings used to frame the sovereign and counterparty context"
-                >
+                <Section title="Agency observations">
                   {data.ratings.length > 0 ? (
                     <RatingsStrip ratings={data.ratings} />
                   ) : (
@@ -436,10 +432,7 @@ export default function MarketsPage() {
                 together. On narrow viewports they stack. */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
               {referenceRates.length > 0 && (
-                <Section
-                  title="Rate monitor"
-                  subtitle="Policy, reference, and lending rates on the selected source"
-                >
+                <Section title="Rate monitor">
                   <RatesBoard
                     indices={referenceRates}
                     groups={["policy", "lending"]}
@@ -448,10 +441,7 @@ export default function MarketsPage() {
               )}
 
               {data.fxRates.length > 0 && (
-                <Section
-                  title="FX monitor"
-                  subtitle="Spot per pair, day movement, and persisted quote history"
-                >
+                <Section title="FX monitor">
                   <FxBoard fxRates={data.fxRates} />
                 </Section>
               )}
@@ -459,10 +449,7 @@ export default function MarketsPage() {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
               {referenceRates.length > 0 && (
-                <Section
-                  title="Money market"
-                  subtitle="Interbank and bill auction rates on the selected source"
-                >
+                <Section title="Money market">
                   <RatesBoard
                     indices={referenceRates}
                     groups={["money-market"]}
@@ -473,7 +460,7 @@ export default function MarketsPage() {
               {data.curves.length > 0 && (
                 <Section
                   title="Curve monitor"
-                  subtitle="Published discount, zero, and forward curves. Select a row for the curve workbench."
+                  subtitle="Select a row for the curve workbench."
                 >
                   <CurveThumbnails
                     curves={data.curves}
@@ -487,10 +474,7 @@ export default function MarketsPage() {
             </div>
 
             {otherIndices.length > 0 && (
-              <Section
-                title="Indicators"
-                subtitle="Macro indices and forecasts by scenario"
-              >
+              <Section title="Indicators">
                 <IndicesStrip indices={otherIndices} />
               </Section>
             )}
@@ -518,10 +502,7 @@ export default function MarketsPage() {
               onManage={() => setTab("sources")}
             />
           </div>
-          <Section
-            title="Curves explorer"
-            subtitle="Pick a published curve, reproduce it at any past as-of date, read the tenor-adjusted forward grid, and layer your private spreads"
-          >
+          <Section title="Curves explorer">
             <CurvesExplorer
               curves={data.curves}
               asOfDate={data.asOfDate}
@@ -537,10 +518,7 @@ export default function MarketsPage() {
               editOverlaysReason={editOverlaysReason}
             />
           </Section>
-          <Section
-            title="Curve board"
-            subtitle="Every published curve at the as-of date — official base vs your private spread composition"
-          >
+          <Section title="Curve board">
             <CurveBoard
               curves={data.curves}
               onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
@@ -594,10 +572,7 @@ export default function MarketsPage() {
             />
           </div>
           {data.fxRates.length > 0 && (
-            <Section
-              title="Historical spot"
-              subtitle="Arbitrated spot observations, one-day movement, and persisted quote history."
-            >
+            <Section title="Historical spot">
               <FxBoard fxRates={data.fxRates} />
             </Section>
           )}
@@ -642,27 +617,18 @@ export default function MarketsPage() {
         </div>
         <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] items-start">
           {referenceRates.length > 0 && (
-            <Section
-              title="Reference rates"
-              subtitle="Policy, money-market, and lending reference rates"
-            >
+            <Section title="Reference rates">
               <RatesBoard indices={referenceRates} />
             </Section>
           )}
           {otherIndices.length > 0 && (
-            <Section
-              title="Indicators"
-              subtitle="Scenario-tagged macro inputs and forecasts"
-            >
+            <Section title="Indicators">
               <IndicesStrip indices={otherIndices} />
             </Section>
           )}
         </div>
         {data.curves.some((curve) => curve.curveType === "forward") && (
-          <Section
-            title="Published forward-rate forecasts"
-            subtitle="Approved desk forward curves are the term structure of expected market rates. Open one to inspect every published tenor."
-          >
+          <Section title="Published forward-rate forecasts">
             <CurveThumbnails
               curves={data.curves.filter(
                 (curve) => curve.curveType === "forward",

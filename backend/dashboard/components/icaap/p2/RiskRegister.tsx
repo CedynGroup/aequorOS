@@ -93,7 +93,6 @@ export default function RiskRegister({
         <div className="space-y-4">
           <SectionCard
             title="Risk register"
-            subtitle="Every risk the framework names, with the bank's own assessment."
             actions={
               canEdit ? (
                 <SecondaryButton onClick={() => setAddingRisk(true)}>
@@ -221,10 +220,7 @@ export default function RiskRegister({
           <MaterialityMatrix matrix={register.matrix} risks={risks} />
 
           {parameters.length > 0 && (
-            <SectionCard
-              title="Where these thresholds come from"
-              subtitle="Every threshold on this tab is a control-plane value, shown with its citation."
-            >
+            <SectionCard title="Where these thresholds come from">
               <ParameterProvenance uses={parameters} />
             </SectionCard>
           )}

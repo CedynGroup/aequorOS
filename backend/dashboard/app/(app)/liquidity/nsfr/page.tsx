@@ -121,11 +121,7 @@ export default function NSFRDashboard() {
               />
             </div>
 
-            <SectionCard
-              title="Regulatory floor"
-              subtitle="NSFR is a floor limit — compliant while the ratio stays above the Basel minimum"
-              computedAt={computedAt}
-            >
+            <SectionCard title="Regulatory floor" computedAt={computedAt}>
               <LimitBar
                 label="NSFR"
                 value={num(data.metrics.nsfrPct)}

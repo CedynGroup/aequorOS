@@ -212,7 +212,6 @@ export default function LiquidityCockpit() {
 
             <SectionCard
               title="Liquidity posture"
-              subtitle="Current compliance headroom, buffer concentration, early-warning state, and contingency readiness."
               computedAt={computedAt}
               footer={provenance}
             >
@@ -309,7 +308,7 @@ export default function LiquidityCockpit() {
                 <SectionCard
                   className="xl:col-span-2"
                   title="Escalation and contingency readiness"
-                  subtitle="EWI classifications are calculated server-side; the CFP remains a Board-owned activation control."
+                  subtitle="The CFP remains a Board-owned activation control."
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="border-r-0 md:border-r md:border-border-light md:pr-5">
@@ -358,10 +357,7 @@ export default function LiquidityCockpit() {
                   </div>
                 </SectionCard>
               )}
-              <SectionCard
-                title="Control workspace"
-                subtitle="Move from current posture to the relevant control without losing context."
-              >
+              <SectionCard title="Control workspace">
                 <div className="space-y-2">
                   {[
                     {
@@ -662,7 +658,6 @@ export default function LiquidityCockpit() {
             {/* Validations */}
             <SectionCard
               title="Validations"
-              subtitle="Regulatory rule evaluation for this period"
               noPadding
               computedAt={computedAt}
               footer={provenance}

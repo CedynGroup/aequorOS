@@ -188,7 +188,6 @@ function NiiDashboard({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <ChartFrame
           title="NII by scenario"
-          subtitle="Latest succeeded run per preset scenario"
           height={280}
           footer={
             presentScenarios.length < 2 ? (
@@ -208,7 +207,7 @@ function NiiDashboard({
 
         <SectionCard
           title="Sensitivity vs base"
-          subtitle="Per-year NII by scenario, delta vs the base-case run"
+          subtitle="Δ vs the base case"
           noPadding
           computedAt={primary.createdAt}
         >
