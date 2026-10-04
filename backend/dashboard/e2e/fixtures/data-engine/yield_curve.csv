@@ -1,0 +1,4 @@
+currency,curve_name,as_of_date,tenor_months,rate_percent
+GHS,E2E_JOURNEY_CURVE,2099-12-31,3,15.80
+GHS,E2E_JOURNEY_CURVE,2099-12-31,12,17.25
+GHS,E2E_JOURNEY_CURVE,2099-12-31,0,18.10
