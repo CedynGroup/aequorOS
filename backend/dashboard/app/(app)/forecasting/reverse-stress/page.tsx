@@ -11,6 +11,7 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLatestReverseStress, useRunReverseStress } from "@/lib/api/hooks";
+import { fmtPct } from "@/lib/format";
 import ReverseStressFrontier, {
   type FrontierAxis,
 } from "@/components/stress/charts/ReverseStressFrontier";
@@ -36,6 +37,12 @@ function axisNum(axis: Axis, key: string): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** A ratio on the axis at the page's one-decimal percentage precision. */
+function axisPct(axis: Axis, key: string): string {
+  const value = axisNum(axis, key);
+  return value === null ? "—" : fmtPct(value, 1);
 }
 
 function frontierAxis(
@@ -106,7 +113,10 @@ export default function ReverseStress() {
         <PageContainer className="py-6 space-y-6">
           {frontier ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                data-testid="reverse-stress-headlines"
+              >
                 <KpiStat
                   label="Liquidity frontier (combined scenario)"
                   value={
@@ -117,8 +127,8 @@ export default function ReverseStress() {
                   status={axisBreached(liquidity) ? "crit" : "ok"}
                   hint={
                     axisBreached(liquidity)
-                      ? `LCR ${axisValue(liquidity, "lcr_at_breach_pct")}% at breach vs floor ${axisValue(liquidity, "lcr_min_pct")}%`
-                      : `LCR floor ${axisValue(liquidity, "lcr_min_pct")}% holds across the search range`
+                      ? `LCR ${axisPct(liquidity, "lcr_at_breach_pct")} at breach vs floor ${axisPct(liquidity, "lcr_min_pct")}`
+                      : `LCR floor ${axisPct(liquidity, "lcr_min_pct")} holds across the search range`
                   }
                 />
                 <KpiStat
@@ -131,8 +141,8 @@ export default function ReverseStress() {
                   status={axisBreached(capital) ? "crit" : "ok"}
                   hint={
                     axisBreached(capital)
-                      ? `Worst CET1 ${axisValue(capital, "worst_cet1_at_breach_pct")}% vs minimum ${axisValue(capital, "cet1_min_pct")}%`
-                      : `CET1 minimum ${axisValue(capital, "cet1_min_pct")}% holds across the search range`
+                      ? `Worst CET1 ${axisPct(capital, "worst_cet1_at_breach_pct")} vs minimum ${axisPct(capital, "cet1_min_pct")}`
+                      : `CET1 minimum ${axisPct(capital, "cet1_min_pct")} holds across the search range`
                   }
                 />
               </div>
