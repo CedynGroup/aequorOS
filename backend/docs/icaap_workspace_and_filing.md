@@ -24,33 +24,30 @@ opportunities but are load-bearing.
 
 ## Standing rules at a glance
 
-- **ICAAP workspace and filing (built 2026-09-19..20; contract
-  [`backend/docs/icaap_workspace_and_filing.md`](icaap_workspace_and_filing.md),
-  authorization [`icaap_enforcement_rollout.md`](icaap_enforcement_rollout.md),
-  shape ARCHITECTURE.md §3d).** The first surface that is a DOCUMENT UNDER REVIEW
-  rather than a computed view, and it adds four structures that are easy to
-  assume away. **There is a SECOND package-mint site:** `generate_frozen_package`
-  is a PEER of `generate_package` (caller owns what is in the snapshot, mint site
-  owns what a package IS) — gates may sit on either side, **neither side may drop
-  one**, which is why `freeze_cycle` runs the reporting-period and reconciliation
-  gates itself. **`family_hooks` is the one seam a family may use** — lazy
+- **ICAAP workspace and filing** (authorization:
+  [`icaap_enforcement_rollout.md`](icaap_enforcement_rollout.md); shape: ARCHITECTURE.md
+  §3d). The first surface that is a DOCUMENT UNDER REVIEW rather than a computed view, and
+  it adds four structures that are easy to assume away. **There is a SECOND package-mint
+  site:** `generate_frozen_package` is a PEER of `generate_package` (caller owns what is in
+  the snapshot, mint site owns what a package IS) — gates may sit on either side,
+  **neither side may drop one**, which is why `freeze_cycle` runs the reporting-period and
+  reconciliation gates itself. **`family_hooks` is the one seam a family may use** — lazy
   `importlib` dispatch, a no-op default per hook, deliberately not
-  `if return_family == "icaap"` in five services. **The `ai` job lane exists**
-  (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them by
-  construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
-  process holding the model key must run nothing else. **Jurisdiction is data
-  under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and
-  the Nigeria and Kenya manifests were built WITHOUT reading their primary texts
-  (recorded in each file's `## Provenance of this manifest`); obtain and verify
-  them before a customer relies on either. Two rules the audits caught being
-  broken: a rehearsal cycle runs the FULL lifecycle on purpose (block the
-  dangerous act — filing a rehearsal — not the safe one), and the DISPATCH plane
-  must not write to the CALCULATION plane's parameter ledger, so
-  `PrefetchedParameterResolver.load()` requires an explicit `record=` with no
-  default (adding one registry entry had moved an unrelated family's content
-  digest). Every ICAAP read of a governed row goes through
-  `app/services/icaap/parameters.py`; no ICAAP module may touch the live plane
-  (`tests/architecture/test_icaap_boundaries.py`).
+  `if return_family == "icaap"` scattered across services. **The `ai` job lane exists**
+  (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them
+  by construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process)
+  because the process holding the model key must run nothing else. **Jurisdiction is data
+  under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and the
+  Nigeria and Kenya manifests were built WITHOUT reading their primary texts (recorded in
+  each file's `## Provenance of this manifest`); obtain and verify them before a customer
+  relies on either.
+- A rehearsal cycle runs the FULL lifecycle on purpose: block the dangerous act — filing a
+  rehearsal — not the safe one.
+- The DISPATCH plane must not write to the CALCULATION plane's parameter ledger, so
+  `PrefetchedParameterResolver.load()` requires an explicit `record=` with no default (with
+  a default, adding one registry entry moves an unrelated family's content digest). Every
+  ICAAP read of a governed row goes through `app/services/icaap/parameters.py`; no ICAAP
+  module may touch the live plane (`tests/architecture/test_icaap_boundaries.py`).
 
 ---
 

@@ -7,7 +7,7 @@ owning documents listed under [Where the detail lives](#where-the-detail-lives).
 - **`docs/product.md` is the master product roadmap** (source of truth for build
   sequencing, Phase 0 as-built anchor → Phase 7 enterprise). Sub-docs (rbac.md,
   data_engine.md, ai_engine.md, market_data_adapter.md, regulatory_reporting.md)
-  govern domain detail (storage.md and temenos_adapter.md retired 2026-08-09);
+  govern domain detail (storage.md and temenos_adapter.md are retired);
   product.md governs order;
   code wins over both. Phase numbers are per-document — cite `doc.md §N Phase X`,
   never a bare "Phase 2".
@@ -46,19 +46,20 @@ Every surface's gates and the CI workflows that enforce them:
 
 ## Hard invariants
 
-Each rule is stated in full, with its history, in the document the index names.
+Each rule is stated in full in the document the index names.
 
-- **No seeded bank data — ever (order of 2026-07-21).** Every data point enters
-  through the Data Engine (upload, core-banking adapters, API push). There is no
-  seeding route; never add one to the UI or re-add seed CLI scripts.
-  `tests/api/test_banks.py::test_seed_route_is_retired` pins it.
+- **No seeded bank data — ever.** Every data point enters through the Data Engine
+  (upload, core-banking adapters, API push); staff provisioning creates only the
+  organization and bank rows. There is no seeding route; never add one to the UI
+  or re-add seed CLI scripts. `tests/api/test_banks.py::test_seed_route_is_retired`
+  pins it.
 - **Institution identity is the platform ID.** `organizations.id` (`OR-…`) and
   `banks.id` (`BK-…`) are the primary key, API path token, `org` claim, RLS GUC
   value and UI identity. Never reintroduce UUID columns or a separate public id for
   either; every other entity keeps UUID primary keys.
 - **`app/domain/*` stays pure.** A future corporate entity is a sibling of `banks`
   (`CO-` platform id), never a nullable-heavy `banks` row.
-- **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
+- **Every route that accepts an object id must be in the IDOR census.**
   Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
   for catalogue entries, exclusions and defect quarantine.
   `backend/tests/architecture/test_object_reference_census.py` guards catalogue
@@ -104,31 +105,31 @@ Each rule is stated in full, with its history, in the document the index names.
 When a note is implementation detail, add it to the owning document below and, for a
 new topic, add a row here.
 
-| Topic                                                         | Document                                                                                                                                 |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Product segments (subdomains) and the staff control plane     | [ARCHITECTURE.md](ARCHITECTURE.md#product-segments-and-the-staff-control-plane)                                                          |
-| Institution platform IDs (`BK-`/`OR-`) and the ID epoch       | [ARCHITECTURE.md §2.2](ARCHITECTURE.md#22-institution-identity-is-the-platform-id)                                                       |
-| Value-based `input_hash`                                      | [ARCHITECTURE.md §3](ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine)                                      |
-| Live engine, worker, job reclaim windows, tenant health       | [ARCHITECTURE.md §3b](ARCHITECTURE.md#live-engine-operating-rules)                                                                       |
-| Market data adapters, vendor credentials, research desk       | [ARCHITECTURE.md §3c](ARCHITECTURE.md#market-data-standing-rules-and-the-research-desk)                                                  |
-| BI plane                                                      | [ARCHITECTURE.md §3e](ARCHITECTURE.md#bi-working-rules)                                                                                  |
-| Generated API client: regeneration and serializer hazards     | [ARCHITECTURE.md §6](ARCHITECTURE.md#generated-client-hazards)                                                                           |
-| CI enforcement and E2E                                        | [ARCHITECTURE.md §8](ARCHITECTURE.md#ci-enforcement-history)                                                                             |
-| Phase 2 (product.md §Phase 2) completion                      | [ARCHITECTURE.md](ARCHITECTURE.md#phase-2-completion)                                                                                    |
-| Authorization foundation, ownership, grants, filing authority | [backend/docs/authorization_foundation.md](backend/docs/authorization_foundation.md#standing-rules-at-a-glance)                          |
-| Integration keys as bank-scoped machine principals            | [backend/docs/integration_key_machine_principal_rollout.md](backend/docs/integration_key_machine_principal_rollout.md#standing-contract) |
-| ICAAP workspace and filing                                    | [backend/docs/icaap_workspace_and_filing.md](backend/docs/icaap_workspace_and_filing.md#standing-rules-at-a-glance)                      |
-| Reporting dates and anchor windows                            | [docs/regulatory_reporting.md §5b](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)                                        |
-| Official BoG BSD returns from the templates                   | [docs/bog_returns/00_full_return_registry.md §6](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules)                    |
-| SSO (own OIDC relying party)                                  | [docs/rbac.md §11.3](docs/rbac.md#as-built-the-oidc-relying-party)                                                                       |
-| Attestation and e-signature                                   | [docs/attestation_esignature.md](docs/attestation_esignature.md#attestation-standing-rules)                                              |
-| No seeded bank data                                           | [docs/data_engine.md](docs/data_engine.md#standing-order-no-seeded-bank-data)                                                            |
-| Jurisdiction is data                                          | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
-| Stale local processes                                         | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
-| Test databases, the primary database, live-data suite         | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
-| Legacy case vertical (`/api/v1/cases`)                        | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
-| Coolify deployment rules                                      | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
-| Host change to `bank.aequoros.com`                            | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
+| Topic                                                          | Document                                                                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Product segments (subdomains) and the staff control plane      | [ARCHITECTURE.md](ARCHITECTURE.md#product-segments-and-the-staff-control-plane)                                                          |
+| Institution platform IDs (`BK-`/`OR-`) and the ID epoch        | [ARCHITECTURE.md §2.2](ARCHITECTURE.md#22-institution-identity-is-the-platform-id)                                                       |
+| Value-based `input_hash`                                       | [ARCHITECTURE.md §3](ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine)                                      |
+| Live engine, worker, job reclaim windows, tenant health        | [ARCHITECTURE.md §3b](ARCHITECTURE.md#live-engine-operating-rules)                                                                       |
+| Market data adapters, vendor credentials, research desk        | [ARCHITECTURE.md §3c](ARCHITECTURE.md#market-data-standing-rules-and-the-research-desk)                                                  |
+| BI plane                                                       | [ARCHITECTURE.md §3e](ARCHITECTURE.md#bi-working-rules)                                                                                  |
+| Generated API client: regeneration and serializer hazards      | [ARCHITECTURE.md §6](ARCHITECTURE.md#generated-client-hazards)                                                                           |
+| CI enforcement and E2E                                         | [ARCHITECTURE.md §8](ARCHITECTURE.md#ci-enforcement)                                                                                     |
+| Liquidity, stress and capital extensions (product.md §Phase 2) | [ARCHITECTURE.md](ARCHITECTURE.md#liquidity-stress-and-capital-extensions)                                                               |
+| Authorization foundation, ownership, grants, filing authority  | [backend/docs/authorization_foundation.md](backend/docs/authorization_foundation.md#standing-rules-at-a-glance)                          |
+| Integration keys as bank-scoped machine principals             | [backend/docs/integration_key_machine_principal_rollout.md](backend/docs/integration_key_machine_principal_rollout.md#standing-contract) |
+| ICAAP workspace and filing                                     | [backend/docs/icaap_workspace_and_filing.md](backend/docs/icaap_workspace_and_filing.md#standing-rules-at-a-glance)                      |
+| Reporting dates and anchor windows                             | [docs/regulatory_reporting.md §5b](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)                                        |
+| Official BoG BSD returns from the templates                    | [docs/bog_returns/00_full_return_registry.md §6](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules)                    |
+| SSO (own OIDC relying party)                                   | [docs/rbac.md §11.3](docs/rbac.md#as-built-the-oidc-relying-party)                                                                       |
+| Attestation and e-signature                                    | [docs/attestation_esignature.md](docs/attestation_esignature.md#attestation-standing-rules)                                              |
+| No seeded bank data                                            | [docs/data_engine.md](docs/data_engine.md#standing-order-no-seeded-bank-data)                                                            |
+| Jurisdiction is data                                           | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
+| Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
+| Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
+| Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
+| Coolify deployment rules                                       | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
+| Host change to `bank.aequoros.com`                             | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
 
 ## Maintaining this file
 

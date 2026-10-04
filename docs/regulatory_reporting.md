@@ -245,45 +245,38 @@ the calendar still never lists event-driven packs as obligations.
 
 ### 5b. Reporting-date standing rules
 
-- **The reporting date is the REGULATOR's — never derived from ingestion (corrected
-  2026-08-23).** A return's reporting dates come from its `ReturnDefinition` (cadence +
-  BoG anchor conventions) through the ONE authority
-  `app/services/regulatory_reporting/anchors.py`, which touches no tenant data; the
-  calendar and the Returns workspace both bind to it, so they cannot disagree.
-  `bank_reporting_periods` is the KEY FOR ONE COMPUTED FACT SNAPSHOT — created by the
-  data path when a book arrives with an as-of date — and must never again be offered as
-  the user's reporting-date list. It was, and that made BoG's calendar a function of
-  ingestion cadence: 6 of the 22 BSD forms are weekly (Friday close), generation matched
-  `period_end` exactly, and the reference tenant had **19 Friday period-ends against 517
-  Fridays** in its span (17 of them only because the month ended on a Friday) — 96% of
-  weekly filing dates unselectable, and a tenant that had ingested nothing showed an
-  EMPTY calendar. Direction, pinned by `tests/services/test_reporting_anchors.py`:
+- **The reporting date is the REGULATOR's — never derived from ingestion.** A return's
+  reporting dates come from its `ReturnDefinition` (cadence + BoG anchor conventions)
+  through the ONE authority `app/services/regulatory_reporting/anchors.py`, which touches
+  no tenant data; the calendar and the Returns workspace both bind to it, so they cannot
+  disagree. `bank_reporting_periods` is the KEY FOR ONE COMPUTED FACT SNAPSHOT — created by
+  the data path when a book arrives with an as-of date — and must never be offered as the
+  user's reporting-date list: that makes BoG's calendar a function of ingestion cadence,
+  leaves most weekly (Friday-close) filing dates unselectable, and shows a tenant that has
+  ingested nothing an EMPTY calendar. Direction, pinned by
+  `tests/services/test_reporting_anchors.py`:
   `ReturnDefinition -> reporting date -> snapshot lookup`. The snapshot match is **exact
-  for every cadence** (`common.get_snapshot_for_reporting_date`) — the daily
-  "latest period ending on or before" fallback was a fail-open that would file a
-  month-old book as a business day's position; a miss is `no_computed_position` (409)
-  naming the date required and the nearest earlier one, which is reported and NEVER
-  substituted. An anchor with no data is still listed (`data_status='awaiting_data'`) —
-  the deadline is BoG's and runs regardless. `period_start` stays day-1-of-month: it is
-  the fiscal month-to-date window BSD7 (YTD), BSD8 (opening balance) and
-  `implied_rating` read, not filler.
-  **The anchor window runs BOTH ways (2026-09-19).** It used to be "the most recent
-  elapsed period end plus the horizon", which made an overdue return unreachable: a
-  tenant whose book stopped at 30 June was offered only 31 Aug…31 Dec, every one
-  `awaiting_data`, while June — the one period it could actually file — was absent.
-  `AnchorWindow(as_of, start, end)` now carries a `lookback_months` (default 6 = two
-  quarters, callers may widen to 24) beside `horizon_months`, and ALL cadences derive
-  from that one window, so the calendar and the Returns workspace cannot disagree. The
-  pre-existing "most recent elapsed anchor" floor is KEPT on top of the window: a
-  semi-annual or annual return whose only elapsed anchor predates the lookback is still
-  offered it, because dropping it would hide an obligation rather than tidy a list.
-  `reporting_deadline_scan.py` deliberately pins its own shorter `_LOOKBACK_MONTHS = 2`
-  — sharing the picker's window would re-announce the entire historical backlog as one
-  critical notification per elapsed anchor per return per day.
-  **Event-driven packs (`ReturnDefinition.event_driven`, the LRT family) are the one
+  for every cadence** (`common.get_snapshot_for_reporting_date`) — a "latest period ending
+  on or before" fallback would fail open by filing a month-old book as a business day's
+  position; a miss is `no_computed_position` (409) naming the date required and the
+  nearest earlier one, which is reported and NEVER substituted. An anchor with no data is
+  still listed (`data_status='awaiting_data'`) — the deadline is BoG's and runs
+  regardless. `period_start` stays day-1-of-month: it is the fiscal month-to-date window
+  BSD7 (YTD), BSD8 (opening balance) and `implied_rating` read, not filler.
+- **The anchor window runs BOTH ways,** so an overdue return stays reachable: a tenant
+  whose book stopped at 30 June is still offered June. `AnchorWindow(as_of, start, end)`
+  carries a `lookback_months` (default 6 = two quarters, callers may widen to 24) beside
+  `horizon_months`, and ALL cadences derive from that one window, so the calendar and the
+  Returns workspace cannot disagree. A "most recent elapsed anchor" floor applies on top
+  of the window: a semi-annual or annual return whose only elapsed anchor predates the
+  lookback is still offered it, because dropping it would hide an obligation rather than
+  tidy a list. `reporting_deadline_scan.py` deliberately pins its own shorter
+  `_LOOKBACK_MONTHS = 2` — sharing the picker's window would re-announce the entire
+  historical backlog as one critical notification per elapsed anchor per return per day.
+- **Event-driven packs (`ReturnDefinition.event_driven`, the LRT family) are the one
   exception:** no regulator date exists, so they take their as-of date from the bank's
   computed snapshots (`anchors.computed_snapshot_dates`, labelled
-  `reporting_date_source='computed_snapshot'`) — rule in `docs/regulatory_reporting.md` §5a.
+  `reporting_date_source='computed_snapshot'`) — rule in §5a above.
 
 ## 6. API (`app/features/manage_regulatory_reporting.py`)
 

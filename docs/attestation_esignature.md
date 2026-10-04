@@ -1152,46 +1152,44 @@ earlier section's detail.
 
 ### Attestation standing rules
 
-- **Attestation / e-signature (built 2026-07-25; spec `docs/attestation_esignature.md`).**
-  Signing is REQUIRED for every return by default (`default_policy`:
+- **Signing is REQUIRED for every return by default** (`default_policy`:
   `require_signature=True`, `require_signed_pdf=True`, preparer+approver, no family
-  exemptions — changed 2026-07-25 on the founder's call). What BoG demands _of the
-  artifact_ stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
-  what the institution demands _of itself_ before filing is the product. A deployment
-  that cannot sign therefore cannot file — `ensure_signing_configured` raises
-  `signing_not_configured` naming the settings, and in production `/health/ready` 503s
-  (boot only WARNS — an earlier boot refusal locked out the admin who could fix it).
-  Banks relax per return in Settings (an audited PUT); tests use
-  `tests/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0` (default 1)
-  is the deployment-wide kill-switch: applied after policy resolution
+  exemptions). What BoG demands _of the artifact_ stays unconfigured-by-default (§8 C1–C4:
+  officer titles stay unset); what the institution demands _of itself_ before filing is
+  the product. A deployment that cannot sign therefore cannot file —
+  `ensure_signing_configured` raises `signing_not_configured` naming the settings, and in
+  production `/health/ready` 503s (boot only WARNS, so the administrator who could fix the
+  configuration is never locked out). Banks relax per return in Settings (an audited PUT);
+  tests use `tests/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0`
+  (default 1) is the deployment-wide kill-switch: applied after policy resolution
   (`attestation/policy.py::_apply_esign_kill_switch`, `source="esign_disabled"`), it
-  suspends the requirement everywhere — configured mandatory rows go dormant, every
-  return takes the bare maker-checker approval path, and re-enabling restores the rows
-  unchanged.
-  Fields are placed on the document (template per return, package override) from a typed
-  palette — one `signature` per role plus any number of `name`/`title`/`initials`/
+  suspends the requirement everywhere — configured mandatory rows go dormant, every return
+  takes the bare maker-checker approval path, and re-enabling restores the rows unchanged.
+- **Fields are placed on the document** (template per return, package override) from a
+  typed palette — one `signature` per role plus any number of `name`/`title`/`initials`/
   `date_signed` boxes, because a BoG attestation block asks each officer for four things.
   Non-signature boxes are AcroForm TEXT fields whose value is DERIVED from the signature
   record (`SignatureAppearance.derived_values`), never sent by a client, and each kind has
-  its own derived floor (`pdf_signing.MIN_BOX_SIZES`) — the old single 185×61 survives only
-  as the threshold at which the four evidential lines are drawn as a caption. DocMDP means
-  **every field must exist before the first signature**, so the preparer places the
-  approver's boxes too; each role's values are filled in the SAME incremental update as
-  that role's signature (a separate earlier revision makes pyHanko's in-place-appearance
-  rule convict an untouched locked field), and `Sig_Preparer` carries a FieldMDP
-  `/Exclude` lock over everything but the approver's fields. Three digests, all value-based like
-  `input_hash`: `content_digest` (strips volatile `generated_at`), `register_state_digest`
-  (master-data returns), `certification_digest` (what every signer signs) —
-  `app/services/attestation/digests.py`; never add volatile fields. Signer IDs (`SGN-` +
-  16 Crockford) are HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then
-  **persisted as the authority** — rotating the pepper must never re-derive an existing
-  identity. Append-only is _tiered_ by DB trigger (migration `202607250027`):
-  `audit_events` blocks UPDATE+DELETE; signature/identity/artifact-version tables block
-  UPDATE only (DELETE reachable via package CASCADE) — see spec §9 D1 for why. Step-up:
-  password re-entry, or an SSO redirect through the three Next.js server routes under
-  `dashboard/app/api/attestation/` — the id_token and the signing authorisation are
-  server-only by design (HttpOnly cookie, spent by a route), so never move either into
-  the session or a client fetch.
+  its own derived floor (`pdf_signing.MIN_BOX_SIZES`); 185×61 is the threshold at which
+  the four evidential lines are drawn as a caption. DocMDP means **every field must exist
+  before the first signature**, so the preparer places the approver's boxes too; each
+  role's values are filled in the SAME incremental update as that role's signature (a
+  separate earlier revision makes pyHanko's in-place-appearance rule convict an untouched
+  locked field), and `Sig_Preparer` carries a FieldMDP `/Exclude` lock over everything but
+  the approver's fields.
+- **Three digests, all value-based like `input_hash`:** `content_digest` (strips volatile
+  `generated_at`), `register_state_digest` (master-data returns), `certification_digest`
+  (what every signer signs) — `app/services/attestation/digests.py`; never add volatile
+  fields. Signer IDs (`SGN-` + 16 Crockford) are HMAC-derived from the user UUID under
+  `SIGNER_ID_PEPPER` then **persisted as the authority** — rotating the pepper must never
+  re-derive an existing identity.
+- **Append-only is _tiered_ by DB trigger** (migration `202607250027`): `audit_events`
+  blocks UPDATE+DELETE; signature/identity/artifact-version tables block UPDATE only
+  (DELETE reachable via package CASCADE) — see §9 D1 for why.
+- **Step-up:** password re-entry, or an SSO redirect through the three Next.js server
+  routes under `dashboard/app/api/attestation/` — the id_token and the signing
+  authorisation are server-only by design (HttpOnly cookie, spent by a route), so never
+  move either into the session or a client fetch.
 
 ### Honest limitations of the built system
 
