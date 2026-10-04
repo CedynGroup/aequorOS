@@ -14,6 +14,11 @@ updates:
       # typescript-eslint supports 7.
       - dependency-name: typescript
         versions: [">=6"]
+      # Tracks the Node runtime (mise.toml, .nvmrc, engines: 24). Types for a
+      # newer major describe APIs the runtime does not have; move this bound
+      # with the runtime.
+      - dependency-name: "@types/node"
+        versions: [">=25"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
