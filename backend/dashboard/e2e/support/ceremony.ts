@@ -18,8 +18,13 @@
  * the other.
  */
 
-import { expect, type Browser, type Locator, type Page } from '@playwright/test';
-import { E2E_PASSWORD } from './mint';
+import {
+  expect,
+  type Browser,
+  type Locator,
+  type Page,
+} from "@playwright/test";
+import { E2E_PASSWORD } from "./mint";
 
 /** How long a ceremony may take: pyHanko signs and re-renders the document. */
 const CEREMONY_TIMEOUT = 120_000;
@@ -27,15 +32,15 @@ const CEREMONY_TIMEOUT = 120_000;
 const RENDER_TIMEOUT = 60_000;
 
 export const returnsUrl = (code: string, date?: string): string =>
-  `/submissions/returns?code=${encodeURIComponent(code)}${date ? `&date=${date}` : ''}`;
+  `/submissions/returns?code=${encodeURIComponent(code)}${date ? `&date=${date}` : ""}`;
 
 /** Mirror of the dashboard's fmtDateUTC ("2026-02-28" → "28 Feb 2026"). */
 export function fmtDateGB(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -52,10 +57,10 @@ export async function placeField(
   at: { x: number; y: number },
 ): Promise<void> {
   await workspace
-    .getByTestId('field-palette')
+    .getByTestId("field-palette")
     .locator(`[data-field-type="${fieldType}"]`)
     .click();
-  await workspace.getByTestId('placement-surface').click({ position: at });
+  await workspace.getByTestId("placement-surface").click({ position: at });
 }
 
 /**
@@ -71,15 +76,20 @@ export async function placeBothSignatureFields(
   page: Page,
   workspace: Locator,
 ): Promise<void> {
-  await expect(workspace.locator('canvas[aria-label^="Return document"]')).toBeVisible({
+  await expect(
+    workspace.locator('canvas[aria-label^="Return document"]'),
+  ).toBeVisible({
     timeout: RENDER_TIMEOUT,
   });
-  await expect(workspace.getByTestId('placement-surface')).toBeVisible({
+  await expect(workspace.getByTestId("placement-surface")).toBeVisible({
     timeout: RENDER_TIMEOUT,
   });
-  await placeField(workspace, 'signature', { x: 120, y: 500 });
-  await workspace.getByTestId('field-palette').locator('[data-recipient-role="approver"]').click();
-  await placeField(workspace, 'signature', { x: 380, y: 500 });
+  await placeField(workspace, "signature", { x: 120, y: 500 });
+  await workspace
+    .getByTestId("field-palette")
+    .locator('[data-recipient-role="approver"]')
+    .click();
+  await placeField(workspace, "signature", { x: 380, y: 500 });
   await expect(page.getByText(/Place a signature field for/i)).toHaveCount(0);
 }
 
@@ -91,10 +101,10 @@ export async function placeBothSignatureFields(
  * about what it guaranteed.
  */
 export async function adoptTypedMark(workspace: Locator): Promise<void> {
-  const adopted = workspace.getByText('Adopted', { exact: true });
+  const adopted = workspace.getByText("Adopted", { exact: true });
   if ((await adopted.count()) === 0) {
-    await workspace.getByRole('tab', { name: 'Type it' }).click();
-    await workspace.getByRole('button', { name: 'Adopt this mark' }).click();
+    await workspace.getByRole("tab", { name: "Type it" }).click();
+    await workspace.getByRole("button", { name: "Adopt this mark" }).click();
   }
   await expect(adopted.first()).toBeVisible();
 }
@@ -110,24 +120,26 @@ export async function certifyAsPreparer(
   page: Page,
   code: string,
   date: string,
-  approverLabel = 'E2E Approver (approver)',
+  approverLabel = "E2E Approver (approver)",
 ): Promise<void> {
   await page.goto(returnsUrl(code, date));
-  const certify = page.getByRole('button', { name: 'Certify and freeze' });
+  const certify = page.getByRole("button", { name: "Certify and freeze" });
   await expect(certify).toBeEnabled({ timeout: 30_000 });
   await certify.click();
 
-  const workspace = page.getByTestId('signing-workspace');
+  const workspace = page.getByTestId("signing-workspace");
   await expect(workspace).toBeVisible({ timeout: 30_000 });
   await placeBothSignatureFields(page, workspace);
   await adoptTypedMark(workspace);
-  await workspace.getByLabel('Approver recipient').selectOption({ label: approverLabel });
+  await workspace
+    .getByLabel("Approver recipient")
+    .selectOption({ label: approverLabel });
 
-  await workspace.getByLabel('Your password').fill(E2E_PASSWORD);
-  await workspace.getByRole('button', { name: 'Certify and send' }).click();
+  await workspace.getByLabel("Your password").fill(E2E_PASSWORD);
+  await workspace.getByRole("button", { name: "Certify and send" }).click();
   // The workspace closes only on success; a refusal keeps it open with the reason.
   await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
-  await expect(page.getByText('Preparer certified').first()).toBeVisible({
+  await expect(page.getByText("Preparer certified").first()).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -150,40 +162,38 @@ export async function approveAndSignAsChecker(
   const context = await browser.newContext({ storageState });
   try {
     const page = await context.newPage();
-    await page.goto('/submissions/approvals');
-    const row = page.getByRole('row', { name: new RegExp(fmtDateGB(date)) });
+    await page.goto("/submissions/approvals");
+    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
 
-    await page.getByTestId('review-and-sign').click();
-    const workspace = page.getByTestId('signing-workspace');
+    await page.getByTestId("review-and-sign").click();
+    const workspace = page.getByTestId("signing-workspace");
     await expect(workspace).toBeVisible({ timeout: RENDER_TIMEOUT });
     // The fields are part of the certified revision now, so there is nothing to
     // place — the palette is gone and the boxes cannot be moved.
-    await expect(workspace.getByTestId('field-palette')).toHaveCount(0);
+    await expect(workspace.getByTestId("field-palette")).toHaveCount(0);
     // The approver must be shown what the preparer committed to, verified.
     await expect(
       workspace.getByText(/identical figures the preparer certified/i),
     ).toBeVisible({ timeout: 30_000 });
     await adoptTypedMark(workspace);
 
-    await workspace.getByLabel('Your password').fill(E2E_PASSWORD);
-    await workspace.getByRole('button', { name: 'Approve and sign' }).click();
+    await workspace.getByLabel("Your password").fill(E2E_PASSWORD);
+    await workspace.getByRole("button", { name: "Approve and sign" }).click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
     // Signing IS approving: the return comes back to the queue approved and
     // waiting to be sent on, with no second decision to take.
-    await page
-      .getByRole('link', { name: 'Approvals', exact: true })
-      .click();
+    await page.getByRole("link", { name: "Approvals", exact: true }).click();
     await row.first().click();
-    await expect(page.getByTestId('review-and-sign')).toHaveCount(0);
-    await expect(page.getByTestId('awaiting-hand-off')).toBeVisible({
+    await expect(page.getByTestId("review-and-sign")).toHaveCount(0);
+    await expect(page.getByTestId("awaiting-hand-off")).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByTestId('send-to-validator').click();
+    await page.getByTestId("send-to-validator").click();
     // Filing is the Validator's authority alone, so the approver is left with
     // nothing to do on it.
-    await expect(page.getByTestId('with-validator')).toBeVisible({
+    await expect(page.getByTestId("with-validator")).toBeVisible({
       timeout: 30_000,
     });
   } finally {
@@ -207,26 +217,30 @@ export async function sendBackAsChecker(
   const context = await browser.newContext({ storageState });
   try {
     const page = await context.newPage();
-    await page.goto('/submissions/approvals');
-    const row = page.getByRole('row', { name: new RegExp(fmtDateGB(date)) });
+    await page.goto("/submissions/approvals");
+    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
-    await page.getByTestId('review-and-sign').click();
+    await page.getByTestId("review-and-sign").click();
 
-    const workspace = page.getByTestId('signing-workspace');
+    const workspace = page.getByTestId("signing-workspace");
     await expect(workspace).toBeVisible({ timeout: RENDER_TIMEOUT });
-    const panel = workspace.getByTestId('send-back-panel');
-    const send = panel.getByRole('button', { name: 'Send back for corrections' });
+    const panel = workspace.getByTestId("send-back-panel");
+    const send = panel.getByRole("button", {
+      name: "Send back for corrections",
+    });
     // The note IS the instruction, so the exit is closed until there is one.
     await expect(send).toBeDisabled();
-    await panel.getByRole('textbox').fill(note);
+    await panel.getByRole("textbox").fill(note);
     await expect(send).toBeEnabled();
     await send.click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
 
     // Off the checker queue: it is the preparer's again.
-    await page.goto('/submissions/approvals');
-    await expect(page.getByText('Queue is clear')).toBeVisible({ timeout: 30_000 });
+    await page.goto("/submissions/approvals");
+    await expect(page.getByText("Queue is clear")).toBeVisible({
+      timeout: 30_000,
+    });
   } finally {
     await context.close();
   }

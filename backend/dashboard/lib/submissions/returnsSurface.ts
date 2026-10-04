@@ -82,7 +82,9 @@ export type SurfaceInput = {
 };
 
 /** Which stage of the chain the return is sitting at. */
-export function stageForStatus(status: PackageStatus): FilingStageKey | "regulator" | "closed" {
+export function stageForStatus(
+  status: PackageStatus,
+): FilingStageKey | "regulator" | "closed" {
   switch (status) {
     case "draft":
     case "generated":
@@ -257,7 +259,9 @@ function transmitAction(input: SurfaceInput): PrimaryAction {
     label: `File with ${input.regulatorName}`,
     caption: `Sends the approved, signed return to ${input.regulatorName}. This is the filing — it leaves the bank when you press it.`,
     enabled:
-      input.status === "approved" && input.clearedToSubmit && !input.isRehearsal,
+      input.status === "approved" &&
+      input.clearedToSubmit &&
+      !input.isRehearsal,
     reason:
       input.status !== "approved"
         ? notYourTurn
@@ -269,7 +273,10 @@ function transmitAction(input: SurfaceInput): PrimaryAction {
   };
 }
 
-const ACTION_FOR: Record<FilingStageKey, (input: SurfaceInput) => PrimaryAction> = {
+const ACTION_FOR: Record<
+  FilingStageKey,
+  (input: SurfaceInput) => PrimaryAction
+> = {
   prepare: preparerAction,
   approve: approverAction,
   transmit: transmitAction,
@@ -312,7 +319,10 @@ export function primaryFilingAction(input: SurfaceInput): PrimaryAction | null {
   // Not their turn. A stage they hold that is still AHEAD of the return is
   // theirs and is offered disabled, with the reason; a stage behind it is done
   // and nothing is offered.
-  const position = at === "closed" ? STAGE_ORDER.length : STAGE_ORDER.indexOf(at as FilingStageKey);
+  const position =
+    at === "closed"
+      ? STAGE_ORDER.length
+      : STAGE_ORDER.indexOf(at as FilingStageKey);
   const ahead = held.find((stage) => STAGE_ORDER.indexOf(stage) > position);
   if (ahead) return ACTION_FOR[ahead](input);
 

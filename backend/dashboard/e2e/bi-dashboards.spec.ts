@@ -211,7 +211,10 @@ test.describe("certified dashboards", () => {
       expect(widget.kind, `${widget.id} must carry no chart kind`).toBeNull();
       expect(widget.query, `${widget.id} must carry no query`).toBeNull();
       expect(widget.panel, `${widget.id} must carry no panel`).toBeNull();
-      expect(widget.display, `${widget.id} must carry no display hints`).toBeNull();
+      expect(
+        widget.display,
+        `${widget.id} must carry no display hints`,
+      ).toBeNull();
     }
 
     // THE DISCLOSURE PROPERTY, over the whole payload rather than one widget:
@@ -258,7 +261,9 @@ test.describe("the Dashboards page", () => {
     for (const pack of CERTIFIED_PACKS) {
       const tile = page
         .locator("li")
-        .filter({ has: page.getByRole("heading", { name: pack.title, level: 3 }) })
+        .filter({
+          has: page.getByRole("heading", { name: pack.title, level: 3 }),
+        })
         .first();
       await expect(tile, `${pack.id} must be offered`).toBeVisible();
       await expect(
@@ -270,9 +275,9 @@ test.describe("the Dashboards page", () => {
       );
     }
     // And the honest empty state is NOT shown, because there is something to open.
-    await expect(page.getByText("No dashboards yet", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByText("No dashboards yet", { exact: true }),
+    ).toHaveCount(0);
 
     // OPEN ONE. The pack resolves for the date the reader is on, carries the
     // version a citation needs, and draws the figures the fixture book answers.
@@ -296,17 +301,17 @@ test.describe("the Dashboards page", () => {
     }
     // A figure the platform has not published yet says so, and shows no number:
     // `loans_to_deposits` is a `pending_capability` tile on this pack.
-    await expect(page.getByText("Loans to deposits", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        /The platform does not publish this figure as a measure yet/,
-      ).first(),
+      page.getByText("Loans to deposits", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText(/The platform does not publish this figure as a measure yet/)
+        .first(),
     ).toBeVisible();
 
     // This reader is refused nothing, so the pack-level refusal notice is absent.
-    await expect(
-      page.getByText(/Your access does not cover/),
-    ).toHaveCount(0);
+    await expect(page.getByText(/Your access does not cover/)).toHaveCount(0);
   });
 
   test("the governed export is the control on a figure's own frame", async ({
@@ -322,7 +327,10 @@ test.describe("the Dashboards page", () => {
     // A governed export is an export of ONE ANSWER, so the control belongs to
     // the widget and carries the widget's own question. Every artifact in it goes
     // through `POST …/bi/export`, which authorizes, audits and watermarks.
-    await mix.getByRole("button", { name: /Export/ }).first().click();
+    await mix
+      .getByRole("button", { name: /Export/ })
+      .first()
+      .click();
     const menu = page.getByRole("menu").first();
     // Matched on the START of each item's accessible name, because the name folds
     // in the description: a bare "PDF" would match the print item too, which is
@@ -381,7 +389,9 @@ test.describe("a pack whose every figure this reader is refused", () => {
       page.getByText("Roll rates", { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /Open delinquency and migration/ }).first(),
+      page
+        .getByRole("link", { name: /Open delinquency and migration/ })
+        .first(),
     ).toBeVisible();
 
     // A DATASET THE BANK HAS NOT SUPPLIED: the view is named in its author's
@@ -487,7 +497,9 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
     // `bank_certified` and nothing writes it — there is no maker-checker
     // promotion for a dashboard — so the honest badge for a document its owner
     // may still edit is Personal, and that is what the row says.
-    await expect(page.getByText("Personal", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Personal", { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText(/^Version 1$/).first()).toBeVisible();
 
     // A REAL ANSWER, in the institution's own unit. A refusal tile and a
@@ -503,9 +515,7 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
     await expect(tile.getByText(/^Needs data: /)).toHaveCount(0);
 
     // The history exists from the first save and says what it is.
-    await expect(
-      page.getByRole("heading", { name: "History" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
     await expect(page.getByText("Saved for the first time.")).toBeVisible();
     await expect(page.getByText("Shown now", { exact: true })).toBeVisible();
   });
@@ -573,7 +583,9 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
     // ADD THE VIEW THAT WILL BE REFUSED TO A NARROWER READER.
     await page.getByRole("button", { name: "Add a view" }).click();
     await page.getByLabel("Heading", { exact: true }).fill(REFUSED_VIEW);
-    await page.getByRole("button", { name: "Single figure", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Single figure", exact: true })
+      .click();
     await page
       .getByRole("checkbox", { name: "Gross loans", exact: true })
       .check();
@@ -644,9 +656,9 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
       // And they are not offered the controls only its owner may use.
       await expect(page.getByRole("link", { name: "Arrange" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
-      await expect(
-        page.getByRole("heading", { name: "Sharing" }),
-      ).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Sharing" })).toHaveCount(
+        0,
+      );
 
       // THE VIEW THEY HOLD IS SERVED, which is the positive control: the absence
       // assertions below cannot pass on a blank page.
@@ -726,9 +738,7 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
     await page.waitForURL(new RegExp(`${dashboardPath}$`));
 
     await expect(
-      page.getByText(
-        "Only the people named below can open this dashboard.",
-      ),
+      page.getByText("Only the people named below can open this dashboard."),
     ).toBeVisible();
     await expect(page.getByText("Nobody is named yet.")).toBeVisible();
 
@@ -771,11 +781,9 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
       page.getByRole("heading", { name: "This page could not be found." }),
     ).toHaveCount(0);
     await expect(
-      page
-        .locator("li")
-        .filter({
-          has: page.getByRole("heading", { name: SAVED_TITLE, level: 3 }),
-        }),
+      page.locator("li").filter({
+        has: page.getByRole("heading", { name: SAVED_TITLE, level: 3 }),
+      }),
     ).toHaveCount(0);
 
     // And the document itself is gone, not merely off the list.
@@ -824,11 +832,15 @@ test.describe.serial("a certified pack copied into the reader's own", () => {
     copyPath = new URL(page.url()).pathname;
 
     await expect(
-      page.getByRole("heading", { name: "Copy of Asset and liability committee" }),
+      page.getByRole("heading", {
+        name: "Copy of Asset and liability committee",
+      }),
     ).toBeVisible();
     // The copy is the copier's own working document, so it is Personal — never
     // the badge the original wears.
-    await expect(page.getByText("Personal", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Personal", { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText("Platform-certified")).toHaveCount(0);
 
     // The pack's own views came across, drawing the pack's own figures.
@@ -840,9 +852,7 @@ test.describe.serial("a certified pack copied into the reader's own", () => {
     }
     // And it is the copier's, so they are offered the owner's controls.
     await expect(page.getByRole("link", { name: "Arrange" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Sharing" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sharing" })).toBeVisible();
   });
 
   test("is not rearranged here, and the refusal says why", async ({ page }) => {

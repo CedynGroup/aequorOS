@@ -82,7 +82,9 @@ function refusalSentence(error: unknown): string | null {
   if (error === null || error === undefined) return null;
   if (error instanceof DigestUnavailable) return error.message;
   if (isApiError(error)) {
-    return refusedFiguresSentence(refusedFigures(error.details)) ?? error.message;
+    return (
+      refusedFiguresSentence(refusedFigures(error.details)) ?? error.message
+    );
   }
   return error instanceof Error
     ? error.message
@@ -281,8 +283,8 @@ export default function BiMeasuresPage() {
                     }
                     subtitle={
                       <>
-                        <span className="font-mono">{measure.measureKey}</span> ·{" "}
-                        {valueTypeLabel(measure.valueType)} ·{" "}
+                        <span className="font-mono">{measure.measureKey}</span>{" "}
+                        · {valueTypeLabel(measure.valueType)} ·{" "}
                         {directionLabel(measure.favourableDirection)}
                       </>
                     }

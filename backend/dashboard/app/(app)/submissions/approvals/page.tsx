@@ -342,7 +342,9 @@ function DecidePanel({
   // rejection, and the one case that routes to the deadline fallback.
   const stageError = stageDecision.error;
   const downtime =
-    stageError && isApiError(stageError) && stageError.errorCode === "channel_downtime"
+    stageError &&
+    isApiError(stageError) &&
+    stageError.errorCode === "channel_downtime"
       ? stageError.message
       : null;
   const fallbackQuery = useEmailFallbackInstructions(
@@ -373,11 +375,11 @@ function DecidePanel({
   // and the act is not offered to them a second time.
   const alreadyDecided = Boolean(
     profile?.userId &&
-      detailQuery.data?.approvals.some(
-        (approval) =>
-          approval.actorUserId === profile.userId &&
-          approval.action !== "requested",
-      ),
+    detailQuery.data?.approvals.some(
+      (approval) =>
+        approval.actorUserId === profile.userId &&
+        approval.action !== "requested",
+    ),
   );
   const requestReason = detailQuery.data?.approvals.find(
     (approval) => approval.action === "requested",
@@ -406,7 +408,9 @@ function DecidePanel({
     <button
       type="button"
       data-testid="send-to-validator"
-      disabled={handOff.isPending || decide.isPending || !chain?.awaitingHandOff}
+      disabled={
+        handOff.isPending || decide.isPending || !chain?.awaitingHandOff
+      }
       title={chain?.awaitingHandOff ? undefined : "Approve this return first."}
       onClick={() => handOff.mutate({ packageId: pkg.id })}
       className="inline-flex items-center gap-1.5 rounded-md border border-action/40 bg-action-light/40 px-3 py-2 text-caption font-medium text-navy hover:bg-action-light/60 disabled:opacity-50"
@@ -466,9 +470,13 @@ function DecidePanel({
               {chain.stages.map((stage, index) => {
                 const current = stage.seq === chain.currentStageSeq;
                 const done =
-                  chain.currentStageSeq != null && stage.seq < chain.currentStageSeq;
+                  chain.currentStageSeq != null &&
+                  stage.seq < chain.currentStageSeq;
                 return (
-                  <span key={stage.seq} className="inline-flex items-center gap-2">
+                  <span
+                    key={stage.seq}
+                    className="inline-flex items-center gap-2"
+                  >
                     {index > 0 && <span className="text-slate">→</span>}
                     <span
                       className={
@@ -486,9 +494,7 @@ function DecidePanel({
               })}
               <span className="text-slate">→</span>
               <span className="text-slate">{centralBankName()}</span>
-              <span className="ml-auto text-slate">
-                round {chain.round}
-              </span>
+              <span className="ml-auto text-slate">round {chain.round}</span>
             </div>
 
             {chain.stages.some((stage) => stage.decisions.length > 0) && (
@@ -547,10 +553,13 @@ function DecidePanel({
             returnCode={pkg.returnCode}
             reportingDate={fmtDateUTC(pkg.reportingDate)}
             deadlineLabel={null}
-            message={downtime ?? "This return was filed by the downtime bundle."}
+            message={
+              downtime ?? "This return was filed by the downtime bundle."
+            }
             attemptsLabel={null}
             recipient={
-              fallbackQuery.data?.recipientGuidance.downtimeReturnAddress ?? null
+              fallbackQuery.data?.recipientGuidance.downtimeReturnAddress ??
+              null
             }
             subject={fallbackQuery.data?.subject ?? null}
             attachments={(fallbackQuery.data?.attachments ?? []).map(
@@ -581,9 +590,7 @@ function DecidePanel({
             onCheckStatus={() => poll.mutate(pkg.id)}
             checking={poll.isPending}
             checkError={poll.error}
-            lastCheckedLabel={
-              poll.data ? fmtTimestamp(new Date()) : null
-            }
+            lastCheckedLabel={poll.data ? fmtTimestamp(new Date()) : null}
             onDownloadReceipt={null}
             onRequestResubmission={null}
           />
@@ -596,8 +603,8 @@ function DecidePanel({
               This return is with {currentStageTitle}.
             </p>
             <p className="mt-1 text-caption leading-relaxed text-navy/85">
-              Another officer is responsible for this stage&apos;s decision. There
-              is nothing for you to do here.
+              Another officer is responsible for this stage&apos;s decision.
+              There is nothing for you to do here.
             </p>
           </div>
         ) : atTransmitStage ? (
@@ -624,7 +631,9 @@ function DecidePanel({
               <button
                 type="button"
                 data-testid="validator-approve"
-                disabled={stageDecision.isPending || Boolean(chain?.awaitingHandOff)}
+                disabled={
+                  stageDecision.isPending || Boolean(chain?.awaitingHandOff)
+                }
                 onClick={() =>
                   chain &&
                   stageDecision.mutate({
@@ -821,101 +830,103 @@ function DecidePanel({
                 it became usable and announced the return was with the
                 Validator while it had not moved. */}
             {alreadyDecided && !chain?.awaitingHandOff ? (
-            <div
-              data-testid="already-decided"
-              className="rounded border border-success/30 bg-success-light/40 px-3.5 py-3"
-            >
-              <p className="text-body font-medium text-navy">
-                You approved this return and sent it on.
-              </p>
-              <p className="mt-1 text-caption leading-relaxed text-navy/85">
-                Separation of duties means whoever decides one stage cannot
-                decide the next, so there is nothing further for you to do on
-                this return.
-              </p>
-            </div>
+              <div
+                data-testid="already-decided"
+                className="rounded border border-success/30 bg-success-light/40 px-3.5 py-3"
+              >
+                <p className="text-body font-medium text-navy">
+                  You approved this return and sent it on.
+                </p>
+                <p className="mt-1 text-caption leading-relaxed text-navy/85">
+                  Separation of duties means whoever decides one stage cannot
+                  decide the next, so there is nothing further for you to do on
+                  this return.
+                </p>
+              </div>
             ) : (
               <>
-              <div>
-                <label className="block text-caption font-medium text-navy mb-1.5">
-                  Reason{" "}
-                  <span className="font-normal text-slate">
-                    (required to reject)
-                  </span>
-                </label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Cross-checked HQLA stock against the buffer dashboard."
-                  className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
-                />
-              </div>
+                <div>
+                  <label className="block text-caption font-medium text-navy mb-1.5">
+                    Reason{" "}
+                    <span className="font-normal text-slate">
+                      (required to reject)
+                    </span>
+                  </label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Cross-checked HQLA stock against the buffer dashboard."
+                    className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+                  />
+                </div>
 
+                {awaitingHandOffNote}
 
-              {awaitingHandOffNote}
-
-              {/* Three acts, in the order the bank works in: approve the
+                {/* Three acts, in the order the bank works in: approve the
                   figures, or send them back — and only once approved, pass the
                   return on. The hand-off is present from the start and simply
                   unavailable until the approval exists, so the officer can see
                   what comes next instead of discovering it. `awaitingHandOff`
                   is the SERVER's answer to "is it approved yet"; the screen
                   never decides that for itself. */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={decide.isPending || Boolean(chain?.awaitingHandOff)}
-                  onClick={() =>
-                    decide.mutate({
-                      packageId: pkg.id,
-                      action: "approved",
-                      reason: reason.trim() || undefined,
-                    })
-                  }
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                >
-                  {decide.isPending ? (
-                    <Loader2 size={13} className="animate-spin" aria-hidden />
-                  ) : (
-                    <CheckCircle2 size={13} aria-hidden />
-                  )}
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  disabled={decide.isPending || rejectNeedsReason}
-                  title={
-                    alreadyDecided
-                      ? "You have already decided on this return."
-                      : rejectNeedsReason
-                        ? "A reason is required when rejecting."
-                        : undefined
-                  }
-                  onClick={() =>
-                    decide.mutate({
-                      packageId: pkg.id,
-                      action: "rejected",
-                      reason: reason.trim(),
-                    })
-                  }
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
-                >
-                  <XCircle size={13} aria-hidden />
-                  Reject (rework)
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      decide.isPending || Boolean(chain?.awaitingHandOff)
+                    }
+                    onClick={() =>
+                      decide.mutate({
+                        packageId: pkg.id,
+                        action: "approved",
+                        reason: reason.trim() || undefined,
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+                  >
+                    {decide.isPending ? (
+                      <Loader2 size={13} className="animate-spin" aria-hidden />
+                    ) : (
+                      <CheckCircle2 size={13} aria-hidden />
+                    )}
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={decide.isPending || rejectNeedsReason}
+                    title={
+                      alreadyDecided
+                        ? "You have already decided on this return."
+                        : rejectNeedsReason
+                          ? "A reason is required when rejecting."
+                          : undefined
+                    }
+                    onClick={() =>
+                      decide.mutate({
+                        packageId: pkg.id,
+                        action: "rejected",
+                        reason: reason.trim(),
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
+                  >
+                    <XCircle size={13} aria-hidden />
+                    Reject (rework)
+                  </button>
 
-                {/* Third, and unavailable until the approval exists. */}
-                {sendToValidator}
-              </div>
+                  {/* Third, and unavailable until the approval exists. */}
+                  {sendToValidator}
+                </div>
 
-              {handOffError}
+                {handOffError}
 
-              <p className="text-caption text-slate leading-relaxed">
-                An administrator has relaxed signing for this return, so there is
-                no ceremony to route the decision through. Approving requires the
-                approver role; the decision is recorded against your login.
-              </p>
+                <p className="text-caption text-slate leading-relaxed">
+                  An administrator has relaxed signing for this return, so there
+                  is no ceremony to route the decision through. Approving
+                  requires the approver role; the decision is recorded against
+                  your login.
+                </p>
               </>
             )}
           </>
@@ -1035,12 +1046,12 @@ function DecidePanel({
           decide.variables?.packageId === pkg.id &&
           (decide.variables.action !== "approved" ||
             chain?.awaitingHandOff) && (
-          <p className="text-caption text-success font-medium">
-            {decide.variables?.action === "approved"
-              ? "Approval recorded. The return is still with you until you send it on."
-              : "Decision recorded. The return was sent back for rework."}
-          </p>
-        )}
+            <p className="text-caption text-success font-medium">
+              {decide.variables?.action === "approved"
+                ? "Approval recorded. The return is still with you until you send it on."
+                : "Decision recorded. The return was sent back for rework."}
+            </p>
+          )}
       </div>
     </SectionCard>
   );

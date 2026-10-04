@@ -165,6 +165,8 @@ def filing_admits_artifact(kind: str, *, generator: str | None) -> bool:
     return generator is not None and generator in WORKING_ARTIFACT_FILING_GENERATORS.get(
         kind, frozenset()
     )
+
+
 #: Presentation order of a filing set and of the artifact list behind it. The
 #: signed record leads (pinned below, outside this map); then the Excel copies
 #: — the format 44 of 47 returns declare as ``filing_format`` — and the CSV
@@ -288,9 +290,7 @@ def request_approval(
     # The Preparer's act. The chain owns the preconditions — ``checks_passed``
     # gates ENTRY, which is what machine validation is for; it is not a stage
     # and not a person. The status follows the chain, not the other way round.
-    filing_chain.start_chain(
-        db, ctx, package, note=payload.reason, actor=actor_user_id
-    )
+    filing_chain.start_chain(db, ctx, package, note=payload.reason, actor=actor_user_id)
     # The coarse approval log stays: it is append-only evidence with its own
     # readers (``RegulatoryPackageRead.approvals``). The CHAIN is the authority.
     _add_approval(
@@ -431,12 +431,13 @@ def record_certification_approval(
     transaction as the signature. Nobody has to approve a second time in the
     workspace because they signed.
 
-    It is the CHAIN that moves, not the status: the status is the chain's
-    projection. So a checker's signature advances the return to the stage after
-    theirs, and with the default chain that stage is the Validator — the return
-    becomes ``approved``, i.e. filable, only when the Validator has taken it.
-    This used to write ``approved`` directly, which is the conflation the
-    redesign removes: a signature by the Approver is not authority to file.
+    It is the CHAIN that owns the status projection, but this call records only
+    the current stage's decision. The checker's signature leaves the return at
+    that stage with ``awaiting_hand_off`` true; a separate hand-off advances it
+    to the Validator. The return becomes ``approved``, i.e. filable, only after
+    the final stage is decided and released. This used to write ``approved``
+    directly, which is the conflation the redesign removes: a signature by the
+    Approver is not authority to file.
     """
     from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
@@ -611,9 +612,7 @@ def submit_package(  # noqa: PLR0913
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
     # Transmission is the last moment the platform can refuse (audit D-2).
-    filing_reconciliation.assert_package_reconciled(
-        db, ctx, package, purpose="package_submission"
-    )
+    filing_reconciliation.assert_package_reconciled(db, ctx, package, purpose="package_submission")
     transition(db, ctx, package, "submitted", details={"channel": channel})
     add_submission_event(
         db,
@@ -1206,17 +1205,13 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
     )
 
     is_reupload, prior_email_ref = _ensure_channel_submittable(db, package, channel_code)
-    external_ref = _resolve_external_ref(
-        definition, channel_code, external_ref=external_ref
-    )
+    external_ref = _resolve_external_ref(definition, channel_code, external_ref=external_ref)
 
     _ensure_attested(db, ctx, package)
     # Sits beside the attestation gate for the same reason it lives in the
     # service rather than the route: no channel — including the manual record —
     # transmits a return whose book does not reconcile (audit 2026-08-22 D-2).
-    filing_reconciliation.assert_package_reconciled(
-        db, ctx, package, purpose="package_submission"
-    )
+    filing_reconciliation.assert_package_reconciled(db, ctx, package, purpose="package_submission")
 
     if channel_code == "manual":
         # ``mint_missing=False``: recording a submission that happened outside
@@ -1666,9 +1661,7 @@ def list_package_artifacts(
     package = get_package_or_404(db, ctx, bank_id, package_id)
     return sorted(
         _package_artifacts(db, package),
-        key=lambda artifact: FILING_PRESENTATION_ORDER.get(
-            artifact.kind, _UNRANKED_ARTIFACT_ORDER
-        ),
+        key=lambda artifact: FILING_PRESENTATION_ORDER.get(artifact.kind, _UNRANKED_ARTIFACT_ORDER),
     )
 
 

@@ -8,10 +8,11 @@ re-proved (docs/attestation_esignature.md §4).
                                         ↓                    ↓
                                       void ←────────────────┘
 
-Package status and attestation state move together in ONE transaction: T1 also
-performs ``validated → pending_approval``, T2 also performs
-``pending_approval → approved``. There is deliberately no window in which a
-package is approved but uncertified, or certified but unapproved.
+The signature and its human decision move together in ONE transaction: T1
+starts the review chain and projects ``validated → pending_approval``; T2
+records the Approver's decision and completes attestation. Releasing the return
+to the next stage is deliberately a separate ``hand_off`` act, so a fully
+certified package can remain ``pending_approval`` while it awaits release.
 
 What certification freezes, and why four independent mechanisms guard the gap
 between the two signatures:
@@ -332,9 +333,7 @@ def _ensure_signing_order(
         )
         raise ValueError(msg)
     signed = {signature.signing_role for signature in signatures}
-    outstanding = [
-        earlier for earlier in order[: order.index(role)] if earlier not in signed
-    ]
+    outstanding = [earlier for earlier in order[: order.index(role)] if earlier not in signed]
     if outstanding:
         raise AttestationConflict(
             "signing_order",
@@ -389,17 +388,17 @@ def ensure_maker_checker(  # noqa: PLR0913 - every argument is a distinct SoD in
 def ensure_checked_release(
     package: RegulatoryPackage, signatures: list[AttestationSignature]
 ) -> list[AttestationSignature]:
-    """Segregation of duties at the ONE moment certification releases a package.
+    """Segregation of duties when certification records the approval decision.
 
     Every other maker-checker guard in this module runs when a signature is
     *offered*, and each is therefore conditional on configuration:
     :func:`ensure_maker_checker` only compares against prior signers when the
     policy left ``distinct_signers`` true, and it never asks whether the policy
     named a checker slot at all. A policy of ``[preparer]`` alone — or one with
-    ``distinct_signers=False`` — could therefore drive
-    ``pending_approval -> approved`` on the strength of one officer's signature.
+    ``distinct_signers=False`` — could therefore record approval on the strength
+    of one officer's signature.
 
-    This guard runs when the package is *released* instead. It reads the
+    This guard runs when the approval decision is recorded instead. It reads the
     signatures that actually exist rather than the policy that asked for them,
     so no row in ``return_signing_policies`` can shape a filing that one officer
     both prepared and approved:
@@ -410,8 +409,8 @@ def ensure_checked_release(
       id and the permanent signer id, exactly as :func:`ensure_maker_checker`
       compares them;
     * every checker passes ``ensure_decidable`` — the SAME primitive the bare
-      approval decision passes through, so the two routes to ``approved`` cannot
-      drift into two readings of one rule.
+      approval decision passes through, so the two routes to a stage decision
+      cannot drift into two readings of one rule.
 
     Returns the checker signatures: the caller must attribute the approval
     decision to one of them, and re-deriving the set would be a second reading.
@@ -483,9 +482,7 @@ def ensure_signing_configured() -> None:
     )
 
 
-def ensure_submittable(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage
-) -> None:
+def ensure_submittable(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> None:
     """The submission gate: every required signature, and every required document.
 
     Called from the existing submission path, so no return can reach a channel
@@ -544,13 +541,14 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
     """Move the package's attestation state after a signature is recorded.
 
     T1 (preparer) freezes the digest and routes for approval; T2 (final
-    required signature) completes certification and releases for submission.
+    required signature) completes certification and records the Approver's
+    decision without handing the return to the next stage.
 
     T2 also writes the APPROVAL DECISION, because a checker's signature over the
     frozen figures is their approval of the filing — one act. This is the only
-    place ``pending_approval -> approved`` happens by certification, so putting
-    the decision row here is what makes "signed but not approved" unreachable
-    from any endpoint rather than from one.
+    place certification records that chain decision, so putting the decision
+    row here is what makes "signed but undecided" unreachable from any endpoint
+    rather than from one. ``filing_chain.hand_off`` remains the only release.
     """
     from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
@@ -573,10 +571,9 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
         # back): maker-checker was enforced there by ``ensure_decidable``, and
         # this signature merely completes the attestation state.
         released = package.status in {"validated", "pending_approval"}
-        # BEFORE the status moves, never after: this is the only place
-        # certification reaches ``approved``, so it is the only place the
-        # separation has to hold, and a guard that ran afterwards would be
-        # describing a filing rather than preventing one.
+        # Before the approval decision is recorded, never after: this is the
+        # only place certification approves the review stage, so it is the only
+        # place the separation has to hold.
         checkers = ensure_checked_release(package, signatures_after) if released else []
         package.attestation_state = "fully_certified"
         package.fully_certified_at = now
@@ -599,9 +596,8 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
                 actor_user_id=checkers[-1].signer_user_id,
                 reason=reason,
             )
-        # The family's own reaction to a complete attestation, AFTER the status
-        # has moved so the hook sees the package as the rest of the system will
-        # (ICAAP: the cycle becomes board_approved).
+        # The family's own reaction to a complete attestation, after the chain
+        # decision has been recorded (ICAAP: the cycle becomes board_approved).
         from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks a cycle
             family_hooks,
         )
@@ -657,9 +653,7 @@ def void_attestation(
     nobody can correct.
     """
     if package.attestation_state == "unsigned":
-        raise AttestationConflict(
-            "nothing_to_void", "This return has no attestation to void."
-        )
+        raise AttestationConflict("nothing_to_void", "This return has no attestation to void.")
     if package.status in {"submitted", "acknowledged"}:
         raise AttestationConflict(
             "already_submitted",

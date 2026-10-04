@@ -581,17 +581,13 @@ def _assign_position_risk_weights(session: Session) -> None:
         select(CanonicalPositionSnapshot).where(
             CanonicalPositionSnapshot.organization_id == DEMO_ORG_ID,
             CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
-            CanonicalPositionSnapshot.source_reference.in_(
-                _POSITION_RISK_WEIGHT_OVERRIDES
-            ),
+            CanonicalPositionSnapshot.source_reference.in_(_POSITION_RISK_WEIGHT_OVERRIDES),
         )
     )
     for snapshot in snapshots:
         snapshot.attributes = {
             **snapshot.attributes,
-            "risk_weight_code": _POSITION_RISK_WEIGHT_OVERRIDES[
-                snapshot.source_reference
-            ],
+            "risk_weight_code": _POSITION_RISK_WEIGHT_OVERRIDES[snapshot.source_reference],
         }
     session.flush()
 

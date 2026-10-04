@@ -851,10 +851,15 @@ attestation_state ∈ ( 'unsigned', 'preparer_certified', 'fully_certified', 'vo
 | T4  | `fully_certified → void`               | Regulator rejects/declines, or a granted resubmission is consumed | Only before submission or via the existing resubmission path                                                                                                            |
 | T5  | _(no transition)_                      | Submission                                                        | `submit` requires `fully_certified` **and** every policy slot satisfied                                                                                                 |
 
-Package status and attestation state move together in one transaction:
-certification T1 also performs `validated → pending_approval`; T2 also performs
-`pending_approval → approved`. There is no window in which a package is
-approved but uncertified, or certified but unapproved.
+The signature and its corresponding human decision move together in one
+transaction: certification T1 starts the review chain and projects
+`validated → pending_approval`; T2 records the Approver's decision and completes
+the attestation. T2 deliberately does **not** advance the chain. The fully
+certified package remains `pending_approval` and `awaiting_hand_off` until that
+officer performs the separate release described in
+[`backend/docs/filing_workflow_redesign.md`](../backend/docs/filing_workflow_redesign.md).
+There is no signed-but-undecided state, while the accepted two-act workflow
+retains an explicit approved-but-not-yet-released state.
 
 ### 4.2 Freeze semantics — what is locked, and when
 
@@ -1214,13 +1219,11 @@ must not be represented as working:
    chain building, issuer signatures, validity windows. No name constraints, no
    policy tree, no CRL/OCSP. Revocation-aware validation happens only in the
    PDF check, from LTV material embedded in the file.
-6. **The signing workspace has a backend and no UI yet.** Placement, adopted
-   marks and named routing are complete server-side, with contract tests over
-   every endpoint, but nothing drives them from a browser: there is no PDF
-   viewer, no drag-to-place, no signature pad, no recipient picker. Until those
-   exist, the only way to place a field or adopt a mark is an API call, so the
-   founder's flow — open the return, place two fields, draw a signature, pick the
-   approver, send — is **not yet observable end to end**.
+6. **The signing workspace is browser-driven.** Its PDF viewer, field palette,
+   drag-to-place interaction, adopted marks and named recipient picker exercise
+   the same placement and routing endpoints covered by the backend contract
+   suite. The browser journeys drive the founder's flow — open the return, place
+   both signers' fields, adopt a mark, pick the approver and send — end to end.
 
    Two residual weaknesses in what _is_ built. First, `SHRINK_TO_FIT` bounds the
    evidential block by the box, and the minimum box is derived from the two
@@ -1230,7 +1233,7 @@ must not be represented as working:
    slanted serif rather than handwriting — honest, but not what a signer picking
    "script" expects.
 
-7. **The browser journey covers the ceremony surfaces, not the whole
+7. **The browser suite covers both the ceremony surfaces and the filing
    lifecycle.** The hermetic stack enrols disposable self-signed _software_
    signing keys (`scripts/e2e_bootstrap.py`). The attestation spec covers the
    signee ID visible in Settings, unsigned state visible on a generated return,
@@ -1238,15 +1241,15 @@ must not be represented as working:
    declaration before signing is possible, the SSO step-up return leg, route
    guards, field placement, and unsigned export. See the
    [dashboard E2E guidance](../backend/dashboard/README.md#end-to-end-playwright)
-   for fixture coverage and workflow invocation, and
-   [the quarantine list](../backend/dashboard/e2e/support/quarantine.ts)
-   for the remaining ceremony failure and its repair. A full
-   preparer-then-approver-then-verify pass through the UI is **not** yet
-   driven; the submission gate and the two-signature flow are asserted in the
-   backend suite instead. Noted because an earlier version of that journey
-   asserted `Submit` was disabled and passed only because no Submit button is
-   rendered at `generated` status — a conditional assertion that proved
-   nothing. It was removed rather than left green.
+   for fixture coverage, workflow invocation and quarantine enforcement. The
+   full-lifecycle spec drives the Preparer's certification, the Approver's
+   signature and separate hand-off, then the Validator's approval and filing;
+   the backend suite retains the state-machine, digest and cryptographic
+   verification proofs. The quarantine list is currently empty. An earlier
+   version of the ceremony journey asserted `Submit` was disabled and passed
+   only because no Submit button is rendered at `generated` status — a
+   conditional assertion that proved nothing. It was removed rather than left
+   green.
 
 ---
 
