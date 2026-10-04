@@ -7,7 +7,7 @@
  * the whole 17-file Sample Bank folder at once is the intended flow.
  */
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Loader2, UploadCloud } from 'lucide-react';
 import type { IngestionBatchRead } from '@aequoros/risk-service-api';
@@ -36,6 +36,8 @@ type FileOutcome = {
 export default function UploadPanel() {
   const { bank } = useBankContext();
   const inputRef = useRef<HTMLInputElement>(null);
+  const filesInputId = useId();
+  const asOfInputId = useId();
   const [files, setFiles] = useState<File[]>([]);
   const [asOfDate, setAsOfDate] = useState(DEMO_AS_OF);
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
@@ -105,10 +107,14 @@ export default function UploadPanel() {
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-0">
-          <label className="block text-caption font-medium text-slate mb-1">
+          <label
+            htmlFor={filesInputId}
+            className="block text-caption font-medium text-slate mb-1"
+          >
             Source files (.xlsx / .csv)
           </label>
           <input
+            id={filesInputId}
             ref={inputRef}
             type="file"
             multiple
@@ -118,10 +124,14 @@ export default function UploadPanel() {
           />
         </div>
         <div>
-          <label className="block text-caption font-medium text-slate mb-1">
+          <label
+            htmlFor={asOfInputId}
+            className="block text-caption font-medium text-slate mb-1"
+          >
             As-of date
           </label>
           <input
+            id={asOfInputId}
             type="date"
             value={asOfDate}
             onChange={(event) => setAsOfDate(event.target.value)}
