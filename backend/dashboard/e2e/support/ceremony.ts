@@ -172,12 +172,14 @@ export async function approveAndSignAsChecker(
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
     // Signing IS approving: the return comes back to the queue approved and
     // waiting to be sent on, with no second decision to take.
-    await page.goto('/submissions/approvals');
+    await page
+      .getByRole('link', { name: 'Approvals', exact: true })
+      .click();
     await row.first().click();
+    await expect(page.getByTestId('review-and-sign')).toHaveCount(0);
     await expect(page.getByTestId('awaiting-hand-off')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByTestId('review-and-sign')).toHaveCount(0);
     await page.getByTestId('send-to-validator').click();
     // Filing is the Validator's authority alone, so the approver is left with
     // nothing to do on it.

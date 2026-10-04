@@ -2303,6 +2303,7 @@ const reportingInvalidatePrefixes = [
   "rr-packages",
   "rr-package",
   "rr-events",
+  "rr-filing-chain",
   // Certification appends a signed revision, so the version chain — and with it
   // which document Download resolves to — changes without the artifact list
   // moving at all.

@@ -549,18 +549,14 @@ def _seed_canonical_positions(session: Session) -> None:
     print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
 
 
-#: The governed risk-weight code each credit product of the position book
-#: carries, matching the codes the fact spine's loan exposures use for the same
-#: categories (``tests/fixtures/canonical_bank_fixture.py::_LOAN_EXPOSURES_M``).
+#: The governed default risk-weight code each credit product carries.
 _PRODUCT_RISK_WEIGHT_CODES = {
     "LN.CORP.5Y": "RW100",
     "LN.RET.PERS": "RW75",
     "LN.RET.MORT": "RW35",
     "LN.SME.TERM": "RW75",
 }
-#: Credit positions with no product, weighted on the position itself. A
-#: short-dated claim on a bank takes the 20% bank weight.
-_POSITION_RISK_WEIGHT_CODES = {"IBP/1": "RW20"}
+_POSITION_RISK_WEIGHT_OVERRIDES = {"IBP/1": "RW20", "LOAN/6": "RW150"}
 
 
 def _assign_position_risk_weights(session: Session) -> None:
@@ -585,13 +581,17 @@ def _assign_position_risk_weights(session: Session) -> None:
         select(CanonicalPositionSnapshot).where(
             CanonicalPositionSnapshot.organization_id == DEMO_ORG_ID,
             CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
-            CanonicalPositionSnapshot.source_reference.in_(_POSITION_RISK_WEIGHT_CODES),
+            CanonicalPositionSnapshot.source_reference.in_(
+                _POSITION_RISK_WEIGHT_OVERRIDES
+            ),
         )
     )
     for snapshot in snapshots:
         snapshot.attributes = {
             **snapshot.attributes,
-            "risk_weight_code": _POSITION_RISK_WEIGHT_CODES[snapshot.source_reference],
+            "risk_weight_code": _POSITION_RISK_WEIGHT_OVERRIDES[
+                snapshot.source_reference
+            ],
         }
     session.flush()
 

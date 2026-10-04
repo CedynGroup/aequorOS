@@ -303,6 +303,7 @@ function DecidePanel({
   // Validator — which is what it did.
   const chainQuery = usePackageFilingChain(bankId, pkg.id);
   const chain = chainQuery.data ?? null;
+  const chainReady = chainQuery.isSuccess && !chainQuery.isFetching;
   const currentStage =
     chain?.stages.find((stage) => stage.seq === chain.currentStageSeq) ?? null;
   // The stage says WHAT is next; the viewer's authority says whether it is
@@ -525,7 +526,17 @@ function DecidePanel({
           </div>
         )}
 
-        {downtime || pendingReupload ? (
+        {!chainReady ? (
+          chainQuery.error ? (
+            <ErrorPanel
+              error={chainQuery.error}
+              onRetry={() => void chainQuery.refetch()}
+              title="Could not load the filing workflow"
+            />
+          ) : (
+            <SkeletonTable rows={1} />
+          )
+        ) : downtime || pendingReupload ? (
           <DowntimeFallback
             returnCode={pkg.returnCode}
             reportingDate={fmtDateUTC(pkg.reportingDate)}
