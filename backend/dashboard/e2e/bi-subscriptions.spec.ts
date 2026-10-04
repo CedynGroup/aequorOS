@@ -134,10 +134,15 @@ test.describe("scheduled report subscriptions", () => {
     expect(subscription.hour).toBe(7);
     expect(subscription.minute).toBe(30);
     expect(subscription.day_of_week).toBe(1);
-    // A summary report is attachable, and the copy says what will happen.
+    // A summary report is attachable, and the copy says what will happen. This
+    // stack runs with `BI_SUBSCRIPTIONS_ENABLED` off, as every deployment does
+    // today, so the deployment fact follows the disclosure sentence rather than
+    // the report claiming it is being sent.
     expect(subscription.disclosure_class).toBe("summary");
     expect(subscription.delivery_note).toBe(
-      "Each recipient is emailed this report as a file, prepared under their own access.",
+      "Each recipient is emailed this report as a file, prepared under their own access. " +
+        "Nothing is sent from this deployment yet: scheduled report delivery is not enabled here. " +
+        "The report is kept and will go out once your platform operator enables it.",
     );
     // THE OWNER sees the whole distribution list, by name.
     expect(subscription.recipient_user_ids.sort()).toEqual(
@@ -172,7 +177,9 @@ test.describe("scheduled report subscriptions", () => {
       const ownerList = await biApi(request, "admin", SUBSCRIPTIONS);
       expect(ownerList.status).toBe(200);
       const owned = (
-        ownerList.body as { subscriptions: { id: string; recipients: unknown[] }[] }
+        ownerList.body as {
+          subscriptions: { id: string; recipients: unknown[] }[];
+        }
       ).subscriptions.find((entry) => entry.id === subscription.id)!;
       expect(owned.recipients).toHaveLength(2);
 
@@ -267,8 +274,9 @@ test.describe("scheduled report subscriptions", () => {
         `${SUBSCRIPTIONS}/${subscription.id}`,
       );
       expect(
-        (afterRefusal.body as { recipient_user_ids: string[] })
-          .recipient_user_ids.sort(),
+        (
+          afterRefusal.body as { recipient_user_ids: string[] }
+        ).recipient_user_ids.sort(),
       ).toEqual([E2E_USERS.analyst.id, E2E_USERS.liquidity_viewer.id].sort());
 
       // The owner can stop it, and stopping is not deleting.
@@ -315,11 +323,15 @@ test.describe("the scheduled reports workspace", () => {
     ).toBeVisible();
 
     // The honest empty state, by its own copy — not merely "the page rendered".
+    // Delivery is off on this stack, so the empty state says that nothing goes
+    // out yet instead of describing how a sent copy is prepared.
     await expect(
       page.getByText("No scheduled reports yet", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(/each person's copy is prepared under their own access/i),
+      page.getByText(
+        /who receives them\. Scheduled report delivery is not enabled in this deployment\./,
+      ),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "New report" }).click();
@@ -351,9 +363,13 @@ test.describe("the scheduled reports workspace", () => {
     await composer
       .getByRole("button", { name: "Classification grade", exact: true })
       .click();
-    await composer.locator("#bi-recipients").fill(
-      ["e2e.analyst@aequoros.example", "e2e.viewer@aequoros.example"].join("\n"),
-    );
+    await composer
+      .locator("#bi-recipients")
+      .fill(
+        ["e2e.analyst@aequoros.example", "e2e.viewer@aequoros.example"].join(
+          "\n",
+        ),
+      );
     await expect(composer.getByText("2 people named")).toBeVisible();
     await composer.locator("#bi-sub-reason").fill("e2e: the composer journey");
 
@@ -373,13 +389,19 @@ test.describe("the scheduled reports workspace", () => {
     // pinning the defect: a user in Lagos or Nairobi set a send time believing one
     // zone while the scan used another. Both halves are asserted, because the
     // absence of "UTC" is what fails if the fallback ever comes back.
-    await expect(composer.getByText("Time (Africa/Accra)", { exact: true })).toBeVisible();
-    await expect(composer.getByText("Time (UTC)", { exact: true })).toHaveCount(0);
+    await expect(
+      composer.getByText("Time (Africa/Accra)", { exact: true }),
+    ).toBeVisible();
+    await expect(composer.getByText("Time (UTC)", { exact: true })).toHaveCount(
+      0,
+    );
 
     await expect(composer.locator("#bi-sub-cadence")).toHaveValue("weekly");
     await expect(composer.locator("#bi-sub-time")).toHaveValue("07:30");
     await expect(composer.locator("#bi-sub-weekday")).toHaveValue("1");
-    await expect(composer.getByText(/Sent every Monday at 07:30 /)).toBeVisible();
+    await expect(
+      composer.getByText(/Sent every Monday at 07:30 /),
+    ).toBeVisible();
 
     await expect(submit).toBeEnabled();
     await submit.click();
@@ -389,7 +411,10 @@ test.describe("the scheduled reports workspace", () => {
       .locator("section.card")
       .filter({ hasText: "Loan book by grade, Mondays" });
     await expect(card).toBeVisible();
-    await expect(card.getByText("Sending", { exact: true })).toBeVisible();
+    // Delivery is off on this stack, so the row does not claim to be sending.
+    await expect(
+      card.getByText("Not sending here", { exact: true }),
+    ).toBeVisible();
     // The zone on the SAVED row is the institution's own, resolved server-side
     // from the jurisdictions registry — the same rule the delivery scan applies.
     await expect(
@@ -413,9 +438,7 @@ test.describe("the scheduled reports workspace", () => {
       card.getByText("Nothing has been sent yet", { exact: true }),
     ).toBeVisible();
     await expect(
-      card.getByText(
-        /including anyone whose access did not cover the figures/,
-      ),
+      card.getByText(/including anyone whose access did not cover the figures/),
     ).toBeVisible();
 
     // Stopping is not deleting.

@@ -80,6 +80,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.models import (
     CanonicalPositionSnapshot,
+    CanonicalProduct,
     IntegrationKey,
     Organization,
     RegulatoryParameter,
@@ -536,6 +537,7 @@ def _seed_canonical_positions(session: Session) -> None:
         session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=as_of
     )
     session.flush()
+    _assign_position_risk_weights(session)
     snapshots = session.scalar(
         select(func.count())
         .select_from(CanonicalPositionSnapshot)
@@ -545,6 +547,49 @@ def _seed_canonical_positions(session: Session) -> None:
         )
     )
     print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
+
+
+#: The governed default risk-weight code each credit product carries.
+_PRODUCT_RISK_WEIGHT_CODES = {
+    "LN.CORP.5Y": "RW100",
+    "LN.RET.PERS": "RW75",
+    "LN.RET.MORT": "RW35",
+    "LN.SME.TERM": "RW75",
+}
+_POSITION_RISK_WEIGHT_OVERRIDES = {"IBP/1": "RW20", "LOAN/6": "RW150"}
+
+
+def _assign_position_risk_weights(session: Session) -> None:
+    """Give every credit exposure in the position book a governed risk weight.
+
+    ``seed_canonical_fixture`` books positions without risk-weight codes, which
+    the hermetic suites' hand-checked aggregates are written against. A bank's
+    real book arrives with them, and enterprise stress refuses a book where any
+    credit exposure has none (``risk_weight_unresolved``) rather than assuming a
+    weight. Without this the browser would only ever see that refusal.
+    """
+    products = session.scalars(
+        select(CanonicalProduct).where(
+            CanonicalProduct.organization_id == DEMO_ORG_ID,
+            CanonicalProduct.bank_id == SAMPLE_BANK_ID,
+            CanonicalProduct.product_code.in_(_PRODUCT_RISK_WEIGHT_CODES),
+        )
+    )
+    for product in products:
+        product.risk_weight_code = _PRODUCT_RISK_WEIGHT_CODES[product.product_code]
+    snapshots = session.scalars(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.organization_id == DEMO_ORG_ID,
+            CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+            CanonicalPositionSnapshot.source_reference.in_(_POSITION_RISK_WEIGHT_OVERRIDES),
+        )
+    )
+    for snapshot in snapshots:
+        snapshot.attributes = {
+            **snapshot.attributes,
+            "risk_weight_code": _POSITION_RISK_WEIGHT_OVERRIDES[snapshot.source_reference],
+        }
+    session.flush()
 
 
 def _materialize_book(session: Session) -> None:

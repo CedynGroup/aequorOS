@@ -85,178 +85,169 @@ test.describe("the certification ceremony", () => {
   // certify, so the steps are genuinely ordered rather than independent.
   test.describe.configure({ mode: "serial" });
 
-  // Quarantined (e2e/support/quarantine.ts): the SSO step-up return leg
-  // bounces through request.nextUrl.origin, which Next dev resolves to
-  // localhost, so the redirect crosses the 127.0.0.1 cookie jar and lands on
-  // /login. The requestOrigin fix for both step-up routes is committed on
-  // fm/aeq-sso-local-issuer-e2e-journey (stacked on PR #205); this journey is
-  // un-quarantined once that lands.
-  test.fail(
-    "opting in locks submission, and the ceremony enforces what it shows",
-    async ({ browser }) => {
-      const admin = await mintBackendToken("admin");
-      const authorize = { Authorization: `Bearer ${admin}` };
-      // LMT, not BSD3: the other journeys submit BSD3, and Playwright runs files
-      // in parallel against ONE database, so a mandatory-signature policy on
-      // BSD3 would block them mid-run.
-      const scope = {
-        return_code: "LMT",
-        required_signatures: [
-          { role: "preparer", min_count: 1, officer_titles: [] },
-          { role: "approver", min_count: 1, officer_titles: [] },
-        ],
-        effective_from: "2020-01-01",
-      };
+  test("opting in locks submission, and the ceremony enforces what it shows", async ({
+    browser,
+  }) => {
+    const admin = await mintBackendToken("admin");
+    const authorize = { Authorization: `Bearer ${admin}` };
+    // LMT, not BSD3: the other journeys submit BSD3, and Playwright runs files
+    // in parallel against ONE database, so a mandatory-signature policy on
+    // BSD3 would block them mid-run.
+    const scope = {
+      return_code: "LMT",
+      required_signatures: [
+        { role: "preparer", min_count: 1, officer_titles: [] },
+        { role: "approver", min_count: 1, officer_titles: [] },
+      ],
+      effective_from: "2020-01-01",
+    };
 
-      const context = await browser.newContext({ storageState: analystState });
-      const page = await context.newPage();
-      try {
-        const opted = await page.request.put(
-          `${API}/attestation/signing-policies`,
-          {
-            headers: authorize,
-            data: {
-              ...scope,
-              require_signature: true,
-              reason: "e2e: drive the ceremony",
-            },
+    const context = await browser.newContext({ storageState: analystState });
+    const page = await context.newPage();
+    try {
+      const opted = await page.request.put(
+        `${API}/attestation/signing-policies`,
+        {
+          headers: authorize,
+          data: {
+            ...scope,
+            require_signature: true,
+            reason: "e2e: drive the ceremony",
           },
-        );
-        expect(opted.ok()).toBeTruthy();
+        },
+      );
+      expect(opted.ok()).toBeTruthy();
 
-        await page.goto(GATED_RETURN);
-        await generateCurrentVersion(page);
-        await expect(
-          page.getByText(/Generated|Checks passed/).first(),
-        ).toBeVisible({ timeout: 60_000 });
-        // Machine validation is not a human act: it runs with generation, and
-        // the only button is the honest one — "Re-run checks", beside
-        // Regenerate, for source figures that moved under an existing version.
-        await expect(
-          page.getByRole("button", { name: /^validate$/i }),
-        ).toHaveCount(0);
-        const rerun = page
-          .getByRole("button", { name: "Re-run checks" })
-          .first();
-        if (await rerun.count()) {
-          await rerun.click();
-          await expect(page.getByText("Checks passed").first()).toBeVisible({
-            timeout: 60_000,
-          });
-        }
-
-        // --- an unsigned return must READ as unsubmittable ------------------
-        //
-        // The founder's screenshot: CLEARED TO SUBMIT rendered beside UNSIGNED.
-        // The API was already right — `_status_payload` computes can_submit false
-        // while a signature is outstanding — so the defect was purely display, and
-        // that is what this asserts. It runs here, on a return whose policy has just
-        // been set to require signatures, because that is the only state in which
-        // the claim can be wrong.
-        //
-        // An earlier version of this journey asserted `Submit` was disabled and
-        // passed only because no Submit control was rendered at all; these locators
-        // fail if the element is missing, so the check cannot go trivially green.
-        const clearance = page.getByTestId("attestation-clearance").first();
-        await expect(clearance).toHaveText(/^Not cleared to submit/i);
-        await expect(clearance).toContainText(/preparer/i);
-        await expect(clearance).toContainText(/approver/i);
-        await expect(
-          page.getByText("Cleared to submit", { exact: true }),
-        ).toHaveCount(0);
-        await expect(page.getByText("Unsigned").first()).toBeVisible();
-
-        // And the filing control is not disabled here — it is ABSENT. This is a
-        // PREPARER's session, and transmission is the Validator's authority
-        // alone (docs/filing_workflow_redesign.md §4b.1). What this session is
-        // offered instead is its own act, named, with what pressing it does —
-        // which is what the assertions below drive.
-        await expect(page.getByTestId("transmission-row")).toHaveCount(0);
-        const act = page.getByTestId("primary-filing-action");
-        await expect(act).toHaveText(/certify and freeze/i);
-        await expect(
-          page.getByTestId("primary-filing-action-reason"),
-        ).toContainText(/sends the return to the approver/i);
-        if (evidenceDir) {
-          await page.screenshot({
-            path: path.join(evidenceDir, "attestation-ceremony-locked.png"),
-            fullPage: true,
-          });
-        }
-
-        const certify = page.getByRole("button", {
-          name: "Certify and freeze",
+      await page.goto(GATED_RETURN);
+      await generateCurrentVersion(page);
+      await expect(
+        page.getByText(/Generated|Checks passed/).first(),
+      ).toBeVisible({ timeout: 60_000 });
+      // Machine validation is not a human act: it runs with generation, and
+      // the only button is the honest one — "Re-run checks", beside
+      // Regenerate, for source figures that moved under an existing version.
+      await expect(
+        page.getByRole("button", { name: /^validate$/i }),
+      ).toHaveCount(0);
+      const rerun = page.getByRole("button", { name: "Re-run checks" }).first();
+      if (await rerun.count()) {
+        await rerun.click();
+        await expect(page.getByText("Checks passed").first()).toBeVisible({
+          timeout: 60_000,
         });
-        await expect(certify).toBeVisible({ timeout: 20_000 });
-        await certify.click();
-
-        // What-you-see-is-what-you-sign: the figures digest and the FULL Act 930
-        // s.93(3) declaration must both be on screen before signing is possible.
-        await expect(page.getByText(/section 93\(3\)/i)).toBeVisible({
-          timeout: 20_000,
-        });
-        await expect(
-          page.getByText(/complete and accurate/i).first(),
-        ).toBeVisible();
-        // The digest chip renders truncated by design (a4f2…9c1b), so match that
-        // shape rather than 12 consecutive hex characters.
-        await expect(
-          page.getByText(/[0-9a-f]{4}…[0-9a-f]{4}/).first(),
-        ).toBeVisible();
-
-        // Both signature fields have to exist before the first signature — the
-        // certification permits only form filling afterwards — so placing them is
-        // part of the ceremony rather than a preliminary somebody could skip.
-        await placeBothSignatureFields(
-          page,
-          page.getByTestId("signing-workspace"),
-        );
-
-        // Certifying and routing land in ONE backend transaction, so the ceremony
-        // will not start until the return has somewhere to go. Naming the approver
-        // is therefore part of the ceremony, not a follow-up task.
-        const approverSlot = page.getByLabel("Approver recipient");
-        await approverSlot.selectOption({ index: 1 });
-
-        // Step-up is enforced, not decorative: a wrong password cannot certify.
-        const password = page.getByLabel(/password/i).first();
-        if (await password.count()) {
-          await password.fill("definitely-not-the-password");
-          await page
-            .getByRole("button", { name: /^(Certify|Sign|Confirm)/ })
-            .last()
-            .click();
-          await expect(
-            page.getByText(/failed|incorrect|could not/i).first(),
-          ).toBeVisible({ timeout: 20_000 });
-        }
-
-        // SSO step-up is a full redirect to the bank's IdP, so the only thing that
-        // can prove the round trip is a browser. Both legs — the return with an
-        // authorisation held, and the honest "not configured" return when the
-        // connection is off — are proved against the local issuer in
-        // sso-sign-in.spec.ts. Nothing was signed here, and the ceremony is
-        // still open on the same return.
-        await expect(page.getByText(/section 93\(3\)/i)).toBeVisible();
-      } finally {
-        // Hand the gate back however this ends, or every other submission
-        // journey in the run inherits a locked return.
-        const reopened = await page.request.put(
-          `${API}/attestation/signing-policies`,
-          {
-            headers: authorize,
-            data: {
-              ...scope,
-              require_signature: false,
-              reason: "e2e teardown: restore the signature-optional default",
-            },
-          },
-        );
-        expect(reopened.ok()).toBeTruthy();
-        await context.close();
       }
-    },
-  );
+
+      // --- an unsigned return must READ as unsubmittable ------------------
+      //
+      // The founder's screenshot: CLEARED TO SUBMIT rendered beside UNSIGNED.
+      // The API was already right — `_status_payload` computes can_submit false
+      // while a signature is outstanding — so the defect was purely display, and
+      // that is what this asserts. It runs here, on a return whose policy has just
+      // been set to require signatures, because that is the only state in which
+      // the claim can be wrong.
+      //
+      // An earlier version of this journey asserted `Submit` was disabled and
+      // passed only because no Submit control was rendered at all; these locators
+      // fail if the element is missing, so the check cannot go trivially green.
+      const clearance = page.getByTestId("attestation-clearance").first();
+      await expect(clearance).toHaveText(/^Not cleared to submit/i);
+      await expect(clearance).toContainText(/preparer/i);
+      await expect(clearance).toContainText(/approver/i);
+      await expect(
+        page.getByText("Cleared to submit", { exact: true }),
+      ).toHaveCount(0);
+      await expect(page.getByText("Unsigned").first()).toBeVisible();
+
+      // And the filing control is not disabled here — it is ABSENT. This is a
+      // PREPARER's session, and transmission is the Validator's authority
+      // alone (docs/filing_workflow_redesign.md §4b.1). What this session is
+      // offered instead is its own act, named, with what pressing it does —
+      // which is what the assertions below drive.
+      await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+      const act = page.getByTestId("primary-filing-action");
+      await expect(act).toHaveText(/certify and freeze/i);
+      await expect(
+        page.getByTestId("primary-filing-action-reason"),
+      ).toContainText(/sends the return to the approver/i);
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "attestation-ceremony-locked.png"),
+          fullPage: true,
+        });
+      }
+
+      const certify = page.getByRole("button", {
+        name: "Certify and freeze",
+      });
+      await expect(certify).toBeVisible({ timeout: 20_000 });
+      await certify.click();
+
+      // What-you-see-is-what-you-sign: the figures digest and the FULL Act 930
+      // s.93(3) declaration must both be on screen before signing is possible.
+      await expect(page.getByText(/section 93\(3\)/i)).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(
+        page.getByText(/complete and accurate/i).first(),
+      ).toBeVisible();
+      // The digest chip renders truncated by design (a4f2…9c1b), so match that
+      // shape rather than 12 consecutive hex characters.
+      await expect(
+        page.getByText(/[0-9a-f]{4}…[0-9a-f]{4}/).first(),
+      ).toBeVisible();
+
+      // Both signature fields have to exist before the first signature — the
+      // certification permits only form filling afterwards — so placing them is
+      // part of the ceremony rather than a preliminary somebody could skip.
+      await placeBothSignatureFields(
+        page,
+        page.getByTestId("signing-workspace"),
+      );
+
+      // Certifying and routing land in ONE backend transaction, so the ceremony
+      // will not start until the return has somewhere to go. Naming the approver
+      // is therefore part of the ceremony, not a follow-up task.
+      const approverSlot = page.getByLabel("Approver recipient");
+      await approverSlot.selectOption({ index: 1 });
+
+      // Step-up is enforced, not decorative: a wrong password cannot certify.
+      const password = page.getByLabel(/password/i).first();
+      if (await password.count()) {
+        await password.fill("definitely-not-the-password");
+        await page
+          .getByRole("button", { name: /^(Certify|Sign|Confirm)/ })
+          .last()
+          .click();
+        await expect(
+          page.getByText(/failed|incorrect|could not/i).first(),
+        ).toBeVisible({ timeout: 20_000 });
+      }
+
+      // SSO step-up is a full redirect to the bank's IdP, so the only thing that
+      // can prove the round trip is a browser. Both legs — the return with an
+      // authorisation held, and the honest "not configured" return when the
+      // connection is off — are proved against the local issuer in
+      // sso-sign-in.spec.ts. Nothing was signed here, and the ceremony is
+      // still open on the same return.
+      await expect(page.getByText(/section 93\(3\)/i)).toBeVisible();
+    } finally {
+      // Hand the gate back however this ends, or every other submission
+      // journey in the run inherits a locked return.
+      const reopened = await page.request.put(
+        `${API}/attestation/signing-policies`,
+        {
+          headers: authorize,
+          data: {
+            ...scope,
+            require_signature: false,
+            reason: "e2e teardown: restore the signature-optional default",
+          },
+        },
+      );
+      expect(reopened.ok()).toBeTruthy();
+      await context.close();
+    }
+  });
 });
 
 /**

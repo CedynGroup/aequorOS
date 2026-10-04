@@ -194,22 +194,8 @@ test.describe("a reader asking in words", () => {
   test("is offered the door, and told plainly what happens to their words", async ({
     page,
   }) => {
-    // THE FLAG IS PROJECTED HERE BECAUSE THE BACKEND DOES NOT PROJECT IT YET.
-    // `GET /api/v1/feature-flags` serves `bi_enabled`, `bi_mart_enqueue_enabled`
-    // and `bi_scheduler_enabled` and nothing about NLQ, so with the real body the
-    // dashboard reads the flag as "not yet known" and correctly HIDES the tab —
-    // fail-closed, which the third describe block below asserts against the real
-    // body. The two-line backend patch is in
-    // `.ai/bi_recon/p5g_ask_surface_report.md`; delete this interception when it
-    // lands and this journey passes unchanged against the real projection.
-    await page.route("**/api/v1/feature-flags", async (route) => {
-      const response = await route.fetch();
-      await json(route, 200, {
-        ...((await response.json()) as Record<string, unknown>),
-        bi_nlq_enabled: true,
-      });
-    });
-
+    // The real projection: `GET /api/v1/feature-flags` serves `bi_nlq_enabled`
+    // from `BI_NLQ_ENABLED`, which `playwright.config.ts` switches on.
     await page.goto("/explore");
     const tabs = page.getByLabel("Module sections");
     await expect(tabs.getByRole("link", { name: ASK_TAB })).toBeVisible();
@@ -433,12 +419,20 @@ test.describe("a deployment that has not answered about questions in words", () 
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
   test("hides the tab without refusing the route", async ({ page }) => {
-    // THIS IS TODAY'S REAL BACKEND: `/feature-flags` is not intercepted at all, so
-    // it answers without `bi_nlq_enabled` and the flag reads as "not yet known".
-    // Both halves of the asymmetry are asserted, and they point opposite ways on
-    // purpose — the nav hides on anything but a definite yes so no link flashes,
-    // and the route guard refuses only on a definite no so a deep-link refresh
-    // never 404s an unresolved flag.
+    // A backend that predates the flag answers `/feature-flags` without
+    // `bi_nlq_enabled`, so the flag reads as "not yet known". Both halves of the
+    // asymmetry are asserted, and they point opposite ways on purpose — the nav
+    // hides on anything but a definite yes so no link flashes, and the route
+    // guard refuses only on a definite no so a deep-link refresh never 404s an
+    // unresolved flag.
+    await page.route("**/api/v1/feature-flags", async (route) => {
+      await json(route, 200, {
+        bi_enabled: true,
+        bi_mart_enqueue_enabled: false,
+        bi_scheduler_enabled: false,
+      });
+    });
+
     await page.goto("/explore");
     const tabs = page.getByLabel("Module sections");
     await expect(tabs.getByRole("link", { name: "Explore" })).toBeVisible();

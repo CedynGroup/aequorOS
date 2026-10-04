@@ -65,17 +65,27 @@ async function reservePort(): Promise<number> {
   });
 }
 
+/**
+ * Wait for an isolated development server to render `/login`.
+ *
+ * Each probe is bounded: a request accepted while the server is still
+ * compiling can stall, and an unbounded probe would hold the loop until the
+ * test's own timeout, which reports nothing about why. The deadline sits inside
+ * the callers' test budget so its error is the one that surfaces.
+ */
 async function waitForLoginPage(origin: string, child: ChildProcess) {
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + 100_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`Isolated dashboard exited with code ${child.exitCode}.`);
     }
     try {
-      const response = await fetch(`${origin}/login`);
+      const response = await fetch(`${origin}/login`, {
+        signal: AbortSignal.timeout(15_000),
+      });
       if (response.ok) return;
     } catch {
-      // The development server has not bound its port yet.
+      // Not bound yet, or this probe outlived its bound while compiling.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -289,7 +299,7 @@ test.describe("session cookie hygiene", () => {
   });
 
   test("conflicting AUTH_URL warns once across runtime bundles", async ({}, testInfo) => {
-    testInfo.setTimeout(120_000);
+    testInfo.setTimeout(150_000);
     const port = await reservePort();
     const origin = `http://127.0.0.1:${port}`;
     const dashboardDir = path.resolve(__dirname, "..");
@@ -354,7 +364,7 @@ test.describe("session cookie hygiene", () => {
   test("a stopped backend reports the service as unreachable", async ({
     browser,
   }, testInfo) => {
-    testInfo.setTimeout(120_000);
+    testInfo.setTimeout(150_000);
     const backendPort = await reservePort();
     const dashboardPort = await reservePort();
     const origin = `http://127.0.0.1:${dashboardPort}`;
@@ -364,13 +374,14 @@ test.describe("session cookie hygiene", () => {
       force: true,
     });
     const nextBin = require.resolve("next/dist/bin/next");
+    let output = "";
     const child = spawn(
       process.execPath,
       [nextBin, "dev", "-H", "127.0.0.1", "-p", String(dashboardPort)],
       {
         cwd: dashboardDir,
         detached: true,
-        stdio: "ignore",
+        stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
           NEXT_DIST_DIR: ".next-outage",
@@ -381,6 +392,12 @@ test.describe("session cookie hygiene", () => {
         },
       },
     );
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
@@ -399,6 +416,14 @@ test.describe("session cookie hygiene", () => {
     } finally {
       await context.close();
       await stopServer(child);
+      rmSync(path.join(dashboardDir, ".next-outage"), {
+        recursive: true,
+        force: true,
+      });
+      await testInfo.attach("development-server.log", {
+        body: output,
+        contentType: "text/plain",
+      });
     }
   });
 });

@@ -96,7 +96,18 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
     onSuccess: (profile) => {
       queryClient.setQueryData(profileQueryKey, profile);
     },
+    // The read `onMutate` cancelled is not retried on its own, so a failed
+    // update would otherwise leave a first load waiting forever.
+    onError: () =>
+      queryClient.invalidateQueries({ queryKey: profileQueryKey, exact: true }),
   });
+  // "No profile yet", not merely "a request is in flight". A profile update
+  // cancels an in-flight first read, and the session gates that read before
+  // it starts; either way the query is pending with nothing fetching, which
+  // `isLoading` reports as loaded. The route guard then decided on an empty
+  // authority and redirected the officer off the page they had opened.
+  const profilePending =
+    profileQuery.isPending && status !== "unauthenticated" && !session?.error;
   const { mutateAsync, isPending } = updateMutation;
   const { refetch: refetchProfile } = profileQuery;
   const { refetch: refetchAuthority } = authorityQuery;
@@ -127,7 +138,7 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
         : profileQuery.data?.effectiveAuthority,
       isLoading: inspection.impersonating
         ? authorityQuery.isLoading
-        : profileQuery.isLoading,
+        : profilePending,
       error: inspection.impersonating
         ? authorityQuery.error
         : profileQuery.error,
@@ -138,7 +149,7 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
     [
       profileQuery.data,
       profileQuery.error,
-      profileQuery.isLoading,
+      profilePending,
       authorityQuery.data,
       authorityQuery.error,
       authorityQuery.isLoading,

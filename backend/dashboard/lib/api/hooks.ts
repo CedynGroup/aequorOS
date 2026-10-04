@@ -2303,6 +2303,7 @@ const reportingInvalidatePrefixes = [
   "rr-packages",
   "rr-package",
   "rr-events",
+  "rr-filing-chain",
   // Certification appends a signed revision, so the version chain — and with it
   // which document Download resolves to — changes without the artifact list
   // moving at all.
@@ -2504,6 +2505,9 @@ export function useDecidePackageApproval(bankId: string | undefined) {
       ),
     onSuccess: (pkg) => {
       queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-filing-chain", bankId, pkg.id],
+      });
       void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
       void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
@@ -3465,10 +3469,11 @@ export function useRevokeIntegrationKey() {
 // ['attn-preview', bankId, packageId, role], ['attn-verify', bankId, packageId],
 // ['attn-policies'].
 //
-// Certifying and voiding move the PACKAGE status too (validated →
-// pending_approval at T1, pending_approval → approved at T2, back to generated
-// on void), so those mutations invalidate the reporting reads as well as the
-// attestation ones — otherwise the workspace would show a stale lifecycle.
+// Certifying and voiding alter the package workflow too: T1 starts the review
+// chain, T2 records the Approver's decision while leaving the package awaiting
+// hand-off, and voiding returns it to preparation. Those mutations therefore
+// invalidate the filing chain and reporting reads as well as the attestation
+// ones — otherwise the workspace would show a stale lifecycle.
 // ---------------------------------------------------------------------------
 
 /** The caller's own permanent signer identity (provisioned on first read). */

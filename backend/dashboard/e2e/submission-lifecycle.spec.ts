@@ -59,7 +59,9 @@ test.describe("submission pipeline", () => {
     await expect(chain.getByText("Preparer", { exact: true })).toBeVisible();
     await expect(chain.getByText("Approver", { exact: true })).toBeVisible();
     await expect(chain.getByText("Validator", { exact: true })).toBeVisible();
-    await expect(chain).toContainText(/with the preparer/i);
+    // This session IS the preparer, so the chain says so in the second person
+    // rather than naming the stage back to the officer who holds it.
+    await expect(chain).toContainText(/held by you/i);
 
     // And nothing anywhere calls the machine check a person's decision.
     await expect(page.getByText(/\bValidated\b/)).toHaveCount(0);

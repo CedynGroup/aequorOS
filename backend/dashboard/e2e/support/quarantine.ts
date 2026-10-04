@@ -12,9 +12,4 @@
  *
  * Names take the reporter's form: `<file> › <describe> › <title>`.
  */
-export const QUARANTINED_JOURNEYS: readonly string[] = [
-  // SSO step-up return leg crosses the cookie jar (request.nextUrl.origin is
-  // localhost under Next dev); the requestOrigin fix for the step-up routes is
-  // on fm/aeq-sso-local-issuer-e2e-journey, stacked on PR #205.
-  "attestation.spec.ts › the certification ceremony › opting in locks submission, and the ceremony enforces what it shows",
-];
+export const QUARANTINED_JOURNEYS: readonly string[] = [];
