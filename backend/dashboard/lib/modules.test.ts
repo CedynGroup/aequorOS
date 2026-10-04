@@ -42,6 +42,8 @@ const resolved = (
     "fx",
     "ftp",
     "forecasting",
+    "behavioral",
+    "markets",
   ]),
   modules: new Set([
     "command_center",
@@ -58,6 +60,8 @@ const resolved = (
     "irrbb",
     "ftp",
     "forecasting",
+    "behavioral",
+    "markets",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -81,6 +85,14 @@ const resolved = (
   forecastingAggregatedView: true,
   forecastingConfidentialView: true,
   forecastingRun: true,
+  behavioralAggregatedView: true,
+  behavioralRun: true,
+  marketsPublishedView: true,
+  marketsConfidentialView: true,
+  marketsRestrictedView: true,
+  marketsUpload: true,
+  marketsOverlayCreate: true,
+  marketsOverlayEdit: true,
   ...capabilities,
   isResolved: true,
 });
@@ -340,6 +352,57 @@ assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
     "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
+// Behavioral has no confidential page: every tab needs the same aggregated
+// view, and a run-only analyst is still shown the exact sentence they lack.
+const deniedBehavioral = resolved(true, true, {
+  behavioralAggregatedView: false,
+  behavioralRun: true,
+});
+for (const href of [
+  "/behavioral",
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment?period=current",
+  "/behavioral/deposit-stability",
+  "/behavioral/liquidity",
+]) {
+  assert.equal(isHrefVisible(href, deniedBehavioral), false);
+  assert.equal(isPathVisible(href, deniedBehavioral), false);
+  assert.deepEqual(hrefAccess(href, deniedBehavioral), {
+    state: "disabled",
+    reason:
+      "Requires Behavioral Models · Aggregated · View. Ask your organization owner or admin to grant it.",
+  });
+  assert.equal(isHrefVisible(href, resolved(true)), true);
+  assert.equal(isPathVisible(href, resolved(true)), true);
+}
+const behavioralReader = resolved(true, true, { behavioralRun: false });
+assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
+assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);
+// Markets enters on the published tier; a confidential-only grant (ratings,
+// overlays) does not open the hub, and the reason names the published view.
+const deniedMarkets = resolved(true, true, {
+  marketsPublishedView: false,
+  marketsConfidentialView: true,
+});
+assert.equal(isHrefVisible("/markets", deniedMarkets), false);
+assert.equal(isPathVisible("/markets", deniedMarkets), false);
+assert.deepEqual(hrefAccess("/markets", deniedMarkets), {
+  state: "disabled",
+  reason:
+    "Requires Markets · Published · View. Ask your organization owner or admin to grant it.",
+});
+const publishedMarketsOnly = resolved(true, true, {
+  marketsConfidentialView: false,
+  marketsRestrictedView: false,
+  marketsUpload: false,
+  marketsOverlayCreate: false,
+  marketsOverlayEdit: false,
+});
+assert.equal(isHrefVisible("/markets", publishedMarketsOnly), true);
+assert.equal(isPathVisible("/markets?tab=curves", publishedMarketsOnly), true);
+assert.deepEqual(hrefAccess("/markets", publishedMarketsOnly), {
+  state: "enabled",
+});
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

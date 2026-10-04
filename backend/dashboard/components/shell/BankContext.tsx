@@ -370,6 +370,54 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      behavioralAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "beh",
+        "aggregated",
+        "view",
+      ),
+      behavioralRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "beh",
+        "confidential",
+        "run",
+      ),
+      marketsPublishedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "published",
+        "view",
+      ),
+      marketsConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "view",
+      ),
+      marketsRestrictedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "restricted",
+        "view",
+      ),
+      marketsUpload: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "published",
+        "create",
+      ),
+      marketsOverlayCreate: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "create",
+      ),
+      marketsOverlayEdit: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "edit",
+      ),
       // A DEPLOYMENT FLAG, not a permission: with BI off every BI route answers
       // 404, so the nav must not offer the door and the route guard must refuse
       // it. `undefined` until `GET /feature-flags` answers — see ModuleScope.

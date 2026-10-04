@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -35,6 +36,7 @@ from app.ml.behavioral.history import available_as_of_dates
 from app.models import Bank
 from app.models.canonical import CanonicalReferenceRow
 from app.models.ingestion import IngestionBatch, LineageRecord
+from app.services import scoped_authorization
 
 _MODULES = {
     "nmd-duration": nmd_duration,
@@ -82,18 +84,34 @@ def _key_lock(key: tuple[str, str, str]) -> threading.Lock:
         return _key_locks.setdefault(key, threading.Lock())
 
 
-def get_estimates(
+def get_estimates(  # noqa: PLR0913 - explicit tenant, model, refresh, and resolved bank
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     model: str,
     *,
     refresh: bool = False,
+    resolved_bank: Bank | None = None,
 ) -> ModelResult:
-    """Train-on-first-request (or reuse cached/persisted) per-product estimates."""
+    """Train-on-first-request (or reuse cached/persisted) per-product estimates.
+
+    ``refresh`` retrains and rewrites the artifact, so it is a governed run: the
+    caller's BEH/confidential ``run`` binding is required here as well as at the
+    route, and no training happens before that decision.
+    """
     _validate_model(model)
-    _get_bank_or_404(db, ctx, bank_id)
-    key = (ctx.organization_id, bank_id, model)
+    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    if refresh:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.RUN,
+            module=Module.BEHAVIORAL,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="behavioral_train",
+        )
+    key = (ctx.organization_id, bank.id, model)
 
     if not refresh:
         with _cache_lock:

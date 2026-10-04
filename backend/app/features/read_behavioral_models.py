@@ -4,7 +4,8 @@ from datetime import date
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.ml.behavioral.config import ModelResult
 from app.schemas.behavioral_models import (
     BehavioralAccuracyRead,
@@ -18,9 +19,12 @@ from app.schemas.behavioral_models import (
     BehavioralProductEstimate,
     IncentivePoint,
 )
-from app.services import behavioral_liquidity, behavioral_models
+from app.services import behavioral_liquidity, behavioral_models, scoped_authorization
 
 router = APIRouter(tags=["behavioral-models"])
+
+VIEW_DENIAL_DETAIL = "Behavioral access requires an active scoped binding."
+TRAIN_DENIAL_DETAIL = "Training behavioral models requires an active scoped binding."
 
 
 def _to_read(result: ModelResult) -> BehavioralModelRead:
@@ -69,7 +73,19 @@ def get_behavioral_liquidity(
     db: DbSession,
     ctx: Tenant,
 ) -> BehavioralLiquidityRead:
-    report = behavioral_liquidity.get_behavioral_liquidity_report(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission_prefetched(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="behavioral_liquidity",
+        denial_detail=VIEW_DENIAL_DETAIL,
+    )
+    report = behavioral_liquidity.get_behavioral_liquidity_report(
+        db, ctx, bank.id, resolved_bank=bank
+    )
     return BehavioralLiquidityRead(
         as_of_date=report.as_of_date.isoformat() if report.as_of_date else "unavailable",
         segments=[BehavioralLiquiditySegmentRead(**item.__dict__) for item in report.segments],
@@ -83,12 +99,22 @@ def get_behavioral_liquidity(
     operation_id="getBehavioralModel",
 )
 def get_behavioral_model(
-    bank_id,
+    bank_id: str,
     model: BehavioralModelSlug,
     db: DbSession,
     ctx: Tenant,
 ) -> BehavioralModelRead:
-    return _to_read(behavioral_models.get_estimates(db, ctx, bank_id, model))
+    bank = scoped_authorization.require_bank_permission_prefetched(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="behavioral_model",
+        denial_detail=VIEW_DENIAL_DETAIL,
+    )
+    return _to_read(behavioral_models.get_estimates(db, ctx, bank.id, model, resolved_bank=bank))
 
 
 @router.post(
@@ -97,12 +123,24 @@ def get_behavioral_model(
     operation_id="trainBehavioralModel",
 )
 def train_behavioral_model(
-    bank_id,
+    bank_id: str,
     model: BehavioralModelSlug,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> BehavioralModelRead:
-    return _to_read(behavioral_models.get_estimates(db, ctx, bank_id, model, refresh=True))
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="behavioral_train",
+        denial_detail=TRAIN_DENIAL_DETAIL,
+    )
+    return _to_read(
+        behavioral_models.get_estimates(db, ctx, bank.id, model, refresh=True, resolved_bank=bank)
+    )
 
 
 @router.post(

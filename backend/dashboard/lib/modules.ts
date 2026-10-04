@@ -209,6 +209,26 @@ export type ModuleScope = {
   forecastingConfidentialView?: boolean;
   /** Exact FCST/confidential run authority for the projection, optimizer, what-if, and reverse stress. */
   forecastingRun?: boolean;
+  /** Exact BEH/aggregated view authority for model estimates and liquidity effects. */
+  behavioralAggregatedView?: boolean;
+  /** Exact BEH/confidential run authority for retraining a model. */
+  behavioralRun?: boolean;
+  /**
+   * Exact Markets capabilities, split by what the data is: vendor and desk
+   * market data is `published` (views, source planes, templates, uploads),
+   * material derived from the bank's own book is `confidential` (implied
+   * ratings, private curve overlays), and credential-bearing connection
+   * metadata is `restricted`.
+   */
+  marketsPublishedView?: boolean;
+  marketsConfidentialView?: boolean;
+  marketsRestrictedView?: boolean;
+  /** Exact MARKETS/published create authority — manual market-data upload. */
+  marketsUpload?: boolean;
+  /** Exact MARKETS/confidential create authority — adding an overlay version. */
+  marketsOverlayCreate?: boolean;
+  /** Exact MARKETS/confidential edit authority — ending an overlay version. */
+  marketsOverlayEdit?: boolean;
   /**
    * Server-evaluated exact Liquidity capabilities for the selected
    * institution. Omitted/false is deny, so navigation and controls never infer
@@ -566,12 +586,19 @@ const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 const FTP_CONFIDENTIAL_RUN = "Funds Transfer Pricing · Confidential · Run";
 const FORECASTING_CONFIDENTIAL_RUN = "Forecasting · Confidential · Run";
 const FORECASTING_CONFIDENTIAL_VIEW = "Forecasting · Confidential · View";
+const BEHAVIORAL_CONFIDENTIAL_RUN = "Behavioral Models · Confidential · Run";
+const MARKETS_PUBLISHED_VIEW = "Markets · Published · View";
+const MARKETS_PUBLISHED_CREATE = "Markets · Published · Create";
+const MARKETS_CONFIDENTIAL_VIEW = "Markets · Confidential · View";
+const MARKETS_CONFIDENTIAL_CREATE = "Markets · Confidential · Create";
+const MARKETS_CONFIDENTIAL_EDIT = "Markets · Confidential · Edit";
+const MARKETS_RESTRICTED_VIEW = "Markets · Restricted · View";
 
 const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   command_center: "Risk & Limits · Aggregated · View",
   risk: "Risk & Limits · Confidential · View",
   alerts: "Risk & Limits · Confidential · View",
-  markets: "Markets · Published · View",
+  markets: MARKETS_PUBLISHED_VIEW,
   positions: "Risk & Limits · Confidential · View",
   irrbb: "IRRBB · Aggregated · View",
   liquidity: LIQUIDITY_AGGREGATED_VIEW,
@@ -621,6 +648,27 @@ export const FORECASTING_CONFIDENTIAL_RUN_REASON = permissionReason([
 export const FORECASTING_CONFIDENTIAL_VIEW_REASON = permissionReason([
   FORECASTING_CONFIDENTIAL_VIEW,
 ])!;
+export const BEHAVIORAL_CONFIDENTIAL_RUN_REASON = permissionReason([
+  BEHAVIORAL_CONFIDENTIAL_RUN,
+])!;
+export const MARKETS_PUBLISHED_VIEW_REASON = permissionReason([
+  MARKETS_PUBLISHED_VIEW,
+])!;
+export const MARKETS_PUBLISHED_CREATE_REASON = permissionReason([
+  MARKETS_PUBLISHED_CREATE,
+])!;
+export const MARKETS_CONFIDENTIAL_VIEW_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_VIEW,
+])!;
+export const MARKETS_CONFIDENTIAL_CREATE_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_CREATE,
+])!;
+export const MARKETS_CONFIDENTIAL_EDIT_REASON = permissionReason([
+  MARKETS_CONFIDENTIAL_EDIT,
+])!;
+export const MARKETS_RESTRICTED_VIEW_REASON = permissionReason([
+  MARKETS_RESTRICTED_VIEW,
+])!;
 
 function liquidityPermissionReason(
   path: string,
@@ -659,27 +707,47 @@ function liquidityPermissionReason(
   return permissionReason(missing);
 }
 
-const SCOPED_MODULE_ROUTES = [
+type ScopedModuleRoutePolicy = {
+  prefix: string;
+  label: string;
+  /** The exact entry-view capability every page under `prefix` needs. */
+  entryView: keyof ModuleScope;
+  /** The tier that capability names; modules enter on aggregated unless said otherwise. */
+  entrySensitivity?: "Published";
+  /** Pages that need confidential view instead; absent when the module has none. */
+  confidential?: {
+    view: keyof ModuleScope;
+    routes: readonly string[];
+  };
+};
+
+const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
   {
     prefix: "/irr",
     label: "IRRBB",
-    aggregatedView: "irrbbAggregatedView",
-    confidentialView: "irrbbConfidentialView",
-    confidentialRoutes: ["/irr/scenarios"],
+    entryView: "irrbbAggregatedView",
+    confidential: {
+      view: "irrbbConfidentialView",
+      routes: ["/irr/scenarios"],
+    },
   },
   {
     prefix: "/fx",
     label: "Foreign Exchange",
-    aggregatedView: "fxAggregatedView",
-    confidentialView: "fxConfidentialView",
-    confidentialRoutes: ["/fx/scenarios"],
+    entryView: "fxAggregatedView",
+    confidential: {
+      view: "fxConfidentialView",
+      routes: ["/fx/scenarios"],
+    },
   },
   {
     prefix: "/ftp",
     label: "Funds Transfer Pricing",
-    aggregatedView: "ftpAggregatedView",
-    confidentialView: "ftpConfidentialView",
-    confidentialRoutes: ["/ftp/scenarios"],
+    entryView: "ftpAggregatedView",
+    confidential: {
+      view: "ftpConfidentialView",
+      routes: ["/ftp/scenarios"],
+    },
   },
   {
     // The balance-sheet overview and the assumptions page read presets, run
@@ -687,17 +755,34 @@ const SCOPED_MODULE_ROUTES = [
     // detail, so it needs confidential view.
     prefix: "/forecasting",
     label: "Forecasting",
-    aggregatedView: "forecastingAggregatedView",
-    confidentialView: "forecastingConfidentialView",
-    confidentialRoutes: [
-      "/forecasting/nii",
-      "/forecasting/scenario",
-      "/forecasting/whatif",
-      "/forecasting/reverse-stress",
-      "/forecasting/optimizer",
-    ],
+    entryView: "forecastingAggregatedView",
+    confidential: {
+      view: "forecastingConfidentialView",
+      routes: [
+        "/forecasting/nii",
+        "/forecasting/scenario",
+        "/forecasting/whatif",
+        "/forecasting/reverse-stress",
+        "/forecasting/optimizer",
+      ],
+    },
   },
-] as const;
+  {
+    prefix: "/behavioral",
+    label: "Behavioral Models",
+    entryView: "behavioralAggregatedView",
+  },
+  {
+    prefix: "/markets",
+    label: "Markets",
+    entryView: "marketsPublishedView",
+    entrySensitivity: "Published",
+    confidential: {
+      view: "marketsConfidentialView",
+      routes: [],
+    },
+  },
+];
 
 export function forecastingWorkspaceAccess(
   pathname: string,
@@ -723,18 +808,21 @@ function scopedModulePermissionReason(
       !path.startsWith(`${routePolicy.prefix}/`)
     )
       continue;
-    const confidential = routePolicy.confidentialRoutes.some(
-      (route) => path === route || path.startsWith(`${route}/`),
-    );
-    const capability = confidential
-      ? routePolicy.confidentialView
-      : routePolicy.aggregatedView;
+    const confidential = routePolicy.confidential;
+    const requirement =
+      confidential &&
+      confidential.routes.some(
+        (route) => path === route || path.startsWith(`${route}/`),
+      )
+        ? { capability: confidential.view, sensitivity: "Confidential" }
+        : {
+            capability: routePolicy.entryView,
+            sensitivity: routePolicy.entrySensitivity ?? "Aggregated",
+          };
     if (routePolicy.prefix === "/forecasting") {
       const missing: string[] = [];
-      if (scope[capability] !== true) {
-        missing.push(
-          `Forecasting · ${confidential ? "Confidential" : "Aggregated"} · View`,
-        );
+      if (scope[requirement.capability] !== true) {
+        missing.push(`Forecasting · ${requirement.sensitivity} · View`);
       }
       if (
         [
@@ -750,10 +838,10 @@ function scopedModulePermissionReason(
         ? `Requires ${missing.join(" and ")}. Ask an Org Owner to grant access via Settings → Members.`
         : undefined;
     }
-    return scope[capability] === true
+    return scope[requirement.capability] === true
       ? undefined
       : permissionReason([
-          `${routePolicy.label} · ${confidential ? "Confidential" : "Aggregated"} · View`,
+          `${routePolicy.label} · ${requirement.sensitivity} · View`,
         ]);
   }
   return undefined;
@@ -814,8 +902,9 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 
 /**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
- * hidden; a resolved Liquidity, IRRBB, FX, FTP, or Forecasting permission gap
- * stays visible but disabled with the exact grant sentence the user needs.
+ * hidden; a resolved permission gap on a binding-controlled module (Liquidity
+ * or any `SCOPED_MODULE_ROUTES` entry) stays visible but disabled with the
+ * exact grant sentence the user needs.
  */
 export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (scope.institutionClass === "sdi" && /[?&]code=BSD/i.test(href))

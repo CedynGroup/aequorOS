@@ -70,7 +70,11 @@ def _upload(
 
 @pytest.mark.parametrize("kind", TEMPLATE_KINDS)
 def test_template_download(real_client: TestClient, kind: str) -> None:
-    response = real_client.get(f"/api/v1/market-data/templates/{kind}", headers=real_headers())
+    response = real_client.get(
+        f"/api/v1/market-data/templates/{kind}",
+        params={"bank_id": REAL_BANK_ID},
+        headers=real_headers(),
+    )
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith(XLSX_MEDIA_TYPE)
     assert f'filename="{kind}_template.xlsx"' in response.headers["content-disposition"]
@@ -81,7 +85,11 @@ def test_template_download(real_client: TestClient, kind: str) -> None:
 
 
 def test_template_unknown_kind_is_422(real_client: TestClient) -> None:
-    response = real_client.get("/api/v1/market-data/templates/bond_ladder", headers=real_headers())
+    response = real_client.get(
+        "/api/v1/market-data/templates/bond_ladder",
+        params={"bank_id": REAL_BANK_ID},
+        headers=real_headers(),
+    )
     assert response.status_code == 422
 
 
