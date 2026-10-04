@@ -189,7 +189,11 @@ export default function BiMeasuresPage() {
         title="Calculated measures"
         subtitle="Figures this institution worked out for itself, from figures the platform already publishes. Only formulas over figures your own access covers are shown."
         action={
-          !composing && (
+          // A formula is written over one institution's figures, and every
+          // check and save is addressed to it — so nothing is offered until
+          // the institution is known, rather than a check that goes nowhere.
+          !composing &&
+          bank && (
             <button
               type="button"
               onClick={() => {
