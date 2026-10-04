@@ -109,3 +109,41 @@ export function shortChecksum(checksum: string | null): string | null {
     ? `${checksum.slice(0, 4)}…${checksum.slice(-4)}`
     : checksum;
 }
+
+/**
+ * The most recent submission event of one kind, by when it occurred.
+ *
+ * Decided by `occurredAt` rather than by list position. The events endpoint
+ * answers newest first, and the filed receipt once reversed the list before
+ * searching it, so it read the OLDEST event of the kind.
+ */
+export function latestEvent<E extends { event: string; occurredAt: Date }>(
+  events: readonly E[],
+  kind: string
+): E | undefined {
+  let latest: E | undefined;
+  for (const candidate of events) {
+    if (candidate.event !== kind) continue;
+    if (latest === undefined || candidate.occurredAt > latest.occurredAt) {
+      latest = candidate;
+    }
+  }
+  return latest;
+}
+
+/**
+ * What the regulator answered on the most recent status pull, or null when it
+ * has not been asked yet.
+ *
+ * The server records the answer as `result` in the poll event's detail
+ * (`regulatory_reporting.workflow.poll_submission`); the rest of that detail is
+ * the channel's own, unconstrained. The receipt once read a `poll_status` key
+ * that no poll ever wrote, from the oldest poll rather than the newest, so a
+ * return the regulator had acknowledged kept saying it had not yet decided.
+ */
+export function latestPollResult(
+  events: readonly { event: string; occurredAt: Date; detail?: unknown }[]
+): string | null {
+  const poll = latestEvent(events, 'status_poll');
+  return isRecord(poll?.detail) ? asString(poll.detail.result) : null;
+}

@@ -36,6 +36,8 @@ import { fmtDateUTC, fmtTimestamp } from '@/lib/api/values';
 import {
   FILED_ROLE_LABEL,
   filedArtifacts,
+  latestEvent,
+  latestPollResult,
   shortChecksum,
 } from '@/lib/submissions/filedArtifacts';
 import {
@@ -81,16 +83,8 @@ export default function FiledRecord({
 }) {
   const [showAllFiles, setShowAllFiles] = useState(true);
 
-  const submitted = [...events]
-    .reverse()
-    .find((event) => event.event === 'submitted');
-  const latestPoll = [...events]
-    .reverse()
-    .find((event) => event.event === 'status_poll');
-  const pollStatus =
-    typeof latestPoll?.detail?.['poll_status'] === 'string'
-      ? (latestPoll.detail['poll_status'] as string)
-      : null;
+  const submitted = latestEvent(events, 'submitted');
+  const pollStatus = latestPollResult(events);
 
   // The evidence, read from the submission record itself.
   const files = filedArtifacts(submitted?.detail);

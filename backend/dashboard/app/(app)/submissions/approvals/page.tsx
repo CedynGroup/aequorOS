@@ -54,6 +54,7 @@ import {
 import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from "@/lib/api/values";
 import { isApiError } from "@/lib/api/client";
+import { latestEvent } from "@/lib/submissions/filedArtifacts";
 import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import {
   FAMILY_LABELS,
@@ -351,9 +352,7 @@ function DecidePanel({
     bankId,
     downtime ? pkg.id : null,
   );
-  const latestSubmitted = [...filedEvents]
-    .reverse()
-    .find((event) => event.event === "submitted");
+  const latestSubmitted = latestEvent(filedEvents, "submitted");
   const pendingReupload =
     latestSubmitted?.channel === "email" &&
     latestSubmitted.detail?.["pending_orass_reupload"] === true;

@@ -15,6 +15,8 @@ import assert from "node:assert/strict";
 import {
   FILED_ROLE_LABEL,
   filedArtifacts,
+  latestEvent,
+  latestPollResult,
   roleFor,
   shortChecksum,
 } from "./filedArtifacts";
@@ -108,6 +110,36 @@ test("checksums shorten to something comparable by eye", () => {
     shortChecksum("8f3a11bc22de33ff44aa55bb66cc77dd88ee99ff00112233445566778899c210"),
     "8f3a…c210",
   );
+});
+
+test("the latest event is the newest by time, whatever order the list is in", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 4, 17, minute));
+  const events = [
+    { event: "status_poll", occurredAt: at(3), detail: { result: "acknowledged" } },
+    { event: "status_poll", occurredAt: at(2), detail: { result: "pending" } },
+    { event: "submitted", occurredAt: at(0), detail: {} },
+    { event: "status_poll", occurredAt: at(1), detail: { result: "pending" } },
+  ];
+  // Newest first, as the endpoint answers.
+  assert.equal(latestPollResult(events), "acknowledged");
+  // And oldest first, as a caller that reversed it would see it.
+  assert.equal(latestPollResult([...events].reverse()), "acknowledged");
+  assert.equal(latestEvent(events, "submitted")?.occurredAt.getTime(), at(0).getTime());
+  assert.equal(latestEvent(events, "resubmission_requested"), undefined);
+});
+
+test("a poll result is read from where the server writes it, and only there", () => {
+  const at = new Date(Date.UTC(2026, 9, 4, 17, 0));
+  // Never polled: the regulator has not been asked, which is not "pending".
+  assert.equal(latestPollResult([]), null);
+  // A channel's own detail keys are not the server's verdict.
+  assert.equal(
+    latestPollResult([
+      { event: "status_poll", occurredAt: at, detail: { poll_status: "acknowledged" } },
+    ]),
+    null,
+  );
+  assert.equal(latestPollResult([{ event: "status_poll", occurredAt: at, detail: null }]), null);
 });
 
 if (failures > 0) {
