@@ -233,10 +233,13 @@ def update_package_signature_routing(
     response_model=AwaitingSignatureListRead,
     operation_id="listReturnsAwaitingMySignature",
 )
-def list_returns_awaiting_my_signature(
-    db: DbSession, ctx: MutationTenant
-) -> AwaitingSignatureListRead:
-    """Returns routed to the caller and still unsigned."""
+def list_returns_awaiting_my_signature(db: DbSession, ctx: Tenant) -> AwaitingSignatureListRead:
+    """Returns routed to the caller and still unsigned.
+
+    A read of the caller's OWN recipient rows, so it takes no role: an officer
+    whose authority is a binding rather than a scalar write role — the
+    Validator, a Board member — is owed an empty queue, not a refusal.
+    """
     return attestation_api.awaiting_my_signature(db, ctx)
 
 
