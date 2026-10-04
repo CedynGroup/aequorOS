@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Reverse-stress frontier plot (docs/stress.md §4 item 3 — "new component").
@@ -11,7 +11,7 @@
  * Token-native SVG/CSS; both themes.
  */
 
-import { fmtPct } from '@/lib/format';
+import { fmtPct } from "@/lib/format";
 
 export type FrontierAxis = {
   label: string;
@@ -48,17 +48,23 @@ function pinnedWithinTrack(fraction: number) {
 
 function AxisRow({ axis }: { axis: FrontierAxis }) {
   const kMax = Math.max(axis.kMax, 1.01);
-  const markerK = axis.breached && axis.breachMultiplier ? axis.breachMultiplier : null;
+  const markerK =
+    axis.breached && axis.breachMultiplier ? axis.breachMultiplier : null;
   const marker =
     markerK !== null
-      ? { value: `${markerK.toFixed(2)}×`, style: pinnedWithinTrack(trackFraction(markerK, kMax)) }
+      ? {
+          value: `${markerK.toFixed(2)}×`,
+          style: pinnedWithinTrack(trackFraction(markerK, kMax)),
+        }
       : null;
 
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-body font-medium text-navy">{axis.label}</span>
-        <span className={`text-caption tnum ${axis.breached ? 'text-critical' : 'text-success'}`}>
+        <span
+          className={`text-caption tnum ${axis.breached ? "text-critical" : "text-success"}`}
+        >
           {axis.breached && markerK
             ? `Breaks at ${markerK.toFixed(2)}× severity`
             : `Holds to ${kMax.toFixed(2)}×`}
@@ -83,7 +89,7 @@ function AxisRow({ axis }: { axis: FrontierAxis }) {
             className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-2.5 rounded-full overflow-hidden"
             style={{
               background:
-                'linear-gradient(to right, rgb(var(--ok) / 0.35), rgb(var(--warn) / 0.35), rgb(var(--crit) / 0.4))',
+                "linear-gradient(to right, rgb(var(--ok) / 0.35), rgb(var(--warn) / 0.35), rgb(var(--crit) / 0.4))",
             }}
           />
           {/* 1x anchor */}
@@ -91,7 +97,7 @@ function AxisRow({ axis }: { axis: FrontierAxis }) {
           {marker && (
             <div
               className="absolute top-0 h-full w-0.5"
-              style={{ ...marker.style, background: 'rgb(var(--crit))' }}
+              style={{ ...marker.style, background: "rgb(var(--crit))" }}
             />
           )}
         </div>
@@ -100,11 +106,13 @@ function AxisRow({ axis }: { axis: FrontierAxis }) {
         <span className="shrink-0">1× (as reported)</span>
         {axis.ratioAtBreach !== null ? (
           <span className="text-center">
-            {axis.ratioLabel} {fmtPct(axis.ratioAtBreach, 1)} at breach vs floor {fmtPct(axis.floor, 1)}
+            {axis.ratioLabel} {fmtPct(axis.ratioAtBreach, 1)} at breach vs floor{" "}
+            {fmtPct(axis.floor, 1)}
           </span>
         ) : (
           <span className="text-center">
-            {axis.ratioLabel} floor {fmtPct(axis.floor, 1)} holds across the search range
+            {axis.ratioLabel} floor {fmtPct(axis.floor, 1)} holds across the
+            search range
           </span>
         )}
         <span className="shrink-0">{kMax.toFixed(2)}×</span>
@@ -113,7 +121,11 @@ function AxisRow({ axis }: { axis: FrontierAxis }) {
   );
 }
 
-export default function ReverseStressFrontier({ axes }: { axes: FrontierAxis[] }) {
+export default function ReverseStressFrontier({
+  axes,
+}: {
+  axes: FrontierAxis[];
+}) {
   return (
     <div className="space-y-6" data-testid="reverse-stress-frontier">
       {axes.map((axis) => (
