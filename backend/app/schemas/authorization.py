@@ -146,6 +146,8 @@ class ScopedGrantInput(ClosedModel):
                     "so do not select branches or regions."
                 )
         else:
+            if self.module_scope is not ModuleScope.CREDIT:
+                raise ValueError("Branch and region narrowing is supported only for Credit.")
             if not values:
                 raise ValueError(
                     "Select at least one branch or region, "

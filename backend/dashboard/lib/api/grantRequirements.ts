@@ -110,11 +110,11 @@ export function dataScopeShortfall(draft: GrantDraft): string | null {
   const chosen =
     draft.dataScope.kind === "branch" ? "the branches" : "the regions";
   return (
-    `Limiting this grant to ${chosen} you chose also limits what can be ` +
-    `answered: figures for the institution as a whole are refused rather than ` +
-    `computed from part of its book. That is deliberate — a whole-institution ` +
-    `ratio taken over a few branches would read as a real measurement. If they ` +
-    `need those figures, give them the whole book here or in a second grant.`
+    `This Credit grant covers only ${chosen} you chose in the loan book, ` +
+    `activity and facets. Figures for the institution as a whole are refused, ` +
+    `including live summaries, alerts, history and regulatory figures. ` +
+    `If they need those figures, give them the whole book here or in a ` +
+    `second grant for the same module and sensitivity.`
   );
 }
 

@@ -105,7 +105,7 @@ from app.services.loan_classification import (
     classify_loan_book,
 )
 from app.services.params import get_active_params
-from app.services.regulatory_liquidity import get_regulatory_run
+from app.services.regulatory_liquidity import _read_regulatory_run_execution_result
 
 ENGINE_VERSION = "regulatory-credit-v1.0.0"
 INPUT_SCHEMA_VERSION = "credit-loans-v1"
@@ -857,7 +857,7 @@ def _create_and_execute(
     except Exception as exc:  # noqa: BLE001 - a failed run is data, not a 500
         _persist_failure(db, ctx, run.id, CreditRunError("calculation_error", str(exc)))
     db.expire_all()
-    return get_regulatory_run(db, ctx, bank.id, run.id)
+    return _read_regulatory_run_execution_result(db, ctx, bank, run.id)
 
 
 def _persist_success(  # noqa: PLR0913 - one call site; the analysis tuple spread

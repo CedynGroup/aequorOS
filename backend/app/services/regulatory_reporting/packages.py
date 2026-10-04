@@ -119,8 +119,10 @@ def list_packages(  # noqa: PLR0913
 def get_package(
     db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> RegulatoryPackageRead:
-    get_bank_or_404(db, ctx, bank_id)
-    return read_package(db, get_package_or_404(db, ctx, bank_id, package_id))
+    bank = get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    family_access.require_view(db, ctx, bank, package)
+    return read_package(db, package)
 
 
 def list_return_templates() -> ReturnTemplateListRead:

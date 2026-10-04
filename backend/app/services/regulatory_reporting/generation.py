@@ -57,7 +57,7 @@ from app.services import (
 )
 from app.services.attestation import digests, register_state
 from app.services.audit import record_event
-from app.services.regulatory_reporting import family_hooks
+from app.services.regulatory_reporting import family_access, family_hooks
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_snapshot_for_reporting_date,
@@ -360,6 +360,11 @@ def _generate_package(
     # that does not exist. Said once, structurally, at the only generic mint
     # site (ICAAP P3 §4.2).
     _refuse_freeze_only_family(definition)
+    if not family_access.can_view(db, ctx, bank, definition.family):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Generating a return requires whole-institution authority for its family.",
+        )
     # Server-side eligibility (audit ARCH-8) through the SINGLE authority the
     # reporting calendar also consumes, so the two surfaces cannot disagree. It
     # is evaluated HERE, and again at the OTHER mint site
@@ -572,10 +577,13 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Return code '{return_code}' is not registered.",
         )
+    if not family_access.can_view(db, ctx, bank, definition.family):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Generating a return requires whole-institution authority for its family.",
+        )
     eligibility = resolve_eligibility(db, ctx, bank, as_of=reporting_date)
-    eligibility.require(
-        definition, reporting_date=reporting_date, ignore={"effective_date"}
-    )
+    eligibility.require(definition, reporting_date=reporting_date, ignore={"effective_date"})
     effective_from = eligibility.effective_from(definition)
     built = build()
     # The withdrawn-evidence gate, HERE rather than in the caller (D-069, and

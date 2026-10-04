@@ -307,7 +307,7 @@ test("the refusal mirrors the CHECK, both halves", () => {
   // Half two, mirrored: a narrowing kind with nothing chosen is refused.
   for (const kind of ["branch", "region"] as const) {
     const refusal = grantScopeRefusal(
-      draft({ dataScope: { kind, values: [] } }),
+      draft({ moduleScope: "credit", dataScope: { kind, values: [] } }),
     );
     assert.ok(
       refusal,
@@ -317,14 +317,22 @@ test("the refusal mirrors the CHECK, both halves", () => {
   }
   assert.equal(
     grantScopeRefusal(
-      draft({ dataScope: { kind: "branch", values: ["001"] } }),
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "branch", values: ["001"] },
+      }),
     ),
     null,
     "one chosen branch is a complete coverage",
   );
   // Half one, mirrored: `all` never carries a list, so it is never refused.
   assert.equal(
-    grantScopeRefusal(draft({ dataScope: { kind: "all", values: ["001"] } })),
+    grantScopeRefusal(
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "all", values: ["001"] },
+      }),
+    ),
     null,
   );
 });
@@ -397,14 +405,20 @@ test("the stored-scope label the list shows is a field the server sends", () => 
 
 test("a narrowed coverage warns about the figures it cannot answer", () => {
   const warning = dataScopeShortfall(
-    draft({ dataScope: { kind: "branch", values: ["001"] } }),
+    draft({
+      moduleScope: "credit",
+      dataScope: { kind: "branch", values: ["001"] },
+    }),
   );
   assert.ok(warning, "a branch-scoped grant must say what it does not include");
   assert.match(warning, /institution as a whole/);
   assert.match(warning, /second grant/);
   assert.ok(
     dataScopeShortfall(
-      draft({ dataScope: { kind: "region", values: ["Northern"] } }),
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "region", values: ["Northern"] },
+      }),
     ),
   );
 });

@@ -176,6 +176,7 @@ def evaluator_calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, 
         sensitivity: Sensitivity,
         surface: str,
         conditions: Sequence[ConditionCheck] = (),
+        require_whole_institution: bool = True,
     ) -> AuthorizationDecision | None:
         recorded.append(
             {
@@ -195,6 +196,7 @@ def evaluator_calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, 
             sensitivity=sensitivity,
             surface=surface,
             conditions=conditions,
+            require_whole_institution=require_whole_institution,
         )
 
     monkeypatch.setattr(scoped_authorization, "evaluate_bank_permission", spy)
@@ -896,7 +898,7 @@ def test_pairs_are_reduced_apart_where_the_union_would_have_widened(
 ) -> None:
     """The A10-01 / H8 shape against REAL bindings, through the shared helper.
 
-    The branch sentence (``all/aggregated`` over B2) authorized both pairs; the
+    The Credit branch sentence covers B2; the
     institution-wide ``risk/aggregated`` sentence authorized only the dimension
     pair. Per pair: credit → B2, risk → all → combined B2. The one-resource
     reducer over the UNION of the same ids says ``all`` — that is the misuse both
@@ -904,7 +906,7 @@ def test_pairs_are_reduced_apart_where_the_union_would_have_widened(
     """
     branch_sentence = _scoped_grant(
         db_session,
-        module=ModuleScope.ALL,
+        module=ModuleScope.CREDIT,
         sensitivity=SensitivityScope.AGGREGATED,
         data_scope=DataScope.BRANCH,
         values=("B2",),
@@ -915,7 +917,7 @@ def test_pairs_are_reduced_apart_where_the_union_would_have_widened(
         sensitivity=SensitivityScope.AGGREGATED,
         data_scope=DataScope.ALL,
     )
-    per_pair = [(branch_sentence,), (branch_sentence, whole_book_on_risk)]
+    per_pair = [(branch_sentence,), (whole_book_on_risk,)]
 
     combined = combine_pair_scopes(db_session, organization_id=ORG_1, per_pair=per_pair)
     assert combined.allowed

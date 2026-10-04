@@ -49,7 +49,7 @@ def _row(
         role_bundle=role_bundle,
         institution_scope=InstitutionScope.ORGANIZATION.value,
         institution_id=None,
-        module_scope=ModuleScope.ALL.value,
+        module_scope=ModuleScope.CREDIT.value,
         sensitivity_scope=SensitivityScope.ALL.value,
         data_scope_kind=kind,
         data_scope_values=values,

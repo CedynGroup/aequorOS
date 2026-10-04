@@ -108,11 +108,15 @@ the resolved bank. Each surface names its gate list in one tuple
 `window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
 `("credit", Module.CREDIT)` is in every one of them.
 
-**Capital is deliberately still ungated on these surfaces.** Its live-metric
-row, findings and `car_pct` daily aggregate are served to every tenant reader,
-exactly as before this release. Gating it is the capital contract's decision,
-not a side effect of this one, and the existing capital, FX, IRRBB and FTP
-regression tests use capital as the always-visible control row.
+**Whole-institution enforcement corrected 2026-10-04.** Every engine on these
+shared feeds now requires its own whole-institution binding: capital uses
+CAPITAL/aggregated and rating uses MARKETS/aggregated. Capital and rating were
+previously ungated, so a narrowed Credit reader still received their whole-book
+figures after Credit filtering. The shared gate and family gate now refuse
+narrowed bindings by default, including the prefetched path; reconciliation
+amounts are omitted when no whole-institution engine view is authorized. See
+[the data-scope contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+for migration order and executable evidence.
 
 Sensitivity is exact: a CREDIT/`confidential` or CREDIT/`restricted` row (the
 Phase 4 blotter sentence) does NOT unlock the aggregated shared feeds. Add the

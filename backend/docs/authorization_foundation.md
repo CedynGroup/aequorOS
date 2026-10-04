@@ -720,3 +720,56 @@ grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
+
+
+## Whole-institution figures and Credit-only narrowing
+
+Corrected 2026-10-04. `scoped_authorization` defaults
+`require_whole_institution=True`, including its prefetched path, and
+`regulatory_reporting/family_access` applies the same rule to visibility,
+mutations and chain decisions. A matching binding is insufficient when its
+matched data scopes do not include the whole institution. The refusal reason
+is `institution_grain_requires_whole_institution`. A whole-book binding for a
+*different* resource never cancels narrowing on this one.
+
+Only Credit supports new branch/region grants. `ScopedGrantInput`, public grant
+administration, the low-level binding service, and the database enforce that
+limit; Members offers the controls only for Credit. Credit loans, facets and
+activity apply the effective scope to rows and counts. BI query authorization
+explicitly opts out of the institution-figure gate because its compiler applies
+the scope; its institution-grain and non-attributable measures still refuse it.
+Other shared-gate callers must retain the default unless they implement and test
+row filtering, pagination and every count.
+
+Apply migration `202610040083` **before deploying this code**. It revokes every
+non-revoked narrowed non-Credit binding across tenants, retaining its original
+scope and recording system revocation on the row. It never converts a narrow
+scope into `all`. Each affected principal's authorization version advances once,
+and live refresh tokens are revoked in the same transaction. For affected
+machine principals it also revokes their keys and all machine bindings and
+deactivates the identity, preserving the credential lifecycle. Unaffected
+whole-book grants, Credit grants and keys stay unchanged. The CHECK permits
+unsupported scope only on revoked historical rows; they cannot be reactivated.
+Downgrade removes that CHECK but never resurrects grants or credentials.
+
+Shared live summary, alerts, snapshots and window analytics also gate capital
+(CAPITAL/aggregated) and rating (MARKETS/aggregated), previously served ungated.
+Reconciliation amounts require at least one whole-institution engine view.
+Generic regulatory-run lists/details also gate Capital, Credit and enterprise
+stress under their module authorities. Direct enterprise-stress history,
+latest and detail reads require RISK/aggregated (history) or RISK/confidential
+(detail), with whole-institution coverage. This closes the parallel read path
+that otherwise disclosed capital stress outcomes independently of the FX
+projection. This is a denial-only access change; no bindings are backfilled. Run
+`scripts/authorization_access_impact.py` for each deployment after the migration
+and retain its dated output outside the repository.
+
+Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
+shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
+regulatory figures alongside a row-filtered Credit control;
+`tests/services/test_institution_data_scope_enforcement.py` exercises matching
+narrowed bindings through both shared gates and family visibility;
+`tests/api/test_data_scope_grants.py` refuses every unsupported module;
+`tests/db/test_credit_only_narrowed_grants_migration.py` proves cross-tenant
+revocation, session invalidation, credential lifecycle and non-resurrection on
+Postgres. The existing Credit and BI suites prove row filtering on their surfaces.

@@ -78,7 +78,7 @@ def _binding(  # noqa: PLR0913 - one complete row is explicit
         role_bundle=RoleBundle.VIEWER.value,
         institution_scope=InstitutionScope.INSTITUTION.value,
         institution_id=institution_id,
-        module_scope=ModuleScope.ALL.value,
+        module_scope=ModuleScope.CREDIT.value,
         sensitivity_scope=SensitivityScope.ALL.value,
         data_scope_kind=data_scope.value,
         data_scope_values=values,
@@ -277,7 +277,7 @@ def test_a_narrow_scope_on_an_ORGANIZATION_wide_binding_is_refused_by_the_SERVIC
                 scope=authorization.BindingScope(
                     InstitutionScope.ORGANIZATION,
                     None,
-                    ModuleScope.ALL,
+                    ModuleScope.CREDIT,
                     SensitivityScope.ALL,
                     kind,
                     values,
@@ -299,7 +299,7 @@ def test_a_narrow_scope_on_an_ORGANIZATION_wide_binding_is_refused_by_the_SERVIC
         scope=authorization.BindingScope(
             InstitutionScope.INSTITUTION,
             BANK_1,
-            ModuleScope.ALL,
+            ModuleScope.CREDIT,
             SensitivityScope.ALL,
             DataScope.BRANCH,
             ("B1",),

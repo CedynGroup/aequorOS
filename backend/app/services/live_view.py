@@ -45,11 +45,12 @@ _MODULE_ORDER = {
 }
 
 #: Live-engine rows the summary serves only to a principal holding an exact
-#: aggregated ``view`` binding on the engine's module. Capital and rating
-#: rows are still served to every tenant reader — their module cutovers own
-#: that decision; this list must only ever grow.
+#: aggregated ``view`` binding on the engine's module.
+#: Every engine requires whole-institution coverage.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
+    ("capital", Module.CAPITAL),
+    ("rating", Module.MARKETS),
     ("credit", Module.CREDIT),
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
@@ -90,6 +91,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         LiveMetric.organization_id == ctx.organization_id,
         LiveMetric.bank_id == bank.id,
     )
+    any_whole_institution_view = False
     for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
@@ -102,6 +104,8 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         )
         if decision is None or not decision.allowed:
             query = query.where(LiveMetric.module != engine)
+        else:
+            any_whole_institution_view = True
     rows = list(db.scalars(query))
     is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
@@ -134,7 +138,9 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         reconciliation=_reconciliation_view(
             fact_derivation.current_reconciliation_record(db, ctx, bank.id),
             message=blocked.pipeline_error if blocked is not None else None,
-        ),
+        )
+        if any_whole_institution_view
+        else None,
     )
 
 
@@ -346,6 +352,9 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
     # (``manage_live_engine.list_live_snapshots``); the others are gated here.
     protected_module = {
         "liquidity": Module.LIQUIDITY,
+        "capital": Module.CAPITAL,
+        "rating": Module.MARKETS,
+        "irr": Module.IRRBB,
         "credit": Module.CREDIT,
         "fx": Module.FX,
         "ftp": Module.FTP,

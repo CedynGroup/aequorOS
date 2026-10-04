@@ -602,6 +602,8 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
             module=module,
             sensitivity=sensitivity,
             surface=telemetry_surface,
+            # The query compiler applies the matched data scope to rows and counts.
+            require_whole_institution=False,
         )
         if decision is None:
             deny(pair_members, REASON_EVALUATION_FAILED)

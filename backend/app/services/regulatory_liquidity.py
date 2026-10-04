@@ -173,6 +173,9 @@ class _RegulatoryRunAuthorizationPolicy:
 
 
 _REGULATORY_RUN_AUTHORIZATION = {
+    "capital": _RegulatoryRunAuthorizationPolicy(Module.CAPITAL, "capital"),
+    "credit": _RegulatoryRunAuthorizationPolicy(Module.CREDIT, "credit"),
+    "enterprise_stress": _RegulatoryRunAuthorizationPolicy(Module.RISK, "enterprise_stress"),
     MODULE_LIQUIDITY: _RegulatoryRunAuthorizationPolicy(
         Module.LIQUIDITY,
         "liquidity",

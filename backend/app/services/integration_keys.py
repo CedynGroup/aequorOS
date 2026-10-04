@@ -10,7 +10,7 @@ machine route separately requires the complete binding before any side effect.
 * ``writer`` — an Integration Writer binding over DATA/restricted carrying
   ``INGEST``. It pushes canonical data and may read nothing.
 * ``reader`` — a ``bi_reader`` binding over every module at ``aggregated``
-  carrying ``VIEW``, optionally narrowed to branches or regions by a data scope.
+  carrying ``VIEW`` over the whole institution.
   It pulls the curated analytics feed (``docs/bi.md`` §Phase 4) and may write
   nothing.
 
@@ -98,8 +98,8 @@ PURPOSE_BY_BUNDLE: dict[str, IntegrationKeyPurpose] = {
 #: ``aggregated``, which is exact rather than broad: every curated feed dataset
 #: is built from ``aggregated`` members (the registry refuses anything else), and
 #: one dataset spans several modules, so a per-module reader key would multiply
-#: credentials without narrowing what any of them discloses. The narrowing that
-#: matters for a feed is the DATA scope — which branches — and that is per key.
+#: credentials without narrowing what any of them discloses. Issuance therefore
+#: requires whole-institution coverage; only Credit grants support narrowing.
 _SCOPE_BY_PURPOSE: dict[IntegrationKeyPurpose, tuple[ModuleScope, SensitivityScope]] = {
     WRITER_PURPOSE: (ModuleScope.DATA, SensitivityScope.RESTRICTED),
     READER_PURPOSE: (ModuleScope.ALL, SensitivityScope.AGGREGATED),
@@ -258,6 +258,14 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
             ),
         )
     module_scope, sensitivity_scope = _SCOPE_BY_PURPOSE[purpose]
+    if data_scope is not DataScope.ALL and module_scope is not ModuleScope.CREDIT:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Analytics feed keys cover every module and require whole-institution coverage. "
+                "Branch and region narrowing is supported only for Credit."
+            ),
+        )
 
     raw = _generate_key()
     service_user = User(

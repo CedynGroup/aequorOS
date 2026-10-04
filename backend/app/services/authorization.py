@@ -253,6 +253,22 @@ def binding_is_effective(
     )
 
 
+def institution_grain_decision(
+    decision: AuthorizationDecision, *, whole_institution: bool
+) -> AuthorizationDecision:
+    """Refuse institution figures unless the matched grants cover the whole book.
+
+    Preserve the binding trace so telemetry distinguishes a scope refusal from
+    a missing grant. Row-filtering surfaces must instead apply their effective
+    data scope to every row and count.
+    """
+    if decision.allowed and not whole_institution:
+        return replace(
+            decision, allowed=False, reason="institution_grain_requires_whole_institution"
+        )
+    return decision
+
+
 def record_binding_grant_audit(
     db: Session,
     *,
@@ -609,6 +625,10 @@ def data_scope_column_values(scope: BindingScope) -> list[str] | None:
 
 
 def _validate_scope(db: Session, organization_id: str, scope: BindingScope) -> None:
+    if scope.data_scope is not DataScope.ALL and scope.module_scope is not ModuleScope.CREDIT:
+        raise AuthorizationInvariantError(
+            "Branch and region narrowing is supported only for Credit"
+        )
     # A NARROW data scope requires exact institution coverage, and this is where
     # that is enforced rather than only in the request schema (audit A10-05). A
     # branch code belongs to one institution's core banking system, so two sibling

@@ -200,10 +200,13 @@ export function statedDataScope(
  * composer rather than meeting a 422 on the review step.
  */
 export function grantScopeRefusal(
-  draft: Pick<GrantDraft, "institutionScope" | "dataScope">,
+  draft: Pick<GrantDraft, "institutionScope" | "moduleScope" | "dataScope">,
 ): string | null {
   const scope = statedDataScope(draft);
   if (scope.kind === "all") return null;
+  if (draft.moduleScope !== "credit") {
+    return "Branch and region narrowing is supported only for Credit. Choose Credit or the institution's whole book.";
+  }
   if (scope.values.length === 0) {
     return scope.kind === "branch"
       ? "Choose at least one branch, or give this grant the institution's whole book."
@@ -461,6 +464,7 @@ export function institutionBranchesKey(
 
 export type BookCoverageAvailability = Readonly<
   | { status: "organization_wide"; reason: string }
+  | { status: "unsupported_module"; reason: string }
   | { status: "loading" }
   | { status: "unavailable"; reason: string }
   | { status: "no_register"; reason: string }
@@ -496,6 +500,7 @@ export const NO_REGIONS_DECLARED_NOTE =
  */
 export function bookCoverageAvailability(input: {
   institutionScope: InstitutionScope;
+  moduleScope: GrantDraft["moduleScope"];
   directory: BranchDirectory | null;
   failed: boolean;
   loading: boolean;
@@ -504,6 +509,15 @@ export function bookCoverageAvailability(input: {
     return {
       status: "organization_wide",
       reason: ORGANIZATION_WIDE_COVERAGE_NOTE,
+    };
+  }
+  if (input.moduleScope !== "credit") {
+    return {
+      status: "unsupported_module",
+      reason:
+        "This grant covers the institution's whole book. Only Credit supports " +
+        "branch or region coverage, on its loan book, activity and facets. " +
+        "Other modules require whole-institution coverage.",
     };
   }
   if (input.failed) {

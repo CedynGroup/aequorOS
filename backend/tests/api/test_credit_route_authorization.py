@@ -770,25 +770,20 @@ def test_one_whole_institution_row_beside_a_branch_row_reads_the_whole_book(
 def test_an_unconverted_module_refuses_a_narrowed_scope_rather_than_ignoring_it(
     db_client: TestClient,
 ) -> None:
-    """The safe default on the shared institution gate, observed through capital.
-
-    Capital has not applied a data scope, and its figures are institution ratios.
-    If it ignored a branch grant it would serve the whole institution's capital
-    position to a reader the Org Owner restricted to one branch — a grant that
-    lies. It refuses instead; the same request on an ``all`` scope is unchanged.
-    """
+    """Capital narrowing is rejected; a Credit slice grants no Capital figures."""
     _seed_book()
-    scoped = _grant(
-        module_scope=ModuleScope.CAPITAL,
-        sensitivity_scope=SensitivityScope.AGGREGATED,
-        data_scope=DataScope.BRANCH,
-        data_scope_values=(BR_ONE,),
-    )
+    with pytest.raises(authorization.AuthorizationInvariantError, match="only for Credit"):
+        _grant(
+            module_scope=ModuleScope.CAPITAL,
+            sensitivity_scope=SensitivityScope.AGGREGATED,
+            data_scope=DataScope.BRANCH,
+            data_scope_values=(BR_ONE,),
+        )
+    scoped = _grant(data_scope=DataScope.BRANCH, data_scope_values=(BR_ONE,))
     refused = db_client.get(
         f"{BASE}/capital/dashboard", headers=headers(authorization_version=scoped)
     )
     assert refused.status_code == 403, refused.text
-    assert "whole institution" in refused.text
 
     whole = _grant(module_scope=ModuleScope.CAPITAL, sensitivity_scope=SensitivityScope.AGGREGATED)
     allowed = db_client.get(

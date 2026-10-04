@@ -43,9 +43,11 @@ authorities carry disjoint permissions, so a push route asking for `ingest` and 
 feed asking for `view` each refuse the other's credential structurally. Issue one
 key per purpose; do not try to make one credential do both.
 
-A `reader` key may additionally be limited to selected branches or regions at
-issuance. It then serves only those branches on every dataset, and
-institution-wide ratios are refused to it outright.
+Analytics feed keys cover every module and require whole-institution coverage.
+Branch and region narrowing is supported only for Credit grants; key issuance
+rejects narrowed scopes. Migration `202610040083` revokes existing unsupported
+narrowed keys, their machine bindings and their service identities without
+widening them. Administrators may issue a new whole-institution key deliberately.
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.

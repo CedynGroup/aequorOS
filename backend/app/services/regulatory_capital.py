@@ -111,7 +111,7 @@ from app.services.live_types import (
     worst_status,
 )
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
-from app.services.regulatory_liquidity import get_regulatory_run, preview_note
+from app.services.regulatory_liquidity import _read_regulatory_run_execution_result, preview_note
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
 #: change moves a FILED figure over unchanged inputs: the Basel II ¶649 basic-
@@ -722,7 +722,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return get_regulatory_run(db, ctx, bank.id, run_id)
+    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _modeled_ecl(

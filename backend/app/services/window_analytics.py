@@ -94,12 +94,13 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
 
 #: Daily-snapshot modules served only to a principal holding an exact aggregated
 #: ``view`` binding on the engine's module, filtered in SQL before aggregation.
-#: Capital and rating rows are still served to every tenant reader —
-#: their module cutovers own that decision, and this list stays identical to
+#: This list stays identical to
 #: ``live_view._GATED_ENGINE_MODULES`` so the two surfaces cannot disagree about
 #: who may read an engine. It must only ever grow.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
+    ("capital", Module.CAPITAL),
+    ("rating", Module.MARKETS),
     ("credit", Module.CREDIT),
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
@@ -134,7 +135,7 @@ def compute_window(
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
         *(_liquidity_series(db, ctx, bank, periods) if allowed["liquidity"] else []),
-        *_capital_series(db, ctx, bank, periods),
+        *(_capital_series(db, ctx, bank, periods) if allowed["capital"] else []),
     ]
     return WindowAnalyticsRead(
         bank_id=bank.id,
@@ -308,8 +309,6 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     for engine, _module in _GATED_ENGINE_MODULES:
         if not allowed.get(engine, False):
             query = query.where(LiveMetricSnapshot.module != engine)
-    # capital carries no module gate here (``live-summary`` exposes it ungated
-    # today); the capital cutover owns that decision.
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)
