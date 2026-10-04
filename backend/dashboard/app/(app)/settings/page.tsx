@@ -295,7 +295,12 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
     canViewCashflow ? bankId : undefined,
     30,
   );
-  const connections = useMarketDataConnections(bankId);
+  // Connection metadata is Markets/restricted; without the grant the row
+  // reads "Restricted" instead of firing a request that would be refused.
+  const canViewConnections = useModuleScope().marketsRestrictedView === true;
+  const connections = useMarketDataConnections(
+    canViewConnections ? bankId : undefined,
+  );
 
   const riskServiceTone: StatusTone = health.isLoading
     ? "slate"
@@ -368,7 +373,11 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
                 Vendor connections managed in the Data Engine
               </p>
             </div>
-            {connections.isLoading ? (
+            {!canViewConnections ? (
+              <StatusPill tone="slate" className="shrink-0">
+                Restricted
+              </StatusPill>
+            ) : connections.isLoading ? (
               <SkeletonLine width={64} height={18} />
             ) : (
               <StatusPill

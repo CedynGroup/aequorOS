@@ -29,6 +29,7 @@ import {
 } from "@/lib/echartsOptions";
 import { num, fmtDateUTC } from "@/lib/api/values";
 import { fmtPct } from "@/lib/format";
+import PermissionAction from "./PermissionAction";
 import AttributionChip from "./AttributionChip";
 import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
@@ -72,9 +73,12 @@ function mergePoints(
 export default function CurveBoard({
   curves,
   onEditOverlays,
+  editOverlaysReason,
 }: {
   curves: YieldCurveViewRead[];
   onEditOverlays?: (curveName: string) => void;
+  /** The grant the user lacks for the spread editor; the controls stay visible. */
+  editOverlaysReason?: string;
 }) {
   const [view, setView] = useState<"official" | "adjusted">("official");
   const hasAdjusted = curves.some((curve) => curve.adjustedPoints.length > 0);
@@ -135,14 +139,14 @@ export default function CurveBoard({
           onChange={(key) => setView(key as "official" | "adjusted")}
         />
         {onEditOverlays && curves.length > 0 && (
-          <button
-            type="button"
+          <PermissionAction
+            reason={editOverlaysReason}
             onClick={() => onEditOverlays(curves[0].curveName)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
           >
             <SlidersHorizontal size={13} aria-hidden />
             Edit spreads
-          </button>
+          </PermissionAction>
         )}
       </div>
 
@@ -178,15 +182,15 @@ export default function CurveBoard({
                   {curve.curveType === "discount" && <SyntheticProxyBadge />}
                   <AttributionChip attribution={curve.attribution} />
                   {onEditOverlays && (
-                    <button
-                      type="button"
+                    <PermissionAction
+                      reason={editOverlaysReason}
                       onClick={() => onEditOverlays(curve.curveName)}
                       className="text-caption text-action hover:underline"
                     >
                       {curve.overlayComponents.length > 0
                         ? `Spreads (${curve.overlayComponents.length})`
                         : "Add spread"}
-                    </button>
+                    </PermissionAction>
                   )}
                 </span>
               ))}
