@@ -34,9 +34,11 @@ test.describe("bank-scoped integration-key administration", () => {
     await page
       .getByRole("textbox", { name: "Key label" })
       .fill("Reviewer evidence feed");
-    await page.getByRole("button", { name: "Generate key" }).click();
+    await page.getByRole("button", { name: "Generate data push key" }).click();
 
-    await expect(page.getByText(/Key generated — copy it now/)).toBeVisible();
+    await expect(
+      page.getByText(/Data push key generated — copy it now/),
+    ).toBeVisible();
     await expect(page.getByText("Authorized institution:")).toBeVisible();
     await expect(page.getByText("Reviewer evidence feed")).toBeVisible();
 

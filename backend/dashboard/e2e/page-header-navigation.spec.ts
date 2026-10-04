@@ -37,10 +37,15 @@ async function expectAlignedHeaderAndCards(page: Page) {
         const headerContent = await header
           .locator(":scope > div")
           .boundingBox();
+        // The first card may sit in a grid or in a row of cards (the BI
+        // insight strip every landing page opens with). Either way the
+        // container is the content edge; a row's cards are capped in width
+        // and scroll, so the card's own box would never reach the right edge.
         const grid = await firstCard.evaluate((card) => {
           const parent = card.parentElement;
+          const display = parent ? getComputedStyle(parent).display : "";
           const body =
-            parent && getComputedStyle(parent).display === "grid"
+            parent && (display === "grid" || display === "flex")
               ? parent
               : card;
           const box = body.getBoundingClientRect();

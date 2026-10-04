@@ -81,6 +81,8 @@ const WITHHELD_CREDIT_STRINGS = [
   "Portfolio at risk",
   "Recoveries and write-offs",
   "Balances by origination month",
+  "Relationship officer league table",
+  "Loan book by channel",
   "loans.balance_rc",
   "loans.npl_ratio_pct",
   "loan.grade",
@@ -342,12 +344,12 @@ test.describe("a pack whose every figure this reader is refused", () => {
   test("says so, names none of them, and accounts for the tiles still on screen", async ({
     page,
   }) => {
-    // `credit` is the sharpest case: every one of its five query-bearing widgets
+    // `credit` is the sharpest case: every one of its seven query-bearing widgets
     // reads the loan book, so a Liquidity-only reader is refused all of them and
-    // the server answers `access: "restricted"`. Four tiles remain — two embedded
-    // platform surfaces, a dataset the bank has not supplied and a breakdown the
-    // marts cannot yet make — so a sentence that stopped at "none of them are
-    // shown" would contradict the screen. Both sentences are asserted.
+    // the server answers `access: "restricted"`. Three tiles remain — two
+    // embedded platform surfaces and a dataset the bank has not supplied — so a
+    // sentence that stopped at "none of them are shown" would contradict the
+    // screen. Both sentences are asserted.
     await page.goto("/dashboards/credit");
     await expect(
       page.getByRole("heading", { name: "Credit and collections" }),
@@ -363,12 +365,14 @@ test.describe("a pack whose every figure this reader is refused", () => {
       ),
     ).toBeVisible();
 
-    // The refusals are drawn, with the sentence that names nothing.
-    const locked = page.getByText("Access restricted", { exact: true });
-    expect(await locked.count()).toBeGreaterThan(0);
+    // The refusals are drawn, one per refused widget, with the sentence that
+    // names nothing.
+    await expect(
+      page.getByText("Access restricted", { exact: true }),
+    ).toHaveCount(7);
 
     // And the tiles that are NOT refusals are all there, which is what the second
-    // sentence accounts for. All three kinds appear on this one screen.
+    // sentence accounts for. Both kinds appear on this one screen.
     //
     // An EMBEDDED SURFACE: named, with the door to the part of the platform it
     // shows. Nothing is fetched for it here, so nothing can be disclosed by it —
@@ -387,18 +391,6 @@ test.describe("a pack whose every figure this reader is refused", () => {
     ).toBeVisible();
     await expect(
       page.getByText("Needs data: Performance targets", { exact: true }),
-    ).toBeVisible();
-
-    // PLATFORM WORK OUTSTANDING, stated as platform work and never as "needs
-    // data": this bank pushes its loan book every night, and telling it to supply
-    // something it already supplies would be a false statement about its own book.
-    await expect(
-      page.getByText("Relationship officer league table", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        /The analytics tables do not carry the field this view groups by yet/,
-      ),
     ).toBeVisible();
 
     // The refused `Disbursements` widget's own title, as an exact text node, is

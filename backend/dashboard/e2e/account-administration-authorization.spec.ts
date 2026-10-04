@@ -123,7 +123,7 @@ test.describe("operational Analyst", () => {
       page.getByText("Integration keys are managed by an administrator."),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Generate key" }),
+      page.getByRole("button", { name: /^Generate .* key$/ }),
     ).toHaveCount(0);
     expect(keyRequests).toEqual([]);
 
@@ -147,7 +147,7 @@ test.describe("Organization Owner", () => {
       page.getByRole("heading", { name: "Integration keys" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Generate key" }),
+      page.getByRole("button", { name: "Generate data push key" }),
     ).toBeVisible();
 
     if (evidenceDir) {
