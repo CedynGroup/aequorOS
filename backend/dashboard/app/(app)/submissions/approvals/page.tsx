@@ -317,8 +317,13 @@ function DecidePanel({
   });
   const stageTransmits = currentStage?.transmitOnApprove === true;
   const atTransmitStage = stageTransmits && filingAuthority.mayTransmit;
-  const withValidatorNotMine = stageTransmits && !filingAuthority.mayTransmit;
-  const withApproverNotMine = !stageTransmits && !filingAuthority.mayApprove;
+  const stageNotMine =
+    currentStage !== null &&
+    (stageTransmits
+      ? !filingAuthority.mayTransmit
+      : !filingAuthority.mayApprove);
+  const currentStageTitle =
+    currentStage?.title ?? pkg.currentStageTitle ?? "the current review stage";
   const stageDecision = useDecidePackageFilingStage(bankId);
   const handOff = useHandOffPackageFilingStage(bankId);
   const filingSetQuery = usePackageFilingSet(bankId, pkg.id, atTransmitStage);
@@ -582,18 +587,17 @@ function DecidePanel({
             onDownloadReceipt={null}
             onRequestResubmission={null}
           />
-        ) : withValidatorNotMine ? (
+        ) : stageNotMine ? (
           <div
-            data-testid="with-validator"
+            data-testid={stageTransmits ? "with-validator" : "with-approver"}
             className="rounded border border-border-light bg-surface px-3.5 py-3"
           >
             <p className="text-body font-medium text-navy">
-              This return is with the Validator.
+              This return is with {currentStageTitle}.
             </p>
             <p className="mt-1 text-caption leading-relaxed text-navy/85">
-              They review it and file it with {centralBankName()}. Filing is the
-              Validator&apos;s authority alone, so there is nothing for you to
-              do here.
+              Another officer is responsible for this stage&apos;s decision. There
+              is nothing for you to do here.
             </p>
           </div>
         ) : atTransmitStage ? (
@@ -774,20 +778,6 @@ function DecidePanel({
                 />
               </div>
             ) : null}
-          </div>
-        ) : withApproverNotMine ? (
-          <div
-            data-testid="with-approver"
-            className="rounded border border-border-light bg-surface px-3.5 py-3"
-          >
-            <p className="text-body font-medium text-navy">
-              This return is with the Approver.
-            </p>
-            <p className="mt-1 text-caption leading-relaxed text-navy/85">
-              An officer with approval authority reviews the figures, signs the
-              return, and sends it to the Validator. There is nothing for you to
-              do at this stage.
-            </p>
           </div>
         ) : signingRequired && chain?.awaitingHandOff ? (
           // Signing IS approving, so a signed return arrives here already
@@ -1041,16 +1031,14 @@ function DecidePanel({
         {decide.error && (
           <ErrorPanel error={decide.error} title="Decision rejected" />
         )}
-        {decide.isSuccess && (
-          // Never the raw status: approving does NOT move a return out of
-          // `pending_approval` — the chain advances it to the next stage and
-          // the legacy status stays put, so printing it said "moved to
-          // 'pending_approval'" to someone who had just approved. What the
-          // officer needs to know is where it went, and the chain above says
-          // so.
+        {decide.isSuccess &&
+          decide.variables?.packageId === pkg.id &&
+          (decide.variables.action !== "approved" ||
+            chain?.awaitingHandOff) && (
           <p className="text-caption text-success font-medium">
-            Decision recorded. The return has moved to the next officer in the
-            chain — see the stages above.
+            {decide.variables?.action === "approved"
+              ? "Approval recorded. The return is still with you until you send it on."
+              : "Decision recorded. The return was sent back for rework."}
           </p>
         )}
       </div>

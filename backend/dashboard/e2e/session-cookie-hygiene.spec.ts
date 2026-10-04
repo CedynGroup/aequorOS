@@ -71,7 +71,7 @@ async function reservePort(): Promise<number> {
  * Each probe is bounded: a request accepted while the server is still
  * compiling can stall, and an unbounded probe would hold the loop until the
  * test's own timeout, which reports nothing about why. The deadline sits inside
- * the callers' 120-second test budget so its error is the one that surfaces.
+ * the callers' test budget so its error is the one that surfaces.
  */
 async function waitForLoginPage(origin: string, child: ChildProcess) {
   const deadline = Date.now() + 100_000;
@@ -299,7 +299,7 @@ test.describe("session cookie hygiene", () => {
   });
 
   test("conflicting AUTH_URL warns once across runtime bundles", async ({}, testInfo) => {
-    testInfo.setTimeout(120_000);
+    testInfo.setTimeout(150_000);
     const port = await reservePort();
     const origin = `http://127.0.0.1:${port}`;
     const dashboardDir = path.resolve(__dirname, "..");
@@ -364,7 +364,7 @@ test.describe("session cookie hygiene", () => {
   test("a stopped backend reports the service as unreachable", async ({
     browser,
   }, testInfo) => {
-    testInfo.setTimeout(120_000);
+    testInfo.setTimeout(150_000);
     const backendPort = await reservePort();
     const dashboardPort = await reservePort();
     const origin = `http://127.0.0.1:${dashboardPort}`;

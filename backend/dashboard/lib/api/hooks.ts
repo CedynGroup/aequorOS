@@ -2505,6 +2505,9 @@ export function useDecidePackageApproval(bankId: string | undefined) {
       ),
     onSuccess: (pkg) => {
       queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-filing-chain", bankId, pkg.id],
+      });
       void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
       void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
