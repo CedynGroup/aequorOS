@@ -110,20 +110,23 @@ export default function StressBoardPack() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Reports"
-        title="Stress Board-Pack Composer"
-        action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!run}
-            onClick={() => window.print()}
-          >
-            <Printer size={14} /> Print / export PDF
-          </button>
-        }
-      />
+      {/* Screen-only toolbar — the printed pack opens on its cover. */}
+      <div className="no-print">
+        <PageHeader
+          eyebrow="Reports"
+          title="Stress Board-Pack Composer"
+          action={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              disabled={!run}
+              onClick={() => window.print()}
+            >
+              <Printer size={14} /> Print / export PDF
+            </button>
+          }
+        />
+      </div>
 
       <QueryBoundary
         isLoading={registry.isLoading || approved.isLoading}
