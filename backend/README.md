@@ -276,6 +276,33 @@ The generic findings update endpoint does not mutate liquidity workflow
 findings. A newer successful run supersedes open findings from the previous run
 for that scenario without altering acknowledged or dismissed history.
 
+### Stale local processes
+
+- **Long-lived local processes serve STALE CODE and the port check will not save
+  you (2026-08-23).** Four backend processes were running from one checkout —
+  one a week old on `:8011`, one from three hours earlier — all against the
+  primary. Port binding was never violated (uvicorn `--reload` shares one socket
+  between supervisor and child), because the stale instance was on a DIFFERENT
+  port. And a port conflict would not have helped: the damage is done by the
+  **in-process live-engine worker thread**, which needs no port, polls the shared
+  `jobs` table and writes `live_metrics` with whatever code its process holds. A
+  new feature can therefore be verified green in a fresh process while the app
+  serves the old behaviour from an old one. Same hazard as the shared prod/local
+  `jobs` table below, entirely local.
+  **The standalone worker is the one that bites, and it has NO `--reload`.**
+  `python -m app.worker` is a separate process from `fastapi dev`; it never
+  reloads on a code change, and it is what writes `live_metrics`. A cleanup that
+  greps only `fastapi dev|uvicorn|app.main` MISSES it — that exact grep was used
+  on 2026-08-23 to declare the environment clean while a worker from two hours
+  earlier kept serving stale results for another half hour. Use the full pattern
+  and check `lstart` against your edits:
+  ```
+  ps -eo pid,lstart,command | grep -E "fastapi dev|uvicorn|app\.main|app\.worker|app\.operator" | grep -v grep
+  ```
+  Restart the worker after ANY change to a service it dispatches
+  (`fact_derivation`, `implied_rating`, the module engines) or its output is a
+  lie about your code.
+
 ## Run Tests
 
 ```bash
@@ -300,6 +327,44 @@ to force that mode. Native MinIO setup, isolation and shutdown are documented
 in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
 The existing `docker compose up -d risk-postgres` alternative also remains
 available; point `TEST_DATABASE_URL` at it to reuse that service.
+
+### Test databases and the primary database
+
+- **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
+  ACTUAL primary database — provenance (every canonical row ingestion-traced; the
+  executable form of the no-seeding order), period-spine contiguity, fact coverage,
+  live-metrics presence, sign-in capability. Opt-in:
+  `LIVE_DATA_DATABASE_URL=<worker URL> uv run pytest tests/live_data` (BYPASSRLS worker
+  URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
+  it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
+  tests; never point mutating tests at the primary DB.
+- The primary database is the **remote Postgres** (`<postgres-host>:<port>/<database>`, credentials
+  only in untracked `backend/.env`). Postgres-gated tests run against it via `TEST_DATABASE_URL`
+  (each run creates and drops a `risk_service_test_<hex>` schema — the shared DB is safe). The
+  default suite is hermetic: conftest sets `DATABASE_URL=""` (empty = unconfigured via a settings
+  validator) so a developer's `.env` can never leak into tests. Remote gotchas: the single role
+  has no BYPASSRLS (worker needs a granted role before running remotely), and ad-hoc `psql` must
+  set the `app.organization_id` GUC or FORCE-RLS tables read as empty.
+- **Anything built with `Base.metadata.create_all` runs no migration and no worker, so it
+  must seed what those two would have written** (2026-08-22). That is the hermetic pytest
+  suite AND the Playwright stack (`scripts/e2e_bootstrap.py`). Two shared fixtures own it:
+  `tests/fixtures/reference_data.py` seeds every GLOBAL registry from the same catalogues
+  the migrations read (`jurisdictions`; `institution_types.seed_rows`;
+  `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
+  it — and `tests/fixtures/live_plane.py` stands in for the worker's `pipeline_refresh`,
+  because every Treasury/ALM cockpit reads `current_financial_facts`, which only the worker
+  writes. Skip either and the failure is late and misleading: a missing registry surfaces as
+  a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
+  on every module page. Full prerequisites (object storage included):
+  `backend/dashboard/README.md` §End-to-end; for SSO, see its
+  [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
+  **Test databases are built once per pytest process, never per test**
+  (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
+  `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
+  and `@pytest.mark.committing_db` tests share a second schema that is TRUNCATEd
+  and reseeded before each test. Only `tests/db` migration tests build schemas of
+  their own. A test that needs a fresh schema is the exception to justify, not the
+  default to reach for.
 
 ## Lint And Type Check
 

@@ -68,6 +68,18 @@ These principles govern every implementation decision. Deviations require explic
 
 10. **Multi-tenancy with strict isolation.** Bank A's data is never visible to bank B's users, ever, under any code path. Multi-tenant learning aggregates behavioral statistics anonymously; it does not share transactional data.
 
+### Standing order: no seeded bank data
+
+- **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
+  the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
+  by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
+  There is **no seeding route at all**: `POST /banks/seed-demo` and its
+  `DEMO_SEED_ENABLED` flag were deleted in `2dc359f` — this file asserted they still
+  existed until 2026-08-22, and `grep` finds neither anywhere under `backend/app/`.
+  `tests/api/test_banks.py::test_seed_route_is_retired` pins that the path resolves to
+  no handler for any role or tenant. Never add seeding paths to the UI, and never
+  re-add seed CLI scripts.
+
 ---
 
 ## 3. Layered Architecture

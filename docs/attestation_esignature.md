@@ -1150,6 +1150,49 @@ earlier section's detail.
 | D14 | §3.5 checks 1–2 validate with pyHanko's default revision-diff policy                                                                           | **One allowance is switched off** (`verify.attestation_diff_policy`): `allow_in_place_appearance_stream_changes`. `pdf_signing` never rewrites an appearance stream in place — every filled value gets a fresh stream object — so the allowance can only produce a false positive                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | And it did. pyHanko skips a field only when its appearance stream's last change _equals_ the revision being diffed from, rather than is _not later than_ it, so every field the preparer filled reads as an in-place update once any revision exists after the approver's signature. PAdES B-LTA always appends one (the DSS, then the document timestamp), so a fully signed return with placed name/designation/date fields reported `docmdp_ok = False` against a document nobody had touched. Switching the allowance off is strictly stricter: a real in-place rewrite is now refused rather than whitelisted                                                                                                                                                                                                                                                                                                                                                                                    |
 | D16 | (post-build, 2026-08-09) The requirement is policy-resolved only: platform default → configured rows                                           | **`ATTESTATION_ESIGN_REQUIRED` (default 1) — a deployment-wide kill-switch over the resolved policy.** At 0, `resolve_policy` presents every policy — configured mandatory rows included — as `require_signature=False, require_signed_pdf=False, source="esign_disabled"` (`_apply_esign_kill_switch`, applied after resolution; slots and `policy_id` are kept, and a row an Org Owner already relaxed keeps `source="configured"`). Rows are dormant, not deleted: re-enabling restores them unchanged. With the flag at 0, `/health/ready` no longer treats signing gaps as a production failure and boot logs one explicit warning. Caveat: a package approved-but-unsigned while the flag was 0 blocks with `attestation_incomplete` if the flag returns to 1 before it is submitted — the escape hatches are the per-return relaxation or regeneration | A CFO relayed that e-signing before submission is not mandatory in their institution. The founder's-call default stands for deployments that file with signatures; this makes the requirement itself a deployment decision (one env var) without touching the per-return machinery, the ceremony, or any stored policy — the signature-optional workflow (bare maker-checker approval) was already built and proven, this only widens the gate to it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
+### Attestation standing rules
+
+- **Attestation / e-signature (built 2026-07-25; spec `docs/attestation_esignature.md`).**
+  Signing is REQUIRED for every return by default (`default_policy`:
+  `require_signature=True`, `require_signed_pdf=True`, preparer+approver, no family
+  exemptions — changed 2026-07-25 on the founder's call). What BoG demands _of the
+  artifact_ stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
+  what the institution demands _of itself_ before filing is the product. A deployment
+  that cannot sign therefore cannot file — `ensure_signing_configured` raises
+  `signing_not_configured` naming the settings, and in production `/health/ready` 503s
+  (boot only WARNS — an earlier boot refusal locked out the admin who could fix it).
+  Banks relax per return in Settings (an audited PUT); tests use
+  `tests/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0` (default 1)
+  is the deployment-wide kill-switch: applied after policy resolution
+  (`attestation/policy.py::_apply_esign_kill_switch`, `source="esign_disabled"`), it
+  suspends the requirement everywhere — configured mandatory rows go dormant, every
+  return takes the bare maker-checker approval path, and re-enabling restores the rows
+  unchanged.
+  Fields are placed on the document (template per return, package override) from a typed
+  palette — one `signature` per role plus any number of `name`/`title`/`initials`/
+  `date_signed` boxes, because a BoG attestation block asks each officer for four things.
+  Non-signature boxes are AcroForm TEXT fields whose value is DERIVED from the signature
+  record (`SignatureAppearance.derived_values`), never sent by a client, and each kind has
+  its own derived floor (`pdf_signing.MIN_BOX_SIZES`) — the old single 185×61 survives only
+  as the threshold at which the four evidential lines are drawn as a caption. DocMDP means
+  **every field must exist before the first signature**, so the preparer places the
+  approver's boxes too; each role's values are filled in the SAME incremental update as
+  that role's signature (a separate earlier revision makes pyHanko's in-place-appearance
+  rule convict an untouched locked field), and `Sig_Preparer` carries a FieldMDP
+  `/Exclude` lock over everything but the approver's fields. Three digests, all value-based like
+  `input_hash`: `content_digest` (strips volatile `generated_at`), `register_state_digest`
+  (master-data returns), `certification_digest` (what every signer signs) —
+  `app/services/attestation/digests.py`; never add volatile fields. Signer IDs (`SGN-` +
+  16 Crockford) are HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then
+  **persisted as the authority** — rotating the pepper must never re-derive an existing
+  identity. Append-only is _tiered_ by DB trigger (migration `202607250027`):
+  `audit_events` blocks UPDATE+DELETE; signature/identity/artifact-version tables block
+  UPDATE only (DELETE reachable via package CASCADE) — see spec §9 D1 for why. Step-up:
+  password re-entry, or an SSO redirect through the three Next.js server routes under
+  `dashboard/app/api/attestation/` — the id_token and the signing authorisation are
+  server-only by design (HttpOnly cookie, spent by a route), so never move either into
+  the session or a client fetch.
+
 ### Honest limitations of the built system
 
 These are not design choices; they are things that are **not yet true** and

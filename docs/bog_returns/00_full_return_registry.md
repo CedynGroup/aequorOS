@@ -170,3 +170,36 @@ backend/app/services/regulatory_reporting/bog_forms/
 After each wave: registry update + tests + sample package generation. After Wave 4: the
 Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix in
 `docs/bog_returns/99_coverage_matrix.md`.
+
+## 6. As-built engine rules
+
+- **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
+  registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
+  `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,
+  generator `bog_form`, `backend/app/services/regulatory_reporting/bog_forms/`). The committed
+  `layouts/*.json` ARE the official structures (regenerate ONLY with
+  `scripts/extract_bog_templates.py` from `docs/reporting/` — needs LibreOffice); line maps bind
+  official INPUT cells to named source resolvers (`linemaps/<form>.py`, extra resolvers only in
+  `sources_ext/<form>.py`); the engine then **evaluates the templates' own formulas**
+  (`formulas.py`: SUM/IF/+−×÷/%/`[n]Sheet!` external links — 100% of 5,903 cells) so every
+  roll-up is BoG's — never re-implement or "simplify" a BoG line, never bind a formula cell.
+  Export = THREE artifacts per sealed run: `pdf` (values — the BoG submission package, and the
+  signed record), `xlsx`/`xlsx_official` (official layout, values-only, sheets protected — audit
+  twin), `xlsx_working` (official layout with the template's LIVE formulas, labelled FORMULA
+  COPY; BSD forms only; migration 202608160015) — with a "Completion notes" sheet;
+  **BOTH Excel copies of a BoG FORM are FILED (founder decision 2026-09-20)** — BoG prefer the
+  form with live formulas, so `xlsx_working` rides alongside the protected copy; it is filed and
+  NEVER signed, the values-only/PDF artifact stays the signed record of truth, and every surface
+  that shows the formula copy must say so. `workflow.filing_admits_artifact(kind, generator=)`
+  is the ONLY place that is decided, deny-by-default on two axes: the kind must be in
+  `FILABLE_WORKING_ARTIFACT_KINDS` (`docx_working` is not) AND the generator must be named for
+  it in `WORKING_ARTIFACT_FILING_GENERATORS` (`bog_form` only). The scoping is deliberate: the
+  decision named BoG's own workbook, so an SDI packet's working sheet is NOT filed and keeps its
+  "not a filing artifact" label — filing it would infer a second regulator's preference from a
+  decision that stated one. Never reopen either axis to a blanket allow.
+  input cells with no honest source are `input_required`/`unmapped`, never dropped. Blank data
+  grids (no `0` placeholder) are bound with `grid_lines`, captured inputs with `leaf_lines`.
+  Legacy recode (migration `202608150013`): the pre-template `BSD2`(CAR)/`BSD3`(LCR) entries are
+  now `CAR-RWA`/`LCR-NSFR`; the `BSD-MONTHLY` placeholder is retired. Weekly returns anchor on
+  Friday close (Guide fixes cadence not weekday). Gate: `tests/services/test_bog_forms_framework.py`
+  - `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.

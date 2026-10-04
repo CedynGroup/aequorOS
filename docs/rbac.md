@@ -815,6 +815,35 @@ NextAuth v5's per-request lazy config is the mechanism, already in use in
 `dashboard/auth.ts`), verified domains, and `sso_enforced` per org. SSO decides
 _who may sign in_; provisioning decides _who exists_.
 
+#### As built: the OIDC relying party
+
+- SSO is AequorOS' **own OIDC relying party** — no third-party broker (Auth0 removed
+  2026-07-20; never reintroduce `AUTH0_*`). Per-org connection in `sso_connections`
+  (issuer, client_id, AES-256-GCM-sealed secret, allowed email domains; RLS-forced),
+  managed in dashboard Settings → Authentication (secret write-only). The backend verifies
+  every id_token via OIDC discovery + issuer JWKS (`verify_oidc_id_token`; RS256/ES256,
+  `email_verified`, domain allow-list) and links **pre-provisioned** users
+  (`auth_provider='oidc'`). The uniquely selected enabled connection is the sole tenant
+  authority: its `organization_id` scopes subject lookup, email linking, JIT stubs and
+  issued access/refresh tokens; OIDC subject uniqueness is correspondingly scoped to
+  `(organization_id, auth_provider, sso_subject)`. The public SSO exchange accepts only
+  `id_token`; its retired organization hint survives as compatibility-only input and must
+  exactly match the verified connection or authentication fails generically. Missing or
+  ambiguous issuer/audience routing fails before account lookup; multi-audience tokens
+  require `azp` to name the selected connection's client. Opt-in request-access JIT
+  (`jit_enabled`) means an allowed-domain first sign-in records a DEACTIVATED stub + 403
+  "awaiting approval";
+  access exists only after an Org Owner approves one complete scoped grant
+  (`/auth/sso/access-requests`). Never let JIT auto-activate accounts — that was
+  rejected 2026-07-20 as a data-leak path until RBAC group-mapping lands. The dashboard's NextAuth loads the client config through
+  `GET /auth/sso/client-config`, gated by `SSO_INTERNAL_KEY` (same value on backend and
+  dashboard; not in OpenAPI) — the single plaintext read path for the secret. **Two**
+  redirect URIs must be registered at the IdP: `/api/auth/callback/sso` (sign-in) and
+  `/api/attestation/step-up/callback` (signing step-up); registering only the first
+  yields working sign-in with certification failing at re-authentication. Bank-IT
+  runbook: `docs/sso-onboarding.md`; roadmap: rbac.md §15 Phase 2 (multi-connection +
+  home-realm discovery — extend the existing code, don't rebuild).
+
 ### 11.4 JIT + SCIM + verified domains
 
 - **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub with no binding-derived authority. An Org Owner must approve one complete scoped grant in Members; approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29). Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.

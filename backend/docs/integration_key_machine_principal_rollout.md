@@ -7,6 +7,20 @@ the enforcing application is deployed. Do not infer a bank, backfill a binding,
 or create a compatibility grant. Store dated inventory output and rotation
 evidence with the deployment record, never in this repository.
 
+## Standing contract
+
+- **Integration keys are bank-scoped machine principals.** Account administrators
+  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Data Engine →
+  API Push). Issuance atomically creates the service identity, key, row, and
+  machine-only `integration_writer` binding for DATA/restricted `ingest`; push routes
+  require that complete binding and return 404 for a sibling-bank target. Human
+  Analyst authority never satisfies machine ingest. Revocation deactivates the key,
+  binding, and service identity together. Only the SHA-256 hash is stored (raw key
+  shown once); `integration_keys` is deliberately NOT RLS-forced for the pre-auth
+  global hash lookup, so every lifecycle endpoint must remain explicitly org-filtered.
+  Legacy null-bank rows remain inspectable/revocable but never authorize a push.
+  Public contract: `docs/API_INTEGRATION.md` §1.
+
 ## Affected routes
 
 All four routes require one independently complete active binding for the
