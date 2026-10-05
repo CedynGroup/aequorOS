@@ -417,6 +417,7 @@ def send_back_for_corrections(
 
     actor = _require_actor(ctx)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _require_package_action(db, ctx, package, Permission.APPROVE)
     reason = payload.reason.strip()
     reporting.send_back_for_corrections(db, ctx, package, actor_user_id=actor, reason=reason)
     # A relaxed return has no attestation to withdraw, and ``void_attestation``

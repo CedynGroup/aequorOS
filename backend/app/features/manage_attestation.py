@@ -234,7 +234,7 @@ def update_package_signature_routing(
     operation_id="listReturnsAwaitingMySignature",
 )
 def list_returns_awaiting_my_signature(
-    db: DbSession, ctx: MutationTenant
+    db: DbSession, ctx: ScopedMutationTenant
 ) -> AwaitingSignatureListRead:
     """Returns routed to the caller and still unsigned."""
     return attestation_api.awaiting_my_signature(db, ctx)

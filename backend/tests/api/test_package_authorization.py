@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from app.core.authorization import (
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -24,7 +25,13 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, RegulatoryPackage, User
+from app.models import (
+    AuthorizationBinding,
+    Bank,
+    PackageSignatureRecipient,
+    RegulatoryPackage,
+    User,
+)
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
@@ -59,6 +66,8 @@ def _grant(  # noqa: PLR0913 - every binding dimension is an enforcement input
     institution_id: str | None = SAMPLE_BANK_ID,
     organization_id: str = ORG_1,
     user_id: UUID = USER_1,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: tuple[str, ...] = (),
 ) -> int:
     session = get_sessionmaker()()
     session.info["organization_id"] = organization_id
@@ -74,6 +83,8 @@ def _grant(  # noqa: PLR0913 - every binding dimension is an enforcement input
                 institution_id,
                 module_scope,
                 sensitivity_scope,
+                data_scope,
+                data_scope_values,
             ),
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
             reason="Exercise package-plane scoped enforcement.",
@@ -139,6 +150,43 @@ def _add_bank(bank_id: str, *, organization_id: str) -> None:
             )
         )
         session.commit()
+    finally:
+        session.close()
+
+
+def _assign_signature(package_id: UUID, *, user_id: UUID = USER_1) -> None:
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        session.add(
+            PackageSignatureRecipient(
+                organization_id=ORG_1,
+                package_id=package_id,
+                attestation_cycle=1,
+                signing_role="approver",
+                recipient_user_id=user_id,
+                recipient_signer_id=f"fixture-{str(user_id)[:8]}",
+                routing_order=1,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _add_user() -> UUID:
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        user = User(
+            organization_id=ORG_1,
+            email=f"package-maker-{uuid4()}@example.test",
+            display_name="Package Maker",
+            role="analyst",
+        )
+        session.add(user)
+        session.commit()
+        return user.id
     finally:
         session.close()
 
@@ -308,6 +356,94 @@ def test_ordinary_returns_require_regulatory_authority(db_client: TestClient) ->
         ).status_code
         == 200
     )
+
+
+def test_regulatory_viewer_cannot_send_back_but_approver_can(
+    db_client: TestClient,
+) -> None:
+    maker_id = _add_user()
+    package_id = _package(
+        family="liquidity",
+        return_code="LCR-NSFR",
+        generated_by=maker_id,
+        status="pending_approval",
+    )
+    _pin_chain(package_id, current_stage_seq=2)
+    endpoint = (
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/attestation/send-back"
+    )
+    viewer_version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    refused = db_client.post(
+        endpoint,
+        headers=headers(roles=("viewer",), authorization_version=viewer_version),
+        json={"reason": "Viewer must not change the return state."},
+    )
+    assert refused.status_code == 403, refused.text
+    with get_sessionmaker()() as session:
+        assert session.get(RegulatoryPackage, package_id).status == "pending_approval"
+
+    approver_version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    sent_back = db_client.post(
+        endpoint,
+        headers=headers(roles=("viewer",), authorization_version=approver_version),
+        json={"reason": "Correct the return before another review."},
+    )
+    assert sent_back.status_code == 200, sent_back.text
+    with get_sessionmaker()() as session:
+        assert session.get(RegulatoryPackage, package_id).status == "generated"
+
+
+def test_binding_only_signer_queue_filters_by_whole_institution_family(
+    db_client: TestClient,
+) -> None:
+    regulatory = _package(family="liquidity", return_code="LCR-NSFR")
+    icaap = _package(family="icaap", return_code="ICAAP-REPORT")
+    _assign_signature(regulatory)
+    _assign_signature(icaap)
+    version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+
+    response = db_client.get(
+        "/api/v1/attestation/awaiting-my-signature",
+        headers=headers(roles=("viewer",), authorization_version=version),
+    )
+    assert response.status_code == 200, response.text
+    assert [row["package_id"] for row in response.json()["items"]] == [str(regulatory)]
+
+
+@pytest.mark.parametrize("authority", ["narrowed", "unbound"])
+def test_narrowed_or_unbound_assignee_has_an_empty_signer_queue(
+    db_client: TestClient, authority: str
+) -> None:
+    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    _assign_signature(package_id)
+    version = 1
+    if authority == "narrowed":
+        version = _grant(
+            role_bundle=RoleBundle.APPROVER,
+            module_scope=ModuleScope.CREDIT,
+            sensitivity_scope=SensitivityScope.ALL,
+            data_scope=DataScope.BRANCH,
+            data_scope_values=("BR-001",),
+        )
+
+    response = db_client.get(
+        "/api/v1/attestation/awaiting-my-signature",
+        headers=headers(roles=("viewer",), authorization_version=version),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": []}
 
 
 def test_an_unknown_package_never_discloses_figures(db_client: TestClient) -> None:
