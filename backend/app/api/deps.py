@@ -2217,6 +2217,22 @@ def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is exp
     if verdict.near_miss is not None and family_access.can_view(
         db, scoped, bank, package.return_family
     ):
+        if package.return_family in family_access.GATED:
+            try:
+                family_access.require_permission(
+                    db,
+                    scoped,
+                    bank,
+                    package,
+                    permission,
+                    surface=surface,
+                    conditions=conditions,
+                )
+            except HTTPException as exc:
+                if exc.status_code != status.HTTP_403_FORBIDDEN:
+                    raise
+            else:
+                return PackageAccess(ctx=scoped, bank=bank, package=package)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=family_access.near_miss_detail(bank, verdict.near_miss),

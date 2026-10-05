@@ -916,6 +916,34 @@ def test_the_legacy_approval_route_reads_the_same_binding(db_client: TestClient)
     assert response.json()["error"]["details"]["error_code"] == "approval_requires_signature"
 
 
+@pytest.mark.parametrize("route", ["stage", "legacy"])
+def test_icaap_capital_approver_ignores_regulatory_near_miss(
+    db_client: TestClient, route: str
+) -> None:
+    maker_id = _add_user()
+    package_id = _package(status="pending_approval", generated_by=maker_id)
+    _pin_chain(package_id, current_stage_seq=2)
+    _grant(role_bundle=RoleBundle.APPROVER)
+    authv = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    request_headers = headers(roles=("account_admin",), authorization_version=authv)
+
+    if route == "stage":
+        digest = _chain_digest(db_client, package_id, request_headers)
+        response = _decide_stage(
+            db_client, package_id, request_headers=request_headers, digest=digest
+        )
+        assert response.status_code == 200, response.text
+    else:
+        response = _decide_approval(
+            db_client, package_id, request_headers=request_headers
+        )
+        assert response.status_code == 200, response.text
+
+
 def test_a_grant_at_the_wrong_classification_does_not_approve(db_client: TestClient) -> None:
     """Reporting resources are RESTRICTED, and sensitivity is exact-or-all.
 
