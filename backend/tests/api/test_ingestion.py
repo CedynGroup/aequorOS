@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json as jsonlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from threading import Event
+from time import monotonic, sleep
 from typing import Any
 
 import openpyxl
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
@@ -20,11 +23,14 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
+from app.schemas.ingestion import IngestionBatchCreate
+from app.services import ingestion
 from app.services.fact_derivation import _load_position_rows
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.storage.inmemory import InMemoryStorageClient
 
 AS_OF = str(fixtures.AS_OF)
 
@@ -628,6 +634,104 @@ class TestPositionIdentityCorrection:
         snapshot.withdrawn_at = None
         db_session.commit()
         assert derived_position(bank_id, "LN-0001") == ("LOAN", "GHS")
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize(
+    ("correction", "field"),
+    [
+        ({"Ccy": "USD"}, "currency"),
+        ({"Type": "DEPOSIT"}, "position_type"),
+        ({"Originated": date(2024, 2, 1)}, "origination_date"),
+    ],
+)
+def test_concurrent_identity_correction_observes_the_first_acceptance(
+    db_client: TestClient,
+    tmp_path: Path,
+    storage_engine: InMemoryStorageClient,
+    correction: dict[str, Any],
+    field: str,
+) -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    bank_id = seed_bank(db_client)
+    activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+    initial = start_batch(
+        db_client, bank_id, loans_workbook(tmp_path / "initial.xlsx", {"Ccy": "GHZ"})
+    )["batch"]
+    assert initial["records_error"] == 1
+    first_workbook = loans_workbook(tmp_path / "first.xlsx", {})
+    second_workbook = loans_workbook(tmp_path / "second.xlsx", correction)
+    ctx = TenantContext(organization_id=ORG_1)
+    first_date = date(2026, 7, 31)
+    second_date = date(2026, 8, 31)
+    second_started = Event()
+    second_pids: list[int] = []
+
+    def second_ingestion() -> dict[str, Any]:
+        with session_factory() as session:
+            session.info["organization_id"] = ORG_1
+            second_pids.append(session.scalars(select(func.pg_backend_pid())).one())
+            second_started.set()
+            return ingestion.start_ingestion(
+                session,
+                ctx,
+                bank_id,
+                IngestionBatchCreate(
+                    source_system="EXCEL_CSV",
+                    as_of_date=second_date,
+                    location=str(second_workbook),
+                    reason="Concurrent correction.",
+                ),
+                storage_engine,
+            ).batch.model_dump(mode="json")
+
+    with session_factory() as first_session:
+        first_session.info["organization_id"] = ORG_1
+        first_pid = first_session.scalars(select(func.pg_backend_pid())).one()
+        first = ingestion.start_ingestion(
+            first_session,
+            ctx,
+            bank_id,
+            IngestionBatchCreate(
+                source_system="EXCEL_CSV",
+                as_of_date=first_date,
+                location=str(first_workbook),
+                reason="First correction.",
+            ),
+            storage_engine,
+            commit=False,
+        )
+        assert first.batch.status == "accepted"
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(second_ingestion)
+            try:
+                assert second_started.wait(timeout=5)
+                with session_factory() as observer:
+                    deadline = monotonic() + 5
+                    while first_pid not in observer.scalars(
+                        select(func.pg_blocking_pids(second_pids[0]))
+                    ).one():
+                        assert monotonic() < deadline, "The second correction did not wait."
+                        sleep(0.01)
+                first_session.commit()
+                second = future.result(timeout=10)
+            finally:
+                first_session.rollback()
+
+    assert second["records_error"] == 1
+    assert any(
+        failure["rule"] == "position_identity_settled"
+        and failure["source_reference"] == "LN-0001"
+        and failure["detail"].startswith(f"{field} is frozen")
+        for failure in second["validation_report"]["failures"]
+    )
+    assert derived_position(bank_id, "LN-0001", as_of_date=first_date) == ("LOAN", "GHS")
+    assert origination_date_of("LN-0001") == date(2024, 1, 10)
+    assert derived_position(bank_id, "LN-0001", as_of_date=second_date) is None
 
 
 class TestStorageArtifacts:

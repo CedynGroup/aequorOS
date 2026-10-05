@@ -296,6 +296,13 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     *,
     commit: bool = True,
 ) -> IngestionBatchStartRead:
+    """Ingest under transaction-held locks on the batch's existing position identities.
+
+    Lock identities in ID order before reading accepted history so a concurrent
+    correction observes the first acceptance before validation or persistence.
+    Locks last until commit or rollback, including when the caller owns the
+    transaction via ``commit=False``. SQLite omits ``FOR UPDATE``.
+    """
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
@@ -443,6 +450,21 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     known_counterparties, known_products, known_gl_accounts, known_positions = _known_references(
         db, ctx, bank
     )
+    db.scalars(
+        select(CanonicalPosition)
+        .where(
+            CanonicalPosition.organization_id == ctx.organization_id,
+            CanonicalPosition.bank_id == bank.id,
+            CanonicalPosition.source_system == batch.source_system,
+            CanonicalPosition.source_reference.in_(
+                {row.source_reference for row in records.positions}
+            ),
+            *is_current_generation(CanonicalPosition),
+        )
+        .order_by(CanonicalPosition.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
     settled_positions = _settled_position_identities(db, ctx, bank, batch.source_system)
     context = ValidationContext(
         as_of_date=payload.as_of_date,
