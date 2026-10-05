@@ -131,7 +131,7 @@ and drops its own `risk_service_test_<hex>` schema). The task inventory is in
 `backend/mise.toml`.
 
 For native PostgreSQL 17 and MinIO, install
-`brew install postgresql@17 homebrew/core/minio homebrew/core/minio-mc`,
+`brew install postgresql@17 homebrew/core/minio`,
 then run `AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-suite` or
 `AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e`. Standard commands
 also fall back to native services when Docker is unavailable. Data and ports are

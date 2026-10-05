@@ -85,7 +85,7 @@ def test_stopped_docker_state_does_not_prevent_native_fallback(monkeypatch, tmp_
     monkeypatch.setattr(
         local_services.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(a, 1)
     )
-    assert services.prepare("postgres", "native")
+    services.prepare("postgres", "native")
     assert services.state["postgres"]["mode"] == "native"
     assert services.started == ["postgres"]
 
@@ -122,6 +122,17 @@ def test_external_environment_reaches_child_without_provisioning(
         if configuration == "ci"
         else ["postgresql://test.example/test", "http://storage.example"]
     )
+
+
+@pytest.mark.parametrize("action", ["up", "env", "down"])
+def test_persistent_service_actions_are_not_exposed(monkeypatch, tmp_path, action):
+    state = tmp_path / "services"
+    monkeypatch.setattr(local_services, "STATE_DIR", state)
+    monkeypatch.setattr(sys, "argv", ["local-services", action])
+    with pytest.raises(SystemExit) as error:
+        local_services.main()
+    assert error.value.code == 2
+    assert not state.exists()
 
 
 def test_stale_pid_cannot_stop_unrelated_process(tmp_path):
@@ -179,15 +190,14 @@ def test_native_data_symlinks_never_touch_an_existing_cluster(tmp_path, service)
     assert not services.state_file.exists()
 
 
-def test_reused_service_is_not_stopped_by_borrower(monkeypatch, tmp_path):
+def test_existing_service_is_restarted_and_owned_by_run(monkeypatch, tmp_path):
     services = local_services.LocalServices(tmp_path)
     services.state["postgres"] = {"mode": "native", "port": 12345}
     monkeypatch.setattr(services, "running", lambda _: True)
-    assert not services.prepare("postgres", "native")
-    services.stop(services.started)
-    assert services.state["postgres"]["port"] == 12345
-    with pytest.raises(RuntimeError, match="different mode"):
-        services.prepare("postgres", "docker")
+    monkeypatch.setattr(local_services, "available_port", lambda: 23456)
+    services.prepare("postgres", "native")
+    assert services.started == ["postgres"]
+    assert services.state["postgres"]["port"] == 23456
 
 
 def test_failed_start_rolls_back_services_started_by_run(monkeypatch, tmp_path):

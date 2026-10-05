@@ -1,8 +1,8 @@
 """Worktree-local test infrastructure; never use a Homebrew service cluster.
 
 Run through uv for psycopg/boto3. `run` lends its environment to a command and
-stops services it started, including on failure. `up` keeps them for `env`/`down`.
-Explicit test/S3 URLs and CI bypass local provisioning in auto mode.
+stops services it uses, including on failure. Explicit test/S3 URLs and CI bypass
+local provisioning in auto mode.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import fcntl
 import hashlib
 import json
 import os
-import shlex
 import shutil
 import signal
 import socket
@@ -169,17 +168,12 @@ class LocalServices:
             return False
         return result.returncode == 0 and bool(result.stdout.strip())
 
-    def prepare(self, service: str, mode: str) -> bool:
+    def prepare(self, service: str, mode: str) -> None:
         if service in self.state and self.running(service):
-            if self.state[service]["mode"] != mode:
-                raise RuntimeError(
-                    "Local services already use a different mode; run local-services-down"
-                )
-            return False
+            self.stop([service])
         self.state[service] = {"mode": mode, "port": self.new_port()}
         self.started.append(service)
         self.save()
-        return True
 
     def new_port(self) -> int:
         allocated = {
@@ -199,8 +193,7 @@ class LocalServices:
             raise RuntimeError(
                 "Native Postgres data must be a directory in this worktree, not a symlink"
             )
-        if not self.prepare("postgres", mode):
-            return
+        self.prepare("postgres", mode)
         if mode == "docker":
             self.start_docker("postgres")
             return
@@ -255,8 +248,7 @@ class LocalServices:
             raise RuntimeError(
                 "Native MinIO data must be a directory in this worktree, not a symlink"
             )
-        if not self.prepare("minio", mode):
-            return
+        self.prepare("minio", mode)
         self.state["minio"]["console_port"] = self.new_port()
         keyfile = self.directory / "kms-key"
         if not keyfile.exists():
@@ -267,9 +259,7 @@ class LocalServices:
             return
         binary = shutil.which("minio")
         if not binary:
-            raise RuntimeError(
-                "Install native MinIO: brew install homebrew/core/minio homebrew/core/minio-mc"
-            )
+            raise RuntimeError("Install native MinIO: brew install homebrew/core/minio")
         data.mkdir(exist_ok=True)
         args = [str(Path(binary).resolve()), "server", str(data)]
         self.state["minio"]["identity"] = args
@@ -468,7 +458,7 @@ class LocalServices:
 
 def main() -> int:  # noqa: PLR0912, PLR0915
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["up", "env", "down", "run"])
+    parser.add_argument("action", choices=["run"])
     parser.add_argument(
         "--mode",
         choices=["auto", "native", "docker", "external"],
@@ -482,8 +472,8 @@ def main() -> int:  # noqa: PLR0912, PLR0915
     args, child = parser.parse_known_args()
     if child[:1] == ["--"]:
         child = child[1:]
-    if (args.action == "run") != bool(child):
-        parser.error("run requires a command after --; other actions do not take a command")
+    if not child:
+        parser.error("run requires a command after --")
     requested = [
         name for name, enabled in [("postgres", args.postgres), ("minio", args.storage)] if enabled
     ]
@@ -499,12 +489,12 @@ def main() -> int:  # noqa: PLR0912, PLR0915
             for name in requested
             if not env.get("TEST_DATABASE_URL" if name == "postgres" else "S3_ENDPOINT")
         ]
-    if not managed and args.action == "run":
+    if not managed:
         return run_child(child, env)
     if STATE_DIR.is_symlink():
         raise RuntimeError(".local-services must be a directory in this worktree, not a symlink")
     STATE_DIR.mkdir(mode=0o700, exist_ok=True)
-    # A borrow must not race its owner's shutdown; serialize managed runs.
+    # Serialize lifecycle updates and prevent overlapping managed runs.
     with (STATE_DIR / "lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -513,44 +503,21 @@ def main() -> int:  # noqa: PLR0912, PLR0915
                 "Another local-services command is active in this worktree"
             ) from None
         services = LocalServices(STATE_DIR)
-        if args.action == "down":
-            services.stop([name for name in requested if name in services.state])
-            return 0
-        if args.action == "env":
-            managed = [name for name in requested if name in services.state]
-            if not managed:
-                raise RuntimeError("No local services started; run local-services-up first")
-        mode = select_mode(args.mode) if managed and args.action != "env" else args.mode
+        mode = select_mode(args.mode)
         try:
             for name in managed:
-                if args.action != "env":
-                    print(f"Local {name}: {mode} ({STATE_DIR})", file=sys.stderr)
-                    if name == "postgres":
-                        services.start_postgres(mode)
-                    else:
-                        services.start_minio(mode)
-                elif not services.running(name):
-                    raise RuntimeError(f"Local {name} is stopped; run local-services-up")
-                if args.action == "env":
-                    env.update(
-                        services.postgres_environment(args.role_admin)
-                        if name == "postgres"
-                        else services.storage_environment()
-                    )
+                print(f"Local {name}: {mode} ({STATE_DIR})", file=sys.stderr)
+                if name == "postgres":
+                    services.start_postgres(mode)
                 else:
-                    env.update(
-                        services.provision_postgres(args.role_admin)
-                        if name == "postgres"
-                        else services.provision_minio()
-                    )
+                    services.start_minio(mode)
+                env.update(
+                    services.provision_postgres(args.role_admin)
+                    if name == "postgres"
+                    else services.provision_minio()
+                )
                 env["AQS_LOCAL_SERVICES_MODE"] = services.state[name]["mode"]
-            if args.action == "run":
-                return run_child(child, env)
-            for key, value in env.items():
-                if os.environ.get(key) != value:
-                    print(f"export {key}={shlex.quote(value)}")
-            services.started.clear()  # `up` leaves services for explicit `down`.
-            return 0
+            return run_child(child, env)
         finally:
             services.stop(services.started)
 

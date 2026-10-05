@@ -225,15 +225,3 @@ run = [
   "uv run basedpyright",
   "uv run pytest",
 ]
-
-[tasks."risk-service:local-services-up"]
-description = "Local services up for this worktree"
-run = "uv run python scripts/local_services.py up"
-
-[tasks."risk-service:local-services-env"]
-description = "Local services env for this worktree"
-run = "uv run python scripts/local_services.py env"
-
-[tasks."risk-service:local-services-down"]
-description = "Local services down for this worktree"
-run = "uv run python scripts/local_services.py down"

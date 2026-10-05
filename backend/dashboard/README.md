@@ -381,7 +381,7 @@ reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 Install the native binaries once on macOS (do not run `brew services start`):
 
 ```bash
-brew install postgresql@17 homebrew/core/minio homebrew/core/minio-mc
+brew install postgresql@17 homebrew/core/minio
 ```
 
 PostgreSQL 17 matches CI; PostgreSQL 18 is refused. The Homebrew core bottles
@@ -418,28 +418,12 @@ broken KMS fails before the suite starts. Native E2E runs disable Next's
 persistent development compiler cache to conserve the host disk shared with
 MinIO; ordinary development, Docker runs and CI keep their existing defaults.
 
-Test commands stop the services they started on exit, failure or interruption;
-data is retained for the next run. Services already running for this worktree
-are borrowed and left running. To keep both services between commands:
-
-```bash
-AQS_LOCAL_SERVICES=native mise run risk-service:local-services-up
-eval "$(mise run --quiet risk-service:local-services-env)"
-# Run tests with the exported URLs, then stop only this worktree's services:
-mise run risk-service:local-services-down
-unset TEST_DATABASE_URL POSTGRES_ADMIN_URL S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET
-unset AQS_LOCAL_SERVICES_MODE
-```
-
-For schema tests on persistent services, start them with
-`cd backend && uv run python scripts/local_services.py up --mode native --role-admin`
-to grant the schema suite’s CREATEROLE privilege before exporting `env`.
-
-Only one managed service command runs per worktree at a time; run suites
-sequentially, or use `up` and export `env` before independent test commands.
-Other worktrees have separate clusters, storage, locks and ports. To reclaim
-disk space, first run `local-services-down`, then remove this worktree's
-`.local-services/` directory. This discards only local test data.
+Test commands stop the services they use on exit, failure or interruption; data
+is retained for the next run. Only one managed service command runs per
+worktree at a time, so run suites sequentially. Other worktrees have separate
+clusters, storage, locks and ports. To reclaim disk space while no test command
+is running, remove this worktree's `.local-services/` directory. This discards
+only local test data.
 If MinIO reports insufficient free disk space, also remove the disposable
 `backend/dashboard/.next-e2e` cache after stopping its E2E dev server.
 

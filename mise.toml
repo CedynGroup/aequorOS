@@ -176,18 +176,3 @@ run = 'mise run risk-service:revision "${usage_message?}"'
 description = "Run risk service local smoke checks that do not require Postgres"
 dir = "backend"
 run = "mise run risk-service:smoke"
-
-[tasks."risk-service:local-services-up"]
-description = "Local services up for this worktree"
-dir = "backend"
-run = "mise run risk-service:local-services-up"
-
-[tasks."risk-service:local-services-env"]
-description = "Local services env for this worktree"
-dir = "backend"
-run = "mise run risk-service:local-services-env"
-
-[tasks."risk-service:local-services-down"]
-description = "Local services down for this worktree"
-dir = "backend"
-run = "mise run risk-service:local-services-down"
