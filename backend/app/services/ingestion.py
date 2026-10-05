@@ -25,7 +25,8 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import String, any_, bindparam, func, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
@@ -301,7 +302,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     Lock identities in ID order before reading accepted history so a concurrent
     correction observes the first acceptance before validation or persistence.
     Locks last until commit or rollback, including when the caller owns the
-    transaction via ``commit=False``. SQLite omits ``FOR UPDATE``.
+    transaction via ``commit=False``. SQLite skips the lock query.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
@@ -450,21 +451,9 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     known_counterparties, known_products, known_gl_accounts, known_positions = _known_references(
         db, ctx, bank
     )
-    db.scalars(
-        select(CanonicalPosition)
-        .where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
-            CanonicalPosition.source_system == batch.source_system,
-            CanonicalPosition.source_reference.in_(
-                {row.source_reference for row in records.positions}
-            ),
-            *is_current_generation(CanonicalPosition),
-        )
-        .order_by(CanonicalPosition.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).all()
+    _lock_position_identities(
+        db, ctx, bank, batch.source_system, {row.source_reference for row in records.positions}
+    )
     settled_positions = _settled_position_identities(db, ctx, bank, batch.source_system)
     context = ValidationContext(
         as_of_date=payload.as_of_date,
@@ -1606,6 +1595,32 @@ def _known_references(
         current(CanonicalGlAccount.account_code, CanonicalGlAccount),
         current(CanonicalPosition.source_reference, CanonicalPosition),
     )
+
+
+def _lock_position_identities(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    source_system: str,
+    references: Collection[str],
+) -> None:
+    """Lock targeted identities using one reference-array parameter for any batch size."""
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    db.scalars(
+        select(CanonicalPosition)
+        .where(
+            CanonicalPosition.organization_id == ctx.organization_id,
+            CanonicalPosition.bank_id == bank.id,
+            CanonicalPosition.source_system == source_system,
+            CanonicalPosition.source_reference
+            == any_(bindparam("position_references", list(references), type_=ARRAY(String()))),
+            *is_current_generation(CanonicalPosition),
+        )
+        .order_by(CanonicalPosition.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
 
 
 def _settled_position_identities(
