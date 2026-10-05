@@ -384,9 +384,12 @@ Install the native binaries once on macOS (do not run `brew services start`):
 brew install postgresql@17 homebrew/core/minio
 ```
 
-PostgreSQL 17 matches CI; PostgreSQL 18 is refused. The Homebrew core bottles
-work even when the MinIO tap's upstream download URLs have been removed.
-On other Unix hosts, install MinIO on `PATH` and point `AQS_POSTGRES_BIN` at
+PostgreSQL 17 matches CI; PostgreSQL 18 is refused. Native ownership checks use
+`lsof` (included on macOS) to confirm the child owns its port before sending
+health, storage or database requests; an occupied port fails without provisioning
+the existing service. The Homebrew core bottles work even when the MinIO tap's
+upstream download URLs have been removed.
+On other Unix hosts, install MinIO and `lsof` on `PATH` and point `AQS_POSTGRES_BIN` at
 the PostgreSQL 17 `bin` directory.
 
 ```bash

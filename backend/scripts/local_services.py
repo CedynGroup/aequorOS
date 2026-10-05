@@ -104,6 +104,7 @@ class LocalServices:
         self.state_file = directory / "state.json"
         self.state = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
         self.started: list[str] = []
+        self.minio_process: subprocess.Popen[bytes] | None = None
 
     def save(self) -> None:
         temporary = self.state_file.with_suffix(".tmp")
@@ -136,6 +137,57 @@ class LocalServices:
         expected = " ".join(record["identity"])
         actual = result.stdout.strip()
         return result.returncode == 0 and (actual == expected or actual.startswith(expected + " "))
+
+    def require_native_process(self, service: str) -> None:
+        if self.state[service]["mode"] != "native":
+            return
+        name = "MinIO" if service == "minio" else "PostgreSQL"
+        if (
+            service == "minio"
+            and self.minio_process is not None
+            and self.minio_process.poll() is not None
+        ):
+            raise RuntimeError(
+                f"{name} exited during startup; inspect {self.directory / 'minio.log'}"
+            )
+        if not self.owns_process(service):
+            raise RuntimeError(f"{name} is not running as an owned native process")
+
+    def native_listener_ready(self, service: str) -> bool:
+        if self.state[service]["mode"] != "native":
+            return True
+        self.require_native_process(service)
+        record = self.state[service]
+        pid = (
+            int((self.directory / "postgres/postmaster.pid").read_text().splitlines()[0])
+            if service == "postgres"
+            else record["pid"]
+        )
+        lsof = shutil.which("lsof")
+        if not lsof:
+            raise RuntimeError("Native service ownership checks require lsof (included on macOS)")
+        # A healthy endpoint can belong to another worktree when bind fails.
+        # Confirm our process owns the listener before sending any request.
+        try:
+            result = subprocess.run(
+                [
+                    lsof,
+                    "-nP",
+                    "-a",
+                    "-p",
+                    str(pid),
+                    "-iTCP:" + str(record["port"]),
+                    "-sTCP:LISTEN",
+                    "-t",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Timed out checking the native {service} listener") from None
+        return result.returncode == 0 and str(pid) in result.stdout.splitlines()
 
     @staticmethod
     def project_name() -> str:
@@ -281,6 +333,7 @@ class LocalServices:
                 stderr=log,
                 start_new_session=True,
             )
+        self.minio_process = process
         self.state["minio"]["pid"] = process.pid
         self.save()
 
@@ -321,14 +374,22 @@ class LocalServices:
         url = f"postgresql://postgres:postgres@127.0.0.1:{port}/postgres"
         deadline = time.monotonic() + 60
         while True:
-            try:
-                connection = psycopg.connect(url, autocommit=True, connect_timeout=2)
-                break
-            except psycopg.OperationalError:
-                if time.monotonic() >= deadline:
-                    raise
-                time.sleep(0.2)
+            if self.native_listener_ready("postgres"):
+                try:
+                    connection = psycopg.connect(url, autocommit=True, connect_timeout=2)
+                    break
+                except psycopg.OperationalError:
+                    if time.monotonic() >= deadline:
+                        raise
+            if time.monotonic() >= deadline:
+                raise RuntimeError("PostgreSQL did not open its owned listener")
+            time.sleep(0.2)
         with connection:
+            self.require_native_process("postgres")
+            if self.state["postgres"]["mode"] == "native":
+                row = connection.execute("SHOW data_directory").fetchone()
+                if row is None or Path(row[0]).resolve() != (self.directory / "postgres").resolve():
+                    raise RuntimeError("PostgreSQL endpoint is not this worktree's cluster")
             if not connection.execute(
                 "SELECT 1 FROM pg_database WHERE datname='risk_service'"
             ).fetchone():
@@ -361,15 +422,18 @@ class LocalServices:
         endpoint = f"http://127.0.0.1:{self.state['minio']['port']}"
         deadline = time.monotonic() + 60
         while True:
-            try:
-                with urlopen(endpoint + "/minio/health/live", timeout=2):
+            if self.native_listener_ready("minio"):
+                try:
+                    with urlopen(endpoint + "/minio/health/live", timeout=2):
+                        pass
+                except OSError:
+                    pass
+                else:
+                    self.require_native_process("minio")
                     break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise RuntimeError(
-                        f"MinIO did not start; inspect {self.directory / 'minio.log'}"
-                    ) from None
-                time.sleep(0.2)
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f"MinIO did not start; inspect {self.directory / 'minio.log'}")
+            time.sleep(0.2)
         client = boto3.client(
             "s3",
             endpoint_url=endpoint,
@@ -378,15 +442,18 @@ class LocalServices:
             region_name="us-east-1",
         )
         try:
+            self.require_native_process("minio")
             client.head_bucket(Bucket="risk-local")
         except ClientError as error:
             if error.response["Error"]["Code"] != "404":
                 raise
+            self.require_native_process("minio")
             client.create_bucket(Bucket="risk-local")
         # Health/bucket checks still pass when the drive is full or KMS is broken.
         # Exercise the encrypted artifact path before starting a long test suite.
         key = f"local-services/readiness/{uuid.uuid4()}"
         try:
+            self.require_native_process("minio")
             client.put_object(
                 Bucket="risk-local",
                 Key=key,
@@ -402,11 +469,13 @@ class LocalServices:
                 ) from error
             raise
         try:
+            self.require_native_process("minio")
             response = client.get_object(Bucket="risk-local", Key=key)
             with response["Body"] as body:
                 if body.read() != b"ready" or response.get("ServerSideEncryption") != "aws:kms":
                     raise RuntimeError("MinIO encrypted artifact readiness check failed")
         finally:
+            self.require_native_process("minio")
             client.delete_object(Bucket="risk-local", Key=key)
         return self.storage_environment()
 
@@ -452,6 +521,9 @@ class LocalServices:
                         if time.monotonic() >= deadline:
                             raise RuntimeError("MinIO did not shut down; data retained")
                         time.sleep(0.1)
+            if service == "minio" and self.minio_process is not None:
+                self.minio_process.wait(timeout=20)
+                self.minio_process = None
             del self.state[service]
             self.save()
 

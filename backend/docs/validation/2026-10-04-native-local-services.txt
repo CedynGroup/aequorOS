@@ -116,3 +116,50 @@ Cancellation repair
   cancellation regression above passes. Default Homebrew data was untouched.
 
 no user-visible change - screenshots not applicable
+
+Post-pipeline startup collision follow-up — 2026-10-05
+  Reproduced on the published head before fixing: a native MinIO child failed
+  to bind an occupied port and exited, but provisioning sent health, bucket
+  and encrypted PutObject requests to the server already occupying it.
+  The executable regression failed with the existing server's HTTP 501 at
+  PutObject, proving the unwanted request. No shared service was used.
+  The fix requires the owned native PID to own the TCP listener before any
+  health/storage/database connection, and detects native MinIO child exit.
+  PostgreSQL additionally verifies its actual data_directory before creating
+  databases or altering roles. Its existing pg_ctl startup wait already
+  rejects bind collisions; a live regression confirms the first cluster has
+  no newly created risk_service database or risk_service_test role afterward.
+
+  uv run --project backend pytest backend/tests/scripts/test_local_services.py
+    backend/tests/architecture/test_ci_task_wiring.py -q
+    --basetemp="$PWD/.local-services/followup-pytest"
+  44 passed in 12.23s
+  Both immediate and exited-MinIO collisions reject without sending even a
+  health request. The pre-existing HTTP server remains alive. All owned test
+  records/processes are cleaned. Native collision tests require the relevant
+  installed binary; both services' no-connection ownership tests are hermetic.
+  Raw log: .local-services/followup-lifecycle.log
+
+  AQS_LOCAL_SERVICES=native mise run risk-service:test-storage
+  45 passed in 0.60s
+  Raw log: .local-services/followup-storage.log
+
+  cd backend
+  AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run
+    --postgres --role-admin -- uv run pytest
+    tests/db/test_postgres_migrations.py::test_postgres_financial_workspace_rls_isolates_tenant_rows -q
+  1 passed in 13.80s; owned PostgreSQL stopped cleanly.
+  Raw log: .local-services/followup-postgres.log
+
+  Ruff formatting/checks passed; basedpyright with the backend configuration
+  returned 0 errors, 0 warnings. OrbStack remains Stopped. Default Homebrew
+  PostgreSQL PID 567 remains untouched.
+
+  Full journeys rerun after the ownership fix:
+  AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e
+    --reporter=list,./e2e/support/quarantine-reporter.ts
+  212 passed, 4 skipped in 9.7 minutes; exit 0.
+  Discovered 216; executed 212; quarantine size 0; integrity errors [].
+  Raw log: .local-services/followup-journeys.log
+  Machine-readable counts: .local-services/followup-journeys.json
+  Managed state empty after exit; native MinIO stopped cleanly.
