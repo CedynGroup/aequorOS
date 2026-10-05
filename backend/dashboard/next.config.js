@@ -13,6 +13,13 @@ const nextConfig = {
   // e2e API origin into a running dev server's served chunks. The Playwright
   // config sets NEXT_DIST_DIR=.next-e2e; everyone else uses the default `.next`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Native journeys share the host disk with MinIO. Avoid accumulating a
+  // multi-GB compiler cache that can exhaust its free-drive write threshold.
+  ...(process.env.NEXT_DIST_DIR === ".next-e2e" &&
+  process.env.AQS_LOCAL_SERVICES_MODE === "native" &&
+  !process.env.CI
+    ? { experimental: { turbopackFileSystemCacheForDev: false } }
+    : {}),
   // Self-contained server output for the Docker/Coolify image (.next/standalone).
   output: "standalone",
   // Monorepo: trace files from the repo root so the standalone bundle picks up

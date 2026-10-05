@@ -113,3 +113,6 @@ data_snowflake/
 
 # ICAAP implementation ledger: local only (agent audit reports name open weaknesses; repo is public).
 /.ai/
+
+# Per-worktree native test services (data, credentials, PID state and logs).
+/.local-services/

@@ -294,8 +294,12 @@ TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/
   mise run risk-service:test-postgres
 ```
 
-(Local alternative: `docker compose up -d risk-postgres` and point
-`TEST_DATABASE_URL` at it.)
+Without a supplied URL, the task provisions worktree-local Postgres, using
+native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
+to force that mode. Native MinIO setup, isolation and shutdown are documented
+in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
+The existing `docker compose up -d risk-postgres` alternative also remains
+available; point `TEST_DATABASE_URL` at it to reuse that service.
 
 ## Lint And Type Check
 
