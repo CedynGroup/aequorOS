@@ -65,7 +65,9 @@ def _entity_record(entry: CatalogEntry, record: OfsRecord, source_locator: str) 
         # The id field is often the OFS record id, not a separate assignment.
         if value is None and t24_field == entry.id_field:
             value = record.record_id or None
-        if value is not None:
+        if value is not None or (
+            canonical_key == "origination_date" and t24_field in record.fields
+        ):
             data[canonical_key] = value
     for canonical_key, t24_lcy in entry.lcy_fields.items():
         value = record.scalar(t24_lcy)
