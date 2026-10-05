@@ -342,6 +342,52 @@ class TestHappyPath:
 
 
 class TestGatingAndFailure:
+    @pytest.mark.parametrize(
+        ("cell", "value"),
+        [
+            ("C2", "GHSS"),
+            (
+                "A2",
+                "X" * (CanonicalPosition.__table__.c.source_reference.type.length + 1),
+            ),
+        ],
+    )
+    def test_unrepresentable_identity_keeps_the_rejected_batch_and_its_findings(
+        self,
+        db_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        cell: str,
+        value: str,
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, RECON_MAPPING)
+        workbook = fixtures.build_reconciliation_workbook(
+            tmp_path / "unrepresentable.xlsx", gl_balance="1500"
+        )
+        book = openpyxl.load_workbook(workbook)
+        book["Loans"][cell] = value
+        book.save(workbook)
+        book.close()
+
+        with monkeypatch.context() as without_reservations:
+            without_reservations.setattr(ingestion, "_reserve_position_identities", lambda *args: None)
+            before = start_batch(db_client, bank_id, workbook)["batch"]
+        after = start_batch(db_client, bank_id, workbook)["batch"]
+
+        assert before["status"] == after["status"] == "rejected"
+        assert before["validation_report"] == after["validation_report"]
+        assert after["records_blocked"] == 3
+        report = after["validation_report"]
+        assert report["reconciliation"]["gl_vs_subledger"]["1000"]["within_tolerance"] is False
+        assert any(
+            failure["rule"] == "currency_iso_4217" for failure in report["failures"]
+        ) == (cell == "C2")
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        assert positions == []
+
     def test_reconciliation_break_rejects_the_batch(
         self, db_client: TestClient, tmp_path: Path
     ) -> None:

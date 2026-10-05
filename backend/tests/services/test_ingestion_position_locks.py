@@ -51,10 +51,10 @@ def test_sqlite_skips_the_position_lock_query() -> None:
     db.scalars.assert_not_called()
 
 
-@pytest.mark.parametrize("release", [False, True])
-def test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, release: bool
-) -> None:
+@pytest.fixture
+def reservation_context(
+    db_session: Session,
+) -> tuple[TenantContext, Bank, IngestionBatch, LineageRecord]:
     bank = Bank(
         organization_id=ORG_1,
         name="Position reservation test",
@@ -85,7 +85,17 @@ def test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome(
     )
     db_session.add(lineage)
     db_session.flush()
-    ctx = TenantContext(organization_id=ORG_1)
+    return TenantContext(organization_id=ORG_1), bank, batch, lineage
+
+
+@pytest.mark.parametrize("release", [False, True])
+def test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    release: bool,
+    reservation_context: tuple[TenantContext, Bank, IngestionBatch, LineageRecord],
+) -> None:
+    ctx, bank, batch, lineage = reservation_context
 
     def records(currency: str) -> CanonicalRecords:
         return CanonicalRecords(
@@ -123,3 +133,37 @@ def test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome(
             select(CanonicalPosition.id).where(CanonicalPosition.bank_id == bank.id)
         ).all()
     ) == int(release)
+
+
+@pytest.mark.parametrize(
+    "unrepresentable",
+    [
+        {"currency": "GHSS"},
+        {"source_reference": "X" * (CanonicalPosition.__table__.c.source_reference.type.length + 1)},
+        {"position_type": "UNKNOWN"},
+    ],
+)
+def test_reservations_skip_unrepresentable_identities_without_changing_input_records(
+    db_session: Session,
+    reservation_context: tuple[TenantContext, Bank, IngestionBatch, LineageRecord],
+    unrepresentable: dict[str, str],
+) -> None:
+    ctx, bank, batch, lineage = reservation_context
+    valid = PositionData(
+        source_reference="V" * CanonicalPosition.__table__.c.source_reference.type.length,
+        source_locator="Loans:2",
+        position_type="LOAN",
+        currency="GHZ",
+        balance=Decimal("100"),
+    )
+    invalid = valid.model_copy(update={"source_reference": "INVALID", **unrepresentable})
+    records = CanonicalRecords(positions=[valid, invalid])
+    before = records.model_dump()
+    _reserve_position_identities(db_session, ctx, bank, batch, lineage, records)
+    (held,) = db_session.scalars(
+        select(CanonicalPosition).where(CanonicalPosition.bank_id == bank.id)
+    ).all()
+    assert held.source_reference == valid.source_reference
+    assert held.currency == valid.currency
+    assert held.validation_status == "pending"
+    assert records.model_dump() == before

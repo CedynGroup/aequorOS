@@ -39,6 +39,7 @@ from app.domain.ingestion.constants import (
     BATCH_ACCEPTED_STATUSES,
     DEPOSIT_ACCOUNT_TYPES,
     INCLUDED_VALIDATION_STATUSES,
+    POSITION_TYPES,
     SourceSystem,
 )
 from app.domain.ingestion.contracts import (
@@ -1626,7 +1627,14 @@ def _reserve_position_identities(  # noqa: PLR0913
             )
         )
     )
-    positions = {row.source_reference: row for row in records.positions}
+    columns = CanonicalPosition.__table__.c
+    positions = {
+        row.source_reference: row
+        for row in records.positions
+        if len(row.source_reference) <= columns.source_reference.type.length
+        and len(row.currency) <= columns.currency.type.length
+        and row.position_type in POSITION_TYPES
+    }
     rows = [
         {
             "id": new_uuid7(),
