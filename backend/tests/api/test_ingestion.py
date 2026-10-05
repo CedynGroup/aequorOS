@@ -9,12 +9,12 @@ from decimal import Decimal
 from pathlib import Path
 from threading import Event
 from time import monotonic, sleep
-from typing import Any
+from typing import Any, cast
 
 import openpyxl
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import String, func, select
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
@@ -348,7 +348,14 @@ class TestGatingAndFailure:
             ("C2", "GHSS"),
             (
                 "A2",
-                "X" * (CanonicalPosition.__table__.c.source_reference.type.length + 1),
+                "X"
+                * (
+                    cast(
+                        int,
+                        cast(String, CanonicalPosition.__table__.c.source_reference.type).length,
+                    )
+                    + 1
+                ),
             ),
         ],
     )
@@ -371,7 +378,9 @@ class TestGatingAndFailure:
         book.close()
 
         with monkeypatch.context() as without_reservations:
-            without_reservations.setattr(ingestion, "_reserve_position_identities", lambda *args: None)
+            without_reservations.setattr(
+                ingestion, "_reserve_position_identities", lambda *args: None
+            )
             before = start_batch(db_client, bank_id, workbook)["batch"]
         after = start_batch(db_client, bank_id, workbook)["batch"]
 
@@ -380,9 +389,9 @@ class TestGatingAndFailure:
         assert after["records_blocked"] == 3
         report = after["validation_report"]
         assert report["reconciliation"]["gl_vs_subledger"]["1000"]["within_tolerance"] is False
-        assert any(
-            failure["rule"] == "currency_iso_4217" for failure in report["failures"]
-        ) == (cell == "C2")
+        assert any(failure["rule"] == "currency_iso_4217" for failure in report["failures"]) == (
+            cell == "C2"
+        )
         positions = db_client.get(
             f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
         ).json()["positions"]
@@ -619,7 +628,9 @@ class TestPositionIdentityCorrection:
             loaded["Loans"].delete_cols(10)
             loaded.save(workbook)
         next_date = date(2026, 7, 31)
-        updated = start_batch(db_client, bank_id, workbook, as_of_date=next_date.isoformat())["batch"]
+        updated = start_batch(db_client, bank_id, workbook, as_of_date=next_date.isoformat())[
+            "batch"
+        ]
         assert updated["status"] == "accepted"
         assert updated["records_error"] == 0
         assert origination_date_of("LN-0001") == date(2024, 1, 10)
@@ -759,7 +770,8 @@ class TestPositionIdentityCorrection:
         ({"Originated": date(2024, 2, 1)}, "origination_date"),
     ],
 )
-def test_concurrent_identity_correction_observes_the_first_acceptance(
+# One concurrent lifecycle requires explicit fixtures and both transaction flows.
+def test_concurrent_identity_correction_observes_the_first_acceptance(  # noqa: PLR0913, PLR0915
     db_client: TestClient,
     tmp_path: Path,
     storage_engine: InMemoryStorageClient,
@@ -783,12 +795,15 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
     else:
         with session_factory() as session:
             session.info["organization_id"] = ORG_1
-            assert session.scalars(
-                select(CanonicalPosition.id).where(
-                    CanonicalPosition.bank_id == bank_id,
-                    CanonicalPosition.source_reference == "LN-0001",
-                )
-            ).first() is None
+            assert (
+                session.scalars(
+                    select(CanonicalPosition.id).where(
+                        CanonicalPosition.bank_id == bank_id,
+                        CanonicalPosition.source_reference == "LN-0001",
+                    )
+                ).first()
+                is None
+            )
     first_workbook = loans_workbook(tmp_path / "first.xlsx", {})
     second_workbook = loans_workbook(tmp_path / "second.xlsx", correction)
     ctx = TenantContext(organization_id=ORG_1)
@@ -846,9 +861,10 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
                 assert second_started.wait(timeout=5)
                 with session_factory() as observer:
                     deadline = monotonic() + 5
-                    while first_pid not in observer.scalars(
-                        select(func.pg_blocking_pids(second_pids[0]))
-                    ).one():
+                    while (
+                        first_pid
+                        not in observer.scalars(select(func.pg_blocking_pids(second_pids[0]))).one()
+                    ):
                         assert monotonic() < deadline, "The second correction did not wait."
                         sleep(0.01)
                 assert not second_validation_started.is_set()

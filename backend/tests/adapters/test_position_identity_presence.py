@@ -28,7 +28,12 @@ from app.domain.ingestion.validation import (
 
 @pytest.mark.parametrize(
     "translate",
-    [ExcelCsvAdapter().translate, ApiPushAdapter().translate, translate_t24, translate_database_direct],
+    [
+        ExcelCsvAdapter().translate,
+        ApiPushAdapter().translate,
+        translate_t24,
+        translate_database_direct,
+    ],
     ids=["excel", "push", "t24", "database_direct"],
 )
 @pytest.mark.parametrize("source_fields", ["Originated", ["Missing", "Originated"]])

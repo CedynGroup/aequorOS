@@ -32,9 +32,7 @@ REFERENCE = "T24-CORRECTION-1"
 HELD_DATE = date(2042, 1, 1)
 
 
-def stage_bundle(
-    path: Path, mode: str, domain: CoreBankingDomain, values: dict[str, Any]
-) -> Path:
+def stage_bundle(path: Path, mode: str, domain: CoreBankingDomain, values: dict[str, Any]) -> Path:
     entry = load_mode_catalog(mode).entries[domain]
     native_fields = {
         native: values[canonical]
@@ -99,7 +97,9 @@ def test_t24_bundle_preserves_origination_date_presence_through_validation(
         default_validation_config(),
         ValidationContext(
             as_of_date=extraction.as_of_date,
-            settled_positions={REFERENCE: PositionIdentity(position.position_type, "GHS", HELD_DATE)},
+            settled_positions={
+                REFERENCE: PositionIdentity(position.position_type, "GHS", HELD_DATE)
+            },
         ),
     )
     findings = [finding for finding in outcome.findings if finding.rule == SETTLED_IDENTITY_RULE]

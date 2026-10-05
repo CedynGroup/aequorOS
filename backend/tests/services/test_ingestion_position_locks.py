@@ -1,9 +1,10 @@
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import String, select
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
@@ -140,7 +141,13 @@ def test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome(
     "unrepresentable",
     [
         {"currency": "GHSS"},
-        {"source_reference": "X" * (CanonicalPosition.__table__.c.source_reference.type.length + 1)},
+        {
+            "source_reference": "X"
+            * (
+                cast(int, cast(String, CanonicalPosition.__table__.c.source_reference.type).length)
+                + 1
+            )
+        },
         {"position_type": "UNKNOWN"},
     ],
 )
@@ -151,7 +158,8 @@ def test_reservations_skip_unrepresentable_identities_without_changing_input_rec
 ) -> None:
     ctx, bank, batch, lineage = reservation_context
     valid = PositionData(
-        source_reference="V" * CanonicalPosition.__table__.c.source_reference.type.length,
+        source_reference="V"
+        * cast(int, cast(String, CanonicalPosition.__table__.c.source_reference.type).length),
         source_locator="Loans:2",
         position_type="LOAN",
         currency="GHZ",
