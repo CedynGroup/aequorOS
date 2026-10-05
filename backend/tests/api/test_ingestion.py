@@ -530,6 +530,73 @@ def derived_position(
 class TestPositionIdentityCorrection:
     """Identity fields follow corrections until the first accepted snapshot, then freeze."""
 
+    def test_unrepresentable_correction_preserves_identity_and_persists_error_snapshot(
+        self, db_client: TestClient, db_session: Session, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+        initial = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(
+                tmp_path / "initial.xlsx",
+                {"Type": "DEPOSIT", "Ccy": "GHZ", "Originated": date(2042, 1, 1)},
+            ),
+        )["batch"]
+        assert initial["status"] == "accepted_with_warnings"
+        assert initial["records_error"] == 1
+        before = db_session.scalars(
+            select(CanonicalPosition).where(
+                CanonicalPosition.bank_id == bank_id,
+                CanonicalPosition.source_reference == "LN-0001",
+            )
+        ).one()
+        held = (
+            before.id,
+            before.position_type,
+            before.currency,
+            before.origination_date,
+            before.ingestion_batch_id,
+            before.lineage_id,
+        )
+
+        changed = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(tmp_path / "changed.xlsx", {"Ccy": "GHSS"}),
+        )["batch"]
+        assert changed["status"] == "accepted_with_warnings"
+        assert changed["records_error"] == 1
+        (failure,) = changed["validation_report"]["failures"]
+        assert failure["rule"] == "currency_iso_4217"
+        assert failure["source_reference"] == "LN-0001"
+        assert "GHSS" in failure["detail"]
+        db_session.refresh(before)
+        assert (
+            before.id,
+            before.position_type,
+            before.currency,
+            before.origination_date,
+            before.ingestion_batch_id,
+            before.lineage_id,
+        ) == held
+        row = blotter_row(db_client, bank_id, "LN-0001")
+        assert (row["position_type"], row["currency"], row["validation_status"]) == (
+            "DEPOSIT",
+            "GHZ",
+            "error",
+        )
+        (snapshot,) = db_session.scalars(
+            select(CanonicalPositionSnapshot).where(
+                CanonicalPositionSnapshot.position_id == before.id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            )
+        ).all()
+        assert str(snapshot.ingestion_batch_id) == changed["id"]
+        assert snapshot.validation_status == "error"
+        assert derived_position(bank_id, "LN-0001") is None
+
     @pytest.mark.parametrize("initial_currency", ["GHZ", "GHS"])
     @pytest.mark.parametrize("omission", ["unmapped", "absent_column"])
     def test_omitted_origination_date_preserves_the_identity_and_accepts_the_balance(

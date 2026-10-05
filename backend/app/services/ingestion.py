@@ -48,6 +48,7 @@ from app.domain.ingestion.contracts import (
     CanonicalRecords,
     ExtractionResult,
     MappingConfig,
+    PositionData,
 )
 from app.domain.ingestion.enrichment import apply_manual_override
 from app.domain.ingestion.optional_position_fields import normalize_positions
@@ -1608,6 +1609,15 @@ def _known_references(
     )
 
 
+def _position_identity_is_representable(data: PositionData) -> bool:
+    columns = CanonicalPosition.__table__.c
+    return (
+        len(data.source_reference) <= columns.source_reference.type.length
+        and len(data.currency) <= columns.currency.type.length
+        and data.position_type in POSITION_TYPES
+    )
+
+
 def _reserve_position_identities(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
@@ -1627,13 +1637,10 @@ def _reserve_position_identities(  # noqa: PLR0913
             )
         )
     )
-    columns = CanonicalPosition.__table__.c
     positions = {
         row.source_reference: row
         for row in records.positions
-        if len(row.source_reference) <= columns.source_reference.type.length
-        and len(row.currency) <= columns.currency.type.length
-        and row.position_type in POSITION_TYPES
+        if _position_identity_is_representable(row)
     }
     rows = [
         {
@@ -1961,7 +1968,10 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             )
             current_positions[data.source_reference] = position
             new_positions.append(position)
-        elif data.source_reference not in settled_positions:
+        elif (
+            data.source_reference not in settled_positions
+            and _position_identity_is_representable(data)
+        ):
             position.position_type = data.position_type
             position.currency = data.currency
             if "origination_date" in data.model_fields_set:
