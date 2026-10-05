@@ -740,16 +740,12 @@ the scope; its institution-grain and non-attributable measures still refuse it.
 Other shared-gate callers must retain the default unless they implement and test
 row filtering, pagination and every count.
 
-Apply migration `202610040083` **before deploying this code**. It revokes every
-non-revoked narrowed non-Credit binding across tenants, retaining its original
-scope and recording system revocation on the row. It never converts a narrow
-scope into `all`. Each affected principal's authorization version advances once,
-and live refresh tokens are revoked in the same transaction. For affected
-machine principals it also revokes their keys and all machine bindings and
-deactivates the identity, preserving the credential lifecycle. Unaffected
-whole-book grants, Credit grants and keys stay unchanged. The CHECK permits
-unsupported scope only on revoked historical rows; they cannot be reactivated.
-Downgrade removes that CHECK but never resurrects grants or credentials.
+Migration `202610040083` adds only the Credit-only data-scope CHECK, matching
+freshly created schemas. It does not rewrite grants, invalidate sessions or
+revoke integration keys. This rollout has only demo users; the disposable demo
+bootstrap explicitly grants whole-institution coverage for its non-Credit
+modules. Unsupported stored scopes are rejected by the schema rather than
+converted into whole-institution grants. Downgrade removes only the CHECK.
 
 Shared live summary, alerts, snapshots and window analytics also gate capital
 (CAPITAL/aggregated) and rating (MARKETS/aggregated), previously served ungated.
@@ -761,7 +757,7 @@ latest and detail reads require RISK/aggregated (history) or RISK/confidential
 retains its existing mutation gate as well. This closes the parallel read path
 that otherwise disclosed capital stress outcomes independently of the FX
 projection. This is a denial-only access change; no bindings are backfilled. Run
-`scripts/authorization_access_impact.py` for each deployment after the migration
+`scripts/authorization_access_impact.py` for each enforcement deployment
 and retain its dated output outside the repository.
 
 Regulatory **packages** follow their return authority, independently of the
@@ -787,8 +783,6 @@ No return authority is inferred or backfilled. Existing whole-institution REG
 to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
-There are no active customers; unsupported stored narrow grants and credentials
-are revoked by the migration above rather than widened or grandfathered.
 
 Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
@@ -798,6 +792,7 @@ row-filtered Credit control;
 `tests/services/test_institution_data_scope_enforcement.py` exercises matching
 narrowed bindings through both shared gates and family visibility;
 `tests/api/test_data_scope_grants.py` refuses every unsupported module;
-`tests/db/test_credit_only_narrowed_grants_migration.py` proves cross-tenant
-revocation, session invalidation, credential lifecycle and non-resurrection on
-Postgres. The existing Credit and BI suites prove row filtering on their surfaces.
+`tests/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
+and downgrade/re-upgrade on Postgres;
+`tests/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on
+both database dialects. The existing Credit and BI suites prove row filtering on their surfaces.

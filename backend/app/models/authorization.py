@@ -122,7 +122,7 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_authorization_bindings_data_scope_values",
         ),
         CheckConstraint(
-            "data_scope_kind = 'all' OR module_scope = 'credit' OR status = 'revoked'",
+            "data_scope_kind = 'all' OR module_scope = 'credit'",
             name="ck_authorization_bindings_narrowed_module",
         ),
         CheckConstraint(

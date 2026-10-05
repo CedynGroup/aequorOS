@@ -45,9 +45,9 @@ The ``data scope`` column answers the Phase 4 cutover of 2026-09-27 (migration
 book this user's ``view`` capabilities read. Before that migration every grant
 meant the whole institution; since it, a binding may name branches or regions
 and Credit row surfaces and BI queries inject that slice as a filter the
-reader cannot remove. Whole-institution feeds refuse narrowed grants. Migration
-202610040083 revokes unsupported narrowed non-Credit grants before deployment;
-ordinary returns now require whole-institution REG/restricted authority, while
+reader cannot remove. Whole-institution feeds refuse narrowed grants. Only
+Credit supports branch/region grants; ordinary returns require whole-institution
+REG/restricted authority, while
 ICAAP keeps CAPITAL/confidential. A cutover can change what a person SEES without
 changing which module they may open, and a diff of the module columns alone
 would miss it — this column is what shows a narrowing or a widening on release.

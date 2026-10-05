@@ -78,9 +78,6 @@ Each rule is stated in full in the document the index names.
   `authorization.invalidate_user_authorization` in its transaction; every new
   `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration; gate every
   enforcement cutover with `backend/scripts/authorization_access_impact.py`.
-  **Data-scope enforcement and deployment:** see the
-  [whole-institution contract](backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
-  before adding institution reads or row-filtering opt-outs. Only Credit grants support narrowing.
 - **Calculation hashes and digests are value-based.** Never put a row id
   (`fact.id`) or a volatile field into an `input_hash` snapshot or an attestation
   digest; the live engine re-derives facts with new UUIDs on every refresh.
