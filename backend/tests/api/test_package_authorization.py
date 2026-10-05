@@ -24,6 +24,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.models import (
     AuthorizationBinding,
@@ -34,7 +35,7 @@ from app.models import (
 )
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -420,6 +421,92 @@ def test_binding_only_signer_queue_filters_by_whole_institution_family(
     )
     assert response.status_code == 200, response.text
     assert [row["package_id"] for row in response.json()["items"]] == [str(regulatory)]
+
+
+@pytest.mark.parametrize("role", ["viewer", "account_admin"])
+def test_binding_only_signer_can_set_up_only_their_own_signature(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "test-signer-setup-pepper")
+    get_settings.cache_clear()
+    with get_sessionmaker()() as session:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.role = role
+        session.commit()
+    version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=(role,), authorization_version=version)
+    identity_url = "/api/v1/attestation/signer-identity"
+    appearance_url = "/api/v1/attestation/my-signature-appearance"
+
+    identity = db_client.get(identity_url, headers=auth)
+    assert identity.status_code == 200, identity.text
+    signer_id = identity.json()["signer_id"]
+    assert identity.json()["user_id"] == str(USER_1)
+    assert db_client.get(identity_url, headers=auth).json()["signer_id"] == signer_id
+    empty = db_client.get(appearance_url, headers=auth)
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["adopted"] is False
+    assert empty.json()["signer_id"] == signer_id
+
+    for name in ("Ama Mensah", "Ama A. Mensah"):
+        adopted = db_client.put(
+            appearance_url,
+            headers=auth,
+            json={"kind": "typed", "typed_name": name, "typed_font": "times_italic"},
+        )
+        assert adopted.status_code == 200, adopted.text
+        assert adopted.json()["adopted"] is True
+        assert adopted.json()["signer_id"] == signer_id
+        assert adopted.json()["typed_name"] == name
+        reread = db_client.get(appearance_url, headers=auth)
+        assert reread.status_code == 200, reread.text
+        stored = reread.json()
+        assert stored["adopted"] is True
+        assert stored["signer_id"] == signer_id
+        assert stored["kind"] == "typed"
+        assert stored["typed_name"] == name
+        assert stored["typed_font"] == "times_italic"
+
+    other_user = _add_user()
+    other_auth = headers(user_id=other_user, roles=("viewer",))
+    other = db_client.get(appearance_url, headers=other_auth)
+    assert other.status_code == 200, other.text
+    assert other.json()["adopted"] is False
+    assert other.json()["signer_id"] != signer_id
+    assert other.json()["typed_name"] is None
+
+
+@pytest.mark.parametrize(
+    ("method", "endpoint"),
+    [
+        ("GET", "signer-identity"),
+        ("GET", "my-signature-appearance"),
+        ("PUT", "my-signature-appearance"),
+    ],
+)
+@pytest.mark.parametrize("principal", ["impersonation", "machine"])
+def test_signer_setup_refuses_noninteractive_principals(
+    db_client: TestClient, method: str, endpoint: str, principal: str
+) -> None:
+    auth = (
+        _impersonation_headers()
+        if principal == "impersonation"
+        else integration_key_headers(SAMPLE_BANK_ID)
+    )
+    response = db_client.request(
+        method,
+        f"/api/v1/attestation/{endpoint}",
+        headers=auth,
+        json={"kind": "typed", "typed_name": "Examiner", "typed_font": "times_italic"}
+        if method == "PUT"
+        else None,
+    )
+    assert response.status_code == (401 if principal == "machine" else 403), response.text
 
 
 @pytest.mark.parametrize("authority", ["narrowed", "unbound"])
@@ -938,9 +1025,7 @@ def test_icaap_capital_approver_ignores_regulatory_near_miss(
         )
         assert response.status_code == 200, response.text
     else:
-        response = _decide_approval(
-            db_client, package_id, request_headers=request_headers
-        )
+        response = _decide_approval(db_client, package_id, request_headers=request_headers)
         assert response.status_code == 200, response.text
 
 

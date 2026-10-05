@@ -23,7 +23,6 @@ from fastapi import APIRouter, Request
 from app.api.deps import (
     DbSession,
     GrantAdminTenant,
-    MutationTenant,
     ScopedMutationTenant,
     Tenant,
 )
@@ -62,7 +61,7 @@ router = APIRouter(tags=["attestation"])
     response_model=SignerIdentityRead,
     operation_id="getMySignerIdentity",
 )
-def get_my_signer_identity(db: DbSession, ctx: MutationTenant) -> SignerIdentityRead:
+def get_my_signer_identity(db: DbSession, ctx: ScopedMutationTenant) -> SignerIdentityRead:
     """The caller's own permanent signer identity, provisioning it if absent."""
     return attestation_api.my_signer_identity(db, ctx)
 
@@ -245,7 +244,7 @@ def list_returns_awaiting_my_signature(
     response_model=AdoptedSignatureRead,
     operation_id="getMyAdoptedSignature",
 )
-def get_my_adopted_signature(db: DbSession, ctx: MutationTenant) -> AdoptedSignatureRead:
+def get_my_adopted_signature(db: DbSession, ctx: ScopedMutationTenant) -> AdoptedSignatureRead:
     """The caller's adopted mark, plus the font choices available for a typed one."""
     return attestation_api.my_adopted_signature(db, ctx)
 
@@ -256,7 +255,7 @@ def get_my_adopted_signature(db: DbSession, ctx: MutationTenant) -> AdoptedSigna
     operation_id="adoptMySignature",
 )
 def adopt_my_signature(
-    payload: AdoptSignatureRequest, db: DbSession, ctx: MutationTenant
+    payload: AdoptSignatureRequest, db: DbSession, ctx: ScopedMutationTenant
 ) -> AdoptedSignatureRead:
     """Adopt or re-adopt the caller's own signature mark.
 
