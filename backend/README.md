@@ -158,14 +158,24 @@ BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
 with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
 organization, and security settings cannot be changed through this endpoint.
 
+### Legacy case vertical
+
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
 periods, balances, cash flows, obligations, and covenants. These mutations
 require an authenticated mutation-capable bearer principal; each request body
 requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
-refreshed `validation` state. See `docs/architecture.md` for the complete
-contract and correction-history behavior.
+refreshed `validation` state. The request and response schemas live in
+[`app/schemas/financial_workspace.py`](app/schemas/financial_workspace.py);
+[`app/services/financial_canonical_edits.py`](app/services/financial_canonical_edits.py) owns
+correction-history behavior.
+
+Clients use the generated `FinancialDataApi` from `packages/risk-service-api`
+for manual entry and correction, with account and obligation statuses constrained
+to the generated contract values. To have the backend derive covenant compliance
+from the inputs, omit `complianceStatus` from the request. Dashboard client
+conventions are owned by [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md#api-access).
 
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use

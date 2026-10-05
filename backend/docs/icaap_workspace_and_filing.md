@@ -10,13 +10,13 @@ code.
 It is **not** a specification and not a rollout runbook. Authority stays where
 it already is:
 
-| For                                              | Read                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------- |
-| who may reach which ICAAP route                  | [`icaap_enforcement_rollout.md`](icaap_enforcement_rollout.md) |
-| the scoped-binding model those gates evaluate    | [`authorization_foundation.md`](authorization_foundation.md)   |
-| where a BoG parameter's value came from          | [`bog_parameter_sources.md`](bog_parameter_sources.md)         |
-| the shape of the filing plane a package lands in | `ARCHITECTURE.md` §3d                                          |
-| what the code does                               | the code, which wins over this file                            |
+| For                                              | Read                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| who may reach which ICAAP route                  | [`icaap_enforcement_rollout.md`](icaap_enforcement_rollout.md)                   |
+| the scoped-binding model those gates evaluate    | [`authorization_foundation.md`](authorization_foundation.md)                     |
+| how ICAAP parameter values are sourced           | [Governed parameters](#4-governed-parameters-no-regulatory-number-lives-in-code) |
+| the shape of the filing plane a package lands in | `ARCHITECTURE.md` §3d                                                            |
+| what the code does                               | the code, which wins over this file                                              |
 
 What follows is the part a future session cannot reconstruct from the code:
 **why** each boundary is where it is, and which of them look like tidying
@@ -394,8 +394,9 @@ still caught.
 
 ## 10. The AI lane
 
-`icaap_ai_draft` is the only member of the `ai` job lane, and the lane exists
-for one reason: **the model credential**.
+`icaap_ai_draft` shares the dedicated `ai` job lane with BI model jobs;
+`job_queue.JOB_LANES` declares its membership. The lane exists for one reason:
+**the model credential**.
 
 - The AI worker runs from its own compose file
   (`backend/docker-compose.ai.prod.yml`) so `ANTHROPIC_API_KEY` never enters
