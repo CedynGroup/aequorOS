@@ -53,9 +53,11 @@ Every surface's gates and the CI workflows that enforce them:
 
 Each rule is stated in full in the document the index names.
 
-- **No seeded bank data — ever.** Every data point enters through the Data Engine
-  (upload, core-banking adapters, API push); staff provisioning creates only the
-  organization and bank rows. There is no seeding route; never add one to the UI
+- **No seeded bank financial data — ever.** Every bank financial data point enters
+  through the Data Engine (upload, core-banking adapters, API push). Staff provisioning
+  creates tenant setup records (organization, bank, administrator, ownership,
+  membership, SSO, storage, and required parameter register), but no bank financial
+  data. There is no seeding route; never add one to the UI
   or re-add seed CLI scripts. `tests/api/test_banks.py::test_seed_route_is_retired`
   pins it.
 - **Institution identity is the platform ID.** `organizations.id` (`OR-…`) and

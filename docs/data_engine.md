@@ -70,10 +70,12 @@ These principles govern every implementation decision. Deviations require explic
 
 ### Standing order: no seeded bank data
 
-- **No seeded bank data — ever.** Every data point enters through the Data Engine
-  (Excel/CSV upload, core-banking adapters, API push). Staff provisioning
-  (`provision_institution`, `app/operator/services/tenant_provisioning.py`) creates the
-  organization and bank rows and nothing else; every figure arrives through ingestion.
+- **No seeded bank financial data — ever.** Every bank financial data point enters
+  through the Data Engine (Excel/CSV upload, core-banking adapters, API push). Staff
+  provisioning (`provision_institution`, `app/operator/services/tenant_provisioning.py`)
+  creates tenant setup records (organization, bank, administrator, ownership,
+  membership, SSO, storage, and required parameter register), but no bank financial
+  data; every bank financial figure arrives through ingestion.
   There is **no seeding route and no `DEMO_SEED_ENABLED` flag**:
   `tests/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
   resolves to no handler for any role or tenant. Never add seeding paths to the UI, and
