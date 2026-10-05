@@ -14,6 +14,11 @@
  * output, and its ratio to Tier 1 is still checked against the derived Tier 1.
  * The book is carried forward unchanged to the latest month end, so none of
  * these figures move with the calendar.
+ *
+ * The Scenarios tab is the enterprise stress workbench with the IRRBB lens: a
+ * governed rate path driven through every engine. Its capital and liquidity
+ * legs are asserted; its own IRRBB leg is not, because it currently prices a
+ * different book from this module (#306).
  */
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
@@ -26,6 +31,10 @@ import {
   ghsM,
   signedGhsM,
 } from "./support/figures";
+import {
+  expectPersistedStressRun,
+  runEnterpriseStress,
+} from "./support/stress";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -371,6 +380,39 @@ test.describe("IRRBB functional workflow", () => {
         fullPage: true,
       });
     }
+  });
+
+  test("drives the IRRBB parallel +200bp stress from the Scenarios tab and persists it", async ({
+    page,
+  }) => {
+    await page.goto("/irr");
+    await page.getByRole("link", { name: "Scenarios", exact: true }).click();
+    await expect(page).toHaveURL(/\/irr\/scenarios$/);
+    await expect(
+      page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+    ).toBeVisible();
+
+    const run = await runEnterpriseStress(
+      page,
+      "IRRBB parallel +200bp (moderate)",
+    );
+    expect(run.scenario_code).toBe("system_irr_parallel_up_200");
+    // The engine's three-year path for the fixture book under a parallel +200bp
+    // rate path: capital erodes by 0.14pp and coverage falls from the fixture's
+    // derived 147.29% (see the Liquidity journey) to 138.60%.
+    expect(Number(run.summary.baseline_lcr_pct)).toBeCloseTo(147.294589, 6);
+    await expectKpi(page, "Stressed CAR", "17.28%", "Base 17.42%");
+    await expectKpi(
+      page,
+      "CAR erosion",
+      "-0.14 pp",
+      "Base → stress, final year",
+    );
+    await expectKpi(page, "Stressed LCR", "138.6%", "Base 147.3%");
+    await expectKpi(page, "Stays above minima", "Yes", "All minima held");
+    await expectKpi(page, "Solvency × liquidity", "Both hold");
+
+    await expectPersistedStressRun(page, run, "17.28%");
   });
 });
 
