@@ -285,9 +285,9 @@ mise run risk-service:test
 The default test run uses isolated SQLite databases and never touches Postgres —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
-To run the Postgres-gated tests (migrations, RLS), provide `TEST_DATABASE_URL`;
-fixtures create a `risk_service_test_<hex>` schema per run and drop it afterward,
-so the shared remote database is safe:
+To reuse an existing Postgres service for the gated tests (migrations, RLS),
+provide `TEST_DATABASE_URL`; fixtures create a `risk_service_test_<hex>` schema
+per run and drop it afterward, so the shared remote database is safe:
 
 ```bash
 TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database> \

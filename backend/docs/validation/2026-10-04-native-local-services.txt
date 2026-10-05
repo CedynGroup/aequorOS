@@ -44,7 +44,7 @@ Storage (including live S3 and SSE-KMS contracts)
   Exit: 0
   Raw log: .local-services/storage-clean.log
 
-Lifecycle and task wiring
+Lifecycle and task wiring (pre-simplification capture)
   cd backend
   uv run pytest tests/scripts/test_local_services.py tests/architecture/test_ci_task_wiring.py -q
   36 passed
@@ -52,7 +52,9 @@ Lifecycle and task wiring
   Raw log: .local-services/lifecycle-tests-resumed.log
   Covers CI/external bypass, unavailable Docker fallback, copied state,
   symlink refusal, stale process IDs, failed startup, SIGTERM forwarding,
-  borrowing, encrypted readiness and the actual merged Docker Compose model.
+  encrypted readiness and the actual merged Docker Compose model.
+  The final review then removed the persistent up/env/down and borrowing
+  surface; its replacement refusal checks are not included in this count.
   The cancellation regression runs the installed Playwright CLI with a real
   detached web server and confirms it is gone before the wrapper returns.
   Docker's configuration parser runs without starting the daemon; container
@@ -95,10 +97,6 @@ Full journeys (complete standard suite, no added skips)
   Machine-readable counts: .local-services/journeys-resumed.json
   Includes full filing lifecycle, attestation/SSO signing, Markets uploads,
   ICAAP attachments, scoped access and Credit requests on native MinIO.
-  Native up/env/borrow/down smoke also confirmed restricted role flags,
-  worktree-local PostgreSQL data and clean shutdown of both native services.
-  Raw log: .local-services/lifecycle-smoke.log
-
 Earlier full journeys validation was blocked by host disk pressure
   pnpm --filter @aequoros/dashboard e2e --reporter=list,./e2e/support/quarantine-reporter.ts
   OrbStack remained Stopped. Full run reached 131 journeys; signing preview
