@@ -21,7 +21,7 @@ from collections.abc import Callable, Collection
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -290,7 +290,7 @@ def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit pe
     return adapter, mapping_record, mapping, source_path, extraction
 
 
-def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction options are explicit
+def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transaction options are explicit
     db: Session,
     ctx: TenantContext,
     bank_id: str,
@@ -1612,8 +1612,8 @@ def _known_references(
 def _position_identity_is_representable(data: PositionData) -> bool:
     columns = CanonicalPosition.__table__.c
     return (
-        len(data.source_reference) <= columns.source_reference.type.length
-        and len(data.currency) <= columns.currency.type.length
+        len(data.source_reference) <= cast(int, cast(String, columns.source_reference.type).length)
+        and len(data.currency) <= cast(int, cast(String, columns.currency.type).length)
         and data.position_type in POSITION_TYPES
     )
 
@@ -1973,9 +1973,8 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             )
             current_positions[data.source_reference] = position
             new_positions.append(position)
-        elif (
-            data.source_reference not in settled_positions
-            and _position_identity_is_representable(data)
+        elif data.source_reference not in settled_positions and _position_identity_is_representable(
+            data
         ):
             position.position_type = data.position_type
             position.currency = data.currency

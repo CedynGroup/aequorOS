@@ -1,10 +1,12 @@
 """Config-driven validation of translated canonical records.
 
 Validation is a first-class layer: every batch runs through it before
-anything persists, and the outcome gates the batch. Rules are configuration,
-not code paths — different banks have different data-quality realities during
-onboarding, so each rule's severity and parameters are per-institution
+canonical state is published, and the outcome gates the batch. Data-quality
+rules are configuration — different banks have different realities during
+onboarding, so configured rule severities and parameters are per-institution
 (stored alongside the mapping config), while rule *logic* lives here.
+The mandatory position identity safeguard is outside that configuration;
+see ``run_validation`` and docs/data_engine.md §8.3.
 
 Severity semantics (spec §6.2):
 
@@ -620,10 +622,7 @@ def _rule_lmtd_classification_coverage(
     """
     findings: list[Finding] = []
     for position in records.positions:
-        if (
-            position.position_type in _LMTD_DEPOSIT_TYPES
-            and position.deposit_account_type is None
-        ):
+        if position.position_type in _LMTD_DEPOSIT_TYPES and position.deposit_account_type is None:
             findings.append(
                 Finding(
                     rule=rule.name,
@@ -826,12 +825,12 @@ def _rule_loan_event_integrity(
             problems.append(f"unknown event_type {event.event_type!r}")
         else:
             vocabulary = LOAN_EVENT_SUBTYPES.get(event.event_type)
-            if event.event_subtype is not None and vocabulary is not None and (
-                event.event_subtype not in vocabulary
+            if (
+                event.event_subtype is not None
+                and vocabulary is not None
+                and (event.event_subtype not in vocabulary)
             ):
-                problems.append(
-                    f"unknown {event.event_type} subtype {event.event_subtype!r}"
-                )
+                problems.append(f"unknown {event.event_type} subtype {event.event_subtype!r}")
         if event.amount <= 0:
             problems.append(f"non-positive amount {event.amount}")
         if known_positions and event.position_source_reference not in known_positions:

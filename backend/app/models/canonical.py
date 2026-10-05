@@ -109,9 +109,7 @@ class CanonicalMetadataMixin(UuidV7PrimaryKeyMixin, TimestampMixin):
     # marker is stamped exactly as ``superseded_by`` is stamped today, and the
     # governing ``canonical_withdrawals`` record, both lineage nodes and both
     # audit events survive a reversal.
-    withdrawn_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: The withdrawal batch that retired this row — a real ``ingestion_batches``
     #: row carrying the SUPERSESSION lineage node, so a withdrawal is walkable
     #: in lineage exactly like an ingestion.
@@ -285,10 +283,10 @@ class CanonicalProduct(CanonicalMetadataMixin, Base):
 class CanonicalPosition(CanonicalMetadataMixin, Base):
     """Stable identity for anything on or off the balance sheet.
 
-    Identity holds what never changes about a position (its type, currency,
-    and source identity); everything time-varying lives on the snapshot.
-    Ingestion corrects the identity fields until the position's first accepted
-    snapshot and refuses any change after it.
+    Identity fields are shared by every snapshot, so correcting them can alter
+    the inputs read through earlier snapshots. Ingestion's acceptance boundary
+    is specified in docs/data_engine.md §8.3; time-varying measures belong on
+    the snapshot.
     ``as_of_date`` here is the business date the position was first observed.
     """
 
@@ -357,8 +355,7 @@ class CanonicalLoanEvent(CanonicalMetadataMixin, Base):
     __tablename__ = "canonical_loan_events"
     __table_args__ = (
         CheckConstraint(
-            "event_type IN ('DISBURSEMENT', 'REPAYMENT', 'WRITE_OFF', 'RECOVERY', "
-            "'RESTRUCTURE')",
+            "event_type IN ('DISBURSEMENT', 'REPAYMENT', 'WRITE_OFF', 'RECOVERY', 'RESTRUCTURE')",
             name="ck_canonical_loan_events_event_type",
         ),
         _current_generation_unique(

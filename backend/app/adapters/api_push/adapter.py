@@ -430,6 +430,7 @@ def _coerce_field(canonical_field: str, value: Any) -> Any:
 def _fail_type(value: Any) -> Any:
     raise _CoercionError(f"unsupported JSON type {type(value).__name__}")
 
+
 _BOOL_TRUE = frozenset({"true", "t", "yes", "y", "1"})
 _BOOL_FALSE = frozenset({"false", "f", "no", "n", "0"})
 
