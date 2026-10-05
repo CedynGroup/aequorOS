@@ -9,14 +9,17 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy import text as sql_text
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
-from app.models import Bank, CanonicalPosition, CanonicalReferenceRow
+from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.services.fact_derivation import _load_position_rows
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
@@ -128,13 +131,15 @@ def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -
     return response.json()["id"]
 
 
-def start_batch(client: TestClient, bank_id: str, location: Path) -> dict[str, Any]:
+def start_batch(
+    client: TestClient, bank_id: str, location: Path, *, as_of_date: str = AS_OF
+) -> dict[str, Any]:
     response = client.post(
         f"/api/v1/banks/{bank_id}/ingestion-batches",
         headers=headers(),
         json={
             "source_system": "EXCEL_CSV",
-            "as_of_date": AS_OF,
+            "as_of_date": as_of_date,
             "location": str(location),
             "reason": "Month-end ingestion.",
         },
@@ -471,8 +476,9 @@ def derived_position(bank_id: str, reference: str) -> tuple[str, str] | None:
 class TestPositionIdentityCorrection:
     """Identity fields follow corrections until the first accepted snapshot, then freeze."""
 
+    @pytest.mark.parametrize("origination_date", [date(2024, 1, 10), None])
     def test_correcting_a_rejected_row_reaches_the_identity_and_the_facts(
-        self, db_client: TestClient, tmp_path: Path
+        self, db_client: TestClient, tmp_path: Path, origination_date: date | None
     ) -> None:
         bank_id = seed_bank(db_client)
         activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
@@ -489,18 +495,29 @@ class TestPositionIdentityCorrection:
         assert derived_position(bank_id, "LN-0001") is None
 
         corrected = start_batch(
-            db_client, bank_id, loans_workbook(tmp_path / "corrected.xlsx", {})
+            db_client,
+            bank_id,
+            loans_workbook(tmp_path / "corrected.xlsx", {"Originated": origination_date}),
         )["batch"]
         assert corrected["status"] == "accepted"
 
         row = blotter_row(db_client, bank_id, "LN-0001")
         assert (row["position_type"], row["currency"]) == ("LOAN", "GHS")
         assert row["validation_status"] == "accepted"
-        assert origination_date_of("LN-0001") == date(2024, 1, 10)
+        assert origination_date_of("LN-0001") == origination_date
         assert derived_position(bank_id, "LN-0001") == ("LOAN", "GHS")
 
+    @pytest.mark.parametrize(
+        ("correction", "field"),
+        [
+            ({"Ccy": "USD"}, "currency"),
+            ({"Type": "DEPOSIT"}, "position_type"),
+            ({"Originated": date(2024, 2, 1)}, "origination_date"),
+            ({"Originated": None}, "origination_date"),
+        ],
+    )
     def test_changing_a_settled_identity_is_refused_by_field(
-        self, db_client: TestClient, tmp_path: Path
+        self, db_client: TestClient, tmp_path: Path, correction: dict[str, Any], field: str
     ) -> None:
         bank_id = seed_bank(db_client)
         activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
@@ -512,20 +529,75 @@ class TestPositionIdentityCorrection:
         changed = start_batch(
             db_client,
             bank_id,
-            loans_workbook(tmp_path / "changed.xlsx", {"Ccy": "USD"}),
+            loans_workbook(tmp_path / "changed.xlsx", correction),
         )["batch"]
         assert changed["status"] == "accepted_with_warnings"
         assert changed["records_error"] == 1
-        (failure,) = changed["validation_report"]["failures"]
-        assert failure["rule"] == "position_identity_settled"
+        (failure,) = (
+            failure
+            for failure in changed["validation_report"]["failures"]
+            if failure["rule"] == "position_identity_settled"
+        )
         assert failure["source_reference"] == "LN-0001"
-        assert failure["detail"].startswith("currency is frozen")
+        assert failure["detail"].startswith(f"{field} is frozen")
 
         row = blotter_row(db_client, bank_id, "LN-0001")
-        assert row["currency"] == "GHS"
+        assert (row["position_type"], row["currency"]) == ("LOAN", "GHS")
         assert row["validation_status"] == "error"
         assert origination_date_of("LN-0001") == date(2024, 1, 10)
         assert derived_position(bank_id, "LN-0001") is None
+
+    @pytest.mark.parametrize(
+        ("correction", "field"),
+        [
+            ({"Ccy": "USD"}, "currency"),
+            ({"Type": "DEPOSIT"}, "position_type"),
+            ({"Originated": date(2024, 2, 1)}, "origination_date"),
+        ],
+    )
+    def test_withdrawn_accepted_history_still_freezes_the_identity(
+        self,
+        db_client: TestClient,
+        db_session: Session,
+        tmp_path: Path,
+        correction: dict[str, Any],
+        field: str,
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+        accepted = start_batch(db_client, bank_id, loans_workbook(tmp_path / "accepted.xlsx", {}))[
+            "batch"
+        ]
+        assert accepted["status"] == "accepted"
+        snapshot = db_session.scalars(
+            select(CanonicalPositionSnapshot).where(
+                CanonicalPositionSnapshot.bank_id == bank_id,
+                CanonicalPositionSnapshot.source_reference == "LN-0001",
+                CanonicalPositionSnapshot.as_of_date == fixtures.AS_OF,
+            )
+        ).one()
+        snapshot.withdrawn_at = utc_now()
+        db_session.commit()
+        assert derived_position(bank_id, "LN-0001") is None
+
+        changed = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(tmp_path / "changed.xlsx", correction),
+            as_of_date="2026-07-31",
+        )["batch"]
+        failures = changed["validation_report"]["failures"]
+        assert any(
+            failure["rule"] == "position_identity_settled"
+            and failure["source_reference"] == "LN-0001"
+            and failure["detail"].startswith(f"{field} is frozen")
+            for failure in failures
+        )
+        assert origination_date_of("LN-0001") == date(2024, 1, 10)
+
+        snapshot.withdrawn_at = None
+        db_session.commit()
+        assert derived_position(bank_id, "LN-0001") == ("LOAN", "GHS")
 
 
 class TestStorageArtifacts:

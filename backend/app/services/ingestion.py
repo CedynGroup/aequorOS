@@ -1592,8 +1592,7 @@ def _settled_position_identities(
     """Current ``source_system`` positions that have ever had an accepted snapshot.
 
     A superseded accepted snapshot still counts: calculations and filings
-    already read the identity through it. A withdrawn one does not, because
-    the platform has retracted it.
+    already read the identity through it.
     """
     accepted = (
         select(CanonicalPositionSnapshot.id)
@@ -1601,7 +1600,6 @@ def _settled_position_identities(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
             CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
         )
         .exists()
     )
@@ -1863,8 +1861,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         elif data.source_reference not in settled_positions:
             position.position_type = data.position_type
             position.currency = data.currency
-            if data.origination_date is not None:
-                position.origination_date = data.origination_date
+            position.origination_date = data.origination_date
             position.validation_status = status_of("position", data.source_reference)
             position.ingestion_batch_id = batch.id
             position.lineage_id = lineage_node.id

@@ -861,11 +861,7 @@ SETTLED_IDENTITY_RULE = "position_identity_settled"
 def _settled_identity_changes(
     records: CanonicalRecords, context: ValidationContext
 ) -> list[Finding]:
-    """One ERROR per identity field a row tries to change on a settled position.
-
-    A row that omits ``origination_date`` states nothing about it, so only a
-    different stated value counts as a change.
-    """
+    """One ERROR per identity field a row tries to change on a settled position."""
     findings: list[Finding] = []
     for position in records.positions:
         settled = context.settled_positions.get(position.source_reference)
@@ -874,7 +870,7 @@ def _settled_identity_changes(
         for name in POSITION_IDENTITY_FIELDS:
             sent = getattr(position, name)
             held = getattr(settled, name)
-            if sent is None or sent == held:
+            if sent == held:
                 continue
             findings.append(
                 Finding(
@@ -889,7 +885,7 @@ def _settled_identity_changes(
                         f"snapshot with {name}={_text(held)}, and this row sends "
                         f"{_text(sent)}. An identity field cannot change after a "
                         "snapshot has been accepted; send the position under a new "
-                        "source reference, or withdraw its accepted data first."
+                        "source reference."
                     ),
                 )
             )
