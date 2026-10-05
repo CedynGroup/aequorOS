@@ -20,7 +20,7 @@ jobs:
       # no mise and no uv, so it still reports when the toolchain cannot.
       - name: Verify the mise task wiring
         run: python3 .github/scripts/mise_wiring_preflight.py
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           # Pinned: a release must be reproducible, and mise-action installs a
           # floating version by default. Keep in step with risk-service.yml.
