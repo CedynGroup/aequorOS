@@ -560,7 +560,15 @@ def get_liquidity_dashboard(
 def get_bsd3_preview(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd3PreviewRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="bsd3_preview",
+    )
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
     if run is None:

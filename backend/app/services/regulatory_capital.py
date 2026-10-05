@@ -513,6 +513,15 @@ def get_rwa_breakdown(
 def get_bsd2_preview(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd2PreviewRead:
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="bsd2_preview",
+    )
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the BSD-2 preview"
     )

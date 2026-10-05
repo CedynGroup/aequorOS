@@ -16,8 +16,11 @@ The following institution-scoped reads require CAP `view` with sensitivity
 - `GET /api/v1/banks/{bank_id}/sdi/capital-checks`
 - `GET /api/v1/banks/{bank_id}/sdi/capital-summary`
 
-The capital plan, ILAAP snapshot reads, BSD capital preview, and Capital
+The capital plan, ILAAP snapshot reads, and Capital
 regulatory-run details require CAP `view` with sensitivity `confidential`.
+The BSD capital preview requires whole-institution REG `view` with sensitivity
+`restricted`, matching ordinary return reads and generation inputs. CAP authority
+alone cannot read the preview; ICAAP retains its Capital family policy.
 SDI capital assurance requires CAP `view` with sensitivity `restricted`.
 Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
@@ -231,7 +234,8 @@ families are revoked in the same transaction.
 | Need                                                                          | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
 | ----------------------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
 | Aggregated Capital dashboards and SDI checks                                  | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `cap`          | `aggregated`        |
-| Capital plans, BSD preview, run details, and ILAAP reads                      | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
+| Capital plans, run details, and ILAAP reads                                   | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
+| BSD capital preview                                                           | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `reg`          | `restricted`        |
 | SDI capital assurance evidence                                                | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `restricted`        |
 | Run Capital, create/edit plans, and run/create/edit Capital workbench entries | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
 | Approve a Capital plan as an independent checker                              | `human`          | `approver`                                    | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |

@@ -111,6 +111,13 @@ def _assert_return_refusals(
     packages_by_family: dict[str, tuple[UUID, UUID, UUID, str]],
     period_id: str,
 ) -> None:
+    for preview in ("bsd2", "bsd3"):
+        response = db_client.get(
+            f"{BASE}/submissions/{preview}",
+            headers=auth,
+            params={"reporting_period_id": period_id},
+        )
+        assert response.status_code == 403, (preview, response.text)
     for family, (package_id, artifact_id, version_id, return_code) in packages_by_family.items():
         base = f"{BASE}/regulatory-packages/{package_id}"
         paths = _read_routes(package_id) + [

@@ -417,8 +417,19 @@ def test_capital_sensitivity_boundaries_are_exact(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/sdi/capital-assurance",
         headers=headers(authorization_version=confidential_version),
     )
-    assert preview.status_code == 404
+    assert preview.status_code == 403
     assert assurance.status_code == 403
+
+    _, reporting_version = _grant(
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    preview = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/submissions/bsd2",
+        headers=headers(authorization_version=reporting_version),
+        params={"reporting_period_id": str(uuid4())},
+    )
+    assert preview.status_code == 404
 
     _, restricted_version = _grant(sensitivity_scope=SensitivityScope.RESTRICTED)
     assurance = db_client.get(
