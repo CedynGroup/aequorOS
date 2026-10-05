@@ -23,8 +23,8 @@ from app.services import report_comparison
 from app.services.report_comparison import favorable_direction
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-OTHER_CTX = TenantContext(organization_id=ORG_2, actor_user_id=USER_2)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+OTHER_CTX = TenantContext(organization_id=ORG_2, actor_user_id=USER_2, authorization_version=1)
 
 
 def _bank(session: Session, org_id: str = ORG_1) -> str:

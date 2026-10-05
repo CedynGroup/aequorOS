@@ -16,13 +16,15 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     ConditionCheck,
+    ConditionKind,
+    DataScope,
     InstitutionScope,
     Module,
     Permission,
     ResourceLocator,
     Sensitivity,
 )
-from app.models import Bank, RegulatoryPackage
+from app.models import AuthorizationBinding, Bank, RegulatoryPackage
 from app.models.regulatory_reporting import RETURN_FAMILIES
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -31,7 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 @dataclass(frozen=True)
 class FamilyGate:
-    """The authority one gated family is read and written under."""
+    """The authority one return family is read and written under."""
 
     module: Module
     sensitivity: Sensitivity
@@ -78,14 +80,6 @@ _TRANSMISSION_DETAIL = (
 #: modules or different classifications would mean an officer's grant said one
 #: thing about the return's data when they approve it and another when they
 #: file it. Only the permission differs.
-#:
-#: This gate is ADDITIVE to the route's pre-existing scalar dependency, not a
-#: replacement for it: a binding-holder who was previously refused now passes,
-#: and nobody who could approve yesterday is refused today. Removing the scalar
-#: ladder from these routes is a separate enforcement cutover, and this codebase
-#: gates one of those with ``scripts/authorization_access_impact.py`` and a
-#: rollout contract (``docs/filing_submit_authority_rollout.md`` is the
-#: precedent). Until then the honest description is "either authority".
 CHAIN_DECISION_GATE: Final[FamilyGate] = FamilyGate(
     module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
 )
@@ -93,10 +87,6 @@ CHAIN_DECISION_GATE: Final[FamilyGate] = FamilyGate(
 
 def gate_for(family: str | None) -> FamilyGate:
     return GATED.get(family or "", RETURN_GATE)
-
-
-def is_gated(family: str | None) -> bool:
-    return (family or "") in GATED
 
 
 def _not_found() -> HTTPException:
@@ -122,6 +112,7 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     *,
     surface: str,
     conditions: tuple[ConditionCheck, ...] = (),
+    prefetched_bindings: tuple[bool, list[AuthorizationBinding]] | None = None,
 ) -> bool:
     """One complete active binding for this exact institution, or False.
 
@@ -141,17 +132,36 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
         gate.sensitivity,
     )
     try:
-        decision = authorization_service.evaluate_permission(
-            db, principal, permission, resource, conditions=conditions
-        )
-        if decision.allowed:
-            data_scope = authorization_service.effective_data_scope(
-                db,
-                organization_id=ctx.organization_id,
-                binding_ids=decision.matching_binding_ids,
+        if prefetched_bindings is None:
+            decision = authorization_service.evaluate_permission(
+                db, principal, permission, resource, conditions=conditions
             )
+            whole_institution = False
+            if decision.allowed:
+                whole_institution = authorization_service.effective_data_scope(
+                    db,
+                    organization_id=ctx.organization_id,
+                    binding_ids=decision.matching_binding_ids,
+                ).whole_institution
+        else:
+            active, bindings = prefetched_bindings
+            decision = authorization_service.evaluate_prefetched_permission(
+                principal,
+                permission,
+                resource,
+                bindings,
+                principal_active=active,
+                conditions=conditions,
+            )
+            whole_institution = any(
+                binding.id in decision.matching_binding_ids
+                and binding.data_scope_kind == DataScope.ALL.value
+                and authorization_service.binding_is_effective(binding)
+                for binding in bindings
+            )
+        if decision.allowed:
             decision = authorization_service.institution_grain_decision(
-                decision, whole_institution=data_scope.whole_institution
+                decision, whole_institution=whole_institution
             )
     except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
         authorization_service.record_binding_evaluation_failure(
@@ -164,7 +174,14 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     return decision.allowed
 
 
-def can_view(db: Session, ctx: TenantContext, bank: Bank, family: str | None) -> bool:
+def can_view(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    family: str | None,
+    *,
+    prefetched_bindings: tuple[bool, list[AuthorizationBinding]] | None = None,
+) -> bool:
     """Whole-institution VIEW on this family's exact module and sensitivity.
 
     An authorized impersonated examiner can read sealed packages; ICAAP
@@ -183,7 +200,70 @@ def can_view(db: Session, ctx: TenantContext, bank: Bank, family: str | None) ->
         except HTTPException:
             return False
         return True
-    return _evaluate(db, ctx, bank, gate, Permission.VIEW, surface=f"{family}_package_view")
+    return _evaluate(
+        db,
+        ctx,
+        bank,
+        gate,
+        Permission.VIEW,
+        surface=f"{family}_package_view",
+        prefetched_bindings=prefetched_bindings,
+    )
+
+
+def require_generation_authority(db: Session, ctx: TenantContext, bank: Bank, family: str) -> None:
+    """Ordinary generation needs RUN; frozen ICAAP keeps its workspace rules.
+
+    The workspace's freeze gate owns EDIT and reviewed-round conditions. Its
+    mint peer additionally preserves whole-institution Capital visibility.
+    """
+    permission = Permission.VIEW if family in GATED else Permission.RUN
+    if (
+        ctx.impersonation_context is not None
+        or not can_view(db, ctx, bank, family)
+        or not _evaluate(
+            db,
+            ctx,
+            bank,
+            gate_for(family),
+            permission,
+            surface=f"{family}_package_generate",
+        )
+    ):
+        raise _forbidden(
+            "Generating a return requires whole-institution authority for its family, "
+            f"carrying '{permission.value}'."
+        )
+
+
+def prefetch_view_authority(
+    db: Session, ctx: TenantContext, bank: Bank
+) -> tuple[bool, list[AuthorizationBinding]] | None:
+    """Load policy rows once for a calendar/list over a tenant-resolved bank."""
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+
+    if bank.organization_id != ctx.organization_id or ctx.actor_user_id is None:
+        return False, []
+    if ctx.impersonation_context is not None:
+        return None
+    principal = authorization_service.principal_locator(ctx)
+    try:
+        return authorization_service.prefetch_principal_bindings(db, principal)
+    except Exception as exc:  # noqa: BLE001 - a failed policy load hides every family
+        authorization_service.record_binding_evaluation_failure(
+            principal,
+            Permission.VIEW,
+            ResourceLocator(
+                ctx.organization_id,
+                InstitutionScope.INSTITUTION,
+                bank.id,
+                RETURN_GATE.module,
+                RETURN_GATE.sensitivity,
+            ),
+            surface="package_family_list",
+            error=exc,
+        )
+        return False, []
 
 
 def hidden_families(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
@@ -192,7 +272,22 @@ def hidden_families(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[st
     Computed once per request and applied as a NOT-IN over the package query,
     so a list endpoint never has to reason per row.
     """
-    return frozenset(family for family in RETURN_FAMILIES if not can_view(db, ctx, bank, family))
+    if bank.organization_id != ctx.organization_id:
+        return frozenset(RETURN_FAMILIES)
+    prefetched_bindings = prefetch_view_authority(db, ctx, bank)
+    visible: dict[str | None, bool] = {}
+    hidden: set[str] = set()
+    for family in RETURN_FAMILIES:
+        # Ordinary families share one Regulatory Reporting policy sentence.
+        # Evaluate each distinct family policy once, independently of row count.
+        policy_family = family if family in GATED else None
+        if policy_family not in visible:
+            visible[policy_family] = can_view(
+                db, ctx, bank, policy_family, prefetched_bindings=prefetched_bindings
+            )
+        if not visible[policy_family]:
+            hidden.add(family)
+    return frozenset(hidden)
 
 
 def require_view(db: Session, ctx: TenantContext, bank: Bank, package: RegulatoryPackage) -> None:
@@ -349,9 +444,8 @@ def chain_decision_verdict(  # noqa: PLR0913 - the complete decision tuple is ex
 ) -> ChainDecisionVerdict:
     """Does a stored binding authorise this chain decision? Never raises.
 
-    Returns a verdict rather than a bare boolean so the caller can fall back to
-    the route's own pre-existing dependency AND, when that also refuses, explain
-    the real miss instead of the ladder's unrelated one.
+    Returns a verdict so the caller can explain a visible return's scope miss
+    without disclosing a return the principal cannot read.
 
     An impersonated principal is always no: an examiner reads and never decides.
     A gated family the caller cannot see is always a generic no with NO near
@@ -439,7 +533,7 @@ def chain_decision_allowed(  # noqa: PLR0913 - the complete decision tuple is ex
 
 
 #: Which permission a signing role's certification is an exercise of, on a
-#: GATED family. The preparer's certification is the act of finishing the
+#: return family. The preparer's certification is the act of finishing the
 #: document (EDIT); a checker's certification IS the approval of the filing
 #: (APPROVE) — the attestation spine already treats it that way, writing the
 #: approval decision on the final required signature.
@@ -449,6 +543,25 @@ CERTIFY_PERMISSIONS: Final[dict[str, Permission]] = {
     "board": Permission.APPROVE,
     "witness": Permission.VIEW,
 }
+
+
+def certification_conditions(
+    ctx: TenantContext, package: RegulatoryPackage, permission: Permission
+) -> tuple[ConditionCheck, ...]:
+    """An approval signer or nominee must be distinct from the return's maker.
+
+    The ceremony additionally enforces signing-slot separation, titles and
+    prior signatures under its lock; this is the binding evaluator's veto.
+    """
+    if permission is not Permission.APPROVE:
+        return ()
+    return (
+        ConditionCheck(
+            ConditionKind.MAKER_CHECKER,
+            ctx.actor_user_id is not None and ctx.actor_user_id != package.generated_by,
+            "The return's preparer cannot provide its checker signature.",
+        ),
+    )
 
 
 def require_certify_authority(
@@ -467,6 +580,7 @@ def require_certify_authority(
         package,
         permission,
         surface=f"{package.return_family}_package_certify",
+        conditions=certification_conditions(ctx, package, permission),
     )
     return True
 
@@ -491,6 +605,7 @@ def nominee_may_sign(  # noqa: PLR0913 - the complete decision tuple is explicit
         gate,
         permission,
         surface=f"{package.return_family}_package_nominee",
+        conditions=certification_conditions(nominee, package, permission),
     )
 
 
@@ -502,9 +617,9 @@ __all__ = [
     "can_view",
     "gate_for",
     "hidden_families",
-    "is_gated",
     "nominee_may_sign",
     "require_certify_authority",
+    "require_generation_authority",
     "require_permission",
     "require_transmission_authority",
     "require_view",

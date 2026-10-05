@@ -61,7 +61,9 @@ __all__ = ["storage"]
 # calculation authority (an unconditional IRRBB check landed on the run
 # service), so it takes the same two fixtures as its sibling
 # ``test_icaap_stress_appendix2_report.py``.
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "return_generation_authority", "fx_run_authority", "irrbb_run_authority"
+)
 
 BACKEND = Path(__file__).parents[3]
 PILLAR2_FIELDS = (

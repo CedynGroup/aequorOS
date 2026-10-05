@@ -67,6 +67,8 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
 # The Guide's List of Prudential Returns (frequency, time limit) — the registry
 # must state exactly this for every form.
 GUIDE_LIST: dict[str, tuple[str, int]] = {
@@ -525,9 +527,7 @@ def test_working_copy_is_a_distinct_artifact_kind_and_is_filed_with_the_sealed_c
     assert "docx_working" in reporting_workflow.UNFILABLE_WORKING_ARTIFACT_KINDS
     definition = REGISTRY["BSD2"]
     assert definition.generator == "bog_form"
-    assert reporting_workflow.filing_admits_artifact(
-        "xlsx_working", generator=definition.generator
-    )
+    assert reporting_workflow.filing_admits_artifact("xlsx_working", generator=definition.generator)
     source = inspect.getsource(reporting_workflow)
     assert "filing_admits_artifact(artifact.kind, generator=generator)" in source
     assert "artifact.kind not in WORKING_ARTIFACT_KINDS" not in source
@@ -536,8 +536,7 @@ def test_working_copy_is_a_distinct_artifact_kind_and_is_filed_with_the_sealed_c
     # ...and the endpoint's own listing leads with the submission document and
     # keeps both workbooks ahead of any CSV.
     listed = [
-        a["kind"]
-        for a in db_client.get(f"{base}/artifacts", headers=headers()).json()["artifacts"]
+        a["kind"] for a in db_client.get(f"{base}/artifacts", headers=headers()).json()["artifacts"]
     ]
     assert listed == ["pdf", "xlsx", "xlsx_working"]
 

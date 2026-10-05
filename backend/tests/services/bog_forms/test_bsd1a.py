@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -23,6 +24,9 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 
 SHEET = "20 LARGEST WITHDRAWALS"
 ROWS = range(11, 31)
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def test_bsd1a_binds_serials_and_every_ranked_data_cell() -> None:

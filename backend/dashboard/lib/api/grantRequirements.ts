@@ -111,10 +111,11 @@ export function dataScopeShortfall(draft: GrantDraft): string | null {
     draft.dataScope.kind === "branch" ? "the branches" : "the regions";
   return (
     `This Credit grant covers only ${chosen} you chose in the loan book, ` +
-    `activity and facets. Figures for the institution as a whole are refused, ` +
-    `including live summaries, alerts, history and regulatory figures. ` +
-    `If they need those figures, give them the whole book here or in a ` +
-    `second grant for the same module and sensitivity.`
+    `activity and facets. Figures for the institution as a whole are refused ` +
+    `by this narrowed grant, including Credit live summaries, alerts and history. ` +
+    `For those Credit figures, choose the whole book here or add a second grant ` +
+    `for the same module and sensitivity. Regulatory returns require ` +
+    `whole-institution Regulatory Reporting authority; ICAAP requires Capital.`
   );
 }
 

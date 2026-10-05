@@ -1,25 +1,8 @@
-"""Who may reach a regulatory package, per return FAMILY (audit C-4 / D-012).
+"""Every return needs whole-institution scoped authority.
 
-Two answers live side by side and must both stay true:
-
-* an UNGATED family (every BSD, liquidity, capital, FX return) keeps the scalar
-  ladder it has always had. A change that quietly tightened those routes would
-  lock analysts out of returns they have filed for months, so the control rows
-  here are as important as the ICAAP ones;
-* the ICAAP family is GATED on an exact CAPITAL/CONFIDENTIAL binding for the
-  institution. A principal without it gets **404** — the existence of an ICAAP
-  package for a date is itself a disclosure — and a principal with VIEW but
-  without the action permission gets an honest 403.
-
-The third property is the one that is easiest to lose: a scalar role must never
-satisfy a scoped surface. A scalar ``approver`` with no binding is refused.
-
-TRANSMISSION is the fourth, and it cuts across both answers. Filing a return to
-the regulator requires ``Permission.SUBMIT`` over Regulatory Reporting /
-restricted for the exact institution, for EVERY family — it used to require the
-same ``APPROVE`` permission as the approval decision, and on an ungated family
-the scalar ``approver`` role alone (``docs/filing_workflow_redesign.md`` §1
-finding 3). Those tests live in their own section at the bottom.
+Regulatory Reporting/restricted governs ordinary returns; ICAAP keeps
+Capital/confidential. Missing visibility hides the return, while visible returns
+require their own action permission. Scalar roles cannot satisfy either gate.
 """
 
 from __future__ import annotations
@@ -277,9 +260,12 @@ def test_a_package_in_another_tenant_is_not_found(db_client: TestClient) -> None
 def test_an_icaap_package_is_hidden_from_the_package_list(db_client: TestClient) -> None:
     _package()
     _package(family="liquidity", return_code="LCR-NSFR")
+    authv = _grant(
+        module_scope=ModuleScope.REGULATORY, sensitivity_scope=SensitivityScope.RESTRICTED
+    )
     response = db_client.get(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
-        headers=headers(roles=("analyst",)),
+        headers=headers(roles=("analyst",), authorization_version=authv),
     )
     assert response.status_code == 200
     families = {row["return_family"] for row in response.json()["packages"]}
@@ -298,36 +284,39 @@ def test_the_list_shows_icaap_to_a_binding_holder(db_client: TestClient) -> None
     assert "icaap" in {row["return_family"] for row in response.json()["packages"]}
 
 
-# --- the ungated families are untouched ------------------------------------
+# --- ordinary families require Regulatory Reporting ------------------------------------
 
 
-def test_an_ordinary_return_keeps_the_scalar_ladder(db_client: TestClient) -> None:
-    """The control rows. A viewer reads; a viewer does not validate."""
+def test_ordinary_returns_require_regulatory_authority(db_client: TestClient) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
-    assert db_client.get(base, headers=headers(roles=("viewer",))).status_code == 200
-    assert db_client.post(f"{base}/validate", headers=headers(roles=("viewer",))).status_code == 403
+    assert db_client.get(base, headers=headers(roles=("approver",))).status_code == 404
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    viewer = headers(roles=("approver",), authorization_version=version)
+    assert db_client.get(base, headers=viewer).status_code == 200
+    assert db_client.post(f"{base}/validate", headers=viewer).status_code == 403
+    version = _grant(
+        module_scope=ModuleScope.REGULATORY, sensitivity_scope=SensitivityScope.RESTRICTED
+    )
     assert (
-        db_client.post(f"{base}/validate", headers=headers(roles=("analyst",))).status_code == 200
+        db_client.post(
+            f"{base}/validate", headers=headers(roles=("viewer",), authorization_version=version)
+        ).status_code
+        == 200
     )
 
 
-def test_a_viewer_hitting_an_unknown_package_still_gets_the_write_refusal(
-    db_client: TestClient,
-) -> None:
-    """403 before 404: a viewer must not learn from a 404 that they got past
-    the write gate. This is today's behaviour and it is deliberately kept."""
-    unknown = uuid4()
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{unknown}/validate",
-        headers=headers(roles=("viewer",)),
-    )
-    assert response.status_code == 403
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{unknown}/validate",
-        headers=headers(roles=("analyst",)),
-    )
-    assert response.status_code == 404
+def test_an_unknown_package_never_discloses_figures(db_client: TestClient) -> None:
+    for role in ("viewer", "analyst", "approver"):
+        response = db_client.post(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{uuid4()}/validate",
+            headers=headers(roles=(role,)),
+        )
+        assert response.status_code == 404
 
 
 # --- the examiner branch ----------------------------------------------------
@@ -467,8 +456,7 @@ def test_a_scalar_approver_with_no_binding_cannot_transmit(db_client: TestClient
     response = _submit(
         db_client, package_id, request_headers=headers(roles=("admin", "approver", "analyst"))
     )
-    assert response.status_code == 403
-    assert "Validator" in response.json()["error"]["message"]
+    assert response.status_code == 404
 
 
 def test_a_validator_binding_transmits(db_client: TestClient) -> None:
@@ -733,9 +721,7 @@ def test_a_gated_family_hides_its_chain_before_it_refuses(db_client: TestClient)
 # role or higher" while the dashboard, which projects the control from the same
 # binding, offered them the button. Fail-open screen over a fail-closed server.
 #
-# The binding is now asked FIRST on both approve routes. It is additive: the
-# scalar ladder stays behind it, so nobody who could approve yesterday is
-# refused today. Removing the ladder is a separate cutover.
+# Both approval routes now require the complete scoped binding.
 
 
 def _approver_grant(user_id: UUID = USER_1, *, sensitivity: SensitivityScope) -> int:
@@ -747,9 +733,7 @@ def _approver_grant(user_id: UUID = USER_1, *, sensitivity: SensitivityScope) ->
     )
 
 
-def _decide_approval(
-    client: TestClient, package_id: UUID, *, request_headers: dict[str, str]
-):  # noqa: ANN202 - concise route-test helper
+def _decide_approval(client: TestClient, package_id: UUID, *, request_headers: dict[str, str]):  # noqa: ANN202 - concise route-test helper
     return client.post(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/decide-approval",
         headers=request_headers,
@@ -781,9 +765,7 @@ def test_an_approver_grant_approves_an_ungated_return_without_a_scalar_role(
 def test_the_legacy_approval_route_reads_the_same_binding(db_client: TestClient) -> None:
     """One act, one authority. Settings -> Approvals posts here, not to the chain
     route, and a second rule for the same decision is the seam D-069 describes."""
-    package_id = _package(
-        family="liquidity", return_code="LCR-NSFR", status="pending_approval"
-    )
+    package_id = _package(family="liquidity", return_code="LCR-NSFR", status="pending_approval")
     _pin_chain(package_id, current_stage_seq=2, status="pending_approval")
     authv = _approver_grant(sensitivity=SensitivityScope.RESTRICTED)
     response = _decide_approval(
@@ -809,6 +791,11 @@ def test_a_grant_at_the_wrong_classification_does_not_approve(db_client: TestCli
     """
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     authv = _approver_grant(sensitivity=SensitivityScope.CONFIDENTIAL)
     request_headers = headers(roles=("account_admin",), authorization_version=authv)
     digest = _chain_digest(db_client, package_id, request_headers)
@@ -831,6 +818,11 @@ def test_a_grant_for_another_module_names_the_module_that_missed(
 ) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     authv = _grant(
         role_bundle=RoleBundle.APPROVER,
         module_scope=ModuleScope.LIQUIDITY,
@@ -843,20 +835,16 @@ def test_a_grant_for_another_module_names_the_module_that_missed(
     assert "Regulatory Reporting" in response.json()["error"]["message"]
 
 
-def test_a_caller_with_no_binding_at_all_still_reads_the_scalar_refusal(
-    db_client: TestClient,
-) -> None:
-    """A near-miss message is for a near miss. Somebody with no grant is told
-    what they have always been told, and learns nothing new about the tenant."""
+def test_a_caller_with_no_binding_cannot_read_or_approve_a_return(db_client: TestClient) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
-    request_headers = headers(roles=("account_admin",))
-    digest = _chain_digest(db_client, package_id, request_headers)
-    response = _decide_stage(db_client, package_id, request_headers=request_headers, digest=digest)
-    assert response.status_code == 403
-    message = response.json()["error"]["message"]
-    assert "analyst" in message
-    assert "grant" not in message
+    request_headers = headers(roles=("account_admin", "approver"))
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
+    assert db_client.get(f"{base}/workflow", headers=request_headers).status_code == 404
+    response = _decide_stage(
+        db_client, package_id, request_headers=request_headers, digest="0" * 64
+    )
+    assert response.status_code == 404
 
 
 def test_a_near_miss_never_discloses_a_gated_package(db_client: TestClient) -> None:
@@ -871,22 +859,16 @@ def test_a_near_miss_never_discloses_a_gated_package(db_client: TestClient) -> N
     authv = _approver_grant(sensitivity=SensitivityScope.CONFIDENTIAL)
     request_headers = headers(roles=("account_admin",), authorization_version=authv)
     response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
-        "/workflow/decisions",
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/workflow/decisions",
         headers=request_headers,
         json={"decision": "approved", "round": 1, "review_digest": "0" * 64},
     )
     assert response.status_code == 404
 
 
-def test_the_scalar_approver_ladder_still_approves(db_client: TestClient) -> None:
-    """Additive, not a cutover: nobody who could approve yesterday is refused."""
-    package_id = _package(
-        family="liquidity", return_code="LCR-NSFR", status="pending_approval"
-    )
+def test_the_scalar_approver_ladder_never_approves(db_client: TestClient) -> None:
+    """A scalar Approver without a reporting grant has no return authority."""
+    package_id = _package(family="liquidity", return_code="LCR-NSFR", status="pending_approval")
     _pin_chain(package_id, current_stage_seq=2, status="pending_approval")
-    response = _decide_approval(
-        db_client, package_id, request_headers=headers(roles=("approver",))
-    )
-    assert response.status_code == 409, response.text
-    assert response.json()["error"]["details"]["error_code"] == "approval_requires_signature"
+    response = _decide_approval(db_client, package_id, request_headers=headers(roles=("approver",)))
+    assert response.status_code == 404, response.text

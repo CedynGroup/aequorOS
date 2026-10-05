@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import openpyxl
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -40,6 +41,9 @@ DOMESTIC_ROWS = 168
 RANGE_ROWS = 77
 INTL_ROWS = 309
 ITEM_NUMBERS = 22
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def test_line_maps_bind_every_tariff_row_and_keep_item_numbers() -> None:

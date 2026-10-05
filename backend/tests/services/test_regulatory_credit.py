@@ -33,7 +33,9 @@ from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _prepare(db_session: Session) -> BankReportingPeriod:

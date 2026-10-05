@@ -58,11 +58,11 @@ def scan_reporting_deadlines(
     banks = list(db.scalars(select(Bank).where(Bank.organization_id == organization_id)))
     emitted = 0
     for bank in banks:
-        obligations = calendar.list_obligations(
+        obligations = calendar.deadline_scan_obligations(
             db,
-            ctx,
+            organization_id,
             bank.id,
-            _HORIZON_MONTHS,
+            horizon_months=_HORIZON_MONTHS,
             lookback_months=_LOOKBACK_MONTHS,
             as_of=today,
         ).obligations

@@ -100,6 +100,9 @@ NAMED = frozenset(
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _session() -> Session:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1

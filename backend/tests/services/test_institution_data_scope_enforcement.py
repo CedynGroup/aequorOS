@@ -101,10 +101,19 @@ def test_shared_and_family_gates_refuse_a_matching_narrowed_binding(
     gate = family_access.FamilyGate(Module.CREDIT, Sensitivity.AGGREGATED)
     monkeypatch.setitem(family_access.GATED, "scope_test", gate)
     assert not family_access.can_view(db_session, ctx, bank, "scope_test")
+    monkeypatch.setitem(family_access.GATED, "credit", gate)
+    assert "credit" in family_access.hidden_families(db_session, ctx, bank)
     ctx = grant(DataScope.ALL)
     assert family_access.can_view(db_session, ctx, bank, "scope_test")
+    assert "credit" not in family_access.hidden_families(db_session, ctx, bank)
+    assert "liquidity" in family_access.hidden_families(db_session, ctx, bank)
     for require in (
         scoped_authorization.require_bank_permission,
         scoped_authorization.require_bank_permission_prefetched,
     ):
         assert require(db_session, ctx, BANK_ID, **kwargs).id == BANK_ID
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    user.is_active = False
+    db_session.flush()
+    assert "credit" in family_access.hidden_families(db_session, ctx, bank)

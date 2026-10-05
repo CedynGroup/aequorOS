@@ -75,6 +75,9 @@ PERIOD_END = date(2026, 3, 31)
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 @pytest.mark.parametrize(
     ("reporting_date", "lt_1m_last", "one_to_three", "three_to_six", "six_to_year"),
     [

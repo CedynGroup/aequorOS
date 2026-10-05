@@ -74,6 +74,9 @@ TAGGED_ACCOUNT = {
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> None:
     _ = db_client
     session = get_sessionmaker()()

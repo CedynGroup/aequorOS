@@ -239,7 +239,6 @@ def main() -> None:
                             "grant_member",
                             "fx_member",
                             "forecast_member",
-                            "forecast_summary_member",
                             "access_request_member",
                             "access_extra_member",
                             "forecast_summary_member",

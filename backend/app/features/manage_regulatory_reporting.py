@@ -35,6 +35,7 @@ from app.api.deps import (
     PackageSubmit,
     PackageValidate,
     PackageView,
+    ScopedMutationTenant,
     Tenant,
 )
 from app.features.ingest_data import IngestionStorage
@@ -212,7 +213,7 @@ def create_regulatory_package(
     bank_id: str,
     payload: RegulatoryPackageCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> RegulatoryPackageRead:
     return regulatory_reporting.generate_package(db, ctx, bank_id, payload)
 

@@ -896,6 +896,10 @@ def test_enterprise_fx_permission_precedes_input_reads(
         raise HTTPException(status_code=409, detail="Authorized input probe")
 
     monkeypatch.setattr(enterprise_stress, "_get_period_or_404", input_probe)
+    _grant(
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(
         role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.IRRBB,

@@ -146,7 +146,7 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   await context.close();
 });
 
-test("branch-only Capital authority keeps access request available and cannot approve whole-institution access", async ({
+test("unsupported Capital narrowing leaves the whole-institution access request pending", async ({
   browser,
   request,
 }) => {
@@ -183,26 +183,43 @@ test("branch-only Capital authority keeps access request available and cannot ap
     data_scope_kind: "branch",
     data_scope_values: ["ACC"],
   };
+  const bindingsUrl = `${api}/authorization/bindings?principal_user_id=${draft.principal_user_id}`;
+  const beforeBindings = await request.get(bindingsUrl, { headers: owner });
+  expect(beforeBindings.status()).toBe(200);
+  const beforeIds = (await beforeBindings.json()).bindings.map(
+    (binding: { id: string }) => binding.id,
+  );
+  const refusal = "Branch and region narrowing is supported only for Credit";
   const preview = await request.post(`${api}/authorization/bindings/preview`, {
     headers: owner,
     data: draft,
   });
-  expect(preview.status()).toBe(200);
+  expect(preview.status()).toBe(422);
+  expect(JSON.stringify(await preview.json())).toContain(refusal);
   const reviewed = {
     ...draft,
-    expected_authority_sentence: (await preview.json()).authority_sentence,
+    expected_authority_sentence: "A narrowed Capital grant is invalid",
   };
   const { principal_user_id, ...approval } = reviewed;
   const denied = await request.post(
     `${api}/authorization/access-requests/${id}/approve`,
     { headers: owner, data: approval },
   );
-  expect(denied.status()).toBe(409);
+  expect(denied.status()).toBe(422);
+  expect(JSON.stringify(await denied.json())).toContain(refusal);
   const granted = await request.post(`${api}/authorization/bindings`, {
     headers: owner,
     data: reviewed,
   });
-  expect(granted.status()).toBe(201);
+  expect(granted.status()).toBe(422);
+  expect(JSON.stringify(await granted.json())).toContain(refusal);
+  const afterBindings = await request.get(bindingsUrl, { headers: owner });
+  expect(afterBindings.status()).toBe(200);
+  expect(
+    (await afterBindings.json()).bindings.map(
+      (binding: { id: string }) => binding.id,
+    ),
+  ).toEqual(beforeIds);
   const pending = await request.get(`${api}/authorization/access-requests`, {
     headers: owner,
   });
@@ -215,7 +232,7 @@ test("branch-only Capital authority keeps access request available and cannot ap
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("access_extra_member", authv + 1),
+      value: await mintSessionCookie("access_extra_member", authv),
       url: E2E_BASE_URL,
     },
   ]);

@@ -342,7 +342,61 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
     limit: int | None = None,
     offset: int = 0,
 ) -> ReportingObligationListRead:
+    """The tenant calendar hides every package family the principal cannot read."""
     bank = get_bank_or_404(db, ctx, bank_id)
+    return _list_obligations(
+        db,
+        ctx,
+        bank,
+        horizon_months,
+        lookback_months=lookback_months,
+        as_of=as_of,
+        limit=limit,
+        offset=offset,
+        hidden=family_access.hidden_families(db, ctx, bank),
+    )
+
+
+def deadline_scan_obligations(  # noqa: PLR0913 - organization, bank and scan window are explicit
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    *,
+    as_of: date,
+    horizon_months: int,
+    lookback_months: int,
+) -> ReportingObligationListRead:
+    """Worker-only deadline metadata; never called by a tenant route.
+
+    The scheduler owns the organization's scan and must distinguish filed
+    returns from arrears. It reads package lifecycle metadata, not snapshots,
+    independently of any human's grant. Tenant calendars use list_obligations.
+    """
+    ctx = TenantContext(organization_id=organization_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
+    return _list_obligations(
+        db,
+        ctx,
+        bank,
+        horizon_months,
+        lookback_months=lookback_months,
+        as_of=as_of,
+        hidden=frozenset(),
+    )
+
+
+def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page controls
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    horizon_months: int = DEFAULT_HORIZON_MONTHS,
+    *,
+    lookback_months: int = DEFAULT_LOOKBACK_MONTHS,
+    as_of: date | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    hidden: frozenset[str],
+) -> ReportingObligationListRead:
     today = as_of or date.today()
     window = anchor_window(today, lookback_months=lookback_months, horizon_months=horizon_months)
     overrides = _deadline_overrides(db, ctx, bank.id)
@@ -353,7 +407,6 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
     # here and then drive it through the attestation routes (security audit
     # S-2/S-3). The OBLIGATION row stays — BoG's deadline is public — but the
     # package linkage is withheld.
-    hidden = family_access.hidden_families(db, ctx, bank)
     # Return eligibility resolves through the SINGLE authority (audit ARCH-8,
     # ``eligibility.py``) — the same object ``generation.generate_package``
     # gates on, so the calendar and the package-mint site cannot disagree about
@@ -606,6 +659,13 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
         db, ctx, bank.id, {definition.code: reporting_dates}
     )
 
+    visible = family_access.can_view(
+        db,
+        ctx,
+        bank,
+        definition.family,
+        prefetched_bindings=family_access.prefetch_view_authority(db, ctx, bank),
+    )
     anchors: list[ReturnAnchorRead] = []
     deadline_note: str | None = None
     for reporting_date in reporting_dates:
@@ -623,7 +683,7 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
                 f"been configured for this institution ({missing_parameter}). The "
                 "reporting dates below are the regulator's; the due date is not assumed."
             )
-        package = packages.get((definition.code, reporting_date))
+        package = packages.get((definition.code, reporting_date)) if visible else None
         pending_reupload = package is not None and package.id in pending_reuploads
         covered = coverage[reporting_date]
         anchors.append(

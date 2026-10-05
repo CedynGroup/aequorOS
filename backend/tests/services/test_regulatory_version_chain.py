@@ -38,8 +38,12 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
-NEIGHBOUR = TenantContext(organization_id=ORG_2, actor_user_id=uuid4())
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
+NEIGHBOUR = TenantContext(organization_id=ORG_2, actor_user_id=uuid4(), authorization_version=1)
 REPORTING_DATE = date(2026, 3, 31)
 
 

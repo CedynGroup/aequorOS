@@ -71,6 +71,8 @@ from tests.factories.reconciliation import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
 #: The compact canonical fixture's known, deliberate defect: 15.28m GHS of
 #: funding is absent against a 146.85m balance sheet. ``gap = funding - assets``,
 #: so the sign says WHICH side is short — here, the funding side.
@@ -89,7 +91,7 @@ FIXTURE_GAP_FRACTION = Decimal("0.10405175")
 
 
 def _ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _bank(db_session: Session) -> Bank:
@@ -1125,7 +1127,7 @@ _CONTROL_CALL_SITES: tuple[tuple[str, str, str], ...] = (
     # -- D-20b: the SDI zero-obligation explanation gets a field --------------
     (
         "app/services/regulatory_reporting/calendar.py",
-        "list_obligations",
+        "_list_obligations",
         "eligibility.coverage_note",
     ),
     # -- D-20c: the reconciliation escape valve gets routes -------------------

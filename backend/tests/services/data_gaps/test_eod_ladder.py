@@ -66,6 +66,9 @@ TBILL = Decimal("150000000")
 STEP = Decimal("1000000")
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> str:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
@@ -309,8 +312,10 @@ def test_sample_bank_ladder_is_seven_consistent_daily_extracts() -> None:
         assert first_line.startswith("#") and f"as_of_date={day.isoformat()}" in first_line
     readme = (LADDER_DIR / "README.md").read_text(encoding="utf-8")
     assert "as_of_date" in readme and "BSD1" in readme
-    assert (LADDER_DIR / "positions_template.csv").read_text(encoding="utf-8").startswith(
-        "source_reference,position_type,currency,balance"
+    assert (
+        (LADDER_DIR / "positions_template.csv")
+        .read_text(encoding="utf-8")
+        .startswith("source_reference,position_type,currency,balance")
     )
 
 

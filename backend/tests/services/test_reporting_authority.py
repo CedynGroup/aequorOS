@@ -74,9 +74,13 @@ from tests.fixtures.canonical_bank_fixture import (
 
 from app.db.session import get_sessionmaker  # isort: skip
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
 _AS_OF = date(2026, 6, 30)
 REPORTING_DATE = date(2026, 3, 31)
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 _FIXED_TS = datetime(2026, 8, 15, tzinfo=UTC)
 
 
@@ -687,7 +691,7 @@ def test_calendar_and_generation_read_the_same_eligibility_authority(
 ) -> None:
     """The point of ARCH-8: one decision function, two consumers."""
     bank = _make_bank(db_session, institution_type="universal_bank")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     resolved = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
     assert resolved.institution_class == "bank"
     assert resolved.jurisdiction_code == "GH"
@@ -707,7 +711,7 @@ def test_calendar_and_generation_read_the_same_eligibility_authority(
 def test_an_ineligible_return_cannot_be_generated(db_session: Session) -> None:
     """Structurally impossible, not merely hidden: the mint site gates on it."""
     sdi = _make_bank(db_session, institution_type="savings_and_loans")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     bank_only = next(d for d in REGISTRY.values() if "sdi" not in d.institution_classes)
 
     resolved = eligibility.resolve_eligibility(db_session, ctx, sdi, as_of=_AS_OF)
@@ -745,7 +749,7 @@ def test_a_refused_package_is_reported_not_silent(db_session: Session) -> None:
     reason is queryable rather than reconstructed from a 4xx in an access log.
     """
     sdi = _make_bank(db_session, institution_type="savings_and_loans")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     bank_only = next(d for d in REGISTRY.values() if "sdi" not in d.institution_classes)
 
     emitted: list[dict[str, Any]] = []
@@ -785,7 +789,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
     calendar and neither may leak to a universal-bank tenant.
     """
     sdi = _make_bank(db_session, institution_type="savings_and_loans")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
     resolved = eligibility.resolve_eligibility(db_session, ctx, sdi, as_of=_AS_OF)
     assert resolved.coverage_note() is None
@@ -816,9 +820,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
-    } & {
-        definition.code for definition in bank_view.eligible_definitions()
-    }
+    } & {definition.code for definition in bank_view.eligible_definitions()}
     with pytest.raises(HTTPException) as exc:
         generation.generate_package(
             db_session,
@@ -832,7 +834,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
 def test_a_return_from_another_jurisdiction_is_refused(db_session: Session) -> None:
     """The jurisdiction dimension is real, not decorative."""
     bank = _make_bank(db_session, institution_type="universal_bank")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     resolved = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
     foreign: ReturnDefinition = replace(
         REGISTRY["LMT"], code="TEST-NG-RETURN", jurisdictions=("NG",)
@@ -845,7 +847,7 @@ def test_a_return_from_another_jurisdiction_is_refused(db_session: Session) -> N
 def test_a_not_yet_effective_return_is_refused(db_session: Session) -> None:
     """Effective dating is evaluated where the registry establishes a date."""
     bank = _make_bank(db_session, institution_type="universal_bank")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     resolved = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
     future = replace(REGISTRY["LMT"], code="TEST-FUTURE-RETURN", effective_from=date(2027, 1, 1))
     decision = resolved.decide(future, reporting_date=_AS_OF)
@@ -866,7 +868,7 @@ def test_cadence_is_advisory_and_never_refuses_generation(db_session: Session) -
     it blocking would be a new restriction dressed as a correctness fix.
     """
     bank = _make_bank(db_session, institution_type="universal_bank")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     resolved = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
     mid_month = date(2026, 6, 15)
     decision = resolved.decide(REGISTRY["LMT"], reporting_date=mid_month)

@@ -8,7 +8,7 @@ immutable, reproducible runs.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -54,9 +54,10 @@ from tests.factories.canonical import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
-pytestmark = pytest.mark.usefixtures(
-    "fx_run_authority", "ftp_run_authority", "forecasting_run_authority"
-)
+pytestmark = [
+    pytest.mark.usefixtures("fx_run_authority", "ftp_run_authority", "forecasting_run_authority"),
+    pytest.mark.usefixtures("return_generation_authority"),
+]
 
 # The worker retry test opens separate sessions that must observe committed job state.
 requires_committing_db = pytest.mark.committing_db
@@ -630,7 +631,15 @@ def test_refresh_upserts_the_daily_snapshot_ladder(db_session: Session) -> None:
     assert db_session.scalar(select(func.count()).select_from(LiveMetricSnapshot)) == snap_count
     row = db_session.scalar(select(LiveMetricSnapshot).limit(1))
     assert row is not None
-    assert row.snapshot_date == row.computed_at.date()
+    # Postgres returns timestamptz in the session zone; the close is a UTC date.
+    # SQLite discards tzinfo from the same UTC value.
+    computed_at = row.computed_at
+    computed_utc = (
+        computed_at.replace(tzinfo=UTC)
+        if computed_at.tzinfo is None
+        else computed_at.astimezone(UTC)
+    )
+    assert row.snapshot_date == computed_utc.date()
     assert row.status in ("green", "amber", "red", "na")
 
 

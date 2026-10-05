@@ -61,6 +61,9 @@ ANNEXURE_FIELDS = 13
 ANNEXURE_ROWS = 50
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def test_bsd8_line_map_binds_every_input_cell_of_both_sheets() -> None:
     layout = load_layout("BSD8")
     maps = line_maps_for("BSD8")

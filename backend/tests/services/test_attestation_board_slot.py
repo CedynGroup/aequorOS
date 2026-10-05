@@ -53,7 +53,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+CTX = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 VAULT_KEY = "test-vault-master-key-not-for-production-0004"
 
@@ -288,9 +292,7 @@ def test_icaap_placements_are_fixed_and_not_editable(db_session: Session) -> Non
     materialize_canonical_test_book(db_session)
     package = _package("icaap", state="unsigned")
 
-    two = placements.resolve(
-        db_session, CTX, package, signing_order=("preparer", "approver")
-    )
+    two = placements.resolve(db_session, CTX, package, signing_order=("preparer", "approver"))
     assert two.source == "default"
     assert two.editable is False
     assert {p.signing_role for p in two.placements} == {"preparer", "approver"}
@@ -374,9 +376,7 @@ def test_a_board_policy_with_an_order_is_accepted_and_round_trips(
     db_session: Session,
 ) -> None:
     materialize_canonical_test_book(db_session)
-    read = attestation_api.upsert_policy(
-        db_session, CTX, _policy_request(ordered_slots=True)
-    )
+    read = attestation_api.upsert_policy(db_session, CTX, _policy_request(ordered_slots=True))
     assert read.ordered_slots is True
     assert [slot.role for slot in read.required_signatures] == [
         "preparer",
@@ -598,9 +598,7 @@ def test_the_switch_puts_a_configured_board_policy_dormant_and_gives_it_back(
     """
     materialize_canonical_test_book(db_session)
     _icaap_signing(monkeypatch, on=True)
-    saved = attestation_api.upsert_policy(
-        db_session, CTX, _policy_request(ordered_slots=True)
-    )
+    saved = attestation_api.upsert_policy(db_session, CTX, _policy_request(ordered_slots=True))
 
     _icaap_signing(monkeypatch, on=False)
     dormant = _resolve_icaap(db_session)
@@ -791,9 +789,7 @@ def test_a_board_block_survives_the_read_contract(
     _icaap_signing(monkeypatch, on=True)
     attestation_api.upsert_policy(db_session, CTX, _policy_request(ordered_slots=True))
 
-    read = attestation_api.resolved_placements(
-        db_session, ctx, SAMPLE_BANK_ID, package.id
-    )
+    read = attestation_api.resolved_placements(db_session, ctx, SAMPLE_BANK_ID, package.id)
 
     assert "board" in {placement.signing_role for placement in read.placements}
     # The ceremony, in order — which is what the workspace labels its rail from.
@@ -815,9 +811,7 @@ def test_the_ceremony_is_reported_even_where_the_boxes_cannot_be_moved(
     package, ctx = _seed_icaap_package(db_session)
     _icaap_signing(monkeypatch, on=True)
 
-    read = attestation_api.resolved_placements(
-        db_session, ctx, SAMPLE_BANK_ID, package.id
-    )
+    read = attestation_api.resolved_placements(db_session, ctx, SAMPLE_BANK_ID, package.id)
 
     assert read.editable is False
     assert read.placeable_roles == ["preparer", "approver"]

@@ -422,12 +422,9 @@ def list_regulatory_runs(  # noqa: PLR0913
     )
 
 
-def get_regulatory_run(
-    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
-) -> RegulatoryRunRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
-    run = _run_or_404(db, ctx, bank.id, run_id)
-    policy = _REGULATORY_RUN_AUTHORIZATION.get(run.module)
+def require_regulatory_run_read(db: Session, ctx: TenantContext, bank: Bank, module: str) -> None:
+    """Run figures and comparisons share whole-institution module authority."""
+    policy = _REGULATORY_RUN_AUTHORIZATION.get(module)
     if policy is not None:
         scoped_authorization.require_resolved_bank_permission(
             db,
@@ -440,6 +437,14 @@ def get_regulatory_run(
             denial_status=status.HTTP_404_NOT_FOUND,
             denial_detail="Regulatory run not found.",
         )
+
+
+def get_regulatory_run(
+    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
+) -> RegulatoryRunRead:
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    run = _run_or_404(db, ctx, bank.id, run_id)
+    require_regulatory_run_read(db, ctx, bank, run.module)
     response = _read_run(db, run)
     if run.module == "enterprise_stress":
         return enterprise_run_visibility.project_response(

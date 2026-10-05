@@ -758,15 +758,42 @@ Reconciliation amounts require at least one whole-institution engine view.
 Generic regulatory-run lists/details also gate Capital, Credit and enterprise
 stress under their module authorities. Direct enterprise-stress history,
 latest and detail reads require RISK/aggregated (history) or RISK/confidential
-(detail), with whole-institution coverage. This closes the parallel read path
+(detail and execution response), with whole-institution coverage. Execution
+retains its existing mutation gate as well. This closes the parallel read path
 that otherwise disclosed capital stress outcomes independently of the FX
 projection. This is a denial-only access change; no bindings are backfilled. Run
 `scripts/authorization_access_impact.py` for each deployment after the migration
 and retain its dated output outside the repository.
 
+Regulatory **packages** follow their return authority, independently of the
+underlying engine runs: every ordinary return requires whole-institution
+REG/restricted VIEW; ICAAP retains CAPITAL/confidential and its workspace
+freeze rules. Generation additionally requires REG/restricted RUN. Package
+lists filter before counts and pagination. Calendar/anchor links, signing
+inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
+without that authority. Ordinary approval, signing and nomination no longer
+fall back to scalar roles; the action permission and maker/checker conditions
+remain required. A visible return without the action permission returns 403;
+an invisible return returns 404. Report comparisons use the same whole-book
+module authority as regulatory-run details.
+
+The deadline worker uses a separate tenant/bank-scoped lifecycle projection to
+track filed returns and pending ORASS re-uploads; it serves no snapshot figures
+and tenant routes never call it.
+
+No return authority is inferred or backfilled. Existing whole-institution REG
+(or explicit all-module/all-sensitivity) grants continue to qualify according
+to their bundle permissions; an Org Owner must explicitly issue an appropriate
+whole-institution reporting grant for a former scalar-only reader or preparer.
+Valid Credit grants remain valid for Credit, and never grant reporting access.
+There are no active customers; unsupported stored narrow grants and credentials
+are revoked by the migration above rather than widened or grandfathered.
+
 Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
-regulatory figures alongside a row-filtered Credit control;
+regulatory figures, every registered return family's read/download paths,
+generation, legacy approval, signing inboxes and calendar links alongside a
+row-filtered Credit control;
 `tests/services/test_institution_data_scope_enforcement.py` exercises matching
 narrowed bindings through both shared gates and family visibility;
 `tests/api/test_data_scope_grants.py` refuses every unsupported module;

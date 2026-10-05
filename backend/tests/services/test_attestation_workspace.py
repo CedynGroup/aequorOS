@@ -33,6 +33,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import get_settings
 from app.models import (
     AttestationSignature,
@@ -51,7 +59,7 @@ from app.schemas.regulatory_reporting import (
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
 )
-from app.services import attestation_api, regulatory_liquidity
+from app.services import attestation_api, authorization, regulatory_liquidity
 from app.services.attestation import (
     pdf_signing,
     placements,
@@ -75,11 +83,15 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 APPROVER_USER_ID = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
 ANALYST_USER_ID = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
 OTHER_APPROVER_USER_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
-APPROVER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=APPROVER_USER_ID)
+APPROVER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=APPROVER_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 VAULT_KEY = "test-vault-master-key-not-for-production-0004"
 
@@ -127,9 +139,7 @@ def _users(db: Session) -> None:
         # users, and an unscoped existence check would silently skip a nominee
         # this tenant needs.
         existing = db.scalar(
-            select(User.id).where(
-                User.id == user_id, User.organization_id == DEMO_ORG_ID
-            )
+            select(User.id).where(User.id == user_id, User.organization_id == DEMO_ORG_ID)
         )
         if existing is None:
             db.add(
@@ -142,14 +152,40 @@ def _users(db: Session) -> None:
                     role=role,
                 )
             )
-    # The preparer holds approver rights too, which is common in a small treasury
-    # team. Load-bearing for the self-nomination test: with the seeded 'viewer'
-    # role that refusal would come from the role gate, and would pass while
-    # proving nothing about maker-checker.
+    # The preparer holds an Approver grant too, as in a small treasury team.
+    # The self-nomination test must reach maker-checker with real authority,
+    # rather than pass because the preparer lacks the required permission.
     preparer = db.scalar(select(User).where(User.id == DEMO_USER_ID))
     assert preparer is not None
     preparer.role = "approver"
     preparer.job_title = "Chief Financial Officer"
+    db.flush()
+    for user_id, bundle in (
+        (DEMO_USER_ID, RoleBundle.ANALYST),
+        (DEMO_USER_ID, RoleBundle.APPROVER),
+        (APPROVER_USER_ID, RoleBundle.APPROVER),
+        (ANALYST_USER_ID, RoleBundle.ANALYST),
+        (OTHER_APPROVER_USER_ID, RoleBundle.APPROVER),
+    ):
+        authorization.create_role_binding(
+            db,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "signing-fixture"),
+            reason="Authorize the real ceremony under scoped return authority",
+            commit=False,
+        )
+        user = db.get(User, user_id)
+        assert user is not None
+        user.authorization_version = 1
     db.commit()
 
 
@@ -387,9 +423,7 @@ def test_a_template_write_replaces_the_whole_scope(db_session: Session) -> None:
         (
             (
                 *PLACED,
-                pdf_signing.FieldPlacement(
-                    "preparer", FIGURES_PAGE, (60, 100, 300, 185), "stamp"
-                ),
+                pdf_signing.FieldPlacement("preparer", FIGURES_PAGE, (60, 100, 300, 185), "stamp"),
             ),
             "placement_field_type_unsupported",
         ),
@@ -458,9 +492,7 @@ def test_clearing_an_override_returns_the_package_to_its_template(
     db_session: Session,
 ) -> None:
     package = _seed(db_session)
-    placements.set_package_override(
-        db_session, MAKER, package, placements=PLACED, reason="placed"
-    )
+    placements.set_package_override(db_session, MAKER, package, placements=PLACED, reason="placed")
     db_session.commit()
     assert placements.resolve(db_session, MAKER, package).source == "package"
 
@@ -605,7 +637,9 @@ def test_only_the_named_signer_may_fill_a_routed_slot(db_session: Session) -> No
     _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
     db_session.commit()
 
-    other = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID)
+    other = TenantContext(
+        organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID, authorization_version=1
+    )
     with pytest.raises(AttestationConflict) as raised:
         _certify(db_session, other, package, role="approver")
     assert raised.value.error_code == "not_the_named_signer"
@@ -644,7 +678,9 @@ def test_rerouting_frees_a_return_whose_nominee_is_unavailable(
 
     rerouted = routing.current_recipients(db_session, MAKER, package)
     assert [row.recipient_user_id for row in rerouted] == [OTHER_APPROVER_USER_ID]
-    other = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID)
+    other = TenantContext(
+        organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID, authorization_version=1
+    )
     _certify(db_session, other, package, role="approver")
     db_session.refresh(package)
     assert package.attestation_state == "fully_certified"
@@ -950,9 +986,7 @@ def test_the_esign_kill_switch_routes_a_mandatory_return_through_bare_approval(
     assert decided.status == "pending_approval"
     assert_handed_to_the_validator(db_session, package)
 
-    status_read = attestation_api.attestation_status(
-        db_session, MAKER, SAMPLE_BANK_ID, package.id
-    )
+    status_read = attestation_api.attestation_status(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     # The ATTESTATION gate is satisfied — no signature is outstanding. What is
     # outstanding is the Validator's stage, which this surface does not speak
     # for; the chain read does.

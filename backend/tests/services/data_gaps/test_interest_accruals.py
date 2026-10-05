@@ -58,6 +58,9 @@ KIND = "interest_accruals"
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> str:
     """Materialise the hermetic book; return its latest period end (ISO)."""
     session = get_sessionmaker()()

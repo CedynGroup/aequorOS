@@ -29,13 +29,19 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 ADMIN_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 APPROVER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 ANALYST_ID = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
 VIEWER_ID = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
 INACTIVE_APPROVER_ID = UUID("abababab-abab-4bab-8bab-abababababab")
-CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=APPROVER_ID)
+CHECKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=APPROVER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 BSD3_DUE_DATE = date(2026, 4, 9)  # monthly_day(9) for the 2026-03-31 period
 
@@ -87,7 +93,7 @@ def _total_notifications(db: Session) -> int:
 
 def test_emit_role_fanout_targets_role_and_higher_active_users(db_session: Session) -> None:
     _ensure_role_users(db_session, ORG_1)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     rows = notifications.emit(
         db_session,
         ctx,
@@ -107,7 +113,7 @@ def test_emit_role_fanout_targets_role_and_higher_active_users(db_session: Sessi
 
 
 def test_emit_unknown_role_is_rejected(db_session: Session) -> None:
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     with pytest.raises(ValueError, match="Unknown recipient role"):
         notifications.emit(
             db_session,
@@ -122,7 +128,7 @@ def test_emit_unknown_role_is_rejected(db_session: Session) -> None:
 
 def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Session) -> None:
     _ensure_role_users(db_session, ORG_1)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     notifications.emit(
         db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
     )
@@ -153,13 +159,15 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
     # Newest first.
     assert [row.type for row in rows] == ["reporting.test.mine", "reporting.test.org_wide"]
 
-    other_ctx = TenantContext(organization_id=ORG_1, actor_user_id=APPROVER_ID)
+    other_ctx = TenantContext(
+        organization_id=ORG_1, actor_user_id=APPROVER_ID, authorization_version=1
+    )
     other_rows, other_total, _ = notifications.list_notifications(db_session, other_ctx)
     assert other_total == 2
     assert {row.type for row in other_rows} == {"reporting.test.org_wide", "reporting.test.other"}
 
     # A different tenant sees nothing.
-    stranger = TenantContext(organization_id=ORG_2, actor_user_id=USER_2)
+    stranger = TenantContext(organization_id=ORG_2, actor_user_id=USER_2, authorization_version=1)
     _, stranger_total, stranger_unread = notifications.list_notifications(db_session, stranger)
     assert stranger_total == 0
     assert stranger_unread == 0
@@ -167,7 +175,7 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
 
 def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session) -> None:
     _ensure_role_users(db_session, ORG_1)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     org_wide = notifications.emit(
         db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
     )[0]
@@ -501,7 +509,7 @@ def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> Non
     /notifications when the first bank-scoped notification landed after the
     platform-ID epoch (entity_id was typed UUID while the column is text).
     """
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     emitted = notifications.emit(
         db_session,
         ctx,

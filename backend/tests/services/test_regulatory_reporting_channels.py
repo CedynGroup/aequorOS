@@ -45,10 +45,15 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+    authorization_version=1,
 )
 #: The third officer. Since the filing review chain landed
 #: (``docs/filing_workflow_redesign.md`` §3) the Approver's approval advances
@@ -58,6 +63,7 @@ CHECKER = TenantContext(
 VALIDATOR = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+    authorization_version=1,
 )
 REPORTING_DATE = date(2026, 3, 31)
 

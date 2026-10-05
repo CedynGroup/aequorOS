@@ -42,7 +42,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority")
+pytestmark = pytest.mark.usefixtures("return_generation_authority", "fx_run_authority")
 
 FXP = "FORM FXP"
 AFOP = "AFOP"

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import openpyxl
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -68,6 +69,9 @@ NULL_SENTINELS = {
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def _prepare(db_client: TestClient) -> str:

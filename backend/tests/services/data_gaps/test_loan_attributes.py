@@ -46,6 +46,9 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank" / 
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def test_attribute_key_recognises_only_the_documented_prefix() -> None:
     assert attribute_key("attributes.sector") == "sector"
     assert attribute_key("attributes. bog_classification ") == "bog_classification"

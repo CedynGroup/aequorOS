@@ -21,10 +21,10 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 
 from app.api.deps import (
-    ApproverTenant,
     DbSession,
     GrantAdminTenant,
     MutationTenant,
+    ScopedMutationTenant,
     Tenant,
 )
 from app.features.manage_banks import BankReference
@@ -89,7 +89,7 @@ def preview_certification(
     package_id: UUID,
     signing_role: str,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> CertificationPreviewRead:
     """Exactly what will be signed — digest, figures, and the statement."""
     return attestation_api.preview(db, ctx, bank_id, package_id, signing_role)
@@ -106,7 +106,7 @@ def step_up_for_signing(  # noqa: PLR0913 - FastAPI injects db/ctx/request
     payload: StepUpRequest,
     request: Request,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StepUpGrantedRead:
     """Prove presence now; receive a single-use authorisation bound to the figures."""
     return attestation_api.step_up(db, ctx, bank_id, package_id, payload, request)
@@ -122,7 +122,7 @@ def certify_package(
     package_id: UUID,
     payload: CertifyRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Record a signature.
 
@@ -143,7 +143,7 @@ def certify_and_send_package(
     package_id: UUID,
     payload: CertifyAndSendRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Certify and nominate the remaining signers in one act.
 
@@ -164,7 +164,7 @@ def send_package_back_for_corrections(
     package_id: UUID,
     payload: SendBackForCorrectionsRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """The reviewing approver's second exit: return it with a note, unsigned.
 
@@ -198,7 +198,7 @@ def set_package_signature_placements(
     package_id: UUID,
     payload: PackageSignaturePlacementRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ResolvedSignaturePlacementsRead:
     """Place this return's signature fields; an empty list falls back to the template.
 
@@ -218,7 +218,7 @@ def update_package_signature_routing(
     package_id: UUID,
     payload: SignatureRoutingUpdateRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Re-assign outstanding signatures — the escape hatch for an absent nominee.
 
@@ -305,7 +305,7 @@ def void_attestation(
     package_id: UUID,
     payload: VoidAttestationRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Withdraw the current attestation. Signatures are retained, never deleted."""
     return attestation_api.void(db, ctx, bank_id, package_id, payload.reason)

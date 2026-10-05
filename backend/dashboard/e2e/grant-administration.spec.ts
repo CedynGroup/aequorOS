@@ -352,6 +352,9 @@ test.describe("Credit-only book coverage", () => {
   test("narrowing is offered only for Credit and persists the selected branch", async ({
     page,
   }) => {
+    if (evidenceDir) {
+      await page.setViewportSize({ width: 1280, height: 1800 });
+    }
     const ownerToken = await mintBackendToken("admin");
     const ownerHeaders = { Authorization: `Bearer ${ownerToken}` };
     await page.goto("/access/members");
@@ -373,6 +376,18 @@ test.describe("Credit-only book coverage", () => {
     await expect(composer).toContainText(
       "Figures for the institution as a whole are refused",
     );
+    await expect(composer).toContainText(
+      "Regulatory Reporting authority; ICAAP requires Capital",
+    );
+    if (evidenceDir) {
+      await expect(
+        composer.getByTestId("grant-coverage-shortfall"),
+      ).toBeInViewport({ ratio: 1 });
+      await page.screenshot({
+        path: path.join(evidenceDir, "after-credit.png"),
+        fullPage: true,
+      });
+    }
     await composer.getByLabel("Module").selectOption("liq");
     await expect(composer.getByLabel("Only the branches I choose")).toHaveCount(
       0,
@@ -383,6 +398,12 @@ test.describe("Credit-only book coverage", () => {
     await expect(composer.getByTestId("book-coverage")).toContainText(
       "Only Credit supports",
     );
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "after-liquidity.png"),
+        fullPage: true,
+      });
+    }
     await composer.getByLabel("Module").selectOption("credit");
     await expect(
       composer.getByLabel("The institution's whole book"),

@@ -270,9 +270,9 @@ def test_a_document_inside_the_limit_still_reaches_the_service(db_session: Sessi
     # is NOT the 413 — which is the assertion: the bound let this through.
     with pytest.raises(Exception) as excinfo:  # noqa: PT011 - any non-413 outcome proves it
         asyncio.run(_upload_through_the_route(db_session, package, upload))
-    assert not (
-        isinstance(excinfo.value, HTTPException) and excinfo.value.status_code == 413
-    ), "a document inside the limit must not be refused for size"
+    assert not (isinstance(excinfo.value, HTTPException) and excinfo.value.status_code == 413), (
+        "a document inside the limit must not be refused for size"
+    )
     assert upload.requested == get_settings().icaap.max_attachment_bytes + 1
 
 
@@ -333,9 +333,7 @@ def _artifacts(db: Session, package: RegulatoryPackage, kinds: tuple[str, ...]) 
                 organization_id=DEMO_ORG_ID,
                 package_id=package.id,
                 kind=artifact_kind,
-                object_path=(
-                    f"bog_returns/x/{package.id}/{package.return_code}.{artifact_kind}"
-                ),
+                object_path=(f"bog_returns/x/{package.id}/{package.return_code}.{artifact_kind}"),
                 checksum_sha256="b" * 64,
                 size_bytes=10,
             )
@@ -363,9 +361,7 @@ def _filed_kinds(db: Session, return_code: str, kinds: tuple[str, ...]) -> list[
 #: which is what the founder's decision named.
 def test_the_formula_copy_of_an_official_form_is_filed(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    kinds = _filed_kinds(
-        db_session, "BSD2", ("pdf", "xlsx", "csv", "xlsx_working", "docx_working")
-    )
+    kinds = _filed_kinds(db_session, "BSD2", ("pdf", "xlsx", "csv", "xlsx_working", "docx_working"))
     assert "xlsx_working" in kinds, "BoG's own formula workbook is part of what is filed"
     assert "docx_working" not in kinds, "the Word draft never reaches a regulator"
 
@@ -478,7 +474,7 @@ def test_certification_still_signs_the_values_only_document(db_session: Session)
 
 
 def test_the_filing_record_lists_the_documents_by_hash(db_session: Session) -> None:
-    """"Which Board resolution did we file" must be answerable from the database."""
+    """ "Which Board resolution did we file" must be answerable from the database."""
     materialize_canonical_test_book(db_session)
     package = _package(db_session)
     _attach(db_session, package, kind="board_resolution", sha="c" * 64)
@@ -790,9 +786,7 @@ def test_the_freeze_path_ignores_the_effective_date(db_session: Session) -> None
     with pytest.raises(HTTPException):
         resolved.require(definition, reporting_date=date(2025, 12, 31))
     # ...and the freeze path does not, because rehearsing is the point.
-    resolved.require(
-        definition, reporting_date=date(2025, 12, 31), ignore={"effective_date"}
-    )
+    resolved.require(definition, reporting_date=date(2025, 12, 31), ignore={"effective_date"})
 
 
 # --- 6. every registered return can produce a due date ----------------------
@@ -850,9 +844,7 @@ class _StubResolver:
     the governed commencement dates and the governed deadlines.
     """
 
-    def __init__(
-        self, effective_dates: dict[str, date | None], months: dict[str, int]
-    ) -> None:
+    def __init__(self, effective_dates: dict[str, date | None], months: dict[str, int]) -> None:
         self._effective = effective_dates
         self._months = months
 
@@ -908,8 +900,7 @@ def test_the_annex_rides_under_its_parent_once_the_parent_is_in_force(
     assert not [
         row
         for row in listing.obligations
-        if row.return_code == "ICAAP-STRESS-APPENDIX2"
-        and row.reporting_date == date(2026, 12, 31)
+        if row.return_code == "ICAAP-STRESS-APPENDIX2" and row.reporting_date == date(2026, 12, 31)
     ]
 
 
@@ -928,8 +919,7 @@ def test_the_scalar_approver_role_does_not_authorise_an_icaap_certification(
     A Board or approver certification on an ICAAP package was gated on the
     SCALAR ``approver`` role, which is exactly the shape the authorization
     foundation exists to remove: a scalar role must never satisfy a scoped
-    surface. ``require_certify_authority`` answers for a gated family and hands
-    every other family back to the ladder unchanged.
+    surface. Every return family now requires its scoped authority.
     """
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
@@ -938,11 +928,9 @@ def test_the_scalar_approver_role_does_not_authorise_an_icaap_certification(
     icaap = _package(db_session, return_code="ICAAP-REPORT", family="icaap")
     ordinary = _package(db_session)
 
-    # An ungated family is not decided here at all — the caller keeps the ladder.
-    assert (
+    with pytest.raises(HTTPException) as ordinary_refusal:
         family_access.require_certify_authority(db_session, MAKER, bank, ordinary, "approver")
-        is False
-    )
+    assert ordinary_refusal.value.status_code == 403
     # A gated family IS decided here, and a scalar approver role does not
     # satisfy it: this principal can see the ICAAP (the fixture grants a
     # capital binding) but holds no APPROVE on it, so the Board slot is refused
@@ -954,9 +942,7 @@ def test_the_scalar_approver_role_does_not_authorise_an_icaap_certification(
         authorization_version=1,
     )
     with pytest.raises(HTTPException) as excinfo:
-        family_access.require_certify_authority(
-            db_session, scalar_approver, bank, icaap, "board"
-        )
+        family_access.require_certify_authority(db_session, scalar_approver, bank, icaap, "board")
     assert excinfo.value.status_code == 403
 
 
@@ -970,17 +956,17 @@ def test_each_signing_role_maps_to_the_permission_it_actually_exercises() -> Non
     assert family_access.CERTIFY_PERMISSIONS["board"] is Permission.APPROVE
 
 
-def test_only_the_icaap_family_is_gated() -> None:
-    """Gating an EXISTING family would silently take a return away from its readers.
-
-    ``icaap_stress`` is the same confidential subject and is deliberately NOT
-    here: analysts read it today, and removing that is a product decision with
-    a migration, not an implementation detail.
-    """
+def test_every_family_names_whole_institution_authority() -> None:
+    from app.core.authorization import Module, Sensitivity  # noqa: PLC0415
+    from app.models.regulatory_reporting import RETURN_FAMILIES  # noqa: PLC0415
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
-    assert set(family_access.GATED) == {"icaap"}
-    assert family_access.is_gated("icaap_stress") is False
+    for family in RETURN_FAMILIES:
+        gate = family_access.gate_for(family)
+        assert gate.module is (Module.CAPITAL if family == "icaap" else Module.REGULATORY)
+        assert gate.sensitivity is (
+            Sensitivity.CONFIDENTIAL if family == "icaap" else Sensitivity.RESTRICTED
+        )
 
 
 def test_a_nominee_is_evaluated_on_the_same_authority_as_a_signer(
@@ -1000,10 +986,10 @@ def test_a_nominee_is_evaluated_on_the_same_authority_as_a_signer(
     icaap = _package(db_session, return_code="ICAAP-REPORT", family="icaap")
     ordinary = _package(db_session)
 
-    # An ungated family declines to answer, so the caller keeps the ladder.
+    # An ordinary return also refuses a nominee with no approval binding.
     assert (
         family_access.nominee_may_sign(db_session, MAKER, bank, ordinary, MAKER, "approver")
-        is None
+        is False
     )
     # A gated family answers, and a principal with no binding at all is refused
     # however good their scalar role looks.
@@ -1014,8 +1000,7 @@ def test_a_nominee_is_evaluated_on_the_same_authority_as_a_signer(
         authorization_version=1,
     )
     assert (
-        family_access.nominee_may_sign(db_session, MAKER, bank, icaap, stranger, "board")
-        is False
+        family_access.nominee_may_sign(db_session, MAKER, bank, icaap, stranger, "board") is False
     )
 
 
@@ -1043,8 +1028,7 @@ def test_a_rehearsal_never_satisfies_a_calendar_obligation(
         (
             item
             for item in listing.obligations
-            if item.return_code == "ICAAP-REPORT"
-            and item.reporting_date == date(2025, 12, 31)
+            if item.return_code == "ICAAP-REPORT" and item.reporting_date == date(2025, 12, 31)
         ),
         None,
     )
@@ -1132,18 +1116,15 @@ def test_the_freeze_path_cannot_lose_its_reconciliation_gate(db_session: Session
     called = {
         node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute | ast.Name)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute | ast.Name)
     }
     assert "assert_filing_reconciled" in called or "_assert_reconciled" in called, (
         "the ICAAP freeze no longer runs the filing-reconciliation gate; a return "
         "built on a book that does not balance must be impossible to freeze"
     )
     assert "get_snapshot_for_reporting_date" in called or "_period_for" in called, (
-        "the ICAAP freeze no longer resolves the reporting period exactly as of the "
-        "reporting date"
+        "the ICAAP freeze no longer resolves the reporting period exactly as of the reporting date"
     )
     assert "generate_frozen_package" in called, (
-        "the freeze no longer mints through the shared seam, so these gates may now "
-        "guard nothing"
+        "the freeze no longer mints through the shared seam, so these gates may now guard nothing"
     )

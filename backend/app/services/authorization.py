@@ -891,6 +891,34 @@ def _load_principal_grants(
     return True, [_binding_grant(binding) for binding in bindings]
 
 
+def prefetch_principal_bindings(
+    db: Session, principal: PrincipalLocator
+) -> tuple[bool, list[AuthorizationBinding]]:
+    """Load one principal and its grants once for several resource decisions.
+
+    Consumers must resolve each resource in the principal's tenant before using
+    evaluate_prefetched_permission, and apply their own data-grain requirement.
+    """
+    rows = db.execute(
+        select(User, AuthorizationBinding)
+        .select_from(User)
+        .outerjoin(
+            AuthorizationBinding,
+            (AuthorizationBinding.organization_id == principal.organization_id)
+            & (AuthorizationBinding.principal_user_id == principal.principal_id)
+            & (AuthorizationBinding.principal_type == principal.principal_type.value),
+        )
+        .where(
+            User.id == principal.principal_id,
+            User.organization_id == principal.organization_id,
+            User.is_active.is_(True),
+        )
+    ).all()
+    if not rows or _principal_type(rows[0][0]) is not principal.principal_type:
+        return False, []
+    return True, [binding for _, binding in rows if binding is not None]
+
+
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
     db: Session,
     principal: PrincipalLocator,

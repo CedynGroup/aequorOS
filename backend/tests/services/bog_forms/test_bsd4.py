@@ -55,6 +55,9 @@ INPUTS_PER_ROW = GROUPS * 3
 TOTAL_INPUTS = LEAF_ROWS * INPUTS_PER_ROW  # 1,890
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def test_line_map_binds_every_input_cell_of_the_grid() -> None:
     layout = load_layout("BSD4").sheet("BSD4")
     lines = line_maps_for("BSD4")["BSD4"]

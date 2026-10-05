@@ -55,6 +55,7 @@ from app.schemas.report_comparison import (
     ReportComparisonRead,
     ReportComparisonRequest,
 )
+from app.services import regulatory_liquidity
 
 # ---------------------------------------------------------------------------
 # Favorable-direction registry — the substantive judgment layer.
@@ -763,6 +764,7 @@ def build_comparison(
 ) -> ReportComparisonRead:
     """Resolve both sides per mode, then diff their metrics into favorability-scored lines."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    regulatory_liquidity.require_regulatory_run_read(db, ctx, bank, req.module)
     if req.mode == "version":
         left_side, right_side, left_run, right_run = _resolve_version_mode(db, ctx, bank, req)
     else:
