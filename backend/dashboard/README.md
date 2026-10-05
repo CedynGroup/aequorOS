@@ -91,8 +91,13 @@ These are correctness rules, not style preferences. The evidence is
   unclamped — the fixture ships `leverage_min = 3`, which is Basel III's figure
   and _below_ BoG's ¶90 6%. "Regulatory minimum" is the honest label until a
   governed row exists to clamp against; see `15_known_limitations.md`.
-- **IRRBB** shocks are Basel (BCBS d368/d578). Ghana's IRRBB guideline is a
-  February 2026 exposure draft stated effective 1 January 2027.
+- **IRRBB** uses Basel shocks (BCBS d368/d578) for the supervisory outlier
+  test. The overview reports the number of shocks returned by the engine;
+  jurisdiction-calibrated parallel ±450bp shocks appear with readable labels
+  and informational descriptions when the active parameter set supplies them.
+  These additional shocks do not enter the worst-case or breach calculation.
+  Ghana's IRRBB guideline is a February 2026 exposure draft stated effective
+  1 January 2027.
 - **LMTD, LRMD, the stress-testing directive and the ICAAP guideline** are all
   February 2026 **exposure drafts**. Copy must say "draft" / "not yet in force";
   it must not call their minimums binding.

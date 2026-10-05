@@ -67,11 +67,9 @@ export function signedGhsM(millions: number): string {
  */
 export function tableRow(table: Locator, key: string): Locator {
   return table.locator("tbody tr").filter({
-    has: table
-      .page()
-      .locator("td:first-child", {
-        hasText: new RegExp(`^\\s*${escape(key)}\\s*$`),
-      }),
+    has: table.page().locator("td:first-child", {
+      hasText: new RegExp(`^\\s*${escape(key)}\\s*$`),
+    }),
   });
 }
 

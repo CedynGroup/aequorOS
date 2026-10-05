@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * IRRBB Overview: headline KPIs (worst ΔEVE/Tier 1, duration gap, NII
@@ -6,47 +6,46 @@
  * the validation panel. Every figure is a backend engine output.
  */
 
-import Link from 'next/link';
-import { ArrowUpRight, Zap } from 'lucide-react';
-import IrrWorkspace from '@/components/irr/IrrWorkspace';
-import TornadoChart from '@/components/irr/charts/TornadoChart';
-import RepricingLadderChart from '@/components/irr/charts/RepricingLadderChart';
-import TrendChart from '@/components/irr/charts/TrendChart';
-import { scenarioLabel } from '@/components/irr/scenarios';
-import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import Sparkline from '@/components/ui/Sparkline';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import ValidationList from '@/components/ui/ValidationList';
-import { num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
-import SdiModuleContext from '@/components/sdi/SdiModuleContext';
+import Link from "next/link";
+import { ArrowUpRight, Zap } from "lucide-react";
+import IrrWorkspace from "@/components/irr/IrrWorkspace";
+import TornadoChart from "@/components/irr/charts/TornadoChart";
+import RepricingLadderChart from "@/components/irr/charts/RepricingLadderChart";
+import TrendChart from "@/components/irr/charts/TrendChart";
+import { scenarioLabel } from "@/components/irr/scenarios";
+import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import Sparkline from "@/components/ui/Sparkline";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import ValidationList from "@/components/ui/ValidationList";
+import { num, statusTone } from "@/lib/api/values";
+import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from "@/lib/format";
+import SdiModuleContext from "@/components/sdi/SdiModuleContext";
 
 function kpiStatus(status: string): KpiStatus | undefined {
-  return status === 'green'
-    ? 'ok'
-    : status === 'amber'
-    ? 'warn'
-    : status === 'red'
-    ? 'crit'
-    : undefined;
+  return status === "green"
+    ? "ok"
+    : status === "amber"
+      ? "warn"
+      : status === "red"
+        ? "crit"
+        : undefined;
 }
 
 const SPARK_COLOR: Record<KpiStatus, string> = {
-  ok: 'rgb(var(--ok))',
-  warn: 'rgb(var(--warn))',
-  crit: 'rgb(var(--crit))',
+  ok: "rgb(var(--ok))",
+  warn: "rgb(var(--warn))",
+  crit: "rgb(var(--crit))",
 };
 
 export default function IrrOverviewPage() {
   return (
-    <IrrWorkspace
-    >
+    <IrrWorkspace>
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);
         const worstPct = num(m.worstEveChangePctTier1);
-        const worstStatus = kpiStatus(m.eveStatus) ?? 'ok';
+        const worstStatus = kpiStatus(m.eveStatus) ?? "ok";
 
         const earUp = num(m.earUp200Ghs);
         const earDown = num(m.earDown200Ghs);
@@ -63,7 +62,7 @@ export default function IrrOverviewPage() {
         const hasInlineTrendPoints = trend.some((p) => !p.stored);
 
         const eveBars = (data.eveScenarios ?? [])
-          .filter((s) => s.scenarioCode !== 'baseline')
+          .filter((s) => s.scenarioCode !== "baseline")
           .map((s) => ({
             label: scenarioLabel(s.scenarioCode),
             value: num(s.deltaEveGhs),
@@ -82,7 +81,9 @@ export default function IrrOverviewPage() {
         return (
           <>
             <SdiModuleContext title="SDI ALM context">
-              Banking-book repricing and deposit sensitivity are monitored proportionately for a deposit-taking institution. Results depend on complete next-repricing-date data.
+              Banking-book repricing and deposit sensitivity are monitored
+              proportionately for a deposit-taking institution. Results depend
+              on complete next-repricing-date data.
             </SdiModuleContext>
             {/* KPI row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -106,7 +107,7 @@ export default function IrrOverviewPage() {
                 value={num(m.durationGap).toFixed(2)}
                 unit="yrs"
                 hint={`Assets ${num(m.assetDuration).toFixed(2)}y · Liabilities ${num(
-                  m.liabilityDuration
+                  m.liabilityDuration,
                 ).toFixed(2)}y`}
                 sparkline={
                   durationSpark.length > 1 ? (
@@ -121,7 +122,7 @@ export default function IrrOverviewPage() {
               <KpiStat
                 label="NII sensitivity ±200bp"
                 value={fmtCurrencySigned(earWorst)}
-                status={earWorst < 0 ? 'warn' : 'ok'}
+                status={earWorst < 0 ? "warn" : "ok"}
                 hint={`+200bp ${fmtCurrencySigned(earUp)} · −200bp ${fmtCurrencySigned(earDown)}`}
               />
             </div>
@@ -145,7 +146,9 @@ export default function IrrOverviewPage() {
                 {eveBars.length > 0 ? (
                   <TornadoChart data={eveBars} height={280} />
                 ) : (
-                  <p className="text-body text-slate">No scenario results for this period.</p>
+                  <p className="text-body text-slate">
+                    No scenario results for this period.
+                  </p>
                 )}
               </SectionCard>
 
@@ -164,10 +167,12 @@ export default function IrrOverviewPage() {
                 computedAt={computedAt}
                 footer={
                   <span>
-                    12-month cumulative gap{' '}
+                    12-month cumulative gap{" "}
                     <span
                       className={`font-mono tnum font-medium ${
-                        num(m.cumulative12mGapGhs) < 0 ? 'text-warning' : 'text-navy'
+                        num(m.cumulative12mGapGhs) < 0
+                          ? "text-warning"
+                          : "text-navy"
                       }`}
                     >
                       {fmtCurrencySigned(num(m.cumulative12mGapGhs))}
@@ -178,7 +183,9 @@ export default function IrrOverviewPage() {
                 {ladder.length > 0 ? (
                   <RepricingLadderChart data={ladder} height={280} mini />
                 ) : (
-                  <p className="text-body text-slate">No repricing buckets for this period.</p>
+                  <p className="text-body text-slate">
+                    No repricing buckets for this period.
+                  </p>
                 )}
               </SectionCard>
             </div>

@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * EVE & NII sensitivity: full scenario table across the seven engine runs
- * (baseline + six Basel shocks), ΔEVE tornado, earnings-at-risk block, and a
- * short methodology note mirroring the backend engine's documented approach.
+ * EVE & NII sensitivity: the scenario table uses the dashboard payload, which
+ * may include informational jurisdiction shocks alongside the Basel set.
+ * Attribution rules are owned by the dashboard README; shock-shape metadata
+ * is shared through `components/irr/scenarios.ts`.
  */
 
 import { useState } from "react";
