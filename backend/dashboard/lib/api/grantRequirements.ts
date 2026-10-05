@@ -101,8 +101,8 @@ export function grantShortfall(draft: GrantScope): string | null {
  * answering them from a slice, so the grantee meets a refusal on a figure they
  * can see named on screen.
  *
- * Bindings OR, so a second grant covering the whole book restores those
- * figures. The sentence says so rather than implying this grant is broken.
+ * Bindings OR, so a whole-book grant on the figure's module and sensitivity
+ * can admit it. Coverage does not compensate for a different sensitivity.
  */
 export function dataScopeShortfall(draft: GrantDraft): string | null {
   if (draft.institutionScope !== "institution") return null;
@@ -113,8 +113,8 @@ export function dataScopeShortfall(draft: GrantDraft): string | null {
     `This Credit grant covers only ${chosen} you chose in the loan book, ` +
     `activity and facets. Figures for the institution as a whole are refused ` +
     `by this narrowed grant, including Credit live summaries, alerts and history. ` +
-    `For those Credit figures, choose the whole book here or add a second grant ` +
-    `for the same module and sensitivity. Regulatory returns require ` +
+    `For those Credit figures, use a whole-book Credit grant at the sensitivity ` +
+    `required by that surface. Regulatory returns require ` +
     `whole-institution Regulatory Reporting authority; ICAAP requires Capital.`
   );
 }

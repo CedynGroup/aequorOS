@@ -412,7 +412,8 @@ test("a narrowed coverage warns about the figures it cannot answer", () => {
   );
   assert.ok(warning, "a branch-scoped grant must say what it does not include");
   assert.match(warning, /institution as a whole/);
-  assert.match(warning, /second grant/);
+  assert.match(warning, /whole-book Credit grant/);
+  assert.match(warning, /sensitivity required by that surface/);
   assert.match(warning, /Regulatory Reporting authority/);
   assert.match(warning, /ICAAP requires Capital/);
   assert.ok(
