@@ -238,6 +238,7 @@ def _scheduled_official_actor(session: Session, bank: Bank) -> User | None:
     required_modules = [
         module
         for engine, module in (
+            ("credit", Module.CREDIT),
             ("fx", Module.FX),
             ("ftp", Module.FTP),
             ("forecast", Module.FORECASTING),

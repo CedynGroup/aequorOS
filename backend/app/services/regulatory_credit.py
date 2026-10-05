@@ -41,6 +41,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
@@ -92,7 +93,7 @@ from app.schemas.sdi import (
     PortfolioAtRiskRead,
     ProvisionsHeldRead,
 )
-from app.services import filing_reconciliation, jurisdictions
+from app.services import filing_reconciliation, jurisdictions, scoped_authorization
 from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
 from app.services.authorization import EffectiveDataScope
@@ -760,7 +761,15 @@ def run_all_credit_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: CreditScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="credit_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     filing_reconciliation.assert_filing_reconciled(
         db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"

@@ -620,28 +620,32 @@ The order is forced, because the gate script cannot run before the migration:
    until it is regenerated, and the dashboard's credit surfaces should surface the
    scope rather than silently show a scoped total as the institution's.
 
+### Official Credit execution authority
+
+Direct Credit batches, data activation with `run_calculations=true`, requested
+and scheduled official runs require whole-institution CREDIT/confidential `run`.
+Activation and enqueue preflight the planned Credit engine before deriving facts
+or creating jobs; the worker rechecks current authority before reading its period.
+Scheduled runs select an actor with the same whole-institution Credit authority.
+The Credit batch service independently enforces it before reading inputs or
+persisting a run, including callers through `data_activation.run_official_modules`.
+Branch- and region-limited Credit grants cannot satisfy any of these gates.
+Derivation-only activation remains unchanged. No grants are backfilled or widened.
+
 ### Still open after Phase 4 (named, not fixed)
 
-1. **`POST /banks/{bank_id}/official-runs` can still mint a credit official run
-   without the credit `run` sentence.** `live_view.mint_official_run` requires
-   CREDIT/`confidential`/`run`… for liquidity, IRRBB, FX and FTP only; its engine
-   tuple omits `credit`. `data_activation.activate_bank_data` has
-   the same tuple with the same omission. So after this cutover the direct route
-   is gated and the shared minting path is not. Both files are outside this
-   cutover's scope; the fix is one tuple entry each, and until it lands the credit
-   run sentence is not the only way to seal a credit run.
-2. **Credit export.** Only the `analyst` bundle carries `export`, so a
+1. **Credit export.** Only the `analyst` bundle carries `export`, so a
    record-level blotter CSV would need CREDIT/`restricted` `export` and would be
    unavailable to Viewers, Auditors and Approvers without a bundle change. There is
    no credit export route today; decide before adding one.
-3. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
+2. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
    limits, classification grids) stay on `Tenant` reads and `ApproverTenant`
    writes. They are recorded here so the omission does not read as an oversight.
-4. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
+3. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
    scope explains why a sliced dashboard, migration matrix, vintage curve or PD is
    refused rather than computed. If a bank wants them, they need their own limit
    set and their own payload statement of the population.
-5. **The access-impact script has no sensitivity or data-scope column.** It is the
+4. **The access-impact script has no sensitivity or data-scope column.** It is the
    standing cutover gate, and for a cutover whose whole content is sensitivity and
    data scope it can only answer half the question. Extending it belongs with that
    script.

@@ -639,6 +639,7 @@ def test_mixed_execution_requires_irrbb_only_in_plan(
     irr_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FTP, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(

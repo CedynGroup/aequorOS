@@ -620,6 +620,7 @@ def test_mixed_execution_requires_ftp_only_in_plan(
     ftp_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(
         RoleBundle.ANALYST,
         module=ModuleScope.IRRBB,
@@ -771,6 +772,7 @@ def test_queued_ftp_requires_run_before_any_execution(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     period_id = _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(
         RoleBundle.ANALYST,

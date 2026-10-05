@@ -10,14 +10,20 @@ from datetime import date
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-from app.core.authorization import DataScope, SensitivityScope
+from app.api.deps import TenantContext
+from app.core.authorization import DataScope, ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import (
+    AuditEvent,
     AuthorizationBinding,
+    BankFinancialFact,
+    Job,
     PackageSignatureRecipient,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
@@ -25,6 +31,8 @@ from app.models import (
     RegulatoryRun,
 )
 from app.models.regulatory_reporting import RETURN_FAMILIES
+from app.schemas.regulatory_credit import CreditScenarioBatchCreate
+from app.services import data_activation, job_queue, pipeline, regulatory_credit, scheduler
 from app.services.regulatory_reporting.registry import REGISTRY
 from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_credit_authorization import _seed_live_rows
@@ -39,6 +47,8 @@ from tests.api.test_credit_route_authorization import (
 )
 from tests.api.test_fx_authorization import _add_regulatory_run
 from tests.api.test_package_authorization import _read_routes
+from tests.factories.canonical import FIXTURE_AS_OF
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 
 
 def _seed_return_packages() -> dict[str, tuple[UUID, UUID, UUID, str]]:
@@ -271,3 +281,187 @@ def test_narrowed_credit_grant_refuses_cross_module_figures(
     assert book.status_code == 200, book.text
     assert book.json()["total"] == len(BR_ONE_LOANS)
     assert {row["source_reference"] for row in book.json()["rows"]} == BR_ONE_LOANS
+
+
+@pytest.fixture(params=[DataScope.BRANCH, DataScope.REGION])
+def narrowed_credit_executor(db_client: TestClient, request: pytest.FixtureRequest) -> int:
+    with get_sessionmaker()() as db:
+        db.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
+        db.commit()
+    _seed_book()
+    _declare_regions({"BR-001": "North", "BR-002": "South"})
+    for module in (
+        ModuleScope.LIQUIDITY,
+        ModuleScope.CAPITAL,
+        ModuleScope.IRRBB,
+        ModuleScope.FX,
+        ModuleScope.FTP,
+        ModuleScope.FORECASTING,
+    ):
+        _grant(
+            role_bundle=RoleBundle.ANALYST,
+            module_scope=module,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        )
+    return _grant(
+        role_bundle=RoleBundle.ANALYST,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        data_scope=request.param,
+        data_scope_values=(BR_ONE,) if request.param is DataScope.BRANCH else ("North",),
+    )
+
+
+def _execution_rows() -> list[set[UUID]]:
+    with get_sessionmaker()() as db:
+        return [
+            set(db.scalars(select(model.id).where(model.organization_id == ORG_1)))
+            for model in (BankFinancialFact, RegulatoryRun, Job, AuditEvent)
+        ]
+
+
+@pytest.mark.parametrize(
+    "operation", ["data-activations", "official-runs", "credit/run-all-scenarios"]
+)
+def test_narrowed_credit_cannot_mint_through_shared_http_paths(
+    db_client: TestClient, narrowed_credit_executor: int, operation: str
+) -> None:
+    payload: dict[str, str | bool] = (
+        {"reporting_period_id": _period_id()}
+        if operation == "credit/run-all-scenarios"
+        else {
+            "as_of_date": FIXTURE_AS_OF.isoformat(),
+            "reason": "Exercise Credit execution authority",
+        }
+    )
+    if operation == "data-activations":
+        payload["run_calculations"] = True
+    before = _execution_rows()
+    refused = db_client.post(
+        f"{BASE}/{operation}",
+        headers=headers(roles=("analyst",), authorization_version=narrowed_credit_executor),
+        json=payload,
+    )
+    assert refused.status_code == 403, refused.text
+    assert _execution_rows() == before
+
+    version = _grant(
+        role_bundle=RoleBundle.ANALYST, sensitivity_scope=SensitivityScope.CONFIDENTIAL
+    )
+    allowed = db_client.post(
+        f"{BASE}/{operation}",
+        headers=headers(roles=("analyst",), authorization_version=version),
+        json=payload,
+    )
+    assert allowed.status_code == (202 if operation == "official-runs" else 201), allowed.text
+    if operation == "data-activations":
+        credit = next(run for run in allowed.json()["runs"] if run["module"] == "credit")
+        assert credit["status"] == "succeeded"
+        assert credit["headline"].startswith("NPL ")
+    elif operation == "credit/run-all-scenarios":
+        assert allowed.json()["runs"][0]["status"] == "succeeded"
+        assert "npl_ratio_pct" in allowed.json()["runs"][0]["metrics"]
+    else:
+        assert allowed.json()["job_type"] == "official_run"
+
+
+@pytest.mark.parametrize("entry", ["batch", "worker", "scheduler", "dispatcher"])
+def test_narrowed_credit_cannot_execute_through_internal_callers(
+    db_client: TestClient, narrowed_credit_executor: int, entry: str
+) -> None:
+    period_id = UUID(_period_id())
+    with get_sessionmaker()() as db:
+        job = job_queue.enqueue(
+            db,
+            ORG_1,
+            "official_run",
+            bank_id=SAMPLE_BANK_ID,
+            payload={"as_of_date": FIXTURE_AS_OF.isoformat(), "actor_user_id": str(USER_1)},
+        )
+        db.commit()
+        job_id = job.id
+    before = _execution_rows()
+    with get_sessionmaker()() as db:
+        ctx = TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=USER_1,
+            authorization_version=narrowed_credit_executor,
+        )
+        if entry == "scheduler":
+            assert scheduler._enqueue_due_official_runs(db, ORG_1, get_settings(), utc_now()) == []
+        elif entry == "dispatcher":
+            outcomes = data_activation.run_official_modules(db, ctx, SAMPLE_BANK_ID, period_id)
+            credit = next(outcome for outcome in outcomes if outcome.module == "credit")
+            assert credit.status == "failed"
+            assert credit.headline is None
+            assert (
+                db.scalars(select(RegulatoryRun).where(RegulatoryRun.module == "credit")).all()
+                == []
+            )
+        else:
+            with pytest.raises(HTTPException) as excinfo:
+                if entry == "batch":
+                    regulatory_credit.run_all_credit_scenarios(
+                        db,
+                        ctx,
+                        SAMPLE_BANK_ID,
+                        CreditScenarioBatchCreate(reporting_period_id=period_id),
+                    )
+                else:
+                    job = db.get(Job, job_id)
+                    assert job is not None
+                    pipeline.run_official(db, job)
+            assert excinfo.value.status_code == 403
+    if entry != "dispatcher":
+        assert _execution_rows() == before
+
+    version = _grant(
+        role_bundle=RoleBundle.ANALYST, sensitivity_scope=SensitivityScope.CONFIDENTIAL
+    )
+    with get_sessionmaker()() as db:
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=version
+        )
+        if entry == "scheduler":
+            assert scheduler._enqueue_due_official_runs(db, ORG_1, get_settings(), utc_now()) == [
+                SAMPLE_BANK_ID
+            ]
+        else:
+            if entry == "batch":
+                regulatory_credit.run_all_credit_scenarios(
+                    db,
+                    ctx,
+                    SAMPLE_BANK_ID,
+                    CreditScenarioBatchCreate(reporting_period_id=period_id),
+                )
+            elif entry == "dispatcher":
+                outcomes = data_activation.run_official_modules(db, ctx, SAMPLE_BANK_ID, period_id)
+                credit = next(outcome for outcome in outcomes if outcome.module == "credit")
+                assert credit.status == "succeeded"
+                assert credit.headline is not None and credit.headline.startswith("NPL ")
+            else:
+                job = db.get(Job, job_id)
+                assert job is not None
+                pipeline.run_official(db, job)
+            runs = db.scalars(select(RegulatoryRun).where(RegulatoryRun.module == "credit")).all()
+            assert runs
+            assert all(run.status == "succeeded" and "npl_ratio_pct" in run.metrics for run in runs)
+
+
+def test_narrowed_credit_can_activate_without_official_calculations(
+    db_client: TestClient, narrowed_credit_executor: int
+) -> None:
+    before = _execution_rows()[1]
+    response = db_client.post(
+        f"{BASE}/data-activations",
+        headers=headers(roles=("analyst",), authorization_version=narrowed_credit_executor),
+        json={
+            "as_of_date": FIXTURE_AS_OF.isoformat(),
+            "reason": "Derive the ingested book",
+            "run_calculations": False,
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["runs"] == []
+    assert _execution_rows()[1] == before

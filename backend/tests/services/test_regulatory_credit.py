@@ -60,6 +60,7 @@ def _bank(db_session: Session) -> Bank:
     return bank
 
 
+@pytest.mark.usefixtures("credit_run_authority")
 def test_live_hash_equals_the_sealed_baseline_hash_on_an_unchanged_book(
     db_session: Session,
 ) -> None:
@@ -103,6 +104,7 @@ def test_live_metrics_carry_the_governed_limit_and_grade_rollup(db_session: Sess
     assert live.metrics["provision_coverage_pct"] is not None
 
 
+@pytest.mark.usefixtures("credit_run_authority")
 def test_a_failed_run_is_persisted_data_not_an_exception(db_session: Session) -> None:
     """With no loan book, the official run seals a FAILED row naming
     ``no_loan_book`` — refusals are evidence, never a 500."""
@@ -356,6 +358,7 @@ def test_migration_without_a_prior_month_is_soft_unavailable(db_session: Session
     assert read.matrix == []
 
 
+@pytest.mark.usefixtures("credit_run_authority")
 def test_npl_monthly_return_generates_from_the_sealed_run(db_session: Session) -> None:
     """The NPL-MONTHLY package (credit PR-6): levels from the sealed baseline
     credit run; event-driven sections omitted WITH the omission stated when no
@@ -577,6 +580,7 @@ def test_board_thresholds_unset_is_disclosed_not_silent(db_session: Session) -> 
     )
 
 
+@pytest.mark.usefixtures("credit_run_authority")
 def test_board_threshold_breaches_become_findings_on_both_tiers(
     db_session: Session,
 ) -> None:

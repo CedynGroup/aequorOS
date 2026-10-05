@@ -945,6 +945,11 @@ def test_queued_official_run_mints_authorized_fx_results(
     period_id = _seed_book()
     _grant(
         role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.IRRBB,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )

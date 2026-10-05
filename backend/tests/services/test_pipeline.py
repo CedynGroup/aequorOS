@@ -55,7 +55,9 @@ from tests.factories.canonical import (
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "ftp_run_authority", "forecasting_run_authority"),
+    pytest.mark.usefixtures(
+        "fx_run_authority", "ftp_run_authority", "forecasting_run_authority", "credit_run_authority"
+    ),
     pytest.mark.usefixtures("return_generation_authority"),
     pytest.mark.usefixtures("capital_run_authority"),
 ]
