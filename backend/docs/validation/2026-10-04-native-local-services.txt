@@ -1,0 +1,171 @@
+Native local services validation — 2026-10-04–05, macOS arm64
+
+Environment
+  orb status: Stopped (before and during validation)
+  PostgreSQL: 17.11 (Homebrew), matching CI's major 17
+  MinIO: RELEASE.2025-10-15T17-29-55Z
+  mc: RELEASE.2025-08-13T08-35-41Z
+  Playwright: dedicated worktree-local Chromium headless shell v1234
+  Default Homebrew PostgreSQL cluster: PID 567, untouched
+  All managed data and logs: this worktree's gitignored .local-services/
+  No shared browser used.
+
+Common shell environment (repository root)
+  export AQS_LOCAL_SERVICES=native CASHFLOW_FAST_TEST=1
+  export UV_CACHE_DIR="$PWD/.local-services/uv-cache" UV_NO_SYNC=1
+  export PLAYWRIGHT_BROWSERS_PATH="$PWD/.local-services/playwright-browsers"
+
+PostgreSQL suite
+  mise run risk-service:test-postgres-suite
+  14298 passed, 345 skipped, 1 xfailed in 1702.78s (0:28:22)
+  Exit: 0
+  Raw log: .local-services/pg-suite-final.log
+  JUnit: .local-services/pg-suite-final.xml
+  This task preserves CI's exclusions: tests/db and the three locking files
+  are exercised separately below. The test connection is NOSUPERUSER and
+  NOBYPASSRLS, with no CREATEROLE for this suite.
+
+PostgreSQL schema, migrations and RLS
+  mise run risk-service:test-postgres-schema
+  353 passed in 369.09s (0:06:09)
+  Exit: 0
+  Raw log: .local-services/pg-schema.log
+  CREATEROLE is enabled only for this schema/migration task, as in CI.
+
+PostgreSQL concurrency
+  mise run risk-service:test-postgres-locks
+  64 passed in 124.31s (0:02:04)
+  Exit: 0
+  Raw log: .local-services/pg-locks.log
+
+Storage (including live S3 and SSE-KMS contracts)
+  mise run risk-service:test-storage
+  45 passed in 0.73s
+  Exit: 0
+  Raw log: .local-services/storage-clean.log
+
+Lifecycle and task wiring (pre-simplification capture)
+  cd backend
+  uv run pytest tests/scripts/test_local_services.py tests/architecture/test_ci_task_wiring.py -q
+  36 passed
+  Exit: 0
+  Raw log: .local-services/lifecycle-tests-resumed.log
+  Covers CI/external bypass, unavailable Docker fallback, copied state,
+  symlink refusal, stale process IDs, failed startup, SIGTERM forwarding,
+  encrypted readiness and the actual merged Docker Compose model.
+  The final review then removed the persistent up/env/down and borrowing
+  surface; its replacement refusal checks are not included in this count.
+  The cancellation regression runs the installed Playwright CLI with a real
+  detached web server and confirms it is gone before the wrapper returns.
+  Docker's configuration parser runs without starting the daemon; container
+  runtime validation was deliberately not performed with OrbStack stopped.
+
+Isolation checks
+  Two simultaneous native PostgreSQL clusters and MinIO stores under this
+  worktree had distinct data directories and ports, restricted test roles,
+  and successful encrypted object round trips. Both pairs stopped cleanly.
+  Raw log: .local-services/isolation-proof.log
+  PostgreSQL 18 was refused before initializing any cluster.
+  A real auto-mode run with TEST_DATABASE_URL/S3_ENDPOINT/CI unset selected
+  native services while OrbStack was stopped, exported loopback URLs to its
+  child and stopped both services on exit. State was empty afterward.
+  Raw log: .local-services/auto-fallback.log
+
+Configuration and style
+  Ruff formatting/checks and targeted basedpyright: passed, 0 errors.
+  mise_wiring_preflight.py: 30 root tasks, 29 backend tasks, all proxies valid.
+  Dashboard ESLint: passed after excluding generated Playwright artifacts.
+  The installed Next config loader confirmed persistent development caching
+  is false only for native .next-e2e; Docker, CI and ordinary dev retain true.
+  No workflow or production Compose file changed.
+
+Investigation notes
+  An initial journeys attempt lacked the externally configured browser.
+  Installed a dedicated browser inside this worktree and reran.
+  A subsequent attempt exposed XMinioStorageFull on the nearly-full Mac disk.
+  Stopped the test stack and removed only disposable worktree compiler cache
+  and stopped test data. Native journeys now disable the persistent compiler
+  cache; startup verifies encrypted write/read/delete before running tests.
+  MinIO's free-drive safety threshold was not weakened.
+
+Full journeys (complete standard suite, no added skips)
+  pnpm --filter @aequoros/dashboard e2e --reporter=list,./e2e/support/quarantine-reporter.ts
+  212 passed, 4 skipped in 8.2 minutes
+  Exit: 0
+  Discovered: 216; executed: 212; quarantine entries: 0; integrity errors: []
+  Raw log: .local-services/journeys-resumed.log
+  Machine-readable counts: .local-services/journeys-resumed.json
+  Includes full filing lifecycle, attestation/SSO signing, Markets uploads,
+  ICAAP attachments, scoped access and Credit requests on native MinIO.
+Earlier full journeys validation was blocked by host disk pressure
+  pnpm --filter @aequoros/dashboard e2e --reporter=list,./e2e/support/quarantine-reporter.ts
+  OrbStack remained Stopped. Full run reached 131 journeys; signing preview
+  failed with HTTP 500. A separate encrypted write probe confirmed
+  XMinioStorageFull. Free host disk fell from 8.6GiB after worktree-only
+  cleanup to 3.6GiB during the rerun. E2E cache was only about 180MiB.
+  The owned test stack was cancelled after this repeated disk-space blocker.
+  Raw log: .local-services/journeys-clean.log
+  After the host disk was freed, the complete rerun above passed with
+  OrbStack still stopped. No disk threshold or test assertion was relaxed.
+
+Cancellation repair
+  An interrupted run originally left Playwright's detached web servers behind.
+  Those task processes were verified and stopped manually. The E2E script now
+  launches Playwright directly, and the wrapper forwards SIGINT and waits for
+  the child group to finish before stopping native services. The real CLI
+  cancellation regression above passes. Default Homebrew data was untouched.
+
+no user-visible change - screenshots not applicable
+
+Post-pipeline startup collision follow-up — 2026-10-05
+  Reproduced on the published head before fixing: a native MinIO child failed
+  to bind an occupied port and exited, but provisioning sent health, bucket
+  and encrypted PutObject requests to the server already occupying it.
+  The executable regression failed with the existing server's HTTP 501 at
+  PutObject, proving the unwanted request. No shared service was used.
+  The fix requires the owned native PID to own the TCP listener before any
+  health/storage/database connection, and detects native MinIO child exit.
+  PostgreSQL additionally verifies its actual data_directory before creating
+  databases or altering roles. Its existing pg_ctl startup wait already
+  rejects bind collisions; a live regression confirms the first cluster has
+  no newly created risk_service database or risk_service_test role afterward.
+
+  uv run --project backend pytest backend/tests/scripts/test_local_services.py
+    backend/tests/architecture/test_ci_task_wiring.py -q
+    --basetemp="$PWD/.local-services/followup-pytest"
+  44 passed in 12.23s
+  Both immediate and exited-MinIO collisions reject without sending even a
+  health request. The pre-existing HTTP server remains alive. All owned test
+  records/processes are cleaned. Native collision tests require the relevant
+  installed binary; both services' no-connection ownership tests are hermetic.
+  Raw log: .local-services/followup-lifecycle.log
+
+  AQS_LOCAL_SERVICES=native mise run risk-service:test-storage
+  45 passed in 0.60s
+  Raw log: .local-services/followup-storage.log
+
+  cd backend
+  AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run
+    --postgres --role-admin -- uv run pytest
+    tests/db/test_postgres_migrations.py::test_postgres_financial_workspace_rls_isolates_tenant_rows -q
+  1 passed in 13.80s; owned PostgreSQL stopped cleanly.
+  Raw log: .local-services/followup-postgres.log
+
+  Ruff formatting/checks passed; basedpyright with the backend configuration
+  returned 0 errors, 0 warnings. OrbStack remains Stopped. Default Homebrew
+  PostgreSQL PID 567 remains untouched.
+
+  Full journeys rerun after the ownership fix:
+  AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e
+    --reporter=list,./e2e/support/quarantine-reporter.ts
+  212 passed, 4 skipped in 9.7 minutes; exit 0.
+  Discovered 216; executed 212; quarantine size 0; integrity errors [].
+  Raw log: .local-services/followup-journeys.log
+  Machine-readable counts: .local-services/followup-journeys.json
+  Managed state empty after exit; native MinIO stopped cleanly.
+
+  CI found an incompatible log_message override in the regression HTTP
+  server. Corrected it to preserve the base handler's named format parameter.
+  basedpyright scripts/local_services.py tests/scripts/test_local_services.py:
+  0 errors, 0 warnings, 0 notes (using the backend project configuration).
+  Both native MinIO collision cases passed again after this test-only fix.

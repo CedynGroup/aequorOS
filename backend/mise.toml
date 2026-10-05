@@ -46,13 +46,12 @@ description = "Run pytest"
 run = "uv run pytest"
 
 [tasks."risk-service:test-postgres"]
-description = "Run pytest against local Docker Postgres"
-env = { TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:15432/risk_service" }
-run = "uv run pytest"
+description = "Run pytest against local Postgres (native fallback or Docker)"
+run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest"
 
 [tasks."risk-service:test-postgres-migrations"]
-description = "Run Postgres-backed Alembic migration tests; requires TEST_DATABASE_URL"
-run = "uv run pytest tests/db/test_postgres_migrations.py tests/db/test_integration_key_migration.py"
+description = "Run Postgres-backed Alembic migration tests (local or supplied TEST_DATABASE_URL)"
+run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_postgres_migrations.py tests/db/test_integration_key_migration.py"
 
 # The concurrency tests guard row locks and advisory locks, which SQLite cannot
 # express — they self-skip ("PostgreSQL row locks are required for concurrency
@@ -61,10 +60,11 @@ run = "uv run pytest tests/db/test_postgres_migrations.py tests/db/test_integrat
 # because skipped, green in CI because never invoked. Running them found a
 # Boolean column with an integer server_default that made CREATE TABLE fail on
 # Postgres outright, plus four tests comparing the String(40) audit_events.
-# entity_id against UUID objects. Requires TEST_DATABASE_URL.
+# entity_id against UUID objects. The task wrapper supplies TEST_DATABASE_URL
+# locally when one is not already exported.
 [tasks."risk-service:test-postgres-locks"]
-description = "Run the Postgres-only concurrency tests; requires TEST_DATABASE_URL"
-run = "uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
+description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
 
 # The architecture guards: CI task wiring (P0-15), the RLS-blind data-migration
 # scanner (P0-18) and the case/regulatory dependency boundary (ARCH-5). Fast,
@@ -77,15 +77,17 @@ run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migratio
 # Schema-level truth: the migration chain, the RLS policies it installs, and the
 # server defaults. RLS exists ONLY in migrations (the hermetic suite builds its
 # schema with Base.metadata.create_all), so this is the only place row-level
-# security is exercised at all. Requires TEST_DATABASE_URL.
+# security is exercised at all. The task wrapper supplies TEST_DATABASE_URL
+# locally when one is not already exported.
 [tasks."risk-service:test-postgres-schema"]
-description = "Run the Postgres schema, migration and RLS suites; requires TEST_DATABASE_URL"
-run = "uv run pytest tests/db"
+description = "Run the Postgres schema, migration and RLS suites (local or supplied TEST_DATABASE_URL)"
+run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db"
 
 # The remaining suite against the real engine (ownership below). The hermetic
 # default runs on SQLite with row-level security switched off, so a passing run
 # is not evidence about Postgres: Boolean server defaults, String-vs-UUID comparisons, row locks and
-# advisory locks all behave differently there. Requires TEST_DATABASE_URL.
+# advisory locks all behave differently there. The task wrapper supplies
+# TEST_DATABASE_URL locally when one is not already exported.
 #
 # Ownership of the Postgres-only suites: `tests/db` belongs to
 # `risk-service:test-postgres-schema` and the three lock files to
@@ -95,8 +97,8 @@ run = "uv run pytest tests/db"
 # it, rather than repeating the same checks here.
 # The hermetic `risk-service:test` still collects everything.
 [tasks."risk-service:test-postgres-suite"]
-description = "Run the full pytest suite against Postgres; requires TEST_DATABASE_URL"
-run = "uv run pytest --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py"
+description = "Run the full pytest suite against Postgres (local or supplied TEST_DATABASE_URL)"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py"
 
 # The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
 # REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
@@ -134,10 +136,11 @@ run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features t
 #   * export STORAGE_RETIRE_AFTER for the configured MVP client. The pure config
 #     test deletes it before asserting that a missing date is refused.
 #
-# Requires S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY and STORAGE_KMS_KEY_ID.
+# The task wrapper supplies S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from
+# local MinIO when an endpoint is not already exported outside CI.
 [tasks."risk-service:test-storage"]
-description = "Run the S3-compatible storage contract suite; requires S3_* credentials"
-run = "uv run pytest tests/storage"
+description = "Run the S3-compatible storage contract suite (local or supplied S3_* credentials)"
+run = "uv run python scripts/local_services.py run --storage -- uv run pytest tests/storage"
 
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"

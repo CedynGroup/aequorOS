@@ -4,13 +4,11 @@
  * Boots the disposable API, local OIDC issuer, and dashboard. Stack setup and
  * prerequisites are documented in README.md §End-to-end (Playwright).
  *
- * Hermetic EXCEPT object storage. This file used to claim "fully hermetic",
- * which was wrong and cost a long diagnosis: validated packages persist their
- * artifacts to S3/MinIO and the backend has no filesystem mode, so the suite
- * silently depends on S3_* reaching it from the untracked backend/.env. That
- * is why it passes on a developer machine and fails in a fresh clone, a git
- * worktree, or CI. Package-capable journeys refuse immediately without it,
- * while storage-free journeys can still run on a cold worktree.
+ * Object storage is a real S3/MinIO dependency: the backend has no filesystem
+ * mode. `pnpm e2e` provisions worktree-local MinIO through local_services.py
+ * when no endpoint is exported (native binaries when Docker is unavailable).
+ * CI supplies its own endpoint. Direct Playwright invocations must supply S3_*
+ * or use backend/.env; package-capable journeys refuse immediately without it.
  *
  * Run: pnpm e2e   (first run: npx playwright install chromium)
  */

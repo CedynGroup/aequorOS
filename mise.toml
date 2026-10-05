@@ -73,7 +73,7 @@ dir = "backend"
 run = "mise run risk-service:test"
 
 [tasks."risk-service:test-postgres"]
-description = "Run risk service pytest against local Docker Postgres"
+description = "Run risk service pytest against local Postgres"
 dir = "backend"
 run = "mise run risk-service:test-postgres"
 

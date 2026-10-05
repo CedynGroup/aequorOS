@@ -130,6 +130,14 @@ Postgres-gated suites opt in explicitly via `TEST_DATABASE_URL` (each run create
 and drops its own `risk_service_test_<hex>` schema). The task inventory is in
 `backend/mise.toml`.
 
+For native PostgreSQL 17 and MinIO, install
+`brew install postgresql@17 homebrew/core/minio`,
+then run `AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-suite` or
+`AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e`. Standard commands
+also fall back to native services when Docker is unavailable. Data and ports are
+isolated per worktree; see the dashboard's
+[local service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack).
+
 ```bash
 # From the repo root — the TypeScript surfaces.
 pnpm --filter @aequoros/dashboard typecheck && pnpm --filter @aequoros/dashboard lint \

@@ -337,9 +337,10 @@ diagnosis:
 
 1. **Object storage.** `StorageBackend` is `Literal["s3"]` — there is no
    filesystem mode — so validated packages need a reachable S3/MinIO endpoint.
-   Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
-   `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
-   or CI has none. The `attestation`, `full-lifecycle`,
+   The standard `pnpm e2e` command provisions a worktree-local MinIO when no
+   `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
+   auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
+   untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
    `submission-lifecycle`, and opt-in `visual-tour` specs, plus the SSO
    attestation journey, refuse immediately without it rather than letting
    package assertions time out one at a time.
@@ -374,6 +375,60 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+
+### Local services without Docker or OrbStack
+
+Install the native binaries once on macOS (do not run `brew services start`):
+
+```bash
+brew install postgresql@17 homebrew/core/minio
+```
+
+PostgreSQL 17 matches CI; PostgreSQL 18 is refused. Native ownership checks use
+`lsof` (included on macOS) to confirm the child owns its port before sending
+health, storage or database requests; an occupied port fails without provisioning
+the existing service. The Homebrew core bottles work even when the MinIO tap's
+upstream download URLs have been removed.
+On other Unix hosts, install MinIO and `lsof` on `PATH` and point `AQS_POSTGRES_BIN` at
+the PostgreSQL 17 `bin` directory.
+
+```bash
+# From the repository root, force native services even if Docker is running:
+AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-suite
+AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-schema
+AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-locks
+AQS_LOCAL_SERVICES=native mise run risk-service:test-storage
+AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e
+```
+
+The default `auto` mode uses Docker when its daemon responds, and falls back
+to native binaries when Docker is absent, stopped, or unreachable. Use
+`AQS_LOCAL_SERVICES=docker` to require Docker (Compose 2.24.4+), or `external`
+to use only your supplied environment. CI and exported `TEST_DATABASE_URL` /
+`S3_ENDPOINT` bypass automatic provisioning, preserving the existing CI setup.
+An explicit native or Docker mode overrides those URLs with local ones.
+
+`backend/scripts/local_services.py` selects free loopback ports and stores
+native Postgres/MinIO data, the KMS key, state and logs in the gitignored
+`.local-services/` directory at this worktree's root. It never starts or stops
+the default Homebrew cluster. It creates the `risk_service` database with a
+non-superuser, non-BYPASSRLS test role (CREATEROLE only for schema/migration
+tests), and a private `risk-local` bucket with MinIO's built-in `aequoros-key`
+KMS enabled. No bank data is seeded by the service runner. Docker mode uses
+the existing pinned compose images with a worktree-specific project and ports.
+Startup verifies an encrypted object write/read/delete, so a full drive or
+broken KMS fails before the suite starts. Native E2E runs disable Next's
+persistent development compiler cache to conserve the host disk shared with
+MinIO; ordinary development, Docker runs and CI keep their existing defaults.
+
+Test commands stop the services they use on exit, failure or interruption; data
+is retained for the next run. Only one managed service command runs per
+worktree at a time, so run suites sequentially. Other worktrees have separate
+clusters, storage, locks and ports. To reclaim disk space while no test command
+is running, remove this worktree's `.local-services/` directory. This discards
+only local test data.
+If MinIO reports insufficient free disk space, also remove the disposable
+`backend/dashboard/.next-e2e` cache after stopping its E2E dev server.
 
 ### Single sign-on against a local issuer
 

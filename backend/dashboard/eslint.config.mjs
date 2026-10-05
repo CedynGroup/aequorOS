@@ -17,6 +17,8 @@ export default defineConfig([
     ".next-*/**",
     ".test-out/**",
     "e2e/.tmp/**",
+    "test-results/**",
+    "playwright-report/**",
     "next-env.d.ts",
   ]),
 ]);

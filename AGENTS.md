@@ -2,6 +2,11 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
+- **Local test infrastructure:** `backend/scripts/local_services.py` owns native
+  PostgreSQL 17 / MinIO lifecycle and per-worktree isolation. Test tasks and
+  dashboard `e2e` use it; native setup, overrides and shutdown are documented in
+  [the dashboard guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack).
+
 - **`docs/product.md` is the master product roadmap** (source of truth for build
   sequencing, Phase 0 as-built anchor → Phase 7 enterprise). Sub-docs (rbac.md,
   data_engine.md, ai_engine.md, market_data_adapter.md, regulatory_reporting.md)

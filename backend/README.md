@@ -285,17 +285,21 @@ mise run risk-service:test
 The default test run uses isolated SQLite databases and never touches Postgres —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
-To run the Postgres-gated tests (migrations, RLS), provide `TEST_DATABASE_URL`;
-fixtures create a `risk_service_test_<hex>` schema per run and drop it afterward,
-so the shared remote database is safe:
+To reuse an existing Postgres service for the gated tests (migrations, RLS),
+provide `TEST_DATABASE_URL`; fixtures create a `risk_service_test_<hex>` schema
+per run and drop it afterward, so the shared remote database is safe:
 
 ```bash
 TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database> \
   mise run risk-service:test-postgres
 ```
 
-(Local alternative: `docker compose up -d risk-postgres` and point
-`TEST_DATABASE_URL` at it.)
+Without a supplied URL, the task provisions worktree-local Postgres, using
+native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
+to force that mode. Native MinIO setup, isolation and shutdown are documented
+in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
+The existing `docker compose up -d risk-postgres` alternative also remains
+available; point `TEST_DATABASE_URL` at it to reuse that service.
 
 ## Lint And Type Check
 

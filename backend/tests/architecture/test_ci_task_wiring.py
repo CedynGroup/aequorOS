@@ -423,6 +423,11 @@ def test_the_full_suite_ignores_exactly_what_the_schema_and_locks_tasks_run() ->
         arguments: list[str] = []
         for command in _run_commands(tasks[task]):
             tokens = shlex.split(command, comments=True)
+            if tokens[:4] == ["uv", "run", "python", "scripts/local_services.py"]:
+                # Local provisioning lends the environment to the same pytest
+                # command; CI bypasses it when its test URL is already supplied.
+                assert tokens[4] == "run", task
+                tokens = tokens[tokens.index("--") + 1 :]
             assert tokens[:3] == ["uv", "run", "pytest"], task
             assert not ({";", "&&", "||", "|", "&", ">", "<"} & set(tokens)), task
             arguments.extend(tokens[3:])
