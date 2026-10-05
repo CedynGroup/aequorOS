@@ -12,9 +12,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     DataScope,
     GrantorType,
@@ -35,7 +37,8 @@ from app.models import (
 )
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers, integration_key_headers
+from app.services.regulatory_reporting import version_chain
+from tests.api.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -1121,3 +1124,124 @@ def test_the_scalar_approver_ladder_never_approves(db_client: TestClient) -> Non
     _pin_chain(package_id, current_stage_seq=2, status="pending_approval")
     response = _decide_approval(db_client, package_id, request_headers=headers(roles=("approver",)))
     assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize("visible_family", ["icaap", "liquidity"])
+def test_comparison_hides_unauthorized_targets_in_both_family_directions(
+    db_client: TestClient, visible_family: str
+) -> None:
+    packages = {
+        "icaap": _package(),
+        "liquidity": _package(family="liquidity", return_code="LCR-NSFR"),
+    }
+    authorities = {
+        "icaap": (ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL),
+        "liquidity": (ModuleScope.REGULATORY, SensitivityScope.RESTRICTED),
+    }
+    hidden_family = "liquidity" if visible_family == "icaap" else "icaap"
+    module, sensitivity = authorities[visible_family]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER, module_scope=module, sensitivity_scope=sensitivity
+    )
+    auth = headers(roles=("viewer",), authorization_version=version)
+    base, target = packages[visible_family], packages[hidden_family]
+    endpoint = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{base}/comparison"
+    hidden = db_client.get(endpoint, headers=auth, params={"against": str(target)})
+    unknown = db_client.get(endpoint, headers=auth, params={"against": str(uuid4())})
+    assert hidden.status_code == unknown.status_code == 404
+    assert error_envelope(hidden) == error_envelope(unknown)
+    with get_sessionmaker()() as db:
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=version
+        )
+        for left, right in ((base, target), (target, base)):
+            with pytest.raises(HTTPException) as excinfo:
+                version_chain.compare_versions(db, ctx, SAMPLE_BANK_ID, left, right)
+            assert excinfo.value.status_code == 404
+
+    module, sensitivity = authorities[hidden_family]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER, module_scope=module, sensitivity_scope=sensitivity
+    )
+    for left, right in ((base, target), (target, base)):
+        visible = db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{left}/comparison",
+            headers=headers(roles=("viewer",), authorization_version=version),
+            params={"against": str(right)},
+        )
+        assert visible.status_code == 409, visible.text
+        details = visible.json()["error"]["details"]
+        assert details["error_code"] == "comparison_return_mismatch"
+        assert "ICAAP-REPORT" in details["message"]
+        assert "LCR-NSFR" in details["message"]
+
+
+@pytest.mark.parametrize("family", ["icaap", "liquidity"])
+@pytest.mark.parametrize("difference", ["version", "reporting_date", "basis"])
+def test_scoped_package_comparison_preserves_visible_figures_and_direction(
+    db_client: TestClient, family: str, difference: str
+) -> None:
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    base = _package(family=family, return_code=code, status="superseded")
+    target = _package(family=family, return_code=code)
+    with get_sessionmaker()() as db:
+        for package_id, amount in ((base, "100"), (target, "125")):
+            row = db.get(RegulatoryPackage, package_id)
+            assert row is not None
+            row.snapshot = {
+                "sections": [
+                    {
+                        "code": "position",
+                        "title": "Position",
+                        "rows": [{"code": "total", "description": "Total", "value": amount}],
+                    }
+                ]
+            }
+        row = db.get(RegulatoryPackage, target)
+        assert row is not None
+        if difference == "version":
+            row.version = 2
+        elif difference == "reporting_date":
+            row.reporting_date = date(2026, 6, 30)
+        else:
+            row.basis = "consolidated"
+        db.commit()
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL
+        if family == "icaap"
+        else SensitivityScope.RESTRICTED,
+    )
+    for left, right, delta in ((base, target, "25"), (target, base, "-25"), (base, base, None)):
+        response = db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{left}/comparison",
+            headers=headers(roles=("viewer",), authorization_version=version),
+            params={"against": str(right)},
+        )
+        assert response.status_code == 200, response.text
+        comparison = response.json()
+        assert comparison["base"]["package_id"] == str(left)
+        assert comparison["target"]["package_id"] == str(right)
+        assert comparison["identical"] is (left == right)
+        if delta is None:
+            assert comparison["sections"] == []
+        else:
+            assert comparison["changed_count"] == 1
+            assert comparison["sections"][0]["lines"][0]["delta"] == delta
+
+
+@pytest.mark.parametrize("other_org", [ORG_1, ORG_2])
+def test_comparison_target_is_scoped_to_the_path_bank(
+    db_client: TestClient, other_org: str
+) -> None:
+    base = _package()
+    _add_bank(OTHER_ORG_BANK_ID, organization_id=other_org)
+    target = _package(organization_id=other_org, bank_id=OTHER_ORG_BANK_ID)
+    version = _grant(role_bundle=RoleBundle.VIEWER, institution_id=None)
+    endpoint = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{base}/comparison"
+    auth = headers(roles=("viewer",), authorization_version=version)
+    foreign = db_client.get(endpoint, headers=auth, params={"against": str(target)})
+    unknown = db_client.get(endpoint, headers=auth, params={"against": str(uuid4())})
+    assert foreign.status_code == unknown.status_code == 404
+    assert error_envelope(foreign) == error_envelope(unknown)
