@@ -609,7 +609,8 @@ Direct Credit batches, data activation with `run_calculations=true`, requested
 and scheduled official runs require whole-institution CREDIT/confidential `run`.
 Activation and enqueue preflight the planned Credit engine before deriving facts
 or creating jobs; the worker rechecks current authority before reading its period.
-Scheduled runs select an actor with the same whole-institution Credit authority.
+Scheduled actor selection follows the
+[queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 The Credit batch service independently enforces it before reading inputs or
 persisting a run, including callers through `data_activation.run_official_modules`.
 Branch- and region-limited Credit grants cannot satisfy any of these gates.

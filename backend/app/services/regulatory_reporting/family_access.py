@@ -54,7 +54,7 @@ RETURN_GATE: Final[FamilyGate] = FamilyGate(
 _DETAIL = "This return requires an active scoped binding for the institution."
 
 #: The authority to TRANSMIT a return to the regulator — one gate for every
-#: return family, gated or not.
+#: return family.
 #:
 #: Filing is a Regulatory Reporting act, not a Capital one, so an ICAAP and a
 #: BSD3 are transmitted under the same authority even though they are READ under
@@ -448,7 +448,7 @@ def chain_decision_verdict(  # noqa: PLR0913 - the complete decision tuple is ex
     without disclosing a return the principal cannot read.
 
     An impersonated principal is always no: an examiner reads and never decides.
-    A gated family the caller cannot see is always a generic no with NO near
+    A return family the caller cannot see is always a generic no with NO near
     miss — a better error message must never become the disclosure that an
     ICAAP package exists for a date.
     """
