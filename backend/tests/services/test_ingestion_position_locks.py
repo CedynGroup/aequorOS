@@ -32,6 +32,7 @@ def test_postgresql_lock_statement_has_bounded_parameters_for_large_batches() ->
     compiled = statement.compile(
         dialect=postgresql.dialect(), compile_kwargs={"render_postcompile": True}
     )
+    assert str(compiled).endswith("ORDER BY canonical_positions.id FOR NO KEY UPDATE")
     assert len(compiled.params) == 4
     assert set(compiled.params["position_references"]) == references
     assert len(compiled.params["position_references"]) == 70_000

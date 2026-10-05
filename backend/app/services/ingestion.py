@@ -1677,7 +1677,12 @@ def _lock_position_identities(
     source_system: str,
     references: Collection[str],
 ) -> None:
-    """Lock targeted identities using one reference-array parameter for any batch size."""
+    """Lock targeted identities using one reference-array parameter for any batch size.
+
+    NO KEY UPDATE serializes identity corrections, which leave key columns
+    unchanged, while allowing snapshot foreign-key checks to take KEY SHARE.
+    This avoids a lock cycle with concurrent snapshot overrides.
+    """
     if db.get_bind().dialect.name != "postgresql":
         return
     db.scalars(
@@ -1691,7 +1696,7 @@ def _lock_position_identities(
             *is_current_generation(CanonicalPosition),
         )
         .order_by(CanonicalPosition.id)
-        .with_for_update()
+        .with_for_update(key_share=True)
         .execution_options(populate_existing=True)
     ).all()
 
