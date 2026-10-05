@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json as jsonlib
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -12,12 +13,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy import text as sql_text
 
+from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
-from app.models import CanonicalReferenceRow
+from app.models import Bank, CanonicalPosition, CanonicalReferenceRow
+from app.services.fact_derivation import _load_position_rows
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
-from tests.api.helpers import ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 AS_OF = str(fixtures.AS_OF)
@@ -407,6 +410,122 @@ class TestGatingAndFailure:
         )
         assert response.status_code == 422
         assert "active mapping config" in response.json()["error"]["message"]
+
+
+ORIGINATION_MAPPING = FULL_MAPPING.model_copy(deep=True)
+ORIGINATION_MAPPING.field_mappings["position"].fields["origination_date"] = "Originated"
+
+
+def loans_workbook(path: Path, ln_0001: dict[str, Any]) -> Path:
+    """The well-formed workbook with an origination column and LN-0001 overridden."""
+    fixtures.build_well_formed(path)
+    loaded = openpyxl.load_workbook(path)
+    loans = loaded["Loans"]
+    loans["J1"] = "Originated"
+    loans["J2"] = ln_0001.get("Originated", date(2024, 1, 10))
+    loans["J3"] = date(2023, 6, 1)
+    loans["B2"] = ln_0001.get("Type", "LOAN")
+    loans["C2"] = ln_0001.get("Ccy", "GHS")
+    loaded.save(path)
+    return path
+
+
+def blotter_row(client: TestClient, bank_id: str, reference: str) -> dict[str, Any]:
+    positions = client.get(
+        f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+    ).json()["positions"]
+    (row,) = (position for position in positions if position["source_reference"] == reference)
+    return row
+
+
+def origination_date_of(reference: str) -> date | None:
+    session = get_sessionmaker()()
+    try:
+        return session.scalars(
+            select(CanonicalPosition.origination_date).where(
+                CanonicalPosition.source_reference == reference
+            )
+        ).one()
+    finally:
+        session.close()
+
+
+def derived_position(bank_id: str, reference: str) -> tuple[str, str] | None:
+    """(position_type, currency) of ``reference`` as fact derivation reads the book."""
+    session = get_sessionmaker()()
+    try:
+        bank = session.get(Bank, bank_id)
+        assert bank is not None
+        rows = _load_position_rows(
+            session, TenantContext(organization_id=ORG_1), bank, fixtures.AS_OF, bank.currency
+        )
+    finally:
+        session.close()
+    matches = [
+        (row.position_type, row.currency) for row in rows if row.source_reference == reference
+    ]
+    assert len(matches) <= 1
+    return matches[0] if matches else None
+
+
+class TestPositionIdentityCorrection:
+    """Identity fields follow corrections until the first accepted snapshot, then freeze."""
+
+    def test_correcting_a_rejected_row_reaches_the_identity_and_the_facts(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+        rejected = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(
+                tmp_path / "rejected.xlsx",
+                {"Type": "DEPOSIT", "Ccy": "GHZ", "Originated": date(2042, 1, 1)},
+            ),
+        )["batch"]
+        assert rejected["records_error"] == 1
+        assert blotter_row(db_client, bank_id, "LN-0001")["currency"] == "GHZ"
+        assert derived_position(bank_id, "LN-0001") is None
+
+        corrected = start_batch(
+            db_client, bank_id, loans_workbook(tmp_path / "corrected.xlsx", {})
+        )["batch"]
+        assert corrected["status"] == "accepted"
+
+        row = blotter_row(db_client, bank_id, "LN-0001")
+        assert (row["position_type"], row["currency"]) == ("LOAN", "GHS")
+        assert row["validation_status"] == "accepted"
+        assert origination_date_of("LN-0001") == date(2024, 1, 10)
+        assert derived_position(bank_id, "LN-0001") == ("LOAN", "GHS")
+
+    def test_changing_a_settled_identity_is_refused_by_field(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+        accepted = start_batch(db_client, bank_id, loans_workbook(tmp_path / "accepted.xlsx", {}))[
+            "batch"
+        ]
+        assert accepted["status"] == "accepted"
+
+        changed = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(tmp_path / "changed.xlsx", {"Ccy": "USD"}),
+        )["batch"]
+        assert changed["status"] == "accepted_with_warnings"
+        assert changed["records_error"] == 1
+        (failure,) = changed["validation_report"]["failures"]
+        assert failure["rule"] == "position_identity_settled"
+        assert failure["source_reference"] == "LN-0001"
+        assert failure["detail"].startswith("currency is frozen")
+
+        row = blotter_row(db_client, bank_id, "LN-0001")
+        assert row["currency"] == "GHS"
+        assert row["validation_status"] == "error"
+        assert origination_date_of("LN-0001") == date(2024, 1, 10)
+        assert derived_position(bank_id, "LN-0001") is None
 
 
 class TestStorageArtifacts:

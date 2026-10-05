@@ -287,6 +287,8 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
 
     Identity holds what never changes about a position (its type, currency,
     and source identity); everything time-varying lives on the snapshot.
+    Ingestion corrects the identity fields until the position's first accepted
+    snapshot and refuses any change after it.
     ``as_of_date`` here is the business date the position was first observed.
     """
 

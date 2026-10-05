@@ -17,7 +17,7 @@ import io
 import json
 import re
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -37,6 +37,7 @@ from app.domain.ingestion.adapter import SourceAdapter, get_adapter_class
 from app.domain.ingestion.constants import (
     BATCH_ACCEPTED_STATUSES,
     DEPOSIT_ACCOUNT_TYPES,
+    INCLUDED_VALIDATION_STATUSES,
     SourceSystem,
 )
 from app.domain.ingestion.contracts import (
@@ -50,6 +51,7 @@ from app.domain.ingestion.enrichment import apply_manual_override
 from app.domain.ingestion.optional_position_fields import normalize_positions
 from app.domain.ingestion.validation import (
     Finding,
+    PositionIdentity,
     ValidationContext,
     build_validation_report,
     default_validation_config,
@@ -71,7 +73,7 @@ from app.models import (
     MappingConfigRecord,
     TranslationFailure,
 )
-from app.models.canonical import CanonicalMetadataMixin
+from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.schemas.ingestion import (
     CanonicalCountsRead,
     CanonicalPositionFacetsRead,
@@ -441,6 +443,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     known_counterparties, known_products, known_gl_accounts, known_positions = _known_references(
         db, ctx, bank
     )
+    settled_positions = _settled_position_identities(db, ctx, bank, batch.source_system)
     context = ValidationContext(
         as_of_date=payload.as_of_date,
         prior_balances=_prior_balances(db, ctx, bank, payload.as_of_date),
@@ -449,6 +452,7 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
         known_gl_accounts=known_gl_accounts,
         known_positions=known_positions,
         attribute_problems=attribute_problems,
+        settled_positions=settled_positions,
     )
     outcome = run_validation(
         records,
@@ -494,7 +498,16 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     batch.completed_at = utc_now()
 
     if outcome.overall_status != "rejected":
-        _persist_canonical(db, ctx, bank, batch, validate_node, records, outcome.record_statuses)
+        _persist_canonical(
+            db,
+            ctx,
+            bank,
+            batch,
+            validate_node,
+            records,
+            outcome.record_statuses,
+            settled_positions.keys(),
+        )
 
     storage_failure = _artifact_step(
         db,
@@ -1573,6 +1586,45 @@ def _known_references(
     )
 
 
+def _settled_position_identities(
+    db: Session, ctx: TenantContext, bank: Bank, source_system: str
+) -> dict[str, PositionIdentity]:
+    """Current ``source_system`` positions that have ever had an accepted snapshot.
+
+    A superseded accepted snapshot still counts: calculations and filings
+    already read the identity through it. A withdrawn one does not, because
+    the platform has retracted it.
+    """
+    accepted = (
+        select(CanonicalPositionSnapshot.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+        )
+        .exists()
+    )
+    rows = db.execute(
+        select(
+            CanonicalPosition.source_reference,
+            CanonicalPosition.position_type,
+            CanonicalPosition.currency,
+            CanonicalPosition.origination_date,
+        ).where(
+            CanonicalPosition.organization_id == ctx.organization_id,
+            CanonicalPosition.bank_id == bank.id,
+            CanonicalPosition.source_system == source_system,
+            *is_current_generation(CanonicalPosition),
+            accepted,
+        )
+    )
+    return {
+        reference: PositionIdentity(position_type, currency, origination_date)
+        for reference, position_type, currency, origination_date in rows
+    }
+
+
 def _prior_balances(
     db: Session, ctx: TenantContext, bank: Bank, as_of_date: date
 ) -> dict[str, Decimal] | None:
@@ -1612,6 +1664,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
     lineage_node: LineageRecord,
     records: CanonicalRecords,
     record_statuses: dict[tuple[str, str], str],
+    settled_positions: Collection[str],
 ) -> None:
     """Write the batch's canonical rows, superseding same-key current rows.
 
@@ -1620,6 +1673,12 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
     statements. Supersessions of pre-existing rows are flushed before the
     batch's inserts so the partial unique indexes over the current generation
     never see two live rows for one natural key.
+
+    A position identity is rewritten from the batch until it has an accepted
+    snapshot, so correcting a rejected currency, type or origination date
+    reaches the identity every calculation reads. ``settled_positions`` names
+    the identities already past that point; validation refused any change to
+    them, and they are left as they are.
     """
     common = {
         "organization_id": ctx.organization_id,
@@ -1801,6 +1860,14 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             )
             current_positions[data.source_reference] = position
             new_positions.append(position)
+        elif data.source_reference not in settled_positions:
+            position.position_type = data.position_type
+            position.currency = data.currency
+            if data.origination_date is not None:
+                position.origination_date = data.origination_date
+            position.validation_status = status_of("position", data.source_reference)
+            position.ingestion_batch_id = batch.id
+            position.lineage_id = lineage_node.id
 
         snapshot = CanonicalPositionSnapshot(
             id=new_uuid7(),

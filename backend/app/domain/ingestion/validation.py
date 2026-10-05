@@ -16,7 +16,7 @@ Severity semantics (spec §6.2):
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -122,6 +122,20 @@ def default_validation_config() -> ValidationConfig:
 
 
 @dataclass(frozen=True)
+class PositionIdentity:
+    """The fields a position's identity row holds for every one of its snapshots."""
+
+    position_type: str
+    currency: str
+    origination_date: date | None = None
+
+
+#: The identity fields a correction may rewrite only until the position's first
+#: accepted snapshot, in the order findings name them.
+POSITION_IDENTITY_FIELDS: tuple[str, ...] = ("position_type", "currency", "origination_date")
+
+
+@dataclass(frozen=True)
 class ValidationContext:
     as_of_date: date
     # Prior-generation balances keyed by position source_reference; supplied
@@ -140,6 +154,10 @@ class ValidationContext:
     # severity stays per-institution configuration like every other rule, and
     # so no rule has to mutate the records it is reporting on.
     attribute_problems: tuple[AttributeProblem, ...] = ()
+    # Identities of this source system's current positions that have had an
+    # accepted snapshot, keyed by source_reference. Their identity fields are
+    # settled: every calculation that read those snapshots read these values.
+    settled_positions: Mapping[str, PositionIdentity] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -176,7 +194,12 @@ def run_validation(
     """Run the configured rules; ``extra_findings`` lets the orchestrator
     inject findings discovered upstream of validation (for example table
     resolution failures during extraction) so they gate the batch through the
-    same severity semantics as rule findings."""
+    same severity semantics as rule findings.
+
+    Changes to a settled position identity are refused on every run,
+    whatever the configuration: persistence never rewrites a settled
+    identity, so a downgraded severity would report success for a value the
+    platform then discards."""
     outcome = ValidationOutcome()
     outcome.findings.extend(extra_findings)
     for key in _record_keys(records):
@@ -197,6 +220,7 @@ def run_validation(
             )
             continue
         outcome.findings.extend(implementation(records, rule, context, outcome))
+    outcome.findings.extend(_settled_identity_changes(records, context))
 
     for finding in outcome.findings:
         if finding.entity_type is None or finding.source_reference is None:
@@ -828,6 +852,52 @@ def _rule_loan_event_integrity(
                 )
             )
     return findings
+
+
+#: Not a configurable rule: see ``run_validation``.
+SETTLED_IDENTITY_RULE = "position_identity_settled"
+
+
+def _settled_identity_changes(
+    records: CanonicalRecords, context: ValidationContext
+) -> list[Finding]:
+    """One ERROR per identity field a row tries to change on a settled position.
+
+    A row that omits ``origination_date`` states nothing about it, so only a
+    different stated value counts as a change.
+    """
+    findings: list[Finding] = []
+    for position in records.positions:
+        settled = context.settled_positions.get(position.source_reference)
+        if settled is None:
+            continue
+        for name in POSITION_IDENTITY_FIELDS:
+            sent = getattr(position, name)
+            held = getattr(settled, name)
+            if sent is None or sent == held:
+                continue
+            findings.append(
+                Finding(
+                    rule=SETTLED_IDENTITY_RULE,
+                    category="TEMPORAL",
+                    severity="ERROR",
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=(
+                        f"{name} is frozen: this position already has an accepted "
+                        f"snapshot with {name}={_text(held)}, and this row sends "
+                        f"{_text(sent)}. An identity field cannot change after a "
+                        "snapshot has been accepted; send the position under a new "
+                        "source reference, or withdraw its accepted data first."
+                    ),
+                )
+            )
+    return findings
+
+
+def _text(value: object) -> str:
+    return repr(value.isoformat() if isinstance(value, date) else value)
 
 
 _RULES = {

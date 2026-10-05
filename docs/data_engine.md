@@ -60,7 +60,7 @@ These principles govern every implementation decision. Deviations require explic
 
 6. **Idempotent ingestion.** Re-running an ingestion pass with the same inputs must produce the same canonical state. Rebuilds must be possible from source.
 
-7. **Immutability of accepted state.** Once a snapshot is accepted, it is immutable. Corrections produce new snapshots with clear supersession, not overwrites.
+7. **Immutability of accepted state.** Once a snapshot is accepted, it is immutable. Corrections produce new snapshots with clear supersession, not overwrites. A position's identity fields (`position_type`, `currency`, `origination_date`) follow corrections until the position's first accepted snapshot; after that, a change is refused with a `position_identity_settled` finding naming the field.
 
 8. **Excel is a first-class data source, not a workaround.** Every mid-tier African bank will have material data in Excel. Designing Excel handling as "the fallback" produces a brittle product.
 
