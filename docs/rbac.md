@@ -819,7 +819,7 @@ _who may sign in_; provisioning decides _who exists_.
 
 - **SSO is AequorOS' own OIDC relying party** — no third-party broker; never reintroduce
   `AUTH0_*`. Per-org connection in `sso_connections` (issuer, client_id, AES-256-GCM-sealed
-  secret, allowed email domains; RLS-forced), managed in dashboard Settings →
+  secret, allowed email domains; RLS-forced), managed in dashboard Access →
   Authentication (secret write-only). The backend verifies every id_token via OIDC
   discovery + issuer JWKS (`verify_oidc_id_token`; RS256/ES256, `email_verified`, domain
   allow-list) and links **pre-provisioned** users (`auth_provider='oidc'`). The uniquely

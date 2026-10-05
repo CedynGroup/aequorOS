@@ -44,7 +44,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   mandatory, institution coverage is exact or explicitly organization-wide, and the server
   returns its authoritative assignment-time SoD allow/warn/block decision. Mutations audit
   the complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
-  same transaction. Settings → Members aggregates tenant identities and complete grants;
+  same transaction. Access → Members aggregates tenant identities and complete grants;
   the sentence composer uses only scalar controls. SSO request approval uses that same
   atomic scoped-grant flow—verified identity alone still has no access.
 - **Effective dashboard authority** is projected by `/auth/me` from the same evaluator:

@@ -10,8 +10,8 @@ evidence with the deployment record, never in this repository.
 ## Standing contract
 
 - **Integration keys are bank-scoped machine principals.** Account administrators
-  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Data Engine →
-  API Push). Issuance atomically creates the service identity, key, row, and
+  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Access →
+  Integration keys). Issuance atomically creates the service identity, key, row, and
   machine-only `integration_writer` binding for DATA/restricted `ingest`; push routes
   require that complete binding and return 404 for a sibling-bank target. Human
   Analyst authority never satisfies machine ingest. Revocation deactivates the key,
