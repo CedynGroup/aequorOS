@@ -23,4 +23,3 @@ stack and the worked example of the rules below.
   restart). `create_host_path: false` does not save you: Coolify rewrites long-syntax
   mounts to short form and drops it. Put config INSIDE the compose (a `command:` heredoc)
   — `openbao/` is the worked example.
-

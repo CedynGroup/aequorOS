@@ -303,4 +303,3 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 - Banks are created only by staff provisioning (`provision_institution`), which takes
   `currency` and `jurisdiction_code` explicitly; ingestion requires the bank to exist
   (`_get_bank_or_404`).
-

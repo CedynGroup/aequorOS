@@ -102,8 +102,8 @@ mise run risk-service:hooks
 The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
 `DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
 default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
-`TEST_DATABASE_URL` and run in disposable per-run schemas, so the remote database is safe to
-test against. The bundled Docker Compose remains available for fully-local/offline work.
+`TEST_DATABASE_URL`; use a dedicated test database as described under
+[Run Tests](#run-tests). The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -111,15 +111,15 @@ test against. The bundled Docker Compose remains available for fully-local/offli
 mise run risk-service:dev
 ```
 
-Database: the remote Postgres is already migrated to head — with `backend/.env` in place no
-export is needed. Two operational notes for the remote:
+Database: configure `backend/.env` and apply the migration chain before starting the API.
+Two operational notes for a remote database:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
-- **The single remote role has no BYPASSRLS**, so the cross-tenant background worker cannot
-  claim queued jobs there yet — request a BYPASSRLS-granted role from the DB host and set it as
-  `WORKER_DATABASE_URL` before running the worker against the remote.
+- **The cross-tenant worker needs a BYPASSRLS role** to claim queued jobs from FORCE-RLS
+  tables. Configure that separate role through `WORKER_DATABASE_URL`; keep the application
+  role `NOBYPASSRLS`.
 
 Fully-local alternative (offline work):
 
@@ -307,11 +307,12 @@ The default test run uses isolated SQLite databases and never touches Postgres �
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
-provide `TEST_DATABASE_URL`; fixtures create a `risk_service_test_<hex>` schema
-per run and drop it afterward, so the shared remote database is safe:
+provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
+Fixtures create disposable `risk_service_test_<hex>` schemas and drop them afterward.
+Schema isolation does not authorize running mutating tests against the primary:
 
 ```bash
-TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database> \
+TEST_DATABASE_URL=postgresql+psycopg://<test-user>:<password>@<test-host>:<port>/<test-database> \
   mise run risk-service:test-postgres
 ```
 
@@ -332,13 +333,9 @@ available; point `TEST_DATABASE_URL` at it to reuse that service.
   URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
   it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
   tests; never point mutating tests at the primary DB.
-- The primary database is the **remote Postgres** (`<postgres-host>:<port>/<database>`, credentials
-  only in untracked `backend/.env`). Postgres-gated tests run against it via `TEST_DATABASE_URL`
-  (each run creates and drops a `risk_service_test_<hex>` schema — the shared DB is safe). The
-  default suite is hermetic: conftest sets `DATABASE_URL=""` (empty = unconfigured via a settings
-  validator) so a developer's `.env` can never leak into tests. Remote gotchas: the single role
-  has no BYPASSRLS (worker needs a granted role before running remotely), and ad-hoc `psql` must
-  set the `app.organization_id` GUC or FORCE-RLS tables read as empty.
+- Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
+  its dedicated test-database requirement. Tests against the primary are limited to the
+  read-only live-data suite above.
 - **Anything built with `Base.metadata.create_all` runs no migration and no worker, so it
   must seed what those two would have written.** That is the hermetic pytest
   suite AND the Playwright stack (`scripts/e2e_bootstrap.py`). Two shared fixtures own it:

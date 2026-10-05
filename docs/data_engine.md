@@ -17,7 +17,7 @@ AequorOS's differentiators from Finastra, MORS, and Algorithmics are not the reg
 
 Both differentiators depend almost entirely on the Data Engine. A calculation engine that assumes a perfect canonical dataset is trivial. A calculation engine that can be productively fed from a T24 export, a Finacle database, three Excel spreadsheets, and a manual override table within eight weeks of a bank saying "yes" is the actual product.
 
-**Design principle:** the Data Engine is not a data pipeline that supports the product. It *is* the product's central competitive moat. Architectural decisions here compound over years and across institution categories.
+**Design principle:** the Data Engine is not a data pipeline that supports the product. It _is_ the product's central competitive moat. Architectural decisions here compound over years and across institution categories.
 
 ### 1.2 Institution Categories the Engine Must Support Over Time
 
@@ -125,24 +125,28 @@ The canonical model is defined as a set of related entities with typed fields an
 Below is the entity list with primary purpose. Full DDL is expanded in `/schema/canonical_v1.sql` (to be created; see section 4.5 for the DDL structure).
 
 **Institution and Organization**
+
 - `institution` — the tenant (a specific bank or, later, pension fund/insurer)
 - `institution_type` — enum: `UNIVERSAL_BANK`, `RURAL_BANK`, `SAVINGS_LOANS`, `MICROFINANCE`, `PENSION_FUND`, `INSURANCE_LIFE`, `INSURANCE_PC`, `ASSET_MANAGER`, `CORPORATE_TREASURY`, etc.
 - `business_unit` — branches, divisions, subsidiaries within an institution
 - `reporting_entity` — the entity that a given calculation is reported for (may differ from institution for consolidated reporting)
 
 **Chart of Accounts and Product Taxonomy**
+
 - `gl_account` — the general ledger account (with hierarchy)
 - `product` — product definitions (e.g., "5-year fixed corporate loan GHS")
 - `product_category` — regulatory category mapping (e.g., "Corporate unrated 100% RW")
 - `product_to_gl_mapping` — links products to GL accounts
 
 **Counterparties**
+
 - `counterparty` — the entity on the other side of any position (customer, bank, sovereign, etc.)
 - `counterparty_type` — enum: `RETAIL_INDIVIDUAL`, `SME`, `CORPORATE`, `BANK_OECD`, `BANK_NON_OECD`, `SOVEREIGN`, `MULTILATERAL_DEV_BANK`, etc.
 - `counterparty_rating` — credit rating (internal or external)
 - `counterparty_relationship` — connection between counterparties (group exposure)
 
 **Positions (the balance sheet)**
+
 - `position` — a unified abstraction for anything on or off the balance sheet at a point in time
   - `position_type`: `LOAN`, `DEPOSIT`, `SECURITY_HOLDING`, `DERIVATIVE`, `CASH`, `INTERBANK_PLACEMENT`, `INTERBANK_BORROWING`, `LC_GUARANTEE`, `COMMITMENT_UNDRAWN`, etc.
   - Every position has: `institution_id`, `counterparty_id`, `product_id`, `currency`, `notional`, `balance`, `origination_date`, `contractual_maturity`, `next_repricing_date`, `interest_rate`, `rate_type` (`FIXED`/`FLOATING`), `rate_index`, `rate_spread`, `ifrs9_stage`, `collateral_id`, and full metadata
@@ -151,27 +155,32 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 - `collateral` — collateral pledged against loans, with type, value, haircut
 
 **Transactions**
+
 - `transaction` — a money movement (disbursement, repayment, interest accrual, fee, FX conversion, etc.)
 - `transaction_type` — enum
 - Transactions link to positions and GL accounts
 
 **Market Data**
+
 - `yield_curve` — a full curve as of a date (base curve, credit spread curves, FX forward curves)
 - `yield_curve_point` — tenor + rate points on a curve
 - `fx_rate` — spot and forward rates
 - `market_index` — reference index values (BoG policy rate, GHS-IBOR, etc.)
 
 **Behavioral and Assumption Layer**
+
 - `behavioral_assumption` — deposit stability, prepayment, credit conversion factors, non-maturity deposit duration
 - `assumption_source` — enum: `POLICY`, `ML_MODEL`, `MANUAL_OVERRIDE`, `REGULATOR_MANDATED`
 - `manual_adjustment` — off-model adjustments with user, timestamp, and business reason
 
 **Capital and Regulatory**
+
 - `capital_component` — CET1, AT1, Tier 2 components at institution level
 - `regulatory_adjustment` — deductions (goodwill, DTA, etc.)
 - `rwa_bucket` — risk-weighted asset assignments by exposure
 
 **Snapshots and Time**
+
 - Every entity above has a `snapshot` variant tied to `as_of_date`
 - All calculations are performed against a snapshot; historical restatements produce new snapshots, never overwrites
 
@@ -192,7 +201,7 @@ Every entity in the canonical model carries:
 - `created_by` (system or user)
 - `created_at` (row insertion timestamp)
 
-Fields cannot be nullable that describe *what* a record is (e.g., `position_type`, `currency`). Fields can be nullable that describe *behavioral overlays* (e.g., `behavioral_maturity`) because those are enriched, not raw.
+Fields cannot be nullable that describe _what_ a record is (e.g., `position_type`, `currency`). Fields can be nullable that describe _behavioral overlays_ (e.g., `behavioral_maturity`) because those are enriched, not raw.
 
 ### 4.4 Extensibility for Non-Bank Institutions
 
@@ -226,6 +235,7 @@ The DDL is organized into files under `/schema/`:
 ```
 
 Each file is idempotent (uses `CREATE TABLE IF NOT EXISTS`) and includes:
+
 - Table definition with all columns, types, constraints
 - Foreign key relationships
 - Check constraints for business rules that must always hold
@@ -320,7 +330,7 @@ institution_id: "cd8f1e12-..."
 adapter: "temenos_t24"
 adapter_version: "1.0"
 connection:
-  type: "api"  # or "sftp_batch" as fallback
+  type: "api" # or "sftp_batch" as fallback
   endpoint: "https://bank-t24.internal/tafj"
   auth_ref: "vault://banks/xyz/t24_credentials"
 
@@ -335,7 +345,7 @@ field_mappings:
       canonical.balance: "$.outstandingAmount"
       canonical.contractual_maturity: "$.maturityDate"
       canonical.interest_rate: "$.effectiveInterestRate"
-      canonical.rate_type: "$.interestType"  # requires enum mapping
+      canonical.rate_type: "$.interestType" # requires enum mapping
 
   # ... other entity mappings
 
@@ -585,7 +595,7 @@ For any canonical record, the platform must be able to answer:
 - Was it manually overridden? By whom, when, why?
 - Has it been superseded by a later restatement? What restatement?
 
-This is the audit trail. Without it, no BoG examiner accepts AequorOS. With it, AequorOS *is* the audit trail.
+This is the audit trail. Without it, no BoG examiner accepts AequorOS. With it, AequorOS _is_ the audit trail.
 
 ### 8.2 The Lineage Table
 
@@ -683,12 +693,14 @@ Every TODO in this adapter carries a comment specifying what portal document is 
 The adapter supports both integration modes with the same canonical output:
 
 **Mode A: Real-time API (Preferred).**
+
 - Hourly incremental sync for positions
 - Real-time push for material transactions
 - Exponential backoff retry
 - Dead-letter queue for failed messages
 
 **Mode B: Batch File (Fallback).**
+
 - Daily post-COB SFTP file drop
 - Files land in an S3 bucket with KMS encryption
 - MD5 hash validation
@@ -843,7 +855,7 @@ Intelligence in the Data Engine lives at three points:
 2. **Anomaly detection** — catches data quality issues rules miss.
 3. **Reconciliation assistance** — helps operators find and explain breaks.
 
-Intelligence explicitly does *not* live in:
+Intelligence explicitly does _not_ live in:
 
 - The regulatory calculation engines (they are deterministic)
 - Data acceptance decisions (a human must approve batches with blockers)
@@ -862,7 +874,7 @@ Output: for each source column, a ranked list of candidate canonical fields with
 
 Human operator reviews and confirms. The confirmed mapping goes into the bank's `MappingConfig`. Over time, as the platform accumulates confirmed mappings across many banks, suggestions get more accurate.
 
-**Multi-tenant learning is essential here.** Each new bank onboarded improves onboarding for future banks, because the mapping suggestion engine has more examples. But no bank's raw data is ever exposed to another; only the *mappings themselves* (column names to canonical fields) contribute to the shared model, and even those are aggregated statistically, not attributed.
+**Multi-tenant learning is essential here.** Each new bank onboarded improves onboarding for future banks, because the mapping suggestion engine has more examples. But no bank's raw data is ever exposed to another; only the _mappings themselves_ (column names to canonical fields) contribute to the shared model, and even those are aggregated statistically, not attributed.
 
 ### 12.3 Anomaly Detection
 
@@ -1059,7 +1071,7 @@ Things this document deliberately does not specify:
 - **Specific T24 API endpoints and payloads** (deferred until Temenos developer portal access)
 - **Pension and insurance adapter implementations** (deferred to Phase 5)
 
-Things this document is explicit about *not* wanting:
+Things this document is explicit about _not_ wanting:
 
 - **A single monolithic ingestion service.** Adapters are separately deployable, testable, and versionable.
 - **A shared code path between adapters.** The temptation to "consolidate" adapter code is dangerous. Each adapter's messiness stays contained.
@@ -1117,4 +1129,4 @@ If this document is handed to Claude Fable 5 or another AI coding assistant to i
 
 **End of Data Engine Specification v1.0**
 
-*Revisions expected as Temenos developer portal access is confirmed, as first pilot bank engagements reveal onboarding realities, and as the canonical model is stress-tested against non-bank institution categories.*
+_Revisions expected as Temenos developer portal access is confirmed, as first pilot bank engagements reveal onboarding realities, and as the canonical model is stress-tested against non-bank institution categories._

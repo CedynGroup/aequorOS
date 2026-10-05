@@ -1,11 +1,10 @@
 # Bank-scoped integration-key rollout
 
-This cutover makes every API Push credential a machine principal for one exact
-institution. It is intentionally immediate default deny: every existing key has
-`bank_id IS NULL`, no exact Integration Writer binding, and stops working when
-the enforcing application is deployed. Do not infer a bank, backfill a binding,
-or create a compatibility grant. Store dated inventory output and rotation
-evidence with the deployment record, never in this repository.
+API Push authorization requires a machine principal for one exact institution.
+Enforcement is default deny: legacy keys with `bank_id IS NULL` or without an
+exact Integration Writer binding cannot authorize a push. Do not infer a bank,
+backfill a binding, or create a compatibility grant. Store dated inventory output
+and rotation evidence with the deployment record, never in this repository.
 
 ## Standing contract
 

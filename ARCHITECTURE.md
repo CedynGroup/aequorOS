@@ -1,7 +1,6 @@
 # AequorOS Architecture
 
-Single source of truth for agents building new modules. Initially verified on
-2026-07-14 and updated through 2026-08-29. When this document and the code
+Single source of truth for agents building new modules. When this document and the code
 disagree, the code wins — fix this file.
 
 Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
@@ -10,14 +9,14 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
 ## 1. System map
 
-| Component                      | Path                                                                               | Stack                                                                                                                                         | Role                                                                                                                                                           |
-| ------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Risk service                   | `backend`                                                                          | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.                                                             |
-| Generated API client           | `packages/risk-service-api`                                                        | typescript-fetch output of openapi-generator 7.13                                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited.                                                   |
-| Marketing site                 | `frontend`                                                                         | [Marketing stack](frontend/README.md#stack)                                                                                                   | Static marketing site. **Out of scope for this build. Do not touch.**                                                                                          |
-| Product UI                     | `dashboard`                                                                        | [Dashboard stack](backend/dashboard/README.md#stack)                                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.                                                            |
-| Database                       | remote Postgres `<postgres-host>:<port>/<database>` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
-| Local infra (offline fallback) | `backend/docker-compose.yml`                                                       | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local`                 | Started with `docker compose up -d` from `backend`.                                                                                                            |
+| Component                      | Path                         | Stack                                                                                                                         | Role                                                                                                         |
+| ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Risk service                   | `backend`                    | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.           |
+| Generated API client           | `packages/risk-service-api`  | typescript-fetch output of openapi-generator 7.13                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
+| Marketing site                 | `frontend`                   | [Marketing stack](frontend/README.md#stack)                                                                                   | Static marketing site. **Out of scope for this build. Do not touch.**                                        |
+| Product UI                     | `dashboard`                  | [Dashboard stack](backend/dashboard/README.md#stack)                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.          |
+| Database                       | PostgreSQL                   | Application connection configured by `backend/.env`; [test database policy](backend/README.md#run-tests)                      | Schema kept at Alembic head; worker role requirements are defined in §3b.                                    |
+| Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`.                                                          |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
 `uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `dashboard`). Pre-commit config is at the repo root
@@ -644,10 +643,11 @@ and zero with no GUC set.
 every member resolves to a mapped column; filters become bound parameters under
 a whitelisted operator set; grouping, pivot and subtotals are computed
 server-side. There is no `text()` anywhere in `app/services/bi` or
-`app/domain/bi` beyond two named constants that set the statement timeout and
-read-only flag — pinned by an AST guard that proves itself against deliberate
-violations, plus Hypothesis fuzzing that asserts no client string ever reaches
-the compiled SQL.
+`app/domain/bi`. The executor alone may call `exec_driver_sql` with two named
+constant statements that set the statement timeout and read-only flag; the
+timeout is a bound parameter. This boundary is pinned by
+`tests/architecture/test_bi_compiler_injection.py`, which proves its AST guard
+against deliberate violations and fuzzes client input with Hypothesis.
 
 **BI gets its own worker lane** (`risk-worker-bi`, `WORKER_JOB_TYPES=lane:bi`)
 because `claim_next` is FIFO across types and a backfill would otherwise starve
@@ -842,9 +842,11 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   policy to every child; the app role runs no raw `CREATE TABLE`. A cross-tenant read must
   return zero rows through the parent, a named child and the DEFAULT partition alike. **A
   green Postgres run is not evidence of this** — an RLS test self-skips at exit 0 when the
-  `TEST_DATABASE_URL` role bypasses RLS (the shared one does) or when `TEST_DATABASE_URL` is
-  not EXPORTED, and one more self-skips without `CREATEROLE`. Check the passed-count and that
-  skips are ZERO; the local recipe is in `.ai/BI_TEST_MATRIX.md`.
+  `TEST_DATABASE_URL` role bypasses RLS or when `TEST_DATABASE_URL` is not exported, and
+  privilege proofs need `CREATEROLE`. Check that the intended RLS and privilege proofs
+  actually ran. `risk-service:test-postgres-schema` provisions a local `NOBYPASSRLS`
+  test role with `CREATEROLE` and requires the privilege proofs to run; a supplied URL
+  must provide equivalent privileges. See [test database setup](backend/README.md#run-tests).
 - **Missing data is never zero, structurally.** A measure with no target has no
   `bi_fact_target` row; a widget with no data says `needs_data: <dataset>` (or
   `pending_capability` when the gap is platform work, not the bank's book); an insight may
@@ -1086,7 +1088,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | Target                   | Commands                                                                                                                                                                                                                                                                              |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`                                                                                                                                                            |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                        |
+| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                      |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                      |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); package-capable Playwright specs need S3/MinIO, while storage-free specs do not) |
 | marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                     |

@@ -81,7 +81,7 @@ Each rule is stated in full in the document the index names.
 - **Calculation hashes and digests are value-based.** Never put a row id
   (`fact.id`) or a volatile field into an `input_hash` snapshot or an attestation
   digest; the live engine re-derives facts with new UUIDs on every refresh.
-- **The reporting date is the regulator's.** It comes from the `ReturnDefinition`
+- **Periodic reporting dates are the regulator's.** They come from the `ReturnDefinition`
   through `app/services/regulatory_reporting/anchors.py`, never from
   `bank_reporting_periods`, and the snapshot match is exact for every cadence.
 - **Read tenant health from what the platform computed** (`live_metrics`,
