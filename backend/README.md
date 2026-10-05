@@ -102,8 +102,8 @@ mise run risk-service:hooks
 The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
 `DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
 default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
-`TEST_DATABASE_URL` and run in disposable per-run schemas, so the remote database is safe to
-test against. The bundled Docker Compose remains available for fully-local/offline work.
+`TEST_DATABASE_URL`; use a dedicated test database as described under
+[Run Tests](#run-tests). The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -111,15 +111,15 @@ test against. The bundled Docker Compose remains available for fully-local/offli
 mise run risk-service:dev
 ```
 
-Database: the remote Postgres is already migrated to head — with `backend/.env` in place no
-export is needed. Two operational notes for the remote:
+Database: configure `backend/.env` and apply the migration chain before starting the API.
+Two operational notes for a remote database:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
-- **The single remote role has no BYPASSRLS**, so the cross-tenant background worker cannot
-  claim queued jobs there yet — request a BYPASSRLS-granted role from the DB host and set it as
-  `WORKER_DATABASE_URL` before running the worker against the remote.
+- **The cross-tenant worker needs a BYPASSRLS role** to claim queued jobs from FORCE-RLS
+  tables. Configure that separate role through `WORKER_DATABASE_URL`; keep the application
+  role `NOBYPASSRLS`.
 
 Fully-local alternative (offline work):
 
@@ -158,14 +158,24 @@ BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
 with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
 organization, and security settings cannot be changed through this endpoint.
 
+### Legacy case vertical
+
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
 periods, balances, cash flows, obligations, and covenants. These mutations
 require an authenticated mutation-capable bearer principal; each request body
 requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
-refreshed `validation` state. See `docs/architecture.md` for the complete
-contract and correction-history behavior.
+refreshed `validation` state. The request and response schemas live in
+[`app/schemas/financial_workspace.py`](app/schemas/financial_workspace.py);
+[`app/services/financial_canonical_edits.py`](app/services/financial_canonical_edits.py) owns
+correction-history behavior.
+
+Clients use the generated `FinancialDataApi` from `packages/risk-service-api`
+for manual entry and correction, with account and obligation statuses constrained
+to the generated contract values. To have the backend derive covenant compliance
+from the inputs, omit `complianceStatus` from the request. Dashboard client
+conventions are owned by [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md#api-access).
 
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use
@@ -276,6 +286,27 @@ The generic findings update endpoint does not mutate liquidity workflow
 findings. A newer successful run supersedes open findings from the previous run
 for that scenario without altering acknowledged or dismissed history.
 
+### Stale local processes
+
+- **Long-lived local processes serve STALE CODE and the port check will not save you.**
+  Several backend processes can run from one checkout against the primary database on
+  different ports without any port conflict (uvicorn `--reload` shares one socket between
+  supervisor and child). And a port conflict would not help: the damage is done by the
+  **in-process live-engine worker thread**, which needs no port, polls the shared `jobs`
+  table and writes `live_metrics` with whatever code its process holds. A new feature can
+  therefore be verified green in a fresh process while the app serves the old behaviour
+  from an old one.
+- **The standalone worker is the one that bites, and it has NO `--reload`.**
+  `python -m app.worker` is a separate process from `fastapi dev`; it never reloads on a
+  code change, and it is what writes `live_metrics`. A cleanup that greps only
+  `fastapi dev|uvicorn|app.main` MISSES it. Use the full pattern and check `lstart`
+  against your edits:
+  ```
+  ps -eo pid,lstart,command | grep -E "fastapi dev|uvicorn|app\.main|app\.worker|app\.operator" | grep -v grep
+  ```
+  Restart the worker after ANY change to a service it dispatches (`fact_derivation`,
+  `implied_rating`, the module engines) or its output is a lie about your code.
+
 ## Run Tests
 
 ```bash
@@ -286,11 +317,12 @@ The default test run uses isolated SQLite databases and never touches Postgres �
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
-provide `TEST_DATABASE_URL`; fixtures create a `risk_service_test_<hex>` schema
-per run and drop it afterward, so the shared remote database is safe:
+provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
+Fixtures create disposable `risk_service_test_<hex>` schemas and drop them afterward.
+Schema isolation does not authorize running mutating tests against the primary:
 
 ```bash
-TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database> \
+TEST_DATABASE_URL=postgresql+psycopg://<test-user>:<password>@<test-host>:<port>/<test-database> \
   mise run risk-service:test-postgres
 ```
 
@@ -300,6 +332,40 @@ to force that mode. Native MinIO setup, isolation and shutdown are documented
 in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
 The existing `docker compose up -d risk-postgres` alternative also remains
 available; point `TEST_DATABASE_URL` at it to reuse that service.
+
+### Test databases and the primary database
+
+- **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
+  ACTUAL primary database — provenance (every canonical row ingestion-traced; the
+  executable form of the no-seeding order), period-spine contiguity, fact coverage,
+  live-metrics presence, sign-in capability. Opt-in:
+  `LIVE_DATA_DATABASE_URL=<worker URL> uv run pytest tests/live_data` (BYPASSRLS worker
+  URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
+  it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
+  tests; never point mutating tests at the primary DB.
+- Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
+  its dedicated test-database requirement. Tests against the primary are limited to the
+  read-only live-data suite above.
+- **Anything built with `Base.metadata.create_all` runs no migration and no worker, so it
+  must seed what those two would have written.** That is the hermetic pytest
+  suite AND the Playwright stack (`scripts/e2e_bootstrap.py`). Two shared fixtures own it:
+  `tests/fixtures/reference_data.py` seeds every GLOBAL registry from the same catalogues
+  the migrations read (`jurisdictions`; `institution_types.seed_rows`;
+  `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
+  it — and `tests/fixtures/live_plane.py` stands in for the worker's `pipeline_refresh`,
+  because every Treasury/ALM cockpit reads `current_financial_facts`, which only the worker
+  writes. Skip either and the failure is late and misleading: a missing registry surfaces as
+  a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
+  on every module page. Full prerequisites (object storage included):
+  `backend/dashboard/README.md` §End-to-end; for SSO, see its
+  [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
+  **Test databases are built once per pytest process, never per test**
+  (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
+  `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
+  and `@pytest.mark.committing_db` tests share a second schema that is TRUNCATEd
+  and reseeded before each test. Only `tests/db` migration tests build schemas of
+  their own. A test that needs a fresh schema is the exception to justify, not the
+  default to reach for.
 
 ## Lint And Type Check
 

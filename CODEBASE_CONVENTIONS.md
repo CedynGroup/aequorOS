@@ -261,3 +261,45 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 | TanStack Query hooks                             | `backend/dashboard/lib/api/hooks.ts`  | Shared server-state reads, mutations, keys, and invalidation.  |
 | `numOrNull`, `assessAgainstFloor`, `floorStatus` | `backend/dashboard/lib/api/values.ts` | Fail-closed numeric and regulatory-floor presentation.         |
 | Dashboard design and component rules             | `backend/dashboard/README.md`         | Current bank-product UI conventions and verification commands. |
+
+## 4. Jurisdiction is data
+
+- **Never hardcode country identity.** The global `jurisdictions` registry
+  (`code → country, currency, locale, central bank, regulator short, portal, timezone`;
+  NOT tenant-scoped) resolves through `banks.jurisdiction_code` and rides the bank API
+  payload (`BankRead.jurisdiction`). Dashboard: BankContext binds it into `lib/format.ts`
+  (`setActiveJurisdiction`) — use `fmtCurrency`/`fmtInt`/`fmtLocale()`/`regShort()`/
+  `centralBankName()`/`currencyCode()`; never literal `'GHS'`, `'en-GH'`, `'BoG'`,
+  `'Bank of Ghana'` in display code. Module-level constants evaluate before the binding —
+  use jurisdiction-neutral wording there ("regulatory minimum", "supervisory severe"), not
+  getter calls. Backend: services resolve names via `app/services/jurisdictions.py`
+  (BSD-2/BSD-3 headers do); fact derivation reads `_Canonical.base_currency` (from
+  `bank.currency`) for FX base-leg and curve selection. Deliberate exceptions
+  (Ghana-factual content, keep literal): the BoG return-family artifacts — BSD
+  templates/registry, ORASS/DBK rules, notice citations, the GHS ’000 unit convention in
+  `SnapshotPreview`/`lib/templates.ts`, and the `sample_bank_seed` test fixture. Return
+  families exist for Ghana only; other jurisdictions' families are roadmap work in
+  `docs/product.md`.
+- **A `bog_`-prefixed IDENTIFIER is not a jurisdiction leak — and must not be renamed:**
+  the `bog_required_reserves` / `bog_excess_reserves` / `bog_excess_reserves_hqla` fact
+  categories mean "central-bank reserves" in every jurisdiction and are load-bearing
+  wire/DB keys (value-based `input_hash`, BSD line maps, goldens) — same rule as the
+  `refinitiv` vendor id surviving its rebrand. Country identity in _matching logic_ is the
+  real defect: a GL cash classifier that tests a literal token such as `"bog"` misses an
+  SDI's `GL-1020 "Balances with Bank of Ghana"`, which then falls into `other_assets` and
+  out of HQLA. Match on `fact_derivation._CentralBankNames` (the bank's own
+  `central_bank_name` + `regulator_short` from the registry — never `country_name`, which
+  would sweep "Government of Ghana bonds" into the cash line).
+- **`banks.currency` and `banks.jurisdiction_code` are REQUIRED and carry no defaults**,
+  so they cannot silently disagree (a bank created with `jurisdiction_code="NG"` must not
+  report in cedis). Backend code resolves the unit through
+  `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
+  currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
+  currency literal into bank-facing narrative — the guard suite
+  `tests/services/test_jurisdiction_neutrality.py` scans the calculation modules for
+  exactly that and is the cheapest place to catch the regression. On the dashboard,
+  `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
+  it, so pass it only when the currency is genuinely not the bank's own.
+- Banks are created only by staff provisioning (`provision_institution`), which takes
+  `currency` and `jurisdiction_code` explicitly; ingestion requires the bank to exist
+  (`_get_bank_or_404`).

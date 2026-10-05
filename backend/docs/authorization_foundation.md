@@ -8,6 +8,96 @@ boundary are also enforcing. Tenant grant create/list/revoke and the Members
 aggregation are live. Subsequent product cutovers are tracked in the
 [product rollout boundary](#product-rollout-boundary).
 
+## Standing rules at a glance
+
+- **Policy authority is an indivisible `authorization_bindings` row:** principal/type +
+  static bundle + explicit organization/institution/module/sensitivity scope + provenance
+  and lifecycle. Rows OR only after every dimension within a row ANDs; explicit `all`
+  values provide broad module/sensitivity scope, and organization-wide institution
+  coverage is named. `ResourceLocator` also names its target scope: an institution target
+  requires an exact `BK-*`, while an organization target forbids one; missing/null never
+  broadens. The evaluator is deny-by-default, ignores scalar role/token permission claims,
+  returns an audit-ready trace, and accepts global condition vetoes. Product-route
+  cutovers are listed under [Product rollout boundary](#product-rollout-boundary); use the
+  linked rollout contracts for each surface's exact permissions. No binding and no
+  Owner/Admin authority is ever backfilled implicitly. Token `authv` enforcement is live:
+  stale tokens 401; every role/scope/status/security mutation must call
+  `authorization.invalidate_user_authorization` in-transaction to bump the user version
+  and revoke refresh families.
+- **Initial ownership.** Org Owner is an explicit organization-wide `org_owner` binding.
+  The ownership backfill assigned one only where exactly one active human legacy admin
+  existed; zero/multiple-candidate organizations have no binding and remain queryable,
+  with candidate snapshots, in `organization_owner_assignments`. The scalar `admin` role is
+  the non-operational `account_admin`; account admins never enter the analyst/approver
+  ladder. Staff provisioning creates its sole first admin, owner binding, and assignment
+  state atomically. **Ownership is TWO sentences:** the `org_owner`/Account row
+  administers, and a separate organization-wide `viewer`/all/all row reads the product —
+  the Owner bundle has no `view`, so without it an Owner sees no bank and no module.
+  `ensure_owner_read_access` writes it (see [Org Owner read access](#org-owner-read-access-migration-202609160052)).
+  The Members composer scopes grants from `GET /organization/institutions` (account
+  plane), never `/banks`. Gate every enforcement cutover with
+  `scripts/authorization_access_impact.py`. Explicit designation mutation/UI is
+  staff-plane work: a zero-owner tenant has no tenant authority that could authorize its
+  own designation.
+- **Scoped grant administration.** Org Owners administer exactly one indivisible binding
+  per create/revoke through `app/features/manage_authorization.py`; sensitivity is
+  mandatory, institution coverage is exact or explicitly organization-wide, and the server
+  returns its authoritative assignment-time SoD allow/warn/block decision. Mutations audit
+  the complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
+  same transaction. Access → Members aggregates tenant identities and complete grants;
+  the sentence composer uses only scalar controls. SSO request approval uses that same
+  atomic scoped-grant flow—verified identity alone still has no access.
+- **Effective dashboard authority** is projected by `/auth/me` from the same evaluator:
+  cache scopes include `authv`; `/banks` exposes only institutions with at least one
+  exact structurally eligible capability; capabilities whose final decision needs object
+  or transaction context carry `requires_contextual_authorization` and are never execution
+  authority; bank detail/period/fact routes 404 without institution coverage; shell
+  navigation and deep links consume the projection, never token roles.
+- **Bank-route existence rule:** follow [docs/rbac.md §4](../../docs/rbac.md#4-tenancy--the-two-planes)
+  for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
+  requirements, and regression coverage when adding bank routes.
+  **By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query.** Two
+  banks of one organization share an RLS tenant, so organization scoping alone
+  cannot isolate their child objects. See [Executable verification](#executable-verification)
+  for refusal semantics and the regression coverage.
+- Preserve baseline membership as system-managed lifecycle evidence, never evaluator
+  fallback access. Activation/deactivation must use `app/services/membership.py`;
+  [Baseline membership](#baseline-membership) owns its scope, migration, and regression
+  coverage.
+- **Account administration.** SSO connection read/write, SSO request list/reject, and
+  integration-key list/revoke require one organization-wide ACCOUNT/restricted
+  `administer` binding; `/organization/users` separately requires ACCOUNT/restricted
+  `view` (administration does not imply directory access). Scalar roles never satisfy
+  these routes, and the dashboard consumes the same projected organization capabilities.
+  SSO approval/grant administration requires the `org_owner` bundle. Integration-key
+  issuance uses the same Account administration authority and additionally requires an
+  exact bank target for the machine binding.
+- **Unowned tenants.** Eligible administrators in unresolved multi-candidate
+  organizations hold only organization-wide ACCOUNT/restricted `account_admin` authority.
+  Ownership and directory view remain unassigned; explicit staff owner designation is
+  required. The authoritative rollout contract is
+  `backend/docs/account_administration_enforcement_rollout.md`.
+- **Markets authority follows the data, not the page.** Manual market-data uploads
+  belong to Markets, not Data Engine. The authoritative tier, projection,
+  template-target, and held-configuration contracts live in
+  [the Markets rollout](markets_enforcement_rollout.md), pinned by
+  `backend/tests/architecture/test_markets_authorization.py`.
+- **Filing is its OWN authority.** Approving a return and transmitting it to the
+  regulator are separate permissions, so whoever approves cannot thereby file to BoG.
+  `Permission.SUBMIT` is carried by the `validator` bundle (`view`+`submit`, never
+  `approve`) and `require_package_submit` takes one scoped path for EVERY family:
+  interactive human, then a complete binding over REG/restricted for the exact
+  institution; visibility still decides first, so a gated ICAAP stays 404. `SUBMIT` names
+  maker/checker as REQUIRED context, so a route that omits it denies. **Approvers are
+  never converted into validators: nobody can file until an Org Owner grants the
+  Validator sentence** — converting the approvers would re-encode the approve-equals-file
+  defect. Approver+Validator on one identity is BLOCKED at assignment until the stage
+  engine's per-object condition lands. Contract:
+  `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps:
+  `backend/docs/filing_workflow_redesign.md`.
+- **Every new `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration** —
+  see the [migration contract and Postgres regression guard](#institution-vocabulary-built-2026-09-20).
+
 ## Authority model
 
 `Organization` (`OR-*`) remains the account and security tenant. `Bank`

@@ -46,6 +46,11 @@ This file is the starting point for agents working in `backend`.
   evidence through the shared tenant-scoped finding tables, and bind every evidence locator to the
   calculation run and immutable input hash.
 
+## Legacy case vertical
+
+The [backend API guide](README.md#legacy-case-vertical) owns financial-workspace,
+scenario, forecast, capital-projection, and liquidity contracts for `/api/v1/cases`.
+
 ## Commit Messages
 
 Use conventional commits with `risk-service` as the scope:

@@ -10,15 +10,15 @@ claim stops being true. Where a boundary is asserted, the guard that enforces it
 
 ## 1. Deployable components
 
-| Component | Path | Entrypoint | Port | Role |
-|---|---|---|---|---|
-| Tenant API | `backend/app` | `app.main:app` | 8000 | All bank-facing endpoints, engines, persistence |
-| Background worker | `backend/app` | `python -m app.worker` | — | Cross-tenant job queue: ingestion refresh, official runs, market-data pulls, scheduled ticks |
-| Operator control plane | `backend/app/operator` | `uvicorn app.operator.main:app` | 8100 | Staff-only cross-tenant administration |
-| Product UI | `backend/dashboard` | Next.js 14 | — | Treasury workbench; consumes the API through the generated client only |
-| Operator console | `console` | Next.js 14 | — | Staff UI; all traffic via its own `/api/op` proxy |
-| Generated API client | `packages/risk-service-api` | typescript-fetch | — | Generated from `backend/openapi-schema.json`; never hand-edited |
-| Marketing site | `frontend` | Next.js 14 | — | Static; out of the regulatory scope |
+| Component              | Path                        | Entrypoint                      | Port | Role                                                                                         |
+| ---------------------- | --------------------------- | ------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
+| Tenant API             | `backend/app`               | `app.main:app`                  | 8000 | All bank-facing endpoints, engines, persistence                                              |
+| Background worker      | `backend/app`               | `python -m app.worker`          | —    | Cross-tenant job queue: ingestion refresh, official runs, market-data pulls, scheduled ticks |
+| Operator control plane | `backend/app/operator`      | `uvicorn app.operator.main:app` | 8100 | Staff-only cross-tenant administration                                                       |
+| Product UI             | `backend/dashboard`         | Next.js 14                      | —    | Treasury workbench; consumes the API through the generated client only                       |
+| Operator console       | `console`                   | Next.js 14                      | —    | Staff UI; all traffic via its own `/api/op` proxy                                            |
+| Generated API client   | `packages/risk-service-api` | typescript-fetch                | —    | Generated from `backend/openapi-schema.json`; never hand-edited                              |
+| Marketing site         | `frontend`                  | Next.js 14                      | —    | Static; out of the regulatory scope                                                          |
 
 Deployment topology is `backend/docker-compose.prod.yml`: `risk-migrate` (runs
 `alembic upgrade head` and exits), `risk-api`, `risk-worker`, `risk-operator`. Each of the
@@ -44,13 +44,13 @@ The forensic architecture audit's headline finding was that no single calculatio
 exists. That finding stands, and it is architecture rather than defect — but only because
 each plane's authority is now declared and the boundaries between them are machine-checked.
 
-| Plane | Storage | Authority | Reaches a filing? |
-|---|---|---|---|
-| Bank regulatory / treasury | `banks`, `bank_reporting_periods`, `bank_financial_facts`, `regulatory_runs` | Authoritative for universal-bank Basel/BoG metrics | Yes |
-| SDI regime (Act 930 s.29) | canonical positions / references + `regulatory_parameter` | Authoritative for s.29 metrics; **not** Basel | Return pack not published by BoG — see §15 |
-| Case financial workspace (legacy) | `risk_cases`, `financial_*`, `calculation_runs`, `capital_projections` | Case analysis only | **No** — structurally forbidden |
-| Regulatory reporting templates | `regulatory_packages`, committed BoG layouts + line maps | Template-authoritative: the workbook's own formulas | Yes |
-| Scenario workbench | bank facts + params, no `RegulatoryRun` | Advisory / transient | No |
+| Plane                             | Storage                                                                      | Authority                                           | Reaches a filing?                          |
+| --------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------ |
+| Bank regulatory / treasury        | `banks`, `bank_reporting_periods`, `bank_financial_facts`, `regulatory_runs` | Authoritative for universal-bank Basel/BoG metrics  | Yes                                        |
+| SDI regime (Act 930 s.29)         | canonical positions / references + `regulatory_parameter`                    | Authoritative for s.29 metrics; **not** Basel       | Return pack not published by BoG — see §15 |
+| Case financial workspace (legacy) | `risk_cases`, `financial_*`, `calculation_runs`, `capital_projections`       | Case analysis only                                  | **No** — structurally forbidden            |
+| Regulatory reporting templates    | `regulatory_packages`, committed BoG layouts + line maps                     | Template-authoritative: the workbook's own formulas | Yes                                        |
+| Scenario workbench                | bank facts + params, no `RegulatoryRun`                                      | Advisory / transient                                | No                                         |
 
 Source: `backend/docs/FORENSIC_CALCULATION_ARCHITECTURE_AUDIT_2026-08-21.md` §2, verified
 against `app/domain/`, `app/services/regulatory_*.py` and `app/models/`.
@@ -73,7 +73,7 @@ hand-kept list of forbidden files:
   (`test_the_forward_guard_convicts_a_planted_import`,
   `test_the_forward_guard_convicts_an_aliased_module_import`,
   `test_the_reverse_guard_convicts_a_planted_import`).
-- Naming a forbidden symbol inside a string literal is correctly *not* a dependency
+- Naming a forbidden symbol inside a string literal is correctly _not_ a dependency
   (`test_naming_a_forbidden_symbol_in_a_string_is_not_a_dependency`) — this matters
   because `app/domain/authority/registry.py` names the case plane in order to forbid it.
 
@@ -89,10 +89,10 @@ case financial records; the pure domain layer imports no application state — p
 One canonical store, two tiers (`ARCHITECTURE.md` §3b, verified in `app/services/pipeline.py`,
 `app/services/job_queue.py`, `app/worker.py`):
 
-| Tier | Job type | Writes | Purpose |
-|---|---|---|---|
-| Live | `pipeline_refresh` | `live_metrics`, `live_findings`, `current_financial_facts` | Intraday awareness; creates **zero** `RegulatoryRun` rows |
-| Official | `official_run` | immutable `RegulatoryRun` + line items + validations | The filing plane |
+| Tier     | Job type           | Writes                                                     | Purpose                                                   |
+| -------- | ------------------ | ---------------------------------------------------------- | --------------------------------------------------------- |
+| Live     | `pipeline_refresh` | `live_metrics`, `live_findings`, `current_financial_facts` | Intraday awareness; creates **zero** `RegulatoryRun` rows |
+| Official | `official_run`     | immutable `RegulatoryRun` + line items + validations       | The filing plane                                          |
 
 Ingestion is event-driven: an accepted upload or API push enqueues a debounced
 `pipeline_refresh` (coalesced on a `coalesce_key`). Official runs are minted on schedule
@@ -145,12 +145,12 @@ The purity rule is enforced by
 
 Shared primitives, all in `app/domain/`:
 
-| Primitive | Module | Lines |
-|---|---|---|
-| Metric authority registry (`ARCH-1`) | `app/domain/authority/registry.py` | 1,785 |
-| Fail-closed outcome states (`ARCH-3`) | `app/domain/authority/outcomes.py` | 386 |
-| Calculation provenance (`ARCH-4`) | `app/domain/authority/provenance.py` | 282 |
-| Policy resolver (`ARCH-2`) | `app/domain/policy/resolver.py` | 606 |
+| Primitive                             | Module                               | Lines |
+| ------------------------------------- | ------------------------------------ | ----- |
+| Metric authority registry (`ARCH-1`)  | `app/domain/authority/registry.py`   | 1,785 |
+| Fail-closed outcome states (`ARCH-3`) | `app/domain/authority/outcomes.py`   | 386   |
+| Calculation provenance (`ARCH-4`)     | `app/domain/authority/provenance.py` | 282   |
+| Policy resolver (`ARCH-2`)            | `app/domain/policy/resolver.py`      | 606   |
 
 `OutcomeState` (`outcomes.py:82-93`) declares exactly five refusal states —
 `not_computable`, `missing_required_input`, `policy_unresolved`, `data_quality_block`,
@@ -179,30 +179,29 @@ linear and single-headed (verified by reading `revision`/`down_revision` on the 
 → 202608230035 → 36 → 41 → 38 → 39 → 40 → 43 → 42 → 202608250044 → 202608280045 → 202608280046
 ```
 
-| Revision | Subject |
-|---|---|
-| `202608220027` | Row-level security on `current_financial_facts` (`P0-1`) |
-| `202608220028` | Revocable, rotating refresh tokens (`P0-5`) |
-| `202608220029` | Re-runs and verifies the historical BoG return-code recode (`P0-18`) |
-| `202608220030` | `worker_heartbeats` liveness evidence (`P0-16`) |
-| `202608220031` | Append-only triggers on approval and submission evidence (`AUD-1`) |
-| `202608220032` | Reconciliation control tables and seed (`P0-10`) |
+| Revision       | Subject                                                                |
+| -------------- | ---------------------------------------------------------------------- |
+| `202608220027` | Row-level security on `current_financial_facts` (`P0-1`)               |
+| `202608220028` | Revocable, rotating refresh tokens (`P0-5`)                            |
+| `202608220029` | Re-runs and verifies the historical BoG return-code recode (`P0-18`)   |
+| `202608220030` | `worker_heartbeats` liveness evidence (`P0-16`)                        |
+| `202608220031` | Append-only triggers on approval and submission evidence (`AUD-1`)     |
+| `202608220032` | Reconciliation control tables and seed (`P0-10`)                       |
 | `202608220033` | Temenos connection reporting currency required (jurisdiction defaults) |
-| `202608220034` | Basel HQLA haircuts and Level-2 caps in the control plane (`P0-8`) |
-| `202608230035` | Canonical withdrawal and system-of-record register |
-| `202608230036` | RLS on implied-rating runs and market-data entitlements |
-| `202608230041` | Durable operator-login lockout |
-| `202608230038` | Database-enforced governance immutability |
-| `202608230039` | Governed-parameter row identity in run provenance |
-| `202608230040` | SDI regulatory return family |
-| `202608230043` | Desk-capture content-digest de-duplication index |
-| `202608230042` | Wider admitted regulatory wire values |
-| `202608250044` | Scoped authorization bindings and authorization-version invalidation |
-| `202608280045` | Persisted live-module retry classification and schedule |
+| `202608220034` | Basel HQLA haircuts and Level-2 caps in the control plane (`P0-8`)     |
+| `202608230035` | Canonical withdrawal and system-of-record register                     |
+| `202608230036` | RLS on implied-rating runs and market-data entitlements                |
+| `202608230041` | Durable operator-login lockout                                         |
+| `202608230038` | Database-enforced governance immutability                              |
+| `202608230039` | Governed-parameter row identity in run provenance                      |
+| `202608230040` | SDI regulatory return family                                           |
+| `202608230043` | Desk-capture content-digest de-duplication index                       |
+| `202608230042` | Wider admitted regulatory wire values                                  |
+| `202608250044` | Scoped authorization bindings and authorization-version invalidation   |
+| `202608280045` | Persisted live-module retry classification and schedule                |
 
 **A transient duplicate revision id at `202608220031` occurred mid-programme and was
 resolved by re-chaining; the chain is single-headed today.**
-
 
 > ### ⚠ SUPERSEDED 2026-08-22 (close of day) — the production migration gap is CLOSED
 >
@@ -211,7 +210,7 @@ resolved by re-chaining; the chain is single-headed today.**
 > primary is at **`202608230039`**, **level with the repository head**. Every migration named
 > in this section has been applied. Verified by **effect**, not by the version string:
 > `implied_rating_runs` and `market_data_entitlements` both `rowsecurity=True forced=True
-> policies=1` with a fail-closed predicate; `reconciliation_exceptions_governed_row` and
+policies=1` with a fail-closed predicate; `reconciliation_exceptions_governed_row` and
 > `regulatory_parameter_governed_row` both present; the run parameter-provenance column
 > present; the `organization_id` RLS gap is exactly the three documented
 > `CROSS_TENANT_BY_DESIGN` tables (120 of 123 forced with a policy, 0 undocumented).
@@ -230,15 +229,10 @@ resolved by re-chaining; the chain is single-headed today.**
 
 ## 8. Deployment sharp edges recorded in the codebase
 
-These are operational constraints an acquirer inherits; each is documented in `CLAUDE.md`
-with the incident that established it.
+These are operational constraints an acquirer inherits.
 
-- Compose files deployed through Coolify must not use `${...}` interpolation (an incident
-  on 2026-07-21 corrupted the backend's environment store); services load `env_file: .env`
-  and fail-fast lives in the application's settings validators.
-- Coolify materialises only the compose file on the host — a bind mount of a repository
-  file has no source and Docker creates an empty directory in its place. Configuration
-  belongs inside the compose file.
+- [Coolify deployment rules](../../deploy/README.md#coolify-compose-rules) own compose
+  interpolation restrictions, the build-argument exception, and repository-file mount constraints.
 - Pre-creating tables on the shared primary ahead of the migration chain makes
   `risk-migrate` exit 1 on redeploy. The primary must be reconciled to head at deploy.
 - Alembic runs as the application role: data steps on FORCE-RLS tables silently no-op

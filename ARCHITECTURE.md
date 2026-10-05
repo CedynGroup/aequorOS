@@ -1,7 +1,6 @@
 # AequorOS Architecture
 
-Single source of truth for agents building new modules. Initially verified on
-2026-07-14 and updated through 2026-08-29. When this document and the code
+Single source of truth for agents building new modules. When this document and the code
 disagree, the code wins — fix this file.
 
 Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
@@ -10,14 +9,14 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
 ## 1. System map
 
-| Component                      | Path                                                                               | Stack                                                                                                                                         | Role                                                                                                                                                           |
-| ------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Risk service                   | `backend`                                                                          | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.                                                             |
-| Generated API client           | `packages/risk-service-api`                                                        | typescript-fetch output of openapi-generator 7.13                                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited.                                                   |
-| Marketing site                 | `frontend`                                                                         | [Marketing stack](frontend/README.md#stack)                                                                                                   | Static marketing site. **Out of scope for this build. Do not touch.**                                                                                          |
-| Product UI                     | `dashboard`                                                                        | [Dashboard stack](backend/dashboard/README.md#stack)                                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.                                                            |
-| Database                       | remote Postgres `<postgres-host>:<port>/<database>` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
-| Local infra (offline fallback) | `backend/docker-compose.yml`                                                       | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local`                 | Started with `docker compose up -d` from `backend`.                                                                                                            |
+| Component                      | Path                         | Stack                                                                                                                         | Role                                                                                                         |
+| ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Risk service                   | `backend`                    | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.           |
+| Generated API client           | `packages/risk-service-api`  | typescript-fetch output of openapi-generator 7.13                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
+| Marketing site                 | `frontend`                   | [Marketing stack](frontend/README.md#stack)                                                                                   | Static marketing site. **Out of scope for this build. Do not touch.**                                        |
+| Product UI                     | `dashboard`                  | [Dashboard stack](backend/dashboard/README.md#stack)                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.          |
+| Database                       | PostgreSQL                   | Application connection configured by `backend/.env`; [test database policy](backend/README.md#run-tests)                      | Schema kept at Alembic head; worker role requirements are defined in §3b.                                    |
+| Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`.                                                          |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
 `uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `dashboard`). Pre-commit config is at the repo root
@@ -29,6 +28,41 @@ and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds t
 App connection string comes from `backend/.env` (remote:
 `postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>`; local fallback:
 `postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`).
+
+### Product segments and the staff control plane
+
+- **Subdomains are product SEGMENTS, not environments.** The authenticated bank
+  product is `bank.aequoros.com`; `corp.aequoros.com` is reserved for corporate
+  treasury. Marketing stays on the apex, `api.` is the backend, `bao.` is
+  OpenBao. Changing the bank product's host means re-registering two OIDC
+  redirect URIs with every bank's IT department, so the cost only grows with
+  each SSO customer. The segments are genuinely different products over shared
+  engines, not one app with a flag: of the six modules, FTP, Basel capital and
+  IRRBB do not transfer to a corporate at all, liquidity transfers in name only
+  (LCR/NSFR are Basel ratios, corporate liquidity is cash and covenant
+  headroom), and the whole regulatory spine — BoG return families, ORASS,
+  filing attestation — is bank-only. The reusable value lives in
+  `app/domain/*`, which is pure and must stay that way. A corporate entity is a
+  SIBLING of `banks` (a `CO-` platform id alongside `BK-`/`OR-`), never a
+  nullable-heavy `banks` row — a corporate has no licence, no jurisdiction
+  regulator, no return family. Host-change configuration is owned by
+  [dashboard deployment guidance](backend/dashboard/README.md#deploy-to-bankaequoroscom).
+- **Staff control plane** (specs `docs/internal/developer.md` and
+  `docs/internal/staff_UI.md`, both with as-built notes). The operator API is the
+  backend's THIRD entrypoint (`app/operator/`, uvicorn `app.operator.main:app`
+  :8100, compose service `risk-operator`; NEVER mounted on the tenant API — a
+  route-isolation test pins it) with a cross-tenant BYPASSRLS session; the
+  console is the separate `console/` Next.js app (console.aequoros.com, all
+  traffic via its `/api/op` proxy). Staff auth mirrors the client model:
+  email+password against GLOBAL `operator_users` (separate from tenant identity
+  by design; `operator_admin` = super admin, seeded for the founder), OIDC SSO
+  secondary, dev bearer token non-production-only. Tenant onboarding runs as a
+  saga through `provision_institution`; every operator mutation lands in
+  append-only `operator_audit_log`. Workforce domain membership is identity
+  evidence, not authorization: OIDC authentication requires a matching active
+  `operator_users` row and always takes its explicit role from that row;
+  unknown or inactive identities get the same generic 401 as any other invalid
+  operator credential.
 
 ---
 
@@ -107,6 +141,23 @@ assignment SoD is authoritative, and each mutation invalidates the grantee's
 sessions transactionally. SSO request approval uses the same complete-grant
 path. This administration boundary is enforcing; ordinary product routes are
 still on the legacy gates described above.
+
+### 2.2 Institution identity is the platform ID
+
+- **Banks and organizations have no UUIDs — their identity is the platform ID.**
+  `organizations.id` (OR-XXXXXXXX) and `banks.id` (BK-XXXXXXXX) are short
+  Crockford base32 codes generated by `app/services/public_ids.py` via the model
+  defaults — the primary key, API path token, auth `org` claim, RLS GUC value,
+  and UI identity. One identity, no aliases: never reintroduce UUID columns or a
+  separate "public id" for these two entities (every other entity keeps UUID
+  PKs). The hermetic fixture pins `BK-SAMP0001`/`OR-DEM00001` (tests and e2e mint
+  against those); real tenants get generator codes at row creation. RLS policies
+  compare text — no `::uuid` casts. Records that predate the platform ID keep
+  their UUIDs where they were written: migration `202607240025` converted the
+  keys and archived the old values in `platform_id_legacy_map`; older
+  `audit_events.entity_id` values hold the historical UUID text, and older
+  regulatory run input hashes embed the UUID string and stay internally
+  consistent with their stored snapshots. New runs hash the platform ID.
 
 ---
 
@@ -312,6 +363,59 @@ day-to-day live ALM/Treasury state. New modules implement a current
 `compute_live` path and return a typed live payload; their historical and
 official reads must be explicit.
 
+### Live-engine operating rules
+
+- The live engine is two-tier (see §3b above): ingestion enqueues a debounced
+  `pipeline_refresh` job that re-derives facts and upserts `live_metrics`/`live_findings` with
+  zero `RegulatoryRun` writes, while scheduled/on-demand `official_run` jobs mint the immutable
+  filing runs. Endpoints: `GET /banks/{id}/live-summary|freshness|alerts`,
+  `POST /banks/{id}/refresh|official-runs`. `GET live-summary` is strictly read-only: ingestion,
+  market-data, governed-input, entitlement, and reconciliation mutations are the enqueue
+  authorities.
+  Module-level `availability=unavailable` is a stable structural result until one of those inputs
+  changes; only true module exceptions reuse the same job row's bounded exponential retry, with
+  classification/attempt/`next_retry_at` persisted on `live_metrics`.
+- **To assess a tenant's health, read what the PLATFORM computed — never call
+  `derive_facts` yourself.** The two tiers behave differently by design when a
+  book does not reconcile: `derive_current_facts` (live) plugs the gap, stamps
+  the fact `status="blocked"` and KEEPS SERVING, because an operator has to see
+  a broken book to fix it; `derive_facts` (official) REFUSES, because a date that
+  cannot produce a filable book must produce nothing. **A refusal from the
+  official path is therefore not a fault signal** — it is the fail-closed design
+  working, and a date with e.g. positions but no same-date GL is genuinely not
+  filable. Reading it as breakage produces false reports of large
+  reconciliation gaps and needless data withdrawals while `live_metrics` says
+  `ready`. Health checks read `live_metrics` /
+  `GET /banks/{id}/live-summary|freshness|alerts`, or the module's own service
+  (`sdi_readiness`, `sdi_views`). `tests/architecture/test_derivation_plane_boundary.py`
+  pins the caller allow-list; only `pipeline.run_official`,
+  `data_activation.activate_bank_data` and `history_loader` may call the filing
+  derivation.
+- **The stale-job reclaim window is per job type.** `reclaim_stale` requires its
+  window to EXCEED the longest legitimate handler runtime or it reclaims a live job and runs it
+  twice, concurrently with itself. A handler that outgrows the fleet default
+  (`WORKER_STALE_JOB_SECONDS`) gets an entry in `job_queue.STALE_AFTER_OVERRIDES_SECONDS`,
+  **never a bigger global number** (the global also governs how fast a genuinely dead worker's
+  jobs come back). Setting the default asserts every unlisted type finishes inside it — the
+  config comment names them. When a job exhausts `max_attempts` nothing re-enqueues it: the
+  recovery surface is `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
+  `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
+  manual on purpose — stranded jobs fail for unrelated reasons that each need a look.
+- **A REGISTERED JOB WITH NO ENQUEUE SITE IS AN INERT FEATURE, AND NOTHING REPORTS IT.**
+  A job type with a worker lane, a reclaim-window decision, a handler and passing handler
+  tests but no caller is never run, and every gate stays green because each half is correct.
+  **When you add a job type, the same change must add its enqueue site, and a test must
+  assert the caller calls it** — `tests/architecture/test_job_enqueue_reachability.py`
+  requires a reachable enqueue site for every registered type, and
+  `tests/services/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
+  build asks, a skipped build does not). Enqueue counts ride on the job's progress record so
+  "queued nothing" is distinguishable from "was never asked".
+  The same class hides elsewhere in a green suite: a guard whose rules were never proven
+  able to fire, a stale route-count tripwire, a Postgres parity suite that iterates one model
+  module while the tables live in others, and front-end surfaces whose routes work but are
+  never called. **"The endpoint exists" is not "the feature works", and a green test suite is
+  evidence about the code that was written, not about the code that was not.**
+
 ---
 
 ## 3c. Market Data Adapter framework (docs/market_data_adapter.md)
@@ -365,6 +469,51 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   enqueues due pulls per connection schedule, gated on `MARKET_DATA_PULL_ENABLED` (default
   off). Quota is tracked per (bank, vendor, month) and estimated pre-pull; enforcement beyond
   warnings is Phase 2 (§16.5).
+
+### Market-data standing rules and the research desk
+
+- Market data flows only through `app/adapters/market_data/` (see §3c above and
+  docs/market_data_adapter.md). Every adapter pull delegates to `pull_runner.execute_pull` —
+  the single writer of market-data canonical state; never persist market data elsewhere.
+  Vendor catalogs carry only spec-documented identifiers (`supported: false` otherwise —
+  never invent Bloomberg mnemonics or RICs), and raw vendor errors/fields must never reach
+  bank-facing surfaces (classify via `errors.BankFacingErrorCode`; the contract suite's
+  leak canary enforces this). Vendor naming: the Refinitiv brand is retired (Eikon is
+  LSEG Workspace; the platform APIs are the LSEG Data Platform, formerly RDP) — the
+  internal vendor id stays `refinitiv` for wire/DB stability, user-facing labels read
+  "LSEG (formerly Refinitiv)".
+- Calculation modules consume market data ONLY via `app/services/market_data.py`
+  (DataScope + as-of + institution, source attribution + staleness on every view);
+  `fact_derivation` prefers canonical market-data entities and falls back to legacy
+  `canonical_reference_rows`. Cross-source disagreement is resolved at read time
+  (most-recent-refreshed wins) — supersession applies within a source series, not across
+  vendors.
+- Vendor credentials live only in `EncryptedDbVault` (AES-256-GCM,
+  `CREDENTIAL_VAULT_MASTER_KEY`), retrieved per pull cycle and discarded; connection APIs are
+  write-only for credential material (responses expose only fingerprint/expiry/status).
+  Scheduled pulls are gated on `MARKET_DATA_PULL_ENABLED` (default off).
+- **Market research desk** (spec `docs/internal/AequorOS_Market_Data_and_Curve_Platform.md`
+  — its as-built header and calibration deviation are authoritative). Desk-as-vendor:
+  approved determinations publish into EVERY tenant through `pull_runner.execute_pull` as
+  vendor `aequor_desk` (zero quota, AEQ.* curve names so vendor rows coexist — supersession
+  keys ignore source). Global `desk_*` tables: methodology register (Track-1 weekly
+  application vs Track-2 versioned parameter changes, maker-checker everywhere), bitemporal
+  determinations, silver captures. **Rates-first weekly flow:** `desk_capture` stages a
+  pre-computed **draft** only (never auto-submits); Analyst reviews/adjusts then submits;
+  Supervisor approves. Determination-scoped `research_adjustments` (override /
+  additive_bps / assumption_note + rationale) enter `package_digest` and do not rewrite the
+  methodology register. Split QA: `rates_qa_passed` gates approve/submit/publish of rates;
+  `curves_qa_passed` is advisory for rates publish (curve scopes omitted when false). Quant
+  lib `app/domain/curves/` is pure. Nightly job behind `DESK_CAPTURE_ENABLED`.
+  **Entitlements (spec §10):** `market_data_entitlements` grants org × dataset (tiers
+  core/standard/premium); default standard when no rows; publish + market-data reads filter
+  AEQ curves / GHS indices accordingly. The credit curve `AEQ.GHS.CORP` is built from liquid
+  GFIM corporate yields when present; true OIS uses methodology
+  `discounting_mode=ois_bootstrap` + `GHS.OIS.*` (falls back to synthetic AGD). Capture
+  snippet viewer: `GET .../captures/{id}/content`. Engines: `get_discount_curve` prefers
+  AEQ.{ccy}.OIS — EVE/duration discount on it when published, byte-identical fallback
+  otherwise (the golden suites prove the fallback; never edit goldens to make dual-curve
+  changes fit).
 
 ---
 
@@ -494,10 +643,11 @@ and zero with no GUC set.
 every member resolves to a mapped column; filters become bound parameters under
 a whitelisted operator set; grouping, pivot and subtotals are computed
 server-side. There is no `text()` anywhere in `app/services/bi` or
-`app/domain/bi` beyond two named constants that set the statement timeout and
-read-only flag — pinned by an AST guard that proves itself against deliberate
-violations, plus Hypothesis fuzzing that asserts no client string ever reaches
-the compiled SQL.
+`app/domain/bi`. The executor alone may call `exec_driver_sql` with two named
+constant statements that set the statement timeout and read-only flag; the
+timeout is a bound parameter. This boundary is pinned by
+`tests/architecture/test_bi_compiler_injection.py`, which proves its AST guard
+against deliberate violations and fuzzes client input with Hypothesis.
 
 **BI gets its own worker lane** (`risk-worker-bi`, `WORKER_JOB_TYPES=lane:bi`)
 because `claim_next` is FIFO across types and a backfill would otherwise starve
@@ -663,6 +813,109 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   deployment decision. The production
   turn-on order is `backend/docs/bi_turn_on_runbook.md`.
 
+### BI working rules
+
+- **BI plane** (spec `docs/bi.md`, which is not published; working ledger in the gitignored
+  `.ai/BI_*.md`). Governed analytics over the bank's own treasury data, so a bank can drop
+  its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows
+  (current generation only), `live_metrics`, `regulatory_runs` and the registers, and writes
+  **the `bi_*` tables plus `ai_commentary_drafts`** (from `app/jobs/bi_commentary.py`; the
+  write guard scans every BI-owned module and names that one permitted write); the
+  regulatory plane never imports BI except the two enqueue-seam modules
+  (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder,
+  catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins it,
+  `derive_facts` included. **Engine metrics are COPIED, never recomputed**, and portfolio
+  measures reuse the engines' own pure functions out of `app/domain/` — one definition, not
+  a BI copy.
+- **Nothing is mounted by default:** all six `BiSettings` booleans (`BI_ENABLED`,
+  `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`, `BI_ALERTS_ENABLED`,
+  `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`) default off, so every BI route 404s until
+  `BI_ENABLED` is set; `GET /feature-flags` projects all six. Turning it on is the ORDERED
+  sequence in `backend/docs/bi_turn_on_runbook.md`, and `risk-worker-bi` (the `bi`-lane job
+  types) must be DEPLOYED before the enqueue flag flips or every job it produces strands in
+  `queued` (the shared `jobs` table hazard). **`CATALOGUE_VERSION` and `BUILDER_VERSION` both
+  enter the build fingerprint**, so bumping either forces a full mart rebuild per tenant —
+  bump deliberately.
+- **Postgres does not inherit RLS onto partitions.** The marts' monthly and yearly children
+  are created and dropped ONLY by migration-owned `SECURITY DEFINER` functions
+  (`bi_ensure_month_partition` and siblings) that apply ENABLE+FORCE RLS and the tenant
+  policy to every child; the app role runs no raw `CREATE TABLE`. A cross-tenant read must
+  return zero rows through the parent, a named child and the DEFAULT partition alike. **A
+  green Postgres run is not evidence of this** — an RLS test self-skips at exit 0 when the
+  `TEST_DATABASE_URL` role bypasses RLS or when `TEST_DATABASE_URL` is not exported, and
+  privilege proofs need `CREATEROLE`. Check that the intended RLS and privilege proofs
+  actually ran. `risk-service:test-postgres-schema` provisions a local `NOBYPASSRLS`
+  test role with `CREATEROLE` and requires the privilege proofs to run; a supplied URL
+  must provide equivalent privileges. See [test database setup](backend/README.md#run-tests).
+- **Missing data is never zero, structurally.** A measure with no target has no
+  `bi_fact_target` row; a widget with no data says `needs_data: <dataset>` (or
+  `pending_capability` when the gap is platform work, not the bank's book); an insight may
+  only restate a typed fact, so it cannot describe a missing figure as flat; the ratio
+  bridge refuses rather than emitting a leg worth nothing. Never "fix" one of these by
+  defaulting to 0 — that is the defect they exist to prevent.
+- **A filter can itself disclose**, so `authorize_query` evaluates every distinct (module,
+  sensitivity) across measures, dimensions AND filters, deny-by-default, and export
+  authority is derived from the member set the query touches — never a client flag, and
+  re-checked after compilation where the second check can only refuse.
+- **No `text()` in `app/services/bi` or `app/domain/bi`** (an AST guard that proves
+  itself), no currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
+  `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_` fact
+  categories and the `refinitiv` vendor id.
+- **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a
+  different capital regime and is refused the packs surface until its own pack set ships
+  (the gate resolves through the authority registry and opens by itself).
+- **BI tables span three model modules** (`app/models/bi.py`, `bi_content.py`,
+  `bi_notifications.py`), and three registries each convict you by name if you miss a new
+  table: the plane guard's `BI_OWNED` globs, its writable-table derivation, and the table
+  census that requires every `bi_*` table to be named by exactly one module's tuple. **Check
+  which Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py`
+  reads `app/models/bi.py` ALONE, and `tests/db/test_bi_phase3_migration.py` gives the other
+  modules' tables column, CHECK and FORCE-RLS parity. Without that parity a column too narrow
+  for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
+  tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the
+  wrong number.
+- A shared dashboard carries **no** owner authority (the widget resolver is not given the
+  owner), and a subscription delivery is rendered **as each recipient**, asserted by the
+  recipient's name appearing in the artifact's own provenance bytes. A range query over a
+  stock measure carries a REDUNDANT static window bound beside its subquery — do not
+  "simplify" it away: Postgres prunes partitions at plan time and cannot see a subquery, so
+  without it a twelve-month question scans every month the mart holds.
+- **A CALCULATED MEASURE IS AUTHORIZED AS THE FIGURES ITS TEXT NAMES, never as itself** — the
+  walk re-parses the APPROVED expression server-side every time and never reads the stored
+  member column. **The alert and on-new-data triggers live in the `bi_mart_refresh` HANDLER,
+  not in `refresh_bank_as_of`**: the backfill calls the builder once per date, so a hook
+  inside it would mail a bank a thousand board packs, and the builder's `skipped` outcome is
+  what makes both triggers idempotent.
+- **A binding is a five-dimension sentence.** Data scope is REAL:
+  `authorization_bindings.data_scope_kind/values`, reduced PER CAPABILITY by
+  `authorization.reduce_data_scope` — never union ids matched against different resources
+  (`services/bi/authorization.py` and `services/bi/feeds/authorization.py` both go through
+  the shared `combine_pair_scopes`) — resolved by `services/bi/data_scope.py` and injected
+  BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py`
+  reports it (`data scope` column, `scoped_reader` flag) and is the gate for any change that
+  touches it. `bi_reader` is the second machine bundle (`{view}`, disjoint from
+  `integration_writer`'s `{ingest}`) for the Stage B feed (`backend/docs/powerbi_stage_b.md`);
+  Stage A is `powerbi_stage_a.md`.
+- **BI carries NO reconciliation to the regulatory returns:** treasury/ALM and the
+  regulatory spine are different planes, and BI is intelligence over the bank's own treasury
+  data. There are no regulatory reconciliation checks, no trust badge on BI payloads or
+  cards, no export "Data confidence" field and no `X-Bi-Feed-Trust` header. **Build FRESHNESS
+  stays** (`bi_mart_builds`, fingerprints, `provenance.stale_dates`) — a stale build is about
+  the bank's data, not a regulator — and the stale-date signal needs a surface of its own
+  (audit A360 H2). Never put a regulatory verdict on a BI surface.
+- **Natural-language questions** (`ask` routes, `bi_nlq_translate` on the `ai` lane): the
+  shipped consent text (`ai-consent-2026-09-v2`) describes the question surface, so `bi_nlq`
+  is in `CONSENT_COVERED_FEATURES`. **The rule is enforced at the EGRESS gate, not in a
+  request schema**: `gates.evaluate` refuses any feature the shipped consent text does not
+  describe, at enqueue AND run, so a settings row written by any other path cannot out-rank
+  the document. Adding a feature to that tuple without a consent section covering it is the
+  defect. Reaching a tenant also needs the deployment flags, `risk-worker-ai`, a non-empty
+  `approved_configurations.json` and the Owner's consent.
+- `backend/dashboard` charts with ECharts and has no Recharts importer (`console/` still
+  imports Recharts and is outside the BI scope). When a BI document and the code disagree,
+  check the dated as-built notes in `docs/bi.md` before trusting a mechanism the prose
+  describes — the code wins.
+
 ---
 
 ## 4. Findings infrastructure
@@ -750,6 +1003,59 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
    `FromJSON`/`ToJSON`/`*Api` classes from `@aequoros/risk-service-api`; never hand-roll payload
    shapes (see CODEBASE_CONVENTIONS for the two sanctioned wrapper patterns).
 
+### Generated-client hazards
+
+- Regenerate scenario and other API contracts with
+  `mise run risk-service:openapi-client`; validate the generated package with
+  `pnpm --filter @aequoros/risk-service-api test`.
+- **Regenerating while a `next dev` server is up poisons it — restart the
+  dashboard.** The task DELETES and rewrites `packages/risk-service-api/src`, so a
+  running dev server reading `src/index.ts` mid-rewrite caches the failure and then
+  serves **404 for every `/_next/static/chunks/*`** while still returning 200 for the
+  HTML. The symptom is a WHITE PAGE with no console error worth the name, and it does
+  not self-heal on reload. Fix: `rm -rf backend/dashboard/.next` and restart the dev
+  server.
+- **Two schema shapes break generation itself:** two Pydantic classes sharing a NAME
+  across modules (FastAPI then emits `app__schemas__x__Name` component keys the
+  generator cannot map back), and a `Decimal` form field (Pydantic types it
+  `number | string`, and the alias lands in an operation request interface, not in
+  `src/models/`).
+- **A STALE GENERATED CLIENT DROPS A NEW REQUEST FIELD SILENTLY, AND THE SERVER THEN
+  DEFAULTS IT.** The two directions degrade differently, and only one of them is
+  visible. `<Model>FromJSON` opens with `...json`, so an unknown RESPONSE field
+  survives under its snake_case wire name — a frontend reading the camelCase property
+  gets `undefined`, which surfaces as an obvious bug. `<Model>ToJSON` has **no spread**:
+  it returns a hand-enumerated object literal of exactly the keys the generator knew
+  about, so a REQUEST field added to an existing schema is stripped in the browser, the
+  server applies its column default, and the API answers 201. That is not a type error
+  and no frontend test sees it. For example, posting a `ScopedGrantInput` whose
+  `data_scope_kind` / `data_scope_values` the client does not know through the
+  generated `authorizationApi` stores a grant an Org Owner narrowed to two branches as
+  **the whole institution, with a success dialog** — privilege widening reported as
+  success. So after adding a field to a schema an existing route already accepts,
+  either regenerate before the surface ships, or post through a hand-written transport
+  that reuses the generated `FromJSON` parsers plus `normalizeApiError`, and pin a test
+  that FAILS if the generated write operation is called again. Delete the transport at
+  regeneration; an interim one that outlives it is a second contract nobody is checking.
+  **When you delete it, invert the tripwire rather than dropping it:** the test that
+  forbade the generated operation becomes one asserting the transport is gone AND that
+  every field the generated serializer emits is one the caller states — a field the
+  contract carries and the caller leaves unset is still decided by the server's column
+  default, so the same widening returns the next time the schema grows. Give the
+  builders the generated request-model TYPES; then the compiler checks the shape
+  instead of a second literal.
+- **Not every hand-written transport is the interim kind.** `lib/api/askTransport.ts`
+  is permanent; deleting it breaks the feature. The test is which way the serializer
+  hurts you. An INTERIM transport exists because the client does not yet know a FIELD,
+  and a fresh client retires it. A PERMANENT one exists because a value must travel
+  **unmodified** through a layer that rewrites every value it understands, and no
+  generation changes that: BI's confirm-what-you-were-shown contract digests the
+  proposal on both sides, `ToJSON` drops what it does not know (digest mismatch) and
+  `FromJSON` spreads the raw JSON and then re-adds known fields under camelCase (so
+  `top_n` returns as `top_n` AND `topN`, and `BiQuery` is `extra="forbid"` — a 422 on a
+  question the reader confirmed). Carry such a value as opaque JSON end to end, and pin
+  BOTH directions against the generated package's own source.
+
 ---
 
 ## 7. Cash-flow ML module (`backend/app/ml`)
@@ -782,7 +1088,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | Target                   | Commands                                                                                                                                                                                                                                                                              |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`                                                                                                                                                            |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                        |
+| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                      |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                      |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); package-capable Playwright specs need S3/MinIO, while storage-free specs do not) |
 | marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                     |
@@ -810,6 +1116,21 @@ The hermetic SQLite suite remains available to developers as `mise run risk-serv
 CI no longer exercises SQLite compatibility. Postgres suite ownership is defined in the
 task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 [the CI wiring guard](backend/tests/architecture/test_ci_task_wiring.py).
+
+### CI enforcement
+
+- **CI enforces every surface.** `risk-service.yml` gates the backend, `dashboard.yml`
+  gates typecheck + **lint** + **test** + build, `web.yml` gates `frontend` lint+build
+  and `console` typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml`
+  runs the dashboard Playwright journeys against disposable MinIO. See
+  [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for the
+  reasoned, size-pinned quarantine and the canonical fixture carried forward through the
+  last month end on or before today. These gates are what enforce the dashboard's
+  fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
+  and `console/`. Each workflow's header comment is its gate inventory — keep it
+  accurate. Which Postgres job owns which test suites is defined by the
+  `risk-service:test-postgres-*` task comments in `backend/mise.toml` and pinned by
+  `tests/architecture/test_ci_task_wiring.py`.
 
 ---
 
@@ -867,6 +1188,23 @@ remains architectural debt; the Command Center contract and polling policy are u
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.
+
+### Liquidity, stress and capital extensions
+
+- **product.md §Phase 2 is fully built.** All 11 LMTD appendix tables; per-currency gaps +
+  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
+  notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
+  `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
+  (`app/domain/capital/ecl.py`; active only when `ecl_exposure` facts AND the
+  `ecl-assumptions` register exist — otherwise the ingested-provisions path is
+  byte-identical) + CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
+  `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
+  (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
+  it). LAS-QUARTERLY is registry+calendar REAL but generates `template_pending` until the
+  official form lands (never infer a BoG layout); the monthly balance-sheet + P&L pack is
+  filed as the official BSD2 and BSD7A forms. The executable completion proof is
+  `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
+  exports (or refuses by design) over the full official-run sweep; keep it green.
 
 ### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
 
