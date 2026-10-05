@@ -2289,7 +2289,7 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
             db, ctx, bank, package, permission, surface=surface, conditions=conditions
         )
         return PackageAccess(ctx=ctx, bank=bank, package=package)
-    # A mutation on a gated family is a scoped human act. No impersonation, an
+    # A package mutation is a scoped human act. No impersonation, an
     # interactive principal with a current ``authv`` — and NO scalar role check,
     # because a scalar role must never satisfy a scoped surface.
     scoped = get_scoped_mutation_tenant_context(ctx)

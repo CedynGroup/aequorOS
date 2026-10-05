@@ -721,7 +721,6 @@ further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
 
-
 ## Whole-institution figures and Credit-only narrowing
 
 Corrected 2026-10-04. `scoped_authorization` defaults
@@ -730,7 +729,7 @@ Corrected 2026-10-04. `scoped_authorization` defaults
 mutations and chain decisions. A matching binding is insufficient when its
 matched data scopes do not include the whole institution. The refusal reason
 is `institution_grain_requires_whole_institution`. A whole-book binding for a
-*different* resource never cancels narrowing on this one.
+_different_ resource never cancels narrowing on this one.
 
 Only Credit supports new branch/region grants. `ScopedGrantInput`, public grant
 administration, the low-level binding service, and the database enforce that
@@ -771,15 +770,17 @@ REG/restricted VIEW; ICAAP retains CAPITAL/confidential and its workspace
 freeze rules. Generation additionally requires REG/restricted RUN. Package
 lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
-without that authority. Ordinary approval, signing and nomination no longer
-fall back to scalar roles; the action permission and maker/checker conditions
-remain required. A visible return without the action permission returns 403;
-an invisible return returns 404. Report comparisons use the same whole-book
-module authority as regulatory-run details.
+without that authority. Package comparisons filter both referenced packages by
+family before disclosing mismatches. Ordinary approval, signing and nomination
+no longer fall back to scalar roles; the action permission and maker/checker
+conditions remain required. Caller-owned signer identity and signature-appearance setup
+require an interactive human with current authorization, without a scalar-role
+gate; setup confers no package access or signing authority. A visible return
+without the action permission returns 403; an invisible return returns 404.
+Report comparisons use the same whole-book module authority as regulatory-run details.
 
-The deadline worker uses a separate tenant/bank-scoped lifecycle projection to
-track filed returns and pending ORASS re-uploads; it serves no snapshot figures
-and tenant routes never call it.
+Calendar redaction and filing-notification visibility follow
+[the reporting disclosure contract](../../docs/regulatory_reporting.md#filing-state-disclosure).
 
 No return authority is inferred or backfilled. Existing whole-institution REG
 (or explicit all-module/all-sensitivity) grants continue to qualify according

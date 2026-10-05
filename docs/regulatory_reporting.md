@@ -19,9 +19,10 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
   production channel `orass_api`** (real httpx transport/auth/TLS; provisional
   wire contract concentrated in one block; connectivity failures route to the
   BG/FMD/2026/07 email fallback) alongside the labeled `orass_sandbox` simulator.
-- **W2 — control.** `decide-approval`, `submit`, `poll`, and resubmission
-  decisions require the `approver` role (ORASS Principal-only-submit mirror); a
-  real `listOrganizationUsers` directory replaces demo officers; channel config
+- **W2 — control.** Package actions now follow the
+  [scoped family contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+  and [separate transmission authority](../backend/docs/filing_submit_authority_rollout.md).
+  A real `listOrganizationUsers` directory replaces demo officers; channel config
   carries the ORASS principal/secondary user identities.
 - **W3 — notifications.** `notifications` table + emission on approval-request /
   approval-decision / regulator-decision; a daily `reporting_deadline_scan` worker
@@ -185,8 +186,10 @@ keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
   plus at most one submission-event query for pending ORASS re-uploads; horizon growth does not
   increase their SQL query count. Obligations are due-date ordered and may be sliced with
   `limit`/`offset` after the complete horizon is built. `summary` (overdue, due soon, on track,
-  and pending ORASS re-upload), `total`, and `has_more` describe the complete horizon, not just
-  the returned page. Omitting `limit` preserves the original full-horizon response. The contract
+  and pending ORASS re-upload) counts only visible filing state; `total` and `has_more`
+  include public obligations even when their family is hidden. All describe the complete
+  horizon, not just the returned page; see [disclosure below](#filing-state-disclosure).
+  Omitting `limit` preserves the original full-horizon response. The contract
   is pinned by
   `tests/services/test_regulatory_reporting_calendar_query_shape.py`.
 
@@ -233,8 +236,9 @@ it and `anchor_dates` yields none — expanding its nominal frequency would fabr
 figures are still the bank's position as of some date, resolved exactly like every other return, so
 `list_return_anchors` offers the positions the bank actually holds: `anchors.computed_snapshot_dates`
 (on or before `as_of`, newest first, bounded by `EVENT_DRIVEN_SNAPSHOT_LIMIT`), every one
-`computed`, none carrying a deadline (`due_date` is null, so `rag` reads `on_track` exactly as it
-does for an unconfigured governed deadline). The payload's `reporting_date_source` says which kind
+`computed`, none carrying a deadline (`due_date` is null, so an authorized reader sees
+`rag=on_track`, as for an unconfigured governed deadline; hidden families have `rag=null`).
+The payload's `reporting_date_source` says which kind
 of date it offers — `regulator_anchor` or `computed_snapshot`. The Returns workspace keeps the
 "Reporting date" label and adds a hint explaining computed position dates for event-driven packs.
 The institution register's "Generate LRT packs" link carries the newest position so the pack opens
@@ -277,6 +281,28 @@ the calendar still never lists event-driven packs as obligations.
   exception:** no regulator date exists, so they take their as-of date from the bank's
   computed snapshots (`anchors.computed_snapshot_dates`, labelled
   `reporting_date_source='computed_snapshot'`) — rule in §5a above.
+
+### Filing-state disclosure
+
+Calendar obligations and reporting-date anchors retain public schedule metadata
+when the caller cannot read the return family. Package identifiers, status and
+version are withheld, `rag` is null, and those rows contribute nothing to the
+filing-state summary, including overdue and pending-re-upload counts. The
+calendar displays “Restricted”, so a hidden filed return is never presented as
+an overdue unfiled return. Family authority is defined in the
+[foundation contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+
+The deadline worker uses `calendar.deadline_scan_obligations`, a tenant/bank-scoped
+lifecycle projection independent of a human grant, to distinguish filed returns,
+arrears and pending ORASS re-uploads. Tenant routes never call this projection.
+At disclosure time, `notifications.visibility_conditions` applies current family
+visibility to deadline and package notifications in addition to tenant/recipient
+scope. The same filter governs lists, totals, unread badges, individual mark-read
+responses (404 when hidden), mark-all-read and each email-mirror recipient. An
+org-wide notification or an administrator email destination confers no return
+access. The HTTP contract is pinned by
+`backend/tests/api/test_notification_authorization.py`; calendar and anchor
+redaction by `backend/tests/api/test_narrowed_institution_figures.py`.
 
 ## 6. API (`app/features/manage_regulatory_reporting.py`)
 

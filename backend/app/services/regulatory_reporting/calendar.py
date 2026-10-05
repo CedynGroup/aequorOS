@@ -5,6 +5,8 @@ reporting dates inside the horizon, each with its deadline-rule due date, the
 current non-superseded solo package covering it, and a RAG grade —
 ``overdue`` (deadline passed without a submitted/acknowledged package),
 ``due_soon`` (deadline within the warning window), else ``on_track``.
+A hidden family has no package linkage or RAG; its public obligation remains,
+but contributes nothing to filing-state summaries.
 
 Downtime semantics (BoG Notice BG/FMD/2026/07): a package submitted via the
 email fallback is NOT complete until re-uploaded through ORASS, so a
@@ -33,6 +35,7 @@ from app.models import (
 )
 from app.schemas.regulatory_reporting import (
     ObligationAnnexRead,
+    ObligationRag,
     ReportingDateSource,
     ReportingObligationListRead,
     ReportingObligationRead,
@@ -164,7 +167,7 @@ def _rag(
     package_status: str | None,
     *,
     pending_orass_reupload: bool = False,
-) -> str:
+) -> ObligationRag:
     if package_status in _COMPLETED_STATUSES and not pending_orass_reupload:
         return "on_track"
     if due_date is None:

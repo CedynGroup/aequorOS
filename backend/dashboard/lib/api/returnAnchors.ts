@@ -15,7 +15,7 @@
  * is for.
  */
 
-import { isoDate } from './values';
+import { isoDate } from "./values";
 
 /** One selectable reporting date, reduced to what the picker renders. */
 export type ReportingDateOption = {
@@ -35,12 +35,12 @@ type AnchorLike = {
 };
 
 export function toReportingDateOptions(
-  anchors: readonly AnchorLike[]
+  anchors: readonly AnchorLike[],
 ): ReportingDateOption[] {
   return anchors.map((anchor) => ({
     date: isoDate(anchor.reportingDate),
-    hasComputedPosition: anchor.dataStatus === 'computed',
-    isOverdue: anchor.rag === 'overdue',
+    hasComputedPosition: anchor.dataStatus === "computed",
+    isOverdue: anchor.rag === "overdue",
   }));
 }
 
@@ -53,9 +53,11 @@ export function toReportingDateOptions(
  */
 export function reportingDateOptionLabel(option: ReportingDateOption): string {
   const notes: string[] = [];
-  if (option.isOverdue) notes.push('past due');
-  if (!option.hasComputedPosition) notes.push('no figures yet');
-  return notes.length > 0 ? `${option.date} — ${notes.join(', ')}` : option.date;
+  if (option.isOverdue) notes.push("past due");
+  if (!option.hasComputedPosition) notes.push("no figures yet");
+  return notes.length > 0
+    ? `${option.date} — ${notes.join(", ")}`
+    : option.date;
 }
 
 /**
@@ -68,7 +70,7 @@ export function reportingDateOptionLabel(option: ReportingDateOption): string {
  */
 export function defaultReportingDate(
   options: readonly ReportingDateOption[],
-  asOf: string | undefined
+  asOf: string | undefined,
 ): string | undefined {
   if (options.length === 0) return undefined;
   const dates = options.map((option) => option.date).sort();

@@ -2,9 +2,10 @@
 
 The `notifications` table is the outbox: rows with ``emailed_at IS NULL`` are
 pending. The worker job drains them per organization — user-directed rows go
-to that user's email; org-wide rows fan out to active admin users — then
-stamps ``emailed_at``. Delivery is strictly best-effort and post-commit (the
-worker reads committed rows), so a rolled-back business transaction can never
+to that user's email; org-wide rows fan out to active admin users. Each
+recipient must pass the same visibility filter as the inbox before delivery.
+The worker then stamps ``emailed_at``. Delivery is strictly best-effort and
+post-commit (the worker reads committed rows), so a rolled-back business transaction can never
 send email, and an SMTP outage never fails a business action: undelivered
 rows simply wait for the next cycle.
 

@@ -4,7 +4,7 @@
 atomic with the state change that caused it (the caller commits). Role
 fan-out targets every active user holding the role *or higher* per the
 ``app.core.security.ROLES`` hierarchy; ``recipient_user_id=None`` with no
-role means one org-wide row every user in the tenant can see.
+role means one org-wide row, subject to the read-side visibility rules below.
 
 Read-side visibility: recipient and tenant scope also require return-family
 authority for filing notifications.

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared vocabulary for the Regulatory Reporting hub: family/status/RAG/
@@ -16,76 +16,76 @@ import type {
   ObligationRag,
   PackageStatus,
   ResubmissionStatus,
-} from '@aequoros/risk-service-api';
-import { FlaskConical } from 'lucide-react';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+} from "@aequoros/risk-service-api";
+import { FlaskConical } from "lucide-react";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import {
   REHEARSAL_BODY,
   REHEARSAL_HEADLINE,
   REHEARSAL_SHORT,
-} from '@/components/icaap/p3/labels';
-import { apiBaseUrl } from '@/lib/api/client';
-import { getAccessToken } from '@/lib/api/token';
+} from "@/components/icaap/p3/labels";
+import { apiBaseUrl } from "@/lib/api/client";
+import { getAccessToken } from "@/lib/api/token";
 
 // ---------------------------------------------------------------------------
 // Labels + tones
 // ---------------------------------------------------------------------------
 
 export const FAMILY_LABELS: Record<string, string> = {
-  liquidity: 'Liquidity',
-  capital: 'Capital',
-  irrbb: 'IRRBB',
-  fx: 'FX',
+  liquidity: "Liquidity",
+  capital: "Capital",
+  irrbb: "IRRBB",
+  fx: "FX",
   // The ICAAP report itself, minted by freezing an ICAAP cycle. Distinct from
   // `icaap_stress`, which is the stress annexes that accompany it.
-  icaap: 'ICAAP',
-  icaap_stress: 'ICAAP & Stress',
-  large_exposures: 'Large Exposures',
-  corporate: 'Corporate (LRT)',
-  dbk: 'Daily Returns (DBK)',
+  icaap: "ICAAP",
+  icaap_stress: "ICAAP & Stress",
+  large_exposures: "Large Exposures",
+  corporate: "Corporate (LRT)",
+  dbk: "Daily Returns (DBK)",
 };
 
 export const CHANNEL_LABELS: Record<ChannelCode, string> = {
-  orass_api: 'ORASS (API)',
-  orass_sandbox: 'ORASS (sandbox)',
-  email: 'Email fallback',
-  manual: 'Manual record',
+  orass_api: "ORASS (API)",
+  orass_sandbox: "ORASS (sandbox)",
+  email: "Email fallback",
+  manual: "Manual record",
 };
 
 const PACKAGE_STATUS_TONES: Record<PackageStatus, StatusTone> = {
-  draft: 'slate',
-  generated: 'action',
-  validated: 'action',
-  pending_approval: 'amber',
-  approved: 'success',
-  submitted: 'action',
-  acknowledged: 'success',
-  rejected: 'critical',
-  declined: 'critical',
-  superseded: 'slate',
+  draft: "slate",
+  generated: "action",
+  validated: "action",
+  pending_approval: "amber",
+  approved: "success",
+  submitted: "action",
+  acknowledged: "success",
+  rejected: "critical",
+  declined: "critical",
+  superseded: "slate",
 };
 
 export const PACKAGE_STATUS_LABELS: Record<PackageStatus, string> = {
-  draft: 'Draft',
-  generated: 'Generated',
+  draft: "Draft",
+  generated: "Generated",
   // NOT "Validated". `validated` is the rules engine reporting that the return
   // has no errors — a machine result, not an officer's decision — and a bank
   // reading it as "the Validator signed off" is the misreading this whole
   // redesign is correcting (docs/filing_workflow_redesign.md §3.1). The word
   // now belongs to the Validator, the officer who files the return.
-  validated: 'Checks passed',
-  pending_approval: 'Pending approval',
-  approved: 'Approved',
-  submitted: 'Submitted',
-  acknowledged: 'Acknowledged',
-  rejected: 'Rejected',
-  declined: 'Declined',
-  superseded: 'Superseded',
+  validated: "Checks passed",
+  pending_approval: "Pending approval",
+  approved: "Approved",
+  submitted: "Submitted",
+  acknowledged: "Acknowledged",
+  rejected: "Rejected",
+  declined: "Declined",
+  superseded: "Superseded",
 };
 
 export function PackageStatusPill({ status }: { status: PackageStatus }) {
   return (
-    <StatusPill tone={PACKAGE_STATUS_TONES[status] ?? 'pending'}>
+    <StatusPill tone={PACKAGE_STATUS_TONES[status] ?? "pending"}>
       {PACKAGE_STATUS_LABELS[status] ?? status}
     </StatusPill>
   );
@@ -110,7 +110,7 @@ export function PackageStatusPill({ status }: { status: PackageStatus }) {
  * The words are the ICAAP workspace's own (`components/icaap/p3/labels.ts`) —
  * one vocabulary for one thing, never a second one invented here.
  */
-export function RehearsalPill({ className = '' }: { className?: string }) {
+export function RehearsalPill({ className = "" }: { className?: string }) {
   return (
     <span
       title={REHEARSAL_HEADLINE}
@@ -132,7 +132,7 @@ export function RehearsalNotice({ detail }: { detail?: string }) {
     >
       <FlaskConical size={13} className="mt-0.5 shrink-0" aria-hidden />
       <span>
-        <strong className="font-medium">{REHEARSAL_HEADLINE}.</strong>{' '}
+        <strong className="font-medium">{REHEARSAL_HEADLINE}.</strong>{" "}
         {detail ?? REHEARSAL_BODY}
       </span>
     </p>
@@ -140,15 +140,15 @@ export function RehearsalNotice({ detail }: { detail?: string }) {
 }
 
 const RESUBMISSION_STATUS_TONES: Record<ResubmissionStatus, StatusTone> = {
-  requested: 'amber',
-  granted: 'success',
-  denied: 'critical',
+  requested: "amber",
+  granted: "success",
+  denied: "critical",
 };
 
 export const RESUBMISSION_STATUS_LABELS: Record<ResubmissionStatus, string> = {
-  requested: 'Requested',
-  granted: 'Granted',
-  denied: 'Denied',
+  requested: "Requested",
+  granted: "Granted",
+  denied: "Denied",
 };
 
 export function ResubmissionStatusPill({
@@ -164,15 +164,15 @@ export function ResubmissionStatusPill({
 }
 
 const RAG_TONES: Record<ObligationRag, StatusTone> = {
-  overdue: 'critical',
-  due_soon: 'amber',
-  on_track: 'success',
+  overdue: "critical",
+  due_soon: "amber",
+  on_track: "success",
 };
 
 export const RAG_LABELS: Record<ObligationRag, string> = {
-  overdue: 'Overdue',
-  due_soon: 'Due soon',
-  on_track: 'On track',
+  overdue: "Overdue",
+  due_soon: "Due soon",
+  on_track: "On track",
 };
 
 export function RagPill({ rag }: { rag: ObligationRag | null }) {
@@ -186,18 +186,18 @@ export const FIDELITY_INFO: Record<
   { tone: StatusTone; blurb: string }
 > = {
   CONFIRMED: {
-    tone: 'success',
-    blurb: 'Official appendix structure verified from the published directive.',
+    tone: "success",
+    blurb: "Official appendix structure verified from the published directive.",
   },
   PARTIAL: {
-    tone: 'amber',
+    tone: "amber",
     blurb:
-      'Directive-described; the official appendix is not fully public — unpublished parameters follow Basel defaults.',
+      "Directive-described; the official appendix is not fully public — unpublished parameters follow Basel defaults.",
   },
   REPRESENTATIVE: {
-    tone: 'slate',
+    tone: "slate",
     blurb:
-      'Professional reconstruction — the official form is not public; nothing invented is passed off as official.',
+      "Professional reconstruction — the official form is not public; nothing invented is passed off as official.",
   },
 };
 
@@ -216,61 +216,61 @@ export function FidelityPill({ fidelity }: { fidelity: FidelityGrade }) {
 // ---------------------------------------------------------------------------
 
 export const DEADLINE_RULE_TEXT: Record<string, string> = {
-  BSD3: 'Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027). The LCR deadline is assumed to match until the LCR Directive is published (research gap G1).',
-  LMT: 'Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027).',
-  BSD2: 'Monthly — day 14 of the following month is a placeholder: the official CAR return deadline is UNKNOWN in the public record (research §2 row 7).',
-  'IRRBB-PILOT':
-    'Quarterly pilot — due within 9 days after quarter end (IRRBB Guideline ¶11, ¶55 — Feb 2026 exposure draft, stated effective 1 Jan 2027).',
-  'FX-NOP':
-    'Monthly summary registered by AequorOS — day 10 of the following month (placeholder). The confirmed BoG obligation is DAILY Bank Returns (DBK) by 10:00 a.m. the next business day via ORASS.',
-  'ICAAP-STRESS':
-    'Annual — due by 31 March of the ensuing year (ICAAP Guideline ¶72; Stress Testing Guideline ¶67). Both are Feb 2026 exposure drafts stated effective 1 Jan 2027, not yet in force.',
+  BSD3: "Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027). The LCR deadline is assumed to match until the LCR Directive is published (research gap G1).",
+  LMT: "Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027).",
+  BSD2: "Monthly — day 14 of the following month is a placeholder: the official CAR return deadline is UNKNOWN in the public record (research §2 row 7).",
+  "IRRBB-PILOT":
+    "Quarterly pilot — due within 9 days after quarter end (IRRBB Guideline ¶11, ¶55 — Feb 2026 exposure draft, stated effective 1 Jan 2027).",
+  "FX-NOP":
+    "Monthly summary registered by AequorOS — day 10 of the following month (placeholder). The confirmed BoG obligation is DAILY Bank Returns (DBK) by 10:00 a.m. the next business day via ORASS.",
+  "ICAAP-STRESS":
+    "Annual — due by 31 March of the ensuing year (ICAAP Guideline ¶72; Stress Testing Guideline ¶67). Both are Feb 2026 exposure drafts stated effective 1 Jan 2027, not yet in force.",
 };
 
 /** Section sheet titles per template id (display list for the Templates tab). */
 export const TEMPLATE_SECTIONS: Record<string, string[]> = {
-  'bog-bsd3-liquidity-v1': [
-    'Stock of HQLA',
-    'Cash Outflows (30 days)',
-    'Cash Inflows (30 days)',
-    'Liquidity Coverage Ratio Summary',
-    'Available Stable Funding',
-    'Required Stable Funding',
-    'Net Stable Funding Ratio Summary',
+  "bog-bsd3-liquidity-v1": [
+    "Stock of HQLA",
+    "Cash Outflows (30 days)",
+    "Cash Inflows (30 days)",
+    "Liquidity Coverage Ratio Summary",
+    "Available Stable Funding",
+    "Required Stable Funding",
+    "Net Stable Funding Ratio Summary",
   ],
-  'bog-lmt-liquidity-v1': [
-    'Stock of HQLA',
-    'Cash Outflows (30 days)',
-    'Cash Inflows (30 days)',
-    'Liquidity Coverage Ratio Summary',
+  "bog-lmt-liquidity-v1": [
+    "Stock of HQLA",
+    "Cash Outflows (30 days)",
+    "Cash Inflows (30 days)",
+    "Liquidity Coverage Ratio Summary",
   ],
-  'bog-bsd2-capital-v1': [
-    'Common Equity Tier 1',
-    'Additional Tier 1 Capital',
-    'Tier 2 Capital',
-    'Credit Risk-Weighted Assets',
-    'Market Risk-Weighted Assets',
-    'Operational Risk-Weighted Assets',
-    'Capital Adequacy Ratios',
+  "bog-bsd2-capital-v1": [
+    "Common Equity Tier 1",
+    "Additional Tier 1 Capital",
+    "Tier 2 Capital",
+    "Credit Risk-Weighted Assets",
+    "Market Risk-Weighted Assets",
+    "Operational Risk-Weighted Assets",
+    "Capital Adequacy Ratios",
   ],
-  'bog-irrbb-pilot-v1': [
-    'Repricing Gap by Bucket',
-    'ΔEVE by Supervisory Shock',
-    'ΔNII / Earnings at Risk',
-    'IRRBB Summary',
+  "bog-irrbb-pilot-v1": [
+    "Repricing Gap by Bucket",
+    "ΔEVE by Supervisory Shock",
+    "ΔNII / Earnings at Risk",
+    "IRRBB Summary",
   ],
-  'bog-fx-nop-v1': [
-    'Net Open Position by Currency',
-    'Standalone VaR by Currency',
-    'Hedge Effectiveness',
-    'NOP under Depreciation Scenarios',
-    'Net Open Position Summary',
+  "bog-fx-nop-v1": [
+    "Net Open Position by Currency",
+    "Standalone VaR by Currency",
+    "Hedge Effectiveness",
+    "NOP under Depreciation Scenarios",
+    "Net Open Position Summary",
   ],
-  'bog-icaap-stress-v1': [
-    '5-Year Forecast Summary',
-    'Projected Balance-Sheet Path',
-    'Stress Scenario Outcomes',
-    'Reverse Stress Test Summary',
+  "bog-icaap-stress-v1": [
+    "5-Year Forecast Summary",
+    "Projected Balance-Sheet Path",
+    "Stress Scenario Outcomes",
+    "Reverse Stress Test Summary",
   ],
 };
 
@@ -282,7 +282,7 @@ export const TEMPLATE_SECTIONS: Record<string, string[]> = {
 export const PENALTY_UNIT_GHS = 12;
 export const PENALTY_BASE_UNITS = 500;
 export const PENALTY_DAILY_UNITS = 50;
-export const PENALTY_CITATION = 'Act 930 s.93(3)';
+export const PENALTY_CITATION = "Act 930 s.93(3)";
 export const PENALTY_FOOTNOTE =
   `${PENALTY_CITATION}: non-submission, incomplete, delayed or inaccurate submission ` +
   `attracts up to ${PENALTY_BASE_UNITS} penalty units on the institution AND the responsible key ` +
@@ -325,7 +325,7 @@ function artifactVersionUrl(bankId: string, versionId: string): string {
 
 async function fetchBytes(url: string): Promise<Response> {
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ""}` },
   });
   if (!response.ok) {
     throw new Error(`Artifact download failed (${response.status}).`);
@@ -340,7 +340,7 @@ async function fetchBytes(url: string): Promise<Response> {
  */
 export async function fetchArtifactBytes(
   bankId: string,
-  artifactId: string
+  artifactId: string,
 ): Promise<ArrayBuffer> {
   return (await fetchBytes(artifactUrl(bankId, artifactId))).arrayBuffer();
 }
@@ -348,17 +348,19 @@ export async function fetchArtifactBytes(
 /** The same, for one archived revision — the signed document an approver reviews. */
 export async function fetchArtifactVersionBytes(
   bankId: string,
-  versionId: string
+  versionId: string,
 ): Promise<ArrayBuffer> {
-  return (await fetchBytes(artifactVersionUrl(bankId, versionId))).arrayBuffer();
+  return (
+    await fetchBytes(artifactVersionUrl(bankId, versionId))
+  ).arrayBuffer();
 }
 
 async function saveAs(url: string, objectPath: string): Promise<void> {
   const blob = await (await fetchBytes(url)).blob();
   const href = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = document.createElement("a");
   anchor.href = href;
-  anchor.download = objectPath.split('/').pop() ?? 'return-artifact';
+  anchor.download = objectPath.split("/").pop() ?? "return-artifact";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -367,7 +369,7 @@ async function saveAs(url: string, objectPath: string): Promise<void> {
 
 export async function downloadArtifact(
   bankId: string,
-  artifact: { id: string; objectPath: string }
+  artifact: { id: string; objectPath: string },
 ): Promise<void> {
   return saveAs(artifactUrl(bankId, artifact.id), artifact.objectPath);
 }
@@ -375,7 +377,7 @@ export async function downloadArtifact(
 /** Download one archived revision — after certification, the filed document. */
 export async function downloadArtifactVersion(
   bankId: string,
-  version: { id: string; objectPath: string }
+  version: { id: string; objectPath: string },
 ): Promise<void> {
   return saveAs(artifactVersionUrl(bankId, version.id), version.objectPath);
 }
@@ -387,21 +389,21 @@ export async function downloadArtifactVersion(
  */
 export async function downloadEmailFallbackEml(
   bankId: string,
-  packageId: string
+  packageId: string,
 ): Promise<void> {
   const response = await fetch(
     `${apiBaseUrl}/banks/${bankId}/regulatory-packages/${packageId}/email-fallback.eml`,
-    { headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` } }
+    { headers: { Authorization: `Bearer ${getAccessToken() ?? ""}` } },
   );
   if (!response.ok) {
     throw new Error(`Email bundle download failed (${response.status}).`);
   }
-  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const disposition = response.headers.get("Content-Disposition") ?? "";
   const match = /filename="([^"]+)"/.exec(disposition);
   const filename = match?.[1] ?? `orass-downtime-${packageId.slice(0, 8)}.eml`;
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
+  const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);
@@ -420,6 +422,6 @@ export function fmtBytes(bytes: number): string {
 /** Deep link into the Returns workspace for one obligation/package. */
 export function returnsHref(code: string, isoDate?: string): string {
   const params = new URLSearchParams({ code });
-  if (isoDate) params.set('date', isoDate);
+  if (isoDate) params.set("date", isoDate);
   return `/submissions/returns?${params.toString()}`;
 }
