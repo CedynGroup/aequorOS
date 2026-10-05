@@ -29,10 +29,11 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
 from app.models import Job, Notification, User
-from app.services import job_queue, mailer
+from app.services import job_queue, mailer, notifications
 
 JOB_TYPE = "notification_email_mirror"
 # One batch per cycle; stragglers roll to the next tick.
@@ -84,30 +85,48 @@ def _pending_rows(session: Session, org_id: str, now: datetime) -> list[Notifica
 
 
 def _recipient_emails(
-    session: Session, notification: Notification, admin_cache: list[str] | None = None
+    session: Session, notification: Notification, admin_cache: list[User] | None = None
 ) -> list[str]:
     if notification.recipient_user_id is not None:
-        email = session.scalar(
-            select(User.email).where(
-                User.id == notification.recipient_user_id,
-                User.organization_id == notification.organization_id,
-                User.is_active.is_(True),
+        users = list(
+            session.scalars(
+                select(User).where(
+                    User.id == notification.recipient_user_id,
+                    User.organization_id == notification.organization_id,
+                    User.is_active.is_(True),
+                )
             )
         )
-        return [email] if email else []
-    # Org-wide rows mirror to active account administrators. The caller may
-    # pass a cached list so the same admin emails are not re-queried per row.
-    if admin_cache is not None:
-        return admin_cache
-    return list(
-        session.scalars(
-            select(User.email).where(
-                User.organization_id == notification.organization_id,
-                User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
-                User.is_active.is_(True),
+    elif admin_cache is not None:
+        users = admin_cache
+    else:
+        users = list(
+            session.scalars(
+                select(User).where(
+                    User.organization_id == notification.organization_id,
+                    User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
+                    User.is_active.is_(True),
+                )
             )
         )
-    )
+    return [
+        user.email
+        for user in users
+        if session.scalar(
+            select(Notification.id).where(
+                Notification.id == notification.id,
+                *notifications.visibility_conditions(
+                    session,
+                    TenantContext(
+                        organization_id=user.organization_id,
+                        actor_user_id=user.id,
+                        authorization_version=user.authorization_version,
+                    ),
+                ),
+            )
+        )
+        is not None
+    ]
 
 
 def _compose(notification: Notification, recipients: list[str], sender: str) -> EmailMessage:
@@ -134,7 +153,7 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
     # each trigger a separate query for the same recipient list.
     org_wide_recipients = list(
         session.scalars(
-            select(User.email).where(
+            select(User).where(
                 User.organization_id == job.organization_id,
                 User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
                 User.is_active.is_(True),
