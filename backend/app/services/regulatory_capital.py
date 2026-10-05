@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
@@ -96,6 +97,7 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
+    scoped_authorization,
     sdi_capital,
     sdi_capital_checks,
 )
@@ -317,7 +319,15 @@ def create_capital_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="capital_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Audit 2026-08-22 D-3(b): this endpoint mints the same immutable runs as an
     # activation but never went through ``derive_facts``, so the balance-sheet
@@ -336,7 +346,15 @@ def run_all_capital_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: CapitalScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="capital_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # See ``create_capital_run``: the 22-scenario batch is the same mint.
     filing_reconciliation.assert_filing_reconciled(

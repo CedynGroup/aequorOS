@@ -52,6 +52,7 @@ MAKER = TenantContext(
 pytestmark = [
     pytest.mark.usefixtures("forecasting_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
 ]
 REPORTING_DATE = date(2026, 3, 31)
 

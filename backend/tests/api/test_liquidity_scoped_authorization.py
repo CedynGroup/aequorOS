@@ -59,7 +59,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 @pytest.fixture(autouse=True)
@@ -294,6 +294,11 @@ def test_t8_regulatory_registry_filters_liquidity_before_count_and_page(
     db_client: TestClient,
 ) -> None:
     period_id = _seed_book()
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     session = get_sessionmaker()()
     try:
         regulatory_capital.create_capital_run(

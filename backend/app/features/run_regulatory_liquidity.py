@@ -11,7 +11,6 @@ from app.api.deps import (
     LiquidityConfidentialResource,
     ScopedMutationTenant,
     Tenant,
-    get_mutation_tenant_context,
 )
 from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.regulatory_liquidity import (
@@ -46,7 +45,7 @@ def create_regulatory_run(
     if payload.module == "capital":
         return regulatory_capital.create_capital_run(
             db,
-            get_mutation_tenant_context(ctx),
+            ctx,
             bank_id,
             payload,
         )

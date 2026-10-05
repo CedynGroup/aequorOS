@@ -44,7 +44,11 @@ from tests.fixtures.canonical_bank_fixture import (
     set_board_threshold,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 AS_OF = date(2026, 3, 31)
 
 B2 = {

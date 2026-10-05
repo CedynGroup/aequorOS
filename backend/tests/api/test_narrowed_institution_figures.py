@@ -11,7 +11,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.core.authorization import DataScope, SensitivityScope
 from app.core.config import get_settings
@@ -22,6 +22,7 @@ from app.models import (
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
+    RegulatoryRun,
 )
 from app.models.regulatory_reporting import RETURN_FAMILIES
 from app.services.regulatory_reporting.registry import REGISTRY
@@ -223,6 +224,21 @@ def test_narrowed_credit_grant_refuses_cross_module_figures(
             headers=auth,
         )
         assert response.status_code == 403, (path, response.text)
+    with get_sessionmaker()() as db:
+        capital_runs_before = set(db.scalars(select(RegulatoryRun.id)))
+    for path, payload in (
+        ("/regulatory-runs", {"module": "capital", "scenario_code": "baseline"}),
+        ("/regulatory-runs", {"module": "capital", "scenario_code": "severe"}),
+        ("/capital/run-all-scenarios", {}),
+    ):
+        refused = db_client.post(
+            f"{BASE}{path}",
+            headers=headers(roles=("analyst",), authorization_version=version),
+            json={"reporting_period_id": period_id, **payload},
+        )
+        assert refused.status_code == 403, refused.text
+    with get_sessionmaker()() as db:
+        assert set(db.scalars(select(RegulatoryRun.id))) == capital_runs_before
     execution = db_client.post(
         f"{BASE}/enterprise-stress/runs",
         headers=auth,

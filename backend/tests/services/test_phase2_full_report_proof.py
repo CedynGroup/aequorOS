@@ -49,6 +49,7 @@ from tests.storage.inmemory import InMemoryStorageClient
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority", "ftp_run_authority", "forecasting_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
 ]
 
 MAKER = TenantContext(

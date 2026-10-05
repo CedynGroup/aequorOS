@@ -65,6 +65,8 @@ from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import APPROVAL_TIMESTAMP, SAMPLE_BANK_ID
 from tests.services.icaap.conftest import AS_OF
 
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
 COMPONENT = "credit_concentration"
 METHOD = "granularity_adjustment"
 

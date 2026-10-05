@@ -57,6 +57,7 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority", "ftp_run_authority", "forecasting_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
 ]
 
 # The worker retry test opens separate sessions that must observe committed job state.

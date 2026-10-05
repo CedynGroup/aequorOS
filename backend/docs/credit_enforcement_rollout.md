@@ -625,7 +625,7 @@ The order is forced, because the gate script cannot run before the migration:
 1. **`POST /banks/{bank_id}/official-runs` can still mint a credit official run
    without the credit `run` sentence.** `live_view.mint_official_run` requires
    CREDIT/`confidential`/`run`… for liquidity, IRRBB, FX and FTP only; its engine
-   tuple omits `credit` (and `capital`). `data_activation.activate_bank_data` has
+   tuple omits `credit`. `data_activation.activate_bank_data` has
    the same tuple with the same omission. So after this cutover the direct route
    is gated and the shared minting path is not. Both files are outside this
    cutover's scope; the fix is one tuple entry each, and until it lands the credit

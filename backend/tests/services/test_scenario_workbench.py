@@ -233,6 +233,7 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
     materialize_canonical_test_book(db_session)
     _grant_analyst(db_session)
     _grant_analyst(db_session, ModuleScope.FX)
+    _grant_analyst(db_session, ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL)
     period_id = _period_id(db_session)
 
     # Official immutable runs (the governance path).

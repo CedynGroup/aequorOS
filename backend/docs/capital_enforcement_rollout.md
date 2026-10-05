@@ -22,7 +22,12 @@ SDI capital assurance requires CAP `view` with sensitivity `restricted`.
 Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
 
-Capital execution requires CAP `run` with sensitivity `confidential`.
+Capital execution requires whole-institution CAP `run` with sensitivity
+`confidential`. Both the single-run service (`POST /banks/{bank_id}/regulatory-runs`
+with `module=capital`) and the scenario-batch service enforce this before reading
+period inputs or persisting a run. Activation and official-run workers reach that
+same batch gate using the initiating human's authority; a refused Capital module
+produces no run or Capital figures. Scalar roles cannot authorize execution.
 Creating a new capital-plan version requires CAP `create`; changing an existing
 draft requires CAP `edit`, both at that same sensitivity. Approval requires CAP `approve` and an
 independent checker. ILAAP refresh additionally requires a second, independent

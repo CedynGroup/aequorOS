@@ -7,10 +7,12 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, select
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -29,9 +31,12 @@ from app.models import (
     BankReportingPeriod,
     CapitalPlan,
     IlaapSnapshot,
+    RegulatoryRun,
     User,
 )
-from app.services import authorization
+from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.services import authorization, regulatory_capital
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
@@ -580,3 +585,56 @@ def test_ilaap_refresh_does_not_compose_two_incomplete_decisions(
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("scenario", ["baseline", "severe", "batch"])
+def test_capital_execution_requires_run_authority_before_persistence(
+    db_client: TestClient, scenario: str
+) -> None:
+    period_id = _seed_capital_book()
+    path = (
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/run-all-scenarios"
+        if scenario == "batch"
+        else f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs"
+    )
+    payload = {"reporting_period_id": str(period_id)}
+    if scenario != "batch":
+        payload.update(module="capital", scenario_code=scenario)
+    _, version = _grant(sensitivity_scope=SensitivityScope.CONFIDENTIAL)
+    refused = db_client.post(
+        path, headers=headers(roles=("analyst",), authorization_version=version), json=payload
+    )
+    assert refused.status_code == 403, refused.text
+    with get_sessionmaker()() as db:
+        assert db.scalar(select(RegulatoryRun.id)) is None
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=version
+        )
+        with pytest.raises(HTTPException) as denied:
+            if scenario == "batch":
+                regulatory_capital.run_all_capital_scenarios(
+                    db, ctx, SAMPLE_BANK_ID, CapitalScenarioBatchCreate(reporting_period_id=uuid4())
+                )
+            else:
+                regulatory_capital.create_capital_run(
+                    db,
+                    ctx,
+                    SAMPLE_BANK_ID,
+                    RegulatoryRunCreate(
+                        module="capital", reporting_period_id=uuid4(), scenario_code=scenario
+                    ),
+                )
+        assert denied.value.status_code == 403
+        assert db.scalar(select(RegulatoryRun.id)) is None
+    _, version = _grant(
+        role_bundle=RoleBundle.ANALYST, sensitivity_scope=SensitivityScope.CONFIDENTIAL
+    )
+    allowed = db_client.post(
+        path, headers=headers(roles=("viewer",), authorization_version=version), json=payload
+    )
+    assert allowed.status_code == 201, allowed.text
+    runs = allowed.json()["runs"] if scenario == "batch" else [allowed.json()]
+    assert runs and all(run["status"] == "succeeded" for run in runs)
+    assert all(run["metrics"]["car_pct"] is not None for run in runs)
+    with get_sessionmaker()() as db:
+        assert set(db.scalars(select(RegulatoryRun.id))) == {UUID(run["id"]) for run in runs}

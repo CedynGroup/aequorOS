@@ -1260,6 +1260,7 @@ def _derive_official_then_break_the_book(db_session: Session) -> BankReportingPe
     return period
 
 
+@pytest.mark.usefixtures("capital_run_authority")
 def test_official_capital_runs_refuse_a_book_that_no_longer_reconciles(
     db_session: Session,
 ) -> None:

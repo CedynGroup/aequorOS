@@ -94,6 +94,7 @@ __all__ = ["storage"]
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
 ]
 
 #: The date the console action is taken on in the flow-through tests: before
