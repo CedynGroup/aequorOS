@@ -31,7 +31,7 @@ export type ReportingDateOption = {
 type AnchorLike = {
   readonly reportingDate: Date;
   readonly dataStatus: string;
-  readonly rag: string;
+  readonly rag: string | null;
 };
 
 export function toReportingDateOptions(

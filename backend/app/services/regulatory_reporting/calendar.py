@@ -470,8 +470,9 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
             if effective_from is not None and reporting_date < effective_from:
                 continue
             parent_definition = get_definition(parent_code) if parent_code else None
+            family_hidden = definition.family in hidden
             package = packages.get((definition.code, reporting_date))
-            if definition.family in hidden:
+            if family_hidden:
                 package = None
             if parent_definition is not None and _parent_in_force(
                 eligibility, parent_definition, reporting_date
@@ -521,11 +522,15 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
                     data_status=(
                         "computed" if coverage[reporting_date].covered else "awaiting_data"
                     ),
-                    rag=_rag(  # type: ignore[arg-type]
-                        due_date,
-                        today,
-                        package.status if package is not None else None,
-                        pending_orass_reupload=pending_reupload,
+                    rag=(
+                        None
+                        if family_hidden
+                        else _rag(
+                            due_date,
+                            today,
+                            package.status if package is not None else None,
+                            pending_orass_reupload=pending_reupload,
+                        )
                     ),
                 )
             )
@@ -539,8 +544,13 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         "pending_reupload": 0,
     }
     for obligation in obligations:
-        summary_counts[obligation.rag] += 1
-        if obligation.package_status == "submitted" and obligation.rag != "on_track":
+        if obligation.rag is not None:
+            summary_counts[obligation.rag] += 1
+        if (
+            obligation.rag is not None
+            and obligation.package_status == "submitted"
+            and obligation.rag != "on_track"
+        ):
             summary_counts["pending_reupload"] += 1
 
     total = len(obligations)
@@ -698,11 +708,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
                     package.status if package is not None else None  # type: ignore[arg-type]
                 ),
                 package_version=package.version if package is not None else None,
-                rag=_rag(  # type: ignore[arg-type]
-                    due_date,
-                    today,
-                    package.status if package is not None else None,
-                    pending_orass_reupload=pending_reupload,
+                rag=(
+                    _rag(
+                        due_date,
+                        today,
+                        package.status if package is not None else None,
+                        pending_orass_reupload=pending_reupload,
+                    )
+                    if visible
+                    else None
                 ),
                 in_force=effective_from is None or reporting_date >= effective_from,
             )

@@ -45,7 +45,11 @@ const PAGE_SIZE = 25;
 /** Whether an obligation is a downtime email submission awaiting ORASS
  * re-upload: submitted but still not satisfying its RAG (BG/FMD/2026/07). */
 function isPendingReupload(obligation: ReportingObligationRead): boolean {
-  return obligation.packageStatus === 'submitted' && obligation.rag !== 'on_track';
+  return (
+    obligation.rag !== null &&
+    obligation.packageStatus === 'submitted' &&
+    obligation.rag !== 'on_track'
+  );
 }
 
 function daysOverdue(dueDate: Date, asOf: Date): number {
@@ -167,7 +171,9 @@ export default function RegulatoryCalendarPage() {
       key: 'package',
       header: 'Package',
       render: (o) =>
-        o.packageStatus ? (
+        o.rag === null ? (
+          <span className="text-caption text-slate">Restricted</span>
+        ) : o.packageStatus ? (
           <span className="text-caption text-navy/85 whitespace-nowrap">
             {PACKAGE_STATUS_LABELS[o.packageStatus] ?? o.packageStatus}
             <span className="ml-1.5 font-mono text-micro text-slate tnum">

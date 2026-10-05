@@ -1712,6 +1712,7 @@ export * from "./ReportScore";
 export * from "./ReportingDateSource";
 export * from "./ReportingObligationListRead";
 export * from "./ReportingObligationRead";
+export * from "./ReportingObligationReadRag";
 export * from "./ReportingObligationSummaryRead";
 export * from "./ReportingPeriodId";
 export * from "./ReportingSettingsPut";

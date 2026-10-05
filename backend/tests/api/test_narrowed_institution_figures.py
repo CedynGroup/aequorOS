@@ -52,7 +52,7 @@ def _seed_return_packages() -> dict[str, tuple[UUID, UUID, UUID, str]]:
                 return_code=definition.code,
                 reporting_date=date(2026, 6, 30),
                 frequency=definition.frequency,
-                status="generated",
+                status="submitted",
                 version=1,
                 generated_by=USER_1,
                 snapshot={"institution_figures": {"total": "9999999"}},
@@ -138,12 +138,20 @@ def _assert_return_refusals(
         )
         assert anchors.status_code == 200, anchors.text
         assert all(row["package_id"] is None for row in anchors.json()["anchors"])
+        assert all(row["rag"] is None for row in anchors.json()["anchors"])
     inbox = db_client.get("/api/v1/attestation/awaiting-my-signature", headers=auth)
     assert inbox.status_code == 200, inbox.text
     assert inbox.json()["items"] == []
     obligations = db_client.get(f"{BASE}/reporting-obligations", headers=auth)
     assert obligations.status_code == 200, obligations.text
     assert all(row["package_id"] is None for row in obligations.json()["obligations"])
+    assert all(row["rag"] is None for row in obligations.json()["obligations"])
+    assert obligations.json()["summary"] == {
+        "overdue": 0,
+        "due_soon": 0,
+        "on_track": 0,
+        "pending_reupload": 0,
+    }
     for module in ("liquidity", "capital", "credit", "irr", "fx", "ftp", "forecast"):
         comparison = db_client.get(
             f"{BASE}/reports/comparison",

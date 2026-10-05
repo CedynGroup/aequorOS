@@ -175,7 +175,8 @@ export const RAG_LABELS: Record<ObligationRag, string> = {
   on_track: 'On track',
 };
 
-export function RagPill({ rag }: { rag: ObligationRag }) {
+export function RagPill({ rag }: { rag: ObligationRag | null }) {
+  if (rag === null) return <StatusPill tone="slate">Restricted</StatusPill>;
   return <StatusPill tone={RAG_TONES[rag]}>{RAG_LABELS[rag]}</StatusPill>;
 }
 

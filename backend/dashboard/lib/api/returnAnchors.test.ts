@@ -8,7 +8,7 @@ import {
 const anchor = (
   date: string,
   dataStatus: "computed" | "awaiting_data",
-  rag: "overdue" | "due_soon" | "on_track",
+  rag: "overdue" | "due_soon" | "on_track" | null,
 ) => ({ reportingDate: new Date(`${date}T00:00:00Z`), dataStatus, rag });
 
 // The founder's case, as the API returns it on 2026-09-19: the backend sorts
@@ -67,6 +67,12 @@ assert.equal(
     toReportingDateOptions([anchor("2026-09-30", "computed", "on_track")])[0],
   ),
   "2026-09-30",
+);
+assert.equal(
+  reportingDateOptionLabel(
+    toReportingDateOptions([anchor("2026-06-30", "computed", null)])[0],
+  ),
+  "2026-06-30",
 );
 // No raw enum value ever reaches the screen.
 for (const option of options) {
