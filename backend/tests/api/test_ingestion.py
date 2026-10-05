@@ -637,6 +637,7 @@ class TestPositionIdentityCorrection:
 
 
 @pytest.mark.committing_db
+@pytest.mark.parametrize("first_seen", [False, True])
 @pytest.mark.parametrize(
     ("correction", "field"),
     [
@@ -651,6 +652,8 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
     storage_engine: InMemoryStorageClient,
     correction: dict[str, Any],
     field: str,
+    first_seen: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_factory = get_sessionmaker()
     with session_factory() as session:
@@ -659,16 +662,27 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
 
     bank_id = seed_bank(db_client)
     activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
-    initial = start_batch(
-        db_client, bank_id, loans_workbook(tmp_path / "initial.xlsx", {"Ccy": "GHZ"})
-    )["batch"]
-    assert initial["records_error"] == 1
+    if not first_seen:
+        initial = start_batch(
+            db_client, bank_id, loans_workbook(tmp_path / "initial.xlsx", {"Ccy": "GHZ"})
+        )["batch"]
+        assert initial["records_error"] == 1
+    else:
+        with session_factory() as session:
+            session.info["organization_id"] = ORG_1
+            assert session.scalars(
+                select(CanonicalPosition.id).where(
+                    CanonicalPosition.bank_id == bank_id,
+                    CanonicalPosition.source_reference == "LN-0001",
+                )
+            ).first() is None
     first_workbook = loans_workbook(tmp_path / "first.xlsx", {})
     second_workbook = loans_workbook(tmp_path / "second.xlsx", correction)
     ctx = TenantContext(organization_id=ORG_1)
     first_date = date(2026, 7, 31)
     second_date = date(2026, 8, 31)
     second_started = Event()
+    second_validation_started = Event()
     second_pids: list[int] = []
 
     def second_ingestion() -> dict[str, Any]:
@@ -706,6 +720,13 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
             commit=False,
         )
         assert first.batch.status == "accepted"
+        validate = ingestion.run_validation
+
+        def track_second_validation(*args, **kwargs):
+            second_validation_started.set()
+            return validate(*args, **kwargs)
+
+        monkeypatch.setattr(ingestion, "run_validation", track_second_validation)
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(second_ingestion)
             try:
@@ -717,6 +738,7 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(
                     ).one():
                         assert monotonic() < deadline, "The second correction did not wait."
                         sleep(0.01)
+                assert not second_validation_started.is_set()
                 first_session.commit()
                 second = future.result(timeout=10)
             finally:

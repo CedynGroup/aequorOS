@@ -25,8 +25,8 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, any_, bindparam, func, select
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import String, and_, any_, bindparam, func, select
+from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
@@ -297,12 +297,13 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     *,
     commit: bool = True,
 ) -> IngestionBatchStartRead:
-    """Ingest under transaction-held locks on the batch's existing position identities.
+    """Ingest under transaction-held locks on every position identity in the batch.
 
-    Lock identities in ID order before reading accepted history so a concurrent
-    correction observes the first acceptance before validation or persistence.
+    Reserve missing identities through natural-key uniqueness before locking in
+    ID order, so concurrent first sightings also wait for the first acceptance.
+    A rejected batch rolls back its reservations without publishing identities.
     Locks last until commit or rollback, including when the caller owns the
-    transaction via ``commit=False``. SQLite skips the lock query.
+    transaction via ``commit=False``. SQLite skips reservations and row locks.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
@@ -451,6 +452,10 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
     known_counterparties, known_products, known_gl_accounts, known_positions = _known_references(
         db, ctx, bank
     )
+    identity_savepoint = None
+    if records.positions and db.get_bind().dialect.name == "postgresql":
+        identity_savepoint = db.begin_nested()
+        _reserve_position_identities(db, ctx, bank, batch, translate_node, records)
     _lock_position_identities(
         db, ctx, bank, batch.source_system, {row.source_reference for row in records.positions}
     )
@@ -471,6 +476,11 @@ def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction optio
         context,
         extra_findings=_table_resolution_findings(extraction, mapping),
     )
+    if identity_savepoint is not None:
+        if outcome.overall_status == "rejected":
+            identity_savepoint.rollback()
+        else:
+            identity_savepoint.commit()
     validate_node = _lineage(
         db,
         ctx,
@@ -1595,6 +1605,54 @@ def _known_references(
         current(CanonicalGlAccount.account_code, CanonicalGlAccount),
         current(CanonicalPosition.source_reference, CanonicalPosition),
     )
+
+
+def _reserve_position_identities(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    batch: IngestionBatch,
+    lineage_node: LineageRecord,
+    records: CanonicalRecords,
+) -> None:
+    """Claim missing natural keys in reference order without updating a competing identity."""
+    existing = set(
+        db.scalars(
+            select(CanonicalPosition.source_reference).where(
+                CanonicalPosition.organization_id == ctx.organization_id,
+                CanonicalPosition.bank_id == bank.id,
+                CanonicalPosition.source_system == batch.source_system,
+                *is_current_generation(CanonicalPosition),
+            )
+        )
+    )
+    positions = {row.source_reference: row for row in records.positions}
+    rows = [
+        {
+            "id": new_uuid7(),
+            "organization_id": ctx.organization_id,
+            "bank_id": bank.id,
+            "as_of_date": batch.as_of_date,
+            "source_system": batch.source_system,
+            "source_reference": reference,
+            "ingestion_batch_id": batch.id,
+            "lineage_id": lineage_node.id,
+            "created_by": ctx.actor_user_id,
+            "validation_status": UNVALIDATED_STATUS,
+            "position_type": positions[reference].position_type,
+            "currency": positions[reference].currency,
+            "origination_date": positions[reference].origination_date,
+        }
+        for reference in sorted(positions.keys() - existing)
+    ]
+    if rows:
+        db.execute(
+            insert(CanonicalPosition).on_conflict_do_nothing(
+                index_elements=["organization_id", "bank_id", "source_system", "source_reference"],
+                index_where=and_(*is_current_generation(CanonicalPosition)),
+            ),
+            rows,
+        )
 
 
 def _lock_position_identities(
