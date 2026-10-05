@@ -163,3 +163,9 @@ Post-pipeline startup collision follow-up — 2026-10-05
   Raw log: .local-services/followup-journeys.log
   Machine-readable counts: .local-services/followup-journeys.json
   Managed state empty after exit; native MinIO stopped cleanly.
+
+  CI found an incompatible log_message override in the regression HTTP
+  server. Corrected it to preserve the base handler's named format parameter.
+  basedpyright scripts/local_services.py tests/scripts/test_local_services.py:
+  0 errors, 0 warnings, 0 notes (using the backend project configuration).
+  Both native MinIO collision cases passed again after this test-only fix.

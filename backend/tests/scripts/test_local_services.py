@@ -372,7 +372,7 @@ def test_native_minio_bind_collision_never_provisions_the_existing_server(
             self.send_response(200)
             self.end_headers()
 
-        def log_message(self, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), ExistingServer)
