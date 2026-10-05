@@ -1115,7 +1115,7 @@ def test_send_back_refuses_the_officer_who_prepared_the_return(
             package.id,
             SendBackForCorrectionsRequest(reason="I would like another look at this."),
         )
-    assert raised.value.status_code == 409
+    assert raised.value.status_code == 403
     db_session.rollback()
     db_session.refresh(package)
     assert package.attestation_state == "preparer_certified"

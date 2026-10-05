@@ -201,10 +201,7 @@ test("an examiner is offered nothing, and is told why", () => {
   for (const status of STATUSES) {
     assert.equal(primaryFilingAction(input(EXAMINER, status)), null);
   }
-  assert.match(
-    noActionExplanation(input(EXAMINER, "approved")),
-    /examiner/i,
-  );
+  assert.match(noActionExplanation(input(EXAMINER, "approved")), /examiner/i);
   assert.deepEqual(heldStages(EXAMINER), []);
 });
 
@@ -470,7 +467,9 @@ test("the chain is people and stages — never a status called Validated", () =>
       chain.position,
       chain.positionDetail,
       chain.next ?? "",
-      ...chain.stages.map((stage) => `${stage.title} ${stage.roleName} ${stage.act}`),
+      ...chain.stages.map(
+        (stage) => `${stage.title} ${stage.roleName} ${stage.act}`,
+      ),
     ].join(" ");
     assert.ok(
       !/\bvalidated\b/i.test(copy),
@@ -525,6 +524,9 @@ const passthrough = ({ children }: { children?: unknown }) =>
 
 function stubFor(specifier: string): unknown | undefined {
   switch (specifier) {
+    case "@/lib/api/client":
+    case "@/lib/api/token":
+      return {};
     case "@/lib/format":
       return {
         regShort: () => "BoG",
@@ -546,7 +548,11 @@ function stubFor(specifier: string): unknown | undefined {
           ),
       };
     case "@/components/ui/QueryBoundary":
-      return { __esModule: true, default: passthrough, ErrorPanel: passthrough };
+      return {
+        __esModule: true,
+        default: passthrough,
+        ErrorPanel: passthrough,
+      };
     case "lucide-react":
       return new Proxy({} as Record<string, unknown>, {
         get: () => () => el("span"),
@@ -676,20 +682,26 @@ test("the command bar a Preparer reads offers no way to reach a regulator", () =
       identity: "BSD3",
       meta: "31 Mar 2026 · Version 2",
       pills: null,
-      artifacts: el(ArtifactGroup as never, {
-        kinds: ["pdf", "xlsx", "csv"],
-        available: new Set(["pdf"]),
-        busyKind: null,
-        canExport: true,
-        onTake: () => {},
-        unavailableReason: "Producing it is the preparer's act.",
-      } as never),
+      artifacts: el(
+        ArtifactGroup as never,
+        {
+          kinds: ["pdf", "xlsx", "csv"],
+          available: new Set(["pdf"]),
+          busyKind: null,
+          canExport: true,
+          onTake: () => {},
+          unavailableReason: "Producing it is the preparer's act.",
+        } as never,
+      ),
       action: action
-        ? el(PrimaryActionButton as never, {
-            action,
-            pending: false,
-            onClick: () => {},
-          } as never)
+        ? el(
+            PrimaryActionButton as never,
+            {
+              action,
+              pending: false,
+              onClick: () => {},
+            } as never,
+          )
         : el("p", null, noActionExplanation(input(PREPARER, status))),
     });
     assert.ok(
@@ -790,12 +802,10 @@ test("there is no Validate button anywhere on the returns surface", () => {
 });
 
 test("the lifecycle pill calls the machine result what it is", () => {
-  const shared = source("components/submissions/shared.tsx");
-  assert.match(
-    shared,
-    /validated:\s*'Checks passed'/,
-    "the status pill still reads 'Validated' — the word belongs to the Validator",
-  );
+  const pill = loadModule(join(HERE, "shared.tsx"))
+    .PackageStatusPill as Renderable;
+  assert.equal(render(pill, { status: "validated" }).trim(), "Checks passed");
+  assert.equal(render(pill, { status: "approved" }).trim(), "Approved");
 });
 
 test("the stepper is gone, not merely unused", () => {

@@ -65,8 +65,6 @@ from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import APPROVAL_TIMESTAMP, SAMPLE_BANK_ID
 from tests.services.icaap.conftest import AS_OF
 
-pytestmark = pytest.mark.usefixtures("capital_run_authority")
-
 COMPONENT = "credit_concentration"
 METHOD = "granularity_adjustment"
 
@@ -575,7 +573,12 @@ def test_the_maturity_switch_decides_whether_a_maturity_is_required(
 
 
 @pytest.fixture
-def pillar1_bound(canonical_book: Session, access: IcaapAccess, cycle: IcaapCycleRead) -> None:
+def pillar1_bound(
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    capital_run_authority: None,
+) -> None:
     """The Pillar 1 RWA block this cycle reads beside every concentration figure.
 
     The add-on itself is an absolute amount and needs no denominator, but the

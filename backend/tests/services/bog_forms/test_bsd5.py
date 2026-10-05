@@ -100,7 +100,7 @@ NAMED = frozenset(
 # ---------------------------------------------------------------------------
 
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = pytest.mark.usefixtures("return_generation_authority", "capital_run_authority")
 
 
 def _session() -> Session:
