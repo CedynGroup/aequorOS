@@ -455,14 +455,16 @@ def origination_date_of(reference: str) -> date | None:
         session.close()
 
 
-def derived_position(bank_id: str, reference: str) -> tuple[str, str] | None:
+def derived_position(
+    bank_id: str, reference: str, *, as_of_date: date = fixtures.AS_OF
+) -> tuple[str, str] | None:
     """(position_type, currency) of ``reference`` as fact derivation reads the book."""
     session = get_sessionmaker()()
     try:
         bank = session.get(Bank, bank_id)
         assert bank is not None
         rows = _load_position_rows(
-            session, TenantContext(organization_id=ORG_1), bank, fixtures.AS_OF, bank.currency
+            session, TenantContext(organization_id=ORG_1), bank, as_of_date, bank.currency
         )
     finally:
         session.close()
@@ -475,6 +477,34 @@ def derived_position(bank_id: str, reference: str) -> tuple[str, str] | None:
 
 class TestPositionIdentityCorrection:
     """Identity fields follow corrections until the first accepted snapshot, then freeze."""
+
+    @pytest.mark.parametrize("initial_currency", ["GHZ", "GHS"])
+    @pytest.mark.parametrize("omission", ["unmapped", "absent_column"])
+    def test_omitted_origination_date_preserves_the_identity_and_accepts_the_balance(
+        self, db_client: TestClient, tmp_path: Path, initial_currency: str, omission: str
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ORIGINATION_MAPPING)
+        initial = start_batch(
+            db_client,
+            bank_id,
+            loans_workbook(tmp_path / "initial.xlsx", {"Ccy": initial_currency}),
+        )["batch"]
+        assert initial["records_error"] == (1 if initial_currency == "GHZ" else 0)
+
+        workbook = loans_workbook(tmp_path / "next.xlsx", {"Originated": None})
+        if omission == "unmapped":
+            activate_mapping(db_client, bank_id, FULL_MAPPING)
+        else:
+            loaded = openpyxl.load_workbook(workbook)
+            loaded["Loans"].delete_cols(10)
+            loaded.save(workbook)
+        next_date = date(2026, 7, 31)
+        updated = start_batch(db_client, bank_id, workbook, as_of_date=next_date.isoformat())["batch"]
+        assert updated["status"] == "accepted"
+        assert updated["records_error"] == 0
+        assert origination_date_of("LN-0001") == date(2024, 1, 10)
+        assert derived_position(bank_id, "LN-0001", as_of_date=next_date) == ("LOAN", "GHS")
 
     @pytest.mark.parametrize("origination_date", [date(2024, 1, 10), None])
     def test_correcting_a_rejected_row_reaches_the_identity_and_the_facts(

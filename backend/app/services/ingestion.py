@@ -1861,7 +1861,8 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         elif data.source_reference not in settled_positions:
             position.position_type = data.position_type
             position.currency = data.currency
-            position.origination_date = data.origination_date
+            if "origination_date" in data.model_fields_set:
+                position.origination_date = data.origination_date
             position.validation_status = status_of("position", data.source_reference)
             position.ingestion_batch_id = batch.id
             position.lineage_id = lineage_node.id

@@ -868,6 +868,8 @@ def _settled_identity_changes(
         if settled is None:
             continue
         for name in POSITION_IDENTITY_FIELDS:
+            if name not in position.model_fields_set:
+                continue
             sent = getattr(position, name)
             held = getattr(settled, name)
             if sent == held:

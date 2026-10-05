@@ -290,6 +290,8 @@ class ExcelCsvAdapter(SourceAdapter):
             field_errors: list[str] = []
             for canonical_field, source_columns in mapping.fields.items():
                 source_column, raw_value = _resolve_source_value(record.data, source_columns)
+                if canonical_field == "origination_date" and source_column not in record.data:
+                    continue
                 enum_map = mapping_config.enum_mappings.get(canonical_field)
                 if enum_map is not None and raw_value is not None:
                     raw_value = enum_map.get(str(raw_value).strip(), raw_value)

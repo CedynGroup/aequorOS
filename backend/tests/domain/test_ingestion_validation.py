@@ -351,6 +351,13 @@ class TestSettledPositionIdentity:
         assert outcome.record_statuses[("position", "LN-0001")] == "error"
         assert outcome.overall_status == "accepted_with_warnings"
 
+    def test_omitted_origination_date_is_not_a_change(self) -> None:
+        outcome = run_validation(
+            records_of(make_position()), default_validation_config(), self.settled_context()
+        )
+        assert outcome.findings == []
+        assert outcome.overall_status == "accepted"
+
     def test_clearing_origination_date_is_refused(self) -> None:
         outcome = run_validation(
             records_of(make_position(origination_date=None)),
