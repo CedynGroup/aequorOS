@@ -18,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import select

@@ -130,7 +130,7 @@ def return_notifications(db_client: TestClient, db_session: Session) -> dict[str
 
 
 @pytest.mark.parametrize(
-    ("module", "scope", "visible_key"),
+    "grant_case",
     [
         (None, DataScope.ALL, None),
         (ModuleScope.CREDIT, DataScope.BRANCH, None),
@@ -144,10 +144,9 @@ def test_return_notification_visibility_covers_counts_and_mutations(
     db_client: TestClient,
     db_session: Session,
     return_notifications: dict[str, set[str]],
-    module: ModuleScope | None,
-    scope: DataScope,
-    visible_key: str | None,
+    grant_case: tuple[ModuleScope | None, DataScope, str | None],
 ) -> None:
+    module, scope, visible_key = grant_case
     version = 1
     if module is not None:
         version = _grant(
@@ -186,7 +185,10 @@ def test_return_notification_visibility_covers_counts_and_mutations(
     assert bulk.status_code == 200, bulk.text
     assert bulk.json()["marked"] == len(expected) - 1
     db_session.expire_all()
-    assert all(db_session.get(Notification, UUID(row_id)).read_at is None for row_id in hidden)
+    for row_id in hidden:
+        notification = db_session.get(Notification, UUID(row_id))
+        assert notification is not None
+        assert notification.read_at is None
     if module is not None:
         db_session.execute(
             update(AuthorizationBinding).values(

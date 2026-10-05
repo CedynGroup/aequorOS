@@ -172,6 +172,24 @@ def _assert_return_refusals(
         assert comparison.status_code == 404, (module, comparison.text)
 
 
+def _assert_capital_execution_refusals(db_client: TestClient, period_id: str, version: int) -> None:
+    with get_sessionmaker()() as db:
+        capital_runs_before = set(db.scalars(select(RegulatoryRun.id)))
+    for path, payload in (
+        ("/regulatory-runs", {"module": "capital", "scenario_code": "baseline"}),
+        ("/regulatory-runs", {"module": "capital", "scenario_code": "severe"}),
+        ("/capital/run-all-scenarios", {}),
+    ):
+        refused = db_client.post(
+            f"{BASE}{path}",
+            headers=headers(roles=("analyst",), authorization_version=version),
+            json={"reporting_period_id": period_id, **payload},
+        )
+        assert refused.status_code == 403, refused.text
+    with get_sessionmaker()() as db:
+        assert set(db.scalars(select(RegulatoryRun.id))) == capital_runs_before
+
+
 @pytest.mark.parametrize("kind", [DataScope.BRANCH, DataScope.REGION])
 def test_narrowed_credit_grant_refuses_cross_module_figures(
     db_client: TestClient, kind: DataScope, monkeypatch: pytest.MonkeyPatch
@@ -234,21 +252,7 @@ def test_narrowed_credit_grant_refuses_cross_module_figures(
             headers=auth,
         )
         assert response.status_code == 403, (path, response.text)
-    with get_sessionmaker()() as db:
-        capital_runs_before = set(db.scalars(select(RegulatoryRun.id)))
-    for path, payload in (
-        ("/regulatory-runs", {"module": "capital", "scenario_code": "baseline"}),
-        ("/regulatory-runs", {"module": "capital", "scenario_code": "severe"}),
-        ("/capital/run-all-scenarios", {}),
-    ):
-        refused = db_client.post(
-            f"{BASE}{path}",
-            headers=headers(roles=("analyst",), authorization_version=version),
-            json={"reporting_period_id": period_id, **payload},
-        )
-        assert refused.status_code == 403, refused.text
-    with get_sessionmaker()() as db:
-        assert set(db.scalars(select(RegulatoryRun.id))) == capital_runs_before
+    _assert_capital_execution_refusals(db_client, period_id, version)
     execution = db_client.post(
         f"{BASE}/enterprise-stress/runs",
         headers=auth,

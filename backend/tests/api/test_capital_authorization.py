@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import pytest
@@ -589,7 +589,7 @@ def test_ilaap_refresh_does_not_compose_two_incomplete_decisions(
 
 @pytest.mark.parametrize("scenario", ["baseline", "severe", "batch"])
 def test_capital_execution_requires_run_authority_before_persistence(
-    db_client: TestClient, scenario: str
+    db_client: TestClient, scenario: Literal["baseline", "severe", "batch"]
 ) -> None:
     period_id = _seed_capital_book()
     path = (

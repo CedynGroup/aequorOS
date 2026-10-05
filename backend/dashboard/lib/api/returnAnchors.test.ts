@@ -51,13 +51,17 @@ assert.equal(june.isOverdue, true);
 assert.equal(reportingDateOptionLabel(june), "2026-06-30 — past due");
 assert.equal(
   reportingDateOptionLabel(
-    toReportingDateOptions([anchor("2026-07-31", "awaiting_data", "overdue")])[0],
+    toReportingDateOptions([
+      anchor("2026-07-31", "awaiting_data", "overdue"),
+    ])[0],
   ),
   "2026-07-31 — past due, no figures yet",
 );
 assert.equal(
   reportingDateOptionLabel(
-    toReportingDateOptions([anchor("2026-09-30", "awaiting_data", "on_track")])[0],
+    toReportingDateOptions([
+      anchor("2026-09-30", "awaiting_data", "on_track"),
+    ])[0],
   ),
   "2026-09-30 — no figures yet",
 );
