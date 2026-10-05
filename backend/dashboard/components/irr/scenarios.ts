@@ -1,10 +1,12 @@
 /**
  * Shared display metadata for the IRRBB workspace.
  *
- * Scenario codes come from the backend `IrrScenarioCode` enum (baseline plus
- * the six Basel IRRBB shocks the engine runs); descriptions summarize the
- * shock shape documented in `app/domain/irr/engine.py`. Display-only — no
- * regulatory math happens client-side.
+ * Scenario codes come from the backend `IrrScenarioCode` enum: baseline, the
+ * six Basel IRRBB shocks, and the jurisdiction-calibrated parallel ±450bp
+ * shocks the engine adds when the active parameter set carries them.
+ * Descriptions summarize the shock shape documented in
+ * `app/domain/irr/engine.py`. Display-only — no regulatory math happens
+ * client-side.
  */
 
 export const SCENARIO_LABELS: Record<string, string> = {
@@ -15,6 +17,8 @@ export const SCENARIO_LABELS: Record<string, string> = {
   short_down_250: 'Short −250bp',
   steepener: 'Steepener',
   flattener: 'Flattener',
+  parallel_up_450: 'Parallel +450bp',
+  parallel_down_450: 'Parallel −450bp',
 };
 
 /** Shock-shape summaries for the standard Basel IRRBB scenario set. */
@@ -26,6 +30,10 @@ export const SCENARIO_DESCRIPTIONS: Record<string, string> = {
   short_down_250: 'Short-end rates shocked down, long end anchored',
   steepener: 'Short rates down, long rates up — curve steepens',
   flattener: 'Short rates up, long rates down — curve flattens',
+  parallel_up_450:
+    'Jurisdiction-calibrated parallel upward shift (informational)',
+  parallel_down_450:
+    'Jurisdiction-calibrated parallel downward shift (informational)',
 };
 
 export function scenarioLabel(code: string): string {

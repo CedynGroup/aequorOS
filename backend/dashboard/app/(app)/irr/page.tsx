@@ -130,7 +130,7 @@ export default function IrrOverviewPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard
                 title="ΔEVE by scenario"
-                subtitle={`Six Basel IRRBB shocks · Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))}`}
+                subtitle={`${eveBars.length} rate shocks · Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))}`}
                 actions={
                   <Link
                     href="/irr/sensitivity"
