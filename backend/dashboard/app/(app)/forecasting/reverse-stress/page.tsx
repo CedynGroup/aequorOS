@@ -7,7 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import KpiStat from "@/components/ui/KpiStat";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
-import QueryBoundary from "@/components/ui/QueryBoundary";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLatestReverseStress, useRunReverseStress } from "@/lib/api/hooks";
@@ -107,10 +107,16 @@ export default function ReverseStress() {
 
       <QueryBoundary
         isLoading={latest.isLoading}
-        error={latest.error ?? run.error}
+        error={latest.error}
         onRetry={() => latest.refetch()}
       >
         <PageContainer className="py-6 space-y-6">
+          {run.error && (
+            <ErrorPanel
+              error={run.error}
+              title="Reverse-stress search failed"
+            />
+          )}
           {frontier ? (
             <>
               <div
@@ -200,7 +206,7 @@ export default function ReverseStress() {
             <EmptyState
               Icon={Target}
               title="No reverse-stress frontier yet"
-              description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. Both engines need a succeeded baseline for the current reporting period."
+              description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. It searches the selected reporting period's own financial facts, never a substituted current book, so that period needs its facts and the institution needs both stress scenarios configured."
               action={runButton}
             />
           )}

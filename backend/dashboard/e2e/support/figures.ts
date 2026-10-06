@@ -17,8 +17,11 @@ export const SAMPLE_BANK_ID = "BK-SAMP0001";
  * The KPI tile (`components/ui/KpiStat`) whose label is exactly `label`. A
  * section card is a `.card` too, so only the innermost card qualifies.
  */
-export function kpi(page: Page | Locator, label: string): Locator {
-  return page
+export function kpi(scope: Page | Locator, label: string): Locator {
+  // `has`/`hasNot` match inside each candidate card, so they must be built
+  // from the page, not from a scoping locator the card itself sits under.
+  const page = "page" in scope ? scope.page() : scope;
+  return scope
     .locator(".card")
     .filter({ has: page.getByText(label, { exact: true }) })
     .filter({ hasNot: page.locator(".card") });

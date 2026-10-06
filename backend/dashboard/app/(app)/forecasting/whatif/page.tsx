@@ -60,7 +60,10 @@ import {
 import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
-// Shock library — the four shock codes the what-if endpoint accepts.
+// Shock library — the four shock codes the what-if endpoint accepts. Each is a
+// stylized, fixed adjustment to the base assumptions (`WHATIF_SHOCKS` in
+// `app/domain/forecasting/engine.py`), not a calibrated macro model, so each
+// description states exactly what the engine moves.
 // ---------------------------------------------------------------------------
 
 const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] =
@@ -69,25 +72,24 @@ const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] =
       code: "rate_shock_up_400",
       label: "Interest rate shock +400bps",
       description:
-        "Sustained policy tightening — funding costs reprice faster than the loan book.",
+        "Net interest margin −0.50 pp every year, and marketable securities marked down 6% once in Y1.",
     },
     {
       code: "cedi_depreciation_20",
       label: "Local-currency depreciation 20%",
       description:
-        "Local-currency depreciation inflates FX-linked risk-weighted assets across the horizon.",
+        "Open FX positions revalued 20% higher once in Y1, lifting market-risk RWA, and the credit-loss rate +0.30 pp every year.",
     },
     {
       code: "default_spike",
       label: "Loan default spike (2.5× credit losses)",
-      description:
-        "Sectoral concentration risk materializes — annual credit losses multiply 2.5×.",
+      description: "The credit-loss rate multiplied 2.5× every year.",
     },
     {
       code: "mpr_cut_200",
       label: "Policy rate cut −200bps",
       description:
-        "Easing cycle compresses the net interest margin as assets reprice downward.",
+        "Net interest margin −0.40 pp and loan growth +4 pp every year.",
     },
   ];
 
@@ -503,7 +505,7 @@ export default function WhatIfLab() {
             {/* Left panel — shock library */}
             <SectionCard
               title="Shock library"
-              subtitle="The four macro shocks the projection engine accepts"
+              subtitle="Four stylized shocks — fixed adjustments to the base assumptions, illustrative rather than a calibrated macro model"
               className="xl:sticky xl:top-4"
             >
               <div className="space-y-3">
@@ -598,9 +600,11 @@ export default function WhatIfLab() {
                 </ForecastingRunGate>
 
                 <p className="text-caption text-slate leading-relaxed">
-                  Each run re-projects the full 5-year path with the shocked
-                  assumption set and keeps the result as a saved what-if
-                  projection alongside the unshocked base.
+                  Each run re-projects the full 5-year path from the same
+                  canonical book with the shock&apos;s fixed adjustment applied
+                  to the base assumptions, and keeps the result as a saved
+                  what-if projection alongside the unshocked base. The
+                  adjustments are illustrative, not a calibrated macro model.
                 </p>
 
                 <p className="text-caption text-slate leading-relaxed">

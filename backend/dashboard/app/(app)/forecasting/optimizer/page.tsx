@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Strategy Optimizer — constrained scenario search over the deterministic
+ * Strategy Optimizer — an exhaustive, deterministic grid search over the
  * 5-year projection engine. Presents the persisted optimizer output as
  * ranked strategy cards (decision levers + outcomes + constraint headroom),
  * an ROE impact chart across the top candidates, and the full ranking
@@ -37,8 +37,21 @@ import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
 import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
 import { BAR_SERIES_BASE, itemTooltip } from "@/lib/echartsOptions";
 
-const SCOPE_COPY =
-  "Constrained scenario search across 108 decision combinations (loan growth × securities allocation × deposit pricing × dividend payout), projected 5 years each, filtered against regulatory constraints (CAR ≥ 10%, LCR ≥ 100%, NSFR ≥ 100%), ranked by 5-year average ROE.";
+/**
+ * What the search does. The floors are the ones the persisted run enforced
+ * (CAR is the institution's governed minimum, not a fixed 10%); before a run
+ * exists, or when no candidate carries them, they are described, not invented.
+ */
+function scopeCopy(floors: CandidateView["constraints"] | undefined): string {
+  const floorText = floors?.length
+    ? floors
+        .map(
+          (c) => `${c.constraint.toUpperCase()} ≥ ${fmtPct(c.minimumPct, 1)}`,
+        )
+        .join(", ")
+    : `CAR at or above its ${regShort()} minimum, LCR and NSFR at or above their Basel minimums`;
+  return `Deterministic grid search: every one of the 108 decision combinations (4 loan-growth × 3 securities-allocation × 3 deposit-pricing × 3 dividend-payout settings) is projected 5 years from the same canonical book and base assumptions, kept only if every year holds ${floorText}, and ranked by 5-year average ROE. The grid is fixed and searched exhaustively, so the same inputs always return the same ranking; a strategy between grid points is not evaluated.`;
+}
 
 // ---------------------------------------------------------------------------
 // Normalized optimizer output — from a fresh result or a stored run.
@@ -199,11 +212,26 @@ export default function StrategicOptimizer() {
   const latestStoredId = runsQuery.data?.runs[0]?.id ?? null;
   const storedRun = useRegulatoryRun(runsBankId, latestStoredId);
 
-  const view: OptimizerView | null = runOptimizer.data
-    ? fromResult(runOptimizer.data)
-    : storedRun.data
-      ? fromStoredRun(storedRun.data)
+  // A failed search is a refusal (e.g. no approved base assumptions), never an
+  // empty grid: its zero candidates must not read as "no feasible strategy".
+  const latest = runOptimizer.data ?? storedRun.data;
+  const failure =
+    latest?.status === "failed"
+      ? {
+          code: latest.error?.code ?? "run_failed",
+          message:
+            latest.error?.message ??
+            "The optimizer search failed. Review the run inputs and retry.",
+          runId: "runId" in latest ? latest.runId : latest.id,
+        }
       : null;
+  const view: OptimizerView | null = failure
+    ? null
+    : runOptimizer.data
+      ? fromResult(runOptimizer.data)
+      : storedRun.data
+        ? fromStoredRun(storedRun.data)
+        : null;
 
   const runButton = (
     <ForecastingRunGate canRun={canRun}>
@@ -249,9 +277,31 @@ export default function StrategicOptimizer() {
             />
           )}
 
-          {!view ? (
+          {failure ? (
             <>
-              <MethodNote />
+              <div
+                role="alert"
+                className="card border-l-4 border-l-critical bg-critical-light/40 px-5 py-4"
+              >
+                <p className="text-body font-medium text-navy">
+                  The optimizer could not search this period
+                </p>
+                <p className="mt-1 text-body text-slate leading-relaxed">
+                  {failure.message}
+                </p>
+                <p className="mt-2 text-caption text-slate">
+                  Engine diagnostic{" "}
+                  <code className="font-mono">{failure.code}</code>
+                  {" · "}run{" "}
+                  <code className="font-mono">{failure.runId.slice(0, 8)}</code>
+                  {" — "}no candidate was projected, so no strategy is ranked.
+                </p>
+              </div>
+              <MethodNote floors={undefined} />
+            </>
+          ) : !view ? (
+            <>
+              <MethodNote floors={undefined} />
               <EmptyState
                 Icon={Search}
                 title="No optimizer runs yet"
@@ -366,7 +416,7 @@ export default function StrategicOptimizer() {
                 </>
               )}
 
-              <MethodNote />
+              <MethodNote floors={view.top[0]?.constraints} />
             </>
           )}
         </PageContainer>
@@ -375,14 +425,18 @@ export default function StrategicOptimizer() {
   );
 }
 
-function MethodNote() {
+function MethodNote({
+  floors,
+}: {
+  floors: CandidateView["constraints"] | undefined;
+}) {
   return (
     <SectionCard
       title="How the optimizer works"
       subtitle="Method and scope of the persisted search"
     >
       <p className="text-body text-navy/80 leading-relaxed max-w-3xl">
-        {SCOPE_COPY}
+        {scopeCopy(floors)}
       </p>
     </SectionCard>
   );

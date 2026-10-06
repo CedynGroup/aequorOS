@@ -10,13 +10,15 @@ and is a pure extension of the periods the golden suites pin.
 The hermetic e2e fixture users are distinct identities, in both halves.
 `scripts/e2e_bootstrap.py` creates one `users` row per fixture and enrols a
 signing key for each; `dashboard/e2e/support/mint.ts` mints tokens for the same
-identities by id. Two names sharing a UUID collapse to one row, the second key
+identities by id from `dashboard/e2e/support/identities.json`. Journey-owned
+identities are created and removed by their journeys, not the shared bootstrap.
+Two names sharing a UUID collapse to one row, the second key
 enrolment refuses, and the Playwright stack cannot boot at all.
 """
 
 from __future__ import annotations
 
-import re
+import json
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -146,8 +148,9 @@ def test_the_workspace_anchor_is_computed_after_the_carry_forward(
         assert selected.data_status == "computed"
 
 
-_MINT_TS = Path(__file__).resolve().parents[2] / "dashboard" / "e2e" / "support" / "mint.ts"
-_MINT_USER = re.compile(r"^  (\w+): \{\n    id: \"([0-9a-f-]{36})\",", re.MULTILINE)
+_IDENTITIES = (
+    Path(__file__).resolve().parents[2] / "dashboard" / "e2e" / "support" / "identities.json"
+)
 
 
 def test_every_fixture_user_has_its_own_uuid() -> None:
@@ -160,5 +163,13 @@ def test_every_fixture_user_has_its_own_uuid() -> None:
 
 
 def test_token_mint_mirrors_the_bootstrap_identities() -> None:
-    minted = {name: user_id for name, user_id in _MINT_USER.findall(_MINT_TS.read_text())}
-    assert minted == {name: str(user_id) for name, user_id in E2E_USERS.items()}
+    # The mint helper consumes this declarative fixture contract. Only bootstrap
+    # identities belong in the shared tenant; journey identities have their own
+    # provisioning and cleanup lifecycle.
+    identities = json.loads(_IDENTITIES.read_text())
+    assert identities["bootstrap"] == {name: str(user_id) for name, user_id in E2E_USERS.items()}
+    user_ids = list(identities["bootstrap"].values())
+    for identity in identities["journey"].values():
+        assert identity["organizationId"] != DEMO_ORG_ID
+        user_ids.append(identity["id"])
+    assert len(user_ids) == len(set(user_ids))

@@ -45,6 +45,22 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
 
+### Forecasting tools
+
+The What-if Lab describes each shock's fixed adjustments to the base assumptions.
+These are illustrative projections, not calibrated macroeconomic models. The
+optimizer's method note describes its deterministic, exhaustive grid search and
+shows the constraint floors from a saved candidate when available. A failed
+optimizer run displays its diagnostic, including after reload; it is distinct
+from a completed search with no feasible strategies.
+
+Reverse Stress searches the selected reporting period's own financial facts;
+it requires those facts and the institution's configured liquidity and capital
+stress scenarios. A failed search displays its diagnostic while keeping an
+existing frontier visible, or the empty state if no frontier has been saved.
+The frontier chart's range comes from the saved search limit for both axes,
+including axes that breached before reaching that limit.
+
 ### What is deliberately NOT here
 
 - **No mock data layer.** There is no `lib/data/` module. If a screen has

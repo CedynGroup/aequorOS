@@ -12,6 +12,7 @@ import { SignJWT } from "jose";
 import { encode } from "@auth/core/jwt";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
+import identities from "./identities.json";
 
 export const E2E_ORG_ID = "OR-DEM00001";
 export const E2E_JWT_SECRET = "e2e-backend-jwt-secret-not-production-000";
@@ -31,84 +32,89 @@ export const E2E_PASSWORD = "e2e-step-up-password-not-production-000";
 
 export const E2E_USERS: Record<
   string,
-  { id: string; roles: string[]; authv: number }
+  { id: string; roles: string[]; authv: number; organizationId?: string }
 > = {
   // Bootstrap gives every human baseline membership. Admin then receives two
   // initial-ownership grants (owner and read access) and an organization-wide
   // Analyst grant, each advancing authv once.
   // The exact Liquidity-only fixture grant belongs to liquidity_viewer below.
   admin: {
-    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    id: identities.bootstrap.admin,
     roles: ["admin"],
     authv: 5,
   },
   approver: {
-    id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",
+    id: identities.bootstrap.approver,
     roles: ["approver"],
     authv: 3,
   },
   analyst: {
-    id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3",
+    id: identities.bootstrap.analyst,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  fresh_forecast_analyst: {
+    ...identities.journey.fresh_forecast_analyst,
     roles: ["analyst"],
     authv: 3,
   },
   viewer: {
-    id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4",
+    id: identities.bootstrap.viewer,
     roles: ["viewer"],
     authv: 2,
   },
   fx_member: {
-    id: "eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed",
+    id: identities.bootstrap.fx_member,
     roles: ["viewer"],
     authv: 2,
   },
   access_request_member: {
-    id: "eeeeeeee-1010-4eee-8eee-eeeeeeee1010",
+    id: identities.bootstrap.access_request_member,
     roles: ["viewer"],
     authv: 2,
   },
   access_extra_member: {
-    id: "eeeeeeee-1011-4eee-8eee-eeeeeeee1011",
+    id: identities.bootstrap.access_extra_member,
     roles: ["viewer"],
     authv: 2,
   },
   grant_member: {
-    id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
+    id: identities.bootstrap.grant_member,
     roles: ["viewer"],
     authv: 2,
   },
   forecast_member: {
-    id: "eeeeeeee-0000-4eee-8eee-eeeeeeeeeee0",
+    id: identities.bootstrap.forecast_member,
     roles: ["viewer"],
     authv: 2,
   },
   forecast_summary_member: {
-    id: "eeeeeeee-0001-4eee-8eee-eeeeeeeee001",
+    id: identities.bootstrap.forecast_summary_member,
     roles: ["viewer"],
     authv: 2,
   },
   account_admin: {
-    id: "eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6",
+    id: identities.bootstrap.account_admin,
     roles: ["account_admin"],
     authv: 3,
   },
   integration_admin: {
-    id: "eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8",
+    id: identities.bootstrap.integration_admin,
     roles: ["account_admin"],
     authv: 4,
   },
   legacy_account_admin: {
-    id: "eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7",
+    id: identities.bootstrap.legacy_account_admin,
     roles: ["account_admin"],
     authv: 2,
   },
   liquidity_aggregated_viewer: {
-    id: "eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea",
+    id: identities.bootstrap.liquidity_aggregated_viewer,
     roles: ["viewer"],
     authv: 3,
   },
   liquidity_viewer: {
-    id: "eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9",
+    id: identities.bootstrap.liquidity_viewer,
     roles: ["viewer"],
     authv: 3,
   },
@@ -118,12 +124,12 @@ export const E2E_USERS: Record<
   // `scripts/e2e_bootstrap.py` must agree — a cookie minted for the wrong
   // subject authenticates as the other fixture's authority.
   macro_viewer: {
-    id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
+    id: identities.bootstrap.macro_viewer,
     roles: ["viewer"],
     authv: 2,
   },
   invite_fresh: {
-    id: "eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb",
+    id: identities.bootstrap.invite_fresh,
     roles: ["viewer"],
     authv: 2,
   },
@@ -133,7 +139,7 @@ export const E2E_USERS: Record<
   // authority, which is the point — the ICAAP filing surface has to give them
   // a signature they could not give through `/submissions`.
   board: {
-    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    id: identities.bootstrap.board,
     roles: ["viewer"],
     authv: 3,
   },
@@ -142,7 +148,7 @@ export const E2E_USERS: Record<
   // grants on top of baseline membership: the organization-wide read sentence
   // and the Regulatory Reporting / restricted `submit` sentence.
   validator: {
-    id: "eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef",
+    id: identities.bootstrap.validator,
     roles: ["viewer"],
     authv: 4,
   },
@@ -150,7 +156,7 @@ export const E2E_USERS: Record<
   // (e2e/sso-sign-in.spec.ts). Same grants as `analyst`; the SSO journeys
   // sign in through the issuer rather than minting this token.
   sso_analyst: {
-    id: "eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1",
+    id: identities.bootstrap.sso_analyst,
     roles: ["analyst"],
     authv: 3,
   },
@@ -178,7 +184,7 @@ export async function mintBackendToken(
   const user = E2E_USERS[role];
   const secret = new TextEncoder().encode(E2E_JWT_SECRET);
   return new SignJWT({
-    org: E2E_ORG_ID,
+    org: user.organizationId ?? E2E_ORG_ID,
     roles: user.roles,
     type: "access",
     authv: authorizationVersion ?? user.authv,
@@ -208,7 +214,7 @@ export async function mintSessionCookie(
       accessToken,
       refreshToken: accessToken,
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,
-      organizationId: E2E_ORG_ID,
+      organizationId: user.organizationId ?? E2E_ORG_ID,
       roles: user.roles,
       authorizationVersion: authorizationVersion ?? user.authv,
     },
