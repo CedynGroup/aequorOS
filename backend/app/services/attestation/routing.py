@@ -38,7 +38,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core import security
 from app.models import (
     AttestationSignature,
     PackageSignatureRecipient,
@@ -52,7 +51,7 @@ from app.services.attestation.policy import SigningPolicy
 from app.services.attestation.workflow import AttestationConflict
 from app.services.audit import record_event
 
-#: Slots whose holder must carry the approver platform role. Mirrors
+#: Signing slots that exercise checker authority. Mirrors
 #: ``attestation_api.CHECKER_ROLES``: a nominee who could not pass the route's own
 #: gate must not be routed, or the preparer would be told at signing time that the
 #: person they nominated was never eligible.
@@ -267,7 +266,21 @@ def awaiting_signature(
         )
         .order_by(RegulatoryPackage.reporting_date.desc(), RegulatoryPackage.return_code)
     ).all()
-    return [(recipient, package) for recipient, package in rows]
+    from app.models import Bank  # noqa: PLC0415
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    visible: dict[tuple[str, str], bool] = {}
+    result = []
+    for recipient, package in rows:
+        key = (package.bank_id, package.return_family)
+        if key not in visible:
+            bank = db.get(Bank, package.bank_id)
+            visible[key] = bank is not None and family_access.can_view(
+                db, ctx, bank, package.return_family
+            )
+        if visible[key]:
+            result.append((recipient, package))
+    return result
 
 
 # --- internals --------------------------------------------------------------
@@ -307,39 +320,19 @@ def _ensure_nominee_may_sign(
     user: User,
     signing_role: str,
 ) -> None:
-    """Can this nominee actually fill this slot?
-
-    Two answers, chosen by the return's FAMILY, and the choice is the same one
-    the certification gate makes — routing a return to someone who could never
-    sign it must be refused at nomination time, not discovered at the ceremony.
-
-    * a GATED family (ICAAP) evaluates the nominee's own scoped binding, because
-      a scalar role must never satisfy a scoped surface;
-    * every other family keeps the scalar ladder it has always had.
-    """
+    """Nominees need the same scoped authority as the certification ceremony."""
     from app.models import Bank  # noqa: PLC0415
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)
-    if bank is not None:
-        nominee_ctx = replace(ctx, actor_user_id=user.id, roles=(user.role,))
-        allowed = family_access.nominee_may_sign(
-            db, ctx, bank, package, nominee_ctx, signing_role
-        )
-        if allowed is not None:
-            if not allowed:
-                raise AttestationConflict(
-                    "recipient_role_insufficient",
-                    f"{user.display_name or user.email} does not hold the authority this "
-                    f"return requires to provide the '{signing_role}' signature.",
-                )
-            return
-    if signing_role in CHECKER_ROLES and not security.has_role([user.role], "approver"):
+    nominee_ctx = replace(ctx, actor_user_id=user.id, roles=(user.role,))
+    if bank is None or not family_access.nominee_may_sign(
+        db, ctx, bank, package, nominee_ctx, signing_role
+    ):
         raise AttestationConflict(
             "recipient_role_insufficient",
-            f"{user.display_name or user.email} holds the '{user.role}' role, which cannot "
-            f"provide the '{signing_role}' signature — maker-checker cannot be "
-            "satisfied by a preparer.",
+            f"{user.display_name or user.email} does not hold the authority this "
+            f"return requires to provide the '{signing_role}' signature.",
         )
 
 
@@ -380,11 +373,8 @@ def _nominate(  # noqa: PLR0913 - one nominee against the full policy context
         roles = ", ".join(slot.role for slot in policy.slots) or "none"
         raise AttestationConflict(
             "recipient_role_not_in_policy",
-            f"The policy in force has no '{nomination.signing_role}' slot "
-            f"(it requires: {roles}).",
+            f"The policy in force has no '{nomination.signing_role}' slot (it requires: {roles}).",
         )
-    _ensure_nominee_may_sign(db, ctx, package, user, nomination.signing_role)
-
     identity = ensure_signer_identity(db, ctx, nomination.user_id)
     # The single source of truth for "may this person fill this slot": officer
     # title, the generated_by control, and distinct-signers all come from here.
@@ -397,6 +387,7 @@ def _nominate(  # noqa: PLR0913 - one nominee against the full policy context
         signer_id=identity.signer_id,
         job_title=user.job_title,
     )
+    _ensure_nominee_may_sign(db, ctx, package, user, nomination.signing_role)
 
     row = PackageSignatureRecipient(
         organization_id=ctx.organization_id,
@@ -427,9 +418,7 @@ def _notify(
         ctx,
         type="attestation.signature_requested",
         severity="warning",
-        title=(
-            f"{package.return_code} {package.reporting_date.isoformat()} awaits your signature"
-        ),
+        title=(f"{package.return_code} {package.reporting_date.isoformat()} awaits your signature"),
         body=(
             f"You have been asked to provide the '{row.signing_role}' signature on version "
             f"{package.version} of {package.return_code} for "

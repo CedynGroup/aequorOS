@@ -17,7 +17,6 @@ This is the executable form of docs/bog_returns/00_full_return_registry.md:
 
 from __future__ import annotations
 
-import inspect
 import io
 import re
 from datetime import UTC, date, datetime
@@ -66,6 +65,8 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 # The Guide's List of Prudential Returns (frequency, time limit) — the registry
 # must state exactly this for every form.
@@ -525,19 +526,21 @@ def test_working_copy_is_a_distinct_artifact_kind_and_is_filed_with_the_sealed_c
     assert "docx_working" in reporting_workflow.UNFILABLE_WORKING_ARTIFACT_KINDS
     definition = REGISTRY["BSD2"]
     assert definition.generator == "bog_form"
-    assert reporting_workflow.filing_admits_artifact(
-        "xlsx_working", generator=definition.generator
-    )
-    source = inspect.getsource(reporting_workflow)
-    assert "filing_admits_artifact(artifact.kind, generator=generator)" in source
-    assert "artifact.kind not in WORKING_ARTIFACT_KINDS" not in source
-    assert "artifact.kind not in UNFILABLE_WORKING_ARTIFACT_KINDS" not in source
+    assert reporting_workflow.filing_admits_artifact("xlsx_working", generator=definition.generator)
+    preview = db_client.get(f"{base}/filing-set", headers=headers())
+    assert preview.status_code == 200, preview.text
+    filed = {entry["kind"]: entry for entry in preview.json()["filing_set"]}
+    assert set(filed) == {"pdf", "xlsx", "xlsx_working", "csv"}
+    for kind in ("pdf", "xlsx", "xlsx_working"):
+        assert filed[kind]["generated_at_submission"] is False
+    assert filed["csv"]["generated_at_submission"] is True
+    assert filed["xlsx_working"]["role"] == "formula_copy"
+    assert filed["xlsx_working"]["signature_count"] is None
 
     # ...and the endpoint's own listing leads with the submission document and
     # keeps both workbooks ahead of any CSV.
     listed = [
-        a["kind"]
-        for a in db_client.get(f"{base}/artifacts", headers=headers()).json()["artifacts"]
+        a["kind"] for a in db_client.get(f"{base}/artifacts", headers=headers()).json()["artifacts"]
     ]
     assert listed == ["pdf", "xlsx", "xlsx_working"]
 

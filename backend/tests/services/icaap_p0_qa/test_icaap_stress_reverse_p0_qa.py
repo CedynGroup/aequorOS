@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import zipfile
-from datetime import date
+from datetime import UTC, date
 from typing import Any
 
 import pytest
@@ -33,7 +33,9 @@ from tests.services.test_icaap_stress_reverse_stress import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "forecasting_run_authority", "return_generation_authority", "capital_run_authority"
+)
 
 __all__ = ["storage"]
 
@@ -135,7 +137,7 @@ def test_the_latest_of_several_runs_is_bound_by_both_packages(db_session: Sessio
     )
     runs = [r for r in _reverse_runs(db_session) if r.status == "succeeded"]
     assert len(runs) == 2
-    latest = max(runs, key=lambda r: (r.created_at, str(r.id)))
+    latest = max(runs, key=lambda r: (r.created_at.replace(tzinfo=UTC), str(r.id)))
     companion = _generate(db_session)
     pack = _generate(db_session, "STRESS-PACK")
     assert companion.snapshot["metadata"]["reverse_stress_run_id"] == str(latest.id)

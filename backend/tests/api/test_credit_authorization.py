@@ -179,18 +179,18 @@ def test_liquidity_only_principal_no_longer_sees_credit_on_shared_surfaces(
 
     A liquidity binding — the classic case of a Treasury reader — used to see
     the credit live metric, the credit breach and the NPL daily ladder; it now
-    sees only what it holds a sentence for, and capital (ungated) proves the
-    surfaces still answer rather than going blank.
+    sees only what it holds a sentence for. Capital figures require their own
+    sentence as well; a successful response may legitimately contain no rows.
     """
     _seed_live_rows()
     version = _grant(module_scope=ModuleScope.LIQUIDITY)
 
     seen = _shared_surfaces(db_client, version)
 
-    assert seen["summary_modules"] == {"capital"}
-    assert seen["alerts_total"] == 1
-    assert seen["alerts_by_module"] == {"capital": 1}
-    assert seen["window_daily_modules"] == {"capital"}
+    assert seen["summary_modules"] == set()
+    assert seen["alerts_total"] == 0
+    assert seen["alerts_by_module"] == {}
+    assert seen["window_daily_modules"] == set()
     assert seen["snapshots_status"] == 403
 
 
@@ -213,10 +213,11 @@ def test_credit_or_all_aggregated_view_serves_credit_on_shared_surfaces(
 
     seen = _shared_surfaces(db_client, version)
 
-    assert seen["summary_modules"] == {"capital", "credit"}
-    assert seen["alerts_total"] == 2
-    assert seen["alerts_by_module"] == {"capital": 1, "credit": 1}
-    assert seen["window_daily_modules"] == {"capital", "credit"}
+    expected = {"capital", "credit"} if module_scope is ModuleScope.ALL else {"credit"}
+    assert seen["summary_modules"] == expected
+    assert seen["alerts_total"] == len(expected)
+    assert seen["alerts_by_module"] == {module: 1 for module in expected}
+    assert seen["window_daily_modules"] == expected
     assert seen["snapshots_status"] == 200
 
 
@@ -237,9 +238,9 @@ def test_credit_sensitivity_is_exact_on_shared_surfaces(
 
     seen = _shared_surfaces(db_client, version)
 
-    assert seen["summary_modules"] == {"capital"}
-    assert seen["alerts_by_module"] == {"capital": 1}
-    assert seen["window_daily_modules"] == {"capital"}
+    assert seen["summary_modules"] == set()
+    assert seen["alerts_by_module"] == {}
+    assert seen["window_daily_modules"] == set()
     assert seen["snapshots_status"] == 403
 
 
@@ -254,9 +255,9 @@ def test_risk_binding_grants_no_credit_authority(db_client: TestClient) -> None:
 
     seen = _shared_surfaces(db_client, version)
 
-    assert seen["summary_modules"] == {"capital"}
-    assert seen["alerts_by_module"] == {"capital": 1}
-    assert seen["window_daily_modules"] == {"capital"}
+    assert seen["summary_modules"] == set()
+    assert seen["alerts_by_module"] == {}
+    assert seen["window_daily_modules"] == set()
     assert seen["snapshots_status"] == 403
 
 

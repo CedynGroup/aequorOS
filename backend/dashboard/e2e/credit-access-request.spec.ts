@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { writeFileSync } from "node:fs";
+import { decodeJwt } from "jose";
 import { E2E_API_ORIGIN, E2E_BASE_URL } from "../playwright.config";
-import { E2E_USERS, mintBackendToken, mintSessionCookie } from "./support/mint";
+import {
+  E2E_PASSWORD,
+  E2E_USERS,
+  mintBackendToken,
+  mintSessionCookie,
+} from "./support/mint";
 
 test.use({ screenshot: "on" });
 
@@ -146,18 +152,25 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   await context.close();
 });
 
-test("branch-only Capital authority keeps access request available and cannot approve whole-institution access", async ({
+test("unsupported Capital narrowing leaves the whole-institution access request pending", async ({
   browser,
   request,
 }) => {
   test.setTimeout(120_000);
   const api = `${E2E_API_ORIGIN}/api/v1`;
   const owner = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
-  // access-request-regressions.spec.ts runs first on the shared bank and grants
-  // this member twice, advancing it from its pinned authv by two.
-  const authv = E2E_USERS.access_extra_member.authv + 2;
+  const signedIn = await request.post(`${api}/auth/login`, {
+    data: {
+      email: "e2e.access_extra_member@aequoros.example",
+      password: E2E_PASSWORD,
+    },
+  });
+  expect(signedIn.status()).toBe(200);
+  const accessToken = (await signedIn.json()).access_token as string;
+  const authv = decodeJwt(accessToken).authv;
+  expect(typeof authv).toBe("number");
   const member = {
-    Authorization: `Bearer ${await mintBackendToken("access_extra_member", authv)}`,
+    Authorization: `Bearer ${accessToken}`,
   };
   const wanted = await request.post(`${api}/authorization/access-requests`, {
     headers: member,
@@ -183,26 +196,43 @@ test("branch-only Capital authority keeps access request available and cannot ap
     data_scope_kind: "branch",
     data_scope_values: ["ACC"],
   };
+  const bindingsUrl = `${api}/authorization/bindings?principal_user_id=${draft.principal_user_id}`;
+  const beforeBindings = await request.get(bindingsUrl, { headers: owner });
+  expect(beforeBindings.status()).toBe(200);
+  const beforeIds = (await beforeBindings.json()).bindings.map(
+    (binding: { id: string }) => binding.id,
+  );
+  const refusal = "Branch and region narrowing is supported only for Credit";
   const preview = await request.post(`${api}/authorization/bindings/preview`, {
     headers: owner,
     data: draft,
   });
-  expect(preview.status()).toBe(200);
+  expect(preview.status()).toBe(422);
+  expect(JSON.stringify(await preview.json())).toContain(refusal);
   const reviewed = {
     ...draft,
-    expected_authority_sentence: (await preview.json()).authority_sentence,
+    expected_authority_sentence: "A narrowed Capital grant is invalid",
   };
   const { principal_user_id, ...approval } = reviewed;
   const denied = await request.post(
     `${api}/authorization/access-requests/${id}/approve`,
     { headers: owner, data: approval },
   );
-  expect(denied.status()).toBe(409);
+  expect(denied.status()).toBe(422);
+  expect(JSON.stringify(await denied.json())).toContain(refusal);
   const granted = await request.post(`${api}/authorization/bindings`, {
     headers: owner,
     data: reviewed,
   });
-  expect(granted.status()).toBe(201);
+  expect(granted.status()).toBe(422);
+  expect(JSON.stringify(await granted.json())).toContain(refusal);
+  const afterBindings = await request.get(bindingsUrl, { headers: owner });
+  expect(afterBindings.status()).toBe(200);
+  expect(
+    (await afterBindings.json()).bindings.map(
+      (binding: { id: string }) => binding.id,
+    ),
+  ).toEqual(beforeIds);
   const pending = await request.get(`${api}/authorization/access-requests`, {
     headers: owner,
   });
@@ -215,7 +245,7 @@ test("branch-only Capital authority keeps access request available and cannot ap
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("access_extra_member", authv + 1),
+      value: await mintSessionCookie("access_extra_member", Number(authv)),
       url: E2E_BASE_URL,
     },
   ]);

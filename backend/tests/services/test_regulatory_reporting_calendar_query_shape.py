@@ -32,7 +32,12 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 _AS_OF = date(2026, 4, 5)
-_MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+_MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 @contextmanager
@@ -183,7 +188,9 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
     for statements in (short_anchor_sql, long_anchor_sql):
         assert len(_table_selects(statements, "regulatory_packages")) == 1
         assert len(_table_selects(statements, "regulatory_submission_events")) == 1
-        assert len(statements) <= 9
+        # The anchor picker now hides package links under scoped return authority.
+        # Its one principal/grant lookup is fixed per request, never per anchor.
+        assert len(statements) <= 10
     assert len(short_anchor_sql) == len(long_anchor_sql)
 
 

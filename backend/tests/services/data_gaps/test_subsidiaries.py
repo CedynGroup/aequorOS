@@ -70,6 +70,9 @@ M = 1_000_000
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> list[str]:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1

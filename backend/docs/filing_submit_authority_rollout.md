@@ -41,10 +41,9 @@ surface.
 - **Transmission gate:** module `reg` (Regulatory Reporting), sensitivity
   `restricted`, institution scope exact or explicitly organization-wide. Covering one
   bank never covers its sibling.
-- **Visibility is decided first and is unchanged.** A gated (ICAAP) family the caller
-  cannot see still answers `404` — the refusal must not disclose that the package
-  exists. Once it is visible, a missing filing authority is an honest `403` that
-  names what is missing.
+- **Visibility is decided first** under the
+  [whole-institution family contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+  Once the package is visible, a missing filing authority is a `403` naming what is missing.
 - **Maker/checker is required context.** `Permission.SUBMIT` is registered in
   `services/authorization._REQUIRED_RUNTIME_CONDITIONS`, so an evaluation that does
   not receive a maker/checker verdict denies. The officer who generated the return

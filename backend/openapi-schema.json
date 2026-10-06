@@ -51957,7 +51957,14 @@
             "title": "Package Version"
           },
           "rag": {
-            "$ref": "#/components/schemas/ObligationRag"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObligationRag"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reporting_date": {
             "format": "date",
@@ -52448,7 +52455,14 @@
             "title": "Package Version"
           },
           "rag": {
-            "$ref": "#/components/schemas/ObligationRag"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObligationRag"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reporting_date": {
             "format": "date",

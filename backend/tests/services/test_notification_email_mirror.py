@@ -7,18 +7,22 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.core.config import get_settings
-from app.models import Job, Notification, User
+from app.models import AuthorizationBinding, Job, Notification, User
 from app.services import job_queue, notifications
 from app.services.notification_email_mirror import (
     enqueue_due_notification_mirror,
     run_notification_email_mirror,
 )
 from tests.api.helpers import ORG_1, USER_1
+from tests.api.test_package_authorization import _add_bank, _package
+from tests.factories.authorization import grant_institution_authority
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 
 APPROVER_ID = UUID("dddddddd-1111-4ddd-8ddd-ddddddddddd1")
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
@@ -67,6 +71,9 @@ def _enable_smtp(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _seed_admin(db: Session) -> None:
+    user = db.get(User, USER_1)
+    assert user is not None
+    user.role = "account_admin"
     db.add(
         User(
             id=APPROVER_ID,
@@ -80,6 +87,16 @@ def _seed_admin(db: Session) -> None:
 
 
 def _emit_rows(db: Session) -> None:
+    _add_bank(SAMPLE_BANK_ID, organization_id=ORG_1)
+    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    for user_id in (USER_1, APPROVER_ID):
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user_id,
+            bundle=RoleBundle.VIEWER,
+        )
     notifications.emit(
         db,
         CTX,
@@ -88,15 +105,19 @@ def _emit_rows(db: Session) -> None:
         title="BSD3 2026-03-31 approved",
         body="Version 1 approved for submission.",
         recipient_user_id=USER_1,
+        entity_type="regulatory_package",
+        entity_id=package_id,
     )
     notifications.emit(
         db,
         CTX,
-        type="reporting.deadline.overdue:BSD3:2026-03-31:2026-07-24",
+        type="reporting.deadline.overdue:LCR-NSFR:2026-03-31:2026-07-24",
         severity="critical",
         title="BSD3 2026-03-31 overdue",
         body="The return is past its due date.",
-        recipient_user_id=None,  # org-wide -> mirrors to active admins
+        recipient_user_id=None,
+        entity_type="bank",
+        entity_id=SAMPLE_BANK_ID,
     )
     db.commit()
 
@@ -171,3 +192,34 @@ def test_enqueue_coalesces_per_hour(db_session: Session, monkeypatch: pytest.Mon
     assert enqueue_due_notification_mirror(db_session, ORG_1, now=NOW) is True
     db_session.commit()
     assert enqueue_due_notification_mirror(db_session, ORG_1, now=NOW) is False
+
+
+@pytest.mark.parametrize("revoke_all", [False, True])
+def test_mirror_filters_return_state_by_recipient_authority(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, revoke_all: bool
+) -> None:
+    _enable_smtp(monkeypatch)
+    _seed_admin(db_session)
+    _emit_rows(db_session)
+    stmt = update(AuthorizationBinding)
+    if not revoke_all:
+        stmt = stmt.where(AuthorizationBinding.principal_user_id == APPROVER_ID)
+    db_session.execute(
+        stmt.values(
+            status="revoked",
+            revoked_at=datetime.now(UTC),
+            revoked_by_type="system",
+            revoked_by_id="notification-fixture",
+            revoked_reason="Remove return visibility",
+        )
+    )
+    db_session.commit()
+    job = _run_mirror(db_session)
+    if revoke_all:
+        assert job.progress == {"sent": 0, "skipped_no_recipient": 2}
+        assert _FakeSmtp.sent == []
+    else:
+        assert job.progress == {"sent": 2, "skipped_no_recipient": 0}
+        assert all(
+            "admin.two@aequoros.example" not in str(message["To"]) for message in _FakeSmtp.sent
+        )

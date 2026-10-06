@@ -9,16 +9,18 @@ leave no package, no superseded predecessor, and the cycle still in review.
 from __future__ import annotations
 
 import copy
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import RegulatoryPackage
+from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
 from app.models.icaap import IcaapCycle, IcaapStageDecision
 from app.schemas.icaap import IcaapFreezeCreate
+from app.services import reconciliation
 from app.services.icaap import cycles, freeze, guards, workflow
 from tests.services.icaap.p3_support import (
     AS_OF,
@@ -232,6 +234,71 @@ class TestWhoMayFreeze:
         assert workflow.get_stages(db, reviewer, cycle.id).viewer.can_freeze is False
 
 
+@pytest.mark.parametrize("failure", ["missing_snapshot", "unbalanced_facts"])
+def test_freeze_refuses_invalid_filing_inputs_without_minting(
+    canonical_book: Session, extra_frameworks: None, failure: str
+) -> None:
+    db = canonical_book
+    access, _reviewer, _approver, cycle = _build(db)
+    digest = workflow.get_stages(db, access, cycle.id).review_digest
+    period = db.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == access.bank.id,
+            BankReportingPeriod.period_end == AS_OF,
+        )
+    )
+    assert period is not None
+    if failure == "missing_snapshot":
+        period.period_end = AS_OF - timedelta(days=1)
+    else:
+        asset = next(
+            fact
+            for fact in db.scalars(
+                select(BankFinancialFact).where(
+                    BankFinancialFact.reporting_period_id == period.id,
+                    BankFinancialFact.fact_group == "balance_sheet",
+                )
+            )
+            if fact.attributes.get("side") == "asset"
+        )
+        asset.amount += Decimal("1000000000")
+    db.flush()
+
+    report = freeze.freeze_preflight(
+        db, access, guards.get_cycle_or_404(db, access, cycle.id), review_digest=digest
+    )
+    assert report.ready, sorted(_codes(report))
+    with pytest.raises(HTTPException) as excinfo:
+        freeze.freeze_cycle(
+            db, access, cycle.id, IcaapFreezeCreate(review_digest=digest, reason="Seal the report.")
+        )
+    assert excinfo.value.status_code == 409
+    if failure == "missing_snapshot":
+        assert _error(excinfo.value) == "no_computed_position"
+    else:
+        assert isinstance(excinfo.value, reconciliation.FilingBlockedError)
+    assert (
+        db.scalars(
+            select(RegulatoryPackage).where(RegulatoryPackage.return_code == "ICAAP-REPORT")
+        ).all()
+        == []
+    )
+    row = db.get(IcaapCycle, cycle.id)
+    assert row is not None
+    assert row.status == "in_review"
+    assert row.package_id is None
+    assert row.frozen_at is None
+    assert (
+        db.scalar(
+            select(IcaapStageDecision).where(
+                IcaapStageDecision.cycle_id == cycle.id,
+                IcaapStageDecision.decision == "frozen",
+            )
+        )
+        is None
+    )
+
+
 class TestTheTransaction:
     def test_a_freeze_seals_the_cycle_and_mints_one_package(
         self, canonical_book: Session, extra_frameworks: None
@@ -436,9 +503,7 @@ class TestTheTransaction:
         moved = copy.deepcopy(first.snapshot)
         assert moved["metadata"]["icaap"]["review_digest"] == digest
         moved["metadata"]["icaap"]["review_digest"] = "f" * 64
-        assert digest_service.content_digest(moved) != digest_service.content_digest(
-            first.snapshot
-        )
+        assert digest_service.content_digest(moved) != digest_service.content_digest(first.snapshot)
 
 
 class TestTheCycleIsSealedAfterwards:

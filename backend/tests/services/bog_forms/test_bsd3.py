@@ -69,6 +69,9 @@ M = Decimal("1000000")
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 class _Seeder:
     """Batch + lineage + counterparty/position builders at ``as_of``."""
 

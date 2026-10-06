@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
@@ -221,6 +222,7 @@ def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> Non
     assert polled.json()["job_type"] == "pipeline_refresh"
 
 
+@pytest.mark.usefixtures("credit_run_authority")
 def test_mint_official_run_enqueues(db_client: TestClient) -> None:
     _seed_and_refresh(db_client)
     with get_sessionmaker()() as session:

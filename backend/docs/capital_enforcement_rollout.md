@@ -16,13 +16,21 @@ The following institution-scoped reads require CAP `view` with sensitivity
 - `GET /api/v1/banks/{bank_id}/sdi/capital-checks`
 - `GET /api/v1/banks/{bank_id}/sdi/capital-summary`
 
-The capital plan, ILAAP snapshot reads, BSD capital preview, and Capital
+The capital plan, ILAAP snapshot reads, and Capital
 regulatory-run details require CAP `view` with sensitivity `confidential`.
+The BSD capital preview requires whole-institution REG `view` with sensitivity
+`restricted`, matching ordinary return reads and generation inputs. CAP authority
+alone cannot read the preview; ICAAP retains its Capital family policy.
 SDI capital assurance requires CAP `view` with sensitivity `restricted`.
 Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
 
-Capital execution requires CAP `run` with sensitivity `confidential`.
+Capital execution requires whole-institution CAP `run` with sensitivity
+`confidential`. Both the single-run service (`POST /banks/{bank_id}/regulatory-runs`
+with `module=capital`) and the scenario-batch service enforce this before reading
+period inputs or persisting a run. Activation and official-run workers reach that
+same batch gate using the initiating human's authority; a refused Capital module
+produces no run or Capital figures. Scalar roles cannot authorize execution.
 Creating a new capital-plan version requires CAP `create`; changing an existing
 draft requires CAP `edit`, both at that same sensitivity. Approval requires CAP `approve` and an
 independent checker. ILAAP refresh additionally requires a second, independent
@@ -54,7 +62,10 @@ After a grant change, sign in again to obtain the new authorization version.
 
 Run this read-only query as a role that can see every tenant user, institution,
 and binding. It enumerates human and machine principals without inferring any
-grant from scalar roles.
+grant from scalar roles. This query inventories engine authority; evaluate BSD
+preview access separately under the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+using `scripts/authorization_access_impact.py --json`.
 
 ```sql
 WITH active_principals AS (
@@ -223,10 +234,13 @@ Create no automatic backfill. Operators must create only institution-approved
 rows through the authorization service so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
+For BSD preview grants, use the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+
 | Need                                                                          | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
 | ----------------------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
 | Aggregated Capital dashboards and SDI checks                                  | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `cap`          | `aggregated`        |
-| Capital plans, BSD preview, run details, and ILAAP reads                      | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
+| Capital plans, run details, and ILAAP reads                                   | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
 | SDI capital assurance evidence                                                | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `restricted`        |
 | Run Capital, create/edit plans, and run/create/edit Capital workbench entries | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
 | Approve a Capital plan as an independent checker                              | `human`          | `approver`                                    | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |

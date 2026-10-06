@@ -9,7 +9,6 @@ the tenant boundary.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -23,8 +22,8 @@ from app.services import report_comparison
 from app.services.report_comparison import favorable_direction
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-OTHER_CTX = TenantContext(organization_id=ORG_2, actor_user_id=USER_2)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+OTHER_CTX = TenantContext(organization_id=ORG_2, actor_user_id=USER_2, authorization_version=1)
 
 
 def _bank(session: Session, org_id: str = ORG_1) -> str:
@@ -445,7 +444,10 @@ def test_zero_base_and_one_sided_lines(db_session: Session) -> None:
 # --- non-comparable & missing -----------------------------------------------
 
 
-def test_version_mode_different_modules_is_422(db_session: Session) -> None:
+@pytest.mark.parametrize("wrong_side", ["left", "right"])
+def test_version_mode_run_outside_declared_module_is_404(
+    db_session: Session, wrong_side: str
+) -> None:
     bank_id = _bank(db_session)
     period_id = _period(db_session, bank_id, date(2026, 3, 31), "2026-Q1")
     cap = _run(
@@ -466,12 +468,11 @@ def test_version_mode_different_modules_is_422(db_session: Session) -> None:
     )
     db_session.commit()
 
-    req = ReportComparisonRequest(mode="version", module="capital", left=cap, right=liq)
+    left, right = (liq, cap) if wrong_side == "left" else (cap, liq)
+    req = ReportComparisonRequest(mode="version", module="capital", left=left, right=right)
     with pytest.raises(HTTPException) as exc:
         report_comparison.build_comparison(db_session, CTX, bank_id, req)
-    assert exc.value.status_code == 422
-    detail = cast("dict[str, str]", exc.value.detail)
-    assert detail["error_code"] == "not_comparable"
+    assert exc.value.status_code == 404
 
 
 def test_version_mode_different_periods_is_422(db_session: Session) -> None:

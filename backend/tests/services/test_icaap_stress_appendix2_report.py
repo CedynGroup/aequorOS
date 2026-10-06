@@ -72,13 +72,21 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = [
+    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority"),
+    pytest.mark.usefixtures("return_generation_authority"),
+]
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
 )
 CHECKER_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
-CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_ID, roles=("approver",))
+CHECKER = TenantContext(
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=CHECKER_ID,
+    roles=("approver",),
+    authorization_version=1,
+)
 REPORTING_DATE = date(2026, 3, 31)
 RETURN_CODE = "ICAAP-STRESS-APPENDIX2"
 SDI_RETURN_CODE = "SDI-STRESS-ANNUAL"
@@ -744,7 +752,10 @@ def test_an_internal_target_above_the_floor_is_declared_stricter(db_session: Ses
 
 BOARD_CHAIR_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 BOARD_CHAIR = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=BOARD_CHAIR_ID, roles=("approver",)
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=BOARD_CHAIR_ID,
+    roles=("approver",),
+    authorization_version=1,
 )
 
 

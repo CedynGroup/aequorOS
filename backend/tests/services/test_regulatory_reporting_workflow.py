@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.models import BankReportingPeriod, RegulatoryPackage, User
 from app.schemas.filing_workflow import PackageStageDecisionCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
@@ -22,6 +23,7 @@ from app.services import regulatory_liquidity
 from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
 from tests.factories.attestation import relax_signing
+from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -29,10 +31,13 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+    authorization_version=1,
 )
 #: The third officer. Since the filing chain landed
 #: (``docs/filing_workflow_redesign.md`` §3) an Approver's approval is no longer
@@ -42,6 +47,7 @@ CHECKER = TenantContext(
 VALIDATOR = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+    authorization_version=1,
 )
 REPORTING_DATE = date(2026, 3, 31)
 
@@ -67,6 +73,20 @@ def _seed_with_baseline_run(db: Session) -> None:
                 )
             )
             db.commit()
+    for user_id, bundle in (
+        (DEMO_USER_ID, RoleBundle.ANALYST),
+        (CHECKER.actor_user_id, RoleBundle.APPROVER),
+        (VALIDATOR.actor_user_id, RoleBundle.VALIDATOR),
+    ):
+        assert user_id is not None
+        grant_institution_authority(
+            db,
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user_id,
+            bundle=bundle,
+        )
+    db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -439,7 +459,9 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
 
 def test_unknown_bank_is_tenant_scoped_404(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
-    stranger = TenantContext(organization_id="OR-STRANGER", actor_user_id=uuid4())
+    stranger = TenantContext(
+        organization_id="OR-STRANGER", actor_user_id=uuid4(), authorization_version=1
+    )
     with pytest.raises(HTTPException) as exc_info:
         generation.generate_package(
             db_session,

@@ -100,6 +100,9 @@ EXPECTED_SPLIT: dict[str, tuple[int, int]] = {
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 class _Seeder:
     def __init__(self, db: Session, as_of: date) -> None:
         self.db = db

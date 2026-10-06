@@ -20,8 +20,8 @@
  * This module MIRRORS a backend constant and must not drift from it:
  * `CHAIN_DECISION_GATE` in
  * `backend/app/services/regulatory_reporting/family_access.py`.
- * `grantRequirements.parity.test.ts` reads that file and fails if the two
- * disagree — fix the mirror, never the test.
+ * `grantRequirements.parity.test.ts` imports the backend gate at runtime and
+ * fails if the two disagree — fix the mirror, never the test.
  */
 
 import type { GrantDraft } from "./grants";
@@ -44,9 +44,8 @@ export const CHAIN_DECISION_SENSITIVITY = "restricted";
 /**
  * Bundles whose whole purpose is deciding on a return in the filing chain.
  *
- * Deliberately not every operational bundle: an Analyst prepares through the
- * edit path, which is not a chain decision, so a narrower sensitivity is a
- * legitimate choice there rather than a mistake worth interrupting.
+ * Deliberately not every operational bundle: an Analyst prepares returns
+ * rather than taking a filing-chain decision.
  */
 const CHAIN_DECISION_BUNDLES: Record<string, string> = {
   approver: "approve returns or send them back",
@@ -84,8 +83,9 @@ export function grantShortfall(draft: GrantScope): string | null {
   return (
     `This grant will not let them ${work}. Deciding on a return is evaluated ` +
     `against ${missing.join(" and ")}, and scopes are matched exactly — a ` +
-    `narrower level does not include a wider one. They will be able to sign ` +
-    `in and see the return, then be refused when they act on it.`
+    `narrower level does not include a wider one. Ordinary returns stay hidden ` +
+    `without whole-institution Regulatory Reporting / Restricted view authority. ` +
+    `A visible return still requires its action permission.`
   );
 }
 
@@ -101,8 +101,8 @@ export function grantShortfall(draft: GrantScope): string | null {
  * answering them from a slice, so the grantee meets a refusal on a figure they
  * can see named on screen.
  *
- * Bindings OR, so a second grant covering the whole book restores those
- * figures. The sentence says so rather than implying this grant is broken.
+ * Bindings OR, so a whole-book grant on the figure's module and sensitivity
+ * can admit it. Coverage does not compensate for a different sensitivity.
  */
 export function dataScopeShortfall(draft: GrantDraft): string | null {
   if (draft.institutionScope !== "institution") return null;
@@ -110,11 +110,12 @@ export function dataScopeShortfall(draft: GrantDraft): string | null {
   const chosen =
     draft.dataScope.kind === "branch" ? "the branches" : "the regions";
   return (
-    `Limiting this grant to ${chosen} you chose also limits what can be ` +
-    `answered: figures for the institution as a whole are refused rather than ` +
-    `computed from part of its book. That is deliberate — a whole-institution ` +
-    `ratio taken over a few branches would read as a real measurement. If they ` +
-    `need those figures, give them the whole book here or in a second grant.`
+    `This Credit grant covers only ${chosen} you chose in the loan book, ` +
+    `activity and facets. Figures for the institution as a whole are refused ` +
+    `by this narrowed grant, including Credit live summaries, alerts and history. ` +
+    `For those Credit figures, use a whole-book Credit grant at the sensitivity ` +
+    `required by that surface. Regulatory returns require ` +
+    `whole-institution Regulatory Reporting authority; ICAAP requires Capital.`
   );
 }
 

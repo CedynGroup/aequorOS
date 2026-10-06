@@ -201,10 +201,7 @@ test("an examiner is offered nothing, and is told why", () => {
   for (const status of STATUSES) {
     assert.equal(primaryFilingAction(input(EXAMINER, status)), null);
   }
-  assert.match(
-    noActionExplanation(input(EXAMINER, "approved")),
-    /examiner/i,
-  );
+  assert.match(noActionExplanation(input(EXAMINER, "approved")), /examiner/i);
   assert.deepEqual(heldStages(EXAMINER), []);
 });
 
@@ -470,7 +467,9 @@ test("the chain is people and stages — never a status called Validated", () =>
       chain.position,
       chain.positionDetail,
       chain.next ?? "",
-      ...chain.stages.map((stage) => `${stage.title} ${stage.roleName} ${stage.act}`),
+      ...chain.stages.map(
+        (stage) => `${stage.title} ${stage.roleName} ${stage.act}`,
+      ),
     ].join(" ");
     assert.ok(
       !/\bvalidated\b/i.test(copy),
@@ -525,6 +524,10 @@ const passthrough = ({ children }: { children?: unknown }) =>
 
 function stubFor(specifier: string): unknown | undefined {
   switch (specifier) {
+    case "@/lib/api/client":
+      return { isApiError: () => false };
+    case "@/lib/api/token":
+      return {};
     case "@/lib/format":
       return {
         regShort: () => "BoG",
@@ -532,7 +535,12 @@ function stubFor(specifier: string): unknown | undefined {
         submissionPortal: () => "ORASS",
       };
     case "@/lib/api/values":
-      return { fmtTimestamp: () => "02 Mar 2026 10:00" };
+      return {
+        fmtTimestamp: () => "02 Mar 2026 10:00",
+        fmtDateUTC: () => "31 Mar 2026",
+        isoDate: () => "2026-03-31",
+        shortId: (id: string) => id,
+      };
     case "@/components/ui/DisabledWithReason":
       return {
         DisabledWithReason: ({ reason, children }: Props) =>
@@ -546,7 +554,74 @@ function stubFor(specifier: string): unknown | undefined {
           ),
       };
     case "@/components/ui/QueryBoundary":
-      return { __esModule: true, default: passthrough, ErrorPanel: passthrough };
+      return {
+        __esModule: true,
+        default: passthrough,
+        ErrorPanel: passthrough,
+      };
+    case "next/navigation":
+      return {
+        usePathname: () => "/submissions/returns",
+        useSearchParams: () => new URLSearchParams("code=BSD3&date=2026-03-31"),
+        useRouter: () => ({ replace: () => {} }),
+      };
+    case "next/link":
+      return { __esModule: true, default: passthrough };
+    case "@/components/shell/BankContext":
+      return {
+        useBankContext: () => ({
+          bank: { id: "BK-SAMP0001" },
+          moduleScope: { isResolved: true, institutionClass: "bank" },
+        }),
+      };
+    case "@/components/profile/ProfileProvider":
+      return {
+        useUserProfile: () => ({
+          effectiveAuthority: workspaceAuthority,
+          isLoading: workspaceProfileLoading,
+        }),
+      };
+    case "@/components/impersonation/useImpersonation":
+      return { useImpersonation: () => ({ impersonating: false }) };
+    case "@/components/attestation/AttestationPanel":
+      return { __esModule: true, default: () => null };
+    case "@/components/submissions/SnapshotPreview":
+      return {
+        __esModule: true,
+        default: () => el("p", null, "Return figures"),
+      };
+    case "@/lib/api/hooks":
+      return new Proxy(
+        {},
+        {
+          get: (_target, hook: string) => () => {
+            const data: Record<string, unknown> = {
+              useReturnTemplates: {
+                templates: [
+                  {
+                    code: "BSD3",
+                    family: "bsd",
+                    title: "Assets",
+                    fidelity: "CONFIRMED",
+                    defaultChannel: "orass_sandbox",
+                  },
+                ],
+              },
+              useRegulatoryPackages: { packages: [workspacePackage] },
+              useRegulatoryPackage: workspacePackage,
+            };
+            return {
+              data: data[hook],
+              isLoading: false,
+              isFetching: false,
+              isPending: false,
+              error: null,
+              refetch: () => {},
+              mutate: () => {},
+            };
+          },
+        },
+      );
     case "lucide-react":
       return new Proxy({} as Record<string, unknown>, {
         get: () => () => el("span"),
@@ -676,20 +751,26 @@ test("the command bar a Preparer reads offers no way to reach a regulator", () =
       identity: "BSD3",
       meta: "31 Mar 2026 · Version 2",
       pills: null,
-      artifacts: el(ArtifactGroup as never, {
-        kinds: ["pdf", "xlsx", "csv"],
-        available: new Set(["pdf"]),
-        busyKind: null,
-        canExport: true,
-        onTake: () => {},
-        unavailableReason: "Producing it is the preparer's act.",
-      } as never),
+      artifacts: el(
+        ArtifactGroup as never,
+        {
+          kinds: ["pdf", "xlsx", "csv"],
+          available: new Set(["pdf"]),
+          busyKind: null,
+          canExport: true,
+          onTake: () => {},
+          unavailableReason: "Producing it is the preparer's act.",
+        } as never,
+      ),
       action: action
-        ? el(PrimaryActionButton as never, {
-            action,
-            pending: false,
-            onClick: () => {},
-          } as never)
+        ? el(
+            PrimaryActionButton as never,
+            {
+              action,
+              pending: false,
+              onClick: () => {},
+            } as never,
+          )
         : el("p", null, noActionExplanation(input(PREPARER, status))),
     });
     assert.ok(
@@ -717,92 +798,132 @@ test("a disabled act states its reason on screen, not only on hover", () => {
   assert.match(text, /2 checks are still failing/i);
 });
 
-// ---------------------------------------------------------------------------
-// 7. Structural: the workspace cannot spell what it must not offer
-// ---------------------------------------------------------------------------
+let workspaceAuthority = projection([]);
+let workspaceProfileLoading = false;
+let workspacePackage: Props = {};
 
-function source(relative: string): string {
-  return readFileSync(join(ROOT, relative), "utf8");
+function renderWorkspace(
+  status: Status,
+  isRehearsal: boolean,
+): {
+  text: string;
+  sections: string[];
+} {
+  workspacePackage = {
+    id: "return-1",
+    returnCode: "BSD3",
+    returnFamily: "bsd",
+    status,
+    reportingDate: new Date("2026-03-31"),
+    generatedAt: new Date("2026-03-31"),
+    version: 1,
+    basis: "solo",
+    isRehearsal,
+    approvals: [],
+    validationReport: {
+      passed: true,
+      errorCount: 0,
+      warningCount: 0,
+      infoCount: 0,
+      findings: [],
+    },
+  };
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { search: "" } },
+  });
+  let tree: ReturnType<typeof create> | undefined;
+  try {
+    const page = loadModule(
+      join(ROOT, "app/(app)/submissions/returns/page.tsx"),
+    ).default as Renderable;
+    act(() => {
+      tree = create(el(page));
+    });
+    const sections = tree!.root
+      .findAll(
+        (node) =>
+          node.type === "section" &&
+          typeof node.props["data-testid"] === "string",
+      )
+      .map((node) => node.props["data-testid"] as string);
+    for (const button of tree!.root
+      .findAllByType("button")
+      .filter((node) => node.props["aria-expanded"] === false)) {
+      act(() => {
+        button.props.onClick();
+      });
+    }
+    return { text: textOf(tree!.toJSON()), sections };
+  } finally {
+    if (tree) act(() => tree!.unmount());
+    if (previousWindow)
+      Object.defineProperty(globalThis, "window", previousWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 }
 
-const WORKSPACE = "app/(app)/submissions/returns/page.tsx";
+test("the rendered workspace shows channel sections only to a transmitter", () => {
+  for (const permissions of [[], ["run", "edit"], ["approve"], ["submit"]]) {
+    for (const unresolved of [false, true]) {
+      workspaceAuthority = projection(
+        permissions.map((permission) => ({ permission })),
+      );
+      workspaceProfileLoading = unresolved;
+      for (const status of STATUSES.filter(
+        (status) => status !== "superseded",
+      )) {
+        const { text, sections } = renderWorkspace(status, false);
+        const transmits = permissions.includes("submit") && !unresolved;
+        for (const id of [
+          "transmission-row",
+          "events-row",
+          "resubmission-row",
+        ]) {
+          const expected =
+            transmits &&
+            (id !== "resubmission-row" ||
+              ["submitted", "acknowledged", "rejected", "declined"].includes(
+                status,
+              ));
+          assert.equal(
+            sections.filter((section) => section === id).length,
+            expected ? 1 : 0,
+            `${permissions} / ${status} / unresolved=${unresolved}: ${id}`,
+          );
+        }
+        if (!transmits) assert.ok(!CHANNEL_WORDS.test(text), text);
+        else assert.match(text, /ORASS/);
+        assert.ok(!/\bvalidate(?:d)?\b/i.test(text), text);
+        assert.match(text, /BSD3/);
+        assert.match(text, /Return figures/);
+      }
+    }
+  }
+  workspaceProfileLoading = false;
+});
 
-test("the regulator's channel is mounted only behind its own section", () => {
-  const page = source(WORKSPACE);
-  for (const [component, section] of [
-    ["TransmissionCard", "transmission"],
-    ["EventsFeed", "events"],
-    ["ResubmissionCard", "resubmission"],
+test("the rendered return distinguishes a practice package from a filing", () => {
+  workspaceAuthority = projection([{ permission: "view" }]);
+  for (const status of [
+    "generated",
+    "pending_approval",
+    "submitted",
   ] as const) {
-    const mounted = page.split(`<${component}`).length - 1;
-    assert.equal(
-      mounted,
-      1,
-      `<${component}> is mounted ${mounted} times — one guard cannot cover them all`,
-    );
-    const guard = `{showSection('${section}') && (`;
-    assert.ok(
-      page.includes(guard),
-      `the ${section} surface has no ${guard} guard`,
-    );
-    const guardAt = page.indexOf(guard);
-    const mountAt = page.indexOf(`<${component}`);
-    assert.ok(
-      guardAt >= 0 && guardAt < mountAt,
-      `<${component}> is mounted outside its ${section} guard`,
-    );
-  }
-});
-
-test("the workspace itself cannot even spell the portal's name", () => {
-  const page = source(WORKSPACE);
-  // Stripped of comments: this is about what the screen can RENDER.
-  const code = page
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/^\s*\/\/.*$/gm, " ");
-  for (const word of ["ORASS", "Sandbox", "sandbox", "downtime", ".eml"]) {
-    assert.ok(
-      !code.includes(word),
-      `the workspace names '${word}' — channel copy belongs in TransmissionCard`,
-    );
-  }
-});
-
-test("there is no Validate button anywhere on the returns surface", () => {
-  for (const file of [
-    WORKSPACE,
-    "components/submissions/ReturnCommandBar.tsx",
-    "components/submissions/ChecksPanel.tsx",
-    "components/submissions/FilingChain.tsx",
-  ]) {
-    const code = source(file)
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/^\s*\/\/.*$/gm, " ");
-    assert.ok(
-      !/["'>]\s*Validate\b/.test(code),
-      `${file} still offers a Validate control`,
-    );
-    assert.ok(
-      !/["'>]\s*Validated\b/.test(code),
-      `${file} still labels something "Validated"`,
-    );
+    const practice = renderWorkspace(status, true).text;
+    assert.match(practice, /practice run/i);
+    assert.match(practice, /never be filed/i);
+    const filing = renderWorkspace(status, false).text;
+    assert.ok(!/practice run/i.test(filing), filing);
   }
 });
 
 test("the lifecycle pill calls the machine result what it is", () => {
-  const shared = source("components/submissions/shared.tsx");
-  assert.match(
-    shared,
-    /validated:\s*'Checks passed'/,
-    "the status pill still reads 'Validated' — the word belongs to the Validator",
-  );
-});
-
-test("the stepper is gone, not merely unused", () => {
-  assert.ok(
-    !existsSync(join(ROOT, "components/submissions/LifecycleStepper.tsx")),
-    "the six-status stepper is still in the tree and can be re-mounted",
-  );
+  const pill = loadModule(join(HERE, "shared.tsx"))
+    .PackageStatusPill as Renderable;
+  assert.equal(render(pill, { status: "validated" }).trim(), "Checks passed");
+  assert.equal(render(pill, { status: "approved" }).trim(), "Approved");
 });
 
 if (failures > 0) {

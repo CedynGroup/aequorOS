@@ -55,21 +55,21 @@ names in grant reasons as if they were enforced scope.
 
 User-requested jobs retain the initiating `actor_user_id`. For scheduled runs,
 the scheduler selects the first active human principal (ordered by creation
-time, then ID) with independently complete confidential/run authority covering
-that institution for each of FX, FTP, and Forecasting included by
+time, then ID) with independently complete whole-institution confidential/run
+authority for each of Credit, Capital, FX, FTP, and Forecasting included by
 `module_scope.runs_module`. The same principal must satisfy every planned
 module's requirement. If none exists,
 it skips the bank's official-run enqueue and emits
 `no_authorized_scheduled_principal` on the `scheduled_official_run` surface.
-For banks excluding all three modules, it selects the first active human
+For banks excluding all five modules, it selects the first active human
 without any module check.
 
 The worker resolves the recorded actor in the job's organization, requires that
 actor to remain active and human, and loads their current authorization version.
-The FX, FTP, and Forecasting run services still check current binding
+The Credit, Capital, FX, FTP, and Forecasting run services still check current binding
 authority before execution; enqueueing does not grant permanent authority or
-bypass the service gates. When FTP or Forecasting is planned, the worker also
-preflights that module's confidential/run authority before period lookup, fact
+bypass the service gates. When Credit, FTP, or Forecasting is planned, the worker also
+preflights that module's whole-institution confidential/run authority before period lookup, fact
 derivation, or dispatching any module.
 Scheduled jobs use `scheduled-official:{bank_id}:{tick_date}`, while user-requested
 jobs use `official:{bank_id}:{as_of_date}`. Coalescing remains within each source so a

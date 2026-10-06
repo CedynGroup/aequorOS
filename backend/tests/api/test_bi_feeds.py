@@ -36,7 +36,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -67,7 +67,6 @@ from app.models.bi import (
     BiQueryLog,
 )
 from app.services import authorization, integration_keys
-from app.services.bi.authorization import REASON_DATA_SCOPE_CONFLICT
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, runner
@@ -250,7 +249,7 @@ def _reader(
     values: tuple[str, ...] = (),
     label: str = "Report server",
 ) -> dict[str, str]:
-    """Issue a real analytics-feed key through the real issuance path."""
+    """Issue a key; narrowed fixtures hold Credit plus explicit dimension authority."""
 
     with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
@@ -260,10 +259,23 @@ def _reader(
             bank_id,
             label,
             purpose="reader",
-            data_scope=data_scope,
-            data_scope_values=values,
         )
-    return {"Authorization": f"Bearer {issued.key}"}
+    reader = {"Authorization": f"Bearer {issued.key}"}
+    if data_scope is not DataScope.ALL:
+        with get_sessionmaker()() as db:
+            db.info["organization_id"] = ORG_1
+            binding = db.scalar(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == _service_identity(reader)
+                )
+            )
+            assert binding is not None
+            binding.module_scope = ModuleScope.CREDIT.value
+            binding.data_scope_kind = data_scope.value
+            binding.data_scope_values = list(values)
+            db.commit()
+        _add_reader_sentence(reader, module=ModuleScope.RISK)
+    return reader
 
 
 def _pull(
@@ -684,11 +696,11 @@ def _add_reader_sentence(  # noqa: PLR0913 - one keyword per binding dimension
 def test_an_institution_wide_sentence_on_another_pair_does_not_widen_a_branch_scoped_pull(
     db_client: TestClient, mart: Bank, bi_on: None
 ) -> None:
-    """Audit A360-1 H8, reproduced exactly.
+    """Cross-pair scope reduction preserves Credit narrowing.
 
     The loan book touches two pairs: ``credit/aggregated`` (the loan measures)
     and ``risk/aggregated`` (the date, branch and product dimensions). The key's
-    own sentence is ``all/aggregated`` over ``branch=["B2"]`` and matches both.
+    Credit sentence is narrowed to ``branch=["B2"]``.
     A second sentence ``risk/aggregated`` over the WHOLE institution matches
     only the dimension pair — and yet, reduced as one union, "any ``all`` wins"
     discarded the B2 restriction that still applied to the credit pair, and the
@@ -720,11 +732,11 @@ def test_two_sentences_on_the_same_pair_serve_their_union(
 ) -> None:
     """The converse, so the fix cannot be an over-refusal: WITHIN one pair
     bindings OR, and the widest of them wins. Two branch sentences that both
-    match every pair of the dataset serve both branches, as the Org Owner meant."""
+    match the Credit pair serve both branches; dimensions have separate authority."""
 
     reader = _reader(data_scope=DataScope.BRANCH, values=("B1",))
     _add_reader_sentence(
-        reader, module=ModuleScope.ALL, data_scope=DataScope.BRANCH, values=("B2",)
+        reader, module=ModuleScope.CREDIT, data_scope=DataScope.BRANCH, values=("B2",)
     )
 
     response = _pull(db_client, reader)
@@ -733,53 +745,21 @@ def test_two_sentences_on_the_same_pair_serve_their_union(
     assert response.headers["x-bi-feed-data-scope"] == "Branches: B1, B2"
 
 
-def test_two_different_narrow_sentences_across_pairs_refuse_the_pull(
-    db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
+def test_unsupported_narrow_machine_sentence_is_refused_without_widening_credit(
+    db_client: TestClient, mart: Bank, bi_on: None
 ) -> None:
-    """Identical-or-refuse across pairs, on the machine surface too.
-
-    The key's sentence covers B1 on every pair. A second ``credit/aggregated``
-    sentence over a REGION widens the credit pair to ``mixed`` (B1 plus the
-    region's branches) while the risk pair still says ``branch [B1]``. Those are
-    two different narrow slices with no ordering between them, and the feed
-    refuses rather than guessing — the same ``data_scope_conflict`` the
-    interactive path returns — instead of serving the union it once served.
-    """
-
     reader = _reader(data_scope=DataScope.BRANCH, values=("B1",))
-    _add_reader_sentence(
-        reader,
-        module=ModuleScope.CREDIT,
-        data_scope=DataScope.REGION,
-        values=("Unassigned region",),
-    )
-
-    response = _pull(db_client, reader)
-    assert response.status_code == 403, response.text
-    # Matched exactly, so neither branch's balance rides along in the refusal.
-    assert error_envelope(response) == {
-        "code": "forbidden",
-        "message": "Forbidden",
-        "details": {
-            "error_code": read_bi_feeds.ERROR_AUTHORIZATION_DENIED,
-            "message": (
-                "This credential is not authorized for the figures in this dataset. "
-                "An Org Owner can widen or reissue it."
-            ),
-            "denied_members": LOAN_BOOK_MEMBERS,
-        },
-    }
-    # The reason travels on the refusal's audit row (the 403 body names only the
-    # error code and the refused members), and it is the interactive path's own
-    # string, not a feed restatement.
-    refusals = list(
-        db_session.scalars(
-            select(AuditEvent).where(AuditEvent.event_type == read_bi_feeds.EVENT_REFUSED)
+    with pytest.raises(authorization.AuthorizationInvariantError, match="only for Credit"):
+        _add_reader_sentence(
+            reader,
+            module=ModuleScope.RISK,
+            data_scope=DataScope.REGION,
+            values=("Unassigned region",),
         )
-    )
-    assert [event.details["reason"] for event in refusals] == [REASON_DATA_SCOPE_CONFLICT]
-    logged = _log_rows(db_session)
-    assert logged and logged[-1].decision == "denied"
+    response = _pull(db_client, reader)
+    assert response.status_code == 200, response.text
+    assert {row["branch.code"] for row in _rows(response)} == {"B1"}
+    assert response.headers["x-bi-feed-data-scope"] == "Branches: B1"
 
 
 def test_a_branch_scoped_credential_serves_only_its_branch(
@@ -967,15 +947,15 @@ def test_the_purpose_is_derived_from_the_binding_and_not_stored_on_the_key(
     """There is no ``purpose`` column, deliberately: the binding IS the authority."""
 
     assert not hasattr(IntegrationKey, "purpose")
-    _reader(label="Report server", data_scope=DataScope.BRANCH, values=("B1",))
+    _reader(label="Report server")
     integration_key_headers(BANK_ID)
 
     listed = db_client.get("/api/v1/integration-keys", headers=_account_admin_headers(db_session))
     assert listed.status_code == 200, listed.text
     by_label = {item["label"]: item for item in listed.json()["keys"]}
     assert by_label["Report server"]["purpose"] == "reader"
-    assert by_label["Report server"]["data_scope_kind"] == "branch"
-    assert by_label["Report server"]["data_scope_values"] == ["B1"]
+    assert by_label["Report server"]["data_scope_kind"] == "all"
+    assert by_label["Report server"]["data_scope_values"] == []
     assert by_label["Test push feed"]["purpose"] == "writer"
     assert by_label["Test push feed"]["data_scope_kind"] is None
 
@@ -1010,8 +990,8 @@ def test_a_reader_key_is_issued_through_the_route_under_account_administration(
             "bank_id": BANK_ID,
             "label": "Report server via route",
             "purpose": "reader",
-            "data_scope_kind": "branch",
-            "data_scope_values": ["B2"],
+            "data_scope_kind": "all",
+            "data_scope_values": [],
         },
     )
     assert response.status_code == 201, response.text
@@ -1019,7 +999,42 @@ def test_a_reader_key_is_issued_through_the_route_under_account_administration(
     assert issued["record"]["purpose"] == "reader"
     pulled = _pull(db_client, {"Authorization": f"Bearer {issued['key']}"})
     assert pulled.status_code == 200, pulled.text
-    assert {row["branch.code"] for row in _rows(pulled)} == {"B2"}
+    assert {row["branch.code"] for row in _rows(pulled)} == {"B1", "B2"}
+
+
+@pytest.mark.parametrize("kind", [DataScope.BRANCH, DataScope.REGION])
+def test_reader_key_narrowing_is_refused_before_creating_a_credential(
+    db_client: TestClient, db_session: Session, mart: Bank, kind: DataScope
+) -> None:
+    admin = _account_admin_headers(db_session)
+    before = db_session.scalar(select(func.count()).select_from(IntegrationKey))
+    users_before = db_session.scalar(select(func.count()).select_from(User))
+    response = db_client.post(
+        "/api/v1/integration-keys",
+        headers=admin,
+        json={
+            "bank_id": BANK_ID,
+            "label": "Unsupported narrowed report server",
+            "purpose": "reader",
+            "data_scope_kind": kind.value,
+            "data_scope_values": ["B1"],
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert "only for Credit" in response.text
+    with pytest.raises(HTTPException) as refused:
+        integration_keys.issue_key(
+            db_session,
+            TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
+            BANK_ID,
+            "Unsupported direct issuance",
+            purpose="reader",
+            data_scope=kind,
+            data_scope_values=("B1",),
+        )
+    assert refused.value.status_code == 422
+    assert db_session.scalar(select(func.count()).select_from(IntegrationKey)) == before
+    assert db_session.scalar(select(func.count()).select_from(User)) == users_before
 
 
 def _account_admin_headers(db: Session) -> dict[str, str]:

@@ -346,3 +346,101 @@ test.describe("scoped grant administration", () => {
     );
   });
 });
+
+test.describe("Credit-only book coverage", () => {
+  test.use({ storageState: ownerState });
+  test("narrowing is offered only for Credit and persists the selected branch", async ({
+    page,
+  }) => {
+    if (evidenceDir) {
+      await page.setViewportSize({ width: 1280, height: 1800 });
+    }
+    const ownerToken = await mintBackendToken("admin");
+    const ownerHeaders = { Authorization: `Bearer ${ownerToken}` };
+    await page.goto("/access/members");
+    await page
+      .locator("li")
+      .filter({ hasText: "E2E Grant Member" })
+      .first()
+      .getByRole("button", { name: "Add grant" })
+      .click();
+    const composer = page.getByRole("dialog");
+    await composer.getByLabel("Role bundle").selectOption("viewer");
+    await composer
+      .getByLabel("Institution coverage")
+      .selectOption("BK-SAMP0001");
+    await composer.getByLabel("Module").selectOption("credit");
+    await composer.getByLabel("Sensitivity").selectOption("restricted");
+    await composer.getByLabel("Only the branches I choose").check();
+    await composer.getByRole("checkbox", { name: /Head Office/ }).check();
+    await expect(composer).toContainText(
+      "Figures for the institution as a whole are refused",
+    );
+    await expect(composer).toContainText(
+      "Regulatory Reporting authority; ICAAP requires Capital",
+    );
+    if (evidenceDir) {
+      await expect(
+        composer.getByTestId("grant-coverage-shortfall"),
+      ).toBeInViewport({ ratio: 1 });
+      await page.screenshot({
+        path: path.join(evidenceDir, "after-credit.png"),
+        fullPage: true,
+      });
+    }
+    await composer.getByLabel("Module").selectOption("liq");
+    await expect(composer.getByLabel("Only the branches I choose")).toHaveCount(
+      0,
+    );
+    await expect(composer.getByLabel("Only the regions I choose")).toHaveCount(
+      0,
+    );
+    await expect(composer.getByTestId("book-coverage")).toContainText(
+      "Only Credit supports",
+    );
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "after-liquidity.png"),
+        fullPage: true,
+      });
+    }
+    await composer.getByLabel("Module").selectOption("credit");
+    await expect(
+      composer.getByLabel("The institution's whole book"),
+    ).toBeChecked();
+    await composer.getByLabel("Only the branches I choose").check();
+    await composer.getByRole("checkbox", { name: /Head Office/ }).check();
+    await composer.getByLabel("Reason category").selectOption("other");
+    await composer
+      .getByLabel("Detail")
+      .fill("Branch credit review responsibilities");
+    await composer.getByRole("button", { name: "Review grant" }).click();
+    await composer.getByRole("button", { name: "Grant access" }).click();
+    await expect(
+      composer.getByText("Grant created", { exact: true }),
+    ).toBeVisible();
+    const listed = await page.request.get(
+      `${API}/authorization/bindings?principal_user_id=${member.id}`,
+      {
+        headers: ownerHeaders,
+      },
+    );
+    expect(listed.ok()).toBeTruthy();
+    const narrowed = (await listed.json()).bindings.find(
+      (row: { data_scope_kind: string }) => row.data_scope_kind === "branch",
+    );
+    expect(narrowed).toMatchObject({
+      module_scope: "credit",
+      data_scope_kind: "branch",
+      data_scope_values: ["BR-001"],
+    });
+    const revoked = await page.request.post(
+      `${API}/authorization/bindings/${narrowed.id}/revoke`,
+      {
+        headers: ownerHeaders,
+        data: { reason: "Finish isolated coverage journey" },
+      },
+    );
+    expect(revoked.ok()).toBeTruthy();
+  });
+});

@@ -51,7 +51,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 #: A Tuesday, deliberately not a month end and not the weekly anchor weekday.
 AS_OF = date(2026, 3, 31)
 FRIDAY = 4

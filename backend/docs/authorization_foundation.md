@@ -654,8 +654,8 @@ approved a return and filed it — and on an ungated return family the scalar
 carried by the `validator` bundle (`view` + `submit`, never `approve`), and
 `require_package_submit` takes one scoped path for every family: an interactive
 human, then one complete active binding over Regulatory Reporting / restricted
-for the exact institution. Visibility is still decided first, so a gated family
-the caller cannot see stays a `404`.
+for the exact institution. Visibility follows the
+[whole-institution family contract](#whole-institution-figures-and-credit-only-narrowing).
 
 No migration backfills the authority: granting it to everyone who could approve
 would encode the defect being removed, and unlike the ownership split this
@@ -720,3 +720,79 @@ grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
+
+## Whole-institution figures and Credit-only narrowing
+
+Corrected 2026-10-04. `scoped_authorization` defaults
+`require_whole_institution=True`, including its prefetched path, and
+`regulatory_reporting/family_access` applies the same rule to visibility,
+mutations and chain decisions. A matching binding is insufficient when its
+matched data scopes do not include the whole institution. The refusal reason
+is `institution_grain_requires_whole_institution`. A whole-book binding for a
+_different_ resource never cancels narrowing on this one.
+
+Only Credit supports new branch/region grants. `ScopedGrantInput`, public grant
+administration, the low-level binding service, and the database enforce that
+limit; Members offers the controls only for Credit. Credit loans, facets and
+activity apply the effective scope to rows and counts. BI query authorization
+explicitly opts out of the institution-figure gate because its compiler applies
+the scope; its institution-grain and non-attributable measures still refuse it.
+Other shared-gate callers must retain the default unless they implement and test
+row filtering, pagination and every count.
+
+Migration `202610040083` adds only the Credit-only data-scope CHECK, matching
+freshly created schemas. It does not rewrite grants, invalidate sessions or
+revoke integration keys. This rollout has only demo users; the disposable demo
+bootstrap explicitly grants whole-institution coverage for its non-Credit
+modules. Unsupported stored scopes are rejected by the schema rather than
+converted into whole-institution grants. Downgrade removes only the CHECK.
+
+Shared live summary, alerts, snapshots and window analytics also gate capital
+(CAPITAL/aggregated) and rating (MARKETS/aggregated), previously served ungated.
+Reconciliation amounts require at least one whole-institution engine view.
+Generic regulatory-run lists/details also gate Capital, Credit and enterprise
+stress under their module authorities. Direct enterprise-stress history,
+latest and detail reads require RISK/aggregated (history) or RISK/confidential
+(detail and execution response), with whole-institution coverage. Execution
+retains its existing mutation gate as well. This closes the parallel read path
+that otherwise disclosed capital stress outcomes independently of the FX
+projection. This is a denial-only access change; no bindings are backfilled. Run
+`scripts/authorization_access_impact.py` for each enforcement deployment
+and retain its dated output outside the repository.
+
+Regulatory **returns**, including the legacy BSD previews, follow their return
+authority independently of the underlying engine runs: every ordinary return
+requires whole-institution REG/restricted VIEW; ICAAP retains CAPITAL/confidential
+and its workspace freeze rules. Ordinary generation additionally requires REG/restricted RUN. Package
+lists filter before counts and pagination. Calendar/anchor links, signing
+inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
+without that authority. Package comparisons filter both referenced packages by
+family before disclosing mismatches. Ordinary approval, signing and nomination
+no longer fall back to scalar roles; the action permission and maker/checker
+conditions remain required. Caller-owned signer identity and signature-appearance setup
+require an interactive human with current authorization, without a scalar-role
+gate; setup confers no package access or signing authority. A visible package
+without the action permission returns 403; an invisible package returns 404.
+Report comparisons use the same whole-book module authority as regulatory-run details.
+
+Calendar redaction and filing-notification visibility follow
+[the reporting disclosure contract](../../docs/regulatory_reporting.md#filing-state-disclosure).
+
+No return authority is inferred or backfilled. Existing whole-institution REG
+(or explicit all-module/all-sensitivity) grants continue to qualify according
+to their bundle permissions; an Org Owner must explicitly issue an appropriate
+whole-institution reporting grant for a former scalar-only reader or preparer.
+Valid Credit grants remain valid for Credit, and never grant reporting access.
+
+Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
+shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
+regulatory figures, every registered return family's read/download paths,
+generation, legacy approval, signing inboxes and calendar links alongside a
+row-filtered Credit control;
+`tests/services/test_institution_data_scope_enforcement.py` exercises matching
+narrowed bindings through both shared gates and family visibility;
+`tests/api/test_data_scope_grants.py` refuses every unsupported module;
+`tests/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
+and downgrade/re-upgrade on Postgres;
+`tests/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on
+both database dialects. The existing Credit and BI suites prove row filtering on their surfaces.

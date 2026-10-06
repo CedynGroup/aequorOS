@@ -173,6 +173,9 @@ class _RegulatoryRunAuthorizationPolicy:
 
 
 _REGULATORY_RUN_AUTHORIZATION = {
+    "capital": _RegulatoryRunAuthorizationPolicy(Module.CAPITAL, "capital"),
+    "credit": _RegulatoryRunAuthorizationPolicy(Module.CREDIT, "credit"),
+    "enterprise_stress": _RegulatoryRunAuthorizationPolicy(Module.RISK, "enterprise_stress"),
     MODULE_LIQUIDITY: _RegulatoryRunAuthorizationPolicy(
         Module.LIQUIDITY,
         "liquidity",
@@ -419,12 +422,9 @@ def list_regulatory_runs(  # noqa: PLR0913
     )
 
 
-def get_regulatory_run(
-    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
-) -> RegulatoryRunRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
-    run = _run_or_404(db, ctx, bank.id, run_id)
-    policy = _REGULATORY_RUN_AUTHORIZATION.get(run.module)
+def require_regulatory_run_read(db: Session, ctx: TenantContext, bank: Bank, module: str) -> None:
+    """Run figures and comparisons share whole-institution module authority."""
+    policy = _REGULATORY_RUN_AUTHORIZATION.get(module)
     if policy is not None:
         scoped_authorization.require_resolved_bank_permission(
             db,
@@ -437,6 +437,14 @@ def get_regulatory_run(
             denial_status=status.HTTP_404_NOT_FOUND,
             denial_detail="Regulatory run not found.",
         )
+
+
+def get_regulatory_run(
+    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
+) -> RegulatoryRunRead:
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    run = _run_or_404(db, ctx, bank.id, run_id)
+    require_regulatory_run_read(db, ctx, bank, run.module)
     response = _read_run(db, run)
     if run.module == "enterprise_stress":
         return enterprise_run_visibility.project_response(
@@ -552,7 +560,15 @@ def get_liquidity_dashboard(
 def get_bsd3_preview(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd3PreviewRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="bsd3_preview",
+    )
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
     if run is None:

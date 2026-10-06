@@ -73,6 +73,9 @@ DETAIL_COLUMNS = tuple("ABCDEFGHIJKLMN")
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _seed_slice(db: Session, as_of: date) -> None:
     batch = IngestionBatch(
         organization_id=ORG_1,

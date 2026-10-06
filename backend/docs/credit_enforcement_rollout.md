@@ -108,11 +108,9 @@ the resolved bank. Each surface names its gate list in one tuple
 `window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
 `("credit", Module.CREDIT)` is in every one of them.
 
-**Capital is deliberately still ungated on these surfaces.** Its live-metric
-row, findings and `car_pct` daily aggregate are served to every tenant reader,
-exactly as before this release. Gating it is the capital contract's decision,
-not a side effect of this one, and the existing capital, FX, IRRBB and FTP
-regression tests use capital as the always-visible control row.
+Shared-feed whole-institution enforcement, including the Capital and rating
+policies and reconciliation visibility, follows
+[the foundation contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
 
 Sensitivity is exact: a CREDIT/`confidential` or CREDIT/`restricted` row (the
 Phase 4 blotter sentence) does NOT unlock the aggregated shared feeds. Add the
@@ -421,20 +419,9 @@ branch-level credit dashboard is, with its own limit set. It is deliberately not
 attempted here; refusing is the deny-by-default answer and it leaves the decision
 open rather than pre-empting it with a plausible-looking number.
 
-**`require_whole_institution` defaults to True, which changes every other module
-too.** This cutover is the first to consult a binding's data scope, and the gate
-it uses (`deps._require_institution_permission`) is shared with capital,
-liquidity, FX, FTP, ILAAP, capital-plan and the regulatory package surfaces. With
-the other default, the moment `202609270073` ships and the Members composer can
-set a branch, an Org Owner could compose a sentence restricting a reader to one
-branch and those surfaces would serve the whole book anyway — a grant that lies.
-They refuse instead, and for them refusing is not merely safe but correct: capital
-adequacy, liquidity coverage, an FX position, a funds-transfer price and a return
-addressed to the regulator are all institution figures. A module that later wants
-to APPLY a scope opts out explicitly and must then filter its rows AND every
-count; `tests/architecture/test_credit_route_authorization.py` pins the default and
-the exact number of opt-outs, so a third one is a visible decision rather than a
-quiet one.
+The [whole-institution contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+owns the shared gates and the requirements for opting out. Credit's row-filtered
+surfaces are described below.
 
 ### How the scope is applied where it IS applied
 
@@ -603,10 +590,10 @@ The order is forced, because the gate script cannot run before the migration:
    selects the whole binding row.
 2. Run `scripts/authorization_access_impact.py` and keep the dated output.
 3. Run the route-level inventory (§Who loses access) BEFORE and AFTER. This is the
-   gate that answers THIS cutover: the access-impact script projects bindings to a
-   per-institution MODULE list and reports neither sensitivity nor data scope, so
-   it cannot distinguish a reader who keeps the dashboard from one who loses the
-   blotter. Both outputs belong in the record.
+   surface-specific evidence alongside the projection: keep the access-impact
+   script's `--json` output to retain every view capability's module, sensitivity
+   and data scope. Its compact table folds whole-institution capabilities together.
+   Both outputs belong in the record.
 4. Attach the exact list of principals who lose each credit surface.
 5. Attach every institution-approved CREDIT row created before release, per the
    table above.
@@ -616,28 +603,29 @@ The order is forced, because the gate script cannot run before the migration:
    until it is regenerated, and the dashboard's credit surfaces should surface the
    scope rather than silently show a scoped total as the institution's.
 
+### Official Credit execution authority
+
+Direct Credit batches, data activation with `run_calculations=true`, requested
+and scheduled official runs require whole-institution CREDIT/confidential `run`.
+Activation and enqueue preflight the planned Credit engine before deriving facts
+or creating jobs; the worker rechecks current authority before reading its period.
+Scheduled actor selection follows the
+[queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
+The Credit batch service independently enforces it before reading inputs or
+persisting a run, including callers through `data_activation.run_official_modules`.
+Branch- and region-limited Credit grants cannot satisfy any of these gates.
+Derivation-only activation remains unchanged. No grants are backfilled or widened.
+
 ### Still open after Phase 4 (named, not fixed)
 
-1. **`POST /banks/{bank_id}/official-runs` can still mint a credit official run
-   without the credit `run` sentence.** `live_view.mint_official_run` requires
-   CREDIT/`confidential`/`run`… for liquidity, IRRBB, FX and FTP only; its engine
-   tuple omits `credit` (and `capital`). `data_activation.activate_bank_data` has
-   the same tuple with the same omission. So after this cutover the direct route
-   is gated and the shared minting path is not. Both files are outside this
-   cutover's scope; the fix is one tuple entry each, and until it lands the credit
-   run sentence is not the only way to seal a credit run.
-2. **Credit export.** Only the `analyst` bundle carries `export`, so a
+1. **Credit export.** Only the `analyst` bundle carries `export`, so a
    record-level blotter CSV would need CREDIT/`restricted` `export` and would be
    unavailable to Viewers, Auditors and Approvers without a bundle change. There is
    no credit export route today; decide before adding one.
-3. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
+2. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
    limits, classification grids) stay on `Tenant` reads and `ApproverTenant`
    writes. They are recorded here so the omission does not read as an oversight.
-4. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
+3. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
    scope explains why a sliced dashboard, migration matrix, vintage curve or PD is
    refused rather than computed. If a bank wants them, they need their own limit
    set and their own payload statement of the population.
-5. **The access-impact script has no sensitivity or data-scope column.** It is the
-   standing cutover gate, and for a cutover whose whole content is sensitivity and
-   data scope it can only answer half the question. Extending it belongs with that
-   script.

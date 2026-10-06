@@ -74,8 +74,8 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    is not exactly carryable offers nothing (A360-2 M2).
 8. **Org Owners grant BI sentences.** Nothing is backfilled — a bank that granted
    its Treasurer LIQUIDITY/`aggregated` already has BI liquidity under that row;
-   branch or region slices are stored on the binding (`data_scope_kind` /
-   `data_scope_values`), never described in the reason. Run the gate AFTER and diff
+   choose scopes from the [supported BI grant table](bi_enforcement_rollout.md#exact-binding-rows).
+   Store any supported slice on the binding, never in the reason. Run the gate AFTER and diff
    every column, `data scope` included.
 9. **Optionally** `BI_ALERTS_ENABLED=1` (evaluated by a succeeded mart build; owns
    no tick) and `BI_SUBSCRIPTIONS_ENABLED=1` (owns a tick branch; needs the

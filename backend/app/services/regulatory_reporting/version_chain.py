@@ -42,7 +42,12 @@ from app.schemas.regulatory_reporting import (
     PackageVersionSignatureRead,
     RegulatoryArtifactRead,
 )
-from app.services.regulatory_reporting import artifact_versions, snapshot_diff, workflow
+from app.services.regulatory_reporting import (
+    artifact_versions,
+    family_access,
+    snapshot_diff,
+    workflow,
+)
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_package_or_404,
@@ -162,9 +167,24 @@ def compare_versions(
     supervisor legitimately asks for: a later version of the same filing, the
     same return at an earlier reporting date, or solo against consolidated.
     """
-    get_bank_or_404(db, ctx, bank_id)
-    base = get_package_or_404(db, ctx, bank_id, package_id)
-    target = get_package_or_404(db, ctx, bank_id, against_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
+    hidden = family_access.hidden_families(db, ctx, bank)
+    packages = {
+        package.id: package
+        for package in db.scalars(
+            select(RegulatoryPackage).where(
+                RegulatoryPackage.organization_id == ctx.organization_id,
+                RegulatoryPackage.bank_id == bank.id,
+                RegulatoryPackage.id.in_((package_id, against_id)),
+                RegulatoryPackage.return_family.notin_(hidden),
+            )
+        )
+    }
+    if package_id not in packages or against_id not in packages:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
+        )
+    base, target = packages[package_id], packages[against_id]
     if base.return_code != target.return_code:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

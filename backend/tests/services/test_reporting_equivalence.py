@@ -61,7 +61,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority")
+pytestmark = [
+    pytest.mark.usefixtures("fx_run_authority"),
+    pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
+]
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1

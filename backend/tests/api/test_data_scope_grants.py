@@ -737,3 +737,44 @@ def test_baseline_membership_cannot_carry_a_narrow_data_scope(scope_client: Test
             grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
             reason="a baseline membership row must not slice the book",
         )
+
+
+@pytest.mark.parametrize(
+    "module", [module for module in ModuleScope if module is not ModuleScope.CREDIT]
+)
+@pytest.mark.parametrize("kind", ["branch", "region"])
+def test_narrowing_is_credit_only_on_preview_and_issue(
+    scope_client: TestClient, module: ModuleScope, kind: str
+) -> None:
+    payload = _payload(
+        module_scope=module.value, data_scope_kind=kind, data_scope_values=["ACC-001"]
+    )
+    for path in ("/preview", ""):
+        response = scope_client.post(
+            f"/api/v1/authorization/bindings{path}",
+            headers=_owner_headers(),
+            json=payload if path else {**payload, "expected_authority_sentence": "unreviewed"},
+        )
+        assert response.status_code == 422, response.text
+        assert "only for Credit" in response.text
+    with _session() as db:
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.data_scope_kind != "all",
+                )
+            )
+        )
+        with pytest.raises(grant_administration.GrantAdministrationError, match="only for Credit"):
+            grant_administration.validate_public_grant(
+                RoleBundle.VIEWER,
+                authorization.BindingScope(
+                    InstitutionScope.INSTITUTION,
+                    BANK_A,
+                    module,
+                    SensitivityScope.ALL,
+                    DataScope(kind),
+                    ("ACC-001",),
+                ),
+            )

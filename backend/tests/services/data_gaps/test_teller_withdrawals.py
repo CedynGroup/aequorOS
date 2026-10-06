@@ -58,6 +58,9 @@ M = 1_000_000
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> str:
     """Materialise the hermetic book; return the latest period end."""
     session = get_sessionmaker()()

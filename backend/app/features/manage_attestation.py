@@ -21,10 +21,9 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 
 from app.api.deps import (
-    ApproverTenant,
     DbSession,
     GrantAdminTenant,
-    MutationTenant,
+    ScopedMutationTenant,
     Tenant,
 )
 from app.features.manage_banks import BankReference
@@ -62,7 +61,7 @@ router = APIRouter(tags=["attestation"])
     response_model=SignerIdentityRead,
     operation_id="getMySignerIdentity",
 )
-def get_my_signer_identity(db: DbSession, ctx: MutationTenant) -> SignerIdentityRead:
+def get_my_signer_identity(db: DbSession, ctx: ScopedMutationTenant) -> SignerIdentityRead:
     """The caller's own permanent signer identity, provisioning it if absent."""
     return attestation_api.my_signer_identity(db, ctx)
 
@@ -89,7 +88,7 @@ def preview_certification(
     package_id: UUID,
     signing_role: str,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> CertificationPreviewRead:
     """Exactly what will be signed — digest, figures, and the statement."""
     return attestation_api.preview(db, ctx, bank_id, package_id, signing_role)
@@ -106,7 +105,7 @@ def step_up_for_signing(  # noqa: PLR0913 - FastAPI injects db/ctx/request
     payload: StepUpRequest,
     request: Request,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StepUpGrantedRead:
     """Prove presence now; receive a single-use authorisation bound to the figures."""
     return attestation_api.step_up(db, ctx, bank_id, package_id, payload, request)
@@ -122,7 +121,7 @@ def certify_package(
     package_id: UUID,
     payload: CertifyRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Record a signature.
 
@@ -143,7 +142,7 @@ def certify_and_send_package(
     package_id: UUID,
     payload: CertifyAndSendRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Certify and nominate the remaining signers in one act.
 
@@ -164,7 +163,7 @@ def send_package_back_for_corrections(
     package_id: UUID,
     payload: SendBackForCorrectionsRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """The reviewing approver's second exit: return it with a note, unsigned.
 
@@ -198,7 +197,7 @@ def set_package_signature_placements(
     package_id: UUID,
     payload: PackageSignaturePlacementRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ResolvedSignaturePlacementsRead:
     """Place this return's signature fields; an empty list falls back to the template.
 
@@ -218,7 +217,7 @@ def update_package_signature_routing(
     package_id: UUID,
     payload: SignatureRoutingUpdateRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Re-assign outstanding signatures — the escape hatch for an absent nominee.
 
@@ -234,7 +233,7 @@ def update_package_signature_routing(
     operation_id="listReturnsAwaitingMySignature",
 )
 def list_returns_awaiting_my_signature(
-    db: DbSession, ctx: MutationTenant
+    db: DbSession, ctx: ScopedMutationTenant
 ) -> AwaitingSignatureListRead:
     """Returns routed to the caller and still unsigned."""
     return attestation_api.awaiting_my_signature(db, ctx)
@@ -245,7 +244,7 @@ def list_returns_awaiting_my_signature(
     response_model=AdoptedSignatureRead,
     operation_id="getMyAdoptedSignature",
 )
-def get_my_adopted_signature(db: DbSession, ctx: MutationTenant) -> AdoptedSignatureRead:
+def get_my_adopted_signature(db: DbSession, ctx: ScopedMutationTenant) -> AdoptedSignatureRead:
     """The caller's adopted mark, plus the font choices available for a typed one."""
     return attestation_api.my_adopted_signature(db, ctx)
 
@@ -256,7 +255,7 @@ def get_my_adopted_signature(db: DbSession, ctx: MutationTenant) -> AdoptedSigna
     operation_id="adoptMySignature",
 )
 def adopt_my_signature(
-    payload: AdoptSignatureRequest, db: DbSession, ctx: MutationTenant
+    payload: AdoptSignatureRequest, db: DbSession, ctx: ScopedMutationTenant
 ) -> AdoptedSignatureRead:
     """Adopt or re-adopt the caller's own signature mark.
 
@@ -305,7 +304,7 @@ def void_attestation(
     package_id: UUID,
     payload: VoidAttestationRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> AttestationStatusRead:
     """Withdraw the current attestation. Signatures are retained, never deleted."""
     return attestation_api.void(db, ctx, bank_id, package_id, payload.reason)

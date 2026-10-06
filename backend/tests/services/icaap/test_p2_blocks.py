@@ -33,6 +33,8 @@ from app.services.icaap import blocks, pillar2, risks
 from tests.api.helpers import ORG_1
 from tests.services.icaap.conftest import AS_OF
 
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
 CHECKER = uuid4()
 
 

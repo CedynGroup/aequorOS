@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.models import (
     AttestationSignature,
     Bank,
@@ -70,6 +71,7 @@ from app.services.regulatory_reporting.eligibility import (
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
+from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -81,7 +83,11 @@ from tests.services.test_lrt_packs import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 
@@ -96,6 +102,14 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 def _seed_with_baseline_run(db: Session) -> None:
     materialize_canonical_test_book(db)
+    grant_institution_authority(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=DEMO_USER_ID,
+        bundle=RoleBundle.ANALYST,
+    )
+    db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -621,7 +635,9 @@ def test_register_state_digest_ignores_row_order_and_covers_new_rows(
 
 def test_register_state_rows_are_tenant_scoped(db_session: Session) -> None:
     _seed_full_register(db_session)
-    other_tenant = TenantContext(organization_id="OR-NOSUCH1", actor_user_id=DEMO_USER_ID)
+    other_tenant = TenantContext(
+        organization_id="OR-NOSUCH1", actor_user_id=DEMO_USER_ID, authorization_version=1
+    )
     assert register_state.register_state_rows(db_session, other_tenant, SAMPLE_BANK_ID) == []
 
 
@@ -729,7 +745,7 @@ def test_every_export_appends_an_artifact_version_with_storage_version(
     assert version.checksum_sha256 == artifact.checksum_sha256
     assert version.size_bytes == artifact.size_bytes
     assert version.created_by == DEMO_USER_ID
-        # The backend reports an object-store version id, so "the artifact as
+    # The backend reports an object-store version id, so "the artifact as
     # filed" is resolvable from the database rather than only from the bucket.
     assert version.storage_version_id
     stored = next(
@@ -763,7 +779,7 @@ def test_a_signature_pinning_a_version_blocks_re_export(
     export_package(db_session, MAKER, package, "pdf")
     db_session.commit()
     version = _artifact_versions(db_session, package.id)[0]
-    
+
     db_session.add(_signature_over(package, version))
     db_session.commit()
 

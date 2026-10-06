@@ -53,6 +53,9 @@ S1, S2 = "BSG17-SHEET 1", "BSD17 -SHEET 2"
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> str:
     """Materialise the hermetic book; return the latest period end (ISO)."""
     session = get_sessionmaker()()

@@ -59,7 +59,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 @pytest.fixture(autouse=True)
@@ -294,6 +294,11 @@ def test_t8_regulatory_registry_filters_liquidity_before_count_and_page(
     db_client: TestClient,
 ) -> None:
     period_id = _seed_book()
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     session = get_sessionmaker()()
     try:
         regulatory_capital.create_capital_run(
@@ -406,6 +411,7 @@ def test_official_enqueue_preserves_mixed_module_gate(
     role: str,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(
@@ -562,6 +568,9 @@ def test_activation_reaches_derivation_with_required_authority(
     period_id = _seed_book()
     if run_calculations:
         _grant(
+            RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL
+        )
+        _grant(
             RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
         )
     with get_sessionmaker()() as session:
@@ -643,6 +652,7 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     operation: str,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(
         RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
     )

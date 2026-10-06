@@ -13,12 +13,13 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from app.api.deps import DbSession, MutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.enterprise_stress import (
     EnterpriseStressRead,
     EnterpriseStressRunCreate,
     EnterpriseStressRunSummary,
 )
-from app.services import enterprise_stress
+from app.services import enterprise_stress, scoped_authorization
 
 router = APIRouter(tags=["enterprise-stress"])
 
@@ -35,6 +36,16 @@ def run_enterprise_stress(
     db: DbSession,
     ctx: MutationTenant,
 ) -> EnterpriseStressRead:
+    # The execution response contains the same whole-book figures as a detail read.
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.RISK,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="enterprise_stress_execution_response",
+    )
     return enterprise_stress.run_enterprise_stress_test(db, ctx, bank_id, payload)
 
 

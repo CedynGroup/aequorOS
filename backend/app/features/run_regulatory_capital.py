@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import CapitalAggregatedView, CapitalConfidentialView, CapitalRun, DbSession
+from app.api.deps import CapitalAggregatedView, CapitalRun, DbSession, Tenant
 from app.schemas.regulatory_capital import (
     Bsd2PreviewRead,
     CapitalDashboardRead,
@@ -85,6 +85,6 @@ def get_bsd2_preview(
     bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
-    access: CapitalConfidentialView,
+    ctx: Tenant,
 ) -> Bsd2PreviewRead:
-    return regulatory_capital.get_bsd2_preview(db, access.ctx, bank_id, reporting_period_id)
+    return regulatory_capital.get_bsd2_preview(db, ctx, bank_id, reporting_period_id)

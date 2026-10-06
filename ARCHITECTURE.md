@@ -750,21 +750,11 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ### Phase 4 and Phase 5 additions (2026-09-27..28)
 
-- **A binding is now a five-dimension sentence.** `authorization_bindings`
-  carries `data_scope_kind` (`all | branch | region`) and `data_scope_values`
-  (migration `202609270073`; a non-`all` row must carry a NON-EMPTY list, by
-  CHECK, so "no branches" is storable only as no rows). The scope is reduced
-  PER CAPABILITY — `authorization.reduce_data_scope` over the bindings that
-  matched that exact resource; unioning ids matched against different
-  resources was audit blocker A10-01 — resolved against the ingested branch
-  dimension by `app/services/bi/data_scope.py` (a region grant covers whatever
-  the region contains NOW; an unknown code matches nothing, never everything),
-  and handed to `compile_query` BESIDE the `BiQuery`, so no client predicate can
-  reach or remove it. Institution-grain measures are refused to a scoped
-  principal rather than sliced. The same filter is applied by the credit
-  blotter and by the feed; `/auth/me` projects the scope per capability, and
-  `scripts/authorization_access_impact.py` reports it — the gate for any
-  cutover that touches it.
+- **Binding data scope** is governed by the
+  [whole-institution contract](backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+  [BI scope reduction and compiler injection](backend/docs/bi_enforcement_rollout.md#branch-and-region-scope-is-enforced-desk-and-currency-are-not)
+  and [Credit row filtering](backend/docs/credit_enforcement_rollout.md)
+  describe the row-filtered surfaces; `/auth/me` projects scope per capability.
 - **`bi_reader` is the second machine bundle** (`{view}`, disjoint from
   `integration_writer`'s `{ingest}`, machine-only by CHECK; `202609270074`),
   minted with an integration key (`purpose=reader`) for the **Power BI Stage B

@@ -56,6 +56,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.models import (
     AttestationSignature,
     Bank,
@@ -76,6 +77,7 @@ from app.services.attestation.identity import ensure_signer_identity
 from app.services.regulatory_reporting import generation, validation
 from app.services.regulatory_reporting.exports import export_package
 from app.storage.client import ObjectMetadata, StorageLocation
+from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -84,9 +86,13 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_USER_ID)
+CHECKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 #: The offline CLI is loaded from its file, not imported as a module, because it
@@ -259,6 +265,18 @@ def _seed(db: Session) -> RegulatoryPackage:
             reason="Test policy: BSD3 requires a preparer and a distinct approver.",
         )
     )
+    db.commit()
+    for user_id, bundle in (
+        (DEMO_USER_ID, RoleBundle.ANALYST),
+        (CHECKER_USER_ID, RoleBundle.APPROVER),
+    ):
+        grant_institution_authority(
+            db,
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user_id,
+            bundle=bundle,
+        )
     db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
@@ -553,9 +571,7 @@ def test_snapshot_mutation_alone_is_caught_by_the_generation_seal(
     assert _status(report, verify.CHECK_DETACHED_ATTESTATION) == "passed"
 
 
-def test_mutated_engine_run_inputs_fail_content_binding(
-    db_session: Session, pki: _Pki
-) -> None:
+def test_mutated_engine_run_inputs_fail_content_binding(db_session: Session, pki: _Pki) -> None:
     """The run behind the figures is immutable evidence; prove it still is."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
@@ -639,9 +655,7 @@ def test_corrupted_signature_value_fails_only_the_detached_check(
     assert report["overall_passed"] is False
 
 
-def test_a_swapped_certificate_fails_the_detached_check(
-    db_session: Session, pki: _Pki
-) -> None:
+def test_a_swapped_certificate_fails_the_detached_check(db_session: Session, pki: _Pki) -> None:
     """Substituting another officer's certificate cannot rescue a signature."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
@@ -657,9 +671,7 @@ def test_a_swapped_certificate_fails_the_detached_check(
     assert "does not verify against this certificate" in detached["detail"]
 
 
-def test_a_rewritten_statement_fails_the_detached_check(
-    db_session: Session, pki: _Pki
-) -> None:
+def test_a_rewritten_statement_fails_the_detached_check(db_session: Session, pki: _Pki) -> None:
     """What-you-see-is-what-you-sign: the wording is inside the signed payload."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
@@ -678,9 +690,7 @@ def test_a_rewritten_statement_fails_the_detached_check(
 # --- (d) the hash chain -----------------------------------------------------
 
 
-def test_broken_hash_chain_is_detected_and_fails_the_report(
-    db_session: Session, pki: _Pki
-) -> None:
+def test_broken_hash_chain_is_detected_and_fails_the_report(db_session: Session, pki: _Pki) -> None:
     """A removed or re-ordered signature leaves the next entry's prev_hash dangling."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
@@ -721,9 +731,7 @@ def _to_pyhanko_signer(pki: _Pki, key_ref: str) -> pyhanko_signers.SimpleSigner:
     )
 
 
-def _sign_pdf(
-    payload: bytes, pki: _Pki, *, key_ref: str, field_name: str, certify: bool
-) -> bytes:
+def _sign_pdf(payload: bytes, pki: _Pki, *, key_ref: str, field_name: str, certify: bool) -> bytes:
     """One incremental PAdES revision. ``certify=True`` sets DocMDP FILL_FORMS."""
     writer = IncrementalPdfFileWriter(io.BytesIO(payload))
     metadata = (
@@ -761,9 +769,7 @@ def _store_signed_pdf(
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
     checksum = hashlib.sha256(payload).hexdigest()
-    location = StorageLocation(
-        institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH
-    )
+    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH)
     stored = storage_client.write(
         location,
         io.BytesIO(payload),
@@ -1012,9 +1018,7 @@ def test_a_page_added_after_signing_fails_the_tamper_check(
 
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    location = StorageLocation(
-        institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH
-    )
+    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH)
     replacement = storage.write(
         location,
         io.BytesIO(tampered),
@@ -1149,9 +1153,7 @@ def test_offline_cli_verifies_a_clean_record_with_no_database(
     root = tmp_path / "root.pem"
     root.write_bytes(pki.ca_pem)
 
-    exit_code = cli.main(
-        ["--record", str(record), "--pdf", str(pdf), "--trust-root", str(root)]
-    )
+    exit_code = cli.main(["--record", str(record), "--pdf", str(pdf), "--trust-root", str(root)])
     assert exit_code == 0
 
 
@@ -1171,9 +1173,7 @@ def test_offline_cli_exits_non_zero_on_a_tampered_pdf(
     pdf = tmp_path / "BSD3-tampered.pdf"
     pdf.write_bytes(bytes(tampered))
 
-    exit_code = cli.main(
-        ["--record", str(record), "--pdf", str(pdf), "--trust-root", str(root)]
-    )
+    exit_code = cli.main(["--record", str(record), "--pdf", str(pdf), "--trust-root", str(root)])
     assert exit_code == 1
     results = cli.run_checks(
         json.loads(record.read_text("utf-8")), pdf, cli._load_trust_roots([root])
@@ -1197,9 +1197,7 @@ def test_offline_cli_exits_non_zero_on_a_tampered_record(
     assert cli.main(["--record", str(record), "--trust-root", str(root)]) == 0
 
     forged = json.loads(record.read_text("utf-8"))
-    forged["signatures"][0]["signature_value_b64"] = bundle["signatures"][1][
-        "signature_value_b64"
-    ]
+    forged["signatures"][0]["signature_value_b64"] = bundle["signatures"][1]["signature_value_b64"]
     record.write_text(json.dumps(forged), encoding="utf-8")
     assert cli.main(["--record", str(record), "--trust-root", str(root)]) == 1
 
@@ -1251,9 +1249,7 @@ def test_offline_cli_refuses_unknown_inputs_with_a_distinct_exit_code(
     assert cli.main(["--record", str(wrong_schema)]) == 2
 
 
-def test_offline_cli_canonicalisation_matches_the_platform(
-    db_session: Session, pki: _Pki
-) -> None:
+def test_offline_cli_canonicalisation_matches_the_platform(db_session: Session, pki: _Pki) -> None:
     """The CLI duplicates the recipe on purpose; this is what stops it drifting."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
@@ -1326,7 +1322,9 @@ def test_verification_is_tenant_scoped(db_session: Session, pki: _Pki) -> None:
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
 
-    other = TenantContext(organization_id="OR-NOSUCH1", actor_user_id=DEMO_USER_ID)
+    other = TenantContext(
+        organization_id="OR-NOSUCH1", actor_user_id=DEMO_USER_ID, authorization_version=1
+    )
     report = verify.verify_attestation(db_session, other, package)
     assert report["signatures"] == []
     assert _status(report, verify.CHECK_DETACHED_ATTESTATION) == "skipped"

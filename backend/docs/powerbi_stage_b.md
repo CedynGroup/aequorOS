@@ -18,7 +18,7 @@ connection from the report server. **AequorOS will not issue one, and the reason
 is a property of the database rather than a policy preference.**
 
 Every tenant-scoped table in the platform is protected by PostgreSQL row-level
-security, and the policy keys on a *session* setting — `app.organization_id` —
+security, and the policy keys on a _session_ setting — `app.organization_id` —
 that the application sets at the start of each transaction. That design is what
 makes it impossible for one institution's request to read another's rows. It also
 means the setting is a property of the connection, not of the credential:
@@ -31,7 +31,7 @@ means the setting is a property of the connection, not of the credential:
   that the session itself chooses.
 
 There is no third option. Worse, a report server or gateway connects through a
-connection *pool*: connections are reused across refreshes, so even a
+connection _pool_: connections are reused across refreshes, so even a
 well-behaved direct reader has no stable place to put the tenant identity. A
 pooled connection that inherits the previous refresh's setting is the failure
 mode, and it fails silently — with numbers, not an error.
@@ -77,11 +77,11 @@ Authorization: Bearer aeq_live_…
 
 You cannot name a table, a column, or a filter. You name one of these:
 
-| Dataset | One row is | Columns |
-|---|---|---|
-| `loan_book` | one reporting date × branch × product family × economic sector × impairment stage | `time.date`, `branch.code`, `product.family`, `loan.sector`, `loan.ifrs9_stage`, `loans.balance_rc`, `loans.npl_exposure_rc`, `loans.par_90_exposure_rc`, `loans.provision_required_rc`, `loans.provision_held_rc`, `loans.collateral_rc`, `loans.count` |
-| `deposit_book` | one reporting date × branch × product family × account type × maturity bucket | `time.date`, `branch.code`, `product.family`, `position.deposit_account_type`, `position.maturity_bucket`, `deposits.balance_rc`, `deposits.demand_balance_rc`, `deposits.count` |
-| `regulatory_metrics` | one reporting date, for the whole institution | `time.date`, then the filed (`.official`) and continuously re-derived (`.live`) capital, liquidity, interest-rate and foreign-exchange ratios |
+| Dataset              | One row is                                                                        | Columns                                                                                                                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loan_book`          | one reporting date × branch × product family × economic sector × impairment stage | `time.date`, `branch.code`, `product.family`, `loan.sector`, `loan.ifrs9_stage`, `loans.balance_rc`, `loans.npl_exposure_rc`, `loans.par_90_exposure_rc`, `loans.provision_required_rc`, `loans.provision_held_rc`, `loans.collateral_rc`, `loans.count` |
+| `deposit_book`       | one reporting date × branch × product family × account type × maturity bucket     | `time.date`, `branch.code`, `product.family`, `position.deposit_account_type`, `position.maturity_bucket`, `deposits.balance_rc`, `deposits.demand_balance_rc`, `deposits.count`                                                                         |
+| `regulatory_metrics` | one reporting date, for the whole institution                                     | `time.date`, then the filed (`.official`) and continuously re-derived (`.live`) capital, liquidity, interest-rate and foreign-exchange ratios                                                                                                            |
 
 The exact column list for a dataset is also returned on every pull, in
 `X-Bi-Feed-Columns`. Validate against that header rather than hard-coding a
@@ -91,7 +91,7 @@ Three things the registry deliberately does **not** contain:
 
 - **No record-level dataset.** There is no obligor list, no position-level
   extract, no employer or counterparty name. The feed credential carries read
-  authority over *aggregated* figures only, so a dataset naming a legal person or
+  authority over _aggregated_ figures only, so a dataset naming a legal person or
   a single account could not be served even if it were registered. If your board
   pack genuinely needs named exposures, take a governed export from the
   application, where a named human's authority and signature are on it.
@@ -113,7 +113,7 @@ withdrawal is reversed; a supervisory parameter changes and a whole month is
 re-derived. AequorOS rebuilds the affected reporting date from scratch when that
 happens — the figures for an old date change while the date does not.
 
-So **the cursor is not a business date.** It is an opaque position in *build*
+So **the cursor is not a business date.** It is an opaque position in _build_
 time. Concretely:
 
 1. You pull with no `cursor`. You receive every reporting date the platform has
@@ -132,7 +132,7 @@ Append-only loading is wrong here and will silently double-count a restated
 month. Because replacement is idempotent, re-delivery is harmless — and the feed
 deliberately errs towards re-sending:
 
-- **`X-Bi-Feed-Next-Cursor: none`** means *do not advance your cursor*: send the
+- **`X-Bi-Feed-Next-Cursor: none`** means _do not advance your cursor_: send the
   same one again next time. It happens when everything served sits at or after a
   build that was still running when you pulled. Serving you a date twice costs a
   refresh; skipping one costs a year of wrong numbers.
@@ -150,13 +150,13 @@ when it is.
 
 ### Reading the other response headers
 
-| Header | What it tells you |
-|---|---|
-| `X-Bi-Feed-Data-Scope` | The slice of the institution this credential covers: the whole institution, or the named branches. **If this changes, your dataset has changed shape.** Alert on it. |
-| `X-Bi-Feed-Trust` | **REMOVED BY FOUNDER DECISION 2026-09-29.** This header carried a reconciliation verdict (`green` / `amber` / `red` / `grey`) of the feed's figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict. Do not build a page on it, and a loader that requires the header must stop requiring it. Freshness is `X-Bi-Feed-Build` (which build the rows came from) together with the rule above: a date whose build did not succeed is absent, never partial. |
-| `X-Bi-Feed-Build` | The fingerprint of the analytics build the rows came from. Two pulls with the same fingerprint read the same book. |
-| `X-Bi-Feed-Catalogue-Version` | Which definitions were in force. A change here can change what a column means. |
-| `X-Bi-Feed-Reporting-Date-Count` | How many dates the payload covers, for a cheap sanity check against your own load. |
+| Header                           | What it tells you                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Bi-Feed-Data-Scope`           | The coverage of this credential; supported issuance is defined in the [integration contract](../../docs/API_INTEGRATION.md#1-authentication). **If this changes, your dataset has changed shape.** Alert on it.                                                                                                                                                                                                                                                                                                                           |
+| `X-Bi-Feed-Trust`                | **REMOVED BY FOUNDER DECISION 2026-09-29.** This header carried a reconciliation verdict (`green` / `amber` / `red` / `grey`) of the feed's figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict. Do not build a page on it, and a loader that requires the header must stop requiring it. Freshness is `X-Bi-Feed-Build` (which build the rows came from) together with the rule above: a date whose build did not succeed is absent, never partial. |
+| `X-Bi-Feed-Build`                | The fingerprint of the analytics build the rows came from. Two pulls with the same fingerprint read the same book.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `X-Bi-Feed-Catalogue-Version`    | Which definitions were in force. A change here can change what a column means.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `X-Bi-Feed-Reporting-Date-Count` | How many dates the payload covers, for a cheap sanity check against your own load.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -174,10 +174,8 @@ never recovered.
 - A feed key names **one exact institution**. Presented against a sibling
   institution of the same group it answers `404`, exactly as another
   organisation's institution would: a credential cannot map your estate.
-- A feed key may be **narrowed to branches or regions**. It then serves only
-  those branches, on every dataset, and the institution-wide ratios in
-  `regulatory_metrics` are refused outright — a capital ratio computed over three
-  branches is a wrong number with a right-looking name.
+- For supported feed-key coverage and issuance, see the
+  [public integration contract](../../docs/API_INTEGRATION.md#1-authentication).
 - **Revocation is immediate and complete**: the credential, its authority and its
   machine identity are ended in one transaction. Revoke on any suspicion, and
   rotate on your own schedule.
@@ -205,7 +203,7 @@ advice, and AequorOS does not determine which of your data is critical — your
 institution does.
 
 **Why it matters to a BI project at all.** Microsoft Power BI's nearest data
-region is South Africa. A Power BI *Service* (cloud) dataset therefore holds a
+region is South Africa. A Power BI _Service_ (cloud) dataset therefore holds a
 copy of whatever it imports, outside Ghana, on infrastructure your institution
 does not control. That is true of any cloud BI service; Power BI is named because
 it is the tool this feed most often replaces or feeds.
@@ -222,8 +220,8 @@ it is the tool this feed most often replaces or feeds.
    configuration this document is written for.
 3. **Acceptable with sign-off — a gateway with the model kept on-premises.** An
    on-premises data gateway lets a cloud workspace query an in-country source.
-   Note precisely what this does and does not achieve: a *DirectQuery* model
-   leaves the rows in country and sends only query results; an *Import* model
+   Note precisely what this does and does not achieve: a _DirectQuery_ model
+   leaves the rows in country and sends only query results; an _Import_ model
    through a gateway **copies the rows into the cloud region**, and is
    configuration 4 wearing the clothes of configuration 3. Confirm which one your
    dataset uses before you sign anything.
@@ -237,8 +235,8 @@ it is the tool this feed most often replaces or feeds.
 - **Once data leaves through this feed, the platform's controls stop.** Inside
   AequorOS, every figure carries a data-scope filter the reader cannot remove and
   a logged authorization decision. A copy in a report model carries neither. Whoever can open the report can see the whole model,
-  whatever their authority in the bank; a branch-scoped feed key limits what is
-  *pulled*, not who reads the report afterwards.
+  whatever their authority in the bank. Feed authorization controls what is
+  _pulled_, not who reads the report afterwards.
 - **The feed's own record ends at the pull.** AequorOS can tell you that a
   credential took `loan_book` for eleven reporting dates at 03:00. It cannot tell
   you where those rows went next.

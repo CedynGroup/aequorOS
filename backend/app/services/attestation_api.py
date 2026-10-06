@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core import security
+from app.core.authorization import Permission
 from app.core.config import get_settings
 from app.models import (
     AdoptedSignatureAppearance,
@@ -101,43 +101,35 @@ def _validate_role(role: str) -> str:
     return role
 
 
-def _ensure_checker_authority(ctx: TenantContext, role: str) -> None:
-    """A checker slot needs the approver role, whatever the route's own gate.
-
-    The SCALAR ladder, which is the right and unchanged answer for every
-    ungated return family. A gated family supersedes it — see
-    :func:`_ensure_certify_authority`.
-    """
-    if role in CHECKER_ROLES and not security.has_role(list(ctx.roles), "approver"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"Certifying as '{role}' requires the approver role — "
-                "maker-checker cannot be satisfied by a preparer."
-            ),
-        )
-
-
 def _ensure_certify_authority(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str
 ) -> None:
-    """Who may certify: the scoped binding for a gated family, else the ladder.
-
-    A scalar role must never satisfy a scoped surface (authorization
-    foundation, AGENTS.md). For an ICAAP package the certifying officer holds
-    an exact CAPITAL/CONFIDENTIAL binding for that institution — EDIT to
-    certify as preparer, APPROVE to certify as approver or for the Board — and
-    a scalar ``approver`` with no binding is refused. Every other family keeps
-    the ladder it has always had, byte for byte.
-    """
+    """Certification requires the family's whole-institution scoped authority."""
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)
     if bank is None:  # pragma: no cover - the package's own FK guarantees it
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    if family_access.require_certify_authority(db, ctx, bank, package, role):
-        return
-    _ensure_checker_authority(ctx, role)
+    family_access.require_certify_authority(db, ctx, bank, package, role)
+
+
+def _require_package_action(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, permission: Permission
+) -> None:
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    bank = db.get(Bank, package.bank_id)
+    if bank is None:  # pragma: no cover - package FK
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    family_access.require_permission(
+        db,
+        ctx,
+        bank,
+        package,
+        permission,
+        surface="package_attestation_mutation",
+        conditions=family_access.certification_conditions(ctx, package, permission),
+    )
 
 
 def _get_package(
@@ -155,8 +147,8 @@ def _get_package(
     a fully certified ICAAP package. Gating the lookup closes the whole class,
     for the routes that exist today and the ones added later.
 
-    `require_view` is a no-op for an ungated family, so no existing return's
-    behaviour changes.
+    Every family requires whole-institution visibility before this lookup
+    serves its figures or signing state.
     """
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
@@ -216,15 +208,12 @@ def _recipient_read(row: PackageSignatureRecipient) -> dict[str, Any]:
     }
 
 
-def _status_payload(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage
-) -> dict[str, Any]:
+def _status_payload(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> dict[str, Any]:
     policy = workflow.package_policy(db, ctx, package)
     signatures = workflow.current_signatures(db, ctx, package)
     outstanding = workflow.outstanding_slots(policy, signatures)
-    can_submit = (
-        not policy.require_signature
-        or (package.attestation_state == "fully_certified" and not outstanding)
+    can_submit = not policy.require_signature or (
+        package.attestation_state == "fully_certified" and not outstanding
     )
     return {
         "package_id": package.id,
@@ -399,6 +388,7 @@ def void(
     db: Session, ctx: TenantContext, bank_reference: str, package_id: UUID, reason: str
 ) -> AttestationStatusRead:
     package = _get_package(db, ctx, bank_reference, package_id)
+    _require_package_action(db, ctx, package, Permission.APPROVE)
     workflow.void_attestation(db, ctx, package, reason=reason)
     return AttestationStatusRead.model_validate(_status_payload(db, ctx, package))
 
@@ -427,10 +417,9 @@ def send_back_for_corrections(
 
     actor = _require_actor(ctx)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _require_package_action(db, ctx, package, Permission.APPROVE)
     reason = payload.reason.strip()
-    reporting.send_back_for_corrections(
-        db, ctx, package, actor_user_id=actor, reason=reason
-    )
+    reporting.send_back_for_corrections(db, ctx, package, actor_user_id=actor, reason=reason)
     # A relaxed return has no attestation to withdraw, and ``void_attestation``
     # says so rather than no-opping — so ask only when there is one.
     if package.attestation_state != "unsigned":
@@ -451,9 +440,7 @@ def verify(
     # internal consistency is not the same as recognised issuance.
     trust_roots = get_settings().attestation.load_trust_roots()
     return VerificationReportRead.model_validate(
-        verifier.verify_attestation(
-            db, ctx, package, trust_roots=trust_roots or None
-        )
+        verifier.verify_attestation(db, ctx, package, trust_roots=trust_roots or None)
     )
 
 
@@ -494,9 +481,7 @@ def _policy_read(row: ReturnSigningPolicy) -> PolicyRead:
     )
 
 
-def upsert_policy(
-    db: Session, ctx: TenantContext, payload: PolicyUpsertRequest
-) -> PolicyRead:
+def upsert_policy(db: Session, ctx: TenantContext, payload: PolicyUpsertRequest) -> PolicyRead:
     """Create or supersede a signing policy for a scope.
 
     Policies are versioned by effective date rather than edited in place, so a
@@ -621,11 +606,7 @@ def _require_signable_policy(payload: PolicyUpsertRequest) -> None:
                     },
                 )
 
-    if (
-        payload.require_signed_pdf
-        and "board" in roles
-        and not payload.ordered_slots
-    ):
+    if payload.require_signed_pdf and "board" in roles and not payload.ordered_slots:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -639,10 +620,7 @@ def _require_signable_policy(payload: PolicyUpsertRequest) -> None:
         )
 
 
-
-def _close_open_policy(
-    db: Session, ctx: TenantContext, payload: PolicyUpsertRequest
-) -> None:
+def _close_open_policy(db: Session, ctx: TenantContext, payload: PolicyUpsertRequest) -> None:
     """End-date any identically scoped open policy the day before the new one."""
     existing = db.scalars(
         select(ReturnSigningPolicy).where(
@@ -779,9 +757,7 @@ def resolved_placements(
             "package_id": package.id,
             "return_code": package.return_code,
             "source": resolved.source,
-            "placements": [
-                _placement_read(placement) for placement in resolved.placements
-            ],
+            "placements": [_placement_read(placement) for placement in resolved.placements],
             "field_types": _field_types_read(),
             # Two independent reasons a set cannot be moved: the fields are
             # already part of a certified revision, or this return's attestation
@@ -804,6 +780,7 @@ def set_package_placements(
     payload: PackageSignaturePlacementRequest,
 ) -> ResolvedSignaturePlacementsRead:
     package = _get_package(db, ctx, bank_reference, package_id)
+    _require_package_action(db, ctx, package, Permission.EDIT)
     placements.set_package_override(
         db,
         ctx,
@@ -891,9 +868,7 @@ def _nominations(
     payload: list[SignatureRecipientNomination],
 ) -> list[routing.Nomination]:
     return [
-        routing.Nomination(
-            signing_role=_validate_role(item.signing_role), user_id=item.user_id
-        )
+        routing.Nomination(signing_role=_validate_role(item.signing_role), user_id=item.user_id)
         for item in payload
     ]
 
@@ -996,6 +971,7 @@ def update_routing(
     """Re-assign the outstanding signatures with a recorded reason."""
     _require_actor(ctx)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _require_package_action(db, ctx, package, Permission.APPROVE)
     routing.reroute(
         db,
         ctx,

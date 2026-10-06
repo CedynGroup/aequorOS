@@ -55,6 +55,7 @@ from app.schemas.report_comparison import (
     ReportComparisonRead,
     ReportComparisonRequest,
 )
+from app.services import regulatory_liquidity
 
 # ---------------------------------------------------------------------------
 # Favorable-direction registry — the substantive judgment layer.
@@ -625,12 +626,15 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def _get_run_or_404(db: Session, ctx: TenantContext, bank: Bank, run_id: UUID) -> RegulatoryRun:
+def _get_run_or_404(
+    db: Session, ctx: TenantContext, bank: Bank, run_id: UUID, module: str
+) -> RegulatoryRun:
     run = db.scalar(
         select(RegulatoryRun).where(
             RegulatoryRun.id == run_id,
             RegulatoryRun.organization_id == ctx.organization_id,
             RegulatoryRun.bank_id == bank.id,
+            RegulatoryRun.module == module,
             RegulatoryRun.status == "succeeded",
         )
     )
@@ -706,16 +710,8 @@ def _side(run: RegulatoryRun, period: BankReportingPeriod, version: int) -> Comp
 def _resolve_version_mode(
     db: Session, ctx: TenantContext, bank: Bank, req: ReportComparisonRequest
 ) -> tuple[ComparisonSideRead, ComparisonSideRead, RegulatoryRun, RegulatoryRun]:
-    left_run = _get_run_or_404(db, ctx, bank, req.left)
-    right_run = _get_run_or_404(db, ctx, bank, req.right)
-    if left_run.module != right_run.module or left_run.module != req.module:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "error_code": "not_comparable",
-                "message": "Runs belong to different return families and cannot be compared.",
-            },
-        )
+    left_run = _get_run_or_404(db, ctx, bank, req.left, req.module)
+    right_run = _get_run_or_404(db, ctx, bank, req.right, req.module)
     if left_run.reporting_period_id != right_run.reporting_period_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -763,6 +759,7 @@ def build_comparison(
 ) -> ReportComparisonRead:
     """Resolve both sides per mode, then diff their metrics into favorability-scored lines."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    regulatory_liquidity.require_regulatory_run_read(db, ctx, bank, req.module)
     if req.mode == "version":
         left_side, right_side, left_run, right_run = _resolve_version_mode(db, ctx, bank, req)
     else:

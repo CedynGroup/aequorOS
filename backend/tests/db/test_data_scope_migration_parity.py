@@ -265,7 +265,7 @@ def _insert_binding(  # noqa: PLR0913 - one complete row is explicit
                  grant_reason, granted_at, status, valid_from, created_at, updated_at)
             VALUES
                 (:id, :organization_id, :principal, :principal_type, :role_bundle,
-                 'organization', NULL, 'all', 'all',
+                 'organization', NULL, 'credit', 'all',
                  :kind, CAST(:values AS json), 'system', 'data-scope-parity',
                  'exercise the migrated constraints', :now, 'active', :now, :now, :now)
             """

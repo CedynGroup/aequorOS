@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import csv
 import io
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -43,17 +44,17 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.models import AuthorizationBinding, Bank, User
-from app.models.bi import BiDimBranch, BiQueryLog
+from app.models.bi import BiDimBranch, BiFactEngineMetric, BiQueryLog
 from app.services import authorization
 from app.services.bi.authorization import (
     REASON_BANK_WIDE_FIGURE,
     REASON_INSTITUTION_GRAIN,
 )
 from tests.api.helpers import ORG_1, USER_1, error_envelope, headers
-from tests.api.test_bi_routes import AS_OF, BANK_ID, BASE, seed_bi_mart
+from tests.api.test_bi_routes import AS_OF, BANK_ID, BASE, BUILT_AT, seed_bi_mart
 
 PORTFOLIO_MEASURE = "loans.balance_rc"
-INSTITUTION_MEASURE = "engine.car_pct.crd.official"
+INSTITUTION_MEASURE = "engine.npl_ratio_pct.crd.official"
 BANK_WIDE_MEASURE = "loans.balance_rc.budget.actual"
 
 #: Every module and sensitivity, so the only thing under test below is the SLICE.
@@ -68,7 +69,32 @@ INSTITUTION_LOANS = 600.0
 
 @pytest.fixture
 def mart(db_session: Session) -> Bank:
-    return seed_bi_mart(db_session)
+    bank = seed_bi_mart(db_session)
+    db_session.add(
+        BiFactEngineMetric(
+            organization_id=ORG_1,
+            bank_id=BANK_ID,
+            as_of_date=AS_OF,
+            module="credit",
+            metric_id="npl_ratio_pct",
+            tier="official",
+            value=Decimal("14.25"),
+            unit="pct",
+            status="red",
+            regime="crd",
+            institution_class="bank",
+            advisory_designation="filed",
+            input_hash="a" * 64,
+            engine_version="7",
+            pipeline_state="ready",
+            reconciliation_blocked=False,
+            computed_at=BUILT_AT,
+            builder_version=1,
+            built_at=BUILT_AT,
+        )
+    )
+    db_session.commit()
+    return bank
 
 
 @pytest.fixture
@@ -89,6 +115,8 @@ def _grant(  # noqa: PLR0913 - one keyword per binding dimension
     """Give ``principal`` exactly one sentence with this data scope; return ``authv``."""
 
     module, sensitivity = FULL_AUTHORITY
+    if scope is not DataScope.ALL:
+        module = ModuleScope.CREDIT
     if replace_existing:
         db.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == principal)
@@ -106,6 +134,19 @@ def _grant(  # noqa: PLR0913 - one keyword per binding dimension
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
         reason="Exercise the BI data scope end to end.",
     )
+    if scope is not DataScope.ALL:
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=principal,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION, BANK_ID, ModuleScope.RISK, SensitivityScope.ALL
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="Explicit dimension access, independent of the narrowed Credit figure.",
+        )
     db.commit()
     user = db.get(User, principal)
     assert user is not None
@@ -427,7 +468,7 @@ def test_an_institution_grain_measure_is_403_to_a_branch_scoped_reader(
     # of every BI denial: what the reader needs is the grant they are missing, and
     # a member id is not a figure. The reason is the one the log and the telemetry
     # carry, so an operator reading either sees the same rule. The body is matched
-    # exactly, so no figure (the institution's CAR of 14.25, its loans of 600)
+    # exactly, so no figure (the institution's NPL ratio of 14.25, its loans of 600)
     # can ride along in it.
     assert error_envelope(response) == {
         "code": "forbidden",
@@ -440,7 +481,7 @@ def test_an_institution_grain_measure_is_403_to_a_branch_scoped_reader(
             ),
             "reason": REASON_INSTITUTION_GRAIN,
             "denied_members": [INSTITUTION_MEASURE],
-            "denied_member_labels": ["Capital adequacy ratio (CAR) · Official"],
+            "denied_member_labels": ["NPL ratio · Official"],
         },
     }
 
@@ -683,7 +724,7 @@ def test_an_institution_wide_grant_on_one_MODULE_does_not_widen_another(
     whole answer. No privileged action, no crafted request.
 
     Two bindings, both written through the same ``create_role_binding`` an Org
-    Owner's composer calls: one narrowing every module to branch B1, one covering
+    Owner's composer calls: one narrowing Credit to branch B1, one covering
     the risk module institution-wide.
     """
 
@@ -748,66 +789,26 @@ def test_an_institution_grain_measure_stays_refused_when_another_pair_is_wide(
     assert with_dimension.json()["error"]["details"]["reason"] == REASON_INSTITUTION_GRAIN
 
 
-def test_two_irreconcilable_narrow_scopes_are_REFUSED_not_intersected(
+def test_a_narrowed_non_credit_dimension_grant_is_refused_before_querying(
     db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
 ) -> None:
-    """Audit A10-04: ``data_scope_conflict`` was implemented three times and tested nowhere.
+    """The old cross-module conflict is now refused when composing the grant.
 
-    Fixing A10-01 added a fourth site, so the rule now decides whether a query is
-    served on every BI surface — and a refusal nothing exercises is a refusal
-    nobody knows works. This is that exercise.
-
-    The shape: one binding narrows the credit module to branch B1, another narrows
-    the risk module to region North. Both pairs are authorized, and each admits a
-    DIFFERENT slice. There is no honest answer: intersecting them would invent a
-    slice neither sentence granted, and picking one would silently ignore the
-    other. So the query is refused, and the reason names the conflict rather than
-    a missing grant, because the reader is not missing anything — their two
-    sentences cannot be answered together.
+    Credit narrowing remains usable; Risk dimension access cannot be narrowed.
+    The compiler's independent conflict tests still cover incompatible scopes.
     """
-
-    _regions(db_session, {"B1": "North", "B2": "South"})
-    db_session.execute(
-        delete(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == USER_1)
-    )
-    db_session.commit()
-    _grant_pair_scoped(
-        db_session,
-        module=ModuleScope.CREDIT,
-        sensitivity=SensitivityScope.ALL,
-        scope=DataScope.BRANCH,
-        values=("B1",),
-    )
-    authv = _grant_pair_scoped(
-        db_session,
-        module=ModuleScope.RISK,
-        sensitivity=SensitivityScope.ALL,
-        scope=DataScope.REGION,
-        values=("North",),
-    )
-
-    # One pair alone is answerable, so the refusal below is about the COMBINATION
-    # and not about either sentence being unusable.
-    alone = _post(db_client, "/query", _query_body(), authv)
-    assert alone.status_code == 200, alone.text
-
-    conflicted = _post(db_client, "/query", _query_body(dimensions=["branch.code"]), authv)
-    assert conflicted.status_code == 403, conflicted.text
-    # The refusal is matched exactly, so nothing of the book leaks in it.
-    assert error_envelope(conflicted) == {
-        "code": "forbidden",
-        "message": "Forbidden",
-        "details": {
-            "error_code": "bi_authorization_denied",
-            "message": (
-                "Your access does not cover every field this view needs. "
-                "An Org Owner can grant the fields listed here."
-            ),
-            "reason": "data_scope_conflict",
-            "denied_members": ["loans.balance_rc", "branch.code"],
-            "denied_member_labels": ["Gross loans", "Branch code"],
-        },
-    }
+    authv = _grant(db_session, scope=DataScope.BRANCH, values=("B1",))
+    with pytest.raises(authorization.AuthorizationInvariantError, match="only for Credit"):
+        _grant_pair_scoped(
+            db_session,
+            module=ModuleScope.RISK,
+            sensitivity=SensitivityScope.ALL,
+            scope=DataScope.REGION,
+            values=("North",),
+        )
+    response = _post(db_client, "/query", _query_body(dimensions=["branch.code"]), authv)
+    assert response.status_code == 200, response.text
+    assert _figures(response.json()) == [B1_ONLY]
 
 
 def test_the_query_answer_STATES_the_slice_it_covers(

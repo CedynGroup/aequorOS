@@ -26,6 +26,8 @@ from app.services import regulatory_capital
 from app.services.icaap import blocks, resolvers, sections
 from tests.services.icaap.conftest import AS_OF
 
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
 PIN_REASON = "The Board reviewed the December figures and approved this report on them."
 
 
