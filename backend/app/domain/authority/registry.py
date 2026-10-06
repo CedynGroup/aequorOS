@@ -2519,6 +2519,7 @@ def _credit_designation(metric_id: str, *, bank: bool) -> AdvisoryDesignation:
         return AdvisoryDesignation.FILED
     return AdvisoryDesignation.SUPERVISORY_MONITORING
 
+
 REGISTRY.register_all(
     [
         MetricAuthority(

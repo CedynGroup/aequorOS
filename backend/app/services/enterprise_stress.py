@@ -7,10 +7,10 @@ projection + Appendix II builders, and persists the whole enterprise outcome as
 one immutable ``RegulatoryRun`` (module ``enterprise_stress``) with a value-based
 ``input_hash`` — the same reproducibility spine every official run carries.
 
-It reads ONLY stable models: ``BankFinancialFact`` and the ``Param*`` registers
-via ``app.services.params.get_active_params``. It never imports the tenant
-regulatory-run services (which are being reworked concurrently); the domain-fact
-converters here are self-contained, so this service is decoupled from that churn.
+It reads ``BankFinancialFact`` and the effective-dated ``Param*`` registers via
+``app.services.params.get_active_params``. The IRRBB leg shares the regulatory
+IRRBB fact reader, ``regulatory_irr.positions_from_facts``, so contractual rates
+and swap-leg decomposition have one implementation.
 """
 
 from __future__ import annotations
@@ -143,8 +143,8 @@ ENGINE_VERSION = "enterprise-stress-v2.0.0"
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
 #: comparing two sealed runs has to know that a v1 payload is silent about the
 #: risk weights, thresholds, runoff rates and HQLA rates the run was filed under
-#: rather than asserting they were unset. ``ENGINE_VERSION`` deliberately does
-#: NOT move: no methodology changed, only what the reproducibility spine records.
+#: rather than asserting they were unset. That input-schema v2 bump left the
+#: engine version unchanged: only the reproducibility spine changed then.
 #: v3 (#306) adds ``irr_facts`` and ``irr_base_curve``: the IRRBB leg's ΔEVE is
 #: the Table 5 Pillar 2 charge, yet until v3 neither its positions, its swap
 #: hedges nor its curve were in the reproducibility spine.

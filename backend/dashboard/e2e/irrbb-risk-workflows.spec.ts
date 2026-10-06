@@ -17,6 +17,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
+import { writeFile } from "node:fs/promises";
 import type { EnterpriseStressRead } from "../components/stress/types";
 import { E2E_TMP } from "../playwright.config";
 import {
@@ -437,7 +438,10 @@ test.describe("IRRBB functional workflow", () => {
     expect(Number(irr!.base_eve)).toBeCloseTo(baseEve, 2);
     expect(Number(irr!.stressed_eve)).toBeCloseTo(stressedEve, 2);
     expect(Number(irr!.delta_eve)).toBeCloseTo(deltaEve, 2);
-    expect(Number(irr!.delta_nii)).toBeCloseTo(earningsAtRisk(12, 200) * 1e6, 2);
+    expect(Number(irr!.delta_nii)).toBeCloseTo(
+      earningsAtRisk(12, 200) * 1e6,
+      2,
+    );
     const charge = Number((Math.max(-deltaEve, 0) / 1_000).toFixed(3));
     expect(charge).toBeGreaterThan(0);
     expect(persisted.appendix_ii.unit).toBe("GHS'000");
@@ -461,13 +465,21 @@ test.describe("IRRBB functional workflow", () => {
         charge.toLocaleString("en-US", { maximumFractionDigits: 0 }),
       ),
     ];
-    await page.getByRole("button", { name: "Appendix II", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Appendix II", exact: true })
+      .click();
     await page.getByRole("button", { name: "T5 · RWA", exact: true }).click();
     await expectRow(
       section(page, "Appendix II — regulatory deliverable").getByRole("table"),
       "Pillar 2: IRRBB",
       chargeCells,
     );
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "irrbb-stress-appendix-ii.png"),
+        fullPage: true,
+      });
+    }
 
     await expectPersistedStressRun(page, run, "17.28%");
 
@@ -497,20 +509,45 @@ test.describe("IRRBB functional workflow", () => {
       "Stress Y3",
     ]);
     await expectRow(table5, "Pillar 2: IRRBB", chargeCells);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "irrbb-stress-board-pack.png"),
+        fullPage: true,
+      });
+    }
     await page.emulateMedia({ media: "print" });
     await expectRow(table5, "Pillar 2: IRRBB", chargeCells);
     await expect(table5).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "irrbb-stress-board-pack-print.png"),
+        fullPage: true,
+      });
+    }
     await page.emulateMedia({ media: "screen" });
-    await test.info().attach("irrbb-stress-board-pack-run", {
-      body: JSON.stringify(
-        await apiGet(
-          page,
-          "analyst",
-          `/banks/${SAMPLE_BANK_ID}/regulatory-runs/${run.run_id}`,
-        ),
-        null,
-        2,
+    const storedRun = await apiGet(
+      page,
+      "analyst",
+      `/banks/${SAMPLE_BANK_ID}/regulatory-runs/${run.run_id}`,
+    );
+    expect(storedRun.engine_version).toBe("enterprise-stress-v2.0.0");
+    expect(storedRun.metrics.outcome.engine_version).toBe(
+      storedRun.engine_version,
+    );
+    expect(storedRun.input_schema_version).toBe("enterprise-stress-input-v3");
+    expect(
+      storedRun.inputs.irr_facts.filter(
+        (fact: { fact_group: string }) => fact.fact_group === "irr_swap",
       ),
+    ).toHaveLength(1);
+    if (evidenceDir) {
+      await writeFile(
+        path.join(evidenceDir, "irrbb-stress-board-pack-run.json"),
+        JSON.stringify(storedRun, null, 2),
+      );
+    }
+    await test.info().attach("irrbb-stress-board-pack-run", {
+      body: JSON.stringify(storedRun, null, 2),
       contentType: "application/json",
     });
   });

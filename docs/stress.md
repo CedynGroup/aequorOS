@@ -5,7 +5,8 @@ against the **Bank of Ghana Guideline on Stress Testing, 2026 (Exposure Draft, F
 (`docs/EXPOSURE-Draft-Directive-on-Stress-Testing_FEBRUARY-2026.pdf`), the gaps, and a
 buildable target architecture. **The gap inventory and build plan describe the
 2026-08-19 baseline, not current feature availability.** The current default-scenario
-contract and workbench behavior are documented in §3.1.1.
+contract and workbench behavior are documented in §3.1.1; the current IRRBB stress
+input and recorded-run contract is in §3.3.1.
 
 **The authority:** the BoG Guideline. It applies to **RFIs = banks, savings & loans, finance
 houses, finance & leasing, FHCs** (¶3) — so it also scopes into `sdi.md` (see §8). **Effective
@@ -348,6 +349,27 @@ One scenario run drives **liquidity + capital + IRR + FX + credit coherently** a
 single enterprise outcome (¶40, ¶50). Couples solvency and liquidity (¶59(f)); supports
 second-round effects (¶5). Replaces today's independent per-module scenario objects. Output is an
 immutable `RegulatoryRun` (keep the existing reproducibility spine — value-based `input_hash`).
+
+#### 3.3.1 Current IRRBB stress inputs and recorded runs
+
+The enterprise stress IRRBB leg uses the regulatory IRRBB fact groups and
+[shared position reader](../backend/app/services/regulatory_irr.py), which owns
+contractual-rate reading and receive/pay swap-leg decomposition. Both engines
+therefore price the same positions when given the same book and base curve.
+The stress leg's ΔEVE loss, `max(-delta_eve, 0)` in thousands, feeds the
+**Table 5 Pillar 2 IRRBB** line in Appendix II and the stress board pack.
+
+When IRRBB is included, the stress input snapshot includes the loaded IRR
+position and swap facts and the base curve; changing them changes the new run's input hash. The
+[enterprise stress service](../backend/app/services/enterprise_stress.py) owns
+the engine, input-schema and output-schema version declarations.
+
+Previously recorded runs retain their original inputs, versions and results.
+Re-run affected pilot scenarios with the corrected engine, then select the new
+run for Appendix II and the **Stress Board-Pack Composer**
+(`/reports/stress-board-pack`). Record its run ID, input hash, engine version
+and input-schema version from the regulatory-run detail; reopening an old run
+does not upgrade its evidence.
 
 ### 3.4 3-year projection engine → Appendix II
 
