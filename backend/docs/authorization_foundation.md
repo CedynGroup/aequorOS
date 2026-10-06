@@ -763,7 +763,7 @@ and retain its dated output outside the repository.
 Regulatory **returns**, including the legacy BSD previews, follow their return
 authority independently of the underlying engine runs: every ordinary return
 requires whole-institution REG/restricted VIEW; ICAAP retains CAPITAL/confidential
-and its workspace freeze rules. Generation additionally requires REG/restricted RUN. Package
+and its workspace freeze rules. Ordinary generation additionally requires REG/restricted RUN. Package
 lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
 without that authority. Package comparisons filter both referenced packages by

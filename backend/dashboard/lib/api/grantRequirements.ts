@@ -83,8 +83,9 @@ export function grantShortfall(draft: GrantScope): string | null {
   return (
     `This grant will not let them ${work}. Deciding on a return is evaluated ` +
     `against ${missing.join(" and ")}, and scopes are matched exactly — a ` +
-    `narrower level does not include a wider one. They will be able to sign ` +
-    `in and see the return, then be refused when they act on it.`
+    `narrower level does not include a wider one. Ordinary returns stay hidden ` +
+    `without whole-institution Regulatory Reporting / Restricted view authority. ` +
+    `A visible return still requires its action permission.`
   );
 }
 
