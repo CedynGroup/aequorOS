@@ -112,7 +112,7 @@ Four findings, each verified in code:
    ladder, so the scalar `approver`/`admin` role alone was sufficient with no binding at
    all. Both halves are gone; see the rollout contract.
 4. **Send-back is one coarse edge.** `pending_approval → generated` exists, but the package
-   records no *target* for the return and carries no round counter, so a second rejection is
+   records no _target_ for the return and carries no round counter, so a second rejection is
    indistinguishable from the first in the package's own history.
 
 ## 2. The principle: we already own this engine
@@ -133,11 +133,11 @@ differ — three stages here, four elsewhere, "Compliance Sign-off" instead of "
 
 ### 3.1 Separate the three things the current design conflates
 
-| Concern | Today | Redesign |
-|---|---|---|
-| Machine validation | a `validated` **status** in the middle of the chain | a package **attribute** (`checks_passed`) that gates ENTRY to the chain. UI says "Checks passed", never "Validated" |
-| Human review | two statuses (`pending_approval`, `approved`) | a configurable **stage chain** with decisions, comments, rounds |
-| Transmission to ORASS | `submit`, sharing `Permission.APPROVE` | its own authority, held only by the final stage |
+| Concern               | Today                                               | Redesign                                                                                                            |
+| --------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Machine validation    | a `validated` **status** in the middle of the chain | a package **attribute** (`checks_passed`) that gates ENTRY to the chain. UI says "Checks passed", never "Validated" |
+| Human review          | two statuses (`pending_approval`, `approved`)       | a configurable **stage chain** with decisions, comments, rounds                                                     |
+| Transmission to ORASS | `submit`, sharing `Permission.APPROVE`              | its own authority, held only by the final stage                                                                     |
 
 ### 3.2 The default chain (seeded, editable)
 
@@ -169,13 +169,13 @@ family gate was applied per route and missed six routes):
    approve it; whoever approved cannot validate it. Re-checked under the row lock at the
    moment of the act, not only when the screen renders. **Partly built:** the preparer
    cannot file (a maker/checker condition on every family), and Approver + Validator on one
-   identity is BLOCKED at assignment. The *per-object* "whoever approved this round cannot
+   identity is BLOCKED at assignment. The _per-object_ "whoever approved this round cannot
    file it" check is this step's remaining work — when it lands, the assignment-time block
    may become a warning, matching Analyst/Approver. Never relax it earlier.
 
 `Permission.SUBMIT` touches the authorization foundation (bundle definitions, an
 `authorization_bindings` migration, an `authv` bump and refresh-family revocation). That cost
-is the point: it is the difference between two roles and two *authorities*.
+is the point: it is the difference between two roles and two _authorities_.
 
 As built, the migration turned out to be the one part that should NOT exist: backfilling
 transmission authority onto everyone who held approval authority would have encoded the
@@ -251,15 +251,15 @@ that is what it does.
 
 ### 4b.3 Three surfaces, one workspace
 
-| | Preparer | Approver | Validator |
-|---|---|---|---|
-| Generate / re-run checks | **yes** | no | no |
-| Check results panel | **yes**, must clear | read | read |
-| Send for approval | **yes** | — | — |
-| Approve / send back + comment | no | **yes** | **yes** |
-| Choose send-back target | — | — | **Approver or Preparer** |
-| Transmit to ORASS, channel picker, downtime bundle, resubmission | **absent** | **absent** | **yes** |
-| Chain panel (stages, holder, decisions, round) | read | read | read |
+|                                                                  | Preparer            | Approver   | Validator                |
+| ---------------------------------------------------------------- | ------------------- | ---------- | ------------------------ |
+| Generate / re-run checks                                         | **yes**             | no         | no                       |
+| Check results panel                                              | **yes**, must clear | read       | read                     |
+| Send for approval                                                | **yes**             | —          | —                        |
+| Approve / send back + comment                                    | no                  | **yes**    | **yes**                  |
+| Choose send-back target                                          | —                   | —          | **Approver or Preparer** |
+| Transmit to ORASS, channel picker, downtime bundle, resubmission | **absent**          | **absent** | **yes**                  |
+| Chain panel (stages, holder, decisions, round)                   | read                | read       | read                     |
 
 The role comes from the **projected capability and the package's current stage**, never from a
 scalar session role — `AGENTS.md` is explicit that shell navigation and deep links consume the
@@ -315,8 +315,9 @@ back to them, with the comment that sent it.
   loosened to pass**. Step 1 took the first bite: `scripts/e2e_bootstrap.py` seeds a
   `validator` fixture (read sentence + filing sentence) and `full-lifecycle` journeys 1–3
   now submit and poll in that third session instead of the preparer's. They have not been
-  run — Playwright is not in CI (`risk-service.yml` gates the backend only), so treat the
-  first run after this change as the verification.
+  run, so treat the first run after this change as the verification. Follow the
+  [dashboard E2E guidance](../dashboard/README.md#end-to-end-playwright) for local
+  execution and CI dispatch.
 - **Rehearsal packages** (D-068) must remain unfilable through every new path.
 
 ## 6. Recommended sequencing
