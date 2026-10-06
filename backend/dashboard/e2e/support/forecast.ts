@@ -133,14 +133,7 @@ export type Projection = {
   };
 };
 
-/**
- * Project the fixture book `years` years forward under `a`. A what-if MTM
- * haircut marks the securities down once in year 1, after growth.
- */
-export function project(
-  a: Assumptions,
-  { years = 5, securitiesHaircutPct = 0 } = {},
-): Projection {
+export function project(a: Assumptions): Projection {
   const loanFactor = 1 + a.loanGrowthPct / 100;
   const depositFactor = 1 + a.depositGrowthPct / 100;
   const securitiesFactor = 1 + (a.depositGrowthPct + a.securitiesShiftPp) / 100;
@@ -200,19 +193,14 @@ export function project(
   let assetsPrev = assets();
   let equityPrev = equity;
 
-  for (let year = 1; year <= years; year += 1) {
+  for (let year = 1; year <= 5; year += 1) {
     loans = scale(loans, loanFactor);
     commitments = scale(commitments, loanFactor);
     deposits = scale(deposits, depositFactor);
     securities = scale(securities, securitiesFactor);
     cash = scale(cash, depositFactor);
-    if (year === 1) {
-      if (securitiesHaircutPct !== 0) {
-        securities = scale(securities, (100 - securitiesHaircutPct) / 100);
-      }
-      if (a.fxDepreciationPct !== 0) {
-        fx = scale(fx, 1 + a.fxDepreciationPct / 100);
-      }
+    if (year === 1 && a.fxDepreciationPct !== 0) {
+      fx = scale(fx, 1 + a.fxDepreciationPct / 100);
     }
 
     const earning = sum(loans) + sum(securities);

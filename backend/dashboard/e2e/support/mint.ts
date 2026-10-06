@@ -31,7 +31,7 @@ export const E2E_PASSWORD = "e2e-step-up-password-not-production-000";
 
 export const E2E_USERS: Record<
   string,
-  { id: string; roles: string[]; authv: number }
+  { id: string; roles: string[]; authv: number; organizationId?: string }
 > = {
   // Bootstrap gives every human baseline membership. Admin then receives two
   // initial-ownership grants (owner and read access) and an organization-wide
@@ -51,6 +51,12 @@ export const E2E_USERS: Record<
     id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3",
     roles: ["analyst"],
     authv: 3,
+  },
+  fresh_forecast_analyst: {
+    id: "eeeeeeee-2900-4eee-8eee-eeeeeeee2900",
+    roles: ["analyst"],
+    authv: 3,
+    organizationId: "OR-FRSH0001",
   },
   viewer: {
     id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4",
@@ -178,7 +184,7 @@ export async function mintBackendToken(
   const user = E2E_USERS[role];
   const secret = new TextEncoder().encode(E2E_JWT_SECRET);
   return new SignJWT({
-    org: E2E_ORG_ID,
+    org: user.organizationId ?? E2E_ORG_ID,
     roles: user.roles,
     type: "access",
     authv: authorizationVersion ?? user.authv,
@@ -208,7 +214,7 @@ export async function mintSessionCookie(
       accessToken,
       refreshToken: accessToken,
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,
-      organizationId: E2E_ORG_ID,
+      organizationId: user.organizationId ?? E2E_ORG_ID,
       roles: user.roles,
       authorizationVersion: authorizationVersion ?? user.authv,
     },
