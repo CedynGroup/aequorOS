@@ -1,6 +1,6 @@
 """Unit tests for the interest-rate-swap leg decomposition in regulatory_irr.
 
-``_swap_legs`` turns one seed-shaped ``irr_swap`` fact into its two hedge
+``swap_legs`` turns one seed-shaped ``irr_swap`` fact into its two hedge
 legs. Every expectation here is hand-derived from the fact attributes and the
 base curve (explicit Decimal literals), never echoed from the engine:
 
@@ -19,7 +19,7 @@ import pytest
 
 from app.domain.irr.engine import compute_gap, compute_nii
 from app.models import BankFinancialFact
-from app.services.regulatory_irr import IrrRunError, _swap_legs
+from app.services.regulatory_irr import IrrRunError, swap_legs
 
 NOTIONAL = Decimal("120000000")
 FIXED_RATE = Decimal("25.3")
@@ -65,7 +65,7 @@ def _receive_fixed_fact() -> BankFinancialFact:
 
 
 def test_pay_fixed_swap_decomposes_into_floating_asset_and_fixed_liability() -> None:
-    receive, pay = _swap_legs(_pay_fixed_fact(), CURVE)
+    receive, pay = swap_legs(_pay_fixed_fact(), CURVE)
 
     assert receive.side == "asset"
     assert receive.bucket == "1-3m"
@@ -87,7 +87,7 @@ def test_pay_fixed_swap_decomposes_into_floating_asset_and_fixed_liability() -> 
 
 
 def test_receive_fixed_swap_is_the_mirror_image_with_flipped_carry() -> None:
-    receive, pay = _swap_legs(_receive_fixed_fact(), CURVE)
+    receive, pay = swap_legs(_receive_fixed_fact(), CURVE)
 
     # The fixed leg becomes the asset (receive side) at the maturity bucket...
     assert receive.side == "asset"
@@ -108,7 +108,7 @@ def test_receive_fixed_swap_is_the_mirror_image_with_flipped_carry() -> None:
     assert compute_nii([receive, pay]) == Decimal("-600000")
 
     # Gap contributions flip buckets/sides versus the pay-fixed decomposition.
-    pay_fixed_gap = compute_gap(_swap_legs(_pay_fixed_fact(), CURVE))
+    pay_fixed_gap = compute_gap(swap_legs(_pay_fixed_fact(), CURVE))
     receive_fixed_gap = compute_gap([receive, pay])
     pf = {bucket.bucket: bucket for bucket in pay_fixed_gap.buckets}
     rf = {bucket.bucket: bucket for bucket in receive_fixed_gap.buckets}
@@ -121,7 +121,7 @@ def test_receive_fixed_swap_is_the_mirror_image_with_flipped_carry() -> None:
 def test_missing_direction_defaults_to_pay_fixed() -> None:
     # Facts derived before the direction attribute existed keep pricing as
     # pay-fixed swaps.
-    receive, pay = _swap_legs(_pay_fixed_fact(direction=None), CURVE)
+    receive, pay = swap_legs(_pay_fixed_fact(direction=None), CURVE)
     assert receive.fixed_or_float == "float"
     assert pay.fixed_or_float == "fixed"
     assert compute_nii([receive, pay]) == Decimal("600000")
@@ -130,6 +130,6 @@ def test_missing_direction_defaults_to_pay_fixed() -> None:
 def test_unknown_direction_fails_the_run_as_data() -> None:
     fact = _pay_fixed_fact(direction="basis_swap")
     with pytest.raises(IrrRunError) as excinfo:
-        _swap_legs(fact, CURVE)
+        swap_legs(fact, CURVE)
     assert excinfo.value.code == "unsupported_swap_direction"
     assert excinfo.value.details == {"category": "IRS-UNIT-001", "direction": "basis_swap"}
