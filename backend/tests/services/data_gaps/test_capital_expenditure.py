@@ -68,6 +68,9 @@ CENT = 0.5  # cedis: the register is stated to the cedi
 # ---------------------------------------------------------------------------
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _prepare(db_client: TestClient) -> list[str]:
     """Materialise the hermetic book; return the period ends, latest first."""
     session = get_sessionmaker()()

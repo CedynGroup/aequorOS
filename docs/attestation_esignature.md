@@ -154,34 +154,13 @@ Attestation binds to `RegulatoryRun` only.
 | `rejected` / `declined` | `superseded`                                              |
 | `superseded`            | _(terminal)_                                              |
 
-Operational role gating (`app/api/deps.py`; compatibility hierarchy
-`admin ⊃ approver ⊃ analyst ⊃ examiner ⊃ viewer`,
-`app/core/security.py:ROLES`) excludes the separate `account_admin` role;
-migration `202608280046` leaves no persisted legacy `admin`:
-
-| Action                                                             | Gate                                                                                |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| generate, validate, request-approval, export, request-resubmission | `MutationTenant` (analyst+)                                                         |
-| **decide-approval, submit, poll, decide-resubmission**             | `ApproverTenant` (approver+)                                                        |
-| reads, artifact download                                           | `Tenant` (viewer+)                                                                  |
-| **configure signing policies / placement templates**               | `GrantAdminTenant` (persisted Org Owner binding — no scalar `admin` claim suffices) |
-
-**Segregation of duties exists in exactly one place:**
-
-```python
-# app/services/regulatory_reporting/workflow.py:245-252
-if actor_user_id == package.generated_by:
-    raise HTTPException(status_code=409, detail=(
-        "Maker-checker: the approval decision must be made by a different user "
-        "than the one who generated the package."))
-```
-
-That is the whole of it. There is no equivalent check on **submit**, on
-**resubmission decisions**, or against `requested_by`. There is no
-required-approver-count, quorum, or approval-policy concept anywhere in the
-codebase — one approval releases the package. `RegulatoryPackageApproval`
-records `actor_user_id`, `action ∈ (requested, approved, rejected)`, `reason`,
-`occurred_at` — and nothing else about the person.
+Package access, signer setup, certification and nomination follow the
+[whole-institution family contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+Transmission has its own [filing authority](../backend/docs/filing_submit_authority_rollout.md),
+and review-stage separation follows the
+[filing workflow](../backend/docs/filing_workflow_redesign.md).
+Configuring signing policies and placement templates requires `GrantAdminTenant`
+(the persisted Org Owner binding).
 
 ### 1.4 Identity: OIDC → platform user
 

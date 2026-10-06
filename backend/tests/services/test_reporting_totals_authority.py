@@ -56,12 +56,14 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
 PERIOD_END = date(2026, 3, 31)
 #: A position-sourced official form that depends on no other form — the
 #: shortest honest path from generation to an approval request.
 FORM_CODE = "BSD2"
 PACKAGES = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 #: ``build_template_provenance`` reads only jurisdiction/currency/type off the
 #: bank (docs: jurisdiction is data), so the digest sweep needs no DB row.
 _STUB_BANK = SimpleNamespace(jurisdiction_code="GH", currency="GHS", institution_type="bank")

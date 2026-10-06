@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -166,12 +167,8 @@ def test_period_mode(db_client: TestClient) -> None:
         bank_id = _bank(session, ORG_1, "Period Bank")
         mar = _period(session, ORG_1, bank_id, date(2026, 3, 31), "2026-Q1")
         jun = _period(session, ORG_1, bank_id, date(2026, 6, 30), "2026-Q2")
-        _run(
-            session, ORG_1, bank_id, mar, {"car_pct": "12.0"}, datetime(2026, 4, 1, tzinfo=UTC)
-        )
-        _run(
-            session, ORG_1, bank_id, jun, {"car_pct": "12.8"}, datetime(2026, 7, 1, tzinfo=UTC)
-        )
+        _run(session, ORG_1, bank_id, mar, {"car_pct": "12.0"}, datetime(2026, 4, 1, tzinfo=UTC))
+        _run(session, ORG_1, bank_id, jun, {"car_pct": "12.8"}, datetime(2026, 7, 1, tzinfo=UTC))
         session.commit()
 
     response = db_client.get(
@@ -189,7 +186,11 @@ def test_period_mode(db_client: TestClient) -> None:
     assert car["favorability"] == "favorable"
 
 
-def test_non_comparable_returns_422(db_client: TestClient) -> None:
+@pytest.mark.parametrize("module", ["capital", "liquidity"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_run_outside_requested_module_returns_404(
+    db_client: TestClient, module: str, reverse: bool
+) -> None:
     with get_sessionmaker()() as session:
         _set_org(session, ORG_1)
         bank_id = _bank(session, ORG_1, "Mixed Bank")
@@ -214,12 +215,14 @@ def test_non_comparable_returns_422(db_client: TestClient) -> None:
         )
         session.commit()
 
+    left, right = (liq, cap) if reverse else (cap, liq)
     response = db_client.get(
         f"{BASE}/banks/{bank_id}/reports/comparison",
-        params={"mode": "version", "module": "capital", "left": str(cap), "right": str(liq)},
+        params={"mode": "version", "module": module, "left": str(left), "right": str(right)},
         headers=headers(),
     )
-    assert response.status_code == 422, response.text
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["message"] == "Comparable run not found."
 
 
 def test_missing_run_returns_404(db_client: TestClient) -> None:

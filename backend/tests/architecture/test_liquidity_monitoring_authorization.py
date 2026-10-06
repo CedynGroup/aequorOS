@@ -1,4 +1,8 @@
-"""Liquidity Monitoring must remain on the scoped-binding enforcement gate."""
+"""Liquidity Monitoring must remain on the scoped-binding enforcement gate.
+
+BSD-3 is a regulatory return; its shared-reader authority is exercised by
+tests/api/test_return_preview_authorization.py, not a Liquidity route dependency.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +41,6 @@ def test_liquidity_monitoring_route_cannot_revert_to_legacy_authorization() -> N
 
 def test_remaining_liquidity_reads_use_scoped_dependencies_without_role_fallback() -> None:
     confidential_paths = (
-        "/api/v1/banks/{bank_id}/submissions/bsd3",
         "/api/v1/banks/{bank_id}/liquidity/ewis",
         "/api/v1/banks/{bank_id}/liquidity/cfp",
         "/api/v1/banks/{bank_id}/liquidity/cfp/events",

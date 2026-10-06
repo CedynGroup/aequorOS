@@ -82,7 +82,7 @@ LONG_END_BUCKETS = {"1-3y", "3-5y", "5y+"}
 
 
 def _ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _prepare(db_session: Session) -> DerivationResult:
@@ -573,6 +573,7 @@ def test_rederivation_is_idempotent_and_replaces_facts(db_session: Session) -> N
     assert len(periods) == 1
 
 
+@pytest.mark.usefixtures("capital_run_authority")
 def test_liquidity_and_capital_engines_succeed_on_derived_facts(db_session: Session) -> None:
     result = _prepare(db_session)
     ctx = _ctx()
@@ -776,9 +777,7 @@ def _gl(code: str, name: str, balance: str, account_class: str = "ASSET") -> Can
     )
 
 
-def _gl_canonical(
-    accounts: list[CanonicalGlAccount], names: _CentralBankNames
-) -> _Canonical:
+def _gl_canonical(accounts: list[CanonicalGlAccount], names: _CentralBankNames) -> _Canonical:
     return _Canonical(
         as_of=FIXTURE_AS_OF,
         base_currency="GHS",
@@ -822,9 +821,7 @@ def test_the_central_bank_test_is_the_bank_s_own_registry_row_not_a_country(
     """A Nigerian tenant's chart names the Central Bank of Nigeria; a Kenyan
     tenant's names the Central Bank of Kenya. Neither contains ``bog``."""
     nigeria = _CentralBankNames.from_registry("Central Bank of Nigeria", "CBN")
-    cash, other = _classify(
-        [_gl("A/1", "Balances with Central Bank of Nigeria", "1000")], nigeria
-    )
+    cash, other = _classify([_gl("A/1", "Balances with Central Bank of Nigeria", "1000")], nigeria)
     assert cash["bog_excess_reserves"] == Decimal("1000")
     assert other == Decimal("0")
 

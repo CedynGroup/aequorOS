@@ -67,6 +67,9 @@ LADDER_BOG_USD_NATIVE = Decimal("2500000")  # the BoG USD current account, nativ
 MISSING_RUNG_COLUMN = "E"  # Sunday: no snapshot in either week ⇒ input_required
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _materialize(db_client: TestClient) -> None:
     _ = db_client
     session = get_sessionmaker()()

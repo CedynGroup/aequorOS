@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import TenantContext
@@ -31,6 +32,8 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def _materialize(db_client: TestClient) -> None:

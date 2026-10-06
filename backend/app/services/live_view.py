@@ -45,11 +45,12 @@ _MODULE_ORDER = {
 }
 
 #: Live-engine rows the summary serves only to a principal holding an exact
-#: aggregated ``view`` binding on the engine's module. Capital and rating
-#: rows are still served to every tenant reader — their module cutovers own
-#: that decision; this list must only ever grow.
+#: aggregated ``view`` binding on the engine's module.
+#: Every engine requires whole-institution coverage.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
+    ("capital", Module.CAPITAL),
+    ("rating", Module.MARKETS),
     ("credit", Module.CREDIT),
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
@@ -90,6 +91,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         LiveMetric.organization_id == ctx.organization_id,
         LiveMetric.bank_id == bank.id,
     )
+    any_whole_institution_view = False
     for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
@@ -102,6 +104,8 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         )
         if decision is None or not decision.allowed:
             query = query.where(LiveMetric.module != engine)
+        else:
+            any_whole_institution_view = True
     rows = list(db.scalars(query))
     is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
@@ -134,7 +138,9 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         reconciliation=_reconciliation_view(
             fact_derivation.current_reconciliation_record(db, ctx, bank.id),
             message=blocked.pipeline_error if blocked is not None else None,
-        ),
+        )
+        if any_whole_institution_view
+        else None,
     )
 
 
@@ -243,24 +249,8 @@ def mint_official_run(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    # NOT GATED ON CREDIT, and that is a known gap rather than an oversight.
-    # ``_GATED_ENGINE_MODULES`` above already lists ``credit``, so READING a credit
-    # figure is gated while MINTING the official run that computes one is not: a
-    # principal with no credit ``run`` sentence can still produce a filable credit
-    # run (found by the credit route cutover, 2026-09-28).
-    #
-    # Adding ``("credit", Module.CREDIT)`` here is the one-line fix and it was
-    # measured before being deferred: because credit is in every institution
-    # class's default module set, the gate fires for every tenant, and ten
-    # pre-existing tests across FTP, FX, IRRBB, liquidity and the live engine go
-    # red because they mint runs without that sentence. That is the cutover
-    # working, not a defect in the patch — which is exactly why it is a CUTOVER and
-    # not a bug fix. Every other enforcement cutover in this codebase carries its
-    # own rollout contract and its own access-impact measurement
-    # (``backend/docs/*_enforcement_rollout.md``), and this one would change who
-    # can mint a filable run on every existing tenant. Riding it in as a
-    # side-effect of the data-scope phase would skip both.
     for engine, module in (
+        ("credit", Module.CREDIT),
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
@@ -346,6 +336,9 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
     # (``manage_live_engine.list_live_snapshots``); the others are gated here.
     protected_module = {
         "liquidity": Module.LIQUIDITY,
+        "capital": Module.CAPITAL,
+        "rating": Module.MARKETS,
+        "irr": Module.IRRBB,
         "credit": Module.CREDIT,
         "fx": Module.FX,
         "ftp": Module.FTP,

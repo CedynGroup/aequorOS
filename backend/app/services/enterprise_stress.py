@@ -1913,6 +1913,15 @@ def get_latest_enterprise_stress(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID, scenario_id: UUID
 ) -> EnterpriseStressRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.RISK,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="get_latest_enterprise_stress",
+    )
     run = db.scalar(
         select(RegulatoryRun)
         .where(
@@ -1984,6 +1993,15 @@ def list_enterprise_stress_runs(
     (a failed attempt carries no Appendix II payload to summarise).
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.RISK,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="list_enterprise_stress_runs",
+    )
     stmt = (
         select(RegulatoryRun)
         .where(
@@ -2009,6 +2027,16 @@ def get_enterprise_stress_run(
     the scenario has since been re-versioned or archived.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.RISK,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="get_enterprise_stress_run",
+        denial_status=status.HTTP_404_NOT_FOUND,
+    )
     run = db.scalar(
         select(RegulatoryRun).where(
             RegulatoryRun.id == run_id,

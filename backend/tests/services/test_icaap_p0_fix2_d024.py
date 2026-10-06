@@ -91,9 +91,11 @@ __all__ = ["storage"]
 # service), and the capital-plan forecast it drives through ``_run_forecast``
 # requires scoped Forecasting ``run`` authority, so it takes the same fixtures
 # as the suites it borrows ``_run_enterprise_stress`` and ``_run_forecast`` from.
-pytestmark = pytest.mark.usefixtures(
-    "fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"
-)
+pytestmark = [
+    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"),
+    pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("capital_run_authority"),
+]
 
 #: The date the console action is taken on in the flow-through tests: before
 #: the fixture's as-of (2026-03-31), so a generation effective from 2026-01-01 is

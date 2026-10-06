@@ -18,6 +18,7 @@ from app.api.deps import TenantContext
 from app.core.authorization import (
     AuthorizationDecision,
     ConditionCheck,
+    DataScope,
     InstitutionScope,
     Module,
     Permission,
@@ -71,11 +72,14 @@ def evaluate_bank_permission(  # noqa: PLR0913 - complete authorization sentence
     sensitivity: Sensitivity,
     surface: str,
     conditions: Sequence[ConditionCheck] = (),
+    require_whole_institution: bool = True,
 ) -> AuthorizationDecision | None:
     """Evaluate and record one bank-scoped decision.
 
     ``None`` represents a principal that cannot hold an interactive human
-    binding or an evaluator failure. Callers must treat it as denial.
+    binding or an evaluator failure. Callers must treat it as denial. Institution
+    figures require whole-book coverage by default. An opt-out is valid only
+    when the caller applies the effective scope to every row and count.
     """
 
     if ctx.actor_user_id is None or ctx.authorization_version is None:
@@ -109,6 +113,15 @@ def evaluate_bank_permission(  # noqa: PLR0913 - complete authorization sentence
             resource,
             conditions=tuple(conditions),
         )
+        if decision.allowed and require_whole_institution:
+            data_scope = authorization.effective_data_scope(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            )
+            decision = authorization.institution_grain_decision(
+                decision, whole_institution=data_scope.whole_institution
+            )
     except Exception as exc:  # noqa: BLE001 - enforcement must deny closed
         authorization.record_binding_evaluation_failure(
             principal,
@@ -157,6 +170,7 @@ def require_resolved_bank_permission(  # noqa: PLR0913 - complete authorization 
     sensitivity: Sensitivity,
     surface: str,
     conditions: Sequence[ConditionCheck] = (),
+    require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
     denial_detail: str = DEFAULT_DENIAL_DETAIL,
 ) -> AuthorizationDecision:
@@ -171,6 +185,7 @@ def require_resolved_bank_permission(  # noqa: PLR0913 - complete authorization 
         sensitivity=sensitivity,
         surface=surface,
         conditions=conditions,
+        require_whole_institution=require_whole_institution,
     )
     if decision is None or not decision.allowed:
         raise HTTPException(status_code=denial_status, detail=denial_detail)
@@ -187,6 +202,7 @@ def require_bank_permission(  # noqa: PLR0913 - complete authorization sentence
     sensitivity: Sensitivity,
     surface: str,
     conditions: Sequence[ConditionCheck] = (),
+    require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
     denial_detail: str = DEFAULT_DENIAL_DETAIL,
 ) -> Bank:
@@ -202,6 +218,7 @@ def require_bank_permission(  # noqa: PLR0913 - complete authorization sentence
         sensitivity=sensitivity,
         surface=surface,
         conditions=conditions,
+        require_whole_institution=require_whole_institution,
         denial_status=denial_status,
         denial_detail=denial_detail,
     )
@@ -218,6 +235,7 @@ def require_bank_permission_prefetched(  # noqa: PLR0913 - complete authorizatio
     sensitivity: Sensitivity,
     surface: str,
     conditions: Sequence[ConditionCheck] = (),
+    require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
     denial_detail: str = DEFAULT_DENIAL_DETAIL,
 ) -> Bank:
@@ -235,6 +253,7 @@ def require_bank_permission_prefetched(  # noqa: PLR0913 - complete authorizatio
             sensitivity=sensitivity,
             surface=surface,
             conditions=conditions,
+            require_whole_institution=require_whole_institution,
             denial_status=denial_status,
             denial_detail=denial_detail,
         )
@@ -290,6 +309,17 @@ def require_bank_permission_prefetched(  # noqa: PLR0913 - complete authorizatio
             principal_active=rows[0][1] is not None,
             conditions=tuple(conditions),
         )
+        if decision.allowed and require_whole_institution:
+            whole_institution = any(
+                binding is not None
+                and binding.id in decision.matching_binding_ids
+                and binding.data_scope_kind == DataScope.ALL.value
+                and authorization.binding_is_effective(binding)
+                for _, _, binding in rows
+            )
+            decision = authorization.institution_grain_decision(
+                decision, whole_institution=whole_institution
+            )
     except Exception as exc:  # noqa: BLE001 - enforcement must deny closed
         authorization.record_binding_evaluation_failure(
             principal,

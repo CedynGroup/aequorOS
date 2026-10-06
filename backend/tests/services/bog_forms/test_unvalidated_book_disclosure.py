@@ -61,6 +61,9 @@ FORM_CODE = "BSD2"
 NOTES_HEADING = "Unvalidated canonical rows excluded from every line"
 
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
 def _seed_loan(session: Session, *, validation_status: str, withdrawn: bool = False) -> None:
     """One LOAN position + snapshot in a status no calculation reader admits."""
     batch = IngestionBatch(

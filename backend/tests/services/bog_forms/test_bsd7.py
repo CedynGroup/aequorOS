@@ -22,6 +22,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -63,6 +64,9 @@ _LEDGER: tuple[tuple[str, str, str, str | None, dict[date, int]], ...] = (
     # a prior fiscal year generation must never leak into the current year
     ("4001", "INCOME", "1a", "GHS", {date(2025, 12, 31): 9_999}),
 )
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def _materialize(db_client: TestClient) -> None:

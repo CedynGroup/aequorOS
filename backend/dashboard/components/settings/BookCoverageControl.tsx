@@ -75,7 +75,10 @@ export default function BookCoverageControl({
   const loading = availability.status === "loading";
   const failed = availability.status === "unavailable";
 
-  if (availability.status === "organization_wide") {
+  if (
+    availability.status === "organization_wide" ||
+    availability.status === "unsupported_module"
+  ) {
     return (
       <section
         data-testid="book-coverage"

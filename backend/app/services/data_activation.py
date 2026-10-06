@@ -68,15 +68,8 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
-    # NOT GATED ON CREDIT — the same known gap as ``live_view.mint_official_run``,
-    # deferred for the same reason and fixed with the same one line. Activation with
-    # ``run_calculations`` produces official runs, and this function is one of the
-    # three callers the official derivation's allow-list admits, so the gap here is
-    # the same shape: a principal who may not run the credit engine reaches it
-    # through activation instead. See the comment at that mint site for the measured
-    # fallout (ten pre-existing tests) and why this belongs in its own enforcement
-    # cutover with a rollout contract rather than in the data-scope phase.
     for engine, module in (
+        ("credit", Module.CREDIT),
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),

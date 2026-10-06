@@ -1,25 +1,8 @@
-"""Who may reach a regulatory package, per return FAMILY (audit C-4 / D-012).
+"""Every return needs whole-institution scoped authority.
 
-Two answers live side by side and must both stay true:
-
-* an UNGATED family (every BSD, liquidity, capital, FX return) keeps the scalar
-  ladder it has always had. A change that quietly tightened those routes would
-  lock analysts out of returns they have filed for months, so the control rows
-  here are as important as the ICAAP ones;
-* the ICAAP family is GATED on an exact CAPITAL/CONFIDENTIAL binding for the
-  institution. A principal without it gets **404** — the existence of an ICAAP
-  package for a date is itself a disclosure — and a principal with VIEW but
-  without the action permission gets an honest 403.
-
-The third property is the one that is easiest to lose: a scalar role must never
-satisfy a scoped surface. A scalar ``approver`` with no binding is refused.
-
-TRANSMISSION is the fourth, and it cuts across both answers. Filing a return to
-the regulator requires ``Permission.SUBMIT`` over Regulatory Reporting /
-restricted for the exact institution, for EVERY family — it used to require the
-same ``APPROVE`` permission as the approval decision, and on an ungated family
-the scalar ``approver`` role alone (``docs/filing_workflow_redesign.md`` §1
-finding 3). Those tests live in their own section at the bottom.
+Regulatory Reporting/restricted governs ordinary returns; ICAAP keeps
+Capital/confidential. Missing visibility hides the return, while visible returns
+require their own action permission. Scalar roles cannot satisfy either gate.
 """
 
 from __future__ import annotations
@@ -29,10 +12,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -40,11 +26,19 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, RegulatoryPackage, User
+from app.models import (
+    AuthorizationBinding,
+    Bank,
+    PackageSignatureRecipient,
+    RegulatoryPackage,
+    User,
+)
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from app.services.regulatory_reporting import version_chain
+from tests.api.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -76,6 +70,8 @@ def _grant(  # noqa: PLR0913 - every binding dimension is an enforcement input
     institution_id: str | None = SAMPLE_BANK_ID,
     organization_id: str = ORG_1,
     user_id: UUID = USER_1,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: tuple[str, ...] = (),
 ) -> int:
     session = get_sessionmaker()()
     session.info["organization_id"] = organization_id
@@ -91,6 +87,8 @@ def _grant(  # noqa: PLR0913 - every binding dimension is an enforcement input
                 institution_id,
                 module_scope,
                 sensitivity_scope,
+                data_scope,
+                data_scope_values,
             ),
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
             reason="Exercise package-plane scoped enforcement.",
@@ -156,6 +154,43 @@ def _add_bank(bank_id: str, *, organization_id: str) -> None:
             )
         )
         session.commit()
+    finally:
+        session.close()
+
+
+def _assign_signature(package_id: UUID, *, user_id: UUID = USER_1) -> None:
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        session.add(
+            PackageSignatureRecipient(
+                organization_id=ORG_1,
+                package_id=package_id,
+                attestation_cycle=1,
+                signing_role="approver",
+                recipient_user_id=user_id,
+                recipient_signer_id=f"fixture-{str(user_id)[:8]}",
+                routing_order=1,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+
+def _add_user() -> UUID:
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        user = User(
+            organization_id=ORG_1,
+            email=f"package-maker-{uuid4()}@example.test",
+            display_name="Package Maker",
+            role="analyst",
+        )
+        session.add(user)
+        session.commit()
+        return user.id
     finally:
         session.close()
 
@@ -277,9 +312,12 @@ def test_a_package_in_another_tenant_is_not_found(db_client: TestClient) -> None
 def test_an_icaap_package_is_hidden_from_the_package_list(db_client: TestClient) -> None:
     _package()
     _package(family="liquidity", return_code="LCR-NSFR")
+    authv = _grant(
+        module_scope=ModuleScope.REGULATORY, sensitivity_scope=SensitivityScope.RESTRICTED
+    )
     response = db_client.get(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
-        headers=headers(roles=("analyst",)),
+        headers=headers(roles=("analyst",), authorization_version=authv),
     )
     assert response.status_code == 200
     families = {row["return_family"] for row in response.json()["packages"]}
@@ -298,36 +336,213 @@ def test_the_list_shows_icaap_to_a_binding_holder(db_client: TestClient) -> None
     assert "icaap" in {row["return_family"] for row in response.json()["packages"]}
 
 
-# --- the ungated families are untouched ------------------------------------
+# --- ordinary families require Regulatory Reporting ------------------------------------
 
 
-def test_an_ordinary_return_keeps_the_scalar_ladder(db_client: TestClient) -> None:
-    """The control rows. A viewer reads; a viewer does not validate."""
+def test_ordinary_returns_require_regulatory_authority(db_client: TestClient) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
-    assert db_client.get(base, headers=headers(roles=("viewer",))).status_code == 200
-    assert db_client.post(f"{base}/validate", headers=headers(roles=("viewer",))).status_code == 403
+    assert db_client.get(base, headers=headers(roles=("approver",))).status_code == 404
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    viewer = headers(roles=("approver",), authorization_version=version)
+    assert db_client.get(base, headers=viewer).status_code == 200
+    assert db_client.post(f"{base}/validate", headers=viewer).status_code == 403
+    version = _grant(
+        module_scope=ModuleScope.REGULATORY, sensitivity_scope=SensitivityScope.RESTRICTED
+    )
     assert (
-        db_client.post(f"{base}/validate", headers=headers(roles=("analyst",))).status_code == 200
+        db_client.post(
+            f"{base}/validate", headers=headers(roles=("viewer",), authorization_version=version)
+        ).status_code
+        == 200
     )
 
 
-def test_a_viewer_hitting_an_unknown_package_still_gets_the_write_refusal(
+def test_regulatory_viewer_cannot_send_back_but_approver_can(
     db_client: TestClient,
 ) -> None:
-    """403 before 404: a viewer must not learn from a 404 that they got past
-    the write gate. This is today's behaviour and it is deliberately kept."""
-    unknown = uuid4()
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{unknown}/validate",
-        headers=headers(roles=("viewer",)),
+    maker_id = _add_user()
+    package_id = _package(
+        family="liquidity",
+        return_code="LCR-NSFR",
+        generated_by=maker_id,
+        status="pending_approval",
     )
-    assert response.status_code == 403
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{unknown}/validate",
-        headers=headers(roles=("analyst",)),
+    _pin_chain(package_id, current_stage_seq=2)
+    endpoint = (
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/attestation/send-back"
     )
-    assert response.status_code == 404
+    viewer_version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    refused = db_client.post(
+        endpoint,
+        headers=headers(roles=("viewer",), authorization_version=viewer_version),
+        json={"reason": "Viewer must not change the return state."},
+    )
+    assert refused.status_code == 403, refused.text
+    with get_sessionmaker()() as session:
+        assert session.get(RegulatoryPackage, package_id).status == "pending_approval"
+
+    approver_version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    sent_back = db_client.post(
+        endpoint,
+        headers=headers(roles=("viewer",), authorization_version=approver_version),
+        json={"reason": "Correct the return before another review."},
+    )
+    assert sent_back.status_code == 200, sent_back.text
+    with get_sessionmaker()() as session:
+        assert session.get(RegulatoryPackage, package_id).status == "generated"
+
+
+def test_binding_only_signer_queue_filters_by_whole_institution_family(
+    db_client: TestClient,
+) -> None:
+    regulatory = _package(family="liquidity", return_code="LCR-NSFR")
+    icaap = _package(family="icaap", return_code="ICAAP-REPORT")
+    _assign_signature(regulatory)
+    _assign_signature(icaap)
+    version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+
+    response = db_client.get(
+        "/api/v1/attestation/awaiting-my-signature",
+        headers=headers(roles=("viewer",), authorization_version=version),
+    )
+    assert response.status_code == 200, response.text
+    assert [row["package_id"] for row in response.json()["items"]] == [str(regulatory)]
+
+
+@pytest.mark.parametrize("role", ["viewer", "account_admin"])
+def test_binding_only_signer_can_set_up_only_their_own_signature(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "test-signer-setup-pepper")
+    get_settings.cache_clear()
+    with get_sessionmaker()() as session:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.role = role
+        session.commit()
+    version = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=(role,), authorization_version=version)
+    identity_url = "/api/v1/attestation/signer-identity"
+    appearance_url = "/api/v1/attestation/my-signature-appearance"
+
+    identity = db_client.get(identity_url, headers=auth)
+    assert identity.status_code == 200, identity.text
+    signer_id = identity.json()["signer_id"]
+    assert identity.json()["user_id"] == str(USER_1)
+    assert db_client.get(identity_url, headers=auth).json()["signer_id"] == signer_id
+    empty = db_client.get(appearance_url, headers=auth)
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["adopted"] is False
+    assert empty.json()["signer_id"] == signer_id
+
+    for name in ("Ama Mensah", "Ama A. Mensah"):
+        adopted = db_client.put(
+            appearance_url,
+            headers=auth,
+            json={"kind": "typed", "typed_name": name, "typed_font": "times_italic"},
+        )
+        assert adopted.status_code == 200, adopted.text
+        assert adopted.json()["adopted"] is True
+        assert adopted.json()["signer_id"] == signer_id
+        assert adopted.json()["typed_name"] == name
+        reread = db_client.get(appearance_url, headers=auth)
+        assert reread.status_code == 200, reread.text
+        stored = reread.json()
+        assert stored["adopted"] is True
+        assert stored["signer_id"] == signer_id
+        assert stored["kind"] == "typed"
+        assert stored["typed_name"] == name
+        assert stored["typed_font"] == "times_italic"
+
+    other_user = _add_user()
+    other_auth = headers(user_id=other_user, roles=("viewer",))
+    other = db_client.get(appearance_url, headers=other_auth)
+    assert other.status_code == 200, other.text
+    assert other.json()["adopted"] is False
+    assert other.json()["signer_id"] != signer_id
+    assert other.json()["typed_name"] is None
+
+
+@pytest.mark.parametrize(
+    ("method", "endpoint"),
+    [
+        ("GET", "signer-identity"),
+        ("GET", "my-signature-appearance"),
+        ("PUT", "my-signature-appearance"),
+    ],
+)
+@pytest.mark.parametrize("principal", ["impersonation", "machine"])
+def test_signer_setup_refuses_noninteractive_principals(
+    db_client: TestClient, method: str, endpoint: str, principal: str
+) -> None:
+    auth = (
+        _impersonation_headers()
+        if principal == "impersonation"
+        else integration_key_headers(SAMPLE_BANK_ID)
+    )
+    response = db_client.request(
+        method,
+        f"/api/v1/attestation/{endpoint}",
+        headers=auth,
+        json={"kind": "typed", "typed_name": "Examiner", "typed_font": "times_italic"}
+        if method == "PUT"
+        else None,
+    )
+    assert response.status_code == (401 if principal == "machine" else 403), response.text
+
+
+@pytest.mark.parametrize("authority", ["narrowed", "unbound"])
+def test_narrowed_or_unbound_assignee_has_an_empty_signer_queue(
+    db_client: TestClient, authority: str
+) -> None:
+    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    _assign_signature(package_id)
+    version = 1
+    if authority == "narrowed":
+        version = _grant(
+            role_bundle=RoleBundle.APPROVER,
+            module_scope=ModuleScope.CREDIT,
+            sensitivity_scope=SensitivityScope.ALL,
+            data_scope=DataScope.BRANCH,
+            data_scope_values=("BR-001",),
+        )
+
+    response = db_client.get(
+        "/api/v1/attestation/awaiting-my-signature",
+        headers=headers(roles=("viewer",), authorization_version=version),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": []}
+
+
+def test_an_unknown_package_never_discloses_figures(db_client: TestClient) -> None:
+    for role in ("viewer", "analyst", "approver"):
+        response = db_client.post(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{uuid4()}/validate",
+            headers=headers(roles=(role,)),
+        )
+        assert response.status_code == 404
 
 
 # --- the examiner branch ----------------------------------------------------
@@ -467,8 +682,7 @@ def test_a_scalar_approver_with_no_binding_cannot_transmit(db_client: TestClient
     response = _submit(
         db_client, package_id, request_headers=headers(roles=("admin", "approver", "analyst"))
     )
-    assert response.status_code == 403
-    assert "Validator" in response.json()["error"]["message"]
+    assert response.status_code == 404
 
 
 def test_a_validator_binding_transmits(db_client: TestClient) -> None:
@@ -733,9 +947,7 @@ def test_a_gated_family_hides_its_chain_before_it_refuses(db_client: TestClient)
 # role or higher" while the dashboard, which projects the control from the same
 # binding, offered them the button. Fail-open screen over a fail-closed server.
 #
-# The binding is now asked FIRST on both approve routes. It is additive: the
-# scalar ladder stays behind it, so nobody who could approve yesterday is
-# refused today. Removing the ladder is a separate cutover.
+# Both approval routes now require the complete scoped binding.
 
 
 def _approver_grant(user_id: UUID = USER_1, *, sensitivity: SensitivityScope) -> int:
@@ -747,9 +959,7 @@ def _approver_grant(user_id: UUID = USER_1, *, sensitivity: SensitivityScope) ->
     )
 
 
-def _decide_approval(
-    client: TestClient, package_id: UUID, *, request_headers: dict[str, str]
-):  # noqa: ANN202 - concise route-test helper
+def _decide_approval(client: TestClient, package_id: UUID, *, request_headers: dict[str, str]):  # noqa: ANN202 - concise route-test helper
     return client.post(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/decide-approval",
         headers=request_headers,
@@ -781,9 +991,7 @@ def test_an_approver_grant_approves_an_ungated_return_without_a_scalar_role(
 def test_the_legacy_approval_route_reads_the_same_binding(db_client: TestClient) -> None:
     """One act, one authority. Settings -> Approvals posts here, not to the chain
     route, and a second rule for the same decision is the seam D-069 describes."""
-    package_id = _package(
-        family="liquidity", return_code="LCR-NSFR", status="pending_approval"
-    )
+    package_id = _package(family="liquidity", return_code="LCR-NSFR", status="pending_approval")
     _pin_chain(package_id, current_stage_seq=2, status="pending_approval")
     authv = _approver_grant(sensitivity=SensitivityScope.RESTRICTED)
     response = _decide_approval(
@@ -798,6 +1006,32 @@ def test_the_legacy_approval_route_reads_the_same_binding(db_client: TestClient)
     assert response.json()["error"]["details"]["error_code"] == "approval_requires_signature"
 
 
+@pytest.mark.parametrize("route", ["stage", "legacy"])
+def test_icaap_capital_approver_ignores_regulatory_near_miss(
+    db_client: TestClient, route: str
+) -> None:
+    maker_id = _add_user()
+    package_id = _package(status="pending_approval", generated_by=maker_id)
+    _pin_chain(package_id, current_stage_seq=2)
+    _grant(role_bundle=RoleBundle.APPROVER)
+    authv = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    request_headers = headers(roles=("account_admin",), authorization_version=authv)
+
+    if route == "stage":
+        digest = _chain_digest(db_client, package_id, request_headers)
+        response = _decide_stage(
+            db_client, package_id, request_headers=request_headers, digest=digest
+        )
+        assert response.status_code == 200, response.text
+    else:
+        response = _decide_approval(db_client, package_id, request_headers=request_headers)
+        assert response.status_code == 200, response.text
+
+
 def test_a_grant_at_the_wrong_classification_does_not_approve(db_client: TestClient) -> None:
     """Reporting resources are RESTRICTED, and sensitivity is exact-or-all.
 
@@ -809,6 +1043,11 @@ def test_a_grant_at_the_wrong_classification_does_not_approve(db_client: TestCli
     """
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     authv = _approver_grant(sensitivity=SensitivityScope.CONFIDENTIAL)
     request_headers = headers(roles=("account_admin",), authorization_version=authv)
     digest = _chain_digest(db_client, package_id, request_headers)
@@ -831,6 +1070,11 @@ def test_a_grant_for_another_module_names_the_module_that_missed(
 ) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     authv = _grant(
         role_bundle=RoleBundle.APPROVER,
         module_scope=ModuleScope.LIQUIDITY,
@@ -843,20 +1087,16 @@ def test_a_grant_for_another_module_names_the_module_that_missed(
     assert "Regulatory Reporting" in response.json()["error"]["message"]
 
 
-def test_a_caller_with_no_binding_at_all_still_reads_the_scalar_refusal(
-    db_client: TestClient,
-) -> None:
-    """A near-miss message is for a near miss. Somebody with no grant is told
-    what they have always been told, and learns nothing new about the tenant."""
+def test_a_caller_with_no_binding_cannot_read_or_approve_a_return(db_client: TestClient) -> None:
     package_id = _package(family="liquidity", return_code="LCR-NSFR")
     _pin_chain(package_id, current_stage_seq=2)
-    request_headers = headers(roles=("account_admin",))
-    digest = _chain_digest(db_client, package_id, request_headers)
-    response = _decide_stage(db_client, package_id, request_headers=request_headers, digest=digest)
-    assert response.status_code == 403
-    message = response.json()["error"]["message"]
-    assert "analyst" in message
-    assert "grant" not in message
+    request_headers = headers(roles=("account_admin", "approver"))
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
+    assert db_client.get(f"{base}/workflow", headers=request_headers).status_code == 404
+    response = _decide_stage(
+        db_client, package_id, request_headers=request_headers, digest="0" * 64
+    )
+    assert response.status_code == 404
 
 
 def test_a_near_miss_never_discloses_a_gated_package(db_client: TestClient) -> None:
@@ -871,22 +1111,137 @@ def test_a_near_miss_never_discloses_a_gated_package(db_client: TestClient) -> N
     authv = _approver_grant(sensitivity=SensitivityScope.CONFIDENTIAL)
     request_headers = headers(roles=("account_admin",), authorization_version=authv)
     response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
-        "/workflow/decisions",
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/workflow/decisions",
         headers=request_headers,
         json={"decision": "approved", "round": 1, "review_digest": "0" * 64},
     )
     assert response.status_code == 404
 
 
-def test_the_scalar_approver_ladder_still_approves(db_client: TestClient) -> None:
-    """Additive, not a cutover: nobody who could approve yesterday is refused."""
-    package_id = _package(
-        family="liquidity", return_code="LCR-NSFR", status="pending_approval"
-    )
+def test_the_scalar_approver_ladder_never_approves(db_client: TestClient) -> None:
+    """A scalar Approver without a reporting grant has no return authority."""
+    package_id = _package(family="liquidity", return_code="LCR-NSFR", status="pending_approval")
     _pin_chain(package_id, current_stage_seq=2, status="pending_approval")
-    response = _decide_approval(
-        db_client, package_id, request_headers=headers(roles=("approver",))
+    response = _decide_approval(db_client, package_id, request_headers=headers(roles=("approver",)))
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize("visible_family", ["icaap", "liquidity"])
+def test_comparison_hides_unauthorized_targets_in_both_family_directions(
+    db_client: TestClient, visible_family: str
+) -> None:
+    packages = {
+        "icaap": _package(),
+        "liquidity": _package(family="liquidity", return_code="LCR-NSFR"),
+    }
+    authorities = {
+        "icaap": (ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL),
+        "liquidity": (ModuleScope.REGULATORY, SensitivityScope.RESTRICTED),
+    }
+    hidden_family = "liquidity" if visible_family == "icaap" else "icaap"
+    module, sensitivity = authorities[visible_family]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER, module_scope=module, sensitivity_scope=sensitivity
     )
-    assert response.status_code == 409, response.text
-    assert response.json()["error"]["details"]["error_code"] == "approval_requires_signature"
+    auth = headers(roles=("viewer",), authorization_version=version)
+    base, target = packages[visible_family], packages[hidden_family]
+    endpoint = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{base}/comparison"
+    hidden = db_client.get(endpoint, headers=auth, params={"against": str(target)})
+    unknown = db_client.get(endpoint, headers=auth, params={"against": str(uuid4())})
+    assert hidden.status_code == unknown.status_code == 404
+    assert error_envelope(hidden) == error_envelope(unknown)
+    with get_sessionmaker()() as db:
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=version
+        )
+        for left, right in ((base, target), (target, base)):
+            with pytest.raises(HTTPException) as excinfo:
+                version_chain.compare_versions(db, ctx, SAMPLE_BANK_ID, left, right)
+            assert excinfo.value.status_code == 404
+
+    module, sensitivity = authorities[hidden_family]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER, module_scope=module, sensitivity_scope=sensitivity
+    )
+    for left, right in ((base, target), (target, base)):
+        visible = db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{left}/comparison",
+            headers=headers(roles=("viewer",), authorization_version=version),
+            params={"against": str(right)},
+        )
+        assert visible.status_code == 409, visible.text
+        details = visible.json()["error"]["details"]
+        assert details["error_code"] == "comparison_return_mismatch"
+        assert "ICAAP-REPORT" in details["message"]
+        assert "LCR-NSFR" in details["message"]
+
+
+@pytest.mark.parametrize("family", ["icaap", "liquidity"])
+@pytest.mark.parametrize("difference", ["version", "reporting_date", "basis"])
+def test_scoped_package_comparison_preserves_visible_figures_and_direction(
+    db_client: TestClient, family: str, difference: str
+) -> None:
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    base = _package(family=family, return_code=code, status="superseded")
+    target = _package(family=family, return_code=code)
+    with get_sessionmaker()() as db:
+        for package_id, amount in ((base, "100"), (target, "125")):
+            row = db.get(RegulatoryPackage, package_id)
+            assert row is not None
+            row.snapshot = {
+                "sections": [
+                    {
+                        "code": "position",
+                        "title": "Position",
+                        "rows": [{"code": "total", "description": "Total", "value": amount}],
+                    }
+                ]
+            }
+        row = db.get(RegulatoryPackage, target)
+        assert row is not None
+        if difference == "version":
+            row.version = 2
+        elif difference == "reporting_date":
+            row.reporting_date = date(2026, 6, 30)
+        else:
+            row.basis = "consolidated"
+        db.commit()
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL
+        if family == "icaap"
+        else SensitivityScope.RESTRICTED,
+    )
+    for left, right, delta in ((base, target, "25"), (target, base, "-25"), (base, base, None)):
+        response = db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{left}/comparison",
+            headers=headers(roles=("viewer",), authorization_version=version),
+            params={"against": str(right)},
+        )
+        assert response.status_code == 200, response.text
+        comparison = response.json()
+        assert comparison["base"]["package_id"] == str(left)
+        assert comparison["target"]["package_id"] == str(right)
+        assert comparison["identical"] is (left == right)
+        if delta is None:
+            assert comparison["sections"] == []
+        else:
+            assert comparison["changed_count"] == 1
+            assert comparison["sections"][0]["lines"][0]["delta"] == delta
+
+
+@pytest.mark.parametrize("other_org", [ORG_1, ORG_2])
+def test_comparison_target_is_scoped_to_the_path_bank(
+    db_client: TestClient, other_org: str
+) -> None:
+    base = _package()
+    _add_bank(OTHER_ORG_BANK_ID, organization_id=other_org)
+    target = _package(organization_id=other_org, bank_id=OTHER_ORG_BANK_ID)
+    version = _grant(role_bundle=RoleBundle.VIEWER, institution_id=None)
+    endpoint = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{base}/comparison"
+    auth = headers(roles=("viewer",), authorization_version=version)
+    foreign = db_client.get(endpoint, headers=auth, params={"against": str(target)})
+    unknown = db_client.get(endpoint, headers=auth, params={"against": str(uuid4())})
+    assert foreign.status_code == unknown.status_code == 404
+    assert error_envelope(foreign) == error_envelope(unknown)

@@ -40,12 +40,12 @@ import {
   grantScopeDisplay,
   grantScopeRefusal,
   institutionBranchesKey,
-  MODULE_OPTIONS,
   parseBranchDirectory,
   ssoApprovalRequest,
   statedDataScope,
   visibleGrantFragments,
   WHOLE_INSTITUTION_BOOK,
+  MODULE_OPTIONS,
   type BranchDirectory,
   type GrantDataScope,
   type GrantDraft,
@@ -72,7 +72,7 @@ function draft(over: Partial<GrantDraft> = {}): GrantDraft {
     roleBundle: "analyst" as GrantDraft["roleBundle"],
     institutionScope: "institution" as GrantDraft["institutionScope"],
     institutionId: BANK_A,
-    moduleScope: "liq" as GrantDraft["moduleScope"],
+    moduleScope: "credit" as GrantDraft["moduleScope"],
     sensitivityScope: "confidential" as GrantDraft["sensitivityScope"],
     dataScope: WHOLE_INSTITUTION_BOOK,
     reasonCategory: "other",
@@ -240,6 +240,7 @@ test("an organization-wide grant cannot state a branch list", () => {
   assert.equal(statedDataScope(orgDraft).kind, "all");
 
   const availability = bookCoverageAvailability({
+    moduleScope: "credit",
     institutionScope: "organization",
     directory: DIRECTORY,
     failed: false,
@@ -259,6 +260,7 @@ test("an organization-wide grant cannot state a branch list", () => {
 
 test("a bank with no branch register is told so, and offers nothing to pick", () => {
   const availability = bookCoverageAvailability({
+    moduleScope: "credit",
     institutionScope: "institution",
     directory: { institutionId: BANK_A, branches: [], regions: [] },
     failed: false,
@@ -275,6 +277,7 @@ test("a bank with no branch register is told so, and offers nothing to pick", ()
 
 test("a bank that declares no regions can still be narrowed by branch", () => {
   const availability = bookCoverageAvailability({
+    moduleScope: "credit",
     institutionScope: "institution",
     directory: {
       institutionId: BANK_A,
@@ -297,6 +300,7 @@ test("a bank that declares no regions can still be narrowed by branch", () => {
 
 test("a readable register offers both narrowings", () => {
   const availability = bookCoverageAvailability({
+    moduleScope: "credit",
     institutionScope: "institution",
     directory: DIRECTORY,
     failed: false,
@@ -312,6 +316,7 @@ test("a readable register offers both narrowings", () => {
 
 test("a failed branch request is not a bank that declared nothing", () => {
   const availability = bookCoverageAvailability({
+    moduleScope: "credit",
     institutionScope: "institution",
     directory: null,
     failed: true,
@@ -342,6 +347,7 @@ test("a failed branch request is not a bank that declared nothing", () => {
 test("a failure outranks stale data and a pending load", () => {
   assert.equal(
     bookCoverageAvailability({
+      moduleScope: "credit",
       institutionScope: "institution",
       directory: DIRECTORY,
       failed: true,
@@ -351,6 +357,7 @@ test("a failure outranks stale data and a pending load", () => {
   );
   assert.equal(
     bookCoverageAvailability({
+      moduleScope: "credit",
       institutionScope: "institution",
       directory: null,
       failed: false,
@@ -361,6 +368,7 @@ test("a failure outranks stale data and a pending load", () => {
   // No directory and no error yet is still not an empty register.
   assert.equal(
     bookCoverageAvailability({
+      moduleScope: "credit",
       institutionScope: "institution",
       directory: null,
       failed: false,
@@ -926,6 +934,32 @@ test("every field each grant contract carries is one the composer decides", () =
         "server default, which for a scope column means a WIDER grant than " +
         "the Owner composed.",
     );
+  }
+});
+
+test("only Credit offers branch and region choices", () => {
+  for (const moduleScope of MODULE_OPTIONS.map(([module]) => module)) {
+    const availability = bookCoverageAvailability({
+      institutionScope: "institution",
+      moduleScope,
+      directory: DIRECTORY,
+      failed: false,
+      loading: false,
+    });
+    assert.equal(
+      bookCoverageChoiceAvailable(availability, "branch"),
+      moduleScope === "credit",
+    );
+    assert.equal(
+      bookCoverageChoiceAvailable(availability, "region"),
+      moduleScope === "credit",
+    );
+    assert.equal(bookCoverageChoiceAvailable(availability, "all"), true);
+    const refusal = grantScopeRefusal(
+      draft({ moduleScope, dataScope: branchScope("001") }),
+    );
+    if (moduleScope === "credit") assert.equal(refusal, null);
+    else assert.match(refusal ?? "", /only for Credit/);
   }
 });
 

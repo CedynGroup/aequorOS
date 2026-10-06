@@ -253,6 +253,22 @@ def binding_is_effective(
     )
 
 
+def institution_grain_decision(
+    decision: AuthorizationDecision, *, whole_institution: bool
+) -> AuthorizationDecision:
+    """Refuse institution figures unless the matched grants cover the whole book.
+
+    Preserve the binding trace so telemetry distinguishes a scope refusal from
+    a missing grant. Row-filtering surfaces must instead apply their effective
+    data scope to every row and count.
+    """
+    if decision.allowed and not whole_institution:
+        return replace(
+            decision, allowed=False, reason="institution_grain_requires_whole_institution"
+        )
+    return decision
+
+
 def record_binding_grant_audit(
     db: Session,
     *,
@@ -609,6 +625,10 @@ def data_scope_column_values(scope: BindingScope) -> list[str] | None:
 
 
 def _validate_scope(db: Session, organization_id: str, scope: BindingScope) -> None:
+    if scope.data_scope is not DataScope.ALL and scope.module_scope is not ModuleScope.CREDIT:
+        raise AuthorizationInvariantError(
+            "Branch and region narrowing is supported only for Credit"
+        )
     # A NARROW data scope requires exact institution coverage, and this is where
     # that is enforced rather than only in the request schema (audit A10-05). A
     # branch code belongs to one institution's core banking system, so two sibling
@@ -869,6 +889,34 @@ def _load_principal_grants(
         )
     )
     return True, [_binding_grant(binding) for binding in bindings]
+
+
+def prefetch_principal_bindings(
+    db: Session, principal: PrincipalLocator
+) -> tuple[bool, list[AuthorizationBinding]]:
+    """Load one principal and its grants once for several resource decisions.
+
+    Consumers must resolve each resource in the principal's tenant before using
+    evaluate_prefetched_permission, and apply their own data-grain requirement.
+    """
+    rows = db.execute(
+        select(User, AuthorizationBinding)
+        .select_from(User)
+        .outerjoin(
+            AuthorizationBinding,
+            (AuthorizationBinding.organization_id == principal.organization_id)
+            & (AuthorizationBinding.principal_user_id == principal.principal_id)
+            & (AuthorizationBinding.principal_type == principal.principal_type.value),
+        )
+        .where(
+            User.id == principal.principal_id,
+            User.organization_id == principal.organization_id,
+            User.is_active.is_(True),
+        )
+    ).all()
+    if not rows or _principal_type(rows[0][0]) is not principal.principal_type:
+        return False, []
+    return True, [binding for _, binding in rows if binding is not None]
 
 
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit

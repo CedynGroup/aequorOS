@@ -23,6 +23,8 @@ from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import get_template
 from tests.api.helpers import ORG_1, USER_1
 
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
 _AS_OF = date(2026, 6, 30)
 
 
@@ -64,7 +66,7 @@ def test_sdi_returns_are_explicitly_scoped_and_bank_returns_remain_isolated() ->
 
 def test_universal_bank_sees_the_full_reporting_calendar(db_session: Session) -> None:
     bank = _make_bank(db_session, institution_type="universal_bank")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
     # Bank/BoG returns expand into calendar obligations for a 'bank' tenant.
     assert result.obligations
@@ -72,7 +74,7 @@ def test_universal_bank_sees_the_full_reporting_calendar(db_session: Session) ->
 
 def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session) -> None:
     bank = _make_bank(db_session, institution_type="savings_and_loans")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in result.obligations} == {
         "SDI-LMT-MONTHLY",
@@ -90,7 +92,7 @@ def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session
 def test_finance_house_sees_the_same_sdi_return_calendar(db_session: Session) -> None:
     # Both licence types share the SDI class and its published directive pack.
     bank = _make_bank(db_session, institution_type="finance_house")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in result.obligations} == {
         "SDI-LMT-MONTHLY",
@@ -111,7 +113,7 @@ def test_sdi_cannot_generate_a_bank_only_return(db_session: Session) -> None:
         code for code, d in REGISTRY.items() if "sdi" not in d.institution_classes
     )
     sdi = _make_bank(db_session, institution_type="savings_and_loans")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     payload = RegulatoryPackageCreate(return_code=bank_only_code, reporting_date=_AS_OF)
     with pytest.raises(HTTPException) as exc:
         generation.generate_package(db_session, ctx, sdi.id, payload)

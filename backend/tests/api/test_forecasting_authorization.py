@@ -46,14 +46,12 @@ from app.models import (
     User,
 )
 from app.schemas.forecasting import ForecastRunCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import (
     authorization,
     data_activation,
     module_scope,
     pipeline,
-    regulatory_capital,
     regulatory_forecasting,
     reverse_stress,
     scheduler,
@@ -66,7 +64,6 @@ BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast"
 REVERSE_STRESS_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/reverse-stress"
 REGULATORY_RUNS_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs"
 SIBLING_BANK_ID = "BK-FCST0002"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 FORECAST_RUN_MODULES = ("forecast", "optimizer", "whatif", "reverse_stress")
 
 
@@ -605,20 +602,7 @@ def test_regulatory_registry_filters_every_forecasting_module_before_count_and_p
     period_id = _seed_book()
     for module in FORECAST_RUN_MODULES:
         _add_regulatory_run(period_id, module=module)
-    session = get_sessionmaker()()
-    try:
-        regulatory_capital.create_capital_run(
-            session,
-            CTX,
-            SAMPLE_BANK_ID,
-            RegulatoryRunCreate(
-                module="capital",
-                reporting_period_id=period_id,
-                scenario_code="baseline",
-            ),
-        )
-    finally:
-        session.close()
+    _add_regulatory_run(period_id, module="capital")
     _, version = _grant(
         RoleBundle.VIEWER,
         module=ModuleScope.CAPITAL,
@@ -652,6 +636,7 @@ def test_mixed_execution_requires_forecasting_only_in_plan(
     forecast_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = 1
     for module in (ModuleScope.IRRBB, ModuleScope.FX, ModuleScope.FTP, ModuleScope.LIQUIDITY):
         _, version = _grant(
@@ -833,6 +818,10 @@ def test_queued_forecasting_requires_run_before_any_execution(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     period_id = _seed_book()
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.CAPITAL, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = 1
     for module in (ModuleScope.FX, ModuleScope.FTP):
         _, version = _grant(

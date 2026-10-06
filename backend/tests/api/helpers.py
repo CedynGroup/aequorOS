@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+import httpx2
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
@@ -61,7 +62,7 @@ def integration_key_headers(bank_id: str, organization_id: str = ORG_1) -> dict[
     return {"Authorization": f"Bearer {issued.key}"}
 
 
-def error_envelope(response: httpx.Response) -> dict[str, Any]:
+def error_envelope(response: httpx.Response | httpx2.Response) -> dict[str, Any]:
     """The response's ``error`` envelope, with its ``request_id`` checked and removed.
 
     The request id is a fresh uuid4 on every request, so it is the one field an

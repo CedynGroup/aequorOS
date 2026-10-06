@@ -25,6 +25,7 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import (
+    AuthorizationBinding,
     BankReportingPeriod,
     BiMartBuild,
     CurrentFinancialFact,
@@ -48,7 +49,13 @@ def _grant_official_run(
     user_id: UUID,
     sensitivity: SensitivityScope = SensitivityScope.CONFIDENTIAL,
 ) -> None:
-    for module in (ModuleScope.FX, ModuleScope.FTP, ModuleScope.FORECASTING):
+    for module in (
+        ModuleScope.CREDIT,
+        ModuleScope.CAPITAL,
+        ModuleScope.FX,
+        ModuleScope.FTP,
+        ModuleScope.FORECASTING,
+    ):
         authorization.create_role_binding(
             session,
             organization_id=ORG_1,
@@ -269,6 +276,46 @@ def test_scheduled_fx_uses_later_authorized_analyst(db_session: Session) -> None
     )
     assert fx_count == len(runs)
     assert requested.payload["actor_user_id"] == str(owner.id)
+
+
+@pytest.mark.parametrize("capital_sensitivity", [None, SensitivityScope.AGGREGATED])
+def test_scheduled_actor_requires_capital_confidential_run(
+    db_session: Session, capital_sensitivity: SensitivityScope | None
+) -> None:
+    materialize_canonical_test_book(db_session)
+    older = db_session.get(User, USER_1)
+    assert older is not None
+    older.created_at = utc_now() - timedelta(days=1)
+    _grant_official_run(db_session, older.id)
+    capital = db_session.scalar(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.principal_user_id == older.id,
+            AuthorizationBinding.module_scope == ModuleScope.CAPITAL.value,
+        )
+    )
+    assert capital is not None
+    if capital_sensitivity is None:
+        db_session.delete(capital)
+    else:
+        capital.sensitivity_scope = capital_sensitivity.value
+    db_session.flush()
+    assert scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now()) == []
+
+    newer = User(
+        id=uuid4(),
+        organization_id=ORG_1,
+        email="scheduled.capital@example.test",
+        display_name="Capital authorized actor",
+    )
+    db_session.add(newer)
+    db_session.flush()
+    _grant_official_run(db_session, newer.id)
+    assert scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now()) == [
+        SAMPLE_BANK_ID
+    ]
+    job = db_session.scalar(select(Job).where(Job.job_type == "official_run"))
+    assert job is not None
+    assert job.payload["actor_user_id"] == str(newer.id)
 
 
 @pytest.mark.parametrize("authority", ["viewer", "split", "inactive"])

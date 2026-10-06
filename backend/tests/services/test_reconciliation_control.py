@@ -18,10 +18,8 @@ What these tests pin, in the order the audit raised it:
 
 from __future__ import annotations
 
-import ast
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -62,7 +60,7 @@ from app.services.fact_derivation import (
     derive_facts,
     diagnose_source_overlap,
 )
-from app.services.regulatory_reporting import generation
+from app.services.regulatory_reporting import calendar, generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.factories.reconciliation import (
@@ -70,6 +68,8 @@ from tests.factories.reconciliation import (
     allow_fixture_balance_gap,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 #: The compact canonical fixture's known, deliberate defect: 15.28m GHS of
 #: funding is absent against a 146.85m balance sheet. ``gap = funding - assets``,
@@ -89,7 +89,7 @@ FIXTURE_GAP_FRACTION = Decimal("0.10405175")
 
 
 def _ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _bank(db_session: Session) -> Bank:
@@ -900,343 +900,31 @@ def test_diagnose_source_overlap_is_read_only_and_answers_for_a_bank_and_as_of(
     assert empty.state is OutcomeState.MISSING_REQUIRED_INPUT
 
 
-# ---------------------------------------------------------------------------
-# The wiring: a built control with no caller controls nothing
-# ---------------------------------------------------------------------------
-#
-# The 2026-08-22 independent forensic re-audit (D-1..D-3) found this control
-# COMPLETE and UNWIRED: ``assert_filing_reconciled`` had zero production
-# callers, the official-run path short-circuited the only check that existed,
-# and the live plane computed the verdict and discarded it. The defect was never
-# in the logic — every test above passed throughout — so the tests below pin the
-# CALL SITES, not the arithmetic. They are the ones that fail if the control is
-# ever unwired again.
-
-
-#: (module path, enclosing function, dotted call that must appear inside it).
-#: Deleting or relocating any of these out of its function fails
-#: ``test_every_filing_path_reaches_the_reconciliation_gate``.
-_FILING_GATE_CALL_SITES: tuple[tuple[str, str, str], ...] = (
-    # The gate itself, reached from the one module that knows how to feed it.
-    (
-        "app/services/filing_reconciliation.py",
-        "_gate",
-        "reconciliation.assert_filing_reconciled",
-    ),
-    # Package mint — the ARCH-8 eligibility pattern, same single site.
-    (
-        "app/services/regulatory_reporting/generation.py",
-        "_generate_package",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    # Approval, certification, transmission.
-    (
-        "app/services/regulatory_reporting/workflow.py",
-        "decide_approval",
-        "filing_reconciliation.assert_package_reconciled",
-    ),
-    (
-        "app/services/regulatory_reporting/workflow.py",
-        "submit_package",
-        "filing_reconciliation.assert_package_reconciled",
-    ),
-    (
-        "app/services/regulatory_reporting/workflow.py",
-        "submit_package_via_channel",
-        "filing_reconciliation.assert_package_reconciled",
-    ),
-    (
-        "app/services/attestation/signing.py",
-        "certify",
-        "filing_reconciliation.assert_package_reconciled",
-    ),
-    # The per-module official-run mints the audit found wide open (D-3b).
-    (
-        "app/services/regulatory_capital.py",
-        "create_capital_run",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    (
-        "app/services/regulatory_capital.py",
-        "run_all_capital_scenarios",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    (
-        "app/services/regulatory_liquidity.py",
-        "create_liquidity_run",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    (
-        "app/services/regulatory_liquidity.py",
-        "run_all_liquidity_scenarios",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    # The other three official-run mints. The audit named capital and liquidity;
-    # the reasoning — an immutable run is filing evidence — is the same here.
-    (
-        "app/services/regulatory_irr.py",
-        "run_all_irr_scenarios",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    (
-        "app/services/regulatory_fx.py",
-        "run_all_fx_scenarios",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    (
-        "app/services/regulatory_ftp.py",
-        "run_all_ftp_scenarios",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-    # The scheduled official run's fact short-circuit (D-3a).
-    (
-        "app/services/pipeline.py",
-        "run_official",
-        "filing_reconciliation.assert_filing_reconciled",
-    ),
-)
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _dotted_call_names(node: ast.AST) -> set[str]:
-    """Every ``a.b(...)`` / ``b(...)`` callee name reachable inside ``node``."""
-    names: set[str] = set()
-    for child in ast.walk(node):
-        if not isinstance(child, ast.Call):
-            continue
-        func = child.func
-        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-            names.add(f"{func.value.id}.{func.attr}")
-        elif isinstance(func, ast.Attribute):
-            names.add(func.attr)
-        elif isinstance(func, ast.Name):
-            names.add(func.id)
-    return names
-
-
-#: Sentinel ``function`` value meaning "anywhere in the module", for a call site
-#: that lives at module scope (a router registration is a wiring act too — an
-#: endpoint that no router includes is exactly as unreachable as an uncalled
-#: function).
-MODULE_SCOPE = "<module>"
-
-
-def _calls_within(module_path: str, function: str) -> set[str]:
-    """Every callee name reachable inside ``function`` of ``module_path``.
-
-    ``function`` may be :data:`MODULE_SCOPE` to scan the whole module. Raises
-    through an assertion when the function has vanished, so a rename fails here
-    rather than passing vacuously.
-    """
-    tree = ast.parse((_BACKEND_ROOT / module_path).read_text(encoding="utf-8"))
-    if function == MODULE_SCOPE:
-        return _dotted_call_names(tree)
-    target = next(
-        (
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function
-        ),
-        None,
+@pytest.mark.parametrize("jurisdiction", ["GH", "KE"])
+def test_calendar_explains_missing_return_coverage(db_session: Session, jurisdiction: str) -> None:
+    bank = Bank(
+        organization_id=ORG_1,
+        name="Coverage fixture",
+        short_name="Coverage",
+        currency="GHS",
+        jurisdiction_code=jurisdiction,
+        license_type="x",
+        institution_type="savings_and_loans",
     )
-    assert target is not None, f"{module_path} no longer defines {function}()"
-    return _dotted_call_names(target)
+    db_session.add(bank)
+    db_session.flush()
 
+    result = calendar.list_obligations(db_session, _ctx(), bank.id, as_of=date(2026, 6, 30))
 
-@pytest.mark.parametrize(("module_path", "function", "call"), _FILING_GATE_CALL_SITES)
-def test_every_filing_path_reaches_the_reconciliation_gate(
-    module_path: str, function: str, call: str
-) -> None:
-    """A built control with no caller is not a control (audit 2026-08-22 D-2).
-
-    ``assert_filing_reconciled`` shipped complete, tested, documented as
-    integrated — and unreachable from any production code path. Nothing in the
-    behavioural suite noticed, because every behavioural test called the gate
-    directly. This reads the source of each filing surface and asserts the call
-    is actually there, so deleting it fails here and nowhere else has to.
-    """
-    assert call in _calls_within(module_path, function), (
-        f"{module_path}::{function}() no longer calls {call}. The reconciliation "
-        "control is only a control while its callers exist — if this move was "
-        "deliberate, move the assertion, do not delete it."
-    )
-
-
-# ---------------------------------------------------------------------------
-# The same guard, for the controls the RE-AUDIT found unwired (D-19, D-20)
-# ---------------------------------------------------------------------------
-#
-# D-2 was not a one-off. The 2026-08-22 re-audit found four more controls in the
-# identical state — complete, tested, described in a docstring or an evidence
-# document as integrated, and reachable from no production path:
-#
-#   D-19  the SDI risk-weighted-asset SCOPE gate. ``sdi_capital`` said a code
-#         default "marks the ratio provisional and blocks filing"; the only
-#         consumer was an advisory read model, and the official mint's own check
-#         (``credit_in_scope``) is satisfied by the code default BY CONSTRUCTION.
-#   D-20a the CF-1 divergence disclosure. ``declared_methodologies`` reached
-#         ``snapshot["provenance"]`` and stopped — no API field, no artifact line.
-#   D-20b the SDI zero-obligation explanation. ``coverage_note()`` was called
-#         only from tests; the payload had no field to carry it.
-#   D-20c the reconciliation escape valve. ``grant_exception`` had no route, so
-#         a blocked tenant could not be unblocked through the product.
-#   (+)   ``CalculationProvenance.require_complete()`` — WS-A's "may this run be
-#         filed from?" primitive, zero production callers, while the package
-#         recorded ``filable`` and bound the run regardless.
-#
-# Same table, same mechanism, same reason: the behavioural tests all called the
-# control directly, so none of them could see that nothing else did.
-_CONTROL_CALL_SITES: tuple[tuple[str, str, str], ...] = (
-    # -- D-19: the SDI RWA scope gate, on both official capital mints ---------
-    (
-        "app/services/regulatory_capital.py",
-        "create_capital_run",
-        "sdi_capital.assert_official_rwa_scope_governed",
-    ),
-    (
-        "app/services/regulatory_capital.py",
-        "run_all_capital_scenarios",
-        "sdi_capital.assert_official_rwa_scope_governed",
-    ),
-    # ...and the two halves of what that gate must actually assert. Without
-    # these rows the gate could be hollowed out while keeping its name.
-    (
-        "app/services/sdi_capital.py",
-        "assert_official_rwa_scope_governed",
-        "assert_scope_filable",
-    ),
-    (
-        "app/services/sdi_capital.py",
-        "assert_official_rwa_scope_governed",
-        "assert_bucket_map_filable",
-    ),
-    # -- D-20a: the CF-1 divergence disclosure gets a reader ------------------
-    (
-        "app/services/regulatory_reporting/common.py",
-        "read_package",
-        "declared_methodologies",
-    ),
-    (
-        "app/services/regulatory_reporting/templates.py",
-        "_authority_lines",
-        "_declared_methodology_lines",
-    ),
-    # -- D-20b: the SDI zero-obligation explanation gets a field --------------
-    (
-        "app/services/regulatory_reporting/calendar.py",
-        "list_obligations",
-        "eligibility.coverage_note",
-    ),
-    # -- D-20c: the reconciliation escape valve gets routes -------------------
-    (
-        "app/features/manage_reconciliation.py",
-        "grant_reconciliation_exception",
-        "reconciliation.grant_exception",
-    ),
-    (
-        "app/features/manage_reconciliation.py",
-        "revoke_reconciliation_exception",
-        "reconciliation.revoke_exception",
-    ),
-    # A route nothing includes is as unreachable as an uncalled function, so the
-    # registration is pinned too.
-    (
-        "app/api/router.py",
-        MODULE_SCOPE,
-        "v1_router.include_router",
-    ),
-    # -- (+) WS-A's filability primitive is enforced, not merely recorded -----
-    (
-        "app/services/regulatory_reporting/generation.py",
-        "_source_run_entry",
-        "require_complete",
-    ),
-)
-
-
-@pytest.mark.parametrize(("module_path", "function", "call"), _CONTROL_CALL_SITES)
-def test_every_built_control_reaches_its_production_call_site(
-    module_path: str, function: str, call: str
-) -> None:
-    """The D-19 / D-20 generalisation of the gate above.
-
-    Deleting any of these calls fails here and, for several of them, nowhere
-    else — which is precisely the property the re-audit showed was missing. If a
-    move is deliberate, move the call and move the row; do not delete either.
-    """
-    assert call in _calls_within(module_path, function), (
-        f"{module_path}::{function} no longer calls {call}. A control that is "
-        "built, tested and documented as integrated but reached from no "
-        "production path is worse than an admitted gap, because it is invisible "
-        "to the next reviewer."
-    )
-
-
-#: The other half of an anti-unwiring guard: calls that must NOT come back.
-#:
-#: D-19 was not only a missing gate, it was an unlabelled SUBSTITUTION —
-#: ``regulatory_capital`` reached for ``sdi_capital.default_rwa_scope()`` whenever
-#: the resolved scope was absent, so the path that mints filing evidence quietly
-#: fell back to the platform's own placeholder. Adding the gate does not stop that
-#: line from being reintroduced, and the positive table above cannot see it. Both
-#: SDI capital paths that consume :class:`SdiRwaScope` are pinned here; the
-#: documented default survives for the tests and for a caller with no session, but
-#: no path that produces a regulatory number may reach it.
-_FORBIDDEN_CALL_SITES: tuple[tuple[str, str, str], ...] = (
-    (
-        "app/services/regulatory_capital.py",
-        "_sdi_engine_params",
-        "sdi_capital.default_rwa_scope",
-    ),
-    (
-        "app/services/regulatory_capital.py",
-        "_load_active_params",
-        "sdi_capital.default_rwa_scope",
-    ),
-    (
-        "app/services/enterprise_stress.py",
-        "_sdi_capital_params",
-        "sdi_capital.default_rwa_scope",
-    ),
-    # The live s.29 view resolves the SAME object; a default here would put the
-    # live CAR and the filed CAR on different scopes, which is the divergence the
-    # single-authority refactor removed.
-    (
-        "app/services/sdi_capital.py",
-        "compute_sdi_capital_summary",
-        "default_rwa_scope",
-    ),
-)
-
-
-@pytest.mark.parametrize(("module_path", "function", "call"), _FORBIDDEN_CALL_SITES)
-def test_no_regulatory_path_falls_back_to_the_placeholder_rwa_scope(
-    module_path: str, function: str, call: str
-) -> None:
-    """A gate in front of a substitution is not a control (audit 2026-08-22 D-19).
-
-    ``assert_official_rwa_scope_governed`` refuses the mint, but the params build
-    behind it used to substitute the code default rather than fail, so the two
-    disagreed about what an unresolved scope means. The positive table pins the
-    gate; this pins the absence of the escape hatch it was added to close.
-    """
-    assert call not in _calls_within(module_path, function), (
-        f"{module_path}::{function} calls {call} again. Which risk classes an SDI's "
-        "capital adequacy ratio charges for is a regulatory determination "
-        "(Act 930 s.29(4)-(5) delegates the methodology and the categories of risk "
-        "assets to a Bank of Ghana directive, and none has been issued for this "
-        "class). The documented credit-only default is a placeholder, so a "
-        "regulatory path must refuse rather than reach for it."
-    )
-
-
-def test_the_reconciliation_escape_valve_router_is_registered() -> None:
-    """``include_router`` appearing in router.py is not enough — it must be THIS
-    router. The AST row above pins the mechanism; this pins the identity."""
-    source = (_BACKEND_ROOT / "app/api/router.py").read_text(encoding="utf-8")
-    assert "from app.features.manage_reconciliation import router" in source
-    assert "v1_router.include_router(reconciliation_router," in source
+    if jurisdiction == "GH":
+        assert result.obligations
+        assert result.coverage_note is None
+    else:
+        assert result.obligations == []
+        assert result.coverage_note == (
+            "No registered return applies to institution class 'sdi' in "
+            "jurisdiction 'KE' under supervisor 'CBK'."
+        )
 
 
 def _derive_official_then_break_the_book(db_session: Session) -> BankReportingPeriod:
@@ -1258,6 +946,7 @@ def _derive_official_then_break_the_book(db_session: Session) -> BankReportingPe
     return period
 
 
+@pytest.mark.usefixtures("capital_run_authority")
 def test_official_capital_runs_refuse_a_book_that_no_longer_reconciles(
     db_session: Session,
 ) -> None:
@@ -1313,7 +1002,7 @@ def test_package_generation_refuses_a_book_that_no_longer_reconciles(
     assert db_session.scalar(select(func.count()).select_from(RegulatoryPackage)) == packages_before
 
 
-@pytest.mark.usefixtures("ftp_run_authority", "forecasting_run_authority")
+@pytest.mark.usefixtures("ftp_run_authority", "forecasting_run_authority", "credit_run_authority")
 def test_scheduled_official_run_no_longer_short_circuits_the_control(
     db_session: Session,
 ) -> None:

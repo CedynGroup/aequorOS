@@ -573,7 +573,12 @@ def test_the_maturity_switch_decides_whether_a_maturity_is_required(
 
 
 @pytest.fixture
-def pillar1_bound(canonical_book: Session, access: IcaapAccess, cycle: IcaapCycleRead) -> None:
+def pillar1_bound(
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    capital_run_authority: None,
+) -> None:
     """The Pillar 1 RWA block this cycle reads beside every concentration figure.
 
     The add-on itself is an absolute amount and needs no denominator, but the

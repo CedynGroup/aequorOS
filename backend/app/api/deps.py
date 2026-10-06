@@ -2128,24 +2128,10 @@ def get_approver_tenant_context(
 # Regulatory package routes: family-dispatching authorization (ICAAP P3, C-4)
 # ---------------------------------------------------------------------------
 #
-# Every package route has always declared a SCALAR dependency: ``Tenant`` to
-# read, ``MutationTenant`` to write, ``ApproverTenant`` to approve. That is the
-# right answer for a prudential return and the wrong one for an ICAAP, which is
-# the bank's own assessment of its capital adequacy and its Board's challenge of
-# it.
-#
-# These dependencies keep BOTH answers, chosen by the package's family:
-#
-# * ungated family -> the route's existing scalar dependency, called verbatim.
-#   Nothing about a BSD or liquidity return changes.
-# * gated family   -> a human principal with an exact institution-scoped binding
-#   (``family_access``), evaluated on the route's own permission. A missing VIEW
-#   answers 404 because the existence of an ICAAP for a date is itself
-#   disclosure; a held VIEW with a missing action permission answers 403.
-#
-# The scalar check runs FIRST when the package is not found, so a viewer hitting
-# a mutation route with an unknown id still gets today's 403 rather than a 404
-# that would tell them the id is unknown.
+# Every return read requires whole-institution family authority: Regulatory
+# Reporting/restricted by default, Capital/confidential for ICAAP. Missing VIEW
+# hides the object (404); missing action permission explains the refusal (403).
+# Scalar roles never satisfy these routes.
 
 
 @dataclass(frozen=True)
@@ -2155,14 +2141,12 @@ class PackageAccess:
     ctx: TenantContext
     bank: Bank
     package: RegulatoryPackage
-    #: True when the family's scoped gate decided this, rather than the ladder.
-    gated: bool = False
     #: True only on the impersonated-examiner read branch.
     examiner: bool = False
 
 
 _PACKAGE_DETAIL = "This return requires an active scoped binding for the institution."
-type _ScalarGate = Literal["tenant", "mutation", "approver", "scoped"]
+type _PackageGate = Literal["tenant", "mutation"]
 
 
 def _resolve_package_from_path(
@@ -2211,26 +2195,8 @@ def _resolve_package_from_path(
     return bank, package
 
 
-def _apply_scalar_gate(ctx: TenantContext, gate: _ScalarGate) -> TenantContext:
-    """The route's pre-existing dependency, called verbatim.
-
-    ``"scoped"`` is not a scalar ladder step at all: it is the interactive-human
-    boundary every binding-enforced surface shares, and it checks no role. It is
-    named here so a package route can declare that its authority is the stored
-    binding and nothing else.
-    """
-    if gate == "tenant":
-        return get_tenant_context(ctx)
-    if gate == "mutation":
-        return get_mutation_tenant_context(ctx)
-    if gate == "scoped":
-        return get_scoped_mutation_tenant_context(ctx)
-    return get_approver_tenant_context(get_mutation_tenant_context(ctx))
-
-
 def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is explicit
     *,
-    request_gate: _ScalarGate,
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -2239,54 +2205,40 @@ def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is exp
     surface: str,
     conditions: tuple[ConditionCheck, ...],
 ) -> PackageAccess | None:
-    """A review-chain decision, authorised by the STORED BINDING first.
-
-    Returns ``None`` to mean "fall through to the route's own dependency,
-    unchanged" — which is what makes this a widening rather than a cutover.
-
-    Until 2026-09-20 this act dispatched on the family and, for an ungated one —
-    every BSD, liquidity, capital and FX return, i.e. every return a bank
-    actually files — consulted only the scalar ladder. An Org Owner's Approver
-    grant therefore did nothing, while the dashboard, which projects the control
-    from that same grant, offered the button. Fail-open screen over a
-    fail-closed server.
-    """
+    """Try the scoped review-chain authority; never fall back to a scalar role."""
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
-    near_miss: tuple[str, str] | None = None
-    try:
-        scoped = get_scoped_mutation_tenant_context(ctx)
-        verdict = family_access.chain_decision_verdict(
-            db, scoped, bank, package, permission, surface=surface, conditions=conditions
-        )
-    except HTTPException:
-        # The scoped boundary refused (impersonation, a stale ``authv``). That is
-        # not a reason to refuse a caller the old ladder admits, so fall through
-        # rather than turning a widening into a narrowing.
-        return None
+    scoped = get_scoped_mutation_tenant_context(ctx)
+    verdict = family_access.chain_decision_verdict(
+        db, scoped, bank, package, permission, surface=surface, conditions=conditions
+    )
     if verdict.allowed:
-        return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
-    near_miss = verdict.near_miss
-    if near_miss is None:
-        return None
-    # The caller HOLDS a grant for this institution that missed on exactly one
-    # scope dimension. Falling through silently would refuse them with the
-    # scalar ladder's sentence — "requires the 'analyst' role or higher" — which
-    # is about a role they will never hold and sends them to the wrong person.
-    # It cost a live debugging round. The ladder is still tried first, in case it
-    # admits them anyway; only when it also refuses is its reason replaced by the
-    # one they can act on.
-    try:
-        return PackageAccess(
-            ctx=_apply_scalar_gate(ctx, request_gate), bank=bank, package=package, gated=False
-        )
-    except HTTPException as exc:
-        if exc.status_code != status.HTTP_403_FORBIDDEN:
-            raise
+        return PackageAccess(ctx=scoped, bank=bank, package=package)
+    if verdict.near_miss is not None and family_access.can_view(
+        db, scoped, bank, package.return_family
+    ):
+        if package.return_family in family_access.GATED:
+            try:
+                family_access.require_permission(
+                    db,
+                    scoped,
+                    bank,
+                    package,
+                    permission,
+                    surface=surface,
+                    conditions=conditions,
+                )
+            except HTTPException as exc:
+                if exc.status_code != status.HTTP_403_FORBIDDEN:
+                    raise
+            else:
+                return PackageAccess(ctx=scoped, bank=bank, package=package)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=family_access.near_miss_detail(bank, near_miss),
-        ) from exc
+            detail=family_access.near_miss_detail(bank, verdict.near_miss),
+        )
+    # An ICAAP may instead satisfy its own Capital authority below.
+    return None
 
 
 def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is explicit
@@ -2294,7 +2246,7 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
     db: Session,
     ctx: TenantContext,
     *,
-    gate: _ScalarGate,
+    gate: _PackageGate,
     permission: Permission,
     surface: str,
     conditions: tuple[ConditionCheck, ...] = (),
@@ -2304,15 +2256,13 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
 
     bank, package = _resolve_package_from_path(request, db, ctx)
     if package is None or bank is None:
-        # The scalar check first, THEN not-found: a viewer must not learn from a
-        # 404 that they got past the write gate.
-        _apply_scalar_gate(ctx, gate)
+        # Mutation routes still require an interactive human for an unknown id.
+        get_tenant_context(ctx) if gate == "tenant" else get_scoped_mutation_tenant_context(ctx)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
         )
     if authority == "chain":
         chained = _chain_authority_access(
-            request_gate=gate,
             db=db,
             ctx=ctx,
             bank=bank,
@@ -2326,31 +2276,27 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
     if authority == "transmission":
         # Filing does not dispatch on family. Every return reaches the regulator
         # through one authority, so there is no ungated branch to fall through.
-        scoped = _apply_scalar_gate(ctx, "scoped")
+        scoped = get_scoped_mutation_tenant_context(ctx)
         family_access.require_transmission_authority(
             db, scoped, bank, package, permission, surface=surface, conditions=conditions
         )
-        return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
-    if family_access.gate_for(package.return_family) is None:
-        return PackageAccess(
-            ctx=_apply_scalar_gate(ctx, gate), bank=bank, package=package, gated=False
-        )
+        return PackageAccess(ctx=scoped, bank=bank, package=package)
     if gate == "tenant":
         family_access.require_view(db, ctx, bank, package)
         if ctx.impersonation_context is not None:
-            return PackageAccess(ctx=ctx, bank=bank, package=package, gated=True, examiner=True)
+            return PackageAccess(ctx=ctx, bank=bank, package=package, examiner=True)
         family_access.require_permission(
             db, ctx, bank, package, permission, surface=surface, conditions=conditions
         )
-        return PackageAccess(ctx=ctx, bank=bank, package=package, gated=True)
-    # A mutation on a gated family is a scoped human act. No impersonation, an
+        return PackageAccess(ctx=ctx, bank=bank, package=package)
+    # A package mutation is a scoped human act. No impersonation, an
     # interactive principal with a current ``authv`` — and NO scalar role check,
     # because a scalar role must never satisfy a scoped surface.
     scoped = get_scoped_mutation_tenant_context(ctx)
     family_access.require_permission(
         db, scoped, bank, package, permission, surface=surface, conditions=conditions
     )
-    return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
+    return PackageAccess(ctx=scoped, bank=bank, package=package)
 
 
 def require_package_view(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
@@ -2385,19 +2331,14 @@ def require_package_export(request: Request, db: DbSession, ctx: Tenant) -> Pack
 def require_package_approve(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
     """Approve-class package actions: APPROVE, and never the package's own maker.
 
-    The stored binding is consulted first (``authority="chain"``) and the scalar
-    ladder remains behind it, so an Org Owner's Approver grant now actually
-    approves — on a BSD or liquidity return as much as on an ICAAP — while no
-    existing approver loses the route. This and
-    :func:`require_package_stage_decision` take the SAME path on purpose: they
-    write the same chain decision, and two authorities for one act is the seam
-    this codebase keeps losing gates at (D-069).
+    Approval and stage decisions share the same scoped authority and
+    maker/checker conditions. Scalar roles never authorize either route.
     """
     return _require_package_access(
         request,
         db,
         ctx,
-        gate="approver",
+        gate="mutation",
         permission=Permission.APPROVE,
         surface="package_approve",
         conditions=_package_maker_checker_conditions(request, db, ctx),
@@ -2424,7 +2365,7 @@ def require_package_submit(request: Request, db: DbSession, ctx: Tenant) -> Pack
         request,
         db,
         ctx,
-        gate="scoped",
+        gate="mutation",
         permission=Permission.SUBMIT,
         surface="package_submit",
         conditions=_package_transmission_conditions(request, db, ctx),
@@ -2449,10 +2390,7 @@ def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant)
     the refusal lands in the binding trace. The service re-checks it under the
     row lock, because two officers can decide between the two.
 
-    Both branches consult the STORED BINDING. The transmitting stage consults it
-    alone (step 1's cutover); the approve/review stages consult it first and keep
-    the scalar ladder behind it, so an Org Owner's Approver grant authorises the
-    decision on every family while no existing approver loses the route.
+    Both branches require stored bindings; scalar roles provide no fallback.
     """
     from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
@@ -2465,7 +2403,7 @@ def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant)
             request,
             db,
             ctx,
-            gate="scoped",
+            gate="mutation",
             permission=Permission.SUBMIT,
             surface="package_stage_transmit_decision",
             conditions=conditions,
@@ -2475,7 +2413,7 @@ def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant)
         request,
         db,
         ctx,
-        gate="approver",
+        gate="mutation",
         permission=permission,
         surface="package_stage_decision",
         conditions=conditions,

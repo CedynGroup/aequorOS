@@ -8,10 +8,8 @@ from fastapi import APIRouter, Query, status
 from app.api.deps import (
     DbSession,
     LiquidityAggregatedResource,
-    LiquidityConfidentialResource,
     ScopedMutationTenant,
     Tenant,
-    get_mutation_tenant_context,
 )
 from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.regulatory_liquidity import (
@@ -46,7 +44,7 @@ def create_regulatory_run(
     if payload.module == "capital":
         return regulatory_capital.create_capital_run(
             db,
-            get_mutation_tenant_context(ctx),
+            ctx,
             bank_id,
             payload,
         )
@@ -156,11 +154,6 @@ def get_bsd3_preview(
     bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
-    access: LiquidityConfidentialResource,
+    ctx: Tenant,
 ) -> Bsd3PreviewRead:
-    return regulatory_liquidity.get_bsd3_preview(
-        db,
-        access.ctx,
-        access.bank.id,
-        reporting_period_id,
-    )
+    return regulatory_liquidity.get_bsd3_preview(db, ctx, bank_id, reporting_period_id)

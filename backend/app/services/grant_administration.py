@@ -481,6 +481,8 @@ _NON_GRANTABLE_BUNDLES = frozenset(
 
 
 def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
+    if scope.data_scope is not DataScope.ALL and scope.module_scope is not ModuleScope.CREDIT:
+        raise GrantAdministrationError("Branch and region narrowing is supported only for Credit")
     if role_bundle in _NON_GRANTABLE_BUNDLES:
         raise GrantAdministrationError("this role bundle is not grantable from Members")
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and (

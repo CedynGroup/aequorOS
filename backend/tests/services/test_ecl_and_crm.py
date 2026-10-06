@@ -47,7 +47,11 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 ASSUMPTIONS = (
@@ -80,7 +84,9 @@ def test_ecl_probability_weighted_scenarios_and_guards() -> None:
     scenarios = (
         EclScenario("base", Decimal("60")),
         EclScenario(
-            "downside", Decimal("40"), pd_multiplier=Decimal("2"),
+            "downside",
+            Decimal("40"),
+            pd_multiplier=Decimal("2"),
             lgd_multiplier=Decimal("1.1"),
         ),
     )
@@ -183,7 +189,11 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
     seeder = _CanonicalSeeder(db_session)
     product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
     seeder.position(
-        "ECL/L1", "LOAN", Decimal("60000000"), product=product, ifrs9_stage=1,
+        "ECL/L1",
+        "LOAN",
+        Decimal("60000000"),
+        product=product,
+        ifrs9_stage=1,
         extra_attributes={
             "crm_collateral_ghs": "20000000",
             "crm_collateral_class": "corporate_debt",
@@ -191,7 +201,11 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
     )
     seeder.position("ECL/L2", "LOAN", Decimal("15000000"), product=product, ifrs9_stage=2)
     seeder.position(
-        "ECL/L3", "LOAN", Decimal("5000000"), product=product, ifrs9_stage=3,
+        "ECL/L3",
+        "LOAN",
+        Decimal("5000000"),
+        product=product,
+        ifrs9_stage=3,
         extra_attributes={"crm_guarantee_ghs": "1000000", "crm_guarantor_class": "BANK_DEBT"},
     )
 
@@ -255,7 +269,9 @@ def _run_capital(db: Session, period_id, scenario: str):
         MAKER,
         SAMPLE_BANK_ID,
         RegulatoryRunCreate(
-            module="capital", reporting_period_id=period_id, scenario_code=scenario  # type: ignore[index]
+            module="capital",
+            reporting_period_id=period_id,
+            scenario_code=scenario,  # type: ignore[index]
         ),
     )
 
@@ -268,9 +284,7 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     # configuration, and without them the ingested-provisions path holds.
     before = _run_capital(db_session, period.id, "baseline")
     assert before.status == "succeeded", before
-    stored_before = db_session.scalar(
-        select(RegulatoryRun).where(RegulatoryRun.id == before.id)
-    )
+    stored_before = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == before.id))
     assert stored_before is not None
     assert "ecl_total_ghs" not in stored_before.metrics
 

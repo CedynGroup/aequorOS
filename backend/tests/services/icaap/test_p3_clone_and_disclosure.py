@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.models import Bank, RegulatoryPackage
 from app.models.icaap import IcaapCycle, IcaapStageDecision
 from app.schemas.icaap import (
@@ -20,12 +21,30 @@ from app.schemas.icaap import (
     IcaapFreezeCreate,
 )
 from app.services.icaap import clone, disclosure, post_freeze, workflow
+from tests.api.helpers import ORG_1
+from tests.factories.authorization import grant_institution_authority
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.icaap.p3_support import (
     access_for,
     make_user,
     return_payload,
 )
 from tests.services.icaap.test_p3_freeze import _build
+
+
+def _disclosure_checker(db: Session, *, email: str) -> IcaapAccess:
+    user_id = make_user(db, email=email, name="Pub")
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=user_id,
+        bundle=RoleBundle.APPROVER,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    db.commit()
+    return access_for(db, user_id)
 
 
 def _detail(exc: HTTPException) -> dict[str, object]:
@@ -496,7 +515,7 @@ class TestDisclosure:
         disclosure.submit_disclosure(
             db, access, cycle.id, IcaapDisclosureSubmit(reason="Ready for approval.")
         )
-        checker = access_for(db, make_user(db, email="pub@example.com", name="Pub"))
+        checker = _disclosure_checker(db, email="pub@example.com")
         decided = disclosure.decide_disclosure(
             db,
             checker,
@@ -564,7 +583,7 @@ class TestExaminerReadsTheDisclosure:
         # Submitted is not decided either.
         assert disclosure.get_disclosure(db, examiner, cycle.id).id is None
 
-        checker = access_for(db, make_user(db, email="examiner-pub@example.com", name="Pub"))
+        checker = _disclosure_checker(db, email="examiner-pub@example.com")
         decided = disclosure.decide_disclosure(
             db,
             checker,

@@ -47,14 +47,20 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-PREPARER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+PREPARER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 APPROVER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+    authorization_version=1,
 )
 VALIDATOR = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+    authorization_version=1,
 )
 REPORTING_DATE = date(2026, 3, 31)
 _LONG_ENOUGH = "The HQLA total does not agree with the general ledger."
@@ -518,18 +524,38 @@ def test_a_package_pins_the_chain_in_force_and_never_re_pins_it(db_session: Sess
             version=1,
             status="approved",
             stages=[
-                {"seq": 1, "stage_key": "preparation", "title": "Preparer",
-                 "decision_kind": "prepare", "officer_titles": [],
-                 "transmit_on_approve": False},
-                {"seq": 2, "stage_key": "risk", "title": "Risk Review",
-                 "decision_kind": "review", "officer_titles": [],
-                 "transmit_on_approve": False},
-                {"seq": 3, "stage_key": "approval", "title": "Approver",
-                 "decision_kind": "approve", "officer_titles": [],
-                 "transmit_on_approve": False},
-                {"seq": 4, "stage_key": "validation", "title": "Validator",
-                 "decision_kind": "approve", "officer_titles": [],
-                 "transmit_on_approve": True},
+                {
+                    "seq": 1,
+                    "stage_key": "preparation",
+                    "title": "Preparer",
+                    "decision_kind": "prepare",
+                    "officer_titles": [],
+                    "transmit_on_approve": False,
+                },
+                {
+                    "seq": 2,
+                    "stage_key": "risk",
+                    "title": "Risk Review",
+                    "decision_kind": "review",
+                    "officer_titles": [],
+                    "transmit_on_approve": False,
+                },
+                {
+                    "seq": 3,
+                    "stage_key": "approval",
+                    "title": "Approver",
+                    "decision_kind": "approve",
+                    "officer_titles": [],
+                    "transmit_on_approve": False,
+                },
+                {
+                    "seq": 4,
+                    "stage_key": "validation",
+                    "title": "Validator",
+                    "decision_kind": "approve",
+                    "officer_titles": [],
+                    "transmit_on_approve": True,
+                },
             ],
             reason="the bank adds a risk review before approval",
             proposed_by=uuid4(),
@@ -591,9 +617,7 @@ def test_a_return_sent_back_to_the_preparer_can_go_round_again(db_session: Sessi
     assert package.status == "approved"
 
     read = filing_chain.read_chain(db_session, VALIDATOR, package)
-    rounds = sorted(
-        {decision.round for stage in read.stages for decision in stage.decisions}
-    )
+    rounds = sorted({decision.round for stage in read.stages for decision in stage.decisions})
     assert rounds == [1, 2]
     stale = [
         decision

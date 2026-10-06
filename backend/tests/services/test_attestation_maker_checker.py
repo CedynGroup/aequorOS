@@ -70,10 +70,16 @@ from tests.services.test_attestation_workspace import (
 #: The analyst has no ``approver`` platform role — the identity the entitlement
 #: gate must refuse.
 ANALYST = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=ANALYST_USER_ID, roles=("analyst",)
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=ANALYST_USER_ID,
+    roles=("analyst",),
+    authorization_version=1,
 )
 OTHER_APPROVER = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID, roles=("approver",)
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=OTHER_APPROVER_USER_ID,
+    roles=("approver",),
+    authorization_version=1,
 )
 
 
@@ -315,7 +321,7 @@ def test_an_analyst_cannot_certify_as_a_checker(db_session: Session) -> None:
             ),
         )
     assert raised.value.status_code == 403
-    assert "approver role" in str(raised.value.detail)
+    assert "scoped binding" in str(raised.value.detail)
 
     db_session.rollback()
     db_session.refresh(package)

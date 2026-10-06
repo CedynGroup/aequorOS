@@ -600,11 +600,13 @@ def test_the_preparer_then_approver_ceremony_still_completes(
         organization_id=MAKER.organization_id,
         actor_user_id=MAKER.actor_user_id,
         roles=("approver",),
+        authorization_version=1,
     )
     checker = TenantContext(
         organization_id=APPROVER.organization_id,
         actor_user_id=APPROVER.actor_user_id,
         roles=("approver",),
+        authorization_version=1,
     )
     _enrol(db_session, maker, PASSWORD)
     _enrol(db_session, checker, APPROVER_PASSWORD)

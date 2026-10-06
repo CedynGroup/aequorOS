@@ -5,6 +5,8 @@ reporting dates inside the horizon, each with its deadline-rule due date, the
 current non-superseded solo package covering it, and a RAG grade —
 ``overdue`` (deadline passed without a submitted/acknowledged package),
 ``due_soon`` (deadline within the warning window), else ``on_track``.
+A hidden family has no package linkage or RAG; its public obligation remains,
+but contributes nothing to filing-state summaries.
 
 Downtime semantics (BoG Notice BG/FMD/2026/07): a package submitted via the
 email fallback is NOT complete until re-uploaded through ORASS, so a
@@ -33,6 +35,7 @@ from app.models import (
 )
 from app.schemas.regulatory_reporting import (
     ObligationAnnexRead,
+    ObligationRag,
     ReportingDateSource,
     ReportingObligationListRead,
     ReportingObligationRead,
@@ -164,7 +167,7 @@ def _rag(
     package_status: str | None,
     *,
     pending_orass_reupload: bool = False,
-) -> str:
+) -> ObligationRag:
     if package_status in _COMPLETED_STATUSES and not pending_orass_reupload:
         return "on_track"
     if due_date is None:
@@ -342,18 +345,67 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
     limit: int | None = None,
     offset: int = 0,
 ) -> ReportingObligationListRead:
+    """The tenant calendar hides every package family the principal cannot read."""
     bank = get_bank_or_404(db, ctx, bank_id)
+    return _list_obligations(
+        db,
+        ctx,
+        bank,
+        horizon_months,
+        lookback_months=lookback_months,
+        as_of=as_of,
+        limit=limit,
+        offset=offset,
+        hidden=family_access.hidden_families(db, ctx, bank),
+    )
+
+
+def deadline_scan_obligations(  # noqa: PLR0913 - organization, bank and scan window are explicit
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    *,
+    as_of: date,
+    horizon_months: int,
+    lookback_months: int,
+) -> ReportingObligationListRead:
+    """Worker-only deadline metadata; never called by a tenant route.
+
+    The scheduler owns the organization's scan and must distinguish filed
+    returns from arrears. It reads package lifecycle metadata, not snapshots,
+    independently of any human's grant. Tenant calendars use list_obligations.
+    """
+    ctx = TenantContext(organization_id=organization_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
+    return _list_obligations(
+        db,
+        ctx,
+        bank,
+        horizon_months,
+        lookback_months=lookback_months,
+        as_of=as_of,
+        hidden=frozenset(),
+    )
+
+
+def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page controls
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    horizon_months: int = DEFAULT_HORIZON_MONTHS,
+    *,
+    lookback_months: int = DEFAULT_LOOKBACK_MONTHS,
+    as_of: date | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    hidden: frozenset[str],
+) -> ReportingObligationListRead:
     today = as_of or date.today()
     window = anchor_window(today, lookback_months=lookback_months, horizon_months=horizon_months)
     overrides = _deadline_overrides(db, ctx, bank.id)
-    # A gated family's PACKAGE is itself disclosure: `family_access.can_view`
-    # asks "may this principal know that packages of this family exist?". The
-    # package LIST already excludes them; the calendar did not, so a scalar
-    # analyst holding no binding could read an ICAAP package's id and status
-    # here and then drive it through the attestation routes (security audit
-    # S-2/S-3). The OBLIGATION row stays — BoG's deadline is public — but the
-    # package linkage is withheld.
-    hidden = family_access.hidden_families(db, ctx, bank)
+    # Public obligations remain visible even when the return family is hidden.
+    # Package linkage and RAG must be withheld together so hidden filing state
+    # cannot appear as an overdue, unfiled obligation.
     # Return eligibility resolves through the SINGLE authority (audit ARCH-8,
     # ``eligibility.py``) — the same object ``generation.generate_package``
     # gates on, so the calendar and the package-mint site cannot disagree about
@@ -417,8 +469,9 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
             if effective_from is not None and reporting_date < effective_from:
                 continue
             parent_definition = get_definition(parent_code) if parent_code else None
+            family_hidden = definition.family in hidden
             package = packages.get((definition.code, reporting_date))
-            if definition.family in hidden:
+            if family_hidden:
                 package = None
             if parent_definition is not None and _parent_in_force(
                 eligibility, parent_definition, reporting_date
@@ -468,11 +521,15 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
                     data_status=(
                         "computed" if coverage[reporting_date].covered else "awaiting_data"
                     ),
-                    rag=_rag(  # type: ignore[arg-type]
-                        due_date,
-                        today,
-                        package.status if package is not None else None,
-                        pending_orass_reupload=pending_reupload,
+                    rag=(
+                        None
+                        if family_hidden
+                        else _rag(
+                            due_date,
+                            today,
+                            package.status if package is not None else None,
+                            pending_orass_reupload=pending_reupload,
+                        )
                     ),
                 )
             )
@@ -486,8 +543,13 @@ def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page con
         "pending_reupload": 0,
     }
     for obligation in obligations:
-        summary_counts[obligation.rag] += 1
-        if obligation.package_status == "submitted" and obligation.rag != "on_track":
+        if obligation.rag is not None:
+            summary_counts[obligation.rag] += 1
+        if (
+            obligation.rag is not None
+            and obligation.package_status == "submitted"
+            and obligation.rag != "on_track"
+        ):
             summary_counts["pending_reupload"] += 1
 
     total = len(obligations)
@@ -606,6 +668,13 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
         db, ctx, bank.id, {definition.code: reporting_dates}
     )
 
+    visible = family_access.can_view(
+        db,
+        ctx,
+        bank,
+        definition.family,
+        prefetched_bindings=family_access.prefetch_view_authority(db, ctx, bank),
+    )
     anchors: list[ReturnAnchorRead] = []
     deadline_note: str | None = None
     for reporting_date in reporting_dates:
@@ -623,7 +692,7 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
                 f"been configured for this institution ({missing_parameter}). The "
                 "reporting dates below are the regulator's; the due date is not assumed."
             )
-        package = packages.get((definition.code, reporting_date))
+        package = packages.get((definition.code, reporting_date)) if visible else None
         pending_reupload = package is not None and package.id in pending_reuploads
         covered = coverage[reporting_date]
         anchors.append(
@@ -638,11 +707,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
                     package.status if package is not None else None  # type: ignore[arg-type]
                 ),
                 package_version=package.version if package is not None else None,
-                rag=_rag(  # type: ignore[arg-type]
-                    due_date,
-                    today,
-                    package.status if package is not None else None,
-                    pending_orass_reupload=pending_reupload,
+                rag=(
+                    _rag(
+                        due_date,
+                        today,
+                        package.status if package is not None else None,
+                        pending_orass_reupload=pending_reupload,
+                    )
+                    if visible
+                    else None
                 ),
                 in_force=effective_from is None or reporting_date >= effective_from,
             )

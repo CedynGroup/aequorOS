@@ -70,7 +70,7 @@ AS_OF = SEP_18
 #: A branch-attributable portfolio measure, an institution-grain engine ratio, and
 #: a bank-wide target variant of that ratio: the three cases the rules divide on.
 PORTFOLIO_MEASURE = "loans.balance_rc"
-INSTITUTION_MEASURE = "engine.car_pct.crd.official"
+INSTITUTION_MEASURE = "engine.npl_ratio_pct.crd.official"
 TARGET_MEASURE = "loans.balance_rc.budget.actual"
 
 
@@ -526,7 +526,7 @@ def test_an_institution_grain_measure_is_denied_to_a_branch_scoped_principal(
     db_session: Session, cat: Catalogue, mart: Bank
 ) -> None:
     version = _grant(
-        db_session, mart, module=ModuleScope.ALL, scope=DataScope.BRANCH, values=("B1",)
+        db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.BRANCH, values=("B1",)
     )
 
     decision = _decide(db_session, mart, cat, _query(measures=[INSTITUTION_MEASURE]), version)
@@ -562,7 +562,7 @@ def test_a_bank_wide_target_figure_is_denied_to_a_scoped_principal(
     """
     assert cat.measure(TARGET_MEASURE).grain == "portfolio"
     version = _grant(
-        db_session, mart, module=ModuleScope.ALL, scope=DataScope.BRANCH, values=("B1",)
+        db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.BRANCH, values=("B1",)
     )
 
     decision = _decide(db_session, mart, cat, _query(measures=[TARGET_MEASURE]), version)
@@ -577,7 +577,7 @@ def test_a_mixed_query_names_every_figure_the_grant_would_have_to_widen_for(
 ) -> None:
     """What the Org Owner needs is the complete list, not the first refusal."""
     version = _grant(
-        db_session, mart, module=ModuleScope.ALL, scope=DataScope.REGION, values=("North",)
+        db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.REGION, values=("North",)
     )
 
     decision = _decide(
@@ -598,7 +598,7 @@ def test_a_scoped_principal_is_served_a_branch_attributable_figure_with_its_scop
     db_session: Session, cat: Catalogue, mart: Bank
 ) -> None:
     version = _grant(
-        db_session, mart, module=ModuleScope.ALL, scope=DataScope.BRANCH, values=("B1",)
+        db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.BRANCH, values=("B1",)
     )
 
     decision = _decide(db_session, mart, cat, _query(), version)
@@ -614,7 +614,7 @@ def test_a_scoped_principal_is_served_a_branch_attributable_figure_with_its_scop
 def test_the_widest_matching_binding_wins(db_session: Session, cat: Catalogue, mart: Bank) -> None:
     """Bindings OR: narrowing a reader who also holds an institution-wide sentence
     would revoke authority the Org Owner granted."""
-    _grant(db_session, mart, module=ModuleScope.ALL, scope=DataScope.BRANCH, values=("B1",))
+    _grant(db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.BRANCH, values=("B1",))
     version = _grant(db_session, mart, module=ModuleScope.ALL)
 
     decision = _decide(db_session, mart, cat, _query(), version)
@@ -628,7 +628,7 @@ def test_a_revoked_binding_contributes_no_scope_and_no_authority(
 ) -> None:
     """``effective_data_scope`` re-reads the rows; the id list is only a selector."""
     version = _grant(
-        db_session, mart, module=ModuleScope.ALL, scope=DataScope.BRANCH, values=("B1",)
+        db_session, mart, module=ModuleScope.CREDIT, scope=DataScope.BRANCH, values=("B1",)
     )
     assert _decide(db_session, mart, cat, _query(), version).allowed is True
 

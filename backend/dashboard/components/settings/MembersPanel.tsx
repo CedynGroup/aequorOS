@@ -657,12 +657,13 @@ function GrantComposer({
   // One institution's branch register. Scoped per organization, actor,
   // authorization generation and institution — `institutionBranchesKey`.
   const branchQuery = useInstitutionBranches(
-    draft.institutionScope === "institution"
+    draft.institutionScope === "institution" && draft.moduleScope === "credit"
       ? (draft.institutionId ?? null)
       : null,
   );
   const coverage = bookCoverageAvailability({
     institutionScope: draft.institutionScope,
+    moduleScope: draft.moduleScope,
     directory: branchQuery.data ?? null,
     failed: branchQuery.isError,
     // The FIRST load only. A background refetch must not blank the picker the
@@ -895,6 +896,10 @@ function GrantComposer({
                 setDraft({
                   ...draft,
                   moduleScope: value as GrantDraft["moduleScope"],
+                  dataScope:
+                    value === "credit"
+                      ? draft.dataScope
+                      : WHOLE_INSTITUTION_BOOK,
                 })
               }
             />

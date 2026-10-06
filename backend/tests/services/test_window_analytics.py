@@ -49,6 +49,8 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
 )
@@ -450,8 +452,7 @@ def test_daily_stats_serve_credit_only_to_a_credit_or_all_aggregated_view(
 ) -> None:
     """Credit daily rows are gated like every other engine (D-017 retro-gate).
 
-    Capital stays ungated on this surface until its own cutover, so it is the
-    control that proves the response is filtered rather than emptied.
+    Capital also requires its own authority; Credit never opens Capital.
     """
     materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
@@ -485,7 +486,7 @@ def test_daily_stats_serve_credit_only_to_a_credit_or_all_aggregated_view(
         module_scope=ModuleScope.LIQUIDITY,
         sensitivity_scope=SensitivityScope.AGGREGATED,
     )
-    assert daily_modules(liquidity_only) == ["capital"]
+    assert daily_modules(liquidity_only) == []
 
     credit_confidential = _principal_with(
         db_session,
@@ -493,14 +494,14 @@ def test_daily_stats_serve_credit_only_to_a_credit_or_all_aggregated_view(
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
     # Sensitivity is exact: a confidential credit sentence is not the aggregated one.
-    assert daily_modules(credit_confidential) == ["capital"]
+    assert daily_modules(credit_confidential) == []
 
     credit_aggregated = _principal_with(
         db_session,
         module_scope=ModuleScope.CREDIT,
         sensitivity_scope=SensitivityScope.AGGREGATED,
     )
-    assert daily_modules(credit_aggregated) == ["capital", "credit"]
+    assert daily_modules(credit_aggregated) == ["credit"]
 
     # The hermetic fixture's org-wide viewer/all/all sentence keeps seeing it.
     assert daily_modules(MAKER) == ["capital", "credit"]

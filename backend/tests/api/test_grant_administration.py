@@ -1690,14 +1690,18 @@ def test_capital_request_requires_whole_institution_coverage(
     )
     draft = _payload(role="viewer", module="cap", sensitivity="aggregated")
     draft.update(data_scope_kind="branch", data_scope_values=["ACC"])
-    payload = _reviewed_payload(grant_client, draft)
+    preview = grant_client.post(
+        "/api/v1/authorization/bindings/preview", headers=_owner_headers(), json=draft
+    )
+    assert preview.status_code == 422, preview.text
+    payload = {**draft, "expected_authority_sentence": "Unsupported narrowed capital grant"}
     if resolution_path == "approval":
         payload.pop("principal_user_id")
         endpoint = f"/api/v1/authorization/access-requests/{request_id}/approve"
     else:
         endpoint = "/api/v1/authorization/bindings"
     response = grant_client.post(endpoint, headers=_owner_headers(), json=payload)
-    assert response.status_code == (409 if resolution_path == "approval" else 201), response.text
+    assert response.status_code == 422, response.text
     with _session() as db:
         request = db.get(AuthorizationAccessRequest, UUID(request_id))
         assert request is not None
@@ -1720,7 +1724,7 @@ def test_capital_request_requires_whole_institution_coverage(
                 )
             )
         )
-        assert len(bindings) == (0 if resolution_path == "approval" else 1)
+        assert len(bindings) == 0
     whole_payload = _reviewed_payload(
         grant_client, role="viewer", module="cap", sensitivity="aggregated"
     )

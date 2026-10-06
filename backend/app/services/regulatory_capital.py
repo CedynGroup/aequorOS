@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
@@ -96,6 +97,7 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
+    scoped_authorization,
     sdi_capital,
     sdi_capital_checks,
 )
@@ -111,7 +113,7 @@ from app.services.live_types import (
     worst_status,
 )
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
-from app.services.regulatory_liquidity import get_regulatory_run, preview_note
+from app.services.regulatory_liquidity import _read_regulatory_run_execution_result, preview_note
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
 #: change moves a FILED figure over unchanged inputs: the Basel II ¶649 basic-
@@ -317,7 +319,15 @@ def create_capital_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="capital_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Audit 2026-08-22 D-3(b): this endpoint mints the same immutable runs as an
     # activation but never went through ``derive_facts``, so the balance-sheet
@@ -336,7 +346,15 @@ def run_all_capital_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: CapitalScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="capital_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # See ``create_capital_run``: the 22-scenario batch is the same mint.
     filing_reconciliation.assert_filing_reconciled(
@@ -495,6 +513,15 @@ def get_rwa_breakdown(
 def get_bsd2_preview(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd2PreviewRead:
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="bsd2_preview",
+    )
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the BSD-2 preview"
     )
@@ -722,7 +749,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return get_regulatory_run(db, ctx, bank.id, run_id)
+    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _modeled_ecl(

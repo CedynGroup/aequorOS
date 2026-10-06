@@ -20,6 +20,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.domain.icaap.frameworks import registry
 from app.models import Bank, User
@@ -33,6 +34,7 @@ from app.schemas.icaap import (
 )
 from app.services.icaap import guards, sections, workflow
 from tests.api.helpers import ORG_1, USER_1
+from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 
 FRAMEWORK_ROOT = Path(__file__).parents[2] / "fixtures" / "icaap" / "frameworks"
@@ -262,6 +264,16 @@ def seal_capital_run(db: Session, access: IcaapAccess) -> None:
         )
     )
     assert period is not None, "the canonical book has a 31 December period"
+    assert access.ctx.actor_user_id is not None
+    grant_institution_authority(
+        db,
+        organization_id=access.ctx.organization_id,
+        bank_id=access.bank.id,
+        user_id=access.ctx.actor_user_id,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     regulatory_capital.create_capital_run(
         db,
         access.ctx,

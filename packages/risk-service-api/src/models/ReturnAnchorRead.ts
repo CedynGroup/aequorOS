@@ -25,6 +25,13 @@ import {
   AnchorDataStatusToJSON,
   AnchorDataStatusToJSONTyped,
 } from "./AnchorDataStatus";
+import type { ReportingObligationReadRag } from "./ReportingObligationReadRag";
+import {
+  ReportingObligationReadRagFromJSON,
+  ReportingObligationReadRagFromJSONTyped,
+  ReportingObligationReadRagToJSON,
+  ReportingObligationReadRagToJSONTyped,
+} from "./ReportingObligationReadRag";
 import type { PackageId } from "./PackageId";
 import {
   PackageIdFromJSON,
@@ -60,13 +67,6 @@ import {
   PackageVersionToJSON,
   PackageVersionToJSONTyped,
 } from "./PackageVersion";
-import type { ObligationRag } from "./ObligationRag";
-import {
-  ObligationRagFromJSON,
-  ObligationRagFromJSONTyped,
-  ObligationRagToJSON,
-  ObligationRagToJSONTyped,
-} from "./ObligationRag";
 
 /**
  * One reporting date a return reports on, with what exists for it.
@@ -130,10 +130,10 @@ export interface ReturnAnchorRead {
   packageVersion?: PackageVersion;
   /**
    *
-   * @type {ObligationRag}
+   * @type {ReportingObligationReadRag}
    * @memberof ReturnAnchorRead
    */
-  rag: ObligationRag;
+  rag: ReportingObligationReadRag;
   /**
    *
    * @type {Date}
@@ -191,7 +191,7 @@ export function ReturnAnchorReadFromJSONTyped(
       json["package_version"] == null
         ? undefined
         : PackageVersionFromJSON(json["package_version"]),
-    rag: ObligationRagFromJSON(json["rag"]),
+    rag: ReportingObligationReadRagFromJSON(json["rag"]),
     reportingDate: new Date(json["reporting_date"]),
   };
 }
@@ -221,7 +221,7 @@ export function ReturnAnchorReadToJSONTyped(
       value["packageStatus"],
     ),
     package_version: PackageVersionToJSON(value["packageVersion"]),
-    rag: ObligationRagToJSON(value["rag"]),
+    rag: ReportingObligationReadRagToJSON(value["rag"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
   };
 }

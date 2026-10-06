@@ -22,6 +22,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -45,6 +46,9 @@ from tests.fixtures.canonical_bank_fixture import (
 SHEET = lm.SHEET
 RATE_CELLS = {f"{col}{row}" for col in lm.RATE_COLUMNS.values() for row in lm.CURRENCY_ROWS}
 TENOR_CELLS = {f"{col}14" for col in "DEFGHIJ"}
+
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 def test_line_map_binds_the_rate_grid_the_base_rate_and_the_tenor_headers() -> None:

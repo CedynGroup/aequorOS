@@ -289,7 +289,7 @@ class ReportingObligationRead(ClosedModel):
     # normal state for a future anchor and an actionable one for a past anchor;
     # either way the obligation is real and the deadline still runs.
     data_status: AnchorDataStatus = "awaiting_data"
-    rag: ObligationRag
+    rag: ObligationRag | None
     #: Returns carried inside this one's submission. Empty for every return
     #: that has none, which is every return but the ICAAP report.
     annexes: list[ObligationAnnexRead] = Field(default_factory=list)
@@ -349,7 +349,7 @@ class ReturnAnchorRead(ClosedModel):
     package_id: UUID | None = None
     package_status: PackageStatus | None = None
     package_version: int | None = None
-    rag: ObligationRag
+    rag: ObligationRag | None
     #: Whether a filing OBLIGATION exists on this date. False for an anchor
     #: that precedes the return's first in-force date: the date is offered so a
     #: bank can prepare and dry-run before its first live filing (which is the

@@ -59,7 +59,7 @@ BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/ftp"
 WORKBENCH_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/scenario-workbench/ftp"
 REGULATORY_RUNS_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs"
 SIBLING_BANK_ID = "BK-FTP00002"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 @pytest.fixture(autouse=True)
@@ -552,6 +552,11 @@ def test_regulatory_registry_filters_ftp_before_count_and_page(
     db_client: TestClient,
 ) -> None:
     period_id = _seed_book()
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     _add_regulatory_run(period_id)
     _add_regulatory_run(period_id, "rates_up_200")
     session = get_sessionmaker()()
@@ -615,6 +620,7 @@ def test_mixed_execution_requires_ftp_only_in_plan(
     ftp_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(
         RoleBundle.ANALYST,
         module=ModuleScope.IRRBB,
@@ -766,6 +772,10 @@ def test_queued_ftp_requires_run_before_any_execution(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     period_id = _seed_book()
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.CAPITAL, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(
         RoleBundle.ANALYST,

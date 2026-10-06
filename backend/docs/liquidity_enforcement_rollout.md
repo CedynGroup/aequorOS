@@ -6,7 +6,7 @@ deployment immediately before release. Store the dated output with the release
 record. Do not copy production identities into this repository.
 
 No migration or application startup creates compatibility grants. A principal
-without one complete active row for the consumed institution, LIQ module,
+without one complete active row for the consumed institution, surface's module,
 sensitivity, and permission is denied immediately (403 unless the object-hiding
 404 contract below applies). This cutover requires no new migration.
 
@@ -15,7 +15,8 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 | Surface                                                                                                                                                    | Required authority                                                                    |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Liquidity dashboard, live summaries/history, analytics windows, alerts, saved-analysis summaries, and regulatory-run list rows                             | LIQ / `aggregated` / `view`                                                           |
-| Full regulatory-run and saved-analysis detail, and BSD-3 preview                                                                                           | LIQ / `confidential` / `view`                                                         |
+| Full regulatory-run and saved-analysis detail                                                                                                              | LIQ / `confidential` / `view`                                                         |
+| BSD-3 preview                                                                                                                                              | Whole-institution REG / `restricted` / `view`                                         |
 | Monitoring Tools, EWI dashboard, CFP reads/events, forecasts/history, cash-flow window, thresholds, haircuts, SDI liquidity position, and scenario details | LIQ / `confidential` / `view`                                                         |
 | Create one or all Liquidity regulatory runs; execute scenario analysis                                                                                     | LIQ / `confidential` / `run`                                                          |
 | Create a CFP draft, custom scenario, or saved analysis                                                                                                     | LIQ / `confidential` / `create`                                                       |
@@ -32,6 +33,8 @@ snapshots in SQL, preserving authorized non-Liquidity results (see the
 Liquidity live-history requests
 require aggregated view. Full LIQ run and saved-analysis IDs return 404 without
 confidential authority.
+The BSD-3 preview uses the ordinary return read policy, including when consumed
+by package generation and LMT. LIQ authority alone cannot read the preview.
 Denied run and CFP lifecycle requests create no run, event, audit mutation, job,
 or notification.
 
@@ -79,7 +82,10 @@ landing requires confidential view because it reads the SDI position.
 
 Run this read-only query with a role that can see all organizations, banks,
 users, and bindings. It evaluates active human and machine principals without
-inferring authority from `users.role`.
+inferring authority from `users.role`. This query inventories engine authority;
+evaluate BSD preview access separately under the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+using `scripts/authorization_access_impact.py --json`.
 
 ```sql
 WITH active_bindings AS (

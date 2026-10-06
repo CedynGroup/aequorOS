@@ -69,6 +69,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -342,6 +343,8 @@ def main() -> None:
                     None,
                     ModuleScope.ALL,
                     SensitivityScope.ALL,
+                    data_scope=DataScope.ALL,
+                    data_scope_values=(),
                 ),
                 grantor=authorization.GrantorRef(
                     GrantorType.SYSTEM,
@@ -360,6 +363,8 @@ def main() -> None:
                 SAMPLE_BANK_ID,
                 ModuleScope.LIQUIDITY,
                 SensitivityScope.ALL,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -378,6 +383,8 @@ def main() -> None:
                 SAMPLE_BANK_ID,
                 ModuleScope.LIQUIDITY,
                 SensitivityScope.AGGREGATED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -400,6 +407,8 @@ def main() -> None:
                 SAMPLE_BANK_ID,
                 ModuleScope.CAPITAL,
                 SensitivityScope.CONFIDENTIAL,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -421,6 +430,8 @@ def main() -> None:
                 None,
                 ModuleScope.ALL,
                 SensitivityScope.ALL,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -439,6 +450,8 @@ def main() -> None:
                 None,
                 ModuleScope.REGULATORY,
                 SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -457,6 +470,8 @@ def main() -> None:
                 None,
                 ModuleScope.ACCOUNT,
                 SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -475,6 +490,8 @@ def main() -> None:
                 None,
                 ModuleScope.ACCOUNT,
                 SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
@@ -493,6 +510,8 @@ def main() -> None:
                 SAMPLE_BANK_ID,
                 ModuleScope.DATA,
                 SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,

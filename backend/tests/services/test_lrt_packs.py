@@ -46,7 +46,11 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 CORPORATE_CODES = {"LRT-PROFILE", "LRT-OUTLET", "LRT-PARTY", "LRT-CAPITAL", "LRT-PRODUCT"}
 

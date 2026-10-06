@@ -49,7 +49,7 @@ def _row(
         role_bundle=role_bundle,
         institution_scope=InstitutionScope.ORGANIZATION.value,
         institution_id=None,
-        module_scope=ModuleScope.ALL.value,
+        module_scope=ModuleScope.CREDIT.value,
         sensitivity_scope=SensitivityScope.ALL.value,
         data_scope_kind=kind,
         data_scope_values=values,
@@ -108,6 +108,25 @@ def test_an_unknown_kind_is_refused(db_session: Session) -> None:
 def test_the_derived_none_kind_is_refused(db_session: Session) -> None:
     """``none`` describes a reduction over no bindings, never a stored row."""
     _refused(db_session, _row(kind="none", values=None))
+
+
+@pytest.mark.parametrize("kind", ["branch", "region"])
+@pytest.mark.parametrize("status", list(BindingStatus))
+def test_non_credit_narrowing_is_refused_in_every_lifecycle_state(
+    db_session: Session, kind: str, status: BindingStatus
+) -> None:
+    row = _row(kind=kind, values=["ACC-001"])
+    row.module_scope = ModuleScope.LIQUIDITY.value
+    row.status = status.value
+    if status == BindingStatus.REVOKED:
+        row.revoked_at = utc_now()
+        row.revoked_by_type = GrantorType.SYSTEM.value
+        row.revoked_by_id = "data-scope-check-test"
+        row.revoked_reason = "exercise the revoked scope constraint"
+    db_session.add(row)
+    with pytest.raises(IntegrityError, match="ck_authorization_bindings_narrowed_module"):
+        db_session.flush()
+    db_session.rollback()
 
 
 def test_a_human_holding_the_machine_feed_bundle_is_refused(db_session: Session) -> None:

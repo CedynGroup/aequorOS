@@ -624,7 +624,7 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
         )
         session.commit()
-    _, version = _grant(module_scope=ModuleScope.CAPITAL, sensitivity_scope=SensitivityScope.ALL)
+    _, version = _grant(module_scope=ModuleScope.RISK, sensitivity_scope=SensitivityScope.ALL)
     if fx_sensitivity:
         _, version = _grant(sensitivity_scope=SensitivityScope(fx_sensitivity))
     reader_headers = headers(roles=("viewer",), authorization_version=version)

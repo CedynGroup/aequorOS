@@ -70,11 +70,12 @@ def test_shared_surfaces_gate_credit_alongside_the_other_engines() -> None:
     for surface in (live_view, alerts, window_analytics):
         gated = surface._GATED_ENGINE_MODULES  # noqa: SLF001 - the pin reads the gate itself
         assert _CREDIT_GATE in gated, surface.__name__
-        # The gate list is every engine whose module cutover has landed; capital
-        # stays ungated until its own cutover decides otherwise.
+        # Every live engine names its module authority.
         assert {engine for engine, _module in gated} == {
             "liquidity",
             "credit",
+            "capital",
+            "rating",
             "irr",
             "fx",
             "ftp",

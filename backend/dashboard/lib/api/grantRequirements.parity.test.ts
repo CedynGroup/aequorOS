@@ -16,7 +16,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import {
@@ -61,28 +61,6 @@ function repoRoot(): string {
   throw new Error("could not locate the repository root from " + __dirname);
 }
 
-/**
- * The migration that created the data-scope columns. The contract
- * (`.ai/BI_PHASE4_CONTRACT.md`) names it authoritative and names its CHECK
- * verbatim, so it — not a prose summary — is what this mirror is read against.
- */
-const DATA_SCOPE_MIGRATION = join(
-  repoRoot(),
-  "backend",
-  "alembic",
-  "versions",
-  "202609270073_authorization_data_scopes.py",
-);
-
-/** The request and response contracts the composer posts to and reads from. */
-const AUTHORIZATION_SCHEMAS = join(
-  repoRoot(),
-  "backend",
-  "app",
-  "schemas",
-  "authorization.py",
-);
-
 function draft(over: Partial<GrantDraft>): GrantDraft {
   return {
     roleBundle: "approver" as GrantDraft["roleBundle"],
@@ -99,9 +77,21 @@ function draft(over: Partial<GrantDraft>): GrantDraft {
   };
 }
 
-test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
+type BackendContract = {
+  chainDecisionGate: [string, string];
+  dataScopeKinds: string[];
+  scopedGrantFields: string[];
+  dataScopeValuesMaxItems: number;
+  dataScopeAcceptance: Record<string, boolean>;
+  dataScopeConstraintNames: string[];
+  branchEntryFields: string[];
+  branchDirectoryFields: string[];
+  bindingReadFields: string[];
+};
+
+function loadBackendContract(): BackendContract {
   const backendRoot = join(repoRoot(), "backend");
-  const [backendModule, backendSensitivity] = JSON.parse(
+  return JSON.parse(
     execFileSync(
       "uv",
       [
@@ -110,8 +100,61 @@ test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
         "python",
         "-c",
         `import json
+from sqlalchemy import CheckConstraint
+
+from app.core.authorization import DataScope
+from app.models import AuthorizationBinding
+from app.schemas.authorization import (
+    BindingRead,
+    BranchDirectoryEntryRead,
+    BranchDirectoryRead,
+    ScopedGrantInput,
+)
 from app.services.regulatory_reporting.family_access import CHAIN_DECISION_GATE
-print(json.dumps([CHAIN_DECISION_GATE.module.value, CHAIN_DECISION_GATE.sensitivity.value]))`,
+
+def accepts(kind, values):
+    try:
+        ScopedGrantInput.model_validate({
+            "role_bundle": "viewer",
+            "institution_scope": "institution",
+            "institution_id": "BK-SAMP0001",
+            "module_scope": "credit",
+            "sensitivity_scope": "all",
+            "data_scope_kind": kind,
+            "data_scope_values": values,
+            "reason_category": "other",
+            "reason_detail": "Executable dashboard parity probe",
+        })
+    except ValueError:
+        return False
+    return True
+
+grant_schema = ScopedGrantInput.model_json_schema()
+print(json.dumps({
+    "chainDecisionGate": [
+        CHAIN_DECISION_GATE.module.value,
+        CHAIN_DECISION_GATE.sensitivity.value,
+    ],
+    "dataScopeKinds": [kind.value for kind in DataScope],
+    "scopedGrantFields": sorted(grant_schema["properties"]),
+    "dataScopeValuesMaxItems": grant_schema["properties"]["data_scope_values"]["maxItems"],
+    "dataScopeAcceptance": {
+        "all_empty": accepts("all", []),
+        "branch_empty": accepts("branch", []),
+        "branch_one": accepts("branch", ["001"]),
+        "region_empty": accepts("region", []),
+        "region_one": accepts("region", ["Northern"]),
+    },
+    "dataScopeConstraintNames": sorted(
+        constraint.name
+        for constraint in AuthorizationBinding.__table__.constraints
+        if isinstance(constraint, CheckConstraint)
+        and constraint.name.startswith("ck_authorization_bindings_data_scope")
+    ),
+    "branchEntryFields": sorted(BranchDirectoryEntryRead.model_json_schema()["properties"]),
+    "branchDirectoryFields": sorted(BranchDirectoryRead.model_json_schema()["properties"]),
+    "bindingReadFields": sorted(BindingRead.model_json_schema()["properties"]),
+}))`,
       ],
       {
         cwd: backendRoot,
@@ -124,7 +167,13 @@ print(json.dumps([CHAIN_DECISION_GATE.module.value, CHAIN_DECISION_GATE.sensitiv
         encoding: "utf8",
       },
     ),
-  ) as [string, string];
+  ) as BackendContract;
+}
+
+const backendContract = loadBackendContract();
+
+test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
+  const [backendModule, backendSensitivity] = backendContract.chainDecisionGate;
   assert.equal(
     CHAIN_DECISION_MODULE,
     backendModule,
@@ -263,18 +312,11 @@ test("an organization-wide draft compares against organization-wide rows", () =>
 
 // --- the data-scope mirror ---------------------------------------------------
 
-test("the wire field names are the migration's column names", () => {
-  assert.ok(
-    existsSync(DATA_SCOPE_MIGRATION),
-    `the data-scope migration is missing: ${DATA_SCOPE_MIGRATION}. The ` +
-      `composer cannot post a column nobody created.`,
-  );
-  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
+test("the wire field names are fields in the executable request contract", () => {
   for (const column of [DATA_SCOPE_KIND_FIELD, DATA_SCOPE_VALUES_FIELD]) {
-    assert.match(
-      source,
-      new RegExp(`sa\\.Column\\(\\s*\\n?\\s*"${column}"`),
-      `the composer posts '${column}', which the migration does not add. A ` +
+    assert.ok(
+      backendContract.scopedGrantFields.includes(column),
+      `the composer posts '${column}', which the request contract does not accept. A ` +
         `field name the server does not recognise is silently dropped by ` +
         `Pydantic's extra="forbid" as a 422 — or worse, accepted and ignored.`,
     );
@@ -282,32 +324,26 @@ test("the wire field names are the migration's column names", () => {
 });
 
 test("the three choices are the three storable kinds", () => {
-  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
-  const kinds = source.match(/_KINDS\s*=\s*\(([^)]*)\)/);
-  assert.ok(kinds, "could not find the kind vocabulary in the migration");
-  const declared = [...kinds[1].matchAll(/"([a-z_]+)"/g)].map(
-    (match) => match[1],
-  );
   assert.deepEqual(
     [...BOOK_COVERAGE_OPTIONS.map(([kind]) => kind)].sort(),
-    [...declared].sort(),
+    [...backendContract.dataScopeKinds].sort(),
     "the composer offers a set of coverages that is not the set the column " +
       "admits — either an unstorable choice is on screen, or a storable one " +
       "cannot be granted at all",
   );
 });
 
-test("the refusal mirrors the CHECK, both halves", () => {
-  const source = readFileSync(DATA_SCOPE_MIGRATION, "utf8");
-  // Half one: `all` carries no list. Half two: any other kind carries a
-  // non-empty one. Read from the migration so a reshaped CHECK is noticed here.
-  assert.match(source, /data_scope_kind = 'all' AND data_scope_values IS NULL/);
-  assert.match(source, /json_array_length\(data_scope_values\) > 0/);
-
-  // Half two, mirrored: a narrowing kind with nothing chosen is refused.
+test("the refusal mirrors executable backend validation", () => {
+  assert.deepEqual(backendContract.dataScopeConstraintNames, [
+    "ck_authorization_bindings_data_scope_kind",
+    "ck_authorization_bindings_data_scope_values",
+  ]);
+  assert.equal(backendContract.dataScopeAcceptance.all_empty, true);
   for (const kind of ["branch", "region"] as const) {
+    assert.equal(backendContract.dataScopeAcceptance[`${kind}_empty`], false);
+    assert.equal(backendContract.dataScopeAcceptance[`${kind}_one`], true);
     const refusal = grantScopeRefusal(
-      draft({ dataScope: { kind, values: [] } }),
+      draft({ moduleScope: "credit", dataScope: { kind, values: [] } }),
     );
     assert.ok(
       refusal,
@@ -317,38 +353,33 @@ test("the refusal mirrors the CHECK, both halves", () => {
   }
   assert.equal(
     grantScopeRefusal(
-      draft({ dataScope: { kind: "branch", values: ["001"] } }),
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "branch", values: ["001"] },
+      }),
     ),
     null,
     "one chosen branch is a complete coverage",
   );
-  // Half one, mirrored: `all` never carries a list, so it is never refused.
   assert.equal(
-    grantScopeRefusal(draft({ dataScope: { kind: "all", values: ["001"] } })),
+    grantScopeRefusal(
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "all", values: ["001"] },
+      }),
+    ),
     null,
   );
 });
 
 test("the request contract names both fields, and the cap is mirrored", () => {
+  assert.ok(backendContract.scopedGrantFields.includes(DATA_SCOPE_KIND_FIELD));
   assert.ok(
-    existsSync(AUTHORIZATION_SCHEMAS),
-    `the grant contract is missing: ${AUTHORIZATION_SCHEMAS}`,
+    backendContract.scopedGrantFields.includes(DATA_SCOPE_VALUES_FIELD),
   );
-  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
-  assert.match(
-    source,
-    new RegExp(`${DATA_SCOPE_KIND_FIELD}: DataScope`),
-    "ScopedGrantInput no longer takes the coverage kind the composer posts",
-  );
-  const values = source.match(
-    new RegExp(
-      `${DATA_SCOPE_VALUES_FIELD}: list\\[str\\][\\s\\S]{0,240}?max_length=(\\d+)`,
-    ),
-  );
-  assert.ok(values, "could not read the coverage value field and its cap");
   assert.equal(
-    String(MAX_DATA_SCOPE_VALUES),
-    values[1],
+    MAX_DATA_SCOPE_VALUES,
+    backendContract.dataScopeValuesMaxItems,
     "the composer's cap on how many branches one grant may name has drifted " +
       "from the server's, so it either refuses a grant the server accepts or " +
       "posts one it will not",
@@ -356,35 +387,19 @@ test("the request contract names both fields, and the cap is mirrored", () => {
 });
 
 test("the branch directory is read by the response model's own field names", () => {
-  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
-  const entry = source.match(
-    /class BranchDirectoryEntryRead\(ClosedModel\):([\s\S]*?)\n\nclass /,
-  );
-  assert.ok(entry, "could not find BranchDirectoryEntryRead");
-  const fields = [...entry[1].matchAll(/^\s{4}([a-z_]+):/gm)].map(
-    (match) => match[1],
-  );
   assert.deepEqual(
-    [...fields].sort(),
+    backendContract.branchEntryFields,
     ["code", "name", "region"],
     "the branch row's fields changed; `parseBranchDirectory` reads exactly " +
       "these three and treats anything else as a protocol failure, so it would " +
       "start reporting every institution as having no branch register",
   );
-  const directory = source.match(
-    /class BranchDirectoryRead\(ClosedModel\):([\s\S]*?)(?:\nclass |$)/,
-  );
-  assert.ok(directory);
-  assert.match(directory[1], /branches: list\[BranchDirectoryEntryRead\]/);
-  assert.match(directory[1], /regions: list\[str\]/);
+  assert.ok(backendContract.branchDirectoryFields.includes("branches"));
+  assert.ok(backendContract.branchDirectoryFields.includes("regions"));
 });
 
 test("the stored-scope label the list shows is a field the server sends", () => {
-  const source = readFileSync(AUTHORIZATION_SCHEMAS, "utf8");
-  // `grantScopeDisplay` prefers this over its own wording. If it were dropped
-  // the fallback would still describe every grant, but silently — so the
-  // preference is pinned rather than assumed.
-  assert.match(source, /data_scope_label: str/);
+  assert.ok(backendContract.bindingReadFields.includes("data_scope_label"));
   assert.equal(
     grantScopeDisplay({
       data_scope_kind: "region",
@@ -397,14 +412,23 @@ test("the stored-scope label the list shows is a field the server sends", () => 
 
 test("a narrowed coverage warns about the figures it cannot answer", () => {
   const warning = dataScopeShortfall(
-    draft({ dataScope: { kind: "branch", values: ["001"] } }),
+    draft({
+      moduleScope: "credit",
+      dataScope: { kind: "branch", values: ["001"] },
+    }),
   );
   assert.ok(warning, "a branch-scoped grant must say what it does not include");
   assert.match(warning, /institution as a whole/);
-  assert.match(warning, /second grant/);
+  assert.match(warning, /whole-book Credit grant/);
+  assert.match(warning, /sensitivity required by that surface/);
+  assert.match(warning, /Regulatory Reporting authority/);
+  assert.match(warning, /ICAAP requires Capital/);
   assert.ok(
     dataScopeShortfall(
-      draft({ dataScope: { kind: "region", values: ["Northern"] } }),
+      draft({
+        moduleScope: "credit",
+        dataScope: { kind: "region", values: ["Northern"] },
+      }),
     ),
   );
 });

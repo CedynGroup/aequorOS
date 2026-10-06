@@ -43,9 +43,10 @@ authorities carry disjoint permissions, so a push route asking for `ingest` and 
 feed asking for `view` each refuse the other's credential structurally. Issue one
 key per purpose; do not try to make one credential do both.
 
-A `reader` key may additionally be limited to selected branches or regions at
-issuance. It then serves only those branches on every dataset, and
-institution-wide ratios are refused to it outright.
+Analytics feed keys cover every module and require whole-institution coverage.
+Key issuance rejects narrowed scopes. For existing narrowed keys, follow the
+[Credit-only narrowing migration contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
+administrators may deliberately issue a new whole-institution key after revocation.
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
@@ -682,7 +683,7 @@ never present with zeros.
 | Status | When                                                                                                                                                        |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `401`  | The credential is missing, unknown or revoked.                                                                                                              |
-| `403`  | A human token; a `writer` key; a `reader` key without the authority the dataset's figures need; a branch-scoped key asking for institution-wide ratios.     |
+| `403`  | A human token; a `writer` key; a `reader` key without the authority the dataset's figures need.                                                             |
 | `404`  | BI is not enabled for the deployment; the institution belongs to another tenant; the key names a different institution; the dataset is not in the registry. |
 | `422`  | The cursor is not a token this feed issued. It is never treated as "start from the beginning".                                                              |
 

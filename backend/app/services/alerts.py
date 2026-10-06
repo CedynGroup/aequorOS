@@ -23,10 +23,11 @@ _OPEN_STATUSES = ("open", "needs_review")
 
 #: Live-engine findings served only to a principal holding an exact aggregated
 #: ``view`` binding on the engine's module, filtered in SQL before counts and
-#: the limit. Capital findings are still served to every tenant reader — the
-#: capital cutover owns that decision; this list must only ever grow.
+#: the limit. Every engine requires whole-institution coverage.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
+    ("capital", Module.CAPITAL),
+    ("rating", Module.MARKETS),
     ("credit", Module.CREDIT),
     ("irr", Module.IRRBB),
     ("fx", Module.FX),

@@ -82,12 +82,16 @@ class IntegrationKeyIssueRequest(ClosedModel):
         """Refuse an unusable credential here, with a sentence, not at the CHECK.
 
         Values are normalised in place, so two spellings of one scope produce one
-        stored row and one authority sentence. The rules mirror
-        ``ScopedGrantInput`` — the human grant surface — because a machine
-        credential's slice must mean exactly what a person's does.
+        stored row and one authority sentence. A feed key covers every module,
+        so it cannot use the narrowing available only to Credit grants.
         """
 
         values = normalise_data_scope_values(self.data_scope_values)
+        if self.purpose == READER_PURPOSE and self.data_scope_kind is not DataScope.ALL:
+            raise ValueError(
+                "Analytics feed keys cover every module and require whole-institution coverage. "
+                "Branch and region narrowing is supported only for Credit."
+            )
         if self.purpose == WRITER_PURPOSE and (self.data_scope_kind is not DataScope.ALL or values):
             raise ValueError(
                 "A data push key writes rather than reads, so it cannot be limited "

@@ -32,6 +32,8 @@ from app.services import regulatory_capital
 from app.services.icaap import blocks
 from tests.services.icaap.conftest import AS_OF
 
+pytestmark = pytest.mark.usefixtures("capital_run_authority")
+
 
 def _detail(caught: pytest.ExceptionInfo[HTTPException]) -> dict[str, Any]:
     """The refusal body, narrowed once so each assertion reads plainly."""

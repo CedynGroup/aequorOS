@@ -41,6 +41,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.core.config import get_settings
 from app.models import (
     AttestationSignature,
@@ -68,6 +69,7 @@ from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import artifact_versions, generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation
+from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -76,13 +78,19 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_USER_ID)
+CHECKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_USER_ID, authorization_version=1
+)
 #: The third officer of the filing chain. The Approver's signature approves the
 #: figures; only the Validator's stage releases the return to the regulator.
 VALIDATOR_USER_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
-VALIDATOR = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=VALIDATOR_USER_ID)
+VALIDATOR = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=VALIDATOR_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 VAULT_KEY = "test-vault-master-key-not-for-production-0002"
 
@@ -168,6 +176,20 @@ def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) ->
             reason="Test policy: BSD3 is signed on the document itself.",
         )
     )
+    db.commit()
+    for user_id, bundle in (
+        (DEMO_USER_ID, RoleBundle.ANALYST),
+        (CHECKER_USER_ID, RoleBundle.APPROVER),
+        (VALIDATOR_USER_ID, RoleBundle.VALIDATOR),
+    ):
+        assert user_id is not None
+        grant_institution_authority(
+            db,
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user_id,
+            bundle=bundle,
+        )
     db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
@@ -349,9 +371,7 @@ def _trust(db: Session) -> ValidationContext:
         )
         for pem in db.scalars(select(SignerKey.certificate_pem))
     ]
-    return ValidationContext(
-        trust_roots=anchors, allow_fetching=False, revocation_mode="soft-fail"
-    )
+    return ValidationContext(trust_roots=anchors, allow_fetching=False, revocation_mode="soft-fail")
 
 
 def _signatures_count(db: Session) -> int:
@@ -376,9 +396,7 @@ def test_both_signatures_are_placed_on_the_document_and_validate_independently(
     ]
 
     trust = _trust(db_session)
-    statuses = [
-        validate_pdf_signature(sig, signer_validation_context=trust) for sig in embedded
-    ]
+    statuses = [validate_pdf_signature(sig, signer_validation_context=trust) for sig in embedded]
     for status in statuses:
         assert status.intact, status.summary()
         assert status.valid, status.summary()
@@ -422,9 +440,7 @@ def test_the_signer_appears_on_the_attestation_page_of_the_filed_document(
         assert signature.signer_id in drawn
 
 
-def _appearance_text(
-    pdf: bytes, *, page_index: int = pdf_signing.ATTESTATION_PAGE_INDEX
-) -> str:
+def _appearance_text(pdf: bytes, *, page_index: int = pdf_signing.ATTESTATION_PAGE_INDEX) -> str:
     """Every string drawn into a signature widget's appearance, concatenated."""
     import re  # noqa: PLC0415 - local to this reader
 
@@ -592,12 +608,8 @@ def test_a_placed_field_lands_where_the_override_put_it(
         MAKER,
         package,
         placements=[
-            pdf_signing.FieldPlacement(
-                "preparer", 2, boxes[pdf_signing.PREPARER_FIELD_NAME]
-            ),
-            pdf_signing.FieldPlacement(
-                "approver", 2, boxes[pdf_signing.APPROVER_FIELD_NAME]
-            ),
+            pdf_signing.FieldPlacement("preparer", 2, boxes[pdf_signing.PREPARER_FIELD_NAME]),
+            pdf_signing.FieldPlacement("approver", 2, boxes[pdf_signing.APPROVER_FIELD_NAME]),
         ],
         reason="test: the preparer places both fields in the workspace",
     )
@@ -608,9 +620,7 @@ def test_a_placed_field_lands_where_the_override_put_it(
     reader = PdfFileReader(io.BytesIO(final))
     page = reader.root["/Pages"]["/Kids"][2].get_object()
     placed = {
-        str(annot.get_object()["/T"]): tuple(
-            int(coord) for coord in annot.get_object()["/Rect"]
-        )
+        str(annot.get_object()["/T"]): tuple(int(coord) for coord in annot.get_object()["/Rect"])
         for annot in page["/Annots"]
     }
     assert placed == boxes
@@ -714,9 +724,7 @@ def test_a_supplied_artifact_version_must_belong_to_the_package(
     assert _signatures_count(db_session) == 0
 
 
-def _authorization(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str
-) -> str:
+def _authorization(db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str) -> str:
     assert ctx.actor_user_id is not None
     signer_id = _enrol(db, ctx, "Kwesi Owusu")
     token, _row = stepup.mint_authorization(
@@ -762,9 +770,7 @@ def test_a_voided_attestation_can_be_certified_again_on_a_fresh_document(
 
     # The withdrawn cycle's document is still exactly where its signature says.
     assert _bytes(db_session, storage, _version(db_session, first)) == voided_bytes
-    assert _version(db_session, first).object_path != _version(
-        db_session, second[0]
-    ).object_path
+    assert _version(db_session, first).object_path != _version(db_session, second[0]).object_path
 
 
 # --- the verifier accepts what the ceremony produced -------------------------
@@ -854,9 +860,7 @@ def test_the_verifier_passes_every_check_on_a_ceremony_signed_document(
     # Both fields were examined on the filed document — not just the detached
     # attestation the database holds.
     pdf_check = next(
-        entry
-        for entry in report["checks"]
-        if entry["check"] == verifier.CHECK_PDF_SIGNATURE
+        entry for entry in report["checks"] if entry["check"] == verifier.CHECK_PDF_SIGNATURE
     )["evidence"]
     assert {entry["field"] for entry in pdf_check["signatures_examined"]} == {
         pdf_signing.PREPARER_FIELD_NAME,
@@ -941,9 +945,7 @@ def test_a_corrupted_archive_refuses_the_download(
     _corrupt(storage, db_session, version)
 
     with pytest.raises(HTTPException) as raised:
-        artifact_versions.read_version_bytes(
-            db_session, MAKER, SAMPLE_BANK_ID, version.id, storage
-        )
+        artifact_versions.read_version_bytes(db_session, MAKER, SAMPLE_BANK_ID, version.id, storage)
     assert raised.value.status_code == 409
     assert raised.value.detail["error_code"] == "artifact_version_checksum_mismatch"  # type: ignore[index]
 

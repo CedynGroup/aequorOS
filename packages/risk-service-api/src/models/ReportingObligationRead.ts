@@ -46,6 +46,13 @@ import {
   AnchorDataStatusToJSON,
   AnchorDataStatusToJSONTyped,
 } from "./AnchorDataStatus";
+import type { ReportingObligationReadRag } from "./ReportingObligationReadRag";
+import {
+  ReportingObligationReadRagFromJSON,
+  ReportingObligationReadRagFromJSONTyped,
+  ReportingObligationReadRagToJSON,
+  ReportingObligationReadRagToJSONTyped,
+} from "./ReportingObligationReadRag";
 import type { ChannelCode } from "./ChannelCode";
 import {
   ChannelCodeFromJSON,
@@ -81,13 +88,6 @@ import {
   PackageVersionToJSON,
   PackageVersionToJSONTyped,
 } from "./PackageVersion";
-import type { ObligationRag } from "./ObligationRag";
-import {
-  ObligationRagFromJSON,
-  ObligationRagFromJSONTyped,
-  ObligationRagToJSON,
-  ObligationRagToJSONTyped,
-} from "./ObligationRag";
 import type { ReturnFrequency } from "./ReturnFrequency";
 import {
   ReturnFrequencyFromJSON,
@@ -170,10 +170,10 @@ export interface ReportingObligationRead {
   packageVersion: PackageVersion;
   /**
    *
-   * @type {ObligationRag}
+   * @type {ReportingObligationReadRag}
    * @memberof ReportingObligationRead
    */
-  rag: ObligationRag;
+  rag: ReportingObligationReadRag;
   /**
    *
    * @type {Date}
@@ -263,7 +263,7 @@ export function ReportingObligationReadFromJSONTyped(
       json["package_status"],
     ),
     packageVersion: PackageVersionFromJSON(json["package_version"]),
-    rag: ObligationRagFromJSON(json["rag"]),
+    rag: ReportingObligationReadRagFromJSON(json["rag"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
     returnFamily: ReturnFamilyFromJSON(json["return_family"]),
@@ -302,7 +302,7 @@ export function ReportingObligationReadToJSONTyped(
       value["packageStatus"],
     ),
     package_version: PackageVersionToJSON(value["packageVersion"]),
-    rag: ObligationRagToJSON(value["rag"]),
+    rag: ReportingObligationReadRagToJSON(value["rag"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],
     return_family: ReturnFamilyToJSON(value["returnFamily"]),

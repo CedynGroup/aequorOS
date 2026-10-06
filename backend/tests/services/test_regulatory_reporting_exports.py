@@ -44,7 +44,11 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 
@@ -555,48 +559,48 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "template_3",
             "template_4",
         },
-            "sdi_lmt": {
-                "prudential_ratio_inputs",
-                "prudential_ratio_percentages",
-                "liquidity_reserves",
-                "maturity_ladder",
-                "items_no_contractual_maturity",
-                "collateral_rehypothecation",
-                "funding_concentration",
-                "assets_liabilities_by_currency",
-                "maturity_of_exposures",
-                "deposit_funding_concentration",
-                "unencumbered_assets",
-                "collateral_received",
-            },
-            "sdi_large_exposures": {
-                "template_1",
-                "template_1a",
-                "template_2",
-                "template_3",
-                "template_4",
-            },
-            "sdi_stress_annual": {
-                "t1_summary_positions",
-                "t1_impact_of_adverse",
-                "t1_capital_required",
-                "t1_management_actions",
-                "t1_post_capitalisation",
-                "t1_residual",
-                "t3_profit_and_loss",
-                "t4_financial_position",
-                "t5_rwa",
-                "t5_pillar2",
-                "t6_risk_drivers",
-                "governance",
-                "stress_narrative",
-            },
-            "sdi_irrbb": {
-                "repricing_gap",
-                "eve_scenarios",
-                "earnings_at_risk",
-                "summary",
-            },
+        "sdi_lmt": {
+            "prudential_ratio_inputs",
+            "prudential_ratio_percentages",
+            "liquidity_reserves",
+            "maturity_ladder",
+            "items_no_contractual_maturity",
+            "collateral_rehypothecation",
+            "funding_concentration",
+            "assets_liabilities_by_currency",
+            "maturity_of_exposures",
+            "deposit_funding_concentration",
+            "unencumbered_assets",
+            "collateral_received",
+        },
+        "sdi_large_exposures": {
+            "template_1",
+            "template_1a",
+            "template_2",
+            "template_3",
+            "template_4",
+        },
+        "sdi_stress_annual": {
+            "t1_summary_positions",
+            "t1_impact_of_adverse",
+            "t1_capital_required",
+            "t1_management_actions",
+            "t1_post_capitalisation",
+            "t1_residual",
+            "t3_profit_and_loss",
+            "t4_financial_position",
+            "t5_rwa",
+            "t5_pillar2",
+            "t6_risk_drivers",
+            "governance",
+            "stress_narrative",
+        },
+        "sdi_irrbb": {
+            "repricing_gap",
+            "eve_scenarios",
+            "earnings_at_risk",
+            "summary",
+        },
         # LRT corporate packs (plan W5) — event-driven master-data packs.
         "lrt_profile": {
             "general_details",
