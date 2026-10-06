@@ -24,6 +24,13 @@ export function kpi(page: Page | Locator, label: string): Locator {
     .filter({ hasNot: page.locator(".card") });
 }
 
+/** The section card (`components/ui/SectionCard`) titled exactly `title`. */
+export function section(page: Page, title: string): Locator {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+}
+
 /**
  * Assert the KPI tile labelled `label` shows `value`. A `hint` both selects the
  * tile (two tiles may share a label, e.g. a regulatory and a desk figure) and
