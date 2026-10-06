@@ -312,7 +312,15 @@ test.describe("Liquidity functional workflow", () => {
 });
 
 async function tab(page: Page, name: string): Promise<void> {
-  await page.getByRole("link", { name, exact: true }).click();
+  const link = page.getByRole("link", { name, exact: true });
+  const href = await link.getAttribute("href");
+  expect(href).not.toBeNull();
+  // A client-side click returns before Next's route has finished loading.
+  // Wait for the actual destination before asserting its computed figures.
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === href),
+    link.click(),
+  ]);
 }
 
 function lineCells(line: Line): string[] {
