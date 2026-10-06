@@ -206,7 +206,7 @@ export default function ReverseStress() {
             <EmptyState
               Icon={Target}
               title="No reverse-stress frontier yet"
-              description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. Both engines need a succeeded baseline for the current reporting period."
+              description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. It searches the selected reporting period's own financial facts, never a substituted current book, so that period needs its facts and the institution needs both stress scenarios configured."
               action={runButton}
             />
           )}
