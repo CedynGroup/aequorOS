@@ -62,7 +62,10 @@ After a grant change, sign in again to obtain the new authorization version.
 
 Run this read-only query as a role that can see every tenant user, institution,
 and binding. It enumerates human and machine principals without inferring any
-grant from scalar roles.
+grant from scalar roles. This query inventories engine authority; evaluate BSD
+preview access separately under the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+using `scripts/authorization_access_impact.py --json`.
 
 ```sql
 WITH active_principals AS (
@@ -231,11 +234,13 @@ Create no automatic backfill. Operators must create only institution-approved
 rows through the authorization service so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
+For BSD preview grants, use the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
+
 | Need                                                                          | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
 | ----------------------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
 | Aggregated Capital dashboards and SDI checks                                  | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `cap`          | `aggregated`        |
 | Capital plans, run details, and ILAAP reads                                   | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
-| BSD capital preview                                                           | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `reg`          | `restricted`        |
 | SDI capital assurance evidence                                                | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `restricted`        |
 | Run Capital, create/edit plans, and run/create/edit Capital workbench entries | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |
 | Approve a Capital plan as an independent checker                              | `human`          | `approver`                                    | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `cap`          | `confidential`      |

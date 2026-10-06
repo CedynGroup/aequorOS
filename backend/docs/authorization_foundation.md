@@ -654,8 +654,8 @@ approved a return and filed it — and on an ungated return family the scalar
 carried by the `validator` bundle (`view` + `submit`, never `approve`), and
 `require_package_submit` takes one scoped path for every family: an interactive
 human, then one complete active binding over Regulatory Reporting / restricted
-for the exact institution. Visibility is still decided first, so a gated family
-the caller cannot see stays a `404`.
+for the exact institution. Visibility follows the
+[whole-institution family contract](#whole-institution-figures-and-credit-only-narrowing).
 
 No migration backfills the authority: granting it to everyone who could approve
 would encode the defect being removed, and unlike the ownership split this
@@ -760,10 +760,10 @@ projection. This is a denial-only access change; no bindings are backfilled. Run
 `scripts/authorization_access_impact.py` for each enforcement deployment
 and retain its dated output outside the repository.
 
-Regulatory **packages** follow their return authority, independently of the
-underlying engine runs: every ordinary return requires whole-institution
-REG/restricted VIEW; ICAAP retains CAPITAL/confidential and its workspace
-freeze rules. Generation additionally requires REG/restricted RUN. Package
+Regulatory **returns**, including the legacy BSD previews, follow their return
+authority independently of the underlying engine runs: every ordinary return
+requires whole-institution REG/restricted VIEW; ICAAP retains CAPITAL/confidential
+and its workspace freeze rules. Generation additionally requires REG/restricted RUN. Package
 lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
 without that authority. Package comparisons filter both referenced packages by
@@ -771,8 +771,8 @@ family before disclosing mismatches. Ordinary approval, signing and nomination
 no longer fall back to scalar roles; the action permission and maker/checker
 conditions remain required. Caller-owned signer identity and signature-appearance setup
 require an interactive human with current authorization, without a scalar-role
-gate; setup confers no package access or signing authority. A visible return
-without the action permission returns 403; an invisible return returns 404.
+gate; setup confers no package access or signing authority. A visible package
+without the action permission returns 403; an invisible package returns 404.
 Report comparisons use the same whole-book module authority as regulatory-run details.
 
 Calendar redaction and filing-notification visibility follow

@@ -82,7 +82,10 @@ landing requires confidential view because it reads the SDI position.
 
 Run this read-only query with a role that can see all organizations, banks,
 users, and bindings. It evaluates active human and machine principals without
-inferring authority from `users.role`.
+inferring authority from `users.role`. This query inventories engine authority;
+evaluate BSD preview access separately under the
+[return authority contract](authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)
+using `scripts/authorization_access_impact.py --json`.
 
 ```sql
 WITH active_bindings AS (

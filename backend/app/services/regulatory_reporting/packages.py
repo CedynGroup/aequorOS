@@ -47,10 +47,8 @@ def list_packages(  # noqa: PLR0913
         RegulatoryPackage.organization_id == ctx.organization_id,
         RegulatoryPackage.bank_id == bank.id,
     )
-    # A package of a GATED family that this principal may not see is not merely
-    # unopenable — it must not appear in the list at all, because a row showing
-    # "ICAAP-REPORT, FY2026, submitted" is itself the disclosure. Applied as one
-    # NOT-IN over the query rather than per row (ICAAP P3 §4.2).
+    # Hidden families must be excluded before counts and pagination: even a
+    # package's existence and filing status disclose protected return state.
     hidden = family_access.hidden_families(db, ctx, bank)
     if hidden:
         conditions += (RegulatoryPackage.return_family.notin_(sorted(hidden)),)

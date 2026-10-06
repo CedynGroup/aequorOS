@@ -20,8 +20,8 @@
  * This module MIRRORS a backend constant and must not drift from it:
  * `CHAIN_DECISION_GATE` in
  * `backend/app/services/regulatory_reporting/family_access.py`.
- * `grantRequirements.parity.test.ts` reads that file and fails if the two
- * disagree — fix the mirror, never the test.
+ * `grantRequirements.parity.test.ts` imports the backend gate at runtime and
+ * fails if the two disagree — fix the mirror, never the test.
  */
 
 import type { GrantDraft } from "./grants";
@@ -44,9 +44,8 @@ export const CHAIN_DECISION_SENSITIVITY = "restricted";
 /**
  * Bundles whose whole purpose is deciding on a return in the filing chain.
  *
- * Deliberately not every operational bundle: an Analyst prepares through the
- * edit path, which is not a chain decision, so a narrower sensitivity is a
- * legitimate choice there rather than a mistake worth interrupting.
+ * Deliberately not every operational bundle: an Analyst prepares returns
+ * rather than taking a filing-chain decision.
  */
 const CHAIN_DECISION_BUNDLES: Record<string, string> = {
   approver: "approve returns or send them back",

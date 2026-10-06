@@ -350,10 +350,9 @@ def require_transmission_authority(  # noqa: PLR0913 - the complete policy tuple
     :data:`TRANSMISSION_GATE` for this exact institution, and no scalar role
     satisfies it.
 
-    Visibility is decided first and unchanged: a gated family the caller cannot
-    see is still a 404, because the refusal must not disclose that the package
-    exists. Once it is visible, a missing filing authority is an honest 403 that
-    names what is missing.
+    Visibility is decided first for every family: a package the caller cannot
+    see returns 404, so the refusal cannot disclose its existence. Once it is
+    visible, missing transmission authority returns 403 with the required grant.
     """
     require_view(db, ctx, bank, package)
     if ctx.impersonation_context is not None:

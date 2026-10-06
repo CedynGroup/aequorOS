@@ -403,13 +403,9 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
     today = as_of or date.today()
     window = anchor_window(today, lookback_months=lookback_months, horizon_months=horizon_months)
     overrides = _deadline_overrides(db, ctx, bank.id)
-    # A gated family's PACKAGE is itself disclosure: `family_access.can_view`
-    # asks "may this principal know that packages of this family exist?". The
-    # package LIST already excludes them; the calendar did not, so a scalar
-    # analyst holding no binding could read an ICAAP package's id and status
-    # here and then drive it through the attestation routes (security audit
-    # S-2/S-3). The OBLIGATION row stays — BoG's deadline is public — but the
-    # package linkage is withheld.
+    # Public obligations remain visible even when the return family is hidden.
+    # Package linkage and RAG must be withheld together so hidden filing state
+    # cannot appear as an overdue, unfiled obligation.
     # Return eligibility resolves through the SINGLE authority (audit ARCH-8,
     # ``eligibility.py``) — the same object ``generation.generate_package``
     # gates on, so the calendar and the package-mint site cannot disagree about

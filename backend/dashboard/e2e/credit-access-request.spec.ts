@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { writeFileSync } from "node:fs";
+import { decodeJwt } from "jose";
 import { E2E_API_ORIGIN, E2E_BASE_URL } from "../playwright.config";
-import { E2E_USERS, mintBackendToken, mintSessionCookie } from "./support/mint";
+import {
+  E2E_PASSWORD,
+  E2E_USERS,
+  mintBackendToken,
+  mintSessionCookie,
+} from "./support/mint";
 
 test.use({ screenshot: "on" });
 
@@ -153,11 +159,18 @@ test("unsupported Capital narrowing leaves the whole-institution access request 
   test.setTimeout(120_000);
   const api = `${E2E_API_ORIGIN}/api/v1`;
   const owner = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
-  // access-request-regressions.spec.ts runs first on the shared bank and grants
-  // this member twice, advancing it from its pinned authv by two.
-  const authv = E2E_USERS.access_extra_member.authv + 2;
+  const signedIn = await request.post(`${api}/auth/login`, {
+    data: {
+      email: "e2e.access_extra_member@aequoros.example",
+      password: E2E_PASSWORD,
+    },
+  });
+  expect(signedIn.status()).toBe(200);
+  const accessToken = (await signedIn.json()).access_token as string;
+  const authv = decodeJwt(accessToken).authv;
+  expect(typeof authv).toBe("number");
   const member = {
-    Authorization: `Bearer ${await mintBackendToken("access_extra_member", authv)}`,
+    Authorization: `Bearer ${accessToken}`,
   };
   const wanted = await request.post(`${api}/authorization/access-requests`, {
     headers: member,
@@ -232,7 +245,7 @@ test("unsupported Capital narrowing leaves the whole-institution access request 
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("access_extra_member", authv),
+      value: await mintSessionCookie("access_extra_member", Number(authv)),
       url: E2E_BASE_URL,
     },
   ]);
