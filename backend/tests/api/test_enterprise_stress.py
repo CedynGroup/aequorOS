@@ -176,8 +176,15 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
 
     # The outcome couples solvency and liquidity, both baseline vs stressed.
     outcome = run["outcome"]
+    assert outcome["engine_version"] == run["engine_version"]
     assert "capital" in outcome and "liquidity" in outcome and "coupling" in outcome
     assert outcome["capital"]["stressed_car_end_pct"] is not None
+
+    with get_sessionmaker()() as session:
+        stored = session.get(RegulatoryRun, UUID(run["run_id"]))
+        assert stored is not None
+        assert stored.engine_version == run["engine_version"]
+        assert stored.metrics["outcome"]["engine_version"] == stored.engine_version
 
     # The 3-year projection carries base + stress legs.
     projection = run["projection"]
@@ -207,6 +214,8 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     )
     assert again.status_code == 201, again.text
     assert again.json()["input_hash"] == run["input_hash"]
+    assert again.json()["engine_version"] == run["engine_version"]
+    assert again.json()["outcome"]["engine_version"] == run["engine_version"]
 
     latest = db_client.get(
         LATEST_URL.format(bank_id=bank_id)
@@ -215,6 +224,8 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     )
     assert latest.status_code == 200
     assert latest.json()["run_id"] == again.json()["run_id"]
+    assert latest.json()["engine_version"] == run["engine_version"]
+    assert latest.json()["outcome"]["engine_version"] == run["engine_version"]
 
     # Tenant isolation: another org cannot see the run.
     foreign = db_client.get(
