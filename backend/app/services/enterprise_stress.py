@@ -46,7 +46,6 @@ from app.domain.capital.engine import (
 )
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.domain.fx.engine import FxPosition
-from app.domain.irr.engine import IrrPosition
 from app.domain.liquidity.engine import (
     HQLA_LEVEL_1,
     LiquidityFact,
@@ -124,6 +123,7 @@ from app.services import (
     jurisdictions,
     macro_scenarios,
     management_action_plans,
+    regulatory_irr,
     regulatory_parameters,
     scoped_authorization,
     sdi_capital,
@@ -132,7 +132,12 @@ from app.services.audit import record_event
 from app.services.params import get_active_params
 from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 
-ENGINE_VERSION = "enterprise-stress-v1.0.0"
+#: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap
+#: hedges decomposed into their legs, positions at their contractual rates —
+#: through ``regulatory_irr.positions_from_facts``. v1 dropped every swap, so the
+#: same book now yields a different ΔEVE and Appendix II Pillar 2 IRRBB charge.
+#: Stored v1 runs keep what they recorded.
+ENGINE_VERSION = "enterprise-stress-v2.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -140,7 +145,10 @@ ENGINE_VERSION = "enterprise-stress-v1.0.0"
 #: risk weights, thresholds, runoff rates and HQLA rates the run was filed under
 #: rather than asserting they were unset. ``ENGINE_VERSION`` deliberately does
 #: NOT move: no methodology changed, only what the reproducibility spine records.
-INPUT_SCHEMA_VERSION = "enterprise-stress-input-v2"
+#: v3 (#306) adds ``irr_facts`` and ``irr_base_curve``: the IRRBB leg's ΔEVE is
+#: the Table 5 Pillar 2 charge, yet until v3 neither its positions, its swap
+#: hedges nor its curve were in the reproducibility spine.
+INPUT_SCHEMA_VERSION = "enterprise-stress-input-v3"
 OUTPUT_SCHEMA_VERSION = "enterprise-stress-outcome-v1"
 MODULE_ENTERPRISE_STRESS = "enterprise_stress"
 
@@ -174,7 +182,6 @@ _FORECAST_GROUPS = (
     "operational_income",
     "capital_component",
 )
-_IRR_GROUPS = ("irr_position",)
 _FX_GROUPS = ("fx_position",)
 
 _REQUIRED_CAPITAL_THRESHOLDS = (
@@ -666,45 +673,20 @@ def _ecl_inputs(
     return exposures, assumptions
 
 
-def _irr_inputs(  # noqa: PLR0913 - a read helper naming its scope
-    db: Session,
-    ctx: TenantContext,
-    bank: Bank,
-    period: BankReportingPeriod,
-    as_of: date,
-    tier1: Decimal,
+def _irr_inputs(
+    rows: Sequence[FinancialFactRow], curve: dict[Decimal, Decimal], tier1: Decimal
 ) -> IrrStressInputs | None:
-    positions = _irr_positions(_load_facts(db, ctx, bank, period, _IRR_GROUPS))
-    curve = _base_curve(db, ctx, bank, as_of)
+    """The IRRBB leg's inputs: the book regulatory IRRBB prices, on the base curve."""
+    try:
+        positions = regulatory_irr.positions_from_facts(rows, curve)
+    except regulatory_irr.IrrRunError as exc:
+        raise EnterpriseStressError(exc.code, exc.message, exc.details) from exc
     if not positions or not curve or tier1 <= _ZERO:
         return None
     # Every position must price on the curve; skip IRR if the curve is partial.
     if any(position.midpoint_years not in curve for position in positions):
         return None
     return IrrStressInputs(positions=tuple(positions), curve=curve, tier1=tier1)
-
-
-def _irr_positions(rows: Sequence[FinancialFactRow]) -> list[IrrPosition]:
-    positions: list[IrrPosition] = []
-    for fact in rows:
-        attributes = fact.attributes or {}
-        side = attributes.get("side")
-        bucket = attributes.get("bucket")
-        midpoint = attributes.get("midpoint_years")
-        if side not in ("asset", "liability") or bucket is None or midpoint is None:
-            continue
-        positions.append(
-            IrrPosition(
-                side=side,
-                bucket=str(bucket),
-                amount=_dec(fact.amount),
-                rate_pct=_dec(fact.rate_pct) if fact.rate_pct is not None else _ZERO,
-                fixed_or_float=str(attributes.get("fixed_or_float", "fixed")),
-                midpoint_years=_dec(midpoint),
-                source=str(attributes.get("source", fact.category)),
-            )
-        )
-    return positions
 
 
 def _base_curve(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> dict[Decimal, Decimal]:
@@ -1697,7 +1679,13 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         raise EnterpriseStressError(exc.code, exc.message) from exc
 
     baseline_income, baseline_credit_loss = _baseline_pnl(projection)
-    irr_inputs = _irr_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_irr else None
+    irr_rows: list[BankFinancialFact] = []
+    irr_curve: dict[Decimal, Decimal] = {}
+    irr_inputs: IrrStressInputs | None = None
+    if payload.include_irr:
+        irr_rows = _load_facts(db, ctx, bank, period, regulatory_irr.IRR_FACT_GROUPS)
+        irr_curve = _base_curve(db, ctx, bank, as_of)
+        irr_inputs = _irr_inputs(irr_rows, irr_curve, tier1)
     fx_inputs = _fx_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_fx else None
 
     outcome = run_enterprise_stress(
@@ -1805,6 +1793,8 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         "include_fx": payload.include_fx,
         "capital_facts": _fact_snapshot(capital_rows),
         "liquidity_facts": _fact_snapshot(liquidity_rows),
+        "irr_facts": _fact_snapshot(irr_rows),
+        "irr_base_curve": {str(tenor): str(rate) for tenor, rate in sorted(irr_curve.items())},
         # Every governed control-plane number the run consumed (NEW-A1-1). Until
         # 2026-08-22 the reproducibility spine of the filed ICAAP stress carried
         # none of them — see ``_governed_parameters``.

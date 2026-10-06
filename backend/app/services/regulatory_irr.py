@@ -134,7 +134,7 @@ NII_LIMIT_THRESHOLD = "irr_nii_limit_pct"
 
 # Only these fact groups participate in the IRR module; keeping the snapshot
 # scoped to them makes the input hash insensitive to unrelated fact edits.
-_IRR_FACT_GROUPS = ("irr_position", "irr_swap")
+IRR_FACT_GROUPS = ("irr_position", "irr_swap")
 _CAPITAL_COMPONENT_GROUP = "capital_component"
 
 _ZERO = Decimal("0")
@@ -262,7 +262,7 @@ def get_irr_dashboard(
         # ``financial_facts_missing`` (BI Phase 0 item 2). The trend stays on the
         # batch: a point is a period's official picture or nothing.
         current_facts = (
-            load_current_facts(db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)).facts
+            load_current_facts(db, ctx, bank, (*IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)).facts
             if reporting_period_id is None
             else None
         )
@@ -430,7 +430,7 @@ def _run_analysis(  # noqa: PLR0913
         )
     # Floating legs keep repricing off the PROJECTION curve (active.curve);
     # only present values move to the published discount curve when one exists.
-    positions = _positions_from_facts(facts, active.curve)
+    positions = positions_from_facts(facts, active.curve)
     gap = compute_gap(positions)
     duration = compute_duration(positions, active.curve, discount_curve=active.discount_curve)
     eve = run_irr_scenarios(
@@ -887,7 +887,7 @@ def _prefetch_dashboard_batch(
             organization_id=ctx.organization_id,
             bank=bank,
             reporting_period_ids=period_ids,
-            fact_groups=(*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP),
+            fact_groups=(*IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP),
         ),
         shocks=prefetch_active_params(
             db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, dates
@@ -960,7 +960,7 @@ def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus o
     # plus capital components): current mode passes the live plane, which the
     # official spine may not carry yet.
     period_facts = batch.facts.get(period.id, []) if facts is None else facts
-    facts = [fact for fact in period_facts if fact.fact_group in _IRR_FACT_GROUPS]
+    facts = [fact for fact in period_facts if fact.fact_group in IRR_FACT_GROUPS]
     active = _irr_params_from_batch(db, ctx, bank, period.period_end, batch)
     tier1 = (
         batch.sdi_net_own_funds[period.period_end]
@@ -1027,7 +1027,7 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
             "Tier 1 capital must be positive to express ΔEVE as a percentage.",
             None,
         )
-    positions = _positions_from_facts(facts, active.curve)
+    positions = positions_from_facts(facts, active.curve)
     # Workbench parity: the same discount curve the official runs load —
     # shifts stay keyed by the projection curve's midpoints, shared by both.
     base_eve = compute_eve(positions, active.curve, {}, discount_curve=active.discount_curve)
@@ -1107,7 +1107,7 @@ def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full s
             },
         )
     try:
-        positions = _positions_from_facts(facts, active.curve)
+        positions = positions_from_facts(facts, active.curve)
     except IrrRunError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1213,8 +1213,8 @@ def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
     """Compute the baseline live view from current facts without a RegulatoryRun."""
-    current = load_current_facts(db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP))
-    facts = [fact for fact in current.facts if fact.fact_group in _IRR_FACT_GROUPS]
+    current = load_current_facts(db, ctx, bank, (*IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP))
+    facts = [fact for fact in current.facts if fact.fact_group in IRR_FACT_GROUPS]
     active = _load_irr_params_or_none(db, ctx, bank, current.source_as_of_date)
     analysis = _run_analysis(
         db,
@@ -1250,9 +1250,17 @@ def compute_live(
     )
 
 
-def _positions_from_facts(
+def positions_from_facts(
     facts: Sequence[FinancialFactRow], curve: dict[Decimal, Decimal]
 ) -> list[IrrPosition]:
+    """The banking book's rate-sensitive positions, hedges included.
+
+    The one reader of IRR facts: regulatory IRRBB and the enterprise stress
+    IRRBB leg both price what it returns. Each ``irr_position`` carries its
+    contractual rate in ``attributes["rate_pct"]``; each ``irr_swap`` becomes
+    its two legs through :func:`swap_legs`, whose floating leg reprices off
+    ``curve``. Facts of any other group are ignored.
+    """
     positions: list[IrrPosition] = []
     for fact in facts:
         if fact.fact_group != "irr_position":
@@ -1272,11 +1280,11 @@ def _positions_from_facts(
     for fact in facts:
         if fact.fact_group != "irr_swap":
             continue
-        positions.extend(_swap_legs(fact, curve))
+        positions.extend(swap_legs(fact, curve))
     return positions
 
 
-def _swap_legs(fact: FinancialFactRow, curve: dict[Decimal, Decimal]) -> list[IrrPosition]:
+def swap_legs(fact: FinancialFactRow, curve: dict[Decimal, Decimal]) -> list[IrrPosition]:
     """Decompose an interest-rate swap fact into its two hedge legs.
 
     The fact attributes locate the leg the bank RECEIVES (``receive_bucket`` /
@@ -1350,7 +1358,7 @@ def _load_facts(
                 BankFinancialFact.organization_id == ctx.organization_id,
                 BankFinancialFact.bank_id == bank.id,
                 BankFinancialFact.reporting_period_id == period.id,
-                BankFinancialFact.fact_group.in_(_IRR_FACT_GROUPS),
+                BankFinancialFact.fact_group.in_(IRR_FACT_GROUPS),
             )
             .order_by(BankFinancialFact.fact_group, BankFinancialFact.category)
         )

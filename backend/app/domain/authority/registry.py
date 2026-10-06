@@ -1100,7 +1100,7 @@ _NO_VAR_AUTHORITY = (
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
 _FORECAST_VERSION = "regulatory-forecasting-v1.0.0"
-_STRESS_VERSION = "enterprise-stress-v1.0.0"
+_STRESS_VERSION = "enterprise-stress-v2.0.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 
 #: The case-scoped ("legacy/advisory") plane. The forensic audit found its
