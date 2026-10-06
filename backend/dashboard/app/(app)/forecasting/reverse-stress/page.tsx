@@ -7,7 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import KpiStat from "@/components/ui/KpiStat";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
-import QueryBoundary from "@/components/ui/QueryBoundary";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLatestReverseStress, useRunReverseStress } from "@/lib/api/hooks";
@@ -107,10 +107,16 @@ export default function ReverseStress() {
 
       <QueryBoundary
         isLoading={latest.isLoading}
-        error={latest.error ?? run.error}
+        error={latest.error}
         onRetry={() => latest.refetch()}
       >
         <PageContainer className="py-6 space-y-6">
+          {run.error && (
+            <ErrorPanel
+              error={run.error}
+              title="Reverse-stress search failed"
+            />
+          )}
           {frontier ? (
             <>
               <div
