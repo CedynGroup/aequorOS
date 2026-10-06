@@ -69,7 +69,8 @@ export async function expectPersistedStressRun(
   const registry = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
-      url.pathname === `/api/v1/banks/${SAMPLE_BANK_ID}/enterprise-stress/runs` &&
+      url.pathname ===
+        `/api/v1/banks/${SAMPLE_BANK_ID}/enterprise-stress/runs` &&
       url.searchParams.get("reporting_period_id") === run.reporting_period_id &&
       response.request().method() === "GET"
     );
@@ -78,7 +79,9 @@ export async function expectPersistedStressRun(
   const response = await registry;
   expect(response.status(), await response.text()).toBe(200);
   const runs = (await response.json()) as EnterpriseStressRunSummary[];
-  const newest = runs.find((entry) => entry.scenario_code === run.scenario_code);
+  const newest = runs.find(
+    (entry) => entry.scenario_code === run.scenario_code,
+  );
   expect(newest?.run_id).toBe(run.run_id);
   expect(newest?.input_hash).toBe(run.input_hash);
   const row = section(page, "Run registry")
