@@ -246,6 +246,8 @@ def _narrative(liquidity: dict[str, Any], capital: dict[str, Any]) -> str:
 
 
 def _read(run: RegulatoryRun) -> ReverseStressRead:
+    # Breached axes omit k_max from their metrics. Use the saved search limit
+    # for both response axes so the frontier chart retains its original range.
     return ReverseStressRead(
         run_id=run.id,
         bank_id=run.bank_id,

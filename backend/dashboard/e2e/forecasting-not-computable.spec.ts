@@ -92,10 +92,12 @@ with sqlite3.connect(db_path) as db:
 
 test.describe("Forecasting on a fresh tenant", () => {
   test.use({
-    storageState: async ({}, use) => {
+    storageState: async ({}, provideState) => {
       try {
         fixture("create");
-        await use(await writeStorageState(FRESH_ROLE, E2E_BASE_URL, E2E_TMP));
+        await provideState(
+          await writeStorageState(FRESH_ROLE, E2E_BASE_URL, E2E_TMP),
+        );
       } finally {
         fixture("remove");
       }
@@ -192,6 +194,27 @@ test.describe("Forecasting on a fresh tenant", () => {
     await expect(
       page.getByText("No feasible strategy in this search"),
     ).toHaveCount(0);
+
+    // A persisted refusal must keep its diagnostic after reload; it is not a
+    // completed search whose candidates all failed the feasibility floors.
+    await page.reload();
+    await expect(searchAlert).toBeVisible();
+    await expect(searchAlert).toContainText(MISSING_ASSUMPTIONS);
+    await expect(searchAlert).toContainText(
+      "Engine diagnostic missing_parameter",
+    );
+    await expect(
+      page.getByText("No feasible strategy in this search"),
+    ).toHaveCount(0);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "forecasting-optimizer-reloaded-refusal.png",
+        ),
+        fullPage: true,
+      });
+    }
 
     await openTab(page, "Reverse Stress");
     const frontier = page.waitForResponse(
