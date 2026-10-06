@@ -47,6 +47,7 @@ import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { mintBackendToken } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
+import { generateCurrentVersion } from "./support/generate";
 import {
   approveAndSignAsChecker,
   certifyAsPreparer,
@@ -154,10 +155,7 @@ async function generateAndClearChecks(page: Page, date: string): Promise<void> {
     0,
   );
 
-  await page
-    .getByRole("button", { name: /generate the return|^regenerate$/i })
-    .first()
-    .click();
+  await generateCurrentVersion(page);
 
   // Nobody pressed anything: the checks are part of generating.
   await expect(page.getByText("Checks passed").first()).toBeVisible({
@@ -526,11 +524,7 @@ test.describe("full lifecycle", () => {
     );
     await expect(page.getByLabel("Reporting date")).toBeEnabled();
 
-    const generate = page
-      .getByRole("button", { name: /generate the return|^regenerate$/i })
-      .first();
-    await expect(generate).toBeVisible({ timeout: 5_000 });
-    await generate.click();
+    await generateCurrentVersion(page);
     // The pack pre-fills from the register (no engine runs), and the checks
     // run with it — there is no separate act to offer.
     await expect(page.getByText("Checks passed").first()).toBeVisible();
