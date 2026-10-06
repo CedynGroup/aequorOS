@@ -35,6 +35,7 @@ import {
   expectPersistedStressRun,
   runEnterpriseStress,
 } from "./support/stress";
+import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -262,8 +263,7 @@ test.describe("IRRBB functional workflow", () => {
     await expect(runButton).toHaveText("Run IRRBB scenarios");
 
     // ---- Gap Analysis: the full ladder, bucket by bucket.
-    await page.getByRole("link", { name: "Gap Analysis", exact: true }).click();
-    await expect(page).toHaveURL(/\/irr\/gaps$/);
+    await openTab(page, "Gap Analysis");
     await expectKpi(
       page,
       "12-month cumulative gap",
@@ -293,8 +293,7 @@ test.describe("IRRBB functional workflow", () => {
     );
 
     // ---- EVE & NII: every scenario, then a desk horizon the engine computes.
-    await page.getByRole("link", { name: "EVE & NII", exact: true }).click();
-    await expect(page).toHaveURL(/\/irr\/sensitivity$/);
+    await openTab(page, "EVE & NII");
     const eveTable = page.getByRole("table");
     for (const scenario of EVE_SCENARIOS) {
       await expectRow(eveTable, scenario.label, [
@@ -356,8 +355,7 @@ test.describe("IRRBB functional workflow", () => {
 
     // ---- Limits: the worst case against the supervisory ceiling, and the run
     // this journey minted now backs the period's breach-history entry.
-    await page.getByRole("link", { name: "Limits", exact: true }).click();
-    await expect(page).toHaveURL(/\/irr\/limits$/);
+    await openTab(page, "Limits");
     await expect(
       page.getByRole("img", {
         name: `${pct(WORST.delta / TIER1_M)} of ${EVE_LIMIT_PCT.toFixed(2)}% supervisory limit`,
@@ -386,8 +384,7 @@ test.describe("IRRBB functional workflow", () => {
     page,
   }) => {
     await page.goto("/irr");
-    await page.getByRole("link", { name: "Scenarios", exact: true }).click();
-    await expect(page).toHaveURL(/\/irr\/scenarios$/);
+    await openTab(page, "Scenarios");
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();

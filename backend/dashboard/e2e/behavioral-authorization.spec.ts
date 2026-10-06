@@ -30,7 +30,8 @@ async function projectBehavioralAuthority(
           capability.module === "beh" && keep(capability),
       );
     }
-    await route.fulfill({ response, json: profile });
+    // A navigation can cancel the request while the profile is in flight.
+    await route.fulfill({ response, json: profile }).catch(() => undefined);
   });
 }
 
@@ -62,7 +63,8 @@ async function expectAccessRequired(page: Page, href: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: "wait" });
+  // Abandon, never await, a profile handler the last navigation cancelled.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test.describe("unbound Behavioral user", () => {
