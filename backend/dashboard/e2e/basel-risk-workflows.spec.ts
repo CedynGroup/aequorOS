@@ -33,6 +33,7 @@ import {
   expectPersistedStressRun,
   runEnterpriseStress,
 } from "./support/stress";
+import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -141,7 +142,7 @@ test.describe("Basel capital functional workflow", () => {
     ).toBeVisible();
 
     // ---- RWA: the three risk types, and credit RWA exposure by exposure.
-    await tab(page, "RWA");
+    await openTab(page, "RWA");
     await expectKpi(
       page,
       "Credit risk RWA",
@@ -183,7 +184,7 @@ test.describe("Basel capital functional workflow", () => {
     ]);
 
     // ---- Capital Structure: each tier from its components.
-    await tab(page, "Capital Structure");
+    await openTab(page, "Capital Structure");
     await expectKpi(page, "CET1", full(CET1_M), `${ratio(CET1_M)}% of RWA`);
     await expectKpi(
       page,
@@ -202,7 +203,7 @@ test.describe("Basel capital functional workflow", () => {
     ).toBeVisible();
 
     // ---- Stress: a governed adverse path through every engine.
-    await tab(page, "Stress");
+    await openTab(page, "Stress");
     const run = await runEnterpriseStress(
       page,
       "Adverse domestic downturn (moderate)",
@@ -220,7 +221,7 @@ test.describe("Basel capital functional workflow", () => {
     await expectPersistedStressRun(page, run, "16.01%");
 
     // ---- Planning: the what-if planner, then refresh and persist ILAAP evidence.
-    await tab(page, "Planning");
+    await openTab(page, "Planning");
     await expect(
       page.getByRole("heading", { name: "Capital Planning" }),
     ).toBeVisible();
@@ -304,10 +305,6 @@ async function expectWhatIf(
     ((cet1 / rwa) * 100).toFixed(2),
     `Now ${ratio(CET1_M)}%`,
   );
-}
-
-async function tab(page: Page, name: string): Promise<void> {
-  await page.getByRole("link", { name, exact: true }).click();
 }
 
 /** A capital amount over total RWA, as the dashboard prints the ratio. */
