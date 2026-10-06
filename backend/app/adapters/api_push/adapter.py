@@ -310,6 +310,8 @@ class ApiPushAdapter(SourceAdapter):
             field_errors: list[str] = []
             for canonical_field, source_fields in mapping.fields.items():
                 source_field, raw_value = _resolve_source_value(record.data, source_fields)
+                if canonical_field == "origination_date" and source_field not in record.data:
+                    continue
                 enum_map = mapping_config.enum_mappings.get(canonical_field)
                 if enum_map is not None and raw_value is not None:
                     raw_value = enum_map.get(str(raw_value).strip(), raw_value)
@@ -427,6 +429,7 @@ def _coerce_field(canonical_field: str, value: Any) -> Any:
 
 def _fail_type(value: Any) -> Any:
     raise _CoercionError(f"unsupported JSON type {type(value).__name__}")
+
 
 _BOOL_TRUE = frozenset({"true", "t", "yes", "y", "1"})
 _BOOL_FALSE = frozenset({"false", "f", "no", "n", "0"})

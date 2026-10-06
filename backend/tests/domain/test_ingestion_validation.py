@@ -10,6 +10,8 @@ from app.domain.ingestion.contracts import (
     PositionData,
 )
 from app.domain.ingestion.validation import (
+    SETTLED_IDENTITY_RULE,
+    PositionIdentity,
     RuleConfig,
     ValidationConfig,
     ValidationContext,
@@ -307,6 +309,109 @@ class TestLmtdClassificationCoverage:
     def test_default_config_keeps_coverage_at_info(self) -> None:
         rules = {rule.name: rule for rule in default_validation_config().rules}
         assert rules["lmtd_classification_coverage"].severity == "INFO"
+
+
+class TestSettledPositionIdentity:
+    """A position identity is frozen once it has had an accepted snapshot."""
+
+    SETTLED = PositionIdentity("LOAN", "GHS", date(2024, 1, 10))
+
+    def settled_context(self) -> ValidationContext:
+        return ValidationContext(as_of_date=AS_OF, settled_positions={"LN-0001": self.SETTLED})
+
+    def test_unchanged_identity_produces_no_finding(self) -> None:
+        outcome = run_validation(
+            records_of(make_position(origination_date=date(2024, 1, 10))),
+            default_validation_config(),
+            self.settled_context(),
+        )
+        assert outcome.findings == []
+        assert outcome.overall_status == "accepted"
+
+    def test_each_changed_field_is_refused_by_name(self) -> None:
+        outcome = run_validation(
+            records_of(
+                make_position(
+                    position_type="DEPOSIT", currency="USD", origination_date=date(2024, 2, 1)
+                )
+            ),
+            default_validation_config(),
+            self.settled_context(),
+        )
+        findings = [f for f in outcome.findings if f.rule == SETTLED_IDENTITY_RULE]
+        assert [f.detail.split(" ")[0] for f in findings] == [
+            "position_type",
+            "currency",
+            "origination_date",
+        ]
+        assert {f.severity for f in findings} == {"ERROR"}
+        assert "currency='GHS'" in findings[1].detail
+        assert "'USD'" in findings[1].detail
+        assert "origination_date='2024-01-10'" in findings[2].detail
+        assert outcome.record_statuses[("position", "LN-0001")] == "error"
+        assert outcome.overall_status == "accepted_with_warnings"
+
+    def test_omitted_origination_date_is_not_a_change(self) -> None:
+        outcome = run_validation(
+            records_of(make_position()), default_validation_config(), self.settled_context()
+        )
+        assert outcome.findings == []
+        assert outcome.overall_status == "accepted"
+
+    def test_clearing_origination_date_is_refused(self) -> None:
+        outcome = run_validation(
+            records_of(make_position(origination_date=None)),
+            default_validation_config(),
+            self.settled_context(),
+        )
+        (finding,) = outcome.findings
+        assert finding.rule == SETTLED_IDENTITY_RULE
+        assert finding.detail.startswith("origination_date is frozen")
+        assert "this row sends None" in finding.detail
+        assert outcome.record_statuses[("position", "LN-0001")] == "error"
+
+    def test_unchanged_null_origination_date_produces_no_finding(self) -> None:
+        outcome = run_validation(
+            records_of(make_position(origination_date=None)),
+            default_validation_config(),
+            ValidationContext(
+                as_of_date=AS_OF,
+                settled_positions={"LN-0001": PositionIdentity("LOAN", "GHS")},
+            ),
+        )
+        assert outcome.findings == []
+
+    def test_setting_previously_null_origination_date_is_refused(self) -> None:
+        outcome = run_validation(
+            records_of(make_position(origination_date=date(2024, 1, 10))),
+            default_validation_config(),
+            ValidationContext(
+                as_of_date=AS_OF,
+                settled_positions={"LN-0001": PositionIdentity("LOAN", "GHS")},
+            ),
+        )
+        (finding,) = outcome.findings
+        assert finding.rule == SETTLED_IDENTITY_RULE
+        assert finding.detail.startswith("origination_date is frozen")
+        assert outcome.record_statuses[("position", "LN-0001")] == "error"
+
+    def test_unsettled_reference_may_carry_any_identity(self) -> None:
+        outcome = run_validation(
+            records_of(make_position("LN-0002", currency="USD")),
+            default_validation_config(),
+            self.settled_context(),
+        )
+        assert outcome.findings == []
+
+    def test_refusal_holds_without_any_configured_rule(self) -> None:
+        outcome = run_validation(
+            records_of(make_position(currency="USD", origination_date=date(2024, 1, 10))),
+            config_with(),
+            self.settled_context(),
+        )
+        (finding,) = outcome.findings
+        assert finding.rule == SETTLED_IDENTITY_RULE
+        assert outcome.record_statuses[("position", "LN-0001")] == "error"
 
 
 class TestReport:

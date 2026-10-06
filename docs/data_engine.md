@@ -60,7 +60,7 @@ These principles govern every implementation decision. Deviations require explic
 
 6. **Idempotent ingestion.** Re-running an ingestion pass with the same inputs must produce the same canonical state. Rebuilds must be possible from source.
 
-7. **Immutability of accepted state.** Once a snapshot is accepted, it is immutable. Corrections produce new snapshots with clear supersession, not overwrites.
+7. **Immutability of accepted state.** Once a snapshot is accepted, it is immutable. Corrections produce new snapshots with clear supersession, not overwrites. Position identity corrections follow the acceptance boundary in [§8.3](#83-snapshots-and-point-in-time-reproducibility).
 
 8. **Excel is a first-class data source, not a workaround.** Every mid-tier African bank will have material data in Excel. Designing Excel handling as "the fallback" produces a brittle product.
 
@@ -425,11 +425,11 @@ Every validation check emits at one of four severity levels:
 - **ERROR.** Serious data quality issue. The affected records are excluded from calculations. Ingestion continues for other records.
 - **BLOCKER.** The entire ingestion batch is rejected. No calculations run against this batch. Requires human resolution before retry.
 
-Severity thresholds are configurable per-bank via `ValidationConfig`, because different banks have different tolerances during onboarding.
+Severity thresholds for configured data-quality rules are configurable per-bank via `ValidationConfig`, because different banks have different tolerances during onboarding. The position identity safeguard in [§8.3](#83-snapshots-and-point-in-time-reproducibility) is mandatory.
 
 ### 6.3 Validation Rules as Configuration
 
-Validation rules are expressed as configuration, not hard-coded. This is critical for onboarding where different banks have different data quality realities.
+Data-quality rules are expressed as configuration. This is critical for onboarding where different banks have different data quality realities. The mandatory position identity safeguard in [§8.3](#83-snapshots-and-point-in-time-reproducibility) runs even when no rules are configured.
 
 ```yaml
 # Example ValidationConfig
@@ -618,6 +618,12 @@ Every canonical record's `lineage_id` points into this graph. From any output fi
 Every canonical record belongs to an `as_of_date`. Snapshots are immutable. If yesterday's LCR was 105% and today we discover an error in yesterday's data, we do not modify yesterday's record. We create a new snapshot for the same `as_of_date` with a `restatement_reason`, and mark the old one as superseded. The original submission remains reproducible.
 
 This means every regulatory report AequorOS produces can be regenerated years later exactly as filed, even if the underlying data has since been restated.
+
+A position's identity is shared by its snapshots. For the same institution, source system and source reference in the current generation, re-ingestion updates `position_type`, `currency` and a supplied `origination_date` until that identity has had its first snapshot with validation status `accepted` or `warning`. A batch that is rejected does not apply corrections. An existing unsettled identity also stays unchanged if the supplied identity values cannot be stored in the canonical model; its error snapshot and validation findings still persist for a non-rejected batch.
+
+An omitted or unmapped `origination_date` preserves the existing date. An explicitly supplied null or blank clears it before the acceptance boundary and is a change subject to refusal after that boundary.
+
+After acceptance, every attempted identity-field change produces a non-configurable `TEMPORAL` / `ERROR` finding with rule `position_identity_settled`, naming the frozen field and the held and supplied values. The identity remains unchanged and the affected record is excluded from calculations under [§6.2](#62-severity-levels); this finding alone does not reject the entire batch. Superseding or withdrawing an accepted snapshot does not unfreeze its identity. To send a different identity after acceptance, use a new source reference. The executable correction and refusal coverage is in `backend/tests/api/test_ingestion.py::TestPositionIdentityCorrection`.
 
 ### 8.4 Audit Log
 

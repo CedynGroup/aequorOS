@@ -254,6 +254,8 @@ ingestion. Using an authorized human session, fetch them at
 
 ### 3.4 `position`
 
+For position identity corrections and refusal findings, follow the [Data Engine acceptance boundary](data_engine.md#83-snapshots-and-point-in-time-reproducibility).
+
 | Field                        | Type    | Required | Description                                                                                                                                                                                                                                                                                                                               |
 | ---------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `source_reference`           | string  | yes      | Your position identifier (arrangement id, deal ref, …).                                                                                                                                                                                                                                                                                   |
