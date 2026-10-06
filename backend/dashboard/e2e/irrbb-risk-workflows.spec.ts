@@ -14,14 +14,10 @@
  * output, and its ratio to Tier 1 is still checked against the derived Tier 1.
  * The book is carried forward unchanged to the latest month end, so none of
  * these figures move with the calendar.
- *
- * The Scenarios tab is the enterprise stress workbench with the IRRBB lens: a
- * governed rate path driven through every engine. Its capital and liquidity
- * legs are asserted; its own IRRBB leg is not, because it currently prices a
- * different book from this module (#306).
  */
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
+import type { EnterpriseStressRead } from "../components/stress/types";
 import { E2E_TMP } from "../playwright.config";
 import {
   SAMPLE_BANK_ID,
@@ -29,6 +25,7 @@ import {
   expectKpi,
   expectRow,
   ghsM,
+  section,
   signedGhsM,
 } from "./support/figures";
 import {
@@ -67,6 +64,18 @@ const LADDER = [
 const CUMULATIVE = LADDER.map((_, i) =>
   sum(LADDER.slice(0, i + 1).map((r) => r.gap)),
 );
+
+const BASE_CURVE_PCT = [25.5, 25.4, 25.6, 25.8, 26.2, 27.0, 27.8, 28.9, 29.5];
+
+function economicValue(bp: number): number {
+  return sum(
+    LADDER.map(
+      (row, i) =>
+        (row.gap * 1e6) /
+        (1 + BASE_CURVE_PCT[i] / 100 + bp / 10_000) ** row.midpointYears,
+    ),
+  );
+}
 
 /** CET1 (150 + 95 + 45 + 10 − 25 intangibles − 15 DTA) + AT1 20. */
 const TIER1_M = 280;
@@ -385,6 +394,7 @@ test.describe("IRRBB functional workflow", () => {
   test("drives the IRRBB parallel +200bp stress from the Scenarios tab and persists it", async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     await page.goto("/irr");
     await page.getByRole("link", { name: "Scenarios", exact: true }).click();
     await expect(page).toHaveURL(/\/irr\/scenarios$/);
@@ -412,7 +422,97 @@ test.describe("IRRBB functional workflow", () => {
     await expectKpi(page, "Stays above minima", "Yes", "All minima held");
     await expectKpi(page, "Solvency × liquidity", "Both hold");
 
+    const persisted = await apiGet<EnterpriseStressRead>(
+      page,
+      "analyst",
+      `/banks/${SAMPLE_BANK_ID}/enterprise-stress/runs/${run.run_id}`,
+    );
+    expect(persisted.run_id).toBe(run.run_id);
+    expect(persisted.input_hash).toBe(run.input_hash);
+    const irr = persisted.outcome.irr;
+    expect(irr).toBeDefined();
+    const baseEve = economicValue(0);
+    const stressedEve = economicValue(200);
+    const deltaEve = stressedEve - baseEve;
+    expect(Number(irr!.base_eve)).toBeCloseTo(baseEve, 2);
+    expect(Number(irr!.stressed_eve)).toBeCloseTo(stressedEve, 2);
+    expect(Number(irr!.delta_eve)).toBeCloseTo(deltaEve, 2);
+    expect(Number(irr!.delta_nii)).toBeCloseTo(earningsAtRisk(12, 200) * 1e6, 2);
+    const charge = Number((Math.max(-deltaEve, 0) / 1_000).toFixed(3));
+    expect(charge).toBeGreaterThan(0);
+    expect(persisted.appendix_ii.unit).toBe("GHS'000");
+    const stressRows = persisted.appendix_ii.table5_rwa.rows.filter((row) =>
+      row.label.startsWith("stress_"),
+    );
+    expect(stressRows.map((row) => row.label)).toEqual([
+      "stress_y1",
+      "stress_y2",
+      "stress_y3",
+    ]);
+    expect(stressRows.map((row) => Number(row.pillar2.irrbb))).toEqual([
+      charge,
+      charge,
+      charge,
+    ]);
+    const chargeCells = [
+      "Pillar 2: IRRBB",
+      ...Array(4).fill("Not modelled"),
+      ...Array(3).fill(
+        charge.toLocaleString("en-US", { maximumFractionDigits: 0 }),
+      ),
+    ];
+    await page.getByRole("button", { name: "Appendix II", exact: true }).click();
+    await page.getByRole("button", { name: "T5 · RWA", exact: true }).click();
+    await expectRow(
+      section(page, "Appendix II — regulatory deliverable").getByRole("table"),
+      "Pillar 2: IRRBB",
+      chargeCells,
+    );
+
     await expectPersistedStressRun(page, run, "17.28%");
+
+    await page.getByRole("link", { name: "Board-pack composer" }).click();
+    await expect(page).toHaveURL(/\/reports\/stress-board-pack$/);
+    await expect(
+      page.getByRole("heading", { name: "Stress Board-Pack Composer" }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Run", exact: true })
+      .selectOption(run.run_id);
+    await expect(
+      section(page, `ICAAP Stress Test — ${run.scenario_code}`),
+    ).toContainText(`input hash ${run.input_hash.slice(0, 12)}`);
+    const table5 = section(
+      page,
+      "Table 5 — Evolution of RWA & Capital Requirements",
+    ).getByRole("table");
+    await expect(table5.getByRole("columnheader")).toHaveText([
+      "Line item",
+      "Current",
+      "Base Y1",
+      "Base Y2",
+      "Base Y3",
+      "Stress Y1",
+      "Stress Y2",
+      "Stress Y3",
+    ]);
+    await expectRow(table5, "Pillar 2: IRRBB", chargeCells);
+    await page.emulateMedia({ media: "print" });
+    await expectRow(table5, "Pillar 2: IRRBB", chargeCells);
+    await expect(table5).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+    await test.info().attach("irrbb-stress-board-pack-run", {
+      body: JSON.stringify(
+        await apiGet(
+          page,
+          "analyst",
+          `/banks/${SAMPLE_BANK_ID}/regulatory-runs/${run.run_id}`,
+        ),
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    });
   });
 });
 
