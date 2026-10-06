@@ -7,6 +7,7 @@
  */
 
 import { expect, type Page } from "@playwright/test";
+import type { EnterpriseStressRunSummary } from "../../components/stress/types";
 import { SAMPLE_BANK_ID, apiGet, section } from "./figures";
 
 /** The slice of `EnterpriseStressRead` the journeys assert on. */
@@ -65,11 +66,25 @@ export async function expectPersistedStressRun(
   expect(latest.input_hash).toBe(run.input_hash);
 
   await page.reload();
+  const registry = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/v1/banks/${SAMPLE_BANK_ID}/enterprise-stress/runs` &&
+      url.searchParams.get("reporting_period_id") === run.reporting_period_id &&
+      response.request().method() === "GET"
+    );
+  });
   await page.getByRole("button", { name: "Run registry", exact: true }).click();
+  const response = await registry;
+  expect(response.status(), await response.text()).toBe(200);
+  const runs = (await response.json()) as EnterpriseStressRunSummary[];
+  const newest = runs.find((entry) => entry.scenario_code === run.scenario_code);
+  expect(newest?.run_id).toBe(run.run_id);
+  expect(newest?.input_hash).toBe(run.input_hash);
   const row = section(page, "Run registry")
     .locator("tbody tr")
-    .filter({ hasText: run.scenario_code });
-  await expect(row).toHaveCount(1);
+    .filter({ hasText: run.scenario_code })
+    .first();
   await expect(row).toContainText(`hash ${run.input_hash.slice(0, 10)}`);
   await expect(row.locator("td").nth(1)).toHaveText(stressedCar);
 }
