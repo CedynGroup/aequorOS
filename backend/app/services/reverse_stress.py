@@ -252,8 +252,14 @@ def _read(run: RegulatoryRun) -> ReverseStressRead:
         reporting_period_id=run.reporting_period_id,
         input_hash=run.input_hash,
         engine_version=run.engine_version,
-        liquidity_axis=run.metrics["liquidity_axis"],
-        capital_axis=run.metrics["capital_axis"],
+        liquidity_axis={
+            **run.metrics["liquidity_axis"],
+            "k_max": run.inputs["search"]["k_max"],
+        },
+        capital_axis={
+            **run.metrics["capital_axis"],
+            "k_max": run.inputs["search"]["k_max"],
+        },
         narrative=run.metrics["narrative"],
         created_at=run.created_at,
     )

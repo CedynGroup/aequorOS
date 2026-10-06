@@ -230,6 +230,15 @@ test.describe("Forecasting reverse stress", () => {
         fullPage: true,
       });
     }
+
+    // The plotted search range must describe the persisted search, including
+    // breached axes whose stored metrics omit an axis-level k_max.
+    expect(stored.inputs.search.k_max).toBe("5");
+    await expect(
+      page.getByTestId("reverse-stress-frontier").getByText("5.00×", {
+        exact: true,
+      }),
+    ).toHaveCount(2);
   });
 });
 
