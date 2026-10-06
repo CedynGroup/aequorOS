@@ -23,6 +23,7 @@ import {
   expectPersistedStressRun,
   runEnterpriseStress,
 } from "./support/stress";
+import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -194,7 +195,7 @@ test.describe("Liquidity functional workflow", () => {
     ]);
 
     // ---- Buffer: every Level 1 instrument at face value and its share.
-    await tab(page, "Buffer");
+    await openTab(page, "Buffer");
     await expectKpi(page, "HQLA stock", ghsM(HQLA_M));
     await expectKpi(
       page,
@@ -227,7 +228,7 @@ test.describe("Liquidity functional workflow", () => {
     ]);
 
     // ---- NSFR: both sides of the ratio, line by line.
-    await tab(page, "NSFR");
+    await openTab(page, "NSFR");
     const asf = section(page, "Available Stable Funding (ASF)").getByRole(
       "table",
     );
@@ -250,7 +251,7 @@ test.describe("Liquidity functional workflow", () => {
     ).toBeVisible();
 
     // ---- CFP: the early-warning evaluation and the plan's state.
-    await tab(page, "CFP");
+    await openTab(page, "CFP");
     await expect(
       page.getByRole("heading", { name: "Contingency Funding Plan" }),
     ).toBeVisible();
@@ -277,7 +278,7 @@ test.describe("Liquidity functional workflow", () => {
     }
 
     // ---- Stress: drive the adverse scenario through every engine.
-    await tab(page, "Stress");
+    await openTab(page, "Stress");
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();
@@ -310,18 +311,6 @@ test.describe("Liquidity functional workflow", () => {
     }
   });
 });
-
-async function tab(page: Page, name: string): Promise<void> {
-  const link = page.getByRole("link", { name, exact: true });
-  const href = await link.getAttribute("href");
-  expect(href).not.toBeNull();
-  // A client-side click returns before Next's route has finished loading.
-  // Wait for the actual destination before asserting its computed figures.
-  await Promise.all([
-    page.waitForURL((url) => url.pathname === href),
-    link.click(),
-  ]);
-}
 
 function lineCells(line: Line): string[] {
   return [

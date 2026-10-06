@@ -30,6 +30,7 @@ import {
   expectPersistedStressRun,
   runEnterpriseStress,
 } from "./support/stress";
+import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -162,7 +163,7 @@ test.describe("FX functional workflow", () => {
     await expectScenarioStrip(page);
 
     // ---- VaR & Stress: the historical VaR bridge, currency by currency.
-    await tab(page, "VaR & Stress");
+    await openTab(page, "VaR & Stress");
     await expectKpi(
       page,
       "Portfolio VaR (99%, 1-day)",
@@ -196,7 +197,7 @@ test.describe("FX functional workflow", () => {
     );
 
     // ---- Hedges: the IFRS 9 dual test applied to every hedge.
-    await tab(page, "Hedge Book");
+    await openTab(page, "Hedge Book");
     const passing = HEDGES.filter(effective).length;
     await expectKpi(
       page,
@@ -220,7 +221,7 @@ test.describe("FX functional workflow", () => {
     }
 
     // ---- Limits: the aggregate ceiling and the single-currency breach.
-    await tab(page, "Limits");
+    await openTab(page, "Limits");
     await expectKpi(
       page,
       "Aggregate limit utilisation",
@@ -235,7 +236,7 @@ test.describe("FX functional workflow", () => {
 
     // ---- Forwards: the spot fixes the NOP was revalued at. No forward curve
     // can be ingested yet (#333), so the monitor states that honestly.
-    await tab(page, "Forwards");
+    await openTab(page, "Forwards");
     await expect(
       page.getByText("No forward curve ingested", { exact: true }),
     ).toBeVisible();
@@ -249,7 +250,7 @@ test.describe("FX functional workflow", () => {
     }
 
     // ---- Scenarios: a governed macro path through every engine, FX leg included.
-    await tab(page, "Scenarios");
+    await openTab(page, "Scenarios");
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();
@@ -287,10 +288,6 @@ async function expectScenarioStrip(page: Page): Promise<void> {
       `NOP ${ghsM(nop)} · limit ${AGGREGATE_LIMIT_PCT}%`,
     );
   }
-}
-
-async function tab(page: Page, name: string): Promise<void> {
-  await page.getByRole("link", { name, exact: true }).click();
 }
 
 function pct(ratio: number): string {
