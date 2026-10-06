@@ -1,4 +1,8 @@
-"""Capital routes must remain on their scoped-binding dependencies."""
+"""Capital routes must remain on their scoped-binding dependencies.
+
+BSD-2 is a regulatory return; its shared-reader authority is exercised by
+tests/api/test_return_preview_authorization.py, not a Capital route dependency.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,6 @@ _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/capital/dashboard"): "require_capital_aggregated_view",
     ("GET", "/api/v1/banks/{bank_id}/capital/rwa"): "require_capital_aggregated_view",
     ("GET", "/api/v1/banks/{bank_id}/capital/structure"): "require_capital_aggregated_view",
-    ("GET", "/api/v1/banks/{bank_id}/submissions/bsd2"): "require_capital_confidential_view",
     ("POST", "/api/v1/banks/{bank_id}/capital/run-all-scenarios"): "require_capital_run",
     ("GET", "/api/v1/banks/{bank_id}/capital-plan"): "require_capital_confidential_view",
     ("PUT", "/api/v1/banks/{bank_id}/capital-plan"): "require_capital_plan_write",
