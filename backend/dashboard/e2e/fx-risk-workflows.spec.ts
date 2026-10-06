@@ -20,6 +20,8 @@ import { expect, test, type Page } from "@playwright/test";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
 import {
+  SAMPLE_BANK_ID,
+  apiGet,
   expectKpi,
   expectRow,
   ghsM,
@@ -29,10 +31,22 @@ import {
 import {
   expectPersistedStressRun,
   runEnterpriseStress,
+  type StressRun,
 } from "./support/stress";
 import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+type FxStressRun = StressRun & {
+  outcome: {
+    fx: {
+      base_nop_pct_tier1: string;
+      shock_pct: string;
+      stressed_nop_pct_tier1: string;
+      stressed_within_aggregate_limit: boolean;
+    };
+  };
+};
 
 /** CET1 (150 + 95 + 45 + 10 − 25 intangibles − 15 DTA) + AT1 20, GHS millions. */
 const TIER1_M = 280;
@@ -254,19 +268,23 @@ test.describe("FX functional workflow", () => {
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();
-    const run = await runEnterpriseStress(page, "Severe stagflation (severe)");
+    const run = (await runEnterpriseStress(
+      page,
+      "Severe stagflation (severe)",
+    )) as FxStressRun;
     expect(run.scenario_code).toBe("system_severe_stagflation");
-    const fx = (run as unknown as { outcome: { fx: Record<string, string> } })
-      .outcome.fx;
-    // The stress starts from the very position this module reports.
-    expect(Number(fx.base_nop_pct_tier1)).toBeCloseTo(
-      (NOP_M / TIER1_M) * 100,
-      6,
-    );
+    expectSevereFxOutcome(run.outcome.fx);
     await expectKpi(page, "Stressed CAR", "15.21%", "Base 17.42%");
     await expectKpi(page, "Stressed LCR", "116.6%", "Base 147.3%");
     await expectKpi(page, "Solvency × liquidity", "Both hold");
     await expectPersistedStressRun(page, run, "15.21%");
+    const latest = await apiGet<FxStressRun>(
+      page,
+      "analyst",
+      `/banks/${SAMPLE_BANK_ID}/enterprise-stress/latest?reporting_period_id=${run.reporting_period_id}&scenario_id=${run.scenario_id}`,
+    );
+    expect(latest.run_id).toBe(run.run_id);
+    expectSevereFxOutcome(latest.outcome.fx);
 
     if (evidenceDir) {
       await page.screenshot({
@@ -276,6 +294,17 @@ test.describe("FX functional workflow", () => {
     }
   });
 });
+
+function expectSevereFxOutcome(fx: FxStressRun["outcome"]["fx"]): void {
+  const baseNopPct = (NOP_M / TIER1_M) * 100;
+  const shockPct = Number(fx.shock_pct);
+  const stressedNopPct = baseNopPct * (1 + shockPct / 100);
+  expect(Number(fx.base_nop_pct_tier1)).toBeCloseTo(baseNopPct, 6);
+  expect(shockPct).toBeCloseTo(29.807692, 6);
+  expect(Number(fx.stressed_nop_pct_tier1)).toBeCloseTo(stressedNopPct, 6);
+  expect(stressedNopPct).toBeGreaterThan(AGGREGATE_LIMIT_PCT);
+  expect(fx.stressed_within_aggregate_limit).toBe(false);
+}
 
 /** The depreciation strip: each shock grows the NOP and is held to the ceiling. */
 async function expectScenarioStrip(page: Page): Promise<void> {
