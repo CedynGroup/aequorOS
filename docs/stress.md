@@ -208,7 +208,7 @@ documented, and reported **with and without** (¶78–81).
 ### 2.2 The scenario data model (two walled-off stores)
 
 - **System (regulatory) scenarios:** codes **hardcoded** per module (`regulatory_liquidity.py:100`,
-  `regulatory_capital.py:108`, …); values in `param_stress_shock` (`app/models/regulatory.py:224`,
+  `regulatory_capital.py:108`, …); values in `param_stress_shock` (`app/models/parameter_register.py::ParamStressShock`,
   effective-dated + approval columns). **No runtime write path** — `ParamStressShock` is
   constructed only in the fixture + migrations; **magnitudes are frozen at deploy, not editable/
   versionable through the product.** A shock is always a **direct parameter override, never a
