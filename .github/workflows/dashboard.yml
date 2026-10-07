@@ -55,7 +55,7 @@ name: Dashboard CI
 # `if:` fed by the `changes` job, and the `gate` job below aggregates the result
 # into one context that always reports. Trade-off: every pull request in the
 # repository now pays for two ~30-second jobs; the expensive job still runs only
-# when the dashboard or the generated client changes. The context to mark
+# when inputs match the predicate in `changes` below. The context to mark
 # required is `Dashboard gate` (a status context is the job's name), never the
 # `dashboard` job itself, which legitimately reports `skipped`.
 
@@ -84,12 +84,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Dashboard tests consume backend/app/, backend/pyproject.toml and
+      # backend/uv.lock (contracts loaded through `uv run`),
+      # backend/tests/fixtures/icaap/editor_schema_samples.json (editor parity),
+      # and backend/alembic/versions/202608280046_initial_org_owner_assignment.py
+      # (BI role labels).
       - id: areas
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh dashboard
-          '^(backend/dashboard/|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
+          '^(backend/dashboard/|backend/app/|backend/pyproject\.toml$|backend/uv\.lock$|backend/tests/fixtures/icaap/editor_schema_samples\.json$|backend/alembic/versions/202608280046_initial_org_owner_assignment\.py$|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
 
   dashboard:
     needs: changes
@@ -100,8 +105,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
         with:
+          # Pinned with risk-service.yml — see MISE VERSION there.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install backend dependencies for route parity test
         working-directory: backend
         run: uv sync --frozen

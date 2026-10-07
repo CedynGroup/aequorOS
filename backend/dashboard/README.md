@@ -503,8 +503,9 @@ The `Dashboard Playwright journeys` workflow in
 `.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
 pull requests and pushes do not enqueue it. A maintainer launches it from the
 Actions UI or with
-`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
-Chromium, starts MinIO with its built-in KMS, and runs this same command against
+`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It restores or
+installs Chromium, installs its system dependencies on every run, starts MinIO
+with its built-in KMS, and runs this same command against
 real CI-local object storage; the local OIDC issuer needs no container because
 Playwright starts it as a process beside the API. Evidence screenshots are
 uploaded as the `dashboard-journey-evidence` artifact. The run requires at least
