@@ -138,7 +138,20 @@ test.describe("Forecasting on a fresh tenant", () => {
     await expect(
       page.getByText("No succeeded forecast runs yet"),
     ).toBeVisible();
-    // No approved preset for this jurisdiction: the catalogue offers none, only
+    // The governed register names what is missing (a book and an approved
+    // version) and substitutes nothing.
+    const notComputable = page
+      .getByRole("status")
+      .filter({ hasText: "No approved forecast assumptions" });
+    await expect(notComputable).toContainText("Forecasting needs a book date");
+    await expect(notComputable).toContainText(
+      "a version must also be drafted, submitted and approved by a second person",
+    );
+    await expect(notComputable).toContainText("not computable until then");
+    await expect(
+      section(page, "Version history").getByText("No versions yet."),
+    ).toBeVisible();
+    // No approved preset for this bank: the catalogue offers none, only
     // the three documented engine defaults, which no preset is built from.
     await expect(
       section(page, "Preset catalogue").getByRole("columnheader"),
