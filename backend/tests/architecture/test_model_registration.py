@@ -50,6 +50,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from tests.architecture.test_feature_boundaries import COMPOSITION, KERNEL, LAYERS
+
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 #: Import the package and NOTHING else, then report what that registered. Run in
@@ -76,7 +80,7 @@ for info in pkgutil.walk_packages(package.__path__, prefix="{package}."):
 root = pathlib.Path("{root}")
 for path in sorted(root.rglob("*.py")):
     parts = path.relative_to(root.parent).with_suffix("").parts
-    if "models" in parts[1:-1] or parts[-1] == "models":
+    if len(parts) >= 3 and parts[1] in {features} and parts[2] == "models":
         importlib.import_module(".".join(parts).removesuffix(".__init__"))
 from app.db.base import Base
 print(json.dumps(sorted(Base.metadata.tables)))
@@ -106,7 +110,13 @@ def _tables(
     if extra_path is not None:
         env["PYTHONPATH"] = str(extra_path)
     result = subprocess.run(
-        [sys.executable, "-c", script.format(package=package, root=root)],
+        [
+            sys.executable,
+            "-c",
+            script.format(
+                package=package, root=root, features=sorted(set(LAYERS) - {KERNEL, COMPOSITION})
+            ),
+        ],
         cwd=BACKEND_ROOT,
         capture_output=True,
         text=True,
@@ -197,7 +207,10 @@ def test_the_probe_sees_a_model_one_directory_down_and_the_shallow_walk_did_not(
     assert sorted(everything - package_only) == ["probe_child_table"]
 
 
-def test_the_probe_sees_a_feature_model_outside_the_registry_package(tmp_path: Path) -> None:
+@pytest.mark.parametrize("model_path", ["models.py", "models/nested/child.py"])
+def test_the_probe_sees_a_feature_model_outside_the_registry_package(
+    tmp_path: Path, model_path: str
+) -> None:
     """The self-proving case for feature packages.
 
     ``app/<feature>/models.py`` sits outside ``app.models``, so walking the registry
@@ -210,7 +223,12 @@ def test_the_probe_sees_a_feature_model_outside_the_registry_package(tmp_path: P
     (root / "fx").mkdir()
     for package in (root, root / "models", root / "fx"):
         (package / "__init__.py").write_text("")
-    (root / "fx" / "models.py").write_text(
+    model = root / "fx" / model_path
+    model.parent.mkdir(parents=True, exist_ok=True)
+    for directory in (root / "fx").rglob("*"):
+        if directory.is_dir():
+            (directory / "__init__.py").write_text("")
+    model.write_text(
         "from sqlalchemy import Column, Integer\n"
         "from app.db.base import Base\n"
         "class ProbeFeature(Base):\n"
@@ -223,3 +241,27 @@ def test_the_probe_sees_a_feature_model_outside_the_registry_package(tmp_path: P
         "the probe did not import a feature's models.py, so a feature model missing "
         "from the app.models registry would go unconvicted"
     )
+
+
+@pytest.mark.parametrize(
+    "model_path",
+    [
+        "etl/models.py",
+        "etl/models/training.py",
+        "fx/domain/models.py",
+        "fx/domain/models/training.py",
+    ],
+)
+def test_the_probe_does_not_import_unrelated_model_modules(
+    tmp_path: Path, model_path: str
+) -> None:
+    root = tmp_path / "probe_app"
+    (root / "models").mkdir(parents=True)
+    model = root / model_path
+    model.parent.mkdir(parents=True, exist_ok=True)
+    for directory in (root, *root.rglob("*")):
+        if directory.is_dir():
+            (directory / "__init__.py").write_text("")
+    model.write_text("raise RuntimeError('unrelated model module imported')\n")
+    probe = {"package": "probe_app.models", "root": root, "extra_path": tmp_path}
+    assert _tables(_EVERY_MODULE, **probe) == _tables(_PACKAGE_ONLY, **probe)
