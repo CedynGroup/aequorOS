@@ -1208,10 +1208,10 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `approve` with a `MAKER_CHECKER` condition that refuses whoever drafted, revised or submitted
   the version. Mutations lock the version until commit; approved and rejected versions are
   final. A bank has at most one draft or submitted version awaiting a decision.
-- **Effective dating is by book date** (the run's as-of): the latest-effective approved version
-  wins. Corrections may take effect before another approved version, including a future-dated
-  one. New runs use the current approvals; saved inputs, hashes, results and provenance remain
-  unchanged.
+- **Effective dating is by book date** (the run's as-of): a run on date `D` resolves the approved
+  version with the latest `effective_from <= D`; ties use the latest approval time. Corrections
+  may take effect before another approved version, including a future-dated one. New runs use
+  the current approvals; saved inputs, hashes, results and provenance remain unchanged.
 - **Approval enqueues the existing live and BI refresh trigger** in the approval transaction,
   using the bank's current live date.
 - **Runs record `assumption_provenance` beside the snapshot** (version, effective date,

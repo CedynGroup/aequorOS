@@ -613,7 +613,13 @@ def test_mutations_wait_for_the_version_lock_and_refuse_a_concurrent_final_decis
             assert loaded is not None and loaded.status == initial_status
             loaded_by_racer.set()
             actor = USER_1 if verb in {"revise", "submit"} else CHECKER_ID
-            ctx = TenantContext(organization_id=ORG_1, actor_user_id=actor)
+            user = session.get(User, actor)
+            assert user is not None
+            ctx = TenantContext(
+                organization_id=ORG_1,
+                actor_user_id=actor,
+                authorization_version=user.authorization_version,
+            )
             try:
                 _mutate_version(session, ctx, version_id, verb)
             except HTTPException as exc:
