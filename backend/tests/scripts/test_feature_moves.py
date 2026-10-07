@@ -370,6 +370,8 @@ def test_cumulative_rewrites_preserve_current_relative_imports(
         ("app.domain.fx", "app.domain.fx.nested"),
         ("app.services.untracked", "app.fx.untracked"),
         ("app.domain.fx", "app.assets"),
+        ("app.services.audit", "app.domain.fx"),
+        ("app.domain.fx", "app.services.audit"),
     ],
 )
 def test_an_invalid_batch_does_not_apply_earlier_moves(
@@ -397,3 +399,152 @@ def test_an_invalid_batch_does_not_apply_earlier_moves(
 
 def test_the_repository_uses_no_old_module_name() -> None:
     assert feature_moves.check(feature_moves.BACKEND, echo=lambda _line: None) == 0
+
+
+@pytest.mark.parametrize("command", ["move", "rewrite"])
+@pytest.mark.parametrize("kind", ["interpolated", "escaped", "both"])
+def test_embedded_parent_imports_with_template_expressions_remain_executable(
+    repository: Path, command: str, kind: str
+) -> None:
+    if command == "rewrite":
+        _run(repository, "move")
+    script = (
+        "from app.services import (\n"
+        "    audit,\n"
+        "    regulatory_fx as fx,\n"
+        ")\n"
+        "def result():\n"
+        "    from app.services import regulatory_fx as lazy\n"
+        "    return lazy.run()\n"
+        "print(fx.run(), result(), expected)\n"
+    )
+    if kind in {"interpolated", "both"}:
+        script = "expected = ${Math.max(1, 1)}\n" + script
+        script += 'assert "${({value: "ok"}).value}" == "ok"\n'
+    else:
+        script = "expected = 1\n" + script
+    if kind in {"escaped", "both"}:
+        script += 'assert len("a\\\\tb") == 3\n'
+    path = repository / "backend/dashboard/live-verification/probe.spec.ts"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        'import { execFileSync } from "node:child_process";\n'
+        f"const script = `{script}`;\n"
+        f"process.stdout.write(execFileSync({json.dumps(sys.executable)}, "
+        '["-c", script], {encoding: "utf8"}));\n'
+    )
+    if command == "rewrite":
+        assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, command)
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=path.read_text(),
+        cwd=repository / "backend",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "1 1 1"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize("package", [False, True])
+@pytest.mark.parametrize("parent_import", [False, True])
+@pytest.mark.parametrize("moves", [1, 2])
+def test_rebased_relative_imports_resolve_from_historical_locations(
+    repository: Path, package: bool, parent_import: bool, moves: int
+) -> None:
+    statement = "from .. import risk" if parent_import else "from ..risk import LIMIT"
+    value = "risk.LIMIT" if parent_import else "LIMIT"
+    replayed = f"\n\ndef replayed():\n    {statement}\n    return {value}\n"
+    _run(repository, "move")
+    feature = "fx"
+    if moves == 2:
+        _run(repository, "move", [("app.fx.domain", "app.market.domain")])
+        feature = "market"
+    leaf = "__init__" if package else "helpers"
+    path = repository / f"backend/app/{feature}/domain/{leaf}.py"
+    with path.open("a") as output:
+        output.write(replayed)
+    module = f"app.{feature}.domain" + ("" if package else ".helpers")
+    with pytest.raises(subprocess.CalledProcessError):
+        _python(repository, f"from {module} import replayed\nprint(replayed())")
+    assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, "rewrite")
+    assert _python(repository, f"from {module} import replayed\nprint(replayed())") == "1"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize("parent_import", [False, True])
+def test_valid_current_relative_targets_take_priority(
+    repository: Path, parent_import: bool
+) -> None:
+    _run(repository, "move")
+    (repository / "backend/app/fx/risk.py").write_text("LIMIT = 9\n")
+    statement = "from .. import risk" if parent_import else "from ..risk import LIMIT"
+    value = "risk.LIMIT" if parent_import else "LIMIT"
+    helpers = repository / "backend/app/fx/domain/helpers.py"
+    with helpers.open("a") as output:
+        output.write(f"\n\ndef current():\n    {statement}\n    return {value}\n")
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _python(repository, "from app.fx.domain.helpers import current\nprint(current())") == "9"
+
+
+def test_rebased_imports_can_use_an_intermediate_location(repository: Path) -> None:
+    _run(repository, "move")
+    _run(repository, "move", [("app.fx.domain", "app.market.domain")])
+    path = repository / "backend/app/market/domain/helpers.py"
+    with path.open("a") as output:
+        output.write("\n\ndef replayed():\n    from ..service import run\n    return run()\n")
+    assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, "rewrite")
+    assert (
+        _python(repository, "from app.market.domain.helpers import replayed\nprint(replayed())")
+        == "1"
+    )
+    assert _run(repository, "check") == ["exit 0"]
+
+
+def test_relative_package_exports_remain_executable(repository: Path) -> None:
+    package = repository / "backend/app/domain/fx/__init__.py"
+    package.write_text("LIMIT = 5\n\nclass Exported:\n    value = LIMIT\n")
+    helpers = repository / "backend/app/domain/fx/helpers.py"
+    with helpers.open("a") as output:
+        output.write(
+            "\n\ndef exported():\n    from . import Exported, LIMIT\n"
+            "    return Exported.value + LIMIT\n"
+        )
+    _run(repository, "move")
+    assert _python(repository, "from app.fx.domain.helpers import exported\nprint(exported())") == "10"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize("kind", ["missing", "ambiguous"])
+def test_unresolved_relative_imports_refuse_all_commands(repository: Path, kind: str) -> None:
+    _run(repository, "move")
+    _run(repository, "move", [("app.fx.domain", "app.market.domain")])
+    name = "missing"
+    if kind == "ambiguous":
+        name = "risk"
+        (repository / "backend/app/fx/risk.py").write_text("LIMIT = 9\n")
+    path = repository / "backend/app/market/domain/helpers.py"
+    with path.open("a") as output:
+        output.write(f"\n\ndef invalid():\n    from ..{name} import LIMIT\n    return LIMIT\n")
+    before = subprocess.run(
+        ["git", "diff", "HEAD"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    assert _run(repository, "check")[-1] == "exit 1"
+    with pytest.raises(feature_moves.UnresolvedImport):
+        _run(repository, "rewrite")
+    with pytest.raises(feature_moves.UnresolvedImport):
+        _run(repository, "move", [("app.fx.service", "app.currency.service")])
+    after = subprocess.run(
+        ["git", "diff", "HEAD"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    assert before == after
+    assert _python(repository, "from app.fx.service import run\nprint(run())") == "1"
+    assert not (repository / "backend/app/currency").exists()

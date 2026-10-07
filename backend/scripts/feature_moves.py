@@ -41,6 +41,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -76,6 +77,15 @@ class Renamer:
             if name == old or name.startswith(f"{old}."):
                 name = new + name[len(old) :]
         return name
+
+    def locations(self, name: str) -> list[str]:
+        """Current and historical locations, from most recent to oldest."""
+        locations = [name]
+        for old, new in reversed(self.moves):
+            if name == new or name.startswith(f"{new}."):
+                name = old + name[len(new) :]
+                locations.append(name)
+        return locations
 
     @property
     def roots(self) -> frozenset[str]:
@@ -170,6 +180,7 @@ def plan_moves(
             name.startswith(f"{relative}/") for name in tracked
         )
         parents = destination.relative_to(backend).parents
+        destination_module = backend / new.replace(".", "/")
         blocked_parent = any(
             (backend / parent).is_file() or (backend / parent).with_suffix(".py").is_file()
             for parent in parents
@@ -177,7 +188,8 @@ def plan_moves(
         if (
             not _exists(source)
             or not tracked_source
-            or _exists(destination)
+            or _exists(destination_module)
+            or _exists(destination_module.with_suffix(".py"))
             or (not source.is_dir() and destination.exists())
             or blocked_parent
         ):
@@ -268,28 +280,81 @@ def _package_of(module: str, is_package: bool) -> str:
 
 def _resolve(package: str, level: int, module: str | None) -> str:
     parts = package.split(".")
+    if level > len(parts):
+        return ""
     anchor = parts[: len(parts) - (level - 1)]
     return ".".join([*anchor, *([module] if module else [])])
 
 
+class UnresolvedImport(ValueError):
+    """A relative import has no uniquely resolvable location in the move ledger."""
+
+
+def _import_source(backend: Path, module: str, rename: Renamer) -> Path | None:
+    for location in rename.locations(rename(module)):
+        path = backend / location.replace(".", "/")
+        for source in (path / "__init__.py", path.with_suffix(".py")):
+            if source.is_file():
+                return source
+    return None
+
+
+def _declares(node: ast.AST, name: str) -> bool:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return node.name == name
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        for alias in node.names:
+            local = alias.asname or alias.name
+            if isinstance(node, ast.Import) and not alias.asname:
+                local = local.split(".", 1)[0]
+            if local == name:
+                return True
+        return False
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        return node.id == name
+    return any(_declares(child, name) for child in ast.iter_child_nodes(node))
+
+
+def _import_available(backend: Path, base: str, node: ast.ImportFrom, rename: Renamer) -> bool:
+    if not base:
+        return False
+    source = _import_source(backend, base, rename)
+    tree = ast.parse(source.read_text(encoding="utf-8")) if source is not None else None
+    return all(
+        _import_source(backend, f"{base}.{alias.name}", rename) is not None
+        or (tree is not None and (alias.name == "*" or _declares(tree, alias.name)))
+        for alias in node.names
+    )
+
+
 def _absolute_base(
-    node: ast.ImportFrom, module: str | None, is_package: bool, rename: Renamer
+    node: ast.ImportFrom, module: str | None, is_package: bool, rename: Renamer, backend: Path
 ) -> str | None:
     """The absolute module a ``from`` import reads from, or ``None`` to leave it alone.
 
-    A relative import is resolved against the file's current name and made
-    absolute only when, from the file's new location, it would resolve elsewhere.
+    Prefer a resolvable current location, otherwise require one historical target.
     """
     if not node.level:
         return node.module
     if module is None:
         return None
-    old_base = _resolve(_package_of(module, is_package), node.level, node.module)
+    current_base = _resolve(_package_of(module, is_package), node.level, node.module)
+    base = current_base
+    if not _import_available(backend, base, node, rename):
+        candidates: dict[tuple[str, ...], str] = {}
+        for location in rename.locations(module)[1:]:
+            candidate = _resolve(_package_of(location, is_package), node.level, node.module)
+            if _import_available(backend, candidate, node, rename):
+                target = (rename(candidate), *(rename(f"{candidate}.{a.name}") for a in node.names))
+                candidates[target] = candidate
+        if len(candidates) != 1:
+            raise UnresolvedImport(f"cannot resolve relative import in {module}: {ast.unparse(node)}")
+        base = next(iter(candidates.values()))
     new_base = _resolve(_package_of(rename(module), is_package), node.level, node.module)
-    still_resolves = rename(old_base) == new_base and all(
-        rename(f"{old_base}.{alias.name}") == f"{new_base}.{alias.name}" for alias in node.names
+    still_resolves = base == current_base and rename(base) == new_base and all(
+        rename(f"{base}.{alias.name}") == f"{new_base}.{alias.name}" for alias in node.names
     )
-    return None if still_resolves else old_base
+    return None if still_resolves else base
 
 
 def _regroup(
@@ -337,7 +402,9 @@ def _statement_span(
     return start, end, indent, comments
 
 
-def rewrite_imports(text: str, module: str | None, is_package: bool, rename: Renamer) -> str:
+def rewrite_imports(
+    text: str, module: str | None, is_package: bool, rename: Renamer, backend: Path
+) -> str:
     """Rewrite the ``from ... import`` statements a move affects.
 
     ``module`` is the file's current dotted name. A ``from`` import of a moved
@@ -353,7 +420,7 @@ def rewrite_imports(text: str, module: str | None, is_package: bool, rename: Ren
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
-        if (base := _absolute_base(node, module, is_package, rename)) is None:
+        if (base := _absolute_base(node, module, is_package, rename, backend)) is None:
             continue
         kept, moved = _regroup(node, base, rename)
         if not moved and not node.level:
@@ -411,7 +478,31 @@ def _module_of(relative: str) -> tuple[str | None, bool]:
     return ".".join(path.with_suffix("").parts), False
 
 
-def rewrite_embedded_python(text: str, rename: Renamer) -> str:
+def _rewrite_import_snippets(text: str, rename: Renamer, backend: Path) -> str:
+    imports = re.compile(r"(?m)^([ \t]*)from[ \t]+[\w.]+[ \t]+import\b")
+    edits: list[tuple[int, int, str]] = []
+    for match in imports.finditer(text):
+        tail = text[match.start() + len(match.group(1)) :]
+        try:
+            end = next(
+                token.end
+                for token in tokenize.generate_tokens(io.StringIO(tail).readline)
+                if token.type == tokenize.NEWLINE
+            )
+        except (StopIteration, tokenize.TokenError, IndentationError):
+            continue
+        stop = match.start() + len(match.group(1)) + _offsets(tail)[end[0]] + end[1]
+        statement = text[match.start() : stop]
+        updated = rewrite_imports(textwrap.dedent(statement), None, False, rename, backend)
+        updated = textwrap.indent(updated, match.group(1))
+        if updated != statement:
+            edits.append((match.start(), stop, updated))
+    for start, end, replacement in reversed(edits):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def rewrite_embedded_python(text: str, rename: Renamer, backend: Path) -> str:
     """Rewrite absolute Python imports inside JavaScript string literals."""
     literals = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`')
 
@@ -419,27 +510,25 @@ def rewrite_embedded_python(text: str, rename: Renamer) -> str:
         literal = match.group()
         if literal.startswith("`"):
             body = literal[1:-1]
-            if "\\" in body or "${" in body:
-                return literal
-            updated = rewrite_imports(body, None, False, rename)
+            updated = _rewrite_import_snippets(body, rename, backend)
             return f"`{updated}`"
         try:
             body = ast.literal_eval(literal)
         except (SyntaxError, ValueError):
             return literal
-        updated = rewrite_imports(body, None, False, rename)
+        updated = _rewrite_import_snippets(body, rename, backend)
         return json.dumps(updated, ensure_ascii=False) if updated != body else literal
 
     return literals.sub(replace, text)
 
 
-def rewrite_text(relative: str, text: str, rename: Renamer) -> str:
+def rewrite_text(relative: str, text: str, rename: Renamer, backend: Path) -> str:
     """Every rewrite pass for one backend-relative file."""
     module, is_package = _module_of(relative)
     if module is not None:
-        text = rewrite_imports(text, module, is_package, rename)
+        text = rewrite_imports(text, module, is_package, rename, backend)
     elif Path(relative).suffix in _SCRIPT_SUFFIXES:
-        text = rewrite_embedded_python(text, rename)
+        text = rewrite_embedded_python(text, rename, backend)
     text = rewrite_dotted(text, rename)
     text = rewrite_paths(text, rename, app_relative=relative.startswith(_ARCHITECTURE_DIR))
     return text
@@ -471,7 +560,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         if relative in _FROZEN_FILES:
             continue
         original = path.read_text(encoding="utf-8")
-        updated = rewrite_text(relative, original, rename)
+        updated = rewrite_text(relative, original, rename, backend)
         if updated != original:
             planned[path] = updated
     return planned
@@ -621,7 +710,11 @@ def check(backend: Path, echo: Callable[[str], None] = print) -> int:
     ledger = load_ledger(backend)
     for module in unmoved_modules(backend, ledger):
         echo(f"module still at its old path: {module}")
-    stale = plan_rewrites(backend, Renamer(tuple(ledger)))
+    try:
+        stale = plan_rewrites(backend, Renamer(tuple(ledger)))
+    except UnresolvedImport as error:
+        echo(str(error))
+        return 1
     for path in stale:
         echo(f"old name still used: {path.relative_to(backend.parent)}")
     return 1 if stale or unmoved_modules(backend, ledger) else 0
