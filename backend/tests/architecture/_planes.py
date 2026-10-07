@@ -138,7 +138,9 @@ _CASE_MODEL_FILES: tuple[str, ...] = (
     "models/financial.py",
 )
 _BANK_MODEL_FILES: tuple[str, ...] = (
+    "models/bank.py",
     "models/canonical.py",
+    "models/parameter_register.py",
     "models/regulatory.py",
     "models/regulatory_run.py",
     "models/regulatory_reporting.py",

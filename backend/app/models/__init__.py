@@ -18,6 +18,7 @@ from app.models.authorization import (
     AuthorizationBinding,
     OrganizationOwnerAssignment,
 )
+from app.models.bank import Bank
 from app.models.bi import (
     BiAggPositionDaily,
     BiDimBranch,
@@ -148,6 +149,7 @@ from app.models.institution_profile import (
 )
 from app.models.institution_type import InstitutionType
 from app.models.integration_key import IntegrationKey
+from app.models.job import Job
 from app.models.jurisdiction import Jurisdiction
 from app.models.liquidity_cfp import (
     CfpActivationEvent,
@@ -183,12 +185,7 @@ from app.models.operator import (
     TenantStorage,
 )
 from app.models.organization import Organization
-from app.models.reconciliation import ReconciliationException
-from app.models.refresh_token import RefreshToken
-from app.models.regulatory import (
-    Bank,
-    BankFinancialFact,
-    BankReportingPeriod,
+from app.models.parameter_register import (
     ParamCapitalThreshold,
     ParamConcentrationLimit,
     ParamCreditThreshold,
@@ -201,6 +198,9 @@ from app.models.regulatory import (
     ParamRiskWeight,
     ParamStressShock,
 )
+from app.models.reconciliation import ReconciliationException
+from app.models.refresh_token import RefreshToken
+from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_parameter import RegulatoryParameter
 from app.models.regulatory_reporting import (
     RegulatoryChannelConfig,
@@ -223,7 +223,6 @@ from app.models.risk import (
     Document,
     DocumentChunk,
     DocumentExtraction,
-    Job,
     RiskAssessment,
     RiskAssessmentRun,
     RiskCase,

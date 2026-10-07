@@ -322,7 +322,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
-  `app/services/scheduler.py` and the `app.models` metadata registry.
+  `app/services/scheduler.py` and the `app.models` metadata registry. Kernel models
+  (`app/models/{organization,audit_event,job}.py`) and `TenantContext` (`app/core/tenancy.py`,
+  re-exported by `app.api.deps`) are shared by every feature.
 - **Feature names and layers** live in `LAYERS` in
   `backend/tests/architecture/test_feature_boundaries.py`; `PEER_EDGES` defines the permitted
   same-layer directions and `FEATURE_RULES` assigns ownership in the existing layered tree.
@@ -371,3 +373,6 @@ feature. New code goes in the target layout; existing code moves one feature per
   old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
   The diff of a move PR is the renames plus the codemod's output; logic changes go in separate
   PRs.
+- **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
+  rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
+  those keys so moving a model never reorders a flush (a new model adds its key).

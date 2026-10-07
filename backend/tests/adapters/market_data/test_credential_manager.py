@@ -15,8 +15,8 @@ from app.adapters.market_data.credential_manager import (
     derive_status,
     encrypt_credential_envelope,
 )
+from app.models.bank import Bank
 from app.models.market_data import MarketDataConnection
-from app.models.regulatory import Bank
 from tests.support.helpers import ORG_1
 
 MASTER_KEY = derive_master_key("unit-test-master-key")

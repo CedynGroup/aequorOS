@@ -6,7 +6,7 @@ from datetime import date
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.regulatory import RegulatoryParameterMixin
+from app.models.parameter_register import RegulatoryParameterMixin
 
 
 @dataclass(frozen=True)
