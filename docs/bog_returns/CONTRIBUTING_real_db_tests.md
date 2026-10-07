@@ -20,7 +20,7 @@ other_headers, requires_real_data`; module-level `pytestmark = requires_real_dat
   hides Sample Bank ⇒ 404; the isolated org's only user is inactive ⇒ 401, don't use it).
 - **Assertions become invariants and relationships, never frozen golden magnitudes** (the real
   book changes as data is ingested): ratio = numerator/denominator, statuses consistent with
-  thresholds, sections populated, determinism (identical rerun → identical input_hash), tenant
+  thresholds, sections populated, determinism (identical rerun → identical `input_hash`), tenant
   isolation, 404/422 paths. Where the old test pinned a seed number, assert the _relationship_
   that number was demonstrating.
 - Mutation tests are fine (they roll back): create connections/keys/packages/runs, then assert.

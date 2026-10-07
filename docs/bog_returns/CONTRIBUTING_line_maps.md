@@ -5,12 +5,12 @@ official form **registered, structure-exported template-faithfully, formula-eval
 governed** (see `00_full_return_registry.md` §4 and `tests/services/test_bog_forms_framework.py`).
 Per-form work is exactly three deliverables — nothing else may be edited:
 
-| Deliverable | Path (one per form; create it) |
-|---|---|
-| Line map | `backend/app/services/regulatory_reporting/bog_forms/linemaps/<form>.py` |
+| Deliverable                      | Path (one per form; create it)                                              |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| Line map                         | `backend/app/services/regulatory_reporting/bog_forms/linemaps/<form>.py`    |
 | Extra resolvers (only if needed) | `backend/app/services/regulatory_reporting/bog_forms/sources_ext/<form>.py` |
-| Line/cell map doc | `docs/bog_returns/<form>_line_map.md` |
-| Tests | `backend/tests/services/bog_forms/test_<form>.py` |
+| Line/cell map doc                | `docs/bog_returns/<form>_line_map.md`                                       |
+| Tests                            | `backend/tests/services/bog_forms/test_<form>.py`                           |
 
 **Do not edit** `spec.py`, `engine.py`, `render.py`, `catalog.py`, `sources.py`, `registry.py`,
 `layouts/*.json`, or another form's files. If the framework genuinely blocks you, write the need
@@ -25,7 +25,7 @@ into your doc under "Framework asks" and stop there.
    cells so you cannot omit one). **Blank data grids:** some sheets leave their data cells EMPTY (no
    `0` placeholder — BSD2A, the BSD3 ranked rows, BSD11 registers, BSD1A, BSD8-Annexure …), so the
    layout captured no inputs for them; bind those with `_common.grid_lines(form, sheet, rows=…,
-   value_columns={…}, row_sources=…)` naming the official data rows/columns you read off the header
+value_columns={…}, row_sources=…)` naming the official data rows/columns you read off the header
    labels (never rows outside the official grid). Formula cells are skipped automatically. Rows without an honest platform source are `INPUT_REQUIRED` /
    `BANK_COA_MAPPING` with a note saying what the bank must supply. The structure is never dropped.
 3. **Guide definitions apply**: Domestic = payable in cedis, Foreign = payable in a foreign
@@ -61,7 +61,7 @@ into your doc under "Framework asks" and stop there.
 9. Gates before you finish: `uv run ruff check <your files>` clean, the typing ratchet
    (`uv run python scripts/typing_ratchet.py check`) clean,
    `DATABASE_URL="" uv run pytest tests/services/test_bog_forms_framework.py
-   tests/services/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
+tests/services/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
 
 Report back: files created, mapped/input_required/coa-mapping counts per sheet, the critical
 totals your tests prove, and any framework asks.

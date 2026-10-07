@@ -495,7 +495,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
 - **Market research desk** (spec `docs/internal/AequorOS_Market_Data_and_Curve_Platform.md`
   — its as-built header and calibration deviation are authoritative). Desk-as-vendor:
   approved determinations publish into EVERY tenant through `pull_runner.execute_pull` as
-  vendor `aequor_desk` (zero quota, AEQ.* curve names so vendor rows coexist — supersession
+  vendor `aequor_desk` (zero quota, `AEQ.*` curve names so vendor rows coexist — supersession
   keys ignore source). Global `desk_*` tables: methodology register (Track-1 weekly
   application vs Track-2 versioned parameter changes, maker-checker everywhere), bitemporal
   determinations, silver captures. **Rates-first weekly flow:** `desk_capture` stages a
@@ -1223,9 +1223,8 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   [API workflow and readiness guidance](backend/README.md#forecast-assumption-workflow)
   explain the resulting not-computable state and how the bank supplies its own approved set.
 
-### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
+### Known pre-existing typing debt
 
-`basedpyright` reports 8 errors in `app/services/ingestion.py`, `tests/adapters/excel_csv/
-fixtures.py`, and `tests/storage/*` — all in the data-engine/storage tracks, present before
-the six-module build. They are left for those tracks' owners. Current lint and typecheck
-results come from the [validation commands](#8-validation-commands).
+Legacy type-error counts are recorded in `backend/scripts/typing_baseline.json`; the
+[typing ratchet](CODEBASE_CONVENTIONS.md#typing-ratchet) owns their maintenance rules.
+Current lint and typecheck results come from the [validation commands](#8-validation-commands).

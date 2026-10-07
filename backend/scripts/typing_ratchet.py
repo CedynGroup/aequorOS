@@ -1,25 +1,7 @@
 """Hold the backend to basedpyright strict, ratcheting the legacy errors down.
 
-``pyproject.toml`` runs basedpyright in strict mode with ``reportAny`` and the
-``reportUnknown*`` family on. Most of the tree predates that, so this gate runs the
-checker once and compares each module's errors, counted per rule, with
-``typing_baseline.json``:
-
-* A module with no baseline entry is strict: any error fails. That covers every new
-  module, every module that already passed when the baseline was recorded, and
-  ``STRICT_MODULES``, which may never take an entry.
-* A legacy module fails when a rule's count grows past its baseline.
-* A count that falls below its baseline also fails until ``update`` records it, so
-  the baseline only shrinks and every fix is kept by the change that makes it.
-
-Run from ``backend/``::
-
-    uv run python scripts/typing_ratchet.py check   # the gate: mise run risk-service:typecheck
-    uv run python scripts/typing_ratchet.py update  # record fixed errors; never adds one
-
-``update`` refuses to run while any count is above its baseline. Baseline keys are
-current dotted module names; moved modules must pass strict checking at their new
-location before ``update`` can remove their old entries.
+Contributor commands and baseline maintenance rules are owned by
+``CODEBASE_CONVENTIONS.md`` §1, "Typing ratchet".
 """
 
 from __future__ import annotations
