@@ -17,7 +17,7 @@ Paths below describe the existing layered tree; new feature code follows
   legitimately needs many parameters, the existing code suppresses per-line with
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
 - **basedpyright**: `typeCheckingMode = "standard"`, `pythonVersion = "3.13"`,
-  `include = ["app", "tests", "alembic"]`; `reportAny`, `reportExplicitAny`, and the
+  with included paths defined in `backend/pyproject.toml`; `reportAny`, `reportExplicitAny`, and the
   `reportUnknown*` family are disabled.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
@@ -347,14 +347,22 @@ feature. New code goes in the target layout; existing code moves one feature per
   and review that the diff only deletes entries. `write_baseline()` owns the generated JSON's
   formatting.
 - **Moving code.** A move PR runs `uv run python scripts/feature_moves.py move OLD NEW` from
-  `backend/` for each module or package it moves. The codemod `git mv`s the files, appends one
-  ledger pair per moved module, and rewrites every import, string patch target, slash path and
-  doc reference, including Dockerfile COPY paths and generated Python in Python, JavaScript
-  and TypeScript strings.
+  `backend/`, using dotted module or package names; a batch may supply multiple `OLD NEW`
+  pairs. The codemod `git mv`s the files, records their moves in the ledger above, and rewrites
+  imports, string patch targets, slash paths and doc references in the text files selected by
+  `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
+  paths and generated Python in Python, JavaScript and TypeScript strings; generated
+  `packages/` files and the codemod's own source and tests are excluded. The boundary baseline
+  retains its historical names as described above.
   It validates a batch before changing files; overlapping moves run as separate commands.
-  It leaves no compatibility shim at the old path, so in-flight branches rebase
-  cleanly onto the move and then run `scripts/feature_moves.py rewrite`;
+  It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight
+  branches run `uv run python scripts/feature_moves.py rewrite` from `backend/`;
   current and historical locations of each relative import must identify one canonical target
-  or the rewrite refuses to proceed.
-  `scripts/feature_moves.py check` fails while anything still uses an old name. The diff of a
-  move PR is the renames plus the codemod's output; logic changes go in separate PRs.
+  or the rewrite refuses to proceed. Resolve ambiguous imports explicitly before retrying.
+  Changed Python files get Ruff import sorting, plus Ruff formatting if they were formatted
+  before. A move reports architecture-guard path literals matching fewer files afterwards;
+  review and update those guards by hand so they retain their coverage.
+  `uv run python scripts/feature_moves.py check` fails when a recorded module remains at its
+  old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
+  The diff of a move PR is the renames plus the codemod's output; logic changes go in separate
+  PRs.

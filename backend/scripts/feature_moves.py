@@ -1,35 +1,7 @@
 """Move risk-service code into the feature layout and rewrite every reference to it.
 
-Run from ``backend/``::
-
-    uv run python scripts/feature_moves.py move OLD NEW [OLD NEW ...]  # move, then rewrite
-    uv run python scripts/feature_moves.py rewrite  # rewrite references only
-    uv run python scripts/feature_moves.py check    # fail if an old name is still used
-
-``OLD`` and ``NEW`` are dotted names of a module (``app/x/y.py``) or a package
-(``app/x/y/``). ``move`` ``git mv``s them, leaving no shim at the old path, and appends
-one ``[old, new]`` pair per moved module to ``scripts/feature_module_moves.json``: the
-cumulative ledger the boundary guard also reads, so a moved module keeps its baseline
-identity. A branch that predates a move rebases (git carries its edits to the new
-paths) and then runs ``rewrite`` to rename whatever old-path references it added.
-
-The rewrite covers every tracked text file a module path can appear in: Python under
-``app/``, ``tests/``, ``alembic/`` and ``scripts/``, Python programs embedded in Python,
-JavaScript and TypeScript, Dockerfiles, the Markdown docs, and the ``mise`` and CI
-configuration. It rewrites
-
-* dotted names: imports, ``importlib`` string constants, ``mock.patch`` targets, prose;
-* ``from app.old import moved_module`` into ``from app.new import leaf as moved_module``,
-  so local names (and every ``monkeypatch.setattr`` on them) are unchanged;
-* relative imports that would resolve elsewhere after the move, into absolute ones;
-* slash paths (``app/services/x.py``, ``backend/tests/api/helpers.py``), which
-  path-keyed ratchets and docs use, and the ``app/``-relative paths the architecture
-  guards glob with.
-
-Changed Python files then get Ruff's import sorting, and Ruff formatting when they were
-formatted before. A move also reports every architecture-guard path literal that
-matches fewer files afterwards, since a guard whose glob matches nothing passes
-vacuously; update those by hand.
+Usage, rebase workflow and guard-review requirements are owned by
+``CODEBASE_CONVENTIONS.md`` §5, "Moving code".
 """
 
 from __future__ import annotations
@@ -350,8 +322,12 @@ def _absolute_base(
         raise UnresolvedImport(f"cannot resolve relative import in {module}: {ast.unparse(node)}")
     base = next(iter(candidates.values()))
     new_base = _resolve(_package_of(rename(module), is_package), node.level, node.module)
-    still_resolves = base == current_base and rename(base) == new_base and all(
-        rename(f"{base}.{alias.name}") == f"{new_base}.{alias.name}" for alias in node.names
+    still_resolves = (
+        base == current_base
+        and rename(base) == new_base
+        and all(
+            rename(f"{base}.{alias.name}") == f"{new_base}.{alias.name}" for alias in node.names
+        )
     )
     return None if still_resolves else base
 
@@ -384,7 +360,7 @@ def _statement_span(
     """The statement's character span, indentation and comments (trailing one included).
 
     ``None`` when the statement shares its line with other code, which a textual
-    replacement could corrupt; ``--check`` then reports the file.
+    replacement could corrupt; a subsequent dotted/path rewrite may still handle it.
     """
     start = _char_offset(text, starts, node.lineno, node.col_offset)
     end = _char_offset(text, starts, node.end_lineno or node.lineno, node.end_col_offset or 0)
@@ -597,7 +573,9 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
-        relative = path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
+        relative = (
+            path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
+        )
         if relative in _FROZEN_FILES:
             continue
         original = path.read_text(encoding="utf-8")

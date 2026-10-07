@@ -378,11 +378,14 @@ def test_cumulative_rewrites_preserve_current_relative_imports(
     repository: Path, relative: str, statement: str, module: str
 ) -> None:
     _run(repository, "move")
-    assert _python(
-        repository,
-        "from app.fx.domain.helpers import VALUE\n"
-        "from app.services.pipeline import lazy\nprint(VALUE, lazy())",
-    ) == "3 3"
+    assert (
+        _python(
+            repository,
+            "from app.fx.domain.helpers import VALUE\n"
+            "from app.services.pipeline import lazy\nprint(VALUE, lazy())",
+        )
+        == "3 3"
+    )
     path = repository / "backend" / relative
     expression = "run()" if relative.endswith("helpers.py") else "executor.run()"
     path.write_text(f"{statement}\nVALUE = {expression}\n")
@@ -390,8 +393,7 @@ def test_cumulative_rewrites_preserve_current_relative_imports(
     assert _run(repository, "rewrite") == ["exit 0"]
     assert _python(repository, f"from {module} import VALUE\nprint(VALUE)") == "1"
     path.write_text(
-        f"{statement}\nfrom app.domain.fx.engine import compute\n"
-        f"VALUE = {expression} + compute()\n"
+        f"{statement}\nfrom app.domain.fx.engine import compute\nVALUE = {expression} + compute()\n"
     )
     assert _run(repository, "check")[-1] == "exit 1"
     _run(repository, "rewrite")
@@ -462,7 +464,8 @@ def test_python_hosted_program_imports_remain_executable(
         "def result():\n"
         "    from app.services import regulatory_fx as lazy\n"
         "    assert audit is not None and label == 'ok'\n"
-        + r'    assert "\\n" == chr(92) + "n"' + "\n"
+        + r'    assert "\\n" == chr(92) + "n"'
+        + "\n"
         "    return fx.run() + lazy.run() + extra\n"
     )
     if kind == "adjacent":
@@ -616,9 +619,7 @@ def test_ambiguous_rebased_imports_refuse_all_commands(
     current_risk.write_text("LIMIT = 9\n")
     _git(repository, "add", "-u")
     _git(repository, "add", str(current_risk.relative_to(repository)))
-    _git(
-        repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "move"
-    )
+    _git(repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "move")
     _git(repository, "switch", "-q", "caller")
     _git(repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "migration")
     current_module = "app.fx.domain" + ("" if package else ".helpers")
@@ -690,7 +691,9 @@ def test_relative_package_exports_remain_executable(repository: Path) -> None:
             "    return Exported.value + LIMIT\n"
         )
     _run(repository, "move")
-    assert _python(repository, "from app.fx.domain.helpers import exported\nprint(exported())") == "10"
+    assert (
+        _python(repository, "from app.fx.domain.helpers import exported\nprint(exported())") == "10"
+    )
     assert _run(repository, "check") == ["exit 0"]
     assert _run(repository, "rewrite") == ["exit 0"]
 
