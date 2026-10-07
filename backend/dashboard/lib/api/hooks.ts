@@ -45,6 +45,9 @@ import type {
   CrmHaircutUpdate,
   EclAssumptionUpdate,
   EwiRegisterPut,
+  ForecastAssumptionDecision,
+  ForecastAssumptionVersionCreate,
+  ForecastAssumptionVersionUpdate,
   ForecastRunCreate,
   InstitutionProfilePut,
   LiquidityThresholdUpdate,
@@ -1148,6 +1151,109 @@ export function useCreateForecastRun(bankId: string | undefined) {
       });
     },
   });
+}
+
+/**
+ * Everything an assumption decision can change: the register itself, the
+ * presets the scenarios read serves, and run lists that label their version.
+ */
+const forecastAssumptionInvalidatePrefixes = [
+  "forecast-assumptions",
+  "forecast-scenarios",
+  ...forecastInvalidatePrefixes,
+];
+
+function useForecastAssumptionMutation<TVariables>(
+  bankId: string | undefined,
+  call: (bankId: string, variables: TVariables) => Promise<unknown>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: TVariables) =>
+      apiCall(() => call(bankId!, variables)),
+    onSuccess: () => {
+      forecastAssumptionInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/** The bank's governed forecast assumption versions (confidential view). */
+export function useForecastAssumptionRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ["forecast-assumptions", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        forecastingApi.getForecastAssumptionRegister({ bankId: bankId! }),
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useCreateForecastAssumptionVersion(bankId: string | undefined) {
+  return useForecastAssumptionMutation(
+    bankId,
+    (id, payload: ForecastAssumptionVersionCreate) =>
+      forecastingApi.createForecastAssumptionVersion({
+        bankId: id,
+        forecastAssumptionVersionCreate: payload,
+      }),
+  );
+}
+
+export function useUpdateForecastAssumptionVersion(bankId: string | undefined) {
+  return useForecastAssumptionMutation(
+    bankId,
+    (
+      id,
+      {
+        versionId,
+        payload,
+      }: { versionId: string; payload: ForecastAssumptionVersionUpdate },
+    ) =>
+      forecastingApi.updateForecastAssumptionVersion({
+        bankId: id,
+        versionId,
+        forecastAssumptionVersionUpdate: payload,
+      }),
+  );
+}
+
+export function useSubmitForecastAssumptionVersion(bankId: string | undefined) {
+  return useForecastAssumptionMutation(bankId, (id, versionId: string) =>
+    forecastingApi.submitForecastAssumptionVersion({ bankId: id, versionId }),
+  );
+}
+
+/** The checker's decision: approve, or reject with a reason. */
+export function useDecideForecastAssumptionVersion(bankId: string | undefined) {
+  return useForecastAssumptionMutation(
+    bankId,
+    (
+      id,
+      {
+        versionId,
+        decision,
+        payload,
+      }: {
+        versionId: string;
+        decision: "approve" | "reject";
+        payload: ForecastAssumptionDecision;
+      },
+    ) =>
+      decision === "approve"
+        ? forecastingApi.approveForecastAssumptionVersion({
+            bankId: id,
+            versionId,
+            forecastAssumptionDecision: payload,
+          })
+        : forecastingApi.rejectForecastAssumptionVersion({
+            bankId: id,
+            versionId,
+            forecastAssumptionDecision: payload,
+          }),
+  );
 }
 
 export function useRunOptimizer(bankId: string | undefined) {

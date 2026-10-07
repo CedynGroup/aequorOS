@@ -401,6 +401,12 @@ function ScenarioDesigner({
               >
                 Open on Balance Sheet <ArrowUpRight size={12} aria-hidden />
               </Link>
+              <Link
+                href={`/forecasting/nii?run=${result.id}`}
+                className="inline-flex items-center gap-1 text-caption font-medium text-action hover:underline"
+              >
+                Open NII forecast <ArrowUpRight size={12} aria-hidden />
+              </Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiStat

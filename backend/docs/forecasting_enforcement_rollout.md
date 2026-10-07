@@ -93,6 +93,16 @@ Structural exclusions, unknown routes, and unauthorized object details retain
 404 responses. An aggregated-only reader on the Balance Sheet sees the live
 baseline and run index but never requests a run's detail.
 
+On Assumptions, aggregated view admits the preset catalogue and run index;
+confidential view additionally admits the governed register and resolved run
+assumptions. Draft, edit and submit controls consume the exact confidential edit
+capability. Decision controls use the structural confidential approve capability:
+the server evaluates checker independence against the submitted version and
+requires both decision bindings listed above. A maker may therefore see a
+decision control that the server refuses under the maker-checker condition above.
+The [dashboard workflow](../dashboard/README.md#forecasting-tools) owns the steps
+for proposing and deciding a version.
+
 Every execution control — **Run forecast**, the scenario designer's run action,
 **Run optimizer**, the what-if **Run** control, and **Run reverse stress** —
 consumes the exact confidential run capability from effective authority.

@@ -372,6 +372,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      forecastingEdit: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "edit",
+      ),
+      // The checker half of the assumption maker-checker, read STRUCTURALLY
+      // for the same reason as `capitalApprove`: `approve` needs the version in
+      // hand, and the service refuses its author or submitter.
+      forecastingApprove: hasStructuralCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "approve",
+      ),
       behavioralAggregatedView: hasEffectiveCapability(
         institutionCapabilities,
         "beh",

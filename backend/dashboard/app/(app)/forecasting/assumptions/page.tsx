@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * Assumptions — read-only registry of the assumptions the forecast engine
- * actually consumed. Two real sources:
- *  1. The resolved assumption set persisted on the latest succeeded run
- *     (ResolvedForecastAssumptions), with a per-field source label derived
- *     from the run's scenario code and the preset payload.
- *  2. The preset catalogue served by the scenarios endpoint (base / adverse /
- *     severely adverse) plus the engine defaults for the three fields the
- *     presets omit.
+ * Assumptions — the governed register and what the engine actually consumed:
+ *  1. The governed register (confidential): the approved version in force,
+ *     the one change in flight with its maker-checker controls, and the
+ *     version history.
+ *  2. The resolved assumption set persisted on the latest succeeded run
+ *     (ResolvedForecastAssumptions), with a per-field source label and the
+ *     approved version the run recorded.
+ *  3. The preset catalogue served by the scenarios endpoint (base / adverse /
+ *     severely adverse) with its approved version, plus the engine defaults
+ *     for the three fields the presets omit.
  */
 
 import PageContainer from "@/components/ui/PageContainer";
@@ -19,10 +21,13 @@ import type {
   ForecastScenarioListRead,
 } from "@aequoros/risk-service-api";
 import PageHeader from "@/components/ui/PageHeader";
+import AssumptionRegister, {
+  provenanceLabel,
+} from "@/components/forecasting/AssumptionRegister";
 import StatusPill from "@/components/ui/StatusPill";
 import EmptyState from "@/components/ui/EmptyState";
 import SectionCard from "@/components/ui/SectionCard";
-import QueryBoundary from "@/components/ui/QueryBoundary";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   ASSUMPTION_FIELDS,
   type AssumptionField,
@@ -31,6 +36,7 @@ import {
 } from "@/components/forecasting/lib";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
+  useForecastAssumptionRegister,
   useForecastRun,
   useForecastRuns,
   useForecastScenarios,
@@ -55,6 +61,9 @@ export default function AssumptionsPage() {
   const runQuery = useForecastRun(
     canViewRuns ? forecastingBankId : undefined,
     latestId,
+  );
+  const registerQuery = useForecastAssumptionRegister(
+    canViewRuns ? forecastingBankId : undefined,
   );
 
   return (
@@ -83,6 +92,22 @@ export default function AssumptionsPage() {
         }}
       >
         <PageContainer className="py-6 space-y-6">
+          {/* The governed register: approved version, pending change, history */}
+          {bankId && registerQuery.data ? (
+            <AssumptionRegister
+              bankId={bankId}
+              register={registerQuery.data}
+              canEdit={moduleScope.forecastingEdit === true}
+              canApprove={moduleScope.forecastingApprove === true}
+            />
+          ) : registerQuery.error ? (
+            <ErrorPanel
+              error={registerQuery.error}
+              onRetry={() => void registerQuery.refetch()}
+              title="The assumption register could not be read"
+            />
+          ) : null}
+
           {/* Resolved on the latest run */}
           {!latestId ? (
             <EmptyState
@@ -198,6 +223,9 @@ function ResolvedSection({
             {scenarioLabel(run.scenarioCode)}
           </span>{" "}
           · engine {run.engineVersion}
+          {run.assumptionVersion && (
+            <> · presets from {provenanceLabel(run.assumptionVersion)}</>
+          )}
         </span>
       }
     >
@@ -264,7 +292,11 @@ function PresetCatalogue({
   return (
     <SectionCard
       title="Preset catalogue"
-      subtitle="Assumption values served by the scenarios endpoint — presets fill most fields; the engine defaults cover the rest"
+      subtitle={
+        scenarios.assumptionVersion
+          ? `${provenanceLabel(scenarios.assumptionVersion)} — presets fill most fields; the engine defaults cover the rest`
+          : "No approved assumption version covers the catalogue date — forecasting requires an approved version effective on or before the run's book date"
+      }
       noPadding
     >
       <div className="overflow-x-auto">

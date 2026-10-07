@@ -28,6 +28,7 @@ import ChartFrame from "@/components/ui/ChartFrame";
 import DeltaBadge from "@/components/ui/DeltaBadge";
 import ValidationList from "@/components/ui/ValidationList";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { provenanceLabel } from "@/components/forecasting/AssumptionRegister";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import { SkeletonChart } from "@/components/ui/Skeleton";
 import BalanceSheetProjectionChart from "@/components/charts/BalanceSheetProjectionChart";
@@ -449,6 +450,11 @@ function RunDashboard({
         >
           {horizon}-year horizon
         </StatusPill>
+        <span className="text-caption text-slate">
+          {run.assumptionVersion
+            ? `Assumptions: ${provenanceLabel(run.assumptionVersion)}`
+            : "No approved assumption version recorded on this run"}
+        </span>
         {adverse && (
           <span className="text-caption text-slate">
             Adverse band overlaid from run{" "}
