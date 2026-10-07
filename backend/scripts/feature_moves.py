@@ -1,6 +1,6 @@
-"""Move risk-service code into the feature layout and rewrite every reference to it.
+"""Move risk-service code into the feature layout and rewrite its references.
 
-Usage, rebase workflow and guard-review requirements are owned by
+Usage, rebase workflow, frozen-identifier and guard-review requirements are owned by
 ``CODEBASE_CONVENTIONS.md`` §5, "Moving code".
 """
 
