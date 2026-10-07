@@ -9,12 +9,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import MetaData, Table, create_engine, text
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from tests.db.test_initial_owner_migration import _insert_organization
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
@@ -163,7 +163,8 @@ def test_sqlite_upgrade_preserves_legacy_rows_and_requires_a_checker() -> None:
     with engine.begin() as connection:
         for statement in (
             "CREATE TABLE organizations (id TEXT PRIMARY KEY)",
-            "CREATE TABLE banks (id TEXT PRIMARY KEY, organization_id TEXT, jurisdiction_code TEXT)",
+            "CREATE TABLE banks (id TEXT PRIMARY KEY, organization_id TEXT, "
+            "jurisdiction_code TEXT)",
             "CREATE TABLE regulatory_runs (id TEXT PRIMARY KEY, input_hash TEXT, "
             "input_snapshot TEXT, metrics TEXT)",
             "CREATE TABLE param_stress_shock (id TEXT PRIMARY KEY, organization_id TEXT, "
