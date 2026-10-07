@@ -987,8 +987,10 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
    `git status --porcelain` is clean for `backend/openapi-schema.json` and
    `packages/risk-service-api`. It runs on pre-push. A schema change without a committed
    regenerated client fails the gate.
-4. `packages/risk-service-api/src` is excluded from style linting/formatting centrally; generated
-   files must contain no inline suppressions. Type-checking and package tests remain required.
+4. Routine formatting excludes `packages/risk-service-api/src` through the root
+   `.prettierignore`. Web ESLint commands lint their own workspaces, outside the generated
+   client's directory; ESLint does not read the root `.eslintignore`. Generated files must
+   contain no inline suppressions. Type-checking and package tests remain required.
 5. The web app must consume the generated client only — import types and
    `FromJSON`/`ToJSON`/`*Api` classes from `@aequoros/risk-service-api`; never hand-roll payload
    shapes (see CODEBASE_CONVENTIONS for the two sanctioned wrapper patterns).
