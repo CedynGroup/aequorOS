@@ -24034,16 +24034,9 @@
             "type": "string"
           },
           "approved_by": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assumption Approver Id"
+            "format": "uuid",
+            "title": "Assumption Approver Id",
+            "type": "string"
           },
           "approved_by_name": {
             "anyOf": [
@@ -24061,9 +24054,6 @@
             "title": "Effective From",
             "type": "string"
           },
-          "origin": {
-            "$ref": "#/components/schemas/ForecastAssumptionVersionOrigin"
-          },
           "version_id": {
             "format": "uuid",
             "title": "Version Id",
@@ -24077,7 +24067,6 @@
         "required": [
           "version_id",
           "version_number",
-          "origin",
           "effective_from",
           "approved_by",
           "approved_by_name",
@@ -24174,13 +24163,6 @@
         "title": "ForecastAssumptionVersionCreate",
         "type": "object"
       },
-      "ForecastAssumptionVersionOrigin": {
-        "enum": [
-          "tenant",
-          "register"
-        ],
-        "type": "string"
-      },
       "ForecastAssumptionVersionRead": {
         "additionalProperties": false,
         "properties": {
@@ -24198,16 +24180,9 @@
             "type": "string"
           },
           "created_by": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assumption Author Id"
+            "format": "uuid",
+            "title": "Assumption Author Id",
+            "type": "string"
           },
           "created_by_name": {
             "anyOf": [
@@ -24229,9 +24204,6 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
-          },
-          "origin": {
-            "$ref": "#/components/schemas/ForecastAssumptionVersionOrigin"
           },
           "presets": {
             "$ref": "#/components/schemas/ForecastPresetSetRead"
@@ -24335,7 +24307,6 @@
           "bank_id",
           "version_number",
           "status",
-          "origin",
           "effective_from",
           "presets",
           "change_note",

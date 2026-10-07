@@ -11,20 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { AssumptionApproverId } from "./AssumptionApproverId";
-import {
-  AssumptionApproverIdFromJSON,
-  AssumptionApproverIdFromJSONTyped,
-  AssumptionApproverIdToJSON,
-  AssumptionApproverIdToJSONTyped,
-} from "./AssumptionApproverId";
-import type { ForecastAssumptionVersionOrigin } from "./ForecastAssumptionVersionOrigin";
-import {
-  ForecastAssumptionVersionOriginFromJSON,
-  ForecastAssumptionVersionOriginFromJSONTyped,
-  ForecastAssumptionVersionOriginToJSON,
-  ForecastAssumptionVersionOriginToJSONTyped,
-} from "./ForecastAssumptionVersionOrigin";
 import type { AssumptionApproverName } from "./AssumptionApproverName";
 import {
   AssumptionApproverNameFromJSON,
@@ -54,10 +40,10 @@ export interface WhatIfAssumptionVersion {
   approvedAt: Date;
   /**
    *
-   * @type {AssumptionApproverId}
+   * @type {string}
    * @memberof WhatIfAssumptionVersion
    */
-  approvedBy: AssumptionApproverId;
+  approvedBy: string;
   /**
    *
    * @type {AssumptionApproverName}
@@ -70,12 +56,6 @@ export interface WhatIfAssumptionVersion {
    * @memberof WhatIfAssumptionVersion
    */
   effectiveFrom: Date;
-  /**
-   *
-   * @type {ForecastAssumptionVersionOrigin}
-   * @memberof WhatIfAssumptionVersion
-   */
-  origin: ForecastAssumptionVersionOrigin;
   /**
    *
    * @type {string}
@@ -104,7 +84,6 @@ export function instanceOfWhatIfAssumptionVersion(
     return false;
   if (!("effectiveFrom" in value) || value["effectiveFrom"] === undefined)
     return false;
-  if (!("origin" in value) || value["origin"] === undefined) return false;
   if (!("versionId" in value) || value["versionId"] === undefined) return false;
   if (!("versionNumber" in value) || value["versionNumber"] === undefined)
     return false;
@@ -126,10 +105,9 @@ export function WhatIfAssumptionVersionFromJSONTyped(
   }
   return {
     approvedAt: new Date(json["approved_at"]),
-    approvedBy: AssumptionApproverIdFromJSON(json["approved_by"]),
+    approvedBy: json["approved_by"],
     approvedByName: AssumptionApproverNameFromJSON(json["approved_by_name"]),
     effectiveFrom: new Date(json["effective_from"]),
-    origin: ForecastAssumptionVersionOriginFromJSON(json["origin"]),
     versionId: json["version_id"],
     versionNumber: json["version_number"],
   };
@@ -151,10 +129,9 @@ export function WhatIfAssumptionVersionToJSONTyped(
 
   return {
     approved_at: value["approvedAt"].toISOString(),
-    approved_by: AssumptionApproverIdToJSON(value["approvedBy"]),
+    approved_by: value["approvedBy"],
     approved_by_name: AssumptionApproverNameToJSON(value["approvedByName"]),
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
-    origin: ForecastAssumptionVersionOriginToJSON(value["origin"]),
     version_id: value["versionId"],
     version_number: value["versionNumber"],
   };

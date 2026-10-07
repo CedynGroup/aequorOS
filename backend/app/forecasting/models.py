@@ -30,8 +30,6 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 VERSION_STATUSES: Final = ("draft", "submitted", "approved", "rejected")
 OPEN_STATUSES: Final = ("draft", "submitted")
 
-VERSION_ORIGINS: Final = ("tenant", "register")
-
 
 def _in(values: tuple[str, ...]) -> str:
     return "(" + ", ".join(f"'{value}'" for value in values) + ")"
@@ -54,16 +52,13 @@ class ForecastAssumptionVersion(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "forecast_assumption_versions"
     __table_args__ = (
         CheckConstraint(f"status IN {_in(VERSION_STATUSES)}", name="ck_fav_status"),
-        CheckConstraint(f"origin IN {_in(VERSION_ORIGINS)}", name="ck_fav_origin"),
         CheckConstraint("version_number >= 1", name="ck_fav_version_number"),
-        # An approval always records when and by whom: a platform user, or, for a
-        # register row carried over by the migration, the approver it named.
         CheckConstraint(
             "status NOT IN ('approved', 'rejected') OR reviewed_at IS NOT NULL",
             name="ck_fav_reviewed_at",
         ),
         CheckConstraint(
-            "status <> 'approved' OR reviewed_by IS NOT NULL OR approver_label IS NOT NULL",
+            "status <> 'approved' OR reviewed_by IS NOT NULL",
             name="ck_fav_approver",
         ),
         CheckConstraint(
@@ -71,7 +66,7 @@ class ForecastAssumptionVersion(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_fav_checker_not_submitter",
         ),
         CheckConstraint(
-            "reviewed_by IS NULL OR created_by IS NULL OR reviewed_by <> created_by",
+            "reviewed_by IS NULL OR reviewed_by <> created_by",
             name="ck_fav_checker_not_author",
         ),
         UniqueConstraint(
@@ -107,15 +102,13 @@ class ForecastAssumptionVersion(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
-    origin: Mapped[str] = mapped_column(String(24), nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     #: ``{scenario_code: {assumption_key: "decimal string"}}``, always complete.
     presets: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     change_note: Mapped[str] = mapped_column(Text, nullable=False)
-    created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    created_by: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     submitted_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    approver_label: Mapped[str | None] = mapped_column(String(120), nullable=True)

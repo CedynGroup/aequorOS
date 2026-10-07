@@ -1202,7 +1202,7 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   adverse and severely adverse presets only from an approved bank-scoped
   `ForecastAssumptionVersion`** (`app/forecasting/`, the first feature package in the target
   layout). `param_stress_shock` rows with `module = 'forecast'` are no longer read; migration
-  `202610070084` carried every complete register set over as approved versions.
+  `202610070084` creates the empty version register; legacy parameter rows remain untouched.
 - **Mutations lock the version until commit; approved and rejected versions are final.**
   A bank has at most one draft or submitted version awaiting a decision. Required bindings
   and the runtime maker-checker condition are owned by the

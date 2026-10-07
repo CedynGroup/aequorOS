@@ -177,7 +177,6 @@ def create_version(
         bank_id=bank.id,
         version_number=next_number,
         status="draft",
-        origin="tenant",
         effective_from=payload.effective_from,
         presets=_stored(presets),
         change_note=payload.change_note,
@@ -488,22 +487,16 @@ def _names(db: Session, organization_id: str, user_ids: Iterable[UUID | None]) -
 def _provenance(
     version: ForecastAssumptionVersion, names: dict[UUID, str]
 ) -> ForecastAssumptionProvenanceRead:
+    assert version.reviewed_by is not None
     return ForecastAssumptionProvenanceRead(
         version_id=version.id,
         version_number=version.version_number,
-        origin=version.origin,  # type: ignore[arg-type]
         effective_from=version.effective_from,
         approved_by=version.reviewed_by,
-        approved_by_name=_reviewer_name(version, names),
+        approved_by_name=names.get(version.reviewed_by),
         # ``ck_fav_reviewed_at``: an approved version always records when.
         approved_at=version.reviewed_at,  # type: ignore[arg-type]
     )
-
-
-def _reviewer_name(version: ForecastAssumptionVersion, names: dict[UUID, str]) -> str | None:
-    if version.reviewed_by is not None:
-        return names.get(version.reviewed_by)
-    return version.approver_label
 
 
 def _read_one(db: Session, version: ForecastAssumptionVersion) -> ForecastAssumptionVersionRead:
@@ -521,7 +514,6 @@ def _read(
         bank_id=version.bank_id,
         version_number=version.version_number,
         status=version.status,  # type: ignore[arg-type]
-        origin=version.origin,  # type: ignore[arg-type]
         effective_from=version.effective_from,
         presets=ForecastPresetSetRead.model_validate(version.presets),
         change_note=version.change_note,
@@ -532,7 +524,7 @@ def _read(
         submitted_by_name=name(version.submitted_by),
         submitted_at=version.submitted_at,
         reviewed_by=version.reviewed_by,
-        reviewed_by_name=_reviewer_name(version, names),
+        reviewed_by_name=name(version.reviewed_by),
         reviewed_at=version.reviewed_at,
         review_note=version.review_note,
         updated_at=version.updated_at,

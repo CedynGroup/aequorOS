@@ -10,7 +10,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 type ForecastAssumptionVersionStatus = Literal["draft", "submitted", "approved", "rejected"]
-type ForecastAssumptionVersionOrigin = Literal["tenant", "register"]
 
 
 class ClosedModel(BaseModel):
@@ -82,9 +81,8 @@ class ForecastAssumptionProvenanceRead(ClosedModel):
 
     version_id: UUID
     version_number: int
-    origin: ForecastAssumptionVersionOrigin
     effective_from: date
-    approved_by: UUID | None = Field(title="Assumption Approver Id")
+    approved_by: UUID = Field(title="Assumption Approver Id")
     approved_by_name: str | None = Field(title="Assumption Approver Name")
     approved_at: datetime
 
@@ -94,11 +92,10 @@ class ForecastAssumptionVersionRead(ClosedModel):
     bank_id: str
     version_number: int
     status: ForecastAssumptionVersionStatus
-    origin: ForecastAssumptionVersionOrigin
     effective_from: date
     presets: ForecastPresetSetRead
     change_note: str
-    created_by: UUID | None = Field(title="Assumption Author Id")
+    created_by: UUID = Field(title="Assumption Author Id")
     created_by_name: str | None = Field(title="Assumption Author Name")
     created_at: datetime
     submitted_by: UUID | None = Field(title="Assumption Submitter Id")

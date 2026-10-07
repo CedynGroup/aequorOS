@@ -50,7 +50,8 @@ from app.models import (
 )
 from app.services import authorization, membership
 from tests.fixtures.canonical_bank_fixture import (
-    APPROVED_BY,
+    FORECAST_APPROVER_ID,
+    FORECAST_APPROVER_NAME,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
@@ -226,19 +227,14 @@ def test_maker_drafts_checker_approves_and_the_next_run_resolves_the_new_version
     assert provenance == {
         "version_id": provenance["version_id"],
         "version_number": 1,
-        "origin": "register",
         "effective_from": "2000-01-01",
-        "approved_by": None,
-        "approved_by_name": APPROVED_BY,
+        "approved_by": str(FORECAST_APPROVER_ID),
+        "approved_by_name": FORECAST_APPROVER_NAME,
     }
     assert before["assumptions"]["nim_pct"] == "4.8"
 
     version = _draft(db_client, maker, period_end, _revised(nim_pct="5.5", loan_growth_pct="22"))
-    assert (version["version_number"], version["status"], version["origin"]) == (
-        2,
-        "draft",
-        "tenant",
-    )
+    assert (version["version_number"], version["status"]) == (2, "draft")
     assert version["created_by"] == str(USER_1)
 
     # The maker can neither approve their own submission nor reach the decision at all
@@ -495,7 +491,6 @@ def test_bank_authored_assumptions_never_resolve_until_approved(db_client: TestC
     assert register["open_version_id"] is None
     draft = _draft(db_client, maker, date(2000, 1, 1), _revised())
     draft_id = draft["id"]
-    assert draft["origin"] == "tenant"
     assert draft["created_by"] == str(USER_1)
 
     refused = _run(db_client, maker, period_id)
@@ -509,7 +504,6 @@ def test_bank_authored_assumptions_never_resolve_until_approved(db_client: TestC
     assert db_client.post(f"{VERSIONS}/{draft_id}/submit", headers=maker).status_code == 200
     approved = db_client.post(f"{VERSIONS}/{draft_id}/approve", headers=checker, json={})
     assert approved.status_code == 200, approved.text
-    assert approved.json()["origin"] == "tenant"
 
     run = _run(db_client, maker, period_id)
     assert run["status"] == "succeeded"

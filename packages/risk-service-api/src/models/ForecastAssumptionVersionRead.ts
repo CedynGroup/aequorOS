@@ -60,13 +60,6 @@ import {
   AssumptionSubmitterNameToJSON,
   AssumptionSubmitterNameToJSONTyped,
 } from "./AssumptionSubmitterName";
-import type { AssumptionAuthorId } from "./AssumptionAuthorId";
-import {
-  AssumptionAuthorIdFromJSON,
-  AssumptionAuthorIdFromJSONTyped,
-  AssumptionAuthorIdToJSON,
-  AssumptionAuthorIdToJSONTyped,
-} from "./AssumptionAuthorId";
 import type { AssumptionSubmittedAt } from "./AssumptionSubmittedAt";
 import {
   AssumptionSubmittedAtFromJSON,
@@ -88,13 +81,6 @@ import {
   AssumptionReviewerNameToJSON,
   AssumptionReviewerNameToJSONTyped,
 } from "./AssumptionReviewerName";
-import type { ForecastAssumptionVersionOrigin } from "./ForecastAssumptionVersionOrigin";
-import {
-  ForecastAssumptionVersionOriginFromJSON,
-  ForecastAssumptionVersionOriginFromJSONTyped,
-  ForecastAssumptionVersionOriginToJSON,
-  ForecastAssumptionVersionOriginToJSONTyped,
-} from "./ForecastAssumptionVersionOrigin";
 
 /**
  *
@@ -122,10 +108,10 @@ export interface ForecastAssumptionVersionRead {
   createdAt: Date;
   /**
    *
-   * @type {AssumptionAuthorId}
+   * @type {string}
    * @memberof ForecastAssumptionVersionRead
    */
-  createdBy: AssumptionAuthorId;
+  createdBy: string;
   /**
    *
    * @type {AssumptionAuthorName}
@@ -144,12 +130,6 @@ export interface ForecastAssumptionVersionRead {
    * @memberof ForecastAssumptionVersionRead
    */
   id: string;
-  /**
-   *
-   * @type {ForecastAssumptionVersionOrigin}
-   * @memberof ForecastAssumptionVersionRead
-   */
-  origin: ForecastAssumptionVersionOrigin;
   /**
    *
    * @type {ForecastPresetSetRead}
@@ -234,7 +214,6 @@ export function instanceOfForecastAssumptionVersionRead(
   if (!("effectiveFrom" in value) || value["effectiveFrom"] === undefined)
     return false;
   if (!("id" in value) || value["id"] === undefined) return false;
-  if (!("origin" in value) || value["origin"] === undefined) return false;
   if (!("presets" in value) || value["presets"] === undefined) return false;
   if (!("reviewNote" in value) || value["reviewNote"] === undefined)
     return false;
@@ -275,11 +254,10 @@ export function ForecastAssumptionVersionReadFromJSONTyped(
     bankId: json["bank_id"],
     changeNote: json["change_note"],
     createdAt: new Date(json["created_at"]),
-    createdBy: AssumptionAuthorIdFromJSON(json["created_by"]),
+    createdBy: json["created_by"],
     createdByName: AssumptionAuthorNameFromJSON(json["created_by_name"]),
     effectiveFrom: new Date(json["effective_from"]),
     id: json["id"],
-    origin: ForecastAssumptionVersionOriginFromJSON(json["origin"]),
     presets: ForecastPresetSetReadFromJSON(json["presets"]),
     reviewNote: AssumptionReviewNoteFromJSON(json["review_note"]),
     reviewedAt: AssumptionReviewedAtFromJSON(json["reviewed_at"]),
@@ -312,11 +290,10 @@ export function ForecastAssumptionVersionReadToJSONTyped(
     bank_id: value["bankId"],
     change_note: value["changeNote"],
     created_at: value["createdAt"].toISOString(),
-    created_by: AssumptionAuthorIdToJSON(value["createdBy"]),
+    created_by: value["createdBy"],
     created_by_name: AssumptionAuthorNameToJSON(value["createdByName"]),
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     id: value["id"],
-    origin: ForecastAssumptionVersionOriginToJSON(value["origin"]),
     presets: ForecastPresetSetReadToJSON(value["presets"]),
     review_note: AssumptionReviewNoteToJSON(value["reviewNote"]),
     reviewed_at: AssumptionReviewedAtToJSON(value["reviewedAt"]),

@@ -50,6 +50,8 @@ DEMO_ORG_NAME = "AequorOS Demo Organization"
 DEMO_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 DEMO_USER_EMAIL = "demo.user.one@example.test"
 DEMO_USER_NAME = "Demo User One"
+FORECAST_APPROVER_ID = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+FORECAST_APPROVER_NAME = "Forecast Fixture Checker"
 ISOLATED_ORG_ID = "OR-1S000002"
 ISOLATED_ORG_NAME = "AequorOS Isolated Tenant"
 SAMPLE_BANK_ID = "BK-SAMP0001"
@@ -1525,25 +1527,31 @@ def set_board_threshold(session: Session, code: str, value: str | None) -> None:
 
 
 def _seed_forecast_assumptions(session: Session) -> None:
-    """The Sample Bank's approved forecast assumptions: version 1, from the register's epoch.
-
-    The values are the application's starting position (defined ONCE, in
-    ``app/forecasting/domain/assumptions.py``), approved under the same label
-    and timestamp as the rest of the fixture's board register, so every
-    forecast journey projects the book under a known, governed set.
-    """
+    """The canonical book's approved assumptions with distinct fixture maker and checker."""
+    if session.get(User, FORECAST_APPROVER_ID) is None:
+        session.add(
+            User(
+                id=FORECAST_APPROVER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="forecast.checker@example.test",
+                display_name=FORECAST_APPROVER_NAME,
+                is_active=True,
+            )
+        )
     session.add(
         ForecastAssumptionVersion(
             organization_id=DEMO_ORG_ID,
             bank_id=SAMPLE_BANK_ID,
             version_number=1,
             status="approved",
-            origin="register",
             effective_from=EFFECTIVE_FROM,
             presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
             change_note="Hermetic fixture: the canonical book's approved forecast assumptions.",
             reviewed_at=APPROVAL_TIMESTAMP,
-            approver_label=APPROVED_BY,
+            created_by=DEMO_USER_ID,
+            submitted_by=DEMO_USER_ID,
+            submitted_at=APPROVAL_TIMESTAMP,
+            reviewed_by=FORECAST_APPROVER_ID,
         )
     )
 

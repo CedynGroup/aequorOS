@@ -22,6 +22,8 @@ from app.models import (
 from app.services.params import get_active_params
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
+    DEMO_USER_ID,
+    FORECAST_APPROVER_ID,
     ISOLATED_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -211,11 +213,13 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
     # The forecast presets are the bank's approved assumption version 1.
     version = db_session.scalar(select(ForecastAssumptionVersion))
     assert version is not None
-    assert (version.version_number, version.status, version.approver_label) == (
+    assert (version.version_number, version.status, version.reviewed_by) == (
         1,
         "approved",
-        "Bank of Ghana CRD baseline",
+        FORECAST_APPROVER_ID,
     )
+    assert version.created_by == version.submitted_by == DEMO_USER_ID
+    assert version.reviewed_by != version.created_by
 
     rwa_multiplier = db_session.scalar(
         select(ParamCapitalThreshold).where(

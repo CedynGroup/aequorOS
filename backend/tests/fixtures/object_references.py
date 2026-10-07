@@ -678,7 +678,6 @@ def _forecast_assumption_version(session: Session, tenant: TenantSeed, _objects:
             bank_id=tenant.bank_id,
             version_number=1,
             status="submitted",
-            origin="tenant",
             effective_from=PERIOD_START,
             presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
             change_note=tenant.marker,

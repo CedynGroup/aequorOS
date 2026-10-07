@@ -1,20 +1,20 @@
-"""Postgres proof for the governed forecast assumption register (202610070084).
-
-A bank that could forecast before the revision keeps forecasting on the same
-values: every effective date at which its organization's register resolved a
-COMPLETE preset set becomes an approved version for each of its banks in that
-jurisdiction. An incomplete set is not carried over, and the table is FORCE-RLS.
-"""
+"""The governed register starts empty without changing legacy parameters or saved runs."""
 
 from __future__ import annotations
 
+import importlib.util
 import os
 from datetime import UTC, date, datetime
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from alembic import command
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from tests.db.test_initial_owner_migration import _insert_organization
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
@@ -99,7 +99,7 @@ def _insert_preset(  # noqa: PLR0913 - one register row, every identity column e
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration tests.",
 )
-def test_complete_register_sets_become_approved_versions_per_bank(
+def test_upgrade_leaves_legacy_presets_without_approved_versions(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     config = alembic_config_for_app()
@@ -132,38 +132,13 @@ def test_complete_register_sets_become_approved_versions_per_bank(
         connection.execute(
             text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
         )
-        versions = (
-            connection.execute(
-                text(
-                    """
-                SELECT bank_id, version_number, status, origin, effective_from,
-                       presets, approver_label, reviewed_at, reviewed_by
-                FROM forecast_assumption_versions
-                ORDER BY bank_id, version_number
-                """
-                )
+        assert connection.scalar(text("SELECT count(*) FROM forecast_assumption_versions")) == 0
+        assert (
+            connection.scalar(
+                text("SELECT count(*) FROM param_stress_shock WHERE module = 'forecast'")
             )
-            .mappings()
-            .all()
+            == len(SCENARIOS) * len(KEYS) + 1
         )
-    assert [(v["bank_id"], v["version_number"]) for v in versions] == [
-        (BANKS[0], 1),
-        (BANKS[0], 2),
-        (BANKS[1], 1),
-        (BANKS[1], 2),
-    ]
-    first, second = versions[0], versions[1]
-    assert (first["status"], first["origin"], first["reviewed_by"]) == (
-        "approved",
-        "register",
-        None,
-    )
-    assert (first["effective_from"], first["approver_label"]) == (date(2000, 1, 1), "Board 2025")
-    assert first["reviewed_at"] == APPROVED_AT
-    assert first["presets"]["base"]["nim_pct"] == "4.8"
-    assert (second["effective_from"], second["approver_label"]) == (date(2026, 3, 1), "Board 2026")
-    assert second["presets"]["base"]["nim_pct"] == "5.5"
-    assert second["presets"]["adverse"]["nim_pct"] == "4.8"
 
     with migrated_postgres_schema.app_engine.begin() as connection:
         connection.execute(
@@ -174,3 +149,82 @@ def test_complete_register_sets_become_approved_versions_per_bank(
     assert migrated_postgres_schema.policies({"forecast_assumption_versions"}) == {
         "forecast_assumption_versions_tenant_isolation"
     }
+
+
+def test_sqlite_upgrade_preserves_legacy_rows_and_requires_a_checker() -> None:
+    path = (
+        Path(__file__).parents[2] / "alembic/versions/202610070084_forecast_assumption_versions.py"
+    )
+    spec = importlib.util.spec_from_file_location("forecast_assumption_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        for statement in (
+            "CREATE TABLE organizations (id TEXT PRIMARY KEY)",
+            "CREATE TABLE banks (id TEXT PRIMARY KEY, organization_id TEXT, jurisdiction_code TEXT)",
+            "CREATE TABLE regulatory_runs (id TEXT PRIMARY KEY, input_hash TEXT, "
+            "input_snapshot TEXT, metrics TEXT)",
+            "CREATE TABLE param_stress_shock (id TEXT PRIMARY KEY, organization_id TEXT, "
+            "jurisdiction_code TEXT, module TEXT, scenario_code TEXT, shock_key TEXT, "
+            "shock_value TEXT, effective_from TEXT, effective_to TEXT, approved_by TEXT, "
+            "approval_timestamp TEXT)",
+        ):
+            connection.exec_driver_sql(statement)
+        connection.execute(text("INSERT INTO organizations VALUES (:org)"), {"org": ORG})
+        connection.execute(
+            text("INSERT INTO banks VALUES (:bank, :org, 'GH')"),
+            {"bank": BANKS[0], "org": ORG},
+        )
+        for scenario in SCENARIOS:
+            for key in KEYS:
+                connection.execute(
+                    text(
+                        "INSERT INTO param_stress_shock VALUES "
+                        "(:id, :org, 'GH', 'forecast', :scenario, :key, '4.8', "
+                        "'2000-01-01', NULL, 'Legacy board label', '2025-01-01 00:00:00')"
+                    ),
+                    {"id": str(uuid4()), "org": ORG, "scenario": scenario, "key": key},
+                )
+        connection.exec_driver_sql(
+            "INSERT INTO regulatory_runs VALUES "
+            "('saved', 'value-hash', '{\"nim_pct\":\"4.8\"}', '{\"nii\":123}')"
+        )
+        legacy = connection.execute(text("SELECT * FROM param_stress_shock ORDER BY id")).all()
+        saved = connection.execute(text("SELECT * FROM regulatory_runs")).one()
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+        assert connection.scalar(text("SELECT count(*) FROM forecast_assumption_versions")) == 0
+        assert (
+            connection.execute(text("SELECT * FROM param_stress_shock ORDER BY id")).all() == legacy
+        )
+        assert (
+            connection.execute(
+                text("SELECT id, input_hash, input_snapshot, metrics FROM regulatory_runs")
+            ).one()
+            == saved
+        )
+        versions = Table("forecast_assumption_versions", MetaData(), autoload_with=connection)
+        proposed = {
+            "id": uuid4().hex,
+            "organization_id": ORG,
+            "bank_id": BANKS[0],
+            "version_number": 1,
+            "status": "approved",
+            "effective_from": date(2000, 1, 1),
+            "presets": {},
+            "change_note": "Governed proposal",
+            "created_by": uuid4().hex,
+            "reviewed_at": APPROVED_AT,
+            "created_at": APPROVED_AT,
+            "updated_at": APPROVED_AT,
+        }
+        with pytest.raises(IntegrityError):
+            connection.execute(versions.insert(), proposed)
+        connection.execute(versions.insert(), {**proposed, "reviewed_by": uuid4().hex})
+        assert connection.scalar(text("SELECT count(*) FROM forecast_assumption_versions")) == 1
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.downgrade()
+        assert connection.execute(text("SELECT * FROM regulatory_runs")).one() == saved
+    engine.dispose()
