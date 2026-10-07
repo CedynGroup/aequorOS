@@ -126,9 +126,9 @@ uv run basedpyright
 The hermetic default runs on SQLite with row-level security switched off, so a
 green run is **not** evidence about Postgres. Boolean server defaults, String-vs-UUID
 comparisons, row locks and RLS policies all behave differently there; the
-Postgres-gated suites opt in explicitly via `TEST_DATABASE_URL` (each run creates
-and drops its own `risk_service_test_<hex>` schema). The task inventory is in
-`backend/mise.toml`.
+Postgres-gated suites opt in explicitly via `TEST_DATABASE_URL`; see the backend's
+[test database guide](backend/README.md#test-databases-and-the-primary-database)
+for schema isolation and parallel execution. The task inventory is in `backend/mise.toml`.
 
 For native PostgreSQL 17 and MinIO, install
 `brew install postgresql@17 homebrew/core/minio`,
