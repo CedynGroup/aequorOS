@@ -531,8 +531,58 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.services.icaap.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
-    assert _defining_module("app.services.regulatory_fx.any_name") == "app.services.regulatory_fx"
-    assert _model_reexports()["app.models.Bank"] == "app.models.regulatory"
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        ("app.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.identity.models", "identity", "app.fx.service"),
+    ],
+)
+@pytest.mark.parametrize("registry_name", ["Bank", "Institution"])
+def test_scanner_resolves_synthetic_modules_and_registry_imports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layout: tuple[str, str, str],
+    registry_name: str,
+) -> None:
+    app = tmp_path / "app"
+    ledger = tmp_path / "moves.json"
+    ledger.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(_planes, "APP", app)
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.MODULE_MOVES", ledger)
+    bank_module, bank_feature, fx_module = layout
+    files = {
+        "app.models.__init__": (
+            f"from {bank_module} import Bank\n"
+            f"from {bank_module} import Bank as Institution\n"
+        ),
+        bank_module: "class Bank: pass\n",
+        fx_module: "def quote(): pass\n",
+        "app.stress.service": (
+            f"from app.models import {registry_name}\nfrom {fx_module} import quote\n"
+        ),
+    }
+    for module, content in files.items():
+        path = app.joinpath(*module.split(".")[1:]).with_suffix(".py")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    _owners.cache_clear()
+    _model_reexports.cache_clear()
+    try:
+        assert _defining_module(fx_module) == fx_module
+        assert _defining_module(f"{fx_module}.quote.result") == fx_module
+        assert _defining_module("app.unowned.missing") is None
+        assert _model_reexports()[f"app.models.{registry_name}"] == bank_module
+        assert violations() == {
+            f"private stress->{bank_feature}: app.stress.service -> {bank_module}",
+            f"private stress->fx: app.stress.service -> {fx_module}",
+        }
+    finally:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
 
 
 @pytest.mark.parametrize("move_source,move_target", [(True, False), (False, True), (True, True)])
