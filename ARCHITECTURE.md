@@ -1205,11 +1205,14 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `202610070084` carried every complete register set over as approved versions.
 - **Maker-checker is a runtime condition, not a screen convention.** Forecasting `edit` drafts,
   revises and submits; the decision route requires `review`, and the service requires
-  `approve` with a `MAKER_CHECKER` condition that refuses whoever drafted or submitted the
-  version. Approved and rejected versions are final.
+  `approve` with a `MAKER_CHECKER` condition that refuses whoever drafted, revised or submitted
+  the version. Mutations lock the version until commit; approved and rejected versions are
+  final. A bank has at most one draft or submitted version awaiting a decision.
 - **Effective dating is by book date** (the run's as-of): the latest-effective approved version
   wins, and a new version may not take effect before the bank's current one, so approving it
   never changes what an earlier book date resolves.
+- **Approval enqueues the existing live and BI refresh trigger** in the approval transaction,
+  using the bank's current live date.
 - **Runs record `assumption_provenance` beside the snapshot** (version, effective date,
   approver), never inside the value-based `input_hash`.
 - **Provisioning writes no forecast assumption values** and reports the missing approved

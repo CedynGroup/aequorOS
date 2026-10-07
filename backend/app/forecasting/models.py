@@ -45,6 +45,10 @@ class ForecastAssumptionVersion(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     the bank. ``effective_from`` is the first book date (a run's as-of date) the
     version governs; for a book date the latest-effective approved version wins,
     and a later approval on the same effective date supersedes an earlier one.
+
+    At most one draft or submission is allowed per bank so there is one pending
+    decision to review. The decision service excludes every maker recorded in
+    the audit trail, including revision actors, in addition to these row checks.
     """
 
     __tablename__ = "forecast_assumption_versions"

@@ -9,14 +9,21 @@ and a bank with no approved version stays not computable.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import date, timedelta
+from decimal import Decimal
+from threading import Event
 from typing import Any
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -25,12 +32,19 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.forecasting import service
+from app.forecasting.schemas import ForecastAssumptionDecision, ForecastAssumptionVersionUpdate
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
+    Bank,
     BankReportingPeriod,
+    CurrentFinancialFact,
     ForecastAssumptionVersion,
+    Job,
     RegulatoryRun,
     User,
 )
@@ -480,3 +494,240 @@ def test_bank_authored_assumptions_never_resolve_until_approved(db_client: TestC
     )
     assert registry.status_code == 200, registry.text
     assert registry.json()["assumption_provenance"] == run["assumption_version"]
+
+
+@pytest.mark.parametrize("verb", ["approve", "reject"])
+@pytest.mark.parametrize(
+    "revision",
+    [
+        {"presets": _revised(nim_pct="6")},
+        {"effective_from": "2026-02-01"},
+        {"change_note": "Checker's revised board plan"},
+    ],
+)
+def test_revision_actors_cannot_decide_even_after_the_author_restores_the_values(
+    db_client: TestClient, verb: str, revision: dict[str, Any]
+) -> None:
+    _seed_book()
+    maker, _ = _maker_and_checker()
+    reviser = _grant(CHECKER_ID, RoleBundle.ANALYST)
+    version = _draft(db_client, maker, date(2026, 1, 1), _revised())
+    target = f"{VERSIONS}/{version['id']}"
+    assert db_client.patch(target, headers=reviser, json=revision).status_code == 200
+    restored = db_client.patch(
+        target,
+        headers=maker,
+        json={
+            "presets": _revised(),
+            "effective_from": "2026-01-01",
+            "change_note": "Author restored the original plan",
+        },
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["created_by"] == str(USER_1)
+    assert db_client.post(f"{target}/submit", headers=maker).status_code == 200
+    refused = db_client.post(f"{target}/{verb}", headers=reviser, json={"note": "Self-review"})
+    assert refused.status_code == 403, refused.text
+    current = db_client.get(target, headers=maker).json()
+    assert current["status"] == "submitted"
+    assert current["reviewed_by"] is None
+
+
+def _mutate_version(session: Session, ctx: TenantContext, version_id: UUID, verb: str) -> None:
+    if verb == "revise":
+        service.update_version(
+            session,
+            ctx,
+            SAMPLE_BANK_ID,
+            version_id,
+            ForecastAssumptionVersionUpdate.model_validate(
+                {"presets": _revised(nim_pct="6"), "change_note": "Concurrent revision"}
+            ),
+        )
+    elif verb == "submit":
+        service.submit_version(session, ctx, SAMPLE_BANK_ID, version_id)
+    elif verb == "approve":
+        service.approve_version(
+            session, ctx, SAMPLE_BANK_ID, version_id, ForecastAssumptionDecision()
+        )
+    else:
+        service.reject_version(
+            session,
+            ctx,
+            SAMPLE_BANK_ID,
+            version_id,
+            ForecastAssumptionDecision(note="Concurrent rejection"),
+        )
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("verb", ["revise", "submit", "approve", "reject"])
+def test_mutations_wait_for_the_version_lock_and_refuse_a_concurrent_final_decision(
+    db_client: TestClient, verb: str
+) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as session:
+        if session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+    _seed_book()
+    maker, _ = _maker_and_checker()
+    version = _draft(db_client, maker, date(2026, 1, 1), _revised())
+    version_id = UUID(version["id"])
+    initial_status = "draft"
+    if verb in {"approve", "reject"}:
+        assert db_client.post(f"{VERSIONS}/{version_id}/submit", headers=maker).status_code == 200
+        initial_status = "submitted"
+    loaded_by_racer = Event()
+
+    def mutate() -> int:
+        with sessionmaker() as session:
+            session.info["organization_id"] = ORG_1
+            loaded = session.get(ForecastAssumptionVersion, version_id)
+            assert loaded is not None and loaded.status == initial_status
+            loaded_by_racer.set()
+            actor = USER_1 if verb in {"revise", "submit"} else CHECKER_ID
+            ctx = TenantContext(organization_id=ORG_1, actor_user_id=actor)
+            try:
+                _mutate_version(session, ctx, version_id, verb)
+            except HTTPException as exc:
+                session.rollback()
+                return exc.status_code
+            return 200
+
+    with sessionmaker() as winner:
+        winner.info["organization_id"] = ORG_1
+        row = winner.scalar(
+            select(ForecastAssumptionVersion)
+            .where(ForecastAssumptionVersion.id == version_id)
+            .with_for_update()
+        )
+        assert row is not None
+        row.status = "approved"
+        row.submitted_by = USER_1
+        row.reviewed_by = CHECKER_ID
+        row.reviewed_at = utc_now()
+        row.review_note = "Winning decision"
+        winner.flush()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(mutate)
+            try:
+                assert loaded_by_racer.wait(timeout=5)
+                with pytest.raises(FutureTimeoutError):
+                    future.result(timeout=0.2)
+            finally:
+                winner.commit()
+            assert future.result(timeout=5) == 409
+    current = db_client.get(f"{VERSIONS}/{version_id}", headers=maker).json()
+    assert current["status"] == "approved"
+    assert current["presets"] == version["presets"]
+    assert current["change_note"] == version["change_note"]
+    assert current["review_note"] == "Winning decision"
+
+
+@pytest.mark.parametrize("live_input", [False, True])
+def test_approval_enqueues_live_and_bi_refreshes_only_when_the_bank_has_live_inputs(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, live_input: bool
+) -> None:
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    _, live_date = _seed_book()
+    maker, checker = _maker_and_checker()
+    if live_input:
+        with get_sessionmaker()() as session:
+            session.info["organization_id"] = ORG_1
+            bank = session.get(Bank, SAMPLE_BANK_ID)
+            assert bank is not None
+            session.add(
+                CurrentFinancialFact(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    source_as_of_date=live_date,
+                    source_generation=1,
+                    fact_group="balance_sheet",
+                    category="cash_vault",
+                    amount=Decimal("1"),
+                    currency=bank.currency,
+                )
+            )
+            session.commit()
+    version = _draft(db_client, maker, date(2025, 1, 1), _revised(nim_pct="6"))
+    assert db_client.post(f"{VERSIONS}/{version['id']}/submit", headers=maker).status_code == 200
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        assert session.scalars(select(Job).where(Job.bank_id == SAMPLE_BANK_ID)).all() == []
+    approved = db_client.post(f"{VERSIONS}/{version['id']}/approve", headers=checker, json={})
+    assert approved.status_code == 200, approved.text
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        jobs = session.scalars(select(Job).where(Job.bank_id == SAMPLE_BANK_ID)).all()
+        assert {job.job_type for job in jobs} == (
+            {"pipeline_refresh", "bi_mart_refresh"} if live_input else set()
+        )
+        for job in jobs:
+            assert job.status == "queued"
+            assert job.payload["as_of_date"] == live_date.isoformat()
+            assert (
+                job.payload["reason"]
+                == f"forecast assumptions approved:v{version['version_number']}"
+            )
+
+
+@pytest.mark.parametrize("later_approval", [False, True])
+@pytest.mark.parametrize(
+    ("endpoint", "payload"),
+    [
+        ("runs", {"scenario_code": "base"}),
+        ("runs", {"scenario_code": "base", "assumptions": dict(FORECAST_PRESETS["base"])}),
+        ("runs", {"scenario_code": "adverse", "assumptions": dict(FORECAST_PRESETS["base"])}),
+        (
+            "runs",
+            {"scenario_code": "severely_adverse", "assumptions": dict(FORECAST_PRESETS["base"])},
+        ),
+        ("runs", {"scenario_code": "custom", "assumptions": dict(FORECAST_PRESETS["base"])}),
+        ("runs", {"scenario_code": "custom", "assumptions": {"nim_pct": "6"}}),
+        ("whatif", {"shock_code": "default_spike"}),
+        ("optimizer", {}),
+    ],
+)
+def test_runs_cannot_replace_missing_approved_presets_with_overrides(
+    db_client: TestClient, endpoint: str, payload: dict[str, Any], later_approval: bool
+) -> None:
+    latest_id, latest_date = _seed_book()
+    maker, _ = _maker_and_checker()
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        oldest = session.scalars(
+            select(BankReportingPeriod)
+            .where(BankReportingPeriod.bank_id == SAMPLE_BANK_ID)
+            .order_by(BankReportingPeriod.period_end)
+            .limit(1)
+        ).one()
+        assert oldest.period_end < latest_date
+        period_id = str(oldest.id)
+        approved = session.scalars(
+            select(ForecastAssumptionVersion).where(
+                ForecastAssumptionVersion.bank_id == SAMPLE_BANK_ID
+            )
+        ).one()
+        if later_approval:
+            approved.effective_from = latest_date
+        else:
+            session.delete(approved)
+        session.commit()
+    catalogue = db_client.get(f"{BASE}/scenarios", headers=maker).json()
+    assert bool(catalogue["scenarios"]) == later_approval
+    response = db_client.post(
+        f"{BASE}/{endpoint}", headers=maker, json={"reporting_period_id": period_id, **payload}
+    )
+    assert response.status_code == 201, response.text
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "missing_parameter"
+    assert run["assumption_version"] is None
+    if later_approval and endpoint == "runs":
+        current = db_client.post(
+            f"{BASE}/runs", headers=maker, json={"reporting_period_id": str(latest_id), **payload}
+        )
+        assert current.status_code == 201, current.text
+        assert current.json()["status"] == "succeeded"
+        assert current.json()["assumption_version"] == catalogue["assumption_version"]

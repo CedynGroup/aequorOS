@@ -977,13 +977,7 @@ def _resolve_assumptions(
 ) -> ForecastAssumptions:
     preset_code = BASE_SCENARIO if scenario_code == CUSTOM_SCENARIO else scenario_code
     preset = presets.get(preset_code, {})
-    values: dict[str, Decimal] = {key: preset[key] for key in ASSUMPTION_KEYS if key in preset}
-    if overrides is not None:
-        for key in _ALL_ASSUMPTION_KEYS:
-            override = getattr(overrides, key)
-            if override is not None:
-                values[key] = override
-    missing = [key for key in ASSUMPTION_KEYS if key not in values]
+    missing = [key for key in ASSUMPTION_KEYS if key not in preset]
     if missing:
         raise ForecastRunError(
             "missing_parameter",
@@ -992,6 +986,12 @@ def _resolve_assumptions(
             + ".",
             {"scenario_code": preset_code, "assumption_keys": missing},
         )
+    values = {key: preset[key] for key in ASSUMPTION_KEYS}
+    if overrides is not None:
+        for key in _ALL_ASSUMPTION_KEYS:
+            override = getattr(overrides, key)
+            if override is not None:
+                values[key] = override
     return ForecastAssumptions(**values)
 
 

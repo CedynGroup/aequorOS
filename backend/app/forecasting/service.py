@@ -4,10 +4,13 @@ Every forecast, what-if and optimizer run resolves its base, adverse and severel
 adverse assumptions from here, and only from an APPROVED version. The lifecycle:
 
 * a maker with Forecasting ``edit`` drafts a complete set and submits it;
-* a checker with Forecasting ``approve`` who neither wrote nor submitted it
+* a checker with Forecasting ``approve`` who neither drafted, revised nor submitted it
   approves or rejects it — maker ≠ checker is a runtime condition of the
   ``approve`` decision itself, not a convention of the screen;
 * approved and rejected versions are final. A later change is a new version.
+
+Only one draft or submitted version may be in flight per bank: the pending
+proposal is the single decision everyone reviews before another is authored.
 
 Effective dating is by BOOK date: a run on a book dated ``d`` resolves the
 approved version with the latest ``effective_from <= d`` (a later approval on the
@@ -55,7 +58,8 @@ from app.forecasting.schemas import (
     ForecastPresetSetWrite,
 )
 from app.identity.public import User, require_resolved_bank_permission, resolve_bank
-from app.live.public import Bank, BankReportingPeriod
+from app.live.public import Bank, BankReportingPeriod, enqueue_bank_change
+from app.models.audit_event import AuditEvent
 from app.services.audit import record_event
 
 _ENTITY = "forecast_assumption_version"
@@ -205,7 +209,7 @@ def update_version(
 ) -> ForecastAssumptionVersionRead:
     _require_actor(ctx)
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
-    version = _version_or_404(db, ctx, bank, version_id)
+    version = _version_or_404(db, ctx, bank, version_id, for_update=True)
     _require_status(version, "draft", "Only a draft can be revised")
     if payload.presets is not None:
         version.presets = _stored(_validated(payload.presets))
@@ -224,7 +228,7 @@ def submit_version(
 ) -> ForecastAssumptionVersionRead:
     actor = _require_actor(ctx)
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
-    version = _version_or_404(db, ctx, bank, version_id)
+    version = _version_or_404(db, ctx, bank, version_id, for_update=True)
     _require_status(version, "draft", "Only a draft can be submitted for approval")
     _require_not_before_current(db, bank, version.effective_from)
     version.status = "submitted"
@@ -251,6 +255,12 @@ def approve_version(
     _require_not_before_current(db, bank, version.effective_from)
     _decide(version, ctx, "approved", payload.note)
     _audit(db, ctx, version, "forecast_assumptions.approved")
+    enqueue_bank_change(
+        db,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        reason=f"forecast assumptions approved:v{version.version_number}",
+    )
     db.commit()
     return _read_one(db, version)
 
@@ -284,13 +294,30 @@ def _decision_target(
 
     The lookup is bank-scoped and comes first, so a version the caller cannot
     address answers 404 exactly as an unknown id does. The ``approve`` decision
-    then carries the maker-checker verdict for THIS version: whoever drafted or
-    submitted it is refused, whatever their bindings say.
+    then carries the maker-checker verdict for THIS version: whoever drafted,
+    revised or submitted it is refused, whatever their bindings say.
     """
     actor = _require_actor(ctx)
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
-    version = _version_or_404(db, ctx, bank, version_id)
-    independent = actor not in {version.created_by, version.submitted_by}
+    version = _version_or_404(db, ctx, bank, version_id, for_update=True)
+    maker_event = db.scalar(
+        select(AuditEvent.id)
+        .where(
+            AuditEvent.organization_id == ctx.organization_id,
+            AuditEvent.entity_type == _ENTITY,
+            AuditEvent.entity_id == str(version.id),
+            AuditEvent.actor_user_id == actor,
+            AuditEvent.event_type.in_(
+                (
+                    "forecast_assumptions.drafted",
+                    "forecast_assumptions.revised",
+                    "forecast_assumptions.submitted",
+                )
+            ),
+        )
+        .limit(1)
+    )
+    independent = actor not in {version.created_by, version.submitted_by} and maker_event is None
     require_resolved_bank_permission(
         db,
         ctx,
@@ -304,15 +331,15 @@ def _decision_target(
                 kind=ConditionKind.MAKER_CHECKER,
                 passed=independent,
                 reason=(
-                    "the checker neither drafted nor submitted this assumption version"
+                    "the checker neither drafted, revised nor submitted this assumption version"
                     if independent
-                    else "whoever drafted or submitted an assumption version cannot decide it"
+                    else "whoever drafted, revised or submitted an assumption version cannot decide it"
                 ),
             ),
         ),
         denial_detail=(
             "Deciding a forecast assumption version requires Forecasting approval authority "
-            "and a checker who neither drafted nor submitted it."
+            "and a checker who neither drafted, revised nor submitted it."
         ),
     )
     _require_status(version, "submitted", "Only a submitted version can be decided")
@@ -375,15 +402,21 @@ def _require_not_before_current(db: Session, bank: Bank, effective_from: date) -
 
 
 def _version_or_404(
-    db: Session, ctx: TenantContext, bank: Bank, version_id: UUID
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    version_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ForecastAssumptionVersion:
-    version = db.scalar(
-        select(ForecastAssumptionVersion).where(
-            ForecastAssumptionVersion.id == version_id,
-            ForecastAssumptionVersion.organization_id == ctx.organization_id,
-            ForecastAssumptionVersion.bank_id == bank.id,
-        )
+    statement = select(ForecastAssumptionVersion).where(
+        ForecastAssumptionVersion.id == version_id,
+        ForecastAssumptionVersion.organization_id == ctx.organization_id,
+        ForecastAssumptionVersion.bank_id == bank.id,
     )
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    version = db.scalar(statement)
     if version is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
