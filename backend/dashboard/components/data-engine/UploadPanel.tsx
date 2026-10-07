@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Upload & ingest: stage source files in the bank's encrypted temp tier,
@@ -7,26 +7,26 @@
  * the whole 17-file Sample Bank folder at once is the intended flow.
  */
 
-import { useRef, useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, Loader2, UploadCloud } from 'lucide-react';
-import type { IngestionBatchRead } from '@aequoros/risk-service-api';
-import { useBankContext } from '@/components/shell/BankContext';
-import { isApiError } from '@/lib/api/client';
-import { useUploadAndIngest } from '@/lib/api/ingestion';
+import { useId, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Loader2, UploadCloud } from "lucide-react";
+import type { IngestionBatchRead } from "@aequoros/risk-service-api";
+import { useBankContext } from "@/components/shell/BankContext";
+import { isApiError } from "@/lib/api/client";
+import { useUploadAndIngest } from "@/lib/api/ingestion";
 import {
   BatchStatusPill,
   CountStrip,
   TablesChips,
   batchBlockerDetails,
   referenceRowTotal,
-} from './shared';
+} from "./shared";
 
-const DEMO_AS_OF = '2026-04-30'; // business date of the Sample Bank dataset
+const DEMO_AS_OF = "2026-04-30"; // business date of the Sample Bank dataset
 
 type FileOutcome = {
   filename: string;
-  state: 'queued' | 'running' | 'done' | 'failed';
+  state: "queued" | "running" | "done" | "failed";
   batch?: IngestionBatchRead;
   reused?: boolean;
   error?: string;
@@ -36,6 +36,8 @@ type FileOutcome = {
 export default function UploadPanel() {
   const { bank } = useBankContext();
   const inputRef = useRef<HTMLInputElement>(null);
+  const filesInputId = useId();
+  const asOfInputId = useId();
   const [files, setFiles] = useState<File[]>([]);
   const [asOfDate, setAsOfDate] = useState(DEMO_AS_OF);
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
@@ -46,26 +48,29 @@ export default function UploadPanel() {
     if (!files.length || running) return;
     setRunning(true);
     setOutcomes(
-      files.map((file) => ({ filename: file.name, state: 'queued' as const })),
+      files.map((file) => ({ filename: file.name, state: "queued" as const })),
     );
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       setOutcomes((previous) =>
         previous.map((outcome, i) =>
-          i === index ? { ...outcome, state: 'running' } : outcome,
+          i === index ? { ...outcome, state: "running" } : outcome,
         ),
       );
       const startedAt = Date.now();
       try {
         // Sequential on purpose: later files reference earlier batches'
         // canonical state (counterparties, products, GL accounts).
-        const { started } = await uploadAndIngest.mutateAsync({ file, asOfDate });
+        const { started } = await uploadAndIngest.mutateAsync({
+          file,
+          asOfDate,
+        });
         setOutcomes((previous) =>
           previous.map((outcome, i) =>
             i === index
               ? {
                   ...outcome,
-                  state: 'done',
+                  state: "done",
                   batch: started.batch,
                   reused: started.reused,
                   seconds: (Date.now() - startedAt) / 1000,
@@ -79,8 +84,8 @@ export default function UploadPanel() {
             i === index
               ? {
                   ...outcome,
-                  state: 'failed',
-                  error: isApiError(error) ? error.message : 'Upload failed.',
+                  state: "failed",
+                  error: isApiError(error) ? error.message : "Upload failed.",
                   seconds: (Date.now() - startedAt) / 1000,
                 }
               : outcome,
@@ -97,18 +102,23 @@ export default function UploadPanel() {
         <h2 className="text-h2 text-navy">Upload &amp; ingest</h2>
         <p className="mt-1 text-body text-slate">
           Files are stored encrypted with full provenance metadata. The raw
-          source is retained immutably in the <code className="font-mono">raw</code>{' '}
-          tier; every record traces back to its source cell. Select multiple
-          files to queue them through the pipeline in order.
+          source is retained immutably in the{" "}
+          <code className="font-mono">raw</code> tier; every record traces back
+          to its source cell. Select multiple files to queue them through the
+          pipeline in order.
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-0">
-          <label className="block text-caption font-medium text-slate mb-1">
+          <label
+            htmlFor={filesInputId}
+            className="block text-caption font-medium text-slate mb-1"
+          >
             Source files (.xlsx / .csv)
           </label>
           <input
+            id={filesInputId}
             ref={inputRef}
             type="file"
             multiple
@@ -118,10 +128,14 @@ export default function UploadPanel() {
           />
         </div>
         <div>
-          <label className="block text-caption font-medium text-slate mb-1">
+          <label
+            htmlFor={asOfInputId}
+            className="block text-caption font-medium text-slate mb-1"
+          >
             As-of date
           </label>
           <input
+            id={asOfInputId}
             type="date"
             value={asOfDate}
             onChange={(event) => setAsOfDate(event.target.value)}
@@ -140,8 +154,8 @@ export default function UploadPanel() {
             <UploadCloud size={15} aria-hidden />
           )}
           {running
-            ? 'Ingesting…'
-            : `Upload & ingest${files.length > 1 ? ` (${files.length} files)` : ''}`}
+            ? "Ingesting…"
+            : `Upload & ingest${files.length > 1 ? ` (${files.length} files)` : ""}`}
         </button>
       </div>
 
@@ -150,16 +164,20 @@ export default function UploadPanel() {
           {outcomes.map((outcome, index) => (
             <div key={`${outcome.filename}-${index}`} className="p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
-                {outcome.state === 'running' && (
-                  <Loader2 size={14} className="animate-spin text-slate" aria-hidden />
+                {outcome.state === "running" && (
+                  <Loader2
+                    size={14}
+                    className="animate-spin text-slate"
+                    aria-hidden
+                  />
                 )}
                 {outcome.batch ? (
                   <BatchStatusPill status={outcome.batch.status} />
-                ) : outcome.state === 'failed' ? (
+                ) : outcome.state === "failed" ? (
                   <BatchStatusPill status="failed" />
                 ) : (
                   <span className="text-caption text-slate">
-                    {outcome.state === 'queued' ? 'queued' : 'running…'}
+                    {outcome.state === "queued" ? "queued" : "running…"}
                   </span>
                 )}
                 <span className="text-body text-navy font-medium">
@@ -202,7 +220,9 @@ export default function UploadPanel() {
                   </div>
                 ))}
               {outcome.batch?.errorMessage && (
-                <p className="text-body text-critical">{outcome.batch.errorMessage}</p>
+                <p className="text-body text-critical">
+                  {outcome.batch.errorMessage}
+                </p>
               )}
               {outcome.error && (
                 <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">

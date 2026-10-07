@@ -29,6 +29,11 @@ class TestMoney:
             (250000, Decimal("250000")),
             (Decimal("99.999999"), Decimal("99.999999")),
             ("-1,234.56", Decimal("-1234.56")),
+            ("1,500 GHS", Decimal("1500")),
+            ("-$74,000", Decimal("-74000")),
+            ("GHS -1,000", Decimal("-1000")),
+            ("(GHS 2,500.00)", Decimal("-2500.00")),
+            ("1 500 000", Decimal("1500000")),
         ],
     )
     def test_parses(self, value: object, expected: Decimal) -> None:
@@ -41,6 +46,15 @@ class TestMoney:
     @pytest.mark.parametrize("value", ["approx fifty", "GHS", date(2026, 1, 1)])
     def test_rejects_garbage(self, value: object) -> None:
         with pytest.raises(CoercionError):
+            coerce_money(value)
+
+    @pytest.mark.parametrize(
+        "value", ["37S000.00", "1O0,000", "12,5x0.00", "37e000", "GHS 1,000 USD 2"]
+    )
+    def test_rejects_characters_inside_the_number(self, value: str) -> None:
+        # A typo inside an amount must fail the cell, never be cleaned into a
+        # different amount ("37S000.00" once became 37000).
+        with pytest.raises(CoercionError, match="not a number after cleanup"):
             coerce_money(value)
 
 

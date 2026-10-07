@@ -20,7 +20,10 @@ NULL_PLACEHOLDERS = frozenset({"", "-", "--", "n/a", "na", "n.a.", "nil", "none"
 _EXCEL_EPOCH = date(1899, 12, 30)
 _SERIAL_MIN, _SERIAL_MAX = 20_000, 100_000
 
-_CURRENCY_NOISE = re.compile(r"[^\d.,()\-+]")
+# Currency symbols and codes may lead or trail an amount, never sit inside it:
+# "37S000.00" is a typo to report, not the amount 37000.
+_CURRENCY_AFFIX = re.compile(r"^[^\d.,+\-]+|[^\d.,+\-]+$")
+_PLAIN_NUMBER = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)")
 _ISO_DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _SLASHED_DATE = re.compile(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$")
 
@@ -47,9 +50,10 @@ def coerce_string(value: object) -> str | None:
 def coerce_money(value: object) -> Decimal | None:
     """Parse a monetary amount from spreadsheet chaos.
 
-    Handles currency symbols and codes ("GHS 1,500,000.50"), thousand
-    separators, surrounding whitespace, and accounting-style parentheses for
-    negatives ("(1,234.56)").
+    Handles currency symbols and codes before or after the number
+    ("GHS 1,500,000.50", "1,500 GHS"), comma and space thousand separators,
+    surrounding whitespace, and accounting-style parentheses for negatives
+    ("(1,234.56)"). Any other character inside the number is an error.
     """
     if is_null_like(value):
         return None
@@ -62,14 +66,16 @@ def coerce_money(value: object) -> Decimal | None:
 
     text = value.strip()
     negative = text.startswith("(") and text.endswith(")")
-    cleaned = _CURRENCY_NOISE.sub("", text).replace("(", "").replace(")", "")
-    cleaned = cleaned.replace(",", "")
+    if negative:
+        text = text[1:-1].strip()
+    sign = text[:1] if text[:1] in {"-", "+"} else ""
+    cleaned = sign + _CURRENCY_AFFIX.sub("", text.removeprefix(sign).strip())
+    cleaned = re.sub(r"[,\s]", "", cleaned)
     if not cleaned or cleaned in {"-", "+"}:
         raise CoercionError("money", value, "no digits found")
-    try:
-        amount = Decimal(cleaned)
-    except InvalidOperation as exc:
-        raise CoercionError("money", value, "not a number after cleanup") from exc
+    if not _PLAIN_NUMBER.fullmatch(cleaned):
+        raise CoercionError("money", value, "not a number after cleanup")
+    amount = Decimal(cleaned)
     return -amount if negative and amount > 0 else amount
 
 

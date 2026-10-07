@@ -164,7 +164,7 @@ function ManualUploadSection({
   const [file, setFile] = useState<File | null>(null);
   const [asOfDate, setAsOfDate] = useState("");
   const result: MarketDataUploadRead | undefined = upload.data;
-  const canUpload = uploadReason === undefined;
+  const canUpload = bankId !== undefined && uploadReason === undefined;
 
   return (
     <section className="space-y-4">
@@ -236,7 +236,7 @@ function ManualUploadSection({
             </label>
             <PermissionAction
               reason={uploadReason}
-              disabled={!file || !asOfDate || upload.isPending}
+              disabled={!canUpload || !file || !asOfDate || upload.isPending}
               onClick={() => {
                 if (canUpload && file && asOfDate)
                   upload.mutate({ file, asOfDate });

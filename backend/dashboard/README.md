@@ -362,9 +362,9 @@ diagnosis:
    `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, and opt-in `visual-tour` specs, plus the SSO
-   attestation journey, refuse immediately without it rather than letting
-   package assertions time out one at a time.
+   `submission-lifecycle`, `data-engine-ingestion`, and opt-in `visual-tour`
+   specs, plus the SSO attestation journey, refuse immediately without it rather
+   than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
    manually dispatched GitHub Actions workflow starts a disposable MinIO with
    its built-in KMS and runs the standard suite against that real object store.
@@ -396,6 +396,14 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+
+The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
+`e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
+batch findings, correction by re-upload, downstream positions, and manual market
+data upload. The T24 journey configures a core in the browser, stages and ingests
+a recorded OFS extract through the API, then checks its batch and positions in
+the browser; live transport remains unavailable. Set `E2E_EVIDENCE_DIR` to retain
+their screenshots.
 
 ### Local services without Docker or OrbStack
 

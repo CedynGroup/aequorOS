@@ -1,0 +1,5 @@
+source_reference,position_type,currency,balance,notional,counterparty_reference,product_code,gl_account_code,origination_date,contractual_maturity,next_repricing_date,interest_rate,rate_type,rate_index,rate_spread,ifrs9_stage
+E2E-ING-001,LOAN,GHS,1250000.00,,,,,2026-01-15,2028-01-15,,0.215,FIXED,,,1
+E2E-ING-002,DEPOSIT,GHS,800000.00,,,,,2026-02-01,2026-12-01,,0.08,FIXED,,,
+E2E-ING-003,LOAN,GHS,450000.00,,,,,2026-02-10,2027-02-10,,-0.19,FIXED,,,1
+E2E-ING-004,LOAN,GHS,37S000.00,,,,,2026-02-20,2027-08-20,,0.175,FIXED,,,1
