@@ -756,7 +756,7 @@ The Excel adapter must handle all of the above without crashing and, where possi
 /adapters/excel_csv/
   __init__.py
   adapter.py           # Implements SourceAdapter interface
-  workbook_reader.py   # Handles .xlsx, .xls, .csv, .tsv
+  workbook_reader.py   # Handles .xlsx, .csv, .tsv
   sheet_analyzer.py    # Detects tables within sheets, header rows, data blocks
   type_coercion.py     # Robust type parsing for money, dates, percentages, enums
   mapping_engine.py    # Applies bank-specific column-to-canonical mappings
@@ -789,6 +789,8 @@ The first mapping is time-intensive. Subsequent mappings for the same bank take 
 
 Excel-source data gets extra scrutiny:
 
+- Legacy `.xls` workbooks are refused; save the file as `.xlsx` and retry.
+- Malformed monetary amounts with characters embedded between digits (for example, `37S000.00`) produce a row-level `coercion_error` instead of silently becoming a different amount. Correct the source cells and re-upload.
 - Currency detection: if a numeric field lacks an explicit currency, either derive it from context (sheet name, header) or reject.
 - Rate normalization: `24.5`, `24.5%`, `0.245` must all resolve correctly and consistently.
 - Date parsing: Excel serial dates, ISO strings, and locale-specific formats all need robust handling.
