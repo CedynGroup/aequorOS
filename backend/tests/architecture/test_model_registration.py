@@ -63,13 +63,21 @@ print(json.dumps(sorted(Base.metadata.tables)))
 """
 
 #: The same, after also importing every module in the package — RECURSIVELY, so a
-#: subpackage's models count — which is the set a correct ``__init__`` would already
-#: have produced.
+#: subpackage's models count — and every feature's own models (``<feature>/models.py``
+#: or ``<feature>/models/``) under ``{root}``, which is the set a correct
+#: ``__init__`` would already have produced. Feature models live outside the
+#: registry package once a feature moves to ``app/<feature>/``, and the registry must
+#: still import them.
 _EVERY_MODULE = """
-import importlib, json, pkgutil
+import importlib, json, pathlib, pkgutil
 package = importlib.import_module("{package}")
 for info in pkgutil.walk_packages(package.__path__, prefix="{package}."):
     importlib.import_module(info.name)
+root = pathlib.Path("{root}")
+for path in sorted(root.rglob("*.py")):
+    parts = path.relative_to(root.parent).with_suffix("").parts
+    if "models" in parts[1:-1] or parts[-1] == "models":
+        importlib.import_module(".".join(parts).removesuffix(".__init__"))
 from app.db.base import Base
 print(json.dumps(sorted(Base.metadata.tables)))
 """
@@ -88,13 +96,17 @@ print(json.dumps(sorted(Base.metadata.tables)))
 
 
 def _tables(
-    script: str, *, package: str = "app.models", extra_path: Path | None = None
+    script: str,
+    *,
+    package: str = "app.models",
+    root: Path = BACKEND_ROOT / "app",
+    extra_path: Path | None = None,
 ) -> list[str]:
     env = {"PATH": "/usr/bin:/bin", "RUN_INPROCESS_WORKER": "0", "DATABASE_URL": ""}
     if extra_path is not None:
         env["PYTHONPATH"] = str(extra_path)
     result = subprocess.run(
-        [sys.executable, "-c", script.format(package=package)],
+        [sys.executable, "-c", script.format(package=package, root=root)],
         cwd=BACKEND_ROOT,
         capture_output=True,
         text=True,
@@ -162,7 +174,14 @@ def test_the_probe_sees_a_model_one_directory_down_and_the_shallow_walk_did_not(
 
     _synthetic_models_package(tmp_path)
     package_only = set(_tables(_PACKAGE_ONLY, package="probe_models", extra_path=tmp_path))
-    everything = set(_tables(_EVERY_MODULE, package="probe_models", extra_path=tmp_path))
+    everything = set(
+        _tables(
+            _EVERY_MODULE,
+            package="probe_models",
+            root=tmp_path / "probe_models",
+            extra_path=tmp_path,
+        )
+    )
     shallow = set(_tables(_EVERY_MODULE_SHALLOW, package="probe_models", extra_path=tmp_path))
 
     assert "probe_child_table" not in package_only, "the synthetic __init__ must import nothing"
@@ -176,3 +195,31 @@ def test_the_probe_sees_a_model_one_directory_down_and_the_shallow_walk_did_not(
     )
     # And the main test's arithmetic convicts it.
     assert sorted(everything - package_only) == ["probe_child_table"]
+
+
+def test_the_probe_sees_a_feature_model_outside_the_registry_package(tmp_path: Path) -> None:
+    """The self-proving case for feature packages.
+
+    ``app/<feature>/models.py`` sits outside ``app.models``, so walking the registry
+    package alone would never import it, and a feature model the registry forgot
+    would pass. The probe builds an empty registry beside one feature model and
+    must see the model only through the feature walk.
+    """
+    root = tmp_path / "probe_app"
+    (root / "models").mkdir(parents=True)
+    (root / "fx").mkdir()
+    for package in (root, root / "models", root / "fx"):
+        (package / "__init__.py").write_text("")
+    (root / "fx" / "models.py").write_text(
+        "from sqlalchemy import Column, Integer\n"
+        "from app.db.base import Base\n"
+        "class ProbeFeature(Base):\n"
+        "    __tablename__ = 'probe_feature_table'\n"
+        "    id = Column(Integer, primary_key=True)\n"
+    )
+    probe = {"package": "probe_app.models", "root": root, "extra_path": tmp_path}
+    assert "probe_feature_table" not in _tables(_PACKAGE_ONLY, **probe)
+    assert "probe_feature_table" in _tables(_EVERY_MODULE, **probe), (
+        "the probe did not import a feature's models.py, so a feature model missing "
+        "from the app.models registry would go unconvicted"
+    )

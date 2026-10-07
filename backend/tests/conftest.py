@@ -48,6 +48,23 @@ from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
 from tests.storage.inmemory import InMemoryStorageClient
 
+#: Each feature keeps its fixtures in ``tests/<feature>/fixtures.py``. They are
+#: registered here because pytest accepts ``pytest_plugins`` only in the root
+#: conftest; a module becomes its feature's ``conftest.py`` once every test that
+#: uses it lives under that feature's directory. This file keeps only what the
+#: whole suite shares: settings, the database, session and client, storage fakes
+#: and the demo tenants.
+pytest_plugins = [
+    "tests.capital.fixtures",
+    "tests.credit.fixtures",
+    "tests.forecasting.fixtures",
+    "tests.ftp.fixtures",
+    "tests.fx.fixtures",
+    "tests.irrbb.fixtures",
+    "tests.market_data.fixtures",
+    "tests.reporting.fixtures",
+]
+
 
 @pytest.fixture(autouse=True)
 def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -584,222 +601,6 @@ def test_settings() -> Settings:
 def db_settings(db_client: TestClient) -> Settings:
     _ = db_client
     return get_settings()
-
-
-@pytest.fixture
-def fx_run_authority(db_session: Session) -> None:
-    """Opt-in FX calculation authority for integration fixtures using USER_1."""
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.FX,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "fx-calculation-fixture"),
-        reason="Authorize the integration fixture FX calculations",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def irrbb_run_authority(db_session: Session) -> None:
-    """Opt-in IRRBB calculation authority for integration fixtures using USER_1."""
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.IRRBB,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "irrbb-calculation-fixture"),
-        reason="Authorize the integration fixture IRRBB calculations",
-        commit=False,
-    )
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def capital_run_authority(db_session: Session) -> None:
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.CAPITAL,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "capital-calculation-fixture"),
-        reason="Authorize the integration fixture Capital calculations",
-        commit=False,
-    )
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def credit_run_authority(db_session: Session) -> None:
-    """Opt-in credit calculation authority for integration fixtures using USER_1.
-
-    The hermetic baseline sentence is ``viewer / all / all``, which carries no
-    ``run``: after the P4-C cutover
-    (``backend/docs/credit_enforcement_rollout.md``) sealing a credit baseline
-    needs an Analyst CREDIT/confidential row, exactly as FX, IRRBB and FTP do.
-    """
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.CREDIT,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "credit-calculation-fixture"),
-        reason="Authorize the integration fixture credit calculations",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def return_generation_authority(db_session: Session) -> None:
-    """Opt-in whole-institution Regulatory Reporting generation authority."""
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.REGULATORY,
-            SensitivityScope.RESTRICTED,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "return-generation-fixture"),
-        reason="Authorize the integration fixture return generation",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def ftp_run_authority(db_session: Session) -> None:
-    """Opt-in FTP calculation authority for integration fixtures using USER_1."""
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.FTP,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "ftp-calculation-fixture"),
-        reason="Authorize the integration fixture FTP calculations",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def forecasting_run_authority(db_session: Session) -> None:
-    """Opt-in Forecasting run authority (projection, optimizer, what-if, reverse stress)."""
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.FORECASTING,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "forecasting-calculation-fixture"),
-        reason="Authorize the integration fixture Forecasting calculations",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
-
-
-@pytest.fixture
-def markets_analyst_authority(db_session: Session) -> None:
-    """Opt-in Markets analyst authority (every sensitivity) for USER_1.
-
-    Covers manual uploads (published create), private curve overlays and
-    implied-rating runs (confidential create/edit/run), and connection
-    metadata reads (restricted view) in one organization-wide row.
-    """
-    authorization.create_role_binding(
-        db_session,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.MARKETS,
-            SensitivityScope.ALL,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "markets-analyst-fixture"),
-        reason="Authorize the integration fixture Markets mutations",
-        commit=False,
-    )
-    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
-    user = db_session.get(User, USER_1)
-    assert user is not None
-    user.authorization_version = 1
-    db_session.commit()
 
 
 @pytest.fixture

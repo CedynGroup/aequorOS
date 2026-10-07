@@ -330,8 +330,12 @@ feature. New code goes in the target layout; existing code moves one feature per
   `PEER_EDGES` direction), and only another feature's `public` module or pure `domain`
   engines. The kernel imports no feature. Feature code never imports through the `app.models`
   aggregator; it is a registry, not an API.
-- **Target test layout mirrors the source**: `app/<feature>/service.py` is tested under
-  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/`.
+- **Tests mirror the source**: `app/<feature>/service.py` is tested under
+  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/` and shared
+  helpers in `tests/support/`. `tests/conftest.py` keeps only the fixtures every feature shares
+  (settings, database, session, client, storage fakes, demo tenants); a feature's fixtures live in
+  `tests/<feature>/fixtures.py`, registered by the root `pytest_plugins`.
+  `tests/architecture/test_test_layout.py` enforces both.
 - **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
   records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
   does a baseline entry that no longer occurs, so the baseline only shrinks.

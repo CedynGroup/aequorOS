@@ -4,12 +4,13 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
+import app.models
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import audit_event, financial, organization, risk, user
 
-_ = (audit_event, financial, organization, risk, user)
+#: The registry: importing it maps every feature's tables onto ``Base.metadata``.
+_ = app.models
 
 config = context.config
 
