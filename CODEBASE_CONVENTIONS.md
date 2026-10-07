@@ -244,7 +244,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 
 | Helper                                                                                                                                                                                 | Where                                                        | Use for                                                                                                |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `DbSession`, `Tenant`, `MutationTenant`, `Storage`, `TenantContext`                                                                                                                    | `app/api/deps.py`                                            | Every route's session/tenant/storage wiring.                                                           |
+| `DbSession`, `Tenant`, `MutationTenant`, `Storage`                                                                                                                                     | `app/api/deps.py`                                            | Every route's session/tenant/storage wiring; context type location: [§5](#5-feature-layout).           |
 | `record_event(db, ctx, *, event_type, entity_type, entity_id, details)`                                                                                                                | `app/services/audit.py`                                      | Audit trail for every meaningful mutation, same transaction.                                           |
 | `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed`                                                                  | `app/services/cases.py`                                      | Tenant-scoped existence + state guards (template for `get_bank_or_404`).                               |
 | `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py`                                   | Generic finding CRUD/review; reuse for new engines' findings.                                          |
@@ -322,7 +322,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
-  `app/services/scheduler.py` and the `app.models` metadata registry.
+  `app/services/scheduler.py` and the `app.models` metadata registry. Kernel models
+  (`app/models/{organization,audit_event,job}.py`) and `TenantContext` (`app/core/tenancy.py`,
+  re-exported by `app.api.deps`) are shared by every feature.
 - **Feature names and layers** live in `LAYERS` in
   `backend/tests/architecture/test_feature_boundaries.py`; `PEER_EDGES` defines the permitted
   same-layer directions and `FEATURE_RULES` assigns ownership in the existing layered tree.
@@ -371,3 +373,11 @@ feature. New code goes in the target layout; existing code moves one feature per
   old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
   The diff of a move PR is the renames plus the codemod's output; logic changes go in separate
   PRs.
+- **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
+  rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
+  those keys so moving a model never reorders a flush (a new model adds its key).
+  `backend/tests/architecture/feature_boundary_split_origins.json` freezes the exact pre-existing
+  importer/target pairs affected by the model split. Only those pairs retain their historical
+  target module and feature after reversing the move ledger; all other imports use current
+  ownership. Its importer lists may only shrink, and the scanner rejects resolved entries
+  until they are removed. The JSON stays outside the codemod's rewrite scope.

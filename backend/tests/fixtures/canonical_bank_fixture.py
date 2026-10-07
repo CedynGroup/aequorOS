@@ -36,7 +36,7 @@ from app.models import (
     ParamStressShock,
     User,
 )
-from app.models.regulatory import RegulatoryParameterMixin
+from app.models.parameter_register import RegulatoryParameterMixin
 from app.services import parameter_register
 from app.services.reporting_periods import new_snapshot_period
 from tests.fixtures.forecast_assumptions import FORECAST_PRESETS

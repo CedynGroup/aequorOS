@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import DateTime, Uuid
@@ -13,8 +16,27 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+#: Each model's flush-order key, by class name: ``"module.ClassName"`` as of the
+#: module the model lived in when the key was recorded.
+#:
+#: A session flushes the rows of models that share no ``relationship()`` (none in
+#: this codebase do) in the order of their mappers' keys, which SQLAlchemy derives
+#: from the class's module. A flush that adds an organization and its bank works
+#: only because that order puts the parent first, so moving a model to another
+#: module would silently reorder flushes and could break a foreign key. Pinning the
+#: key keeps flush order independent of where the code lives. A new model records
+#: its key here; ``tests/architecture/test_model_flush_order.py`` enforces it.
+FLUSH_ORDER: dict[str, str] = json.loads(
+    Path(__file__).with_name("flush_order.json").read_text(encoding="utf-8")
+)
+
+
 class Base(DeclarativeBase):
-    pass
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        mapper = cls.__dict__.get("__mapper__")
+        if mapper is not None and cls.__name__ in FLUSH_ORDER:
+            mapper._sort_key = FLUSH_ORDER[cls.__name__]
 
 
 class UuidV4PrimaryKeyMixin:

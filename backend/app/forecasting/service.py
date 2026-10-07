@@ -56,8 +56,8 @@ from app.forecasting.schemas import (
     ForecastPresetSetRead,
     ForecastPresetSetWrite,
 )
-from app.identity.public import User, require_resolved_bank_permission, resolve_bank
-from app.live.public import Bank, BankReportingPeriod, enqueue_bank_change
+from app.identity.public import Bank, User, require_resolved_bank_permission, resolve_bank
+from app.live.public import BankReportingPeriod, enqueue_bank_change
 from app.models.audit_event import AuditEvent
 from app.services.audit import record_event
 
