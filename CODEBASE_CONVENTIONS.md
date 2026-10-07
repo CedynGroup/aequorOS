@@ -174,7 +174,9 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 - Layout: `tests/api/` (HTTP-level, the default style), `tests/services/`, `tests/features/`,
   `tests/db/`, plus `tests/conftest.py`.
-- **Database fixtures**: `CONTRIBUTING.md` owns the fixture-family and isolation guidance.
+- **Database fixtures**: see [CONTRIBUTING.md](CONTRIBUTING.md) for fixture selection and
+  the [backend test database guide](backend/README.md#test-databases-and-the-primary-database)
+  for isolation and application reuse.
   Use `mise run risk-service:test-postgres` to exercise the same suite against Postgres;
   Postgres-only behavior (RLS, advisory locks) is written to no-op on SQLite.
 - **Fixtures** (conftest): `client` (no DB), `db_client`, `db_session`, `api_factories`,

@@ -30,6 +30,7 @@ from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
 from tests.conftest import (
+    _LazyTestApp,
     _rollback_sessionmaker_lifecycle,
     _TestDatabase,
     build_test_database,
@@ -220,26 +221,84 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # validation and the ``banks.institution_type`` FK need these reference rows.
 # Mirrors migration 202608190018.
 _OP_BANK_MODULES = [
-    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
-    "data_engine", "institution", "reports", "settings", "irrbb", "behavioral",
-    "forecasting", "ftp", "fx", "markets", "positions",
+    "command_center",
+    "risk",
+    "alerts",
+    "liquidity",
+    "capital",
+    "regulatory_reporting",
+    "data_engine",
+    "institution",
+    "reports",
+    "settings",
+    "irrbb",
+    "behavioral",
+    "forecasting",
+    "ftp",
+    "fx",
+    "markets",
+    "positions",
 ]
 _OP_SDI_MODULES = [
-    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
-    "data_engine", "institution", "reports", "settings",
+    "command_center",
+    "risk",
+    "alerts",
+    "liquidity",
+    "capital",
+    "regulatory_reporting",
+    "data_engine",
+    "institution",
+    "reports",
+    "settings",
 ]
 _OP_INSTITUTION_TYPE_SEED = [
     ("universal_bank", "Universal Bank", "bank", "bsd", "crd", 20, 25, False, _OP_BANK_MODULES),
     ("savings_and_loans", "Savings & Loans", "sdi", "sdi", "s29", 15, 25, True, _OP_SDI_MODULES),
     ("finance_house", "Finance House", "sdi", "sdi", "s29", 15, 25, True, _OP_SDI_MODULES),
-    ("rural_community_bank", "Rural & Community Bank", "sdi", "sdi", "s29", 15, 25, True,
-     _OP_SDI_MODULES),
-    ("microfinance_bank", "Microfinance Institution", "sdi", "sdi", "s29", 15, 25, True,
-     _OP_SDI_MODULES),
-    ("financial_holding_company", "Financial Holding Company", "bank", "bsd", "crd", 20, 25,
-     False, _OP_BANK_MODULES),
-    ("other_rfi", "Other Regulated Financial Institution", "sdi", "sdi", "s29", 15, 25, True,
-     _OP_SDI_MODULES),
+    (
+        "rural_community_bank",
+        "Rural & Community Bank",
+        "sdi",
+        "sdi",
+        "s29",
+        15,
+        25,
+        True,
+        _OP_SDI_MODULES,
+    ),
+    (
+        "microfinance_bank",
+        "Microfinance Institution",
+        "sdi",
+        "sdi",
+        "s29",
+        15,
+        25,
+        True,
+        _OP_SDI_MODULES,
+    ),
+    (
+        "financial_holding_company",
+        "Financial Holding Company",
+        "bank",
+        "bsd",
+        "crd",
+        20,
+        25,
+        False,
+        _OP_BANK_MODULES,
+    ),
+    (
+        "other_rfi",
+        "Other Regulated Financial Institution",
+        "sdi",
+        "sdi",
+        "s29",
+        15,
+        25,
+        True,
+        _OP_SDI_MODULES,
+    ),
 ]
 
 
@@ -345,20 +404,30 @@ def _operator_bound_sessionmaker(
         yield maker
 
 
+@pytest.fixture(scope="session")
+def _shared_operator_app() -> _LazyTestApp:
+    """Build the operator app once per process, inside the first test's environment."""
+    return _LazyTestApp(create_operator_app)
+
+
 @pytest.fixture
 def operator_client(
     _operator_bound_sessionmaker: sessionmaker,
+    _shared_operator_app: _LazyTestApp,
     fake_s3: FakeS3Client,
 ) -> Iterator[TestClient]:
     """Operator app over the rollback-isolated database with the fake S3 injected."""
     _ = _operator_bound_sessionmaker
-    app = create_operator_app()
+    app = _shared_operator_app.get()
     app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
         s3_client=fake_s3,
         storage_settings=fake_storage_settings(),
     )
-    with TestClient(app, raise_server_exceptions=False) as client:
-        yield client
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture

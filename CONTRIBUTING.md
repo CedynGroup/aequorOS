@@ -20,8 +20,7 @@ are always welcome.
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
 - Backend database fixture isolation and parallel execution are documented in the
   [backend test database guide](backend/README.md#test-databases-and-the-primary-database).
-  `db_client` and `db_session` are the defaults; each `db_client` gets a fresh
-  `TestClient` with function-scoped storage overrides.
+  `db_client` and `db_session` are the defaults.
   Mark a test with `@pytest.mark.committing_db` when real commits are required
   for DDL, independent connections, raw commit visibility, query-count
   transaction boundaries, or concurrency/lock behavior. Tests under `tests/db/`

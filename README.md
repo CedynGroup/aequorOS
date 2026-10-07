@@ -118,7 +118,7 @@ default deployment image — see `backend/README.md`.
 
 ```bash
 cd backend
-uv run pytest                 # hermetic suite (~4,800 tests)
+uv run pytest                 # hermetic suite
 uv run ruff check .
 uv run basedpyright
 ```

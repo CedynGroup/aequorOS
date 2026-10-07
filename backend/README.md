@@ -360,12 +360,15 @@ available; point `TEST_DATABASE_URL` at it to reuse that service.
   `backend/dashboard/README.md` §End-to-end; for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
   **Test databases are built once per pytest process, never per test**
-  (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
-  `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
-  and `@pytest.mark.committing_db` tests share a second schema that is TRUNCATEd
-  and reseeded before each test. Only `tests/db` migration tests build schemas of
-  their own. A test that needs a fresh schema is the exception to justify, not the
-  default to reach for.
+  (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
+  schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
+  tests share a second schema that is TRUNCATEd and reseeded before each test.
+  Both tenant fixture families reuse one application per process. Operator tests
+  reuse a separate application and SQLite database, with the same rollback isolation
+  (`tests/operator/conftest.py`). Each client is function-scoped, with storage
+  dependency overrides removed at teardown. Only `tests/db` migration tests build
+  schemas of their own. A test that needs a fresh schema is the exception to justify,
+  not the default to reach for.
   `risk-service:test-postgres-suite` runs under pytest-xdist (`-n auto --dist loadfile`),
   using one worker per detected CPU. Each worker lazily builds its own rollback and
   committing schemas as needed, and a module's tests stay on one worker. CI's

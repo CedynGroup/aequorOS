@@ -244,9 +244,15 @@ def _latest_period_end(db_client: TestClient) -> str:
 
 
 @pytest.mark.parametrize("code", sorted(GUIDE_LIST))
-def test_form_generates_and_exports_template_faithful_xlsx(  # noqa: PLR0915
+def test_form_generates_and_exports_the_official_xlsx_and_pdf(
     db_client: TestClient, code: str
 ) -> None:
+    """Generate each form once and hold every export of it to the official form.
+
+    Generating the package is what costs; the snapshot, the workbook and the PDF
+    checks below each read the same immutable package rather than building their
+    own copy of it.
+    """
     _materialize(db_client)
     reporting_date = _latest_period_end(db_client)
     package = _generate(db_client, code, reporting_date)
@@ -258,6 +264,28 @@ def test_form_generates_and_exports_template_faithful_xlsx(  # noqa: PLR0915
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}", headers=headers()
     ).json()
     snapshot = detail["snapshot"]
+    _assert_snapshot_accounts_for_every_cell(code, snapshot)
+
+    # export → the OFFICIAL workbook and PDF (the exact renderers the package
+    # export path calls, fed with the immutable snapshot)
+    session = get_sessionmaker()()
+    try:
+        session.info["organization_id"] = ORG_1
+        bank = session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        generated_at = datetime(2026, 8, 15, tzinfo=UTC)
+        xlsx_bytes = render_bog_form_xlsx(code, snapshot, bank, generated_at)
+        pdf_bytes = render_bog_form_pdf(code, snapshot, bank, generated_at)
+    finally:
+        session.close()
+    workbook = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=False)
+
+    _assert_xlsx_is_template_faithful(code, snapshot, workbook)
+    _assert_xlsx_writes_nothing_beyond_the_printed_form(code, workbook)
+    _assert_pdf_is_the_official_form_not_a_cell_listing(code, pdf_bytes)
+
+
+def _assert_snapshot_accounts_for_every_cell(code: str, snapshot: dict) -> None:
     layout = load_layout(code)
     assert snapshot["metadata"]["official_sheets"] == list(layout.sheet_names)
     payload = snapshot["bog_form"]
@@ -279,19 +307,11 @@ def test_form_generates_and_exports_template_faithful_xlsx(  # noqa: PLR0915
     assert counts["derived"] == sum(len(s.formula_cells) for s in layout.sheets)
     assert not payload["errors"], payload["errors"]
 
-    # export → the OFFICIAL workbook, values only (the exact renderer the
-    # package export path calls, fed with the immutable snapshot)
-    session = get_sessionmaker()()
-    try:
-        session.info["organization_id"] = ORG_1
-        bank = session.get(Bank, SAMPLE_BANK_ID)
-        assert bank is not None
-        payload_bytes = render_bog_form_xlsx(
-            code, snapshot, bank, datetime(2026, 8, 15, tzinfo=UTC)
-        )
-    finally:
-        session.close()
-    wb = openpyxl.load_workbook(io.BytesIO(payload_bytes), data_only=False)
+
+def _assert_xlsx_is_template_faithful(code: str, snapshot: dict, wb: openpyxl.Workbook) -> None:
+    """The workbook is the official one, values only: every label verbatim, every
+    header prompt filled, every date box the real date, no live formula."""
+    layout = load_layout(code)
     official_names = [name[:31] for name in layout.sheet_names]
     assert wb.sheetnames[: len(official_names)] == official_names
     assert wb.sheetnames[-1] == "Completion notes"
@@ -551,10 +571,7 @@ def _pdf_text(payload: bytes) -> str:
     return extract_text(io.BytesIO(payload))
 
 
-@pytest.mark.parametrize("code", sorted(GUIDE_LIST))
-def test_pdf_export_is_the_official_form_not_a_cell_listing(
-    db_client: TestClient, code: str
-) -> None:
+def _assert_pdf_is_the_official_form_not_a_cell_listing(code: str, payload: bytes) -> None:
     """The filing PDF must be BoG's own form.
 
     It regressed once to the GENERIC tabular renderer, which emitted a
@@ -562,23 +579,6 @@ def test_pdf_export_is_the_official_form_not_a_cell_listing(
     (``BSD1.R10.thu``, ``input_required``). That is a completion aid, not a
     return — a supervisor cannot read it and BoG would not accept it.
     """
-    _materialize(db_client)
-    reporting_date = _latest_period_end(db_client)
-    package = _generate(db_client, code, reporting_date)
-    detail = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}", headers=headers()
-    ).json()
-    snapshot = detail["snapshot"]
-
-    session = get_sessionmaker()()
-    try:
-        session.info["organization_id"] = ORG_1
-        bank = session.get(Bank, SAMPLE_BANK_ID)
-        assert bank is not None
-        payload = render_bog_form_pdf(code, snapshot, bank, datetime(2026, 8, 15, tzinfo=UTC))
-    finally:
-        session.close()
-
     assert payload.startswith(b"%PDF"), code
     text = " ".join(_pdf_text(payload).split())
 
@@ -631,8 +631,7 @@ def test_printed_day_dates_match_the_dates_the_line_maps_resolve() -> None:
         ), key
 
 
-@pytest.mark.parametrize("code", sorted(GUIDE_LIST))
-def test_xlsx_writes_nothing_beyond_the_printed_form(db_client: TestClient, code: str) -> None:
+def _assert_xlsx_writes_nothing_beyond_the_printed_form(code: str, wb: openpyxl.Workbook) -> None:
     """No wall of zeros to the right of the return.
 
     The official workbooks drag formulas far past the printed grid (BSD1 runs
@@ -640,21 +639,6 @@ def test_xlsx_writes_nothing_beyond_the_printed_form(db_client: TestClient, code
     subtotal row with zeros from column K onward — visible nonsense on an
     artifact that is meant to mirror the form.
     """
-    _materialize(db_client)
-    reporting_date = _latest_period_end(db_client)
-    package = _generate(db_client, code, reporting_date)
-    snapshot = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}", headers=headers()
-    ).json()["snapshot"]
-    session = get_sessionmaker()()
-    try:
-        session.info["organization_id"] = ORG_1
-        bank = session.get(Bank, SAMPLE_BANK_ID)
-        assert bank is not None
-        payload = render_bog_form_xlsx(code, snapshot, bank, datetime(2026, 8, 15, tzinfo=UTC))
-    finally:
-        session.close()
-    wb = openpyxl.load_workbook(io.BytesIO(payload))
     for sheet in load_layout(code).sheets:
         limit = official_width(sheet)
         if not limit:
