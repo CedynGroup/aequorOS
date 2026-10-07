@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
-from tests.api.helpers import ORG_1, headers
-from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import seed_canonical_fixture
+from tests.support.helpers import ORG_1, headers
 
 
 def test_behavioral_liquidity_route_precedes_model_wildcard(db_client: TestClient) -> None:

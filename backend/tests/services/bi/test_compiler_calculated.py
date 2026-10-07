@@ -73,7 +73,7 @@ from app.services.bi import compiler, content
 from app.services.bi.compiler import compile_query, expand_calculated_measures
 from app.services.bi.errors import InvalidQuery, UnknownMember
 from app.services.bi.execution import execute
-from tests.api.helpers import ORG_1, USER_1, USER_2
+from tests.support.helpers import ORG_1, USER_1, USER_2
 
 BUILT_AT = datetime(2026, 10, 1, 2, tzinfo=UTC)
 

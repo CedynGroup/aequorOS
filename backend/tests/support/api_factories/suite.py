@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
-from tests.api.factories.assessments import AssessmentFactory
-from tests.api.factories.cases import CaseFactory
-from tests.api.factories.documents import DocumentFactory, MutableFakeStorage
+from tests.support.api_factories.assessments import AssessmentFactory
+from tests.support.api_factories.cases import CaseFactory
+from tests.support.api_factories.documents import DocumentFactory, MutableFakeStorage
 
 
 @dataclass(frozen=True)

@@ -54,7 +54,7 @@ from app.services.bi.authorization import (
     REASON_NOT_ENTITLED,
     authorize_query,
 )
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 8, 31)
 #: The institution every row targets unless it says ``other``.

@@ -19,14 +19,14 @@ from decimal import Decimal
 
 from fastapi.testclient import TestClient
 
-from tests.api.helpers import ORG_2, USER_1, headers
 from tests.api.test_ingestion import seed_bank
+from tests.support.helpers import ORG_2, USER_1, headers
 
 URL = "/api/v1/banks/{bank_id}/reconciliation/exceptions"
 
 #: The hermetic canonical fixture ships WITH a governed exception — the compact
 #: book deliberately does not tie, and the fixture records the same bounded,
-#: dated grant a real bank would need (``tests/factories/reconciliation.py``).
+#: dated grant a real bank would need (``tests/support/factories/reconciliation.py``).
 #: So these tests assert on deltas and on identity, never on an empty register.
 FIXTURE_APPROVER = "fixture_supervisor"
 

@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.models import RefreshToken, User
 from app.services import authentication
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _PASSWORD = "S3cure-Passphrase!"
 

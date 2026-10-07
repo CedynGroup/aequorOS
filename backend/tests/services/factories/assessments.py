@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import RiskAssessment
 from app.services import assessments
-from tests.factories import CreatesServiceCase, assessment_payload
+from tests.support.factories import CreatesServiceCase, assessment_payload
 
 
 @dataclass(frozen=True)

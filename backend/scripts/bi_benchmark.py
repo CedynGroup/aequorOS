@@ -556,10 +556,10 @@ def scaffold_tenant(client: Any) -> Tenant:
     """
 
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from tests.api.helpers import ORG_1  # noqa: PLC0415
     from tests.fixtures.canonical_bank_fixture import (  # noqa: PLC0415
         materialize_canonical_test_book,
     )
+    from tests.support.helpers import ORG_1  # noqa: PLC0415
 
     _ = client  # the app's engine is resolved by the client's construction
     session = get_sessionmaker()()
@@ -597,7 +597,7 @@ def _grant_bi_reader(session: Any) -> None:
     )
     from app.models import AuthorizationBinding  # noqa: PLC0415
     from app.services import authorization  # noqa: PLC0415
-    from tests.api.helpers import ORG_1, USER_1  # noqa: PLC0415
+    from tests.support.helpers import ORG_1, USER_1  # noqa: PLC0415
 
     existing = session.execute(
         select(AuthorizationBinding.id).where(
@@ -640,7 +640,7 @@ def mint_human_headers() -> dict[str, str]:
 
     from app.db.session import get_sessionmaker  # noqa: PLC0415
     from app.models import User  # noqa: PLC0415
-    from tests.api.helpers import ORG_1, USER_1, headers  # noqa: PLC0415
+    from tests.support.helpers import ORG_1, USER_1, headers  # noqa: PLC0415
 
     session = get_sessionmaker()()
     try:
@@ -658,8 +658,13 @@ def _tenant_with_reader() -> Tenant:
 
     from app.db.session import get_sessionmaker  # noqa: PLC0415
     from app.models import User  # noqa: PLC0415
-    from tests.api.helpers import ORG_1, USER_1, headers, integration_key_headers  # noqa: PLC0415
     from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID  # noqa: PLC0415
+    from tests.support.helpers import (  # noqa: PLC0415
+        ORG_1,
+        USER_1,
+        headers,
+        integration_key_headers,
+    )
 
     session = get_sessionmaker()()
     try:
@@ -1939,7 +1944,7 @@ def _client() -> Any:
     from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
     from app.integrations.storage.s3 import get_object_storage  # noqa: PLC0415
     from app.main import create_app  # noqa: PLC0415
-    from tests.storage.inmemory import InMemoryStorageClient  # noqa: PLC0415
+    from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
 
     # Object storage is a real dependency of the push flow (staged pages live in
     # the bank's temp tier). The in-memory client is the contract-tested

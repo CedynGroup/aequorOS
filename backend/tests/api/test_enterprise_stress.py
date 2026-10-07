@@ -29,9 +29,9 @@ from app.core.authorization import (
 from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding, RegulatoryRun, User
 from app.services import authorization, default_macro_scenarios
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 pytestmark = pytest.mark.usefixtures("irrbb_run_authority")
 

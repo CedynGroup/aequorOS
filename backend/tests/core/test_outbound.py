@@ -29,7 +29,7 @@ from app.core.outbound import (
     get_outbound_settings,
     redirect_guard,
 )
-from tests.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
+from tests.support.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
 
 # Every address form the finding names, plus the classic notation bypasses.
 BLOCKED_ADDRESSES = [

@@ -26,8 +26,8 @@ from app.models import (
 )
 from app.services.market_desk import curve_construction as cc
 from app.services.market_desk import determinations, register
-from tests.api.helpers import ORG_1, ORG_2
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, ORG_2
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 COB = date(2026, 8, 7)
 CURVE_CODE = "AEQ.GHS.SOV.FWD"

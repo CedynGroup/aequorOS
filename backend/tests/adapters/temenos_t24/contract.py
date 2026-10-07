@@ -53,8 +53,8 @@ from app.models import (
 )
 from app.schemas.ingestion import MappingConfigCreate
 from app.services.ingestion import create_mapping_config
-from tests.api.helpers import ORG_1, USER_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 # A sentinel that must NEVER appear on a bank-facing surface. It stands in for
 # the raw OFS/core diagnostic text an error carries internally.

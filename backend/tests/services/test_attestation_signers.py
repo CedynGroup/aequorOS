@@ -45,7 +45,7 @@ from app.services.attestation.signers import (
     new_key_ref,
     signer_subject,
 )
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 VAULT_KEY = "test-vault-master-key-not-for-production-0001"
 SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"

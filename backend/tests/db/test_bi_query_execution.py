@@ -38,7 +38,7 @@ from app.services.bi.compiler import compile_query
 from app.services.bi.content import expression_digest
 from app.services.bi.errors import BiQueryTimeout, InvalidQuery
 from app.services.bi.execution import execute, run_select
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,

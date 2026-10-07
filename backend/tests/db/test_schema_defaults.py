@@ -23,7 +23,7 @@ from app.models.financial import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
-from tests.api.helpers import ORG_1, ORG_2, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_2
 
 
 def db_uuid(session: Session, value: UUID | str) -> str:

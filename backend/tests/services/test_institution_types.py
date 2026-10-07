@@ -29,7 +29,7 @@ from app.api.deps import TenantContext
 from app.models import Bank, InstitutionType
 from app.services import banks as banks_service
 from app.services import institution_types
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 # The authoritative institution_type -> institution_class derivation map
 # (docs/sdi.md §1.1). Deposit-taking non-bank licences resolve to the 'sdi'

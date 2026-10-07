@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import Bank, CanonicalReferenceRow, IngestionBatch, LineageRecord
 from app.services import sdi_readiness
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 _CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 

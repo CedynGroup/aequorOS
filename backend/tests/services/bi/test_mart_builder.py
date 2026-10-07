@@ -1,7 +1,7 @@
 """``app.services.bi.mart_builder`` on the canonical fixture bank.
 
 The builder is run synchronously (``tests/fixtures/bi_plane.py``, the same
-call the e2e bootstrap makes) over ``tests/factories/canonical.py``'s book —
+call the e2e bootstrap makes) over ``tests/support/factories/canonical.py``'s book —
 18 included current-generation snapshots plus one superseded and one
 error-status row that must never appear — with the live plane materialised by
 the product's own ``pipeline.recompute_live`` so the engine tier and the
@@ -65,10 +65,10 @@ from app.services.bi import compiler, mart_builder, partitions, provenance
 from app.services.bi.compiler import compile_query
 from app.services.bi.mart_builder import BuildOutcome
 from app.services.bi.versions import BUILDER_VERSION
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = FIXTURE_AS_OF  # 2026-06-30, the fixture's only date and the month's last
 MID_MONTH = date(2026, 6, 15)

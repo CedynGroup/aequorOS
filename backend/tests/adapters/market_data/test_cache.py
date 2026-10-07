@@ -14,7 +14,7 @@ from app.adapters.market_data.cache import (
     write_cache_entry,
 )
 from app.adapters.market_data.scope_taxonomy import DataScope, ScopeCategory
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK = "sbl-gh-001"
 

@@ -22,7 +22,7 @@ from app.services.regulatory_reporting.le_generation import (
     _append_related_party_finding,  # pyright: ignore[reportPrivateUsage]
     _Entity,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
 _NOF = Decimal("1000")

@@ -29,9 +29,9 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import fact_derivation, regulatory_credit, reporting_periods
 from app.services.authorization import ALL_INSTITUTION_DATA
 from app.services.regulatory_reporting import generation as reporting_generation
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

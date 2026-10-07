@@ -36,8 +36,8 @@ from app.models import Bank, Job
 from app.models.database_connection import DatabaseDirectConnection
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.services import database_connections, database_direct_jobs, job_queue, scheduler
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.outbound import stub_public_dns
+from tests.support.factories.outbound import stub_public_dns
+from tests.support.helpers import ORG_1, USER_1
 
 MASTER_KEY = "db-direct-jobs-test-master-key"
 CREDENTIALS = {"username": "AEQUOROS_RO", "password": "probe-password"}

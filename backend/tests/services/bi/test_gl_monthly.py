@@ -40,9 +40,9 @@ from app.models import (
 )
 from app.models.canonical import CanonicalGlAccount
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
-from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import AS_OF, CTX, MID_MONTH, build, new_batch, seed_book
+from tests.support.helpers import ORG_1
 
 M = 1_000_000
 _APR, _MAY, _JUN = date(2026, 4, 30), date(2026, 5, 31), AS_OF

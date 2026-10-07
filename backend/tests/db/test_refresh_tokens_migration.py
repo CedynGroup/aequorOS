@@ -17,11 +17,11 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
-from tests.api.helpers import ORG_1, ORG_2
 from tests.db.test_postgres_migrations import (  # noqa: F401 - fixture import
     MigratedPostgresSchema,
     migrated_postgres_schema,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 _TABLE = "refresh_tokens"
 

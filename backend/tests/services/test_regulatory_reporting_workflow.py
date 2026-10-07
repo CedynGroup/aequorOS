@@ -22,14 +22,14 @@ from app.schemas.regulatory_reporting import (
 from app.services import regulatory_liquidity
 from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
-from tests.factories.attestation import relax_signing
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.attestation import relax_signing
+from tests.support.factories.authorization import grant_institution_authority
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1

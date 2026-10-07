@@ -18,8 +18,8 @@ from app.models import (
     FinancialRecordSourceLink,
     FinancialSourceRow,
 )
-from tests.api.factories import ApiFactories
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.support.api_factories import ApiFactories
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 
 def test_financial_workspace_map_creates_records_traceability_and_is_idempotent(

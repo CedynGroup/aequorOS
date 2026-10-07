@@ -46,13 +46,13 @@ from app.services import (
     regulatory_liquidity,
 )
 from app.services.regulatory_reporting import generation
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import (
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
     seed_hedge_and_swap_positions,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = [
     pytest.mark.usefixtures(

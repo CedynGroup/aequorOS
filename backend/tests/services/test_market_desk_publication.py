@@ -34,8 +34,8 @@ from app.models import (
 )
 from app.services.market_desk import determinations, observations, publication, register
 from app.storage.client import StorageLocation
-from tests.api.helpers import ORG_1, ORG_2
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, ORG_2
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 COB = date(2026, 8, 7)
 ANALYST = "analyst@aequoros.com"

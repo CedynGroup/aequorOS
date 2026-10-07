@@ -31,7 +31,7 @@ from app.models import AuthorizationBinding, Bank, User
 from app.services import authorization
 from app.services.authorization import ALL_INSTITUTION_DATA, NO_INSTITUTION_DATA
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 BANK_1 = "BK-DSCOPE01"
 BANK_2 = "BK-DSCOPE02"

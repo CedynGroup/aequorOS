@@ -61,9 +61,9 @@ from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from app.services.icaap import blocks, pillar2
 from app.services.icaap.pillar2_inputs import granularity as granularity_inputs
-from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import APPROVAL_TIMESTAMP, SAMPLE_BANK_ID
 from tests.services.icaap.conftest import AS_OF
+from tests.support.helpers import ORG_1
 
 COMPONENT = "credit_concentration"
 METHOD = "granularity_adjustment"

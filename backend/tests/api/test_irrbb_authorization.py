@@ -48,8 +48,8 @@ from app.services import (
     regulatory_irr,
 )
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/irr"
 WORKBENCH_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/scenario-workbench/irr"

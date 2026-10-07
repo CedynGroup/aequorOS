@@ -12,7 +12,7 @@ from app.adapters.temenos_t24.credential_vault import (
     TemenosCredentialVault,
 )
 from app.models import Bank, TemenosConnection
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 _CREDS = {"username": "SVC.AEQUOROS", "password": "s3cret-that-must-never-leak"}
 

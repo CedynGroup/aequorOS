@@ -37,13 +37,13 @@ from app.services.regulatory_reporting.channels import (
     EmailFallbackChannel,
     OrassSandboxChannel,
 )
-from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.attestation import relax_signing
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.services import market_data
 from app.services.market_desk import entitlements
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 7, 15)
 EARLIER = datetime(2026, 7, 14, 8, 0, tzinfo=UTC)

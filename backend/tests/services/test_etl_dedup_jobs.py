@@ -32,8 +32,8 @@ from app.models import (
 )
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import etl_dedup_jobs, ingestion
-from tests.api.helpers import ORG_1, USER_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 AS_OF = date(2026, 6, 30)
 

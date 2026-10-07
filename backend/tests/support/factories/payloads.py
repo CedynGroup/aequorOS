@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.schemas.common import JsonObject, JsonValue
-from tests.factories.defaults import (
+from tests.support.factories.defaults import (
     DEFAULT_ASSESSMENT_NAME,
     DEFAULT_ASSESSMENT_TYPE,
     DEFAULT_CASE_STATUS,

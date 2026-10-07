@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.models import User
 from app.services import authorization
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 MASTER_KEY = "sso-config-test-master-key"
 SECRET = "google-client-secret-that-must-never-leak"

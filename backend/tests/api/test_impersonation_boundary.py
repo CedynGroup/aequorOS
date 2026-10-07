@@ -48,9 +48,9 @@ from app.integrations.storage.base import StoredObjectHead
 from app.models import Bank, RegulatoryPackage, User
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.factories import CaseFactory, DocumentFactory
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.api_factories import CaseFactory, DocumentFactory
+from tests.support.helpers import ORG_1, USER_1, headers
 
 _UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 _SUBMISSION_BANK_ID = "BK-IMPBND01"

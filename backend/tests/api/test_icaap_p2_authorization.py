@@ -33,11 +33,11 @@ from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding, Bank, User
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 SDI_BANK_ID = "BK-P2SDI001"
 OTHER_ORG_BANK_ID = "BK-P2OTH001"

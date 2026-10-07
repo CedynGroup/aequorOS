@@ -9,7 +9,7 @@ from app.core import security
 from app.core.config import AuthSettings
 from app.models import User
 from app.services import auth_throttle, authentication
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 PASSWORD = "correct-horse-battery-staple-0001"  # noqa: S105 - fixture only
 WRONG_PASSWORD = "wrong-password-0002"  # noqa: S105 - fixture only

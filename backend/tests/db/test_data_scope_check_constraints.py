@@ -31,7 +31,7 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, User
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 
 def _row(

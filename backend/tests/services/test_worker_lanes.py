@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.models import Job
 from app.services import job_queue
 from app.worker import HANDLERS, WorkerConfigurationError, resolve_job_types
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 #: In ``JOB_TYPES`` order, which is the order ``job_types_in_lane`` returns. Every
 #: one holds an external model credential while it runs: ``bi_commentary`` and

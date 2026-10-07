@@ -50,8 +50,8 @@ from app.services.bi.authorization import (
     REASON_BANK_WIDE_FIGURE,
     REASON_INSTITUTION_GRAIN,
 )
-from tests.api.helpers import ORG_1, USER_1, error_envelope, headers
 from tests.api.test_bi_routes import AS_OF, BANK_ID, BASE, BUILT_AT, seed_bi_mart
+from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 
 PORTFOLIO_MEASURE = "loans.balance_rc"
 INSTITUTION_MEASURE = "engine.npl_ratio_pct.crd.official"

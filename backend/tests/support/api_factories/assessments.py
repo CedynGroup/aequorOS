@@ -6,8 +6,8 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from app.schemas.assessments import AssessmentRead
-from tests.api.helpers import headers
-from tests.factories import CreatesApiCase, assessment_payload
+from tests.support.factories import CreatesApiCase, assessment_payload
+from tests.support.helpers import headers
 
 
 @dataclass(frozen=True)

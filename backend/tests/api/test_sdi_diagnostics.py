@@ -13,7 +13,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from tests.api.helpers import ORG_1, headers
+from tests.support.helpers import ORG_1, headers
 
 
 def _create_sdi_bank() -> str:

@@ -63,7 +63,7 @@ from tests.real_data import (
     real_headers,
     requires_real_data,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = requires_real_data
 

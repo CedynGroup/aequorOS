@@ -70,7 +70,6 @@ from app.services import authorization, integration_keys
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, runner
-from tests.api.helpers import ORG_1, USER_1, error_envelope, headers, integration_key_headers
 from tests.api.test_bi_routes import (
     AS_OF,
     BANK_ID,
@@ -79,6 +78,7 @@ from tests.api.test_bi_routes import (
     SIBLING_BANK_ID,
     seed_bi_mart,
 )
+from tests.support.helpers import ORG_1, USER_1, error_envelope, headers, integration_key_headers
 
 #: A SECOND reporting date, built BEFORE August, so the walk order is derivable.
 PRIOR = dt.date(2026, 7, 31)

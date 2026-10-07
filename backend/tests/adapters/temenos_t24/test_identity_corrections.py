@@ -25,8 +25,8 @@ from app.domain.ingestion.validation import (
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services.ingestion import create_mapping_config, start_ingestion
-from tests.api.helpers import ORG_1, USER_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 REFERENCE = "T24-CORRECTION-1"
 HELD_DATE = date(2042, 1, 1)

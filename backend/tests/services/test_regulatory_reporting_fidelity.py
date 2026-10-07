@@ -42,15 +42,15 @@ from app.services.regulatory_reporting.channels.errors import (
 )
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
 from app.services.regulatory_reporting.common import read_package
-from tests.factories.attestation import relax_signing
-from tests.factories.filing_chain import complete_chain
-from tests.factories.outbound import stub_dns, stub_public_dns
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.attestation import relax_signing
+from tests.support.factories.filing_chain import complete_chain
+from tests.support.factories.outbound import stub_dns, stub_public_dns
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

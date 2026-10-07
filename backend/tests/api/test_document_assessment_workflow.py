@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.api.factories import AssessmentFactory, CaseFactory, DocumentFactory
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.support.api_factories import AssessmentFactory, CaseFactory, DocumentFactory
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 
 def test_phase_1_happy_path_e2e(db_client: TestClient, fake_storage) -> None:  # noqa: PLR0915

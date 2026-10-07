@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_2, USER_1, USER_2, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_2, USER_1, USER_2, headers
 
 
 def test_bulk_case_actions_assign_with_partial_failures(db_client: TestClient) -> None:

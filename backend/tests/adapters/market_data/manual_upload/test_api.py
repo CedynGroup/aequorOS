@@ -26,7 +26,7 @@ from tests.adapters.market_data.manual_upload.fixtures import (
     build_yield_curve_workbook,
 )
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = requires_real_data
 

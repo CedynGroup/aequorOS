@@ -34,7 +34,7 @@ from app.api.deps import TenantContext
 from app.core import security
 from app.models import SsoConnection, User
 from app.services.attestation import stepup
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _ISSUER = "https://idp.example.test"
 _CLIENT_ID = "aequoros-step-up-client"

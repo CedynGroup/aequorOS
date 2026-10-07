@@ -29,8 +29,8 @@ from app.models import Bank, CanonicalGlAccount, CanonicalLoanEvent, CanonicalRe
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from app.services.push_ingestion import IDENTITY_MAPPING_NAME
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_ingestion import seed_bank
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 pytestmark = pytest.mark.committing_db
 

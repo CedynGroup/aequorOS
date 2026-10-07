@@ -37,7 +37,7 @@ from app.services.ai import gates
 from app.services.ai.features import (
     CONSENT_COVERED_FEATURES,
 )
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 URL = "/api/v1/organization/ai-settings"
 

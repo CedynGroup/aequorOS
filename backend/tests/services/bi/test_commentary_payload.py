@@ -35,7 +35,7 @@ from app.services.attestation.digests import canonical_json
 from app.services.bi.commentary import payload as payload_module
 from app.services.bi.commentary import prompt as prompt_module
 from app.services.bi.insights import facts, rules
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)

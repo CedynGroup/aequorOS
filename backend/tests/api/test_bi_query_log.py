@@ -27,7 +27,6 @@ from app.models import Bank
 from app.models.bi import QUERY_LOG_SURFACES, BiQueryLog
 from app.schemas.bi import BiQuery
 from app.services.bi import query_log
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_bi_routes import (
     AGGREGATE_ONLY,
     AS_OF,
@@ -42,6 +41,7 @@ from tests.api.test_bi_routes import (
     impersonation_headers,
     seed_bi_mart,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 #: A surface the vocabulary does not carry, derived so that widening
 #: :data:`QUERY_LOG_SURFACES` cannot silently make the refusal test vacuous.
@@ -199,7 +199,7 @@ def test_an_impersonated_session_persists_nothing(
 def test_a_machine_key_persists_nothing(
     db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
 ) -> None:
-    from tests.api.helpers import integration_key_headers  # noqa: PLC0415 - issues a real key
+    from tests.support.helpers import integration_key_headers  # noqa: PLC0415 - issues a real key
 
     response = call(
         db_client,

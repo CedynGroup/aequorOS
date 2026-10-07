@@ -70,7 +70,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority"),

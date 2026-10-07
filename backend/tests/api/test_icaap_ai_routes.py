@@ -31,11 +31,11 @@ from app.models import AuthorizationBinding, BankReportingPeriod, User
 from app.models.ai import AiCommentarySettings
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import authorization, regulatory_capital
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
 SECTION = "executive_summary"

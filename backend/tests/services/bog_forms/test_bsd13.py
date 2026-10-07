@@ -45,11 +45,11 @@ from app.services.regulatory_reporting.bog_forms.layout import load_layout
 from app.services.regulatory_reporting.bog_forms.linemaps import bsd13 as lm
 from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
 from app.services.regulatory_reporting.bog_forms.sources_ext import bsd13 as ext
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, headers
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority", "fx_run_authority")
 

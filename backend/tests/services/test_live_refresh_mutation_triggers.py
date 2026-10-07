@@ -18,12 +18,12 @@ from app.schemas.liquidity_thresholds import (
     LiquidityThresholdUpdate,
 )
 from app.services import credit_params, liquidity_thresholds, reconciliation
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1, USER_1
 
 
 def _seed_live_input(db: Session) -> TenantContext:

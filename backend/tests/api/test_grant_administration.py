@@ -40,7 +40,7 @@ from app.models import (
 from app.schemas.authorization import AccessRequestReject
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 BANK_A = "BK-GRNT0001"

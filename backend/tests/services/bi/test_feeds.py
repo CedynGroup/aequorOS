@@ -28,7 +28,7 @@ from app.services.bi.exports import policy
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, render, runner
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 BANK_ID = "BK-FEEDSVC1"
 DOC = Path(__file__).resolve().parents[3] / "docs" / "powerbi_stage_b.md"

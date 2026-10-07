@@ -31,7 +31,7 @@ from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
 from app.services import authentication, authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1
+from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 BANK_1 = "BK-AUTH0001"
 BANK_1_SIBLING = "BK-AUTH0003"

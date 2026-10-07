@@ -40,11 +40,11 @@ from app.services.regulatory_reporting.bog_forms.sources_ext.bsd7 import (
     LINE_ATTRIBUTE,
     window_start,
 )
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, headers
 
 M = 1_000_000
 REPORTING_DATE = "2026-03-31"  # the fixture's latest period (fiscal Q1 → quarter == PTD)

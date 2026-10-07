@@ -58,9 +58,9 @@ from app.services import canonical_withdrawal, system_of_record
 from app.services.canonical_withdrawal import WithdrawalError
 from app.services.fact_derivation import _load_canonical, diagnose_source_overlap
 from app.services.system_of_record import SystemOfRecordError
-from tests.api.helpers import ORG_1, USER_1, USER_2
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1, USER_2
 
 SECOND_SOURCE = "API_PUSH"
 FIXTURE_SOURCE = "EXCEL_CSV"

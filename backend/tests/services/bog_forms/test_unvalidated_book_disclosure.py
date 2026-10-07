@@ -47,12 +47,12 @@ from app.models import (
 )
 from app.services.regulatory_reporting.common import UNVALIDATED_BOOK_RULE
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
-from tests.api.helpers import headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import headers
 
 PERIOD_END = date(2026, 3, 31)
 #: A position-sourced official form that depends on no other form, so the

@@ -41,7 +41,7 @@ from app.services.bi import commentary
 from app.services.bi.commentary import CommentaryDraft, CommentaryParagraph, build_view
 from app.services.bi.insights import facts, rules
 from app.services.bi.insights.assemble import AssembledInsights
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)

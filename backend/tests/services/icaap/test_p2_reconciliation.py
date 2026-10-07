@@ -34,8 +34,8 @@ from app.schemas.icaap_risk_capital import (
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import capital_plan, regulatory_capital
 from app.services.icaap import allocation, blocks, pillar2, reconciliation
-from tests.api.helpers import ORG_1
 from tests.services.icaap.conftest import AS_OF
+from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
 

@@ -45,7 +45,7 @@ from app.services.market_desk import capture_job
 from app.services.market_desk.capture_job import run_desk_capture
 from app.services.market_desk.sources.core import QF_STALE_SOURCE
 from app.services.market_desk.sources.fetch import DeskSession, Pacer
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 #: The harvest's newest published day (fixtures README, 2026-08-09 harvest
 #: refreshed through 2026-08-19 on the primary).

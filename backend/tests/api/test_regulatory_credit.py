@@ -17,9 +17,9 @@ from sqlalchemy import select
 from app.db.session import get_sessionmaker
 from app.models import BankReportingPeriod
 from app.services import job_queue, pipeline
-from tests.api.helpers import ORG_1, headers
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, headers
 
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 

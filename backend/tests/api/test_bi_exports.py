@@ -49,7 +49,6 @@ from app.storage.client import (
     StorageLocation,
     StorageObject,
 )
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_bi_routes import (
     AGGREGATE_ONLY,
     AS_OF,
@@ -59,6 +58,7 @@ from tests.api.test_bi_routes import (
     grant_only,
     seed_bi_mart,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 SUMMARY_QUERY: dict[str, Any] = {
     "measures": ["loans.balance_rc"],

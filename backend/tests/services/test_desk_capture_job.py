@@ -32,11 +32,11 @@ from app.services.market_desk.capture_job import (
     run_desk_capture,
 )
 from app.services.market_desk.sources.fetch import FetchError, RawFetch
-from tests.api.helpers import ORG_1, ORG_2
 from tests.services.test_market_desk_calculation import (
     COB,
     _seed_fixture_observations,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 LEAD = "desk-lead@aequoros.com"
 

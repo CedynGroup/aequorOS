@@ -184,11 +184,11 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   Postgres-only behavior (RLS, advisory locks) is written to no-op on SQLite.
 - **Fixtures** (conftest): `client` (no DB), `db_client`, `db_session`, `api_factories`,
   `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
-- **Tenant constants** from `tests/api/helpers.py`: `ORG_1`, `ORG_2`, `USER_1`, `USER_2`, and
+- **Tenant constants** from `tests/support/helpers.py`: `ORG_1`, `ORG_2`, `USER_1`, `USER_2`, and
   `headers(org_id, user_id, roles, authorization_version)`, which returns a signed
   `Authorization: Bearer ...` access token. It defaults to the seeded user's current
   authorization version (`1`); stale-session tests pass an older value explicitly.
-- **Factories**: `tests/api/factories/` package — `ApiFactories` bundles `CaseFactory`,
+- **Factories**: `tests/support/api_factories/` package — `ApiFactories` bundles `CaseFactory`,
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.
 - **Cross-tenant isolation test pattern** — every new endpoint needs one. Canonical example:
@@ -346,7 +346,7 @@ feature. New code goes in the target layout; existing code moves one feature per
   when a module moves again; list each moved module, rather than package-prefix substitutions.
   The guard evaluates ownership and interfaces at current paths, then maps both dependency
   endpoints back through the ledger for baseline identity. A file move leaves baseline lines
-  unchanged; a dependency fix deletes them. The ledger is empty until the first file moves.
+  unchanged; a dependency fix deletes them.
   After fixing dependencies, regenerate the baseline from `backend/` with
   `uv run python -c "import tests.architecture.test_feature_boundaries as t; t.write_baseline()"`
   and review that the diff only deletes entries. `write_baseline()` owns the generated JSON's

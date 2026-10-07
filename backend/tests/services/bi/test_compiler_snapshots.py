@@ -32,7 +32,7 @@ from app.models.bi import BiDimDate, BiFactPositionDaily
 from app.models.bi_content import BiMeasure
 from app.schemas.bi import BiFilter, BiQuery
 from app.services.bi.compiler import compile_query
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 AS_OF = date(2026, 9, 18)

@@ -28,7 +28,6 @@ from app.services import (
     regulatory_irr,
     regulatory_liquidity,
 )
-from tests.api.helpers import headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -36,6 +35,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.fixtures.live_plane import materialize_live_plane
+from tests.support.helpers import headers
 
 _CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 _MODULES = {

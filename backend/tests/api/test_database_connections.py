@@ -30,9 +30,9 @@ from app.api.v1.database_connections import get_database_direct_storage
 from app.core.config import get_settings
 from app.services import database_connections as database_connections_service
 from app.services.database_connections import _reconcile_as_of
-from tests.factories.outbound import stub_public_dns
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.factories.outbound import stub_public_dns
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 MASTER_KEY = "db-direct-api-test-master-key"
 SECRET = "svc-db-password-that-must-never-leak"

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.ai import AiCommentarySettings
 from app.services.ai import approvals, gates
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.usefixtures("ai_enabled")
 

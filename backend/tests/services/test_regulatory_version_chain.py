@@ -30,13 +30,13 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_liquidity
 from app.services.attestation import workflow as attestation_workflow
 from app.services.regulatory_reporting import generation, snapshot_diff, version_chain
-from tests.api.helpers import ORG_2
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_2
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

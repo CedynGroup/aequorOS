@@ -42,11 +42,11 @@ from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
 from app.services import authorization
-from tests.api.factories import ApiFactories
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.api_factories import ApiFactories
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 #: Each feature keeps its fixtures in ``tests/<feature>/fixtures.py``. They are
 #: registered here because pytest accepts ``pytest_plugins`` only in the root

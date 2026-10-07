@@ -39,7 +39,7 @@ from app.schemas.market_data_sources import (
     SourcePreferencesUpdate,
 )
 from app.services import market_data, market_data_overlays, market_data_sources
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 7, 15)
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)

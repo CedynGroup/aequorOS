@@ -14,7 +14,7 @@ from app.core.authorization import (
 )
 from app.models import User
 from app.services import authorization
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 
 def grant_organization_analyst(

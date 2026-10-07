@@ -25,7 +25,7 @@ from app.core.authorization import (
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, User
 from app.services import authorization
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 POLICY_URL = "/api/v1/attestation/signing-policies"
 PLACEMENT_URL = "/api/v1/attestation/signature-placements"

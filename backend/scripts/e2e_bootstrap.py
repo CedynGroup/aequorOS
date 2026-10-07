@@ -91,7 +91,6 @@ from app.services import authorization, membership, sso_config
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
-from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
@@ -100,6 +99,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.fixtures.live_plane import materialize_live_plane
 from tests.fixtures.reference_data import seed_global_reference_data
+from tests.support.factories.canonical import seed_canonical_fixture
 
 # The platform tenant ID used by the hermetic E2E fixture.
 DEMO_ORG_ID = "OR-DEM00001"
@@ -537,7 +537,7 @@ def _seed_canonical_positions(session: Session) -> None:
     snapshots to build from" and every BI page would have opened on its empty
     state).
 
-    ``tests/factories/canonical.py`` is the same fixture every hermetic suite
+    ``tests/support/factories/canonical.py`` is the same fixture every hermetic suite
     layers on the test book — the GL chart, one product per regulatory category,
     retail and corporate counterparties, and one position per type with
     hand-checkable aggregates — so the browser sees the book the unit tests are

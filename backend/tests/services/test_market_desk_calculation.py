@@ -36,8 +36,8 @@ from app.models import (
 )
 from app.services.market_desk import calculation, determinations, publication, register
 from app.services.market_desk.calculation import CalculationError, run_pipeline
-from tests.api.helpers import ORG_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "market_desk" / "series"
 COB = date(2026, 8, 7)

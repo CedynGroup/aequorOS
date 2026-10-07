@@ -42,7 +42,7 @@ from app.models import (
 from app.schemas.authorization import GrantableRoleBundle
 from app.services import authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 BANK_A = "BK-DSGRNT01"

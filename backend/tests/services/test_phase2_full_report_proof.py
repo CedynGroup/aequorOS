@@ -44,7 +44,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = [
     pytest.mark.usefixtures(

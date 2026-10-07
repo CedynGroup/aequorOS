@@ -256,7 +256,7 @@ def test_provision_coverage_evidence_is_real_since_credit_pr1(
     reports coverage UNAVAILABLE with the reason (absent is not zero), and a
     book that does state provisions yields a real coverage sourced from the
     classification engine's provisions-held split - not the requirement."""
-    from tests.factories.canonical import (  # noqa: PLC0415
+    from tests.support.factories.canonical import (  # noqa: PLC0415
         FIXTURE_AS_OF,
         seed_canonical_fixture,
     )

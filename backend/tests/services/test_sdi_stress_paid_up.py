@@ -18,7 +18,7 @@ from app.api.deps import TenantContext
 from app.models import Bank
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.services import enterprise_stress as svc
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

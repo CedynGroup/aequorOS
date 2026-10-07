@@ -31,7 +31,6 @@ from app.models import BiFactPositionEom, CurrentFinancialFact, Job
 from app.services import job_queue, live_refresh_triggers
 from app.services.bi import enqueue, versions
 from tests.adapters.excel_csv import fixtures
-from tests.api.helpers import ORG_1
 from tests.api.test_ingestion import (
     FULL_MAPPING,
     RECON_MAPPING,
@@ -39,8 +38,9 @@ from tests.api.test_ingestion import (
     seed_bank,
     start_batch,
 )
-from tests.factories.canonical import FIXTURE_AS_OF
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
 OTHER_AS_OF = date(2026, 5, 31)

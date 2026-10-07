@@ -29,7 +29,7 @@ from app.domain.forecasting.engine import ProjectionYear
 from app.models import Bank, RegulatoryPackage
 from app.services.regulatory_forecasting import _balance_ties_row
 from app.services.regulatory_reporting import validation
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 
 def _bank(db: Session) -> Bank:

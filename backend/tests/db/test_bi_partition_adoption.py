@@ -49,7 +49,6 @@ from alembic import command
 # Imported for its side effect: app.db.session registers the ``after_begin``
 # listener that sets the tenant GUC.
 from app.db.session import set_tenant_rls_context
-from tests.api.helpers import ORG_1, ORG_2
 
 # The two privilege helpers are shared deliberately: "skip locally, FAIL in the
 # gate" is one policy and must not be re-stated per module.
@@ -63,6 +62,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 _ = set_tenant_rls_context
 

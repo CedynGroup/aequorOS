@@ -40,8 +40,8 @@ from app.services.fact_derivation import (
 )
 from app.services.regulatory_capital import run_all_capital_scenarios
 from app.services.regulatory_liquidity import run_all_liquidity_scenarios
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import (
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import (
     EXPECTED_CAPITAL_TOTAL,
     EXPECTED_FX_NET_LONG,
     EXPECTED_FX_NET_SHORT,
@@ -56,7 +56,7 @@ from tests.factories.canonical import (
     seed_directional_swap_positions,
     seed_hedge_and_swap_positions,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, USER_1
 
 EXPECTED_GROUPS = {
     "balance_sheet",

@@ -33,8 +33,8 @@ from app.schemas.icaap_risk_capital import (
     IcaapRetire,
 )
 from app.services.icaap import params, pillar2
-from tests.api.helpers import ORG_1
 from tests.domain.icaap.pillar2.conftest import seed_body
+from tests.support.helpers import ORG_1
 
 #: A second person in the same tenant: the checker in every maker-checker test.
 CHECKER = uuid4()

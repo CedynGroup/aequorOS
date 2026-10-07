@@ -30,7 +30,7 @@ from tests.adapters.market_data.manual_upload.fixtures import (
     produced_batch_records,
     stage_upload,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 PULL_SCOPES = [
     DataScope.YIELD_CURVE_GHS,

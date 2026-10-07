@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 from app.integrations.storage.base import StoredObjectHead
 from app.schemas.documents import UploadRequestResponse
-from tests.api.helpers import headers
-from tests.factories import CreatesApiCase, upload_payload
+from tests.support.factories import CreatesApiCase, upload_payload
+from tests.support.helpers import headers
 
 
 class MutableFakeStorage(Protocol):

@@ -28,7 +28,7 @@ from app.services.market_data_jobs import (
     enqueue_due_market_data_pulls,
     run_market_data_pull,
 )
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 MASTER_KEY = "unit-test-master-key"
 CREDENTIALS = {"api_key": "bbg-key-1234", "api_secret": "must-never-leak"}

@@ -39,13 +39,13 @@ from app.schemas.regulatory_reporting import (
 from app.services import regulatory_liquidity
 from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import generation, validation, workflow
-from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.attestation import relax_signing
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

@@ -14,7 +14,7 @@ from app.services.market_data_overlays import (
     compose_curve,
     is_active,
 )
-from tests.api.helpers import ORG_1, ORG_2
+from tests.support.helpers import ORG_1, ORG_2
 
 AS_OF = date(2026, 7, 15)
 CURVE = "AEQ.GHS.SOV.ZERO"

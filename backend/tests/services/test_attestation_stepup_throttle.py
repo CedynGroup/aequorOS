@@ -56,7 +56,7 @@ from app.services import attestation_api, auth_throttle
 from app.services.attestation import stepup
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 PASSWORD = "correct-horse-battery-staple-0001"  # noqa: S105 - disposable fixture
 WRONG = "not-the-password-0002"  # noqa: S105 - disposable fixture
@@ -585,7 +585,7 @@ def test_the_preparer_then_approver_ceremony_still_completes(
         SAMPLE_BANK_ID,
         _seed,  # pyright: ignore[reportPrivateUsage]
     )
-    from tests.storage.inmemory import InMemoryStorageClient  # noqa: PLC0415
+    from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
 
     storage = InMemoryStorageClient()
     monkeypatch.setattr(

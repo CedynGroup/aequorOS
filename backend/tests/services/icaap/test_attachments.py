@@ -23,7 +23,7 @@ from app.schemas.icaap import (
     IcaapManualTablePut,
 )
 from app.services.icaap import attachments, blocks
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 REPORT = "senior_management_report"
 RESOLUTION = "board_resolution"

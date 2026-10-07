@@ -16,7 +16,7 @@ from app.adapters.market_data.scope_taxonomy import DataScope, PullFrequency
 from app.adapters.market_data.scope_translator import Catalog, CatalogEntry
 from app.models.market_data import MarketDataQuotaUsage
 from app.models.regulatory import Bank
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 
 def _catalog() -> Catalog:

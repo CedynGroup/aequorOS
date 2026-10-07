@@ -24,9 +24,9 @@ from app.schemas.regulatory_credit import (
     CreditThresholdUpdate,
 )
 from app.services import credit_concentration, credit_params, fact_derivation
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 

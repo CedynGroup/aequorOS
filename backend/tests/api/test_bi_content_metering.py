@@ -59,7 +59,6 @@ from app.models import Bank, User
 from app.models.bi import BiQueryLog
 from app.models.bi_content import BiMeasure
 from app.services.bi import content, query_log
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_bi_content_routes import (
     AS_OF,
     BANK_ID,
@@ -72,6 +71,7 @@ from tests.api.test_bi_content_routes import (
     bi_on,  # noqa: F401 - imported so pytest can resolve it by name
     plane,  # noqa: F401 - imported so pytest can resolve it by name
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 #: Every test here needs the institution and the deployment flag.
 pytestmark = pytest.mark.usefixtures("plane", "bi_on")

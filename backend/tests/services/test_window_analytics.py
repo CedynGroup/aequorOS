@@ -40,14 +40,14 @@ from app.services import (
     regulatory_liquidity,
     window_analytics,
 )
-from tests.api.helpers import headers
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import headers
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
 

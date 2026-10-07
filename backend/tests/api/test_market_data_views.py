@@ -22,7 +22,7 @@ from app.models import (
     LineageRecord,
     MarketDataOverlay,
 )
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 AS_OF = date(2026, 7, 15)
 INGESTED_AT = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)

@@ -24,7 +24,7 @@ from app.db.base import utc_now
 from app.jobs import bi_common, bi_mart_backfill, bi_mart_refresh, bi_retention
 from app.models import Bank, Job
 from app.services import job_queue
-from tests.api.helpers import ORG_1, ORG_2
+from tests.support.helpers import ORG_1, ORG_2
 
 AS_OF = date(2026, 6, 30)
 

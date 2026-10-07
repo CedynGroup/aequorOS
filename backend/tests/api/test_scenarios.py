@@ -15,8 +15,8 @@ from app.db.session import get_sessionmaker
 from app.models import AuditEvent, RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.schemas.scenarios import AssumptionUpdate
 from app.services.scenarios import update_assumption
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 # These concurrency tests need PostgreSQL row locks and independent sessions.
 requires_committing_db = pytest.mark.committing_db

@@ -19,7 +19,7 @@ from app.services import liquidity_thresholds
 from app.services.regulatory_reporting.le_generation import (
     _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
 _CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

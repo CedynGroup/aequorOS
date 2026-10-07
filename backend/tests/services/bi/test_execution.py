@@ -26,7 +26,7 @@ from app.services.bi import execution
 from app.services.bi.compiler import CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError, BiQueryTimeout
 from app.services.bi.execution import QueryResult, execute
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 9, 18)
 

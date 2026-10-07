@@ -21,8 +21,6 @@ from app.schemas.icaap import (
     IcaapFreezeCreate,
 )
 from app.services.icaap import clone, disclosure, post_freeze, workflow
-from tests.api.helpers import ORG_1
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.icaap.p3_support import (
     access_for,
@@ -30,6 +28,8 @@ from tests.services.icaap.p3_support import (
     return_payload,
 )
 from tests.services.icaap.test_p3_freeze import _build
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import ORG_1
 
 
 def _disclosure_checker(db: Session, *, email: str) -> IcaapAccess:

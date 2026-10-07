@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.services.market_desk import observations as observations_service
 from tests.operator.conftest import operator_headers
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 BASE = "/operator/v1/desk"
 DEV_EMAIL = "dev@aequoros.com"

@@ -68,8 +68,8 @@ from app.services.ai import client as ai_client
 from app.services.bi import commentary
 from app.services.bi.commentary import CommentaryDraft, CommentaryParagraph
 from app.services.bi.insights import default_compare_to
-from tests.api.helpers import ORG_1, headers
 from tests.api.test_bi_routes import AS_OF, BANK_ID, BUILT_AT, FINGERPRINT, seed_bi_mart
+from tests.support.helpers import ORG_1, headers
 
 PRIOR = default_compare_to(AS_OF)
 BASE = f"/api/v1/banks/{BANK_ID}/bi"

@@ -45,7 +45,7 @@ from app.models.bi_content import (
     BiDashboardVersion,
     BiMeasure,
 )
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 BANK_ID = "BK-BICONT01"
 NOW = datetime(2026, 9, 27, 12, tzinfo=UTC)

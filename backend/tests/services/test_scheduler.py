@@ -39,9 +39,9 @@ from app.schemas.live import OfficialRunRequest
 from app.services import authorization, job_queue, live_view, pipeline, regulatory_fx, scheduler
 from app.services.bi import enqueue as bi_enqueue
 from app.services.bi.versions import BUILDER_VERSION
-from tests.api.helpers import ORG_1, ORG_2, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 
 def _grant_official_run(

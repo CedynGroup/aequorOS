@@ -22,7 +22,7 @@ from app.schemas.management_actions import (
     ManagementActionPlanTransition,
 )
 from app.services import management_action_plans
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 CHECKER = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

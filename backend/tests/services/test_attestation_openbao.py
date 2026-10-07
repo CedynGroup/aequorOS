@@ -97,7 +97,6 @@ from app.services.attestation.signers import (
     signer_subject,
 )
 from scripts import bootstrap_openbao_pki
-from tests.api.helpers import ORG_1, ORG_2
 from tests.services.test_attestation_artifact_signing import (
     CHECKER,
     MAKER,
@@ -108,6 +107,7 @@ from tests.services.test_attestation_artifact_signing import (
     _trust,
     _version,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 DIGEST = hashlib.sha256(b"aequoros attestation payload").digest()
 SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"

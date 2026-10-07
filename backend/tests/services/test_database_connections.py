@@ -7,7 +7,7 @@ No live database is ever required: the driver is injected as an
 concern is that sealed credentials round-trip the vault and never leak.
 
 The egress guard resolves ``host`` before every connect, so DNS is stubbed too
-(``tests.factories.outbound``) — no test performs a real lookup. The guard's own
+(``tests.support.factories.outbound``) — no test performs a real lookup. The guard's own
 behaviour on this service is pinned at the bottom of this module.
 """
 
@@ -37,9 +37,9 @@ from app.schemas.database_connection import (
     DatabaseConnectionUpdate,
 )
 from app.services import database_connections
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 MASTER_KEY = "db-direct-service-test-master-key"
 SECRET = "svc-db-password-that-must-never-leak"

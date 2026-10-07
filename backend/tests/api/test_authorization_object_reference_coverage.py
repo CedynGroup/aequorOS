@@ -47,7 +47,6 @@ from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
 from app.models.ai import AiCommentarySettings
-from tests.api.helpers import headers
 from tests.fixtures.object_reference_routes import (
     KNOWN_DEFECTS,
     LAYOUTS,
@@ -75,6 +74,7 @@ from tests.fixtures.object_references import (
     seed_objects,
 )
 from tests.fixtures.reference_data import seed_global_reference_data
+from tests.support.helpers import headers
 
 # The census is read from a throwaway app at import so the cases are available
 # for parametrization; the fixture below builds the app that serves requests.

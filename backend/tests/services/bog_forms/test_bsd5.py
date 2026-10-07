@@ -60,12 +60,12 @@ from app.services.regulatory_reporting.bog_forms.layout import load_layout
 from app.services.regulatory_reporting.bog_forms.linemaps import bsd5a, line_maps_for
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 M = Decimal("1000000")
 PERIOD_END = date(2026, 3, 31)

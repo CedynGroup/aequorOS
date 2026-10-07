@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Bank, User
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,

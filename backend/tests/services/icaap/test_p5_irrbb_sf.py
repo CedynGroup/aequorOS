@@ -39,10 +39,10 @@ from app.schemas.icaap_risk_capital import IcaapPillar2Compute, IcaapPillar2Item
 from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
 from app.services import regulatory_irr_sf, regulatory_parameters
 from app.services.icaap import blocks, cycles, pillar2, readiness, sf_state
-from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.icaap.conftest import AS_OF, rehearsal_payload
 from tests.services.sf_book import seed_book
+from tests.support.helpers import ORG_1, USER_1
 
 CODE = regulatory_irr_sf.CODE_MANDATORY_FROM
 

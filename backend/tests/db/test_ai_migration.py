@@ -36,13 +36,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 
 from alembic import command
-from tests.api.helpers import ORG_1, ORG_2
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,

@@ -26,11 +26,11 @@ from app.services.regulatory_reporting.anchors import (
     DEFAULT_HORIZON_MONTHS,
     DEFAULT_LOOKBACK_MONTHS,
 )
-from tests.api.helpers import headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 ANCHORS = f"{BASE}/return-anchors"

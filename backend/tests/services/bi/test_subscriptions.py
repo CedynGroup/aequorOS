@@ -51,9 +51,9 @@ from app.models.bi import BiMartBuild, BiQueryLog
 from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
 from app.services import authorization, job_queue, scheduler
 from app.services.bi import subscriptions
-from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import AS_OF, build, seed_book
+from tests.support.helpers import ORG_1, USER_1
 
 LOANS = "loans.balance_rc"
 #: A dimension the catalogue declares ``restricted``: it names a legal person, so

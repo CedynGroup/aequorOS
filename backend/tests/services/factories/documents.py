@@ -10,8 +10,8 @@ from app.core.config import Settings
 from app.integrations.storage.base import StoredObjectHead
 from app.models import Document
 from app.services import documents
-from tests.factories import CreatesServiceCase, upload_payload
 from tests.services.factories.shared import MutableObjectStorage
+from tests.support.factories import CreatesServiceCase, upload_payload
 
 
 @dataclass(frozen=True)

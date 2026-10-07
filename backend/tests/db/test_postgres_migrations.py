@@ -16,7 +16,7 @@ from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.services.ai import observability
-from tests.api.helpers import ORG_1, ORG_2
+from tests.support.helpers import ORG_1, ORG_2
 
 
 @dataclass(frozen=True)

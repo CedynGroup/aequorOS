@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.integrations.storage.base import StoredObjectHead
-from tests.api.factories import CaseFactory, DocumentFactory
-from tests.api.helpers import ORG_2, headers
+from tests.support.api_factories import CaseFactory, DocumentFactory
+from tests.support.helpers import ORG_2, headers
 
 
 def test_upload_flow_validates_and_completes(db_client: TestClient, fake_storage) -> None:

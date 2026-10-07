@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
 from app.services import authentication, grant_administration, membership
-from tests.api.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 _BANK_ID = "BK-MEMB0001"
 

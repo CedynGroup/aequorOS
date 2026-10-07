@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from app.db.session import get_sessionmaker
 from app.models import Bank
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, headers
 
 
 def _seed_universal_bank() -> str:
