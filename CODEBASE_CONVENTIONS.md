@@ -7,6 +7,9 @@ Match existing code exactly; do not introduce new patterns when one below alread
 
 ## 1. Python (backend)
 
+Paths below describe the existing layered tree; new feature code follows
+[the target feature layout](#5-feature-layout).
+
 ### Tooling (from `pyproject.toml`)
 
 - **ruff**: `line-length = 100`, `target-version = "py313"`. Lint rule set:
@@ -164,8 +167,8 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   (`CalculationInputError`, `CapitalInputError` with `{code, message, details}`) that services
   convert into persisted `failed` rows — not HTTP 500s.
 - Pure calculation logic (no db/ctx) lives in plain functions like
-  `liquidity.calculate_metrics(periods)` so it is unit-testable; longer-term home is
-  `app/domain/...` per `docs/architecture.md`.
+  `liquidity.calculate_metrics(periods)` so it is unit-testable; its target home follows
+  [the feature layout](#5-feature-layout).
 - Storage access only through the `ObjectStorage` protocol
   (`app/integrations/storage/base.py`); `S3ObjectStorage` + `get_object_storage()` in
   `s3.py` is the sole boto3 call site. Never import boto3 in features/services.
@@ -305,3 +308,41 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 - Banks are created only by staff provisioning (`provision_institution`), which takes
   `currency` and `jurisdiction_code` explicitly; ingestion requires the bank to exist
   (`_get_bank_or_404`).
+
+## 5. Feature layout
+
+The risk service is moving from a layer-first tree (`app/services/`, `app/domain/`,
+`app/models/`, `app/schemas/`, `app/features/`, `app/jobs/`) to one package per product
+feature. New code goes in the target layout; existing code moves one feature per change.
+
+- **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
+  only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
+  `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  feature has worker handlers. A role is one module until it passes about 1,000 lines. The
+  kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
+  composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
+  `app/services/scheduler.py` and the `app.models` metadata registry.
+- **Feature names and layers** live in `LAYERS` in
+  `backend/tests/architecture/test_feature_boundaries.py`; `PEER_EDGES` defines the permitted
+  same-layer directions and `FEATURE_RULES` assigns ownership in the existing layered tree.
+- **Imports.** A feature imports only lower layers (same-layer only along a declared
+  `PEER_EDGES` direction), and only another feature's `public` module or pure `domain`
+  engines. The kernel imports no feature. Feature code never imports through the `app.models`
+  aggregator; it is a registry, not an API.
+- **Target test layout mirrors the source**: `app/<feature>/service.py` is tested under
+  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/`.
+- **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
+  records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
+  does a baseline entry that no longer occurs, so the baseline only shrinks.
+  Record behaviour-neutral module moves in `backend/scripts/feature_module_moves.json`, the
+  cumulative ledger consumed by the boundary guard: append `[old, new]` pairs of
+  exact dotted module names in move order (package names omit `.__init__`). Keep earlier pairs
+  when a module moves again; list each moved module, rather than package-prefix substitutions.
+  The guard evaluates ownership and interfaces at current paths, then maps both dependency
+  endpoints back through the ledger for baseline identity. A file move leaves baseline lines
+  unchanged; a dependency fix deletes them. The ledger is empty until the first file moves.
+  After fixing dependencies, regenerate the baseline from `backend/` with
+  `uv run python -c "import tests.architecture.test_feature_boundaries as t; t.write_baseline()"`
+  and review that the diff only deletes entries. `write_baseline()` owns the generated JSON's
+  formatting.
