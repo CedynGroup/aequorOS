@@ -50,9 +50,13 @@ import re
 from functools import cache
 from pathlib import Path
 
+import pytest
+
+from tests.architecture import _planes
 from tests.architecture._planes import APP, imported_modules, module_name
 
 BASELINE = Path(__file__).with_name("feature_boundary_baseline.json")
+MODULE_MOVES = Path(__file__).parents[2] / "scripts" / "feature_module_moves.json"
 
 KERNEL = "kernel"
 COMPOSITION = "composition"
@@ -421,10 +425,18 @@ def _violation(source: str, dest: str, target: str) -> str | None:
     return None if _is_interface(target, dest) else "private"
 
 
+def _canonical_module(module: str, moves: list[list[str]]) -> str:
+    for old, new in reversed(moves):
+        if module == new:
+            module = old
+    return module
+
+
 def violations() -> frozenset[str]:
     """Every boundary violation in ``app/``, one entry per module-to-module import."""
     owners = _owners()
     reexports = _model_reexports()
+    moves = json.loads(MODULE_MOVES.read_text(encoding="utf-8"))
     found: set[str] = set()
     for path in _app_files():
         module = _module(path)
@@ -439,7 +451,9 @@ def violations() -> frozenset[str]:
                 continue
             dest = owners[target]
             if (kind := _violation(source, dest, target)) is not None:
-                found.add(f"{kind} {source}->{dest}: {module} -> {target}")
+                importer = _canonical_module(module, moves)
+                imported = _canonical_module(target, moves)
+                found.add(f"{kind} {source}->{dest}: {importer} -> {imported}")
     return frozenset(found)
 
 
@@ -519,3 +533,101 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("icaap", KERNEL, "app.services.audit") is None
     assert _defining_module("app.services.regulatory_fx.any_name") == "app.services.regulatory_fx"
     assert _model_reexports()["app.models.Bank"] == "app.models.regulatory"
+
+
+@pytest.mark.parametrize("move_source,move_target", [(True, False), (False, True), (True, True)])
+@pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
+def test_recorded_moves_preserve_the_ratchet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    move_source: bool,
+    move_target: bool,
+    import_style: str,
+) -> None:
+    app = tmp_path / "app"
+    baseline = tmp_path / "baseline.json"
+    ledger = tmp_path / "moves.json"
+    monkeypatch.setattr(_planes, "APP", app)
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.BASELINE", baseline)
+    monkeypatch.setattr(f"{__name__}.MODULE_MOVES", ledger)
+    ledger.write_text("[]", encoding="utf-8")
+    source = "app.services.bi.authorization"
+    target = "app.services.scoped_authorization"
+
+    def write_module(module: str, content: str = "") -> Path:
+        path = app.joinpath(*module.split(".")[1:]).with_suffix(".py")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def scan() -> frozenset[str]:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
+        return violations()
+
+    def import_content() -> str:
+        if import_style == "registry":
+            write_module("app.models.__init__", f"from {target} import Authority\n")
+            return "from app.models import Authority\n"
+        if import_style == "relative":
+            parents = source.split(".")[:-1]
+            parts = target.split(".")
+            common = 0
+            for left, right in zip(parents, parts, strict=False):
+                if left != right:
+                    break
+                common += 1
+            relative = "." * (len(parents) - common + 1) + ".".join(parts[common:])
+            return f"from {relative} import Authority\n"
+        if import_style == "dynamic":
+            return f"importlib.import_module({target!r})\n"
+        return f"from {target} import Authority\n"
+
+    try:
+        write_module("app.models.__init__")
+        write_module(target)
+        source_path = write_module(source, import_content())
+        original = scan()
+        assert original == {
+            f"private bi->identity: {source} -> {target}",
+        }
+        write_baseline()
+        baseline_bytes = baseline.read_bytes()
+        moves = (
+            ([[source, "app.bi.service.authorization"]] if move_source else [])
+            + ([[target, "app.identity.service.scoped_authorization"]] if move_target else [])
+            + [
+                ["app.bi.service.authorization" if move_source else source, "app.bi.service.authority"]
+            ]
+        )
+        for index, (old, new) in enumerate(moves, start=1):
+            app.joinpath(*old.split(".")[1:]).with_suffix(".py").unlink()
+            source = new if source == old else source
+            target = new if target == old else target
+            write_module(target)
+            source_path = write_module(source, import_content())
+            ledger.write_text(json.dumps(moves[:index]), encoding="utf-8")
+            assert scan() == original
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+            write_baseline()
+            assert baseline.read_bytes() == baseline_bytes
+
+        write_module("app.identity.service.new_authority")
+        source_path.write_text(
+            import_content() + "from app.identity.service.new_authority import Authority\n",
+            encoding="utf-8",
+        )
+        scan()
+        with pytest.raises(AssertionError, match="These imports break the feature layout"):
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+
+        source_path.write_text("", encoding="utf-8")
+        assert scan() == frozenset()
+        with pytest.raises(AssertionError, match="These violations are gone"):
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+        write_baseline()
+        assert _baseline() == []
+    finally:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()

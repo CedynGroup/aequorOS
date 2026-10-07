@@ -331,3 +331,10 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
   records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
   does a baseline entry that no longer occurs, so the baseline only shrinks.
+  Record behaviour-neutral module moves in `backend/scripts/feature_module_moves.json`, the
+  cumulative ledger for the boundary guard and migration codemod: append `[old, new]` pairs of
+  exact dotted module names in move order (package names omit `.__init__`). Keep earlier pairs
+  when a module moves again; list each moved module, rather than package-prefix substitutions.
+  The guard evaluates ownership and interfaces at current paths, then maps both dependency
+  endpoints back through the ledger for baseline identity. A file move leaves baseline lines
+  unchanged; a dependency fix deletes them. The ledger is empty until the first file moves.
