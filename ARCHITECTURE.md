@@ -1075,16 +1075,16 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 ## 8. Validation commands
 
-| Target                   | Commands                                                                                                                                                                                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`                                                                                                                                                            |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                      |
-| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                      |
+| Target                   | Commands                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`                                                                                                                                                                                      |
+| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                |
+| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
-| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                     |
-| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                               |
-| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                    |
-| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                  |
+| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                               |
+| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                         |
+| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                              |
+| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                            |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 
@@ -1203,11 +1203,10 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `ForecastAssumptionVersion`** (`app/forecasting/`, the first feature package in the target
   layout). `param_stress_shock` rows with `module = 'forecast'` are no longer read; migration
   `202610070084` carried every complete register set over as approved versions.
-- **Maker-checker is a runtime condition, not a screen convention.** Forecasting `edit` drafts,
-  revises and submits; the decision route requires `review`, and the service requires
-  `approve` with a `MAKER_CHECKER` condition that refuses whoever drafted, revised or submitted
-  the version. Mutations lock the version until commit; approved and rejected versions are
-  final. A bank has at most one draft or submitted version awaiting a decision.
+- **Mutations lock the version until commit; approved and rejected versions are final.**
+  A bank has at most one draft or submitted version awaiting a decision. Required bindings
+  and the runtime maker-checker condition are owned by the
+  [Forecasting authorization contract](backend/docs/forecasting_enforcement_rollout.md#affected-surfaces).
 - **Effective dating is by book date** (the run's as-of): a run on date `D` resolves the approved
   version with the latest `effective_from <= D`; ties use the latest approval time. Corrections
   may take effect before another approved version, including a future-dated one. New runs use
@@ -1216,13 +1215,13 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   using the bank's current live date.
 - **Runs record `assumption_provenance` beside the snapshot** (version, effective date,
   approver), never inside the value-based `input_hash`.
-- **Provisioning writes no forecast assumption values** and reports the missing approved
-  base, adverse and severely adverse assumptions. The bank authors its own set; until a
-  different authorized user approves it, forecasting stays not computable (`missing_parameter`).
+- **Provisioning writes no forecast assumption values.** The
+  [API workflow and readiness guidance](backend/README.md#forecast-assumption-workflow)
+  explain the resulting not-computable state and how the bank supplies its own approved set.
 
 ### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
 
 `basedpyright` reports 8 errors in `app/services/ingestion.py`, `tests/adapters/excel_csv/
 fixtures.py`, and `tests/storage/*` — all in the data-engine/storage tracks, present before
-the six-module build. They are left for those tracks' owners; the regulatory modules and the
-repo-wide `ruff check` are clean.
+the six-module build. They are left for those tracks' owners. Current lint and typecheck
+results come from the [validation commands](#8-validation-commands).

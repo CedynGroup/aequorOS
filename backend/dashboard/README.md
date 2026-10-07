@@ -47,6 +47,12 @@ documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-
 
 ### Forecasting tools
 
+The Assumptions page currently displays preset, custom-override and engine-default
+values; authoring and approving governed versions uses the
+[tenant API workflow](../README.md#forecast-assumption-workflow). The page does not
+yet display the API's approved-version provenance. NII currently shows the latest
+preset runs with five-year labels; it does not select an edited custom saved run.
+
 The What-if Lab describes each shock's fixed adjustments to the base assumptions.
 These are illustrative projections, not calibrated macroeconomic models. The
 optimizer's method note describes its deterministic, exhaustive grid search and

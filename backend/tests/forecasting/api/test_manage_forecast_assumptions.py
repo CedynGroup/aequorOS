@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Event
 from typing import Any
@@ -218,8 +218,11 @@ def test_maker_drafts_checker_approves_and_the_next_run_resolves_the_new_version
 
     before = _run(db_client, maker, period_id)
     provenance = dict(before["assumption_version"])
-    # SQLite keeps no offset; the instant is the fixture's approval either way.
-    assert provenance.pop("approved_at").startswith("2025-01-01T00:00:00")
+    # SQLite keeps no offset; PostgreSQL renders the same instant in its session timezone.
+    approved_at = datetime.fromisoformat(provenance.pop("approved_at"))
+    if approved_at.tzinfo is None:
+        approved_at = approved_at.replace(tzinfo=UTC)
+    assert approved_at == datetime(2025, 1, 1, tzinfo=UTC)
     assert provenance == {
         "version_id": provenance["version_id"],
         "version_number": 1,

@@ -8,15 +8,24 @@ binding explicitly before deployment.
 
 ## Affected surfaces
 
-| Surface                                                                                                                    | Required complete binding      |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Scenario presets (`GET …/forecast/scenarios`) and the forecast run index (`GET …/forecast/runs`)                           | FCST / `aggregated` / `view`   |
-| Forecast rows in the live summary, live snapshots, alerts, window analytics, and the regulatory-run registry               | FCST / `aggregated` / `view`   |
-| The capital-plan projection section (`GET …/capital-plan`), which is rendered from Forecasting runs                        | FCST / `aggregated` / `view`   |
-| Full forecast run detail (`GET …/forecast/runs/{run_id}`) and the same run through `GET …/regulatory-runs/…`               | FCST / `confidential` / `view` |
-| The latest reverse-stress frontier (`GET …/reverse-stress/latest`)                                                         | FCST / `confidential` / `view` |
-| Create a forecast run, run the optimizer, run a what-if shock, run reverse stress                                          | FCST / `confidential` / `run`  |
-| Activation with calculations and on-demand or scheduled official runs, when `module_scope.runs_module` includes `forecast` | FCST / `confidential` / `run`  |
+| Surface                                                                                                                    | Required complete binding                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Scenario presets (`GET …/forecast/scenarios`) and the forecast run index (`GET …/forecast/runs`)                           | FCST / `aggregated` / `view`                                                 |
+| Forecast rows in the live summary, live snapshots, alerts, window analytics, and the regulatory-run registry               | FCST / `aggregated` / `view`                                                 |
+| The capital-plan projection section (`GET …/capital-plan`), which is rendered from Forecasting runs                        | FCST / `aggregated` / `view`                                                 |
+| Full forecast run detail (`GET …/forecast/runs/{run_id}`) and the same run through `GET …/regulatory-runs/…`               | FCST / `confidential` / `view`                                               |
+| The latest reverse-stress frontier (`GET …/reverse-stress/latest`)                                                         | FCST / `confidential` / `view`                                               |
+| Create a forecast run, run the optimizer, run a what-if shock, run reverse stress                                          | FCST / `confidential` / `run`                                                |
+| Activation with calculations and on-demand or scheduled official runs, when `module_scope.runs_module` includes `forecast` | FCST / `confidential` / `run`                                                |
+| Assumption register and version detail (`GET …/forecast/assumption-versions[/…]`)                                          | FCST / `confidential` / `view`                                               |
+| Draft, revise and submit an assumption version                                                                             | FCST / `confidential` / `edit`                                               |
+| Approve or reject a submitted assumption version                                                                           | FCST / `confidential` / `review` at the route, plus `approve` in the service |
+
+Assumption decisions require an independent human checker: the `approve`
+evaluation carries a `MAKER_CHECKER` condition that refuses any actor who
+drafted, revised or submitted that version, even if they hold both bindings.
+See the [governed-assumption lifecycle](../../ARCHITECTURE.md#governed-forecast-assumptions)
+and [API workflow](../README.md#forecast-assumption-workflow).
 
 The four persisted run modules — `forecast`, `optimizer`, `whatif`, and
 `reverse_stress` — answer to the one Forecasting authority. The shared
@@ -62,9 +71,9 @@ surface is a Forecasting route, and neither exposes a run outside the document
 it is bound into.
 
 No scalar role, token role, tenant membership, or binding for another module or
-sensitivity grants Forecasting authority. Forecast assumption presets are
-read-only reference data on this surface; assumption governance stays with the
-regulatory-parameter control plane and its own cutover.
+sensitivity grants Forecasting authority. Approved presets remain read-only
+through `GET …/forecast/scenarios`; authoring and decisions use the assumption
+version routes listed above.
 
 ## Dashboard controls
 

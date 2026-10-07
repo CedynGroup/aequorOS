@@ -328,7 +328,10 @@ def _decision_target(
                 reason=(
                     "the checker neither drafted, revised nor submitted this assumption version"
                     if independent
-                    else "whoever drafted, revised or submitted an assumption version cannot decide it"
+                    else (
+                        "whoever drafted, revised or submitted an assumption version "
+                        "cannot decide it"
+                    )
                 ),
             ),
         ),

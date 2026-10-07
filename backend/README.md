@@ -158,6 +158,37 @@ BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
 with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
 organization, and security settings cannot be changed through this endpoint.
 
+### Forecast assumption workflow
+
+A newly provisioned bank has no forecast assumption values. Its provisioning
+result names the missing approved base, adverse and severely adverse assumptions;
+forecasting remains not computable (`missing_parameter`) until an approved set is
+effective for the reporting period's book date. One-off run overrides do not
+replace that prerequisite.
+
+Use the tenant API under `/api/v1/banks/{bank_id}/forecast/assumption-versions`:
+
+1. Read the register with `GET` to see the effective version for the latest book
+   and any open proposal. `GET /{version_id}` reads one version.
+2. Propose the bank's complete set with `POST`, using the request contract in the
+   API's generated `/docs` reference (`ForecastAssumptionVersionCreate`). Revise
+   a draft with `PATCH /{version_id}`.
+3. Submit it with `POST /{version_id}/submit`. An independent authorized user
+   decides it with `POST /{version_id}/approve` or `POST /{version_id}/reject`;
+   approval accepts `{}`, while rejection requires a reason in `note`.
+
+The [Forecasting authorization contract](docs/forecasting_enforcement_rollout.md#affected-surfaces)
+owns the required scoped bindings and checker independence. Account administration
+alone grants no Forecasting authority. The
+[governed-assumption architecture](../ARCHITECTURE.md#governed-forecast-assumptions)
+owns effective-date selection, final-version rules and saved-run immutability.
+
+Scenario catalogue and forecast, what-if and optimizer reads expose the resolved
+version as `assumption_version`; generic regulatory-run reads expose its saved
+record as `assumption_provenance`. Consult the generated API reference for those
+provenance fields. The dashboard's current capabilities are documented in
+[Forecasting tools](dashboard/README.md#forecasting-tools).
+
 ### Legacy case vertical
 
 Canonical financial data is read with
