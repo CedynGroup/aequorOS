@@ -376,7 +376,8 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
   rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
   those keys so moving a model never reorders a flush (a new model adds its key).
-  The boundary ratchet uses the original module and feature of split models, recorded in
-  `SPLIT_ORIGINS`, after reversing the move ledger. Current ownership still determines whether
-  an import is a violation; surviving violations keep their historical identity, and imports
-  that were internal before a split do not become new baseline debt merely because of the split.
+  `backend/tests/architecture/feature_boundary_split_origins.json` freezes the exact pre-existing
+  importer/target pairs affected by the model split. Only those pairs retain their historical
+  target module and feature after reversing the move ledger; all other imports use current
+  ownership. Its importer lists may only shrink, and the scanner rejects resolved entries
+  until they are removed. The JSON stays outside the codemod's rewrite scope.
