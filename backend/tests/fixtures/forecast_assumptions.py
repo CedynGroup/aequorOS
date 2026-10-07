@@ -1,4 +1,8 @@
-"""Test-only forecast assumptions for hermetic bank and governance fixtures."""
+"""Test-only forecast assumptions for hermetic bank and governance fixtures.
+
+Decimal strings use the governance API's canonical format (no trailing zeros),
+so restoring these values through that API reproduces the original input hash.
+"""
 
 from collections.abc import Mapping
 from typing import Final
@@ -9,7 +13,7 @@ FORECAST_PRESETS: Final[Mapping[str, Mapping[str, str]]] = {
         "deposit_growth_pct": "16",
         "nim_pct": "4.8",
         "cost_to_income_pct": "48",
-        "credit_loss_rate_pct": "1.0",
+        "credit_loss_rate_pct": "1",
         "fx_depreciation_pct": "0",
         "dividend_payout_pct": "30",
     },
@@ -27,7 +31,7 @@ FORECAST_PRESETS: Final[Mapping[str, Mapping[str, str]]] = {
         "deposit_growth_pct": "-8",
         "nim_pct": "3.6",
         "cost_to_income_pct": "60",
-        "credit_loss_rate_pct": "2.0",
+        "credit_loss_rate_pct": "2",
         "fx_depreciation_pct": "40",
         "dividend_payout_pct": "0",
     },

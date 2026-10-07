@@ -1,27 +1,33 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * Forecasting assumptions and the NII forecast, worked end to end by an
- * analyst: read the live baseline, save the approved adverse and base
- * projections, read the NII forecast and the Assumption Registry they feed,
- * then edit two assumptions in the Scenario designer and follow the edited
- * projection through the run comparison and the Balance Sheet, while the
- * earlier saved base run stays exactly as it was persisted.
+ * Forecasting assumptions and the NII forecast, worked end to end: an analyst
+ * reads the live baseline, saves the approved adverse and base projections,
+ * reads the NII forecast and the Assumption Registry they feed, then edits two
+ * assumptions in the Scenario designer and follows the one-off edited
+ * projection through the run comparison, the Balance Sheet and the NII tab.
+ *
+ * Then the GOVERNED edit: the analyst drafts and submits a new version of the
+ * approved assumption set, a different person (the approver) approves it, and
+ * the next base projection and its NII forecast resolve the new version and
+ * name it — who approved it, when, and from which book date — while every run
+ * saved before the approval stays exactly as it was persisted.
  *
  * The expectations are the FIXTURE's, not the screen's: `support/forecast.ts`
- * projects the canonical book under the fixture's approved `forecast` presets,
- * so every balance, NII, net income, ROE and CAR figure here is derived, not
- * read back. LCR and NSFR paths are engine output, pinned as the same values on
- * every surface.
- *
- * The edit goes through the Scenario designer because it is the only
- * assumption edit the product offers. Revising the approved preset register
- * itself has no governed path yet (#342), the registry does not show its
- * approval provenance (#343), and the NII tab reads only preset runs, so it
- * does not show the edited projection (#344).
+ * projects the canonical book under the fixture's approved presets (version 1)
+ * and under each edit, so every balance, NII, net income, ROE and CAR figure
+ * here is derived, not read back. LCR and NSFR paths are engine output, pinned
+ * as the same values on every surface.
  */
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { writeFileSync } from "node:fs";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { SAMPLE_BANK_ID, apiGet, expectKpi, section } from "./support/figures";
 import {
   ADVERSE,
@@ -36,6 +42,7 @@ import {
   type Assumptions,
   type Projection,
 } from "./support/forecast";
+import { mintBackendToken } from "./support/mint";
 import { openTab } from "./support/navigation";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
@@ -43,8 +50,20 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 /** The edit: a wider margin and faster loan growth on top of the base preset. */
 const EDITED: Assumptions = { ...BASE, nimPct: 5.5, loanGrowthPct: 22 };
 
+/** The governed revision of the base preset that version 2 approves. */
+const GOVERNED: Assumptions = { ...BASE, nimPct: 5.2, loanGrowthPct: 20 };
+
+const ASSUMPTIONS_PATH = `/banks/${SAMPLE_BANK_ID}/forecast/assumption-versions`;
+
 /** Year-0 LCR: 735M of Level 1 HQLA over 499M of net 30-day outflows. */
 const YEAR0_LCR_PCT = (735 / 499) * 100;
+
+type AssumptionVersion = {
+  id: string;
+  version_number: number;
+  status: string;
+  presets: Record<string, Record<string, string>>;
+};
 
 type ForecastRun = {
   id: string;
@@ -52,6 +71,11 @@ type ForecastRun = {
   scenario_code: string;
   input_hash: string;
   assumptions: Record<string, string>;
+  assumption_version: {
+    version_number: number;
+    approved_by_name: string | null;
+    effective_from: string;
+  } | null;
   summary: Record<string, string>;
   path: Record<string, string | number | null>[];
 };
@@ -59,13 +83,15 @@ type ForecastRun = {
 test.describe("Forecasting assumptions and NII", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("approved presets project the NII forecast; an edit re-projects it and leaves the saved run unchanged", async ({
+  test("approved presets project the NII forecast; edits re-project it and leave saved runs unchanged", async ({
     page,
+    browser,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     const base = project(BASE);
     const adverse = project(ADVERSE);
     const edited = project(EDITED);
+    const governed = project(GOVERNED);
     // Hand-checkable anchors: 105.3888M of Y1 NII on the 2,020M earning book.
     expect(base.years[1].nii).toBe(105_388_800);
     expect(base.years[0].carPct).toBeCloseTo((340 / 2147.5) * 100, 5);
@@ -291,6 +317,260 @@ test.describe("Forecasting assumptions and NII", () => {
       sourceOf: () => "Custom override",
     });
 
+    // ---- The NII tab reads the edited run when it is the one chosen.
+    await page.goto(`/forecasting/nii?run=${editedRun.id}`);
+    await expect(page.getByText(/^Reading run/)).toContainText(
+      `${editedRun.id.slice(0, 8)} — Custom scenario · 5-year horizon`,
+    );
+    await expectKpi(
+      page,
+      "Y1 projected NII",
+      ghs(edited.years[1].nii),
+      "Custom scenario",
+    );
+    const editedNii = edited.years.slice(1).map((y) => y.nii);
+    await expectKpi(page, "5-year cumulative NII", ghs(sum(editedNii)));
+    // The edited run joins the presets in the sensitivity table, against the
+    // saved base run.
+    const editedColumn = section(page, "Sensitivity vs base").getByRole(
+      "table",
+    );
+    await expect(
+      editedColumn.getByRole("columnheader", {
+        name: `Custom run ${editedRun.id.slice(0, 8)} · Δ vs base`,
+      }),
+    ).toBeVisible();
+    await expect(
+      editedColumn.locator("tbody tr").first().locator("td").last(),
+    ).toHaveText(
+      `${ghs(edited.years[1].nii)}${delta(
+        ((edited.years[1].nii - base.years[1].nii) / base.years[1].nii) * 100,
+        "%",
+        1,
+      )}`,
+    );
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "forecasting-custom-nii.png"),
+        fullPage: true,
+      });
+    }
+
+    // ---- The governed edit: draft, submit, an independent approval.
+    const register = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+    const approvedV1 = register.versions.find(
+      (v: AssumptionVersion) => v.id === register.effective_version_id,
+    ) as AssumptionVersion;
+    expect(approvedV1.version_number).toBe(1);
+    try {
+      await openTab(page, "Assumptions");
+      const inForce = section(page, "Approved assumptions in force");
+      await expect(inForce).toContainText("Version 1");
+      await expect(inForce).toContainText("Forecast Fixture Checker");
+      await expect(section(page, "Preset catalogue")).toContainText(
+        "Version 1 · approved by Forecast Fixture Checker",
+      );
+
+      await page.getByRole("button", { name: "Propose new version" }).click();
+      const editor = section(page, "Propose new version");
+      // Effective from the bank's latest book date by default.
+      await expect(editor.getByLabel("Effective from")).toHaveValue(
+        period.period_end,
+      );
+      await editor
+        .getByLabel("Base case Net interest margin", { exact: true })
+        .fill(String(GOVERNED.nimPct));
+      await editor
+        .getByLabel("Base case Loan growth", { exact: true })
+        .fill(String(GOVERNED.loanGrowthPct));
+      await editor
+        .getByLabel("Change note")
+        .fill("Board plan revision: wider margin, faster loan growth.");
+      await editor.getByRole("button", { name: "Save draft" }).click();
+
+      const pending = section(page, "Version 2 — pending change");
+      await expect(pending).toContainText("Draft");
+      await expect(pending).toContainText("drafted by E2E Analyst");
+      await expect(pending).toContainText("5.2%(was 4.8%)");
+      await pending
+        .getByRole("button", { name: "Submit for approval" })
+        .click();
+      await expect(pending).toContainText("Awaiting approval");
+      await expect(pending).toContainText("submitted by E2E Analyst");
+      // The maker is offered no decision on their own submission.
+      await expect(
+        pending.getByRole("button", { name: "Approve" }),
+      ).toHaveCount(0);
+      // Not yet approved: version 1 is still in force.
+      await expect(inForce).toContainText("Version 1");
+
+      const submitted = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+      const selfApproval = await page.request.post(
+        `${E2E_API_ORIGIN}/api/v1${ASSUMPTIONS_PATH}/${submitted.open_version_id}/approve`,
+        {
+          data: {},
+          headers: {
+            Authorization: `Bearer ${await mintBackendToken("analyst")}`,
+          },
+        },
+      );
+      expect(selfApproval.status()).toBe(403);
+      expect(
+        (await apiGet(page, "analyst", ASSUMPTIONS_PATH)).effective_version_id,
+      ).toBe(approvedV1.id);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-self-approval-refusal.json"),
+          JSON.stringify(
+            { status: selfApproval.status(), body: await selfApproval.json() },
+            null,
+            2,
+          ),
+        );
+        await page.screenshot({
+          path: path.join(evidenceDir, "forecasting-submitted-version.png"),
+          fullPage: true,
+        });
+      }
+
+      await approveAsApprover(
+        browser,
+        "Board minute 14: plan revision approved.",
+      );
+
+      await page.reload();
+      await expect(inForce).toContainText("Version 2");
+      await expect(inForce).toContainText("E2E Approver");
+      await expect(inForce).toContainText(fmtUtcDate(period.period_end));
+      const history = section(page, "Version history").getByRole("table");
+      await expect(history.locator("tbody tr").first()).toContainText(
+        "Version 2",
+      );
+      await expect(history.locator("tbody tr").first()).toContainText(
+        "Approved",
+      );
+      await expect(section(page, "Preset catalogue")).toContainText(
+        "Version 2 · approved by E2E Approver",
+      );
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "forecasting-approved-register.png"),
+          fullPage: true,
+        });
+      }
+
+      // ---- The next base projection resolves version 2 and names it.
+      await page.goto("/forecasting");
+      const governedRun = await runPreset(page, "Base case", "base");
+      expectRunMatches(governedRun, GOVERNED, governed);
+      expect(governedRun.assumption_version).toMatchObject({
+        version_number: 2,
+        approved_by_name: "E2E Approver",
+        effective_from: period.period_end,
+      });
+      expect(governedRun.input_hash).not.toBe(baseRun.input_hash);
+      await expect(
+        page.getByText(/^Assumptions: Version 2 · approved by E2E Approver/),
+      ).toBeVisible();
+      await expectRunDashboard(page, governed);
+
+      // ---- NII Forecast: the latest base run is the governed one.
+      await openTab(page, "NII Forecast");
+      await expect(page.getByText(/^Reading run/)).toContainText(
+        `${governedRun.id.slice(0, 8)} — Base case scenario`,
+      );
+      await expect(page.getByText(/^Reading run/)).toContainText(
+        "assumptions: Version 2 · approved by E2E Approver",
+      );
+      const governedNii = governed.years.slice(1).map((y) => y.nii);
+      await expectKpi(
+        page,
+        "Y1 projected NII",
+        ghs(governedNii[0]),
+        "Base case scenario",
+      );
+      expect(governedNii[0]).not.toBe(baseNii[0]);
+      await expectKpi(page, "5-year cumulative NII", ghs(sum(governedNii)));
+      await expectKpi(page, "NIM assumption", pct(GOVERNED.nimPct));
+
+      // ---- Every run saved before the approval is exactly what was persisted.
+      expect(await persisted(page, baseRun.id)).toEqual(savedBase);
+      expect(await persisted(page, editedRun.id)).toEqual(savedEdit);
+      expect(
+        (
+          await apiGet(
+            page,
+            "analyst",
+            `/banks/${SAMPLE_BANK_ID}/forecast/runs/${baseRun.id}`,
+          )
+        ).assumption_version.version_number,
+      ).toBe(1);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-saved-run-immutability.json"),
+          JSON.stringify(
+            {
+              before: { base: savedBase, custom: savedEdit },
+              after: {
+                base: await persisted(page, baseRun.id),
+                custom: await persisted(page, editedRun.id),
+              },
+              governedRun,
+              restoredPresets: approvedV1.presets,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+    } finally {
+      // Later journeys project the fixture's version-1 figures: approve them
+      // again as the newest version, whatever state this one stopped in.
+      await restoreApprovedPresets(page, approvedV1.presets);
+      const restored = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+      expect(restored.open_version_id).toBeNull();
+      const restoredVersion = restored.versions.find(
+        (v: AssumptionVersion) => v.id === restored.effective_version_id,
+      );
+      // The API canonicalizes equivalent decimal strings ("1.0" -> "1").
+      const values = (presets: AssumptionVersion["presets"]) =>
+        Object.fromEntries(
+          Object.entries(presets).map(([scenario, fields]) => [
+            scenario,
+            Object.fromEntries(
+              Object.entries(fields).map(([key, value]) => [
+                key,
+                Number(value),
+              ]),
+            ),
+          ]),
+        );
+      expect(values(restoredVersion.presets)).toEqual(
+        values(approvedV1.presets),
+      );
+      const restoredRun = await apiSend(
+        page,
+        "analyst",
+        "POST",
+        `/banks/${SAMPLE_BANK_ID}/forecast/runs`,
+        { reporting_period_id: period.id, scenario_code: "base" },
+      );
+      expect(restoredRun.status).toBe("succeeded");
+      expect(restoredRun.input_hash).toBe(baseRun.input_hash);
+      expect(restoredRun.path).toEqual(baseRun.path);
+      expect(restoredRun.summary).toEqual(baseRun.summary);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-restored-presets.json"),
+          JSON.stringify(
+            { register: restored, originalRun: baseRun, restoredRun },
+            null,
+            2,
+          ),
+        );
+      }
+    }
+
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-assumptions.png"),
@@ -299,6 +579,120 @@ test.describe("Forecasting assumptions and NII", () => {
     }
   });
 });
+
+/** The approver opens the register in their own session and approves the pending version. */
+async function approveAsApprover(browser: Browser, note: string) {
+  const context = await browser.newContext({
+    storageState: path.join(E2E_TMP, "approver.json"),
+  });
+  try {
+    const checker = await context.newPage();
+    await checker.goto("/forecasting/assumptions");
+    const pending = section(checker, "Version 2 — pending change");
+    await expect(pending).toContainText("Awaiting approval");
+    await pending.getByLabel("Decision note").fill(note);
+    const decided = checker.waitForResponse(
+      (r) =>
+        r.url().includes(`${ASSUMPTIONS_PATH}/`) &&
+        r.url().endsWith("/approve") &&
+        r.request().method() === "POST",
+    );
+    await pending.getByRole("button", { name: "Approve" }).click();
+    expect((await decided).status()).toBe(200);
+    await expect(
+      section(checker, "Approved assumptions in force"),
+    ).toContainText("Version 2");
+  } finally {
+    await context.close();
+  }
+}
+
+/** Send one assumption-register write as `role`; the response body. */
+async function apiSend(
+  page: Page,
+  role: "analyst" | "approver",
+  method: "POST" | "PATCH",
+  pathName: string,
+  data: unknown,
+) {
+  const response = await page.request.fetch(
+    `${E2E_API_ORIGIN}/api/v1${pathName}`,
+    {
+      method,
+      data,
+      headers: { Authorization: `Bearer ${await mintBackendToken(role)}` },
+    },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json();
+}
+
+/**
+ * Make `presets` the newest approved version again, through the same
+ * maker-checker path: settle any version left in flight, then draft, submit
+ * and approve. Values are value-based inputs, so later runs hash exactly as
+ * they did under version 1.
+ */
+async function restoreApprovedPresets(
+  page: Page,
+  presets: Record<string, Record<string, string>>,
+) {
+  const register = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+  const open = register.versions.find(
+    (v: AssumptionVersion) => v.id === register.open_version_id,
+  ) as AssumptionVersion | undefined;
+  if (open?.status === "submitted") {
+    await apiSend(
+      page,
+      "approver",
+      "POST",
+      `${ASSUMPTIONS_PATH}/${open.id}/reject`,
+      {
+        note: "Journey teardown",
+      },
+    );
+  }
+  const restore =
+    open?.status === "draft"
+      ? await apiSend(
+          page,
+          "analyst",
+          "PATCH",
+          `${ASSUMPTIONS_PATH}/${open.id}`,
+          {
+            presets,
+          },
+        )
+      : await apiSend(page, "analyst", "POST", ASSUMPTIONS_PATH, {
+          effective_from: register.as_of,
+          presets,
+          change_note: "Journey teardown: the fixture's approved presets",
+        });
+  await apiSend(
+    page,
+    "analyst",
+    "POST",
+    `${ASSUMPTIONS_PATH}/${restore.id}/submit`,
+    {},
+  );
+  await apiSend(
+    page,
+    "approver",
+    "POST",
+    `${ASSUMPTIONS_PATH}/${restore.id}/approve`,
+    {},
+  );
+}
+
+/** `lib/api/values.ts::fmtDateUTC` for an ISO date. */
+function fmtUtcDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 /** Run a preset from the Balance Sheet header and return the saved run. */
 async function runPreset(

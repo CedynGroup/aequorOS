@@ -16,6 +16,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
+import { writeFileSync } from "node:fs";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { SAMPLE_BANK_ID, apiGet, expectKpi, section } from "./support/figures";
 import {
@@ -115,6 +116,14 @@ test.describe("Forecasting What-if Lab and Optimizer", () => {
       const result = await response.json();
       expect(result.status).toBe("succeeded");
       expect(result.reporting_period_id).toBe(period.id);
+      expect(result.assumption_version).toEqual(saved.assumption_version);
+      await expect(
+        page.getByText(
+          new RegExp(
+            `^Assumptions: Version ${saved.assumption_version.version_number} · approved by`,
+          ),
+        ),
+      ).toContainText(saved.assumption_version.approved_by_name);
 
       // The library judges the lowest shocked CAR against the governed floor.
       await expect(card).toContainText(
@@ -183,6 +192,26 @@ test.describe("Forecasting What-if Lab and Optimizer", () => {
         reference.metrics.year5_lcr_pct,
       );
     }
+    await page.reload();
+    // Reload resets the selected shock; choose a saved result before reading it.
+    await page
+      .getByRole("button", {
+        name: new RegExp(`^${escape(SHOCKS[1].label)}`),
+      })
+      .click();
+    await expect(
+      page.getByText(
+        new RegExp(
+          `^Assumptions: Version ${saved.assumption_version.version_number} · approved by`,
+        ),
+      ),
+    ).toContainText(saved.assumption_version.approved_by_name);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "forecasting-whatif-provenance.png"),
+        fullPage: true,
+      });
+    }
 
     // ---- Optimizer: the 108-point grid, ranked by derived average ROE.
     await page.goto("/forecasting/optimizer");
@@ -196,6 +225,14 @@ test.describe("Forecasting What-if Lab and Optimizer", () => {
     expect(response.status()).toBe(201);
     const search = await response.json();
     expect(search.status).toBe("succeeded");
+    expect(search.assumption_version).toEqual(saved.assumption_version);
+    await expect(
+      page.getByText(
+        new RegExp(
+          `^Assumptions: Version ${saved.assumption_version.version_number} · approved by`,
+        ),
+      ),
+    ).toContainText(saved.assumption_version.approved_by_name);
 
     const candidates = optimizerGrid().map((decision) => ({
       decision,
@@ -255,8 +292,24 @@ test.describe("Forecasting What-if Lab and Optimizer", () => {
     expect(optimizerRun.scenario_code).toBe("constrained_search");
     expectSameInputs(optimizerRun, reference);
     expect(optimizerRun.metrics.candidates_evaluated).toBe(candidates.length);
+    await page.reload();
+    await expect(
+      page.getByText(
+        new RegExp(
+          `^Assumptions: Version ${saved.assumption_version.version_number} · approved by`,
+        ),
+      ),
+    ).toContainText(saved.assumption_version.approved_by_name);
 
     if (evidenceDir) {
+      writeFileSync(
+        path.join(evidenceDir, "forecasting-optimizer-provenance.json"),
+        JSON.stringify(
+          { reference: saved, search, persisted: optimizerRun },
+          null,
+          2,
+        ),
+      );
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-optimizer.png"),
         fullPage: true,
