@@ -156,6 +156,15 @@ test.describe("Forecasting on a fresh tenant", () => {
     await expect(
       section(page, "Preset catalogue").getByRole("columnheader"),
     ).toHaveText(["Assumption", "Engine default"]);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "forecasting-fresh-assumption-register.png",
+        ),
+        fullPage: true,
+      });
+    }
     await openTab(page, "Reverse Stress");
     await expect(
       page.getByText("No reverse-stress frontier yet"),

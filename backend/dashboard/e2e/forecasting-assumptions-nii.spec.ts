@@ -26,6 +26,7 @@ import {
   type Page,
 } from "@playwright/test";
 import path from "path";
+import { writeFileSync } from "node:fs";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { SAMPLE_BANK_ID, apiGet, expectKpi, section } from "./support/figures";
 import {
@@ -348,6 +349,12 @@ test.describe("Forecasting assumptions and NII", () => {
         1,
       )}`,
     );
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "forecasting-custom-nii.png"),
+        fullPage: true,
+      });
+    }
 
     // ---- The governed edit: draft, submit, an independent approval.
     const register = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
@@ -397,6 +404,35 @@ test.describe("Forecasting assumptions and NII", () => {
       // Not yet approved: version 1 is still in force.
       await expect(inForce).toContainText("Version 1");
 
+      const submitted = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+      const selfApproval = await page.request.post(
+        `${E2E_API_ORIGIN}/api/v1${ASSUMPTIONS_PATH}/${submitted.open_version_id}/approve`,
+        {
+          data: {},
+          headers: {
+            Authorization: `Bearer ${await mintBackendToken("analyst")}`,
+          },
+        },
+      );
+      expect(selfApproval.status()).toBe(403);
+      expect(
+        (await apiGet(page, "analyst", ASSUMPTIONS_PATH)).effective_version_id,
+      ).toBe(approvedV1.id);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-self-approval-refusal.json"),
+          JSON.stringify(
+            { status: selfApproval.status(), body: await selfApproval.json() },
+            null,
+            2,
+          ),
+        );
+        await page.screenshot({
+          path: path.join(evidenceDir, "forecasting-submitted-version.png"),
+          fullPage: true,
+        });
+      }
+
       await approveAsApprover(
         browser,
         "Board minute 14: plan revision approved.",
@@ -416,6 +452,12 @@ test.describe("Forecasting assumptions and NII", () => {
       await expect(section(page, "Preset catalogue")).toContainText(
         "Version 2 · approved by E2E Approver",
       );
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "forecasting-approved-register.png"),
+          fullPage: true,
+        });
+      }
 
       // ---- The next base projection resolves version 2 and names it.
       await page.goto("/forecasting");
@@ -463,10 +505,70 @@ test.describe("Forecasting assumptions and NII", () => {
           )
         ).assumption_version.version_number,
       ).toBe(1);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-saved-run-immutability.json"),
+          JSON.stringify(
+            {
+              before: { base: savedBase, custom: savedEdit },
+              after: {
+                base: await persisted(page, baseRun.id),
+                custom: await persisted(page, editedRun.id),
+              },
+              governedRun,
+              restoredPresets: approvedV1.presets,
+            },
+            null,
+            2,
+          ),
+        );
+      }
     } finally {
       // Later journeys project the fixture's version-1 figures: approve them
       // again as the newest version, whatever state this one stopped in.
       await restoreApprovedPresets(page, approvedV1.presets);
+      const restored = await apiGet(page, "analyst", ASSUMPTIONS_PATH);
+      expect(restored.open_version_id).toBeNull();
+      const restoredVersion = restored.versions.find(
+        (v: AssumptionVersion) => v.id === restored.effective_version_id,
+      );
+      // The API canonicalizes equivalent decimal strings ("1.0" -> "1").
+      const values = (presets: AssumptionVersion["presets"]) =>
+        Object.fromEntries(
+          Object.entries(presets).map(([scenario, fields]) => [
+            scenario,
+            Object.fromEntries(
+              Object.entries(fields).map(([key, value]) => [
+                key,
+                Number(value),
+              ]),
+            ),
+          ]),
+        );
+      expect(values(restoredVersion.presets)).toEqual(
+        values(approvedV1.presets),
+      );
+      const restoredRun = await apiSend(
+        page,
+        "analyst",
+        "POST",
+        `/banks/${SAMPLE_BANK_ID}/forecast/runs`,
+        { reporting_period_id: period.id, scenario_code: "base" },
+      );
+      expect(restoredRun.status).toBe("succeeded");
+      expect(restoredRun.input_hash).toBe(baseRun.input_hash);
+      expect(restoredRun.path).toEqual(baseRun.path);
+      expect(restoredRun.summary).toEqual(baseRun.summary);
+      if (evidenceDir) {
+        writeFileSync(
+          path.join(evidenceDir, "forecasting-restored-presets.json"),
+          JSON.stringify(
+            { register: restored, originalRun: baseRun, restoredRun },
+            null,
+            2,
+          ),
+        );
+      }
     }
 
     if (evidenceDir) {

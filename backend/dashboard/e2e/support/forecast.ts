@@ -6,9 +6,9 @@
  * `tests/fixtures/canonical_bank_fixture.py` (`_FIXED_ASSETS_M`, `_DEPOSITS_M`,
  * `_LOAN_EXPOSURES_M`, `_SECURITIES_M`, `_OFF_BALANCE_M`, `_MARKET_RISK_M`,
  * `_OPERATIONAL_INCOME_M`, `_CAPITAL_COMPONENTS_M`), carried forward unchanged
- * to the latest month end. Every preset is the fixture's approved `forecast`
- * stress-shock register. The projection below is the documented yearly
- * recurrence of `app/domain/forecasting/engine.py` (growth, the NII/fee/opex/
+ * to the latest month end. Preset values come from
+ * `tests/fixtures/forecast_assumptions.py`. The projection below is the documented
+ * yearly recurrence of `app/domain/forecasting/engine.py` (growth, the NII/fee/opex/
  * credit-loss/tax/dividend chain, the funding plug, retained earnings into
  * CET1), and CAR is the Basel build-up the Basel journey derives: credit RWA at
  * standardised weights with commitments at a 50% CCF, the FX open position at
