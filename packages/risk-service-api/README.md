@@ -5,10 +5,8 @@ TypeScript client generated from the AequorOS Risk Service OpenAPI schema.
 Generated `src/` code is committed so frontend consumers do not need Python or
 the OpenAPI generator installed.
 
-Generated source is excluded centrally from routine style linting and formatting
-through the repository `.eslintignore` and `.prettierignore`. TypeScript
-type-checking, package tests, and deterministic regeneration freshness checks
-remain enforced.
+See [ARCHITECTURE.md §6](../../ARCHITECTURE.md#6-openapi-contract-flow) for
+generated-source lint and formatting exclusions and required verification.
 
 ## Regenerating
 
