@@ -75,6 +75,8 @@ from app.domain.liquidity.engine import (
 from app.domain.liquidity.engine import (
     MissingParameterError as LiquidityMissingParameterError,
 )
+from app.forecasting import service as assumption_register
+from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -86,7 +88,6 @@ from app.models import (
     ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
-    ParamStressShock,
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
@@ -135,18 +136,9 @@ MODULE_WHATIF = "whatif"
 BASE_SCENARIO = "base"
 CUSTOM_SCENARIO = "custom"
 OPTIMIZER_SCENARIO = "constrained_search"
-FORECAST_PRESET_CODES = ("base", "adverse", "severely_adverse")
+FORECAST_PRESET_CODES = PRESET_CODES
 
 _ZERO = Decimal("0")
-ASSUMPTION_KEYS = (
-    "loan_growth_pct",
-    "deposit_growth_pct",
-    "nim_pct",
-    "cost_to_income_pct",
-    "credit_loss_rate_pct",
-    "fx_depreciation_pct",
-    "dividend_payout_pct",
-)
 _EXTRA_ASSUMPTION_KEYS = ("fee_income_pct_assets", "tax_rate_pct", "securities_shift_pp")
 _ALL_ASSUMPTION_KEYS = (*ASSUMPTION_KEYS, *_EXTRA_ASSUMPTION_KEYS)
 _REQUIRED_LIQUIDITY_THRESHOLDS = ("lcr_min", "lcr_amber_floor", "nsfr_min", "lcr_inflow_cap_pct")
@@ -270,18 +262,23 @@ def list_forecast_scenarios(
     # that will not be produced.
     sdi_regime.require_bank_forecast_regime(db, bank)
     as_of = _latest_period_end(db, ctx, bank) or date.today()
-    presets = _load_presets(db, ctx, bank, as_of)
+    effective = _load_presets(db, ctx, bank, as_of)
     scenarios = [
-        ForecastScenarioRead(code=code, assumptions=presets[code])  # type: ignore[arg-type]
+        ForecastScenarioRead(code=code, assumptions=effective.presets[code])  # type: ignore[arg-type]
         for code in FORECAST_PRESET_CODES
-        if code in presets
+        if code in effective.presets
     ]
     defaults = ForecastAssumptionDefaultsRead(
         fee_income_pct_assets=DEFAULT_FEE_INCOME_PCT_ASSETS,
         tax_rate_pct=DEFAULT_TAX_RATE_PCT,
         securities_shift_pp=DEFAULT_SECURITIES_SHIFT_PP,
     )
-    return ForecastScenarioListRead(bank_id=bank.id, scenarios=scenarios, defaults=defaults)
+    return ForecastScenarioListRead(
+        bank_id=bank.id,
+        scenarios=scenarios,
+        defaults=defaults,
+        assumption_version=assumption_register.provenance_read(effective.provenance),
+    )
 
 
 def create_forecast_run(
@@ -298,10 +295,10 @@ def create_forecast_run(
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
-    presets = _load_presets(db, ctx, bank, period.period_end)
+    effective = _load_presets(db, ctx, bank, period.period_end)
 
     assumptions, resolution_error = _resolve_or_defer(
-        presets, payload.scenario_code, payload.assumptions
+        effective.presets, payload.scenario_code, payload.assumptions
     )
     snapshot = _build_snapshot(
         bank,
@@ -314,7 +311,9 @@ def create_forecast_run(
         overrides=payload.assumptions,
         horizon_years=payload.horizon_years,
     )
-    run = _create_run_row(db, ctx, bank, period, MODULE_FORECAST, payload.scenario_code, snapshot)
+    run = _create_run_row(
+        db, ctx, bank, period, MODULE_FORECAST, payload.scenario_code, snapshot, effective
+    )
 
     run_id = run.id
     if assumptions is None:
@@ -356,8 +355,8 @@ def compute_live(
     current = load_current_facts(db, ctx, bank, _FORECAST_FACT_GROUPS)
     facts = current.facts
     active = _load_active_params(db, ctx, bank, current.source_as_of_date)
-    presets = _load_presets(db, ctx, bank, current.source_as_of_date)
-    assumptions, resolution_error = _resolve_or_defer(presets, BASE_SCENARIO, None)
+    effective = _load_presets(db, ctx, bank, current.source_as_of_date)
+    assumptions, resolution_error = _resolve_or_defer(effective.presets, BASE_SCENARIO, None)
     if assumptions is None:
         raise resolution_error or _missing_assumptions_error()
     params = _forecast_engine_params(active)
@@ -471,8 +470,8 @@ def run_strategic_optimizer(
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
-    presets = _load_presets(db, ctx, bank, period.period_end)
-    assumptions, resolution_error = _resolve_or_defer(presets, BASE_SCENARIO, None)
+    effective = _load_presets(db, ctx, bank, period.period_end)
+    assumptions, resolution_error = _resolve_or_defer(effective.presets, BASE_SCENARIO, None)
     snapshot = _build_snapshot(
         bank,
         period,
@@ -483,7 +482,9 @@ def run_strategic_optimizer(
         assumptions=assumptions,
         overrides=None,
     )
-    run = _create_run_row(db, ctx, bank, period, MODULE_OPTIMIZER, OPTIMIZER_SCENARIO, snapshot)
+    run = _create_run_row(
+        db, ctx, bank, period, MODULE_OPTIMIZER, OPTIMIZER_SCENARIO, snapshot, effective
+    )
 
     run_id = run.id
     if assumptions is None:
@@ -518,8 +519,8 @@ def run_whatif_analysis(
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
-    presets = _load_presets(db, ctx, bank, period.period_end)
-    assumptions, resolution_error = _resolve_or_defer(presets, BASE_SCENARIO, None)
+    effective = _load_presets(db, ctx, bank, period.period_end)
+    assumptions, resolution_error = _resolve_or_defer(effective.presets, BASE_SCENARIO, None)
     snapshot = _build_snapshot(
         bank,
         period,
@@ -531,7 +532,9 @@ def run_whatif_analysis(
         overrides=None,
         shock=WHATIF_SHOCKS.get(payload.shock_code),
     )
-    run = _create_run_row(db, ctx, bank, period, MODULE_WHATIF, payload.shock_code, snapshot)
+    run = _create_run_row(
+        db, ctx, bank, period, MODULE_WHATIF, payload.shock_code, snapshot, effective
+    )
 
     run_id = run.id
     if assumptions is None:
@@ -603,6 +606,7 @@ def _create_run_row(  # noqa: PLR0913
     module: str,
     scenario_code: str,
     snapshot: dict[str, Any],
+    effective: assumption_register.EffectiveAssumptions,
 ) -> RegulatoryRun:
     run = RegulatoryRun(
         organization_id=ctx.organization_id,
@@ -622,6 +626,9 @@ def _create_run_row(  # noqa: PLR0913
         # ids and timestamps are identity, not values, and the ``input_hash`` is
         # value-based by contract.
         parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
+        # WHICH approved assumption version supplied the presets the snapshot's
+        # resolved ``assumptions`` were drawn from — beside it, for the same reason.
+        assumption_provenance=effective.provenance,
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -1105,16 +1112,11 @@ def _load_active_params(
 
 def _load_presets(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> dict[str, dict[str, Decimal]]:
-    rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, as_of
+) -> assumption_register.EffectiveAssumptions:
+    """The bank's approved assumption version governing a book dated ``as_of``."""
+    return assumption_register.resolve_effective(
+        db, organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
     )
-    presets: dict[str, dict[str, Decimal]] = {}
-    for row in rows:
-        if row.module != MODULE_FORECAST:
-            continue
-        presets.setdefault(row.scenario_code, {})[row.shock_key] = Decimal(str(row.shock_value))
-    return presets
 
 
 def _engine_params(active: _ActiveForecastParams) -> ForecastParams:
@@ -1365,6 +1367,7 @@ def _read_forecast_run(db: Session, run: RegulatoryRun) -> ForecastRunRead:
         input_hash=run.input_hash,
         inputs=run.inputs,
         assumptions=_assumptions_read(run.inputs.get("assumptions")),
+        assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         path=_path_read(run.metrics.get("path")),
         summary=_summary_read(run.metrics),
         metric_results=[RegulatoryMetricResultRead.model_validate(item) for item in metric_results],
@@ -1387,6 +1390,7 @@ def _read_summary(run: RegulatoryRun, period_label: str) -> ForecastRunSummaryRe
         reporting_period_id=run.reporting_period_id,
         period_label=period_label,
         input_hash=run.input_hash,
+        assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         avg_roe_pct=_optional_decimal(metrics.get("avg_roe_pct")),
         year5_car_pct=_optional_decimal(metrics.get("year5_car_pct")),
         year5_lcr_pct=_optional_decimal(metrics.get("year5_lcr_pct")),
@@ -1406,6 +1410,7 @@ def _read_optimizer_result(run: RegulatoryRun) -> OptimizerResultRead:
         status=run.status,  # type: ignore[arg-type]
         input_hash=run.input_hash,
         base_assumptions=_assumptions_read(metrics.get("base_assumptions")),
+        assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         candidates_evaluated=int(metrics.get("candidates_evaluated", 0)),
         feasible_count=int(metrics.get("feasible_count", 0)),
         top=[_candidate_read(item) for item in metrics.get("top", [])],
@@ -1429,6 +1434,7 @@ def _read_whatif_result(run: RegulatoryRun) -> WhatIfResultRead:
         status=run.status,  # type: ignore[arg-type]
         input_hash=run.input_hash,
         base_assumptions=_assumptions_read(metrics.get("base_assumptions")),
+        assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         shocked_assumptions=_assumptions_read(metrics.get("shocked_assumptions")),
         base_path=_path_read(metrics.get("base_path")),
         shocked_path=_path_read(metrics.get("shocked_path")),

@@ -1196,6 +1196,25 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.
 
+### Governed forecast assumptions
+
+- **Forecast, what-if, optimizer runs and the live forecast baseline resolve their base,
+  adverse and severely adverse presets only from an approved bank-scoped
+  `ForecastAssumptionVersion`** (`app/forecasting/`, the first feature package in the target
+  layout). `param_stress_shock` rows with `module = 'forecast'` are no longer read; migration
+  `202610070084` carried every complete register set over as approved versions.
+- **Maker-checker is a runtime condition, not a screen convention.** Forecasting `edit` drafts,
+  revises and submits; the decision route requires `review`, and the service requires
+  `approve` with a `MAKER_CHECKER` condition that refuses whoever drafted or submitted the
+  version. Approved and rejected versions are final.
+- **Effective dating is by book date** (the run's as-of): the latest-effective approved version
+  wins, and a new version may not take effect before the bank's current one, so approving it
+  never changes what an earlier book date resolves.
+- **Runs record `assumption_provenance` beside the snapshot** (version, effective date,
+  approver), never inside the value-based `input_hash`.
+- **Provisioning offers an unapproved draft starting position**; nothing substitutes a value,
+  so a bank with no approved version stays not computable (`missing_parameter`).
+
 ### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
 
 `basedpyright` reports 8 errors in `app/services/ingestion.py`, `tests/adapters/excel_csv/

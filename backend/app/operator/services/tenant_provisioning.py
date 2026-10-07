@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import OperatorSettings, get_operator_settings
 from app.db.base import utc_now
+from app.forecasting import public as forecasting
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -389,6 +390,38 @@ def _step_parameters(
     state.record("parameters", "succeeded", f"{institution_class}: {result.summary()}")
 
 
+def _step_forecast_assumptions(db: Session, bank: Bank, state: _SagaState) -> None:
+    """Offer a bank the illustrative forecast assumptions as an UNAPPROVED draft.
+
+    Forecasting resolves only an approved version, so the tenant stays honestly
+    not computable until a maker in the bank submits these (or their own) values
+    and a different checker approves them. A licence class with no Basel
+    projection (an SDI) is offered nothing.
+    """
+    institution_class = institution_types.get_type(db, bank).institution_class
+    if institution_class != "bank":
+        state.record(
+            "forecast_assumptions",
+            "skipped",
+            f"{institution_class}: no balance-sheet projection, so no forecast assumptions.",
+        )
+        return
+    draft = forecasting.seed_starting_position(
+        db,
+        organization_id=bank.organization_id,
+        bank_id=bank.id,
+        effective_from=parameter_register.REGISTER_EFFECTIVE_FROM,
+    )
+    state.record(
+        "forecast_assumptions",
+        "succeeded",
+        "starting position offered as unapproved draft version 1; forecasting stays not "
+        "computable until the bank approves a version"
+        if draft is not None
+        else "forecast assumption register already present; nothing written",
+    )
+
+
 def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _SagaState) -> None:
     org_ok = (
         db.scalar(select(Organization.id).where(Organization.id == organization_id)) is not None
@@ -527,6 +560,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
         administrator = _step_first_admin(db, payload, organization.id, state)
         _step_first_owner(db, organization.id, administrator, operator, state)
         _step_parameters(db, bank, operator, state)
+        _step_forecast_assumptions(db, bank, state)
         _step_readiness(db, organization.id, bank.id, state)
     except _SagaAbort:
         db.rollback()

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.forecasting.schemas import ForecastAssumptionProvenanceRead
 from app.schemas.regulatory_liquidity import (
     RegulatoryMetricResultRead,
     RegulatoryRunErrorRead,
@@ -66,9 +67,18 @@ class ForecastScenarioRead(ClosedModel):
 
 
 class ForecastScenarioListRead(ClosedModel):
+    """The presets a run on the bank's latest book resolves, and their approved version.
+
+    Every preset comes from the one approved version named by
+    ``assumption_version``; ``None`` (with no scenarios) means none is effective.
+    """
+
     bank_id: str
     scenarios: list[ForecastScenarioRead]
     defaults: ForecastAssumptionDefaultsRead
+    assumption_version: ForecastAssumptionProvenanceRead | None = Field(
+        title="Preset Assumption Version"
+    )
 
 
 class ForecastRunCreate(ClosedModel):
@@ -139,6 +149,9 @@ class ForecastRunRead(ClosedModel):
     input_hash: str
     inputs: dict[str, Any]
     assumptions: ForecastAssumptionsRead | None = Field(title="Resolved Forecast Assumptions")
+    assumption_version: ForecastAssumptionProvenanceRead | None = Field(
+        title="Forecast Run Assumption Version"
+    )
     path: list[ProjectionYearRead]
     summary: ProjectionSummaryRead | None = Field(title="Forecast Projection Summary")
     metric_results: list[RegulatoryMetricResultRead]
@@ -158,6 +171,9 @@ class ForecastRunSummaryRead(ClosedModel):
     reporting_period_id: UUID
     period_label: str
     input_hash: str
+    assumption_version: ForecastAssumptionProvenanceRead | None = Field(
+        title="Forecast Summary Assumption Version"
+    )
     avg_roe_pct: Decimal | None = Field(title="Forecast Summary Avg ROE Pct")
     year5_car_pct: Decimal | None = Field(title="Forecast Summary Year 5 CAR Pct")
     year5_lcr_pct: Decimal | None = Field(title="Forecast Summary Year 5 LCR Pct")
@@ -210,6 +226,9 @@ class OptimizerResultRead(ClosedModel):
     status: RegulatoryRunStatus
     input_hash: str
     base_assumptions: ForecastAssumptionsRead | None = Field(title="Optimizer Base Assumptions")
+    assumption_version: ForecastAssumptionProvenanceRead | None = Field(
+        title="Optimizer Assumption Version"
+    )
     candidates_evaluated: int
     feasible_count: int
     top: list[OptimizerCandidateRead]
@@ -252,6 +271,9 @@ class WhatIfResultRead(ClosedModel):
     status: RegulatoryRunStatus
     input_hash: str
     base_assumptions: ForecastAssumptionsRead | None = Field(title="What-If Base Assumptions")
+    assumption_version: ForecastAssumptionProvenanceRead | None = Field(
+        title="What-If Assumption Version"
+    )
     shocked_assumptions: ForecastAssumptionsRead | None = Field(title="What-If Shocked Assumptions")
     base_path: list[ProjectionYearRead]
     shocked_path: list[ProjectionYearRead]

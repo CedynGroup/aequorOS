@@ -74,6 +74,13 @@ import {
   ProjectionYearReadToJSON,
   ProjectionYearReadToJSONTyped,
 } from "./ProjectionYearRead";
+import type { WhatIfAssumptionVersion } from "./WhatIfAssumptionVersion";
+import {
+  WhatIfAssumptionVersionFromJSON,
+  WhatIfAssumptionVersionFromJSONTyped,
+  WhatIfAssumptionVersionToJSON,
+  WhatIfAssumptionVersionToJSONTyped,
+} from "./WhatIfAssumptionVersion";
 import type { WhatIfRunError } from "./WhatIfRunError";
 import {
   WhatIfRunErrorFromJSON,
@@ -88,6 +95,12 @@ import {
  * @interface WhatIfResultRead
  */
 export interface WhatIfResultRead {
+  /**
+   *
+   * @type {WhatIfAssumptionVersion}
+   * @memberof WhatIfResultRead
+   */
+  assumptionVersion: WhatIfAssumptionVersion;
   /**
    *
    * @type {string}
@@ -192,6 +205,11 @@ export interface WhatIfResultRead {
 export function instanceOfWhatIfResultRead(
   value: object,
 ): value is WhatIfResultRead {
+  if (
+    !("assumptionVersion" in value) ||
+    value["assumptionVersion"] === undefined
+  )
+    return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("baseAssumptions" in value) || value["baseAssumptions"] === undefined)
     return false;
@@ -236,6 +254,9 @@ export function WhatIfResultReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionVersion: WhatIfAssumptionVersionFromJSON(
+      json["assumption_version"],
+    ),
     bankId: json["bank_id"],
     baseAssumptions: WhatIfBaseAssumptionsFromJSON(json["base_assumptions"]),
     basePath: (json["base_path"] as Array<any>).map(ProjectionYearReadFromJSON),
@@ -272,6 +293,9 @@ export function WhatIfResultReadToJSONTyped(
   }
 
   return {
+    assumption_version: WhatIfAssumptionVersionToJSON(
+      value["assumptionVersion"],
+    ),
     bank_id: value["bankId"],
     base_assumptions: WhatIfBaseAssumptionsToJSON(value["baseAssumptions"]),
     base_path: (value["basePath"] as Array<any>).map(ProjectionYearReadToJSON),

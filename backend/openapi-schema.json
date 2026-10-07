@@ -23976,6 +23976,27 @@
         "title": "FindingUpdate",
         "type": "object"
       },
+      "ForecastAssumptionDecision": {
+        "additionalProperties": false,
+        "description": "The checker's decision note: optional on approval, required on rejection.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Decision Note"
+          }
+        },
+        "title": "ForecastAssumptionDecision",
+        "type": "object"
+      },
       "ForecastAssumptionDefaultsRead": {
         "additionalProperties": false,
         "properties": {
@@ -24001,6 +24022,390 @@
           "securities_shift_pp"
         ],
         "title": "ForecastAssumptionDefaultsRead",
+        "type": "object"
+      },
+      "ForecastAssumptionProvenanceRead": {
+        "additionalProperties": false,
+        "description": "Which approved version supplied a projection's assumptions, and on whose authority.",
+        "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "title": "Approved At",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Approver Id"
+          },
+          "approved_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Approver Name"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ForecastAssumptionVersionOrigin"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version_id",
+          "version_number",
+          "origin",
+          "effective_from",
+          "approved_by",
+          "approved_by_name",
+          "approved_at"
+        ],
+        "title": "ForecastAssumptionProvenanceRead",
+        "type": "object"
+      },
+      "ForecastAssumptionRegisterRead": {
+        "additionalProperties": false,
+        "description": "A bank's versions, newest first, with the ones that matter named.\n\n``as_of`` is the bank's latest book date; ``effective_version_id`` is the\napproved version a run on that book resolves (``None``: forecasting is not\ncomputable). ``open_version_id`` is the draft or submission in flight.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Register As Of"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Assumption Version Id"
+          },
+          "open_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Assumption Version Id"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "as_of",
+          "effective_version_id",
+          "open_version_id",
+          "versions"
+        ],
+        "title": "ForecastAssumptionRegisterRead",
+        "type": "object"
+      },
+      "ForecastAssumptionVersionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "change_note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Change Note",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "presets": {
+            "$ref": "#/components/schemas/ForecastPresetSetWrite"
+          }
+        },
+        "required": [
+          "effective_from",
+          "presets",
+          "change_note"
+        ],
+        "title": "ForecastAssumptionVersionCreate",
+        "type": "object"
+      },
+      "ForecastAssumptionVersionOrigin": {
+        "enum": [
+          "tenant",
+          "starting_position",
+          "register"
+        ],
+        "type": "string"
+      },
+      "ForecastAssumptionVersionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "change_note": {
+            "title": "Change Note",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Author Id"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Author Name"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ForecastAssumptionVersionOrigin"
+          },
+          "presets": {
+            "$ref": "#/components/schemas/ForecastPresetSetRead"
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Review Note"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Reviewed At"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Reviewer Id"
+          },
+          "reviewed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Reviewer Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ForecastAssumptionVersionStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Submitted At"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Submitter Id"
+          },
+          "submitted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Submitter Name"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "version_number",
+          "status",
+          "origin",
+          "effective_from",
+          "presets",
+          "change_note",
+          "created_by",
+          "created_by_name",
+          "created_at",
+          "submitted_by",
+          "submitted_by_name",
+          "submitted_at",
+          "reviewed_by",
+          "reviewed_by_name",
+          "reviewed_at",
+          "review_note",
+          "updated_at"
+        ],
+        "title": "ForecastAssumptionVersionRead",
+        "type": "object"
+      },
+      "ForecastAssumptionVersionStatus": {
+        "enum": [
+          "draft",
+          "submitted",
+          "approved",
+          "rejected"
+        ],
+        "type": "string"
+      },
+      "ForecastAssumptionVersionUpdate": {
+        "additionalProperties": false,
+        "description": "Revise a draft; unset fields keep their drafted value.",
+        "properties": {
+          "change_note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Change Note Update"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Effective From Update"
+          },
+          "presets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastPresetSetWrite"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumption Presets Update"
+          }
+        },
+        "title": "ForecastAssumptionVersionUpdate",
         "type": "object"
       },
       "ForecastAssumptionsRead": {
@@ -24314,6 +24719,158 @@
         "title": "ForecastPeriodRead",
         "type": "object"
       },
+      "ForecastPresetAssumptionsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_to_income_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost To Income Pct",
+            "type": "string"
+          },
+          "credit_loss_rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credit Loss Rate Pct",
+            "type": "string"
+          },
+          "deposit_growth_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Deposit Growth Pct",
+            "type": "string"
+          },
+          "dividend_payout_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dividend Payout Pct",
+            "type": "string"
+          },
+          "fx_depreciation_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Fx Depreciation Pct",
+            "type": "string"
+          },
+          "loan_growth_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Loan Growth Pct",
+            "type": "string"
+          },
+          "nim_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nim Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loan_growth_pct",
+          "deposit_growth_pct",
+          "nim_pct",
+          "cost_to_income_pct",
+          "credit_loss_rate_pct",
+          "fx_depreciation_pct",
+          "dividend_payout_pct"
+        ],
+        "title": "ForecastPresetAssumptionsRead",
+        "type": "object"
+      },
+      "ForecastPresetAssumptionsWrite": {
+        "additionalProperties": false,
+        "description": "One scenario's projection drivers, as proposed (percentages).",
+        "properties": {
+          "cost_to_income_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset Cost To Income Pct"
+          },
+          "credit_loss_rate_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset Credit Loss Rate Pct"
+          },
+          "deposit_growth_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset Deposit Growth Pct"
+          },
+          "dividend_payout_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset Dividend Payout Pct"
+          },
+          "fx_depreciation_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset FX Depreciation Pct"
+          },
+          "loan_growth_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset Loan Growth Pct"
+          },
+          "nim_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Preset NIM Pct"
+          }
+        },
+        "required": [
+          "loan_growth_pct",
+          "deposit_growth_pct",
+          "nim_pct",
+          "cost_to_income_pct",
+          "credit_loss_rate_pct",
+          "fx_depreciation_pct",
+          "dividend_payout_pct"
+        ],
+        "title": "ForecastPresetAssumptionsWrite",
+        "type": "object"
+      },
       "ForecastPresetCode": {
         "enum": [
           "base",
@@ -24321,6 +24878,49 @@
           "severely_adverse"
         ],
         "type": "string"
+      },
+      "ForecastPresetSetRead": {
+        "additionalProperties": false,
+        "properties": {
+          "adverse": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsRead"
+          },
+          "base": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsRead"
+          },
+          "severely_adverse": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsRead"
+          }
+        },
+        "required": [
+          "base",
+          "adverse",
+          "severely_adverse"
+        ],
+        "title": "ForecastPresetSetRead",
+        "type": "object"
+      },
+      "ForecastPresetSetWrite": {
+        "additionalProperties": false,
+        "description": "A complete proposal: every preset scenario with every driver.",
+        "properties": {
+          "adverse": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsWrite"
+          },
+          "base": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsWrite"
+          },
+          "severely_adverse": {
+            "$ref": "#/components/schemas/ForecastPresetAssumptionsWrite"
+          }
+        },
+        "required": [
+          "base",
+          "adverse",
+          "severely_adverse"
+        ],
+        "title": "ForecastPresetSetWrite",
+        "type": "object"
       },
       "ForecastRunCreate": {
         "additionalProperties": false,
@@ -24403,6 +25003,17 @@
       "ForecastRunRead": {
         "additionalProperties": false,
         "properties": {
+          "assumption_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAssumptionProvenanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Run Assumption Version"
+          },
           "assumptions": {
             "anyOf": [
               {
@@ -24561,6 +25172,7 @@
           "input_hash",
           "inputs",
           "assumptions",
+          "assumption_version",
           "path",
           "summary",
           "metric_results",
@@ -24578,6 +25190,17 @@
       "ForecastRunSummaryRead": {
         "additionalProperties": false,
         "properties": {
+          "assumption_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAssumptionProvenanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Summary Assumption Version"
+          },
           "avg_roe_pct": {
             "anyOf": [
               {
@@ -24674,6 +25297,7 @@
           "reporting_period_id",
           "period_label",
           "input_hash",
+          "assumption_version",
           "avg_roe_pct",
           "year5_car_pct",
           "year5_lcr_pct",
@@ -24695,7 +25319,19 @@
       },
       "ForecastScenarioListRead": {
         "additionalProperties": false,
+        "description": "The presets a run on the bank's latest book resolves, and their approved version.\n\nEvery preset comes from the one approved version named by\n``assumption_version``; ``None`` (with no scenarios) means none is effective.",
         "properties": {
+          "assumption_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAssumptionProvenanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Assumption Version"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -24714,7 +25350,8 @@
         "required": [
           "bank_id",
           "scenarios",
-          "defaults"
+          "defaults",
+          "assumption_version"
         ],
         "title": "ForecastScenarioListRead",
         "type": "object"
@@ -45548,6 +46185,17 @@
       "OptimizerResultRead": {
         "additionalProperties": false,
         "properties": {
+          "assumption_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAssumptionProvenanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optimizer Assumption Version"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -45632,6 +46280,7 @@
           "status",
           "input_hash",
           "base_assumptions",
+          "assumption_version",
           "candidates_evaluated",
           "feasible_count",
           "top",
@@ -50601,6 +51250,18 @@
       "RegulatoryRunRead": {
         "additionalProperties": false,
         "properties": {
+          "assumption_provenance": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulatory Run Assumption Provenance"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -50737,6 +51398,7 @@
           "input_hash",
           "inputs",
           "metrics",
+          "assumption_provenance",
           "started_at",
           "completed_at",
           "error",
@@ -59066,6 +59728,17 @@
       "WhatIfResultRead": {
         "additionalProperties": false,
         "properties": {
+          "assumption_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastAssumptionProvenanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What-If Assumption Version"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -59191,6 +59864,7 @@
           "status",
           "input_hash",
           "base_assumptions",
+          "assumption_version",
           "shocked_assumptions",
           "base_path",
           "shocked_path",
@@ -77316,6 +77990,771 @@
         "summary": "Submit Filing Workflow Template",
         "tags": [
           "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/forecast/assumption-versions": {
+      "get": {
+        "operationId": "getForecastAssumptionRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Forecast Assumption Register",
+        "tags": [
+          "forecasting"
+        ]
+      },
+      "post": {
+        "operationId": "createForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastAssumptionVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Forecast Assumption Version",
+        "tags": [
+          "forecasting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}": {
+      "get": {
+        "operationId": "getForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Forecast Assumption Version",
+        "tags": [
+          "forecasting"
+        ]
+      },
+      "patch": {
+        "operationId": "updateForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastAssumptionVersionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Forecast Assumption Version",
+        "tags": [
+          "forecasting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/approve": {
+      "post": {
+        "operationId": "approveForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastAssumptionDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Forecast Assumption Version",
+        "tags": [
+          "forecasting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/reject": {
+      "post": {
+        "operationId": "rejectForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastAssumptionDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Forecast Assumption Version",
+        "tags": [
+          "forecasting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/submit": {
+      "post": {
+        "operationId": "submitForecastAssumptionVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastAssumptionVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Forecast Assumption Version",
+        "tags": [
+          "forecasting"
         ]
       }
     },

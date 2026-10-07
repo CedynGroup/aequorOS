@@ -241,6 +241,12 @@ class RegulatoryRunRead(ClosedModel):
     input_hash: str
     inputs: dict[str, Any]
     metrics: dict[str, Any]
+    #: Forecasting runs only: the approved assumption version that supplied the
+    #: presets, as recorded beside the snapshot (the forecasting reads type it
+    #: as ``ForecastAssumptionProvenanceRead``). ``None`` for every other module.
+    assumption_provenance: dict[str, Any] | None = Field(
+        title="Regulatory Run Assumption Provenance"
+    )
     started_at: datetime | None = Field(title="Regulatory Run Started At")
     completed_at: datetime | None = Field(title="Regulatory Run Completed At")
     error: RegulatoryRunError

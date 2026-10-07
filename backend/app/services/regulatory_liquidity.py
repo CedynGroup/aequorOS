@@ -2014,6 +2014,7 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
         input_hash=run.input_hash,
         inputs=run.inputs,
         metrics=run.metrics,
+        assumption_provenance=run.assumption_provenance,
         started_at=run.started_at,
         completed_at=run.completed_at,
         error=_error_read(run),

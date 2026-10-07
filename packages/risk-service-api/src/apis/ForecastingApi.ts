@@ -13,6 +13,11 @@
 import * as runtime from "../runtime";
 import type {
   ErrorResponse,
+  ForecastAssumptionDecision,
+  ForecastAssumptionRegisterRead,
+  ForecastAssumptionVersionCreate,
+  ForecastAssumptionVersionRead,
+  ForecastAssumptionVersionUpdate,
   ForecastRunCreate,
   ForecastRunListRead,
   ForecastRunRead,
@@ -25,6 +30,16 @@ import type {
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  ForecastAssumptionDecisionFromJSON,
+  ForecastAssumptionDecisionToJSON,
+  ForecastAssumptionRegisterReadFromJSON,
+  ForecastAssumptionRegisterReadToJSON,
+  ForecastAssumptionVersionCreateFromJSON,
+  ForecastAssumptionVersionCreateToJSON,
+  ForecastAssumptionVersionReadFromJSON,
+  ForecastAssumptionVersionReadToJSON,
+  ForecastAssumptionVersionUpdateFromJSON,
+  ForecastAssumptionVersionUpdateToJSON,
   ForecastRunCreateFromJSON,
   ForecastRunCreateToJSON,
   ForecastRunListReadFromJSON,
@@ -43,9 +58,29 @@ import {
   WhatIfRunCreateToJSON,
 } from "../models/index";
 
+export interface ApproveForecastAssumptionVersionRequest {
+  bankId: string;
+  versionId: string;
+  forecastAssumptionDecision: ForecastAssumptionDecision;
+}
+
+export interface CreateForecastAssumptionVersionRequest {
+  bankId: string;
+  forecastAssumptionVersionCreate: ForecastAssumptionVersionCreate;
+}
+
 export interface CreateForecastRunRequest {
   bankId: string;
   forecastRunCreate: ForecastRunCreate;
+}
+
+export interface GetForecastAssumptionRegisterRequest {
+  bankId: string;
+}
+
+export interface GetForecastAssumptionVersionRequest {
+  bankId: string;
+  versionId: string;
 }
 
 export interface GetForecastRunRequest {
@@ -63,6 +98,12 @@ export interface ListForecastScenariosRequest {
   bankId: string;
 }
 
+export interface RejectForecastAssumptionVersionRequest {
+  bankId: string;
+  versionId: string;
+  forecastAssumptionDecision: ForecastAssumptionDecision;
+}
+
 export interface RunStrategicOptimizerRequest {
   bankId: string;
   optimizerRunCreate: OptimizerRunCreate;
@@ -73,10 +114,173 @@ export interface RunWhatIfAnalysisRequest {
   whatIfRunCreate: WhatIfRunCreate;
 }
 
+export interface SubmitForecastAssumptionVersionRequest {
+  bankId: string;
+  versionId: string;
+}
+
+export interface UpdateForecastAssumptionVersionRequest {
+  bankId: string;
+  versionId: string;
+  forecastAssumptionVersionUpdate: ForecastAssumptionVersionUpdate;
+}
+
 /**
  *
  */
 export class ForecastingApi extends runtime.BaseAPI {
+  /**
+   * Approve Forecast Assumption Version
+   */
+  async approveForecastAssumptionVersionRaw(
+    requestParameters: ApproveForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling approveForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling approveForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["forecastAssumptionDecision"] == null) {
+      throw new runtime.RequiredError(
+        "forecastAssumptionDecision",
+        'Required parameter "forecastAssumptionDecision" was null or undefined when calling approveForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/approve`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ForecastAssumptionDecisionToJSON(
+          requestParameters["forecastAssumptionDecision"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Approve Forecast Assumption Version
+   */
+  async approveForecastAssumptionVersion(
+    requestParameters: ApproveForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.approveForecastAssumptionVersionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Create Forecast Assumption Version
+   */
+  async createForecastAssumptionVersionRaw(
+    requestParameters: CreateForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["forecastAssumptionVersionCreate"] == null) {
+      throw new runtime.RequiredError(
+        "forecastAssumptionVersionCreate",
+        'Required parameter "forecastAssumptionVersionCreate" was null or undefined when calling createForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ForecastAssumptionVersionCreateToJSON(
+          requestParameters["forecastAssumptionVersionCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Create Forecast Assumption Version
+   */
+  async createForecastAssumptionVersion(
+    requestParameters: CreateForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.createForecastAssumptionVersionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Create Forecast Run
    */
@@ -139,6 +343,134 @@ export class ForecastingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ForecastRunRead> {
     const response = await this.createForecastRunRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Get Forecast Assumption Register
+   */
+  async getForecastAssumptionRegisterRaw(
+    requestParameters: GetForecastAssumptionRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionRegisterRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getForecastAssumptionRegister().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionRegisterReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Forecast Assumption Register
+   */
+  async getForecastAssumptionRegister(
+    requestParameters: GetForecastAssumptionRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionRegisterRead> {
+    const response = await this.getForecastAssumptionRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Get Forecast Assumption Version
+   */
+  async getForecastAssumptionVersionRaw(
+    requestParameters: GetForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling getForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Forecast Assumption Version
+   */
+  async getForecastAssumptionVersion(
+    requestParameters: GetForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.getForecastAssumptionVersionRaw(
       requestParameters,
       initOverrides,
     );
@@ -340,6 +672,88 @@ export class ForecastingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Reject Forecast Assumption Version
+   */
+  async rejectForecastAssumptionVersionRaw(
+    requestParameters: RejectForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling rejectForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling rejectForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["forecastAssumptionDecision"] == null) {
+      throw new runtime.RequiredError(
+        "forecastAssumptionDecision",
+        'Required parameter "forecastAssumptionDecision" was null or undefined when calling rejectForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/reject`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ForecastAssumptionDecisionToJSON(
+          requestParameters["forecastAssumptionDecision"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Reject Forecast Assumption Version
+   */
+  async rejectForecastAssumptionVersion(
+    requestParameters: RejectForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.rejectForecastAssumptionVersionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Run Strategic Optimizer
    */
   async runStrategicOptimizerRaw(
@@ -469,6 +883,158 @@ export class ForecastingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<WhatIfResultRead> {
     const response = await this.runWhatIfAnalysisRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Submit Forecast Assumption Version
+   */
+  async submitForecastAssumptionVersionRaw(
+    requestParameters: SubmitForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling submitForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling submitForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}/submit`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Submit Forecast Assumption Version
+   */
+  async submitForecastAssumptionVersion(
+    requestParameters: SubmitForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.submitForecastAssumptionVersionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Forecast Assumption Version
+   */
+  async updateForecastAssumptionVersionRaw(
+    requestParameters: UpdateForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ForecastAssumptionVersionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling updateForecastAssumptionVersion().',
+      );
+    }
+
+    if (requestParameters["forecastAssumptionVersionUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "forecastAssumptionVersionUpdate",
+        'Required parameter "forecastAssumptionVersionUpdate" was null or undefined when calling updateForecastAssumptionVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/forecast/assumption-versions/{version_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ForecastAssumptionVersionUpdateToJSON(
+          requestParameters["forecastAssumptionVersionUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ForecastAssumptionVersionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Forecast Assumption Version
+   */
+  async updateForecastAssumptionVersion(
+    requestParameters: UpdateForecastAssumptionVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ForecastAssumptionVersionRead> {
+    const response = await this.updateForecastAssumptionVersionRaw(
       requestParameters,
       initOverrides,
     );

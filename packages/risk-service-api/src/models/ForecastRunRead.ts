@@ -74,6 +74,13 @@ import {
   ForecastScenarioCodeToJSON,
   ForecastScenarioCodeToJSONTyped,
 } from "./ForecastScenarioCode";
+import type { ForecastRunAssumptionVersion } from "./ForecastRunAssumptionVersion";
+import {
+  ForecastRunAssumptionVersionFromJSON,
+  ForecastRunAssumptionVersionFromJSONTyped,
+  ForecastRunAssumptionVersionToJSON,
+  ForecastRunAssumptionVersionToJSONTyped,
+} from "./ForecastRunAssumptionVersion";
 import type { ForecastRunError } from "./ForecastRunError";
 import {
   ForecastRunErrorFromJSON,
@@ -88,6 +95,12 @@ import {
  * @interface ForecastRunRead
  */
 export interface ForecastRunRead {
+  /**
+   *
+   * @type {ForecastRunAssumptionVersion}
+   * @memberof ForecastRunRead
+   */
+  assumptionVersion: ForecastRunAssumptionVersion;
   /**
    *
    * @type {ResolvedForecastAssumptions}
@@ -234,6 +247,11 @@ export interface ForecastRunRead {
 export function instanceOfForecastRunRead(
   value: object,
 ): value is ForecastRunRead {
+  if (
+    !("assumptionVersion" in value) ||
+    value["assumptionVersion"] === undefined
+  )
+    return false;
   if (!("assumptions" in value) || value["assumptions"] === undefined)
     return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
@@ -292,6 +310,9 @@ export function ForecastRunReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionVersion: ForecastRunAssumptionVersionFromJSON(
+      json["assumption_version"],
+    ),
     assumptions: ResolvedForecastAssumptionsFromJSON(json["assumptions"]),
     bankId: json["bank_id"],
     completedAt: ForecastRunCompletedAtFromJSON(json["completed_at"]),
@@ -335,6 +356,9 @@ export function ForecastRunReadToJSONTyped(
   }
 
   return {
+    assumption_version: ForecastRunAssumptionVersionToJSON(
+      value["assumptionVersion"],
+    ),
     assumptions: ResolvedForecastAssumptionsToJSON(value["assumptions"]),
     bank_id: value["bankId"],
     completed_at: ForecastRunCompletedAtToJSON(value["completedAt"]),

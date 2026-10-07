@@ -15,6 +15,7 @@ from app.core.config import get_operator_settings
 from app.models import (
     AuthorizationBinding,
     Bank,
+    ForecastAssumptionVersion,
     OperatorAuditLog,
     Organization,
     OrganizationOwnerAssignment,
@@ -424,6 +425,52 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert steps["storage"]["status"] == "failed"
     assert "not configured" in steps["storage"]["detail"]
     assert operator_db.scalar(select(Organization)) is None
+
+
+def test_forecast_assumptions_are_offered_as_an_unapproved_draft(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """A new bank is given a starting position to REVIEW, never an approved one.
+
+    Forecasting resolves only an approved version, so the tenant stays not
+    computable until a maker submits a set and a different checker approves it.
+    An SDI, which has no balance-sheet projection, is offered nothing.
+    """
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert _steps_by_name(body)["forecast_assumptions"]["status"] == "succeeded"
+    versions = operator_db.scalars(
+        select(ForecastAssumptionVersion).where(
+            ForecastAssumptionVersion.bank_id == body["bank_id"]
+        )
+    ).all()
+    assert [(v.version_number, v.status, v.origin, v.created_by) for v in versions] == [
+        (1, "draft", "starting_position", None)
+    ]
+    assert versions[0].effective_from == parameter_register.REGISTER_EFFECTIVE_FROM
+
+    sdi = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(
+            organization_name="SDI Forecast Tenant",
+            bank_name="SDI Forecast Bank",
+            institution_type="savings_and_loans",
+            admin_email="admin@sdiforecast.example",
+        ),
+        headers=operator_headers(),
+    ).json()
+    assert _steps_by_name(sdi)["forecast_assumptions"]["status"] == "skipped"
+    assert (
+        operator_db.scalar(
+            select(func.count())
+            .select_from(ForecastAssumptionVersion)
+            .where(ForecastAssumptionVersion.bank_id == sdi["bank_id"])
+        )
+        == 0
+    )
 
 
 def test_parameters_step_seeds_the_board_register(operator_client: TestClient) -> None:

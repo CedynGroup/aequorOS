@@ -67,6 +67,13 @@ import {
   RegulatoryRunCompletedAtToJSON,
   RegulatoryRunCompletedAtToJSONTyped,
 } from "./RegulatoryRunCompletedAt";
+import type { RegulatoryRunAssumptionProvenance } from "./RegulatoryRunAssumptionProvenance";
+import {
+  RegulatoryRunAssumptionProvenanceFromJSON,
+  RegulatoryRunAssumptionProvenanceFromJSONTyped,
+  RegulatoryRunAssumptionProvenanceToJSON,
+  RegulatoryRunAssumptionProvenanceToJSONTyped,
+} from "./RegulatoryRunAssumptionProvenance";
 
 /**
  *
@@ -74,6 +81,12 @@ import {
  * @interface RegulatoryRunRead
  */
 export interface RegulatoryRunRead {
+  /**
+   *
+   * @type {RegulatoryRunAssumptionProvenance}
+   * @memberof RegulatoryRunRead
+   */
+  assumptionProvenance: RegulatoryRunAssumptionProvenance;
   /**
    *
    * @type {string}
@@ -220,6 +233,11 @@ export interface RegulatoryRunRead {
 export function instanceOfRegulatoryRunRead(
   value: object,
 ): value is RegulatoryRunRead {
+  if (
+    !("assumptionProvenance" in value) ||
+    value["assumptionProvenance"] === undefined
+  )
+    return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("completedAt" in value) || value["completedAt"] === undefined)
     return false;
@@ -277,6 +295,9 @@ export function RegulatoryRunReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionProvenance: RegulatoryRunAssumptionProvenanceFromJSON(
+      json["assumption_provenance"],
+    ),
     bankId: json["bank_id"],
     completedAt: RegulatoryRunCompletedAtFromJSON(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
@@ -322,6 +343,9 @@ export function RegulatoryRunReadToJSONTyped(
   }
 
   return {
+    assumption_provenance: RegulatoryRunAssumptionProvenanceToJSON(
+      value["assumptionProvenance"],
+    ),
     bank_id: value["bankId"],
     completed_at: RegulatoryRunCompletedAtToJSON(value["completedAt"]),
     created_at: value["createdAt"].toISOString(),

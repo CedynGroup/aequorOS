@@ -35,6 +35,9 @@ type ProvisioningStepName = Literal[
     # provisioned, ingests its whole book, and still cannot produce a single
     # successful calculation run (founder review 2026-08-23).
     "parameters",
+    # The bank's forecast assumption register: an UNAPPROVED starting position,
+    # so forecasting stays not computable until the bank approves a version.
+    "forecast_assumptions",
     "readiness",
     "desk_market_data",
     "cleanup",
