@@ -496,6 +496,7 @@ AGGREGATE_ONLY: tuple[Grant, ...] = (
     Grant(ModuleScope.RISK),
 )
 
+
 def grant_only(db: Session, grants: tuple[Grant, ...]) -> int:
     """Replace the fixture's org-wide sentence with exactly ``grants``.
 

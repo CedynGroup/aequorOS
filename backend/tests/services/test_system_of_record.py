@@ -337,9 +337,10 @@ def test_a_draft_declaration_does_not_resolve_and_cannot_be_self_approved(
         db_session, _ctx(USER_2), bank, row.id, approved_by="cro@bank.test"
     )
     assert approved.status == "approved"
-    assert system_of_record.resolve(db_session, ORG_1, SAMPLE_BANK_ID, FIXTURE_AS_OF)[
-        "LOAN"
-    ].id == row.id
+    assert (
+        system_of_record.resolve(db_session, ORG_1, SAMPLE_BANK_ID, FIXTURE_AS_OF)["LOAN"].id
+        == row.id
+    )
 
 
 def test_a_declaration_requires_a_citation_and_a_rationale(db_session: Session) -> None:
@@ -396,9 +397,7 @@ def test_a_core_migration_resolves_differently_on_either_side_of_the_cutover(
     """
     _seed_book(db_session)
     cutover = date(2026, 6, 1)
-    legacy = _declare(
-        db_session, source_system=FIXTURE_SOURCE, effective_from=date(2026, 1, 1)
-    )
+    legacy = _declare(db_session, source_system=FIXTURE_SOURCE, effective_from=date(2026, 1, 1))
     new_core = _declare(db_session, source_system=SECOND_SOURCE, effective_from=cutover)
 
     day_before = cutover - timedelta(days=1)
@@ -616,7 +615,7 @@ def test_the_database_refuses_a_withdrawal_with_a_blank_reason(db_session: Sessi
 
 
 def test_a_withdrawal_whose_scope_matches_nothing_is_refused(db_session: Session) -> None:
-    """"Withdrawn" must never quietly mean "matched nothing"."""
+    """ "Withdrawn" must never quietly mean "matched nothing"."""
     _seed_book(db_session)
     with pytest.raises(WithdrawalError) as exc:
         canonical_withdrawal.request_withdrawal(

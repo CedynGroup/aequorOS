@@ -169,9 +169,7 @@ def _run(db: Session, site: _FakeBogFxTables, **payload: Any) -> dict[str, Any]:
     return job.progress["sources"]
 
 
-def _current_observations(
-    db: Session, *, keep_staleness: bool = False
-) -> set[tuple[Any, ...]]:
+def _current_observations(db: Session, *, keep_staleness: bool = False) -> set[tuple[Any, ...]]:
     """Every CURRENT observation, fingerprinted down to its quality flags.
 
     ``keep_staleness=False`` drops ``stale_source`` and its bookkeeping
@@ -183,9 +181,7 @@ def _current_observations(
     ``test_page_boundary_staleness_flags_already_moved_every_night`` pins that
     this predates the bound; nothing here changes it.
     """
-    rows = db.scalars(
-        select(DeskObservation).where(DeskObservation.superseded_by.is_(None))
-    )
+    rows = db.scalars(select(DeskObservation).where(DeskObservation.superseded_by.is_(None)))
     fingerprints: set[tuple[Any, ...]] = set()
     for row in rows:
         attributes = dict(row.attributes)
@@ -207,9 +203,7 @@ def _current_observations(
 
 
 def _stale_flagged_dates(db: Session) -> set[str]:
-    rows = db.scalars(
-        select(DeskObservation).where(DeskObservation.superseded_by.is_(None))
-    )
+    rows = db.scalars(select(DeskObservation).where(DeskObservation.superseded_by.is_(None)))
     return {r.as_of_date.isoformat() for r in rows if QF_STALE_SOURCE in r.quality_flags}
 
 

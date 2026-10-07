@@ -55,9 +55,7 @@ def _ctx() -> TenantContext:
     return TenantContext(organization_id=ORG_1, actor_user_id=DEMO_USER_ID)
 
 
-def _required_policy(
-    *, approver_titles: tuple[str, ...] = ()
-) -> SigningPolicy:
+def _required_policy(*, approver_titles: tuple[str, ...] = ()) -> SigningPolicy:
     """A policy that an institution has opted into — signature mandatory.
 
     The guard tests must use this rather than ``default_policy``, because the

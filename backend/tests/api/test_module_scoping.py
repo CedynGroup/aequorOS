@@ -72,9 +72,7 @@ def test_sdi_is_allowed_the_in_scope_alm_modules(db_client) -> None:  # noqa: AN
     bug). Proves the expanded SDI set (migration 202608210026) is honoured."""
     _seed_universal_bank()
     sdi_bank_id = _create_sdi_bank()
-    response = db_client.get(
-        f"/api/v1/banks/{sdi_bank_id}/irr/dashboard", headers=headers()
-    )
+    response = db_client.get(f"/api/v1/banks/{sdi_bank_id}/irr/dashboard", headers=headers())
     assert response.status_code != 403, f"IRRBB wrongly scoped out for an SDI: {response.text}"
 
 

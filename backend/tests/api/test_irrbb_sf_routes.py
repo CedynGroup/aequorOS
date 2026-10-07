@@ -199,9 +199,7 @@ def test_the_read_route_returns_the_result_with_production_copy(
     assert body["outlier_threshold_pct"] is not None
     # A representative or unconfirmed parameter says so in the payload itself.
     statements = {row["code"]: row["statement"] for row in body["parameters"]}
-    assert "pending confirmation with the supervisor" in (
-        statements["irrbb_sf_parallel_shock_bp"]
-    )
+    assert "pending confirmation with the supervisor" in (statements["irrbb_sf_parallel_shock_bp"])
     assert "representative only" in statements["irrbb_sf_default_cash_flow_profile"]
     assert body["automatic_option_statement"].startswith("No automatic interest-rate options")
     # The floor statement says what the ENGINE did and names the point as open,
@@ -212,9 +210,7 @@ def test_the_read_route_returns_the_result_with_production_copy(
     assert floor_statement.startswith("No post-shock rate floor was applied")
     assert "open point for the supervisor" in floor_statement
     assert "framework text prescribes no post-shock rate floor" not in floor_statement
-    assert all(
-        row["label"] != row["marker"] for row in body["data_quality"]["assumptions"]
-    )
+    assert all(row["label"] != row["marker"] for row in body["data_quality"]["assumptions"])
 
 
 def test_the_read_route_hides_rather_than_announces_a_denial(
@@ -222,9 +218,7 @@ def test_the_read_route_hides_rather_than_announces_a_denial(
 ) -> None:
     period_id = _seed()
 
-    response = db_client.get(
-        BASE, params={"reporting_period_id": str(period_id)}, headers=_auth(1)
-    )
+    response = db_client.get(BASE, params={"reporting_period_id": str(period_id)}, headers=_auth(1))
 
     assert response.status_code == 404, response.text
 
@@ -400,7 +394,7 @@ def _record_refusal(period_id: UUID, *, code: str, message: str) -> None:
 def test_an_untried_reporting_date_answers_rather_than_404s(
     db_client: TestClient,
 ) -> None:
-    """"Nobody has run it" is an ANSWER — the one a refusal must be told from."""
+    """ "Nobody has run it" is an ANSWER — the one a refusal must be told from."""
     period_id = _seed()
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.ALL)
 

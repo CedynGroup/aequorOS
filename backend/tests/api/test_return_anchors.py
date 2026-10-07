@@ -80,9 +80,9 @@ def test_anchor_window_defaults_to_two_quarters_of_elapsed_dates(
     assert body["lookback_months"] == DEFAULT_LOOKBACK_MONTHS
     assert body["horizon_months"] == DEFAULT_HORIZON_MONTHS
     elapsed, upcoming = _split(body)
-    assert len(elapsed) == (
-        DEFAULT_LOOKBACK_MONTHS * ELAPSED_MONTH_ENDS_PER_LOOKBACK_MONTH
-    ), "a bank two quarters behind must be offered every month end it owes"
+    assert len(elapsed) == (DEFAULT_LOOKBACK_MONTHS * ELAPSED_MONTH_ENDS_PER_LOOKBACK_MONTH), (
+        "a bank two quarters behind must be offered every month end it owes"
+    )
     assert upcoming, "the forward half of the window is unchanged"
     # Data status is reported per anchor and is never a filter: an elapsed date
     # with no computed position is still a date the regulator expects.
@@ -156,9 +156,7 @@ def test_calendar_takes_the_same_window_and_cannot_disagree(
 def test_calendar_lookback_is_bounded_too(db_client: TestClient) -> None:
     _seed()
     for value in (0, 25):
-        response = db_client.get(
-            OBLIGATIONS, headers=headers(), params={"lookback_months": value}
-        )
+        response = db_client.get(OBLIGATIONS, headers=headers(), params={"lookback_months": value})
         assert response.status_code == 422, f"{value}: {response.text}"
 
 
@@ -168,14 +166,10 @@ def test_elapsed_anchors_carry_their_deadline_and_grade(db_client: TestClient) -
     body = _anchors(db_client)
     as_of = date.fromisoformat(body["as_of"])
     elapsed = [
-        anchor
-        for anchor in body["anchors"]
-        if date.fromisoformat(anchor["reporting_date"]) < as_of
+        anchor for anchor in body["anchors"] if date.fromisoformat(anchor["reporting_date"]) < as_of
     ]
     assert elapsed
     overdue = [anchor for anchor in elapsed if anchor["rag"] == "overdue"]
     assert overdue, "an unfiled elapsed return grades overdue, not hidden"
     for anchor in elapsed:
-        assert date.fromisoformat(anchor["due_date"]) > date.fromisoformat(
-            anchor["reporting_date"]
-        )
+        assert date.fromisoformat(anchor["due_date"]) > date.fromisoformat(anchor["reporting_date"])

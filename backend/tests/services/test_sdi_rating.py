@@ -237,8 +237,7 @@ def test_the_evidence_ledger_is_populated_from_the_sdi_authorities(
     materialize_canonical_test_book(db_session)
     bank = _sdi_bank(db_session)
     evidence = {
-        item.code: item
-        for item in sdi_rating.collect_evidence(db_session, CTX, bank, AS_OF)
+        item.code: item for item in sdi_rating.collect_evidence(db_session, CTX, bank, AS_OF)
     }
     # Capital and asset quality resolve through sdi_capital / loan_classification.
     assert evidence["car_headroom_pp"].source.startswith("sdi_capital")
@@ -264,16 +263,13 @@ def test_provision_coverage_evidence_is_real_since_credit_pr1(
     materialize_canonical_test_book(db_session)
     bank = _sdi_bank(db_session)
     evidence = {
-        item.code: item
-        for item in sdi_rating.collect_evidence(db_session, CTX, bank, AS_OF)
+        item.code: item for item in sdi_rating.collect_evidence(db_session, CTX, bank, AS_OF)
     }
     unstated = evidence["provision_coverage_pct"]
     assert unstated.value is None
     assert "no loan states ecl_provision_ghs" in (unstated.note or "")
 
-    seed_canonical_fixture(
-        db_session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID
-    )
+    seed_canonical_fixture(db_session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
     db_session.flush()
     evidence = {
         item.code: item

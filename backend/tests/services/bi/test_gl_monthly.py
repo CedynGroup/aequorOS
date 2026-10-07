@@ -388,4 +388,3 @@ def test_a_non_integral_register_sign_is_refused_not_truncated(db_session: Sessi
     )
 
     assert validate_mapping_row({"gl_account_code": "7001", "bsd7_item": "18", "sign": "0.5"})
-

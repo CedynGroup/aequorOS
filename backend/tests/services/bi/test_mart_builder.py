@@ -263,16 +263,15 @@ def daily_rows(db: Session, as_of: date = AS_OF) -> dict[str, BiFactPositionDail
     }
 
 
-
 def _as_utc(value: datetime) -> datetime:
     """The instant, however the dialect chose to hand it back.
 
     A naive value is UTC by construction here (SQLite stores what the builder
     wrote); an aware one is converted rather than truncated.
     """
-    return (
-        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
-    ).replace(tzinfo=None)
+    return (value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)).replace(
+        tzinfo=None
+    )
 
 
 def build_records(db: Session, as_of: date = AS_OF) -> dict[str, BiMartBuild]:

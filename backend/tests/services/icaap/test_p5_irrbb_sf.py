@@ -196,9 +196,7 @@ def test_the_block_payload_keeps_every_assumption_and_its_count(
     total = int(binding.facts["assumption_defaults_applied"].value or 0)
     assert total == sum(tallies.values())
     table = next(
-        entry
-        for entry in (binding.payload or {})["tables"]
-        if entry["key"] == "assumption_tallies"
+        entry for entry in (binding.payload or {})["tables"] if entry["key"] == "assumption_tallies"
     )
     # Production copy, never a raw marker, on a surface a bank reads.
     assert all(row["cells"]["assumption"] not in tallies for row in table["rows"])
@@ -447,8 +445,7 @@ def test_the_register_states_the_mandate_once_it_bites(
     assert finding is not None
     assert finding.params["mandatory"] == "true"
     assert finding.params["statement"].startswith(
-        "The Standardised Framework applies to reporting dates from "
-        f"{AS_OF.year - 1}-12-31."
+        f"The Standardised Framework applies to reporting dates from {AS_OF.year - 1}-12-31."
     )
     # A console edit moves the rule, with no code change (D-024).
     _set_commencement(db_session, date(AS_OF.year + 5, 12, 31))

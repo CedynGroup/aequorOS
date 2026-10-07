@@ -120,9 +120,7 @@ def test_ecdsa_round_trip_verifies_against_the_issued_certificate(
     public_key.verify(signature, DIGEST, ec.ECDSA(utils.Prehashed(hashes.SHA256())))
     # … and equivalently as a SHA-256 signature over the original message, which
     # is what an independent verifier with only the message would compute.
-    public_key.verify(
-        signature, b"aequoros attestation payload", ec.ECDSA(hashes.SHA256())
-    )
+    public_key.verify(signature, b"aequoros attestation payload", ec.ECDSA(hashes.SHA256()))
 
 
 def test_a_signature_does_not_verify_over_a_different_digest(
@@ -206,7 +204,7 @@ def test_software_signer_is_refused_in_production(monkeypatch: pytest.MonkeyPatc
 
 
 def test_software_signer_is_refused_for_a_bare_prod_env_value() -> None:
-    """"prod" is not in the AppEnv literal, but the guard must still catch it —
+    """ "prod" is not in the AppEnv literal, but the guard must still catch it —
     an environment string is exactly the kind of thing that gets shortened."""
     settings = get_settings()
     prod_app = settings.app.model_copy(update={"app_env": "prod"})
@@ -475,9 +473,7 @@ def test_revoke_records_the_reason_and_stops_selection(db_session: Session) -> N
     with pytest.raises(SignerKeyError, match="already revoked"):
         service.revoke(key_id=record.id, reason="Again")
     assert (
-        db_session.scalar(
-            select(AuditEvent).where(AuditEvent.event_type == "signer_key.revoked")
-        )
+        db_session.scalar(select(AuditEvent).where(AuditEvent.event_type == "signer_key.revoked"))
         is not None
     )
 
@@ -654,9 +650,7 @@ def test_private_key_material_never_reaches_any_database_column(
             for column, value in row.items():
                 rendered = str(value)
                 for needle in forbidden:
-                    assert needle not in rendered, (
-                        f"key material leaked into {table.name}.{column}"
-                    )
+                    assert needle not in rendered, f"key material leaked into {table.name}.{column}"
 
 
 def test_signer_keys_has_no_column_that_could_hold_key_material() -> None:

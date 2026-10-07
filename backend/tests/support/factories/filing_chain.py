@@ -45,9 +45,7 @@ def complete_chain(
     Idempotent over stages that already decided in the current round, so it can
     follow a suite that has already driven the Preparer and the Approver.
     """
-    ctx = TenantContext(
-        organization_id=package.organization_id, actor_user_id=package.generated_by
-    )
+    ctx = TenantContext(organization_id=package.organization_id, actor_user_id=package.generated_by)
     package.checks_passed = True
     stages = filing_chain.materialise_stages(db, ctx, package)
     actors = [actor or uuid4() for actor in (approver, validator)]
@@ -55,9 +53,7 @@ def complete_chain(
         if stage.decision_kind not in {"review", "approve"}:
             continue
         state = filing_chain.load_state(db, ctx, package)
-        if domain.stage_decided(
-            state.facts, stage.seq, current_round=package.workflow_round
-        ):
+        if domain.stage_decided(state.facts, stage.seq, current_round=package.workflow_round):
             continue
         filing_chain.record_decision(
             db,

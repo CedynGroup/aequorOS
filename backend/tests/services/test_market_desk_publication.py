@@ -208,9 +208,7 @@ def test_publish_writes_canonical_market_data_for_every_bank(
 
         # Batch + lineage + raw-tier provenance (the no-seeding order's spine).
         batch_ids = {
-            entry["ingestion_batch_id"]
-            for entry in result.results
-            if entry["bank_id"] == bank.id
+            entry["ingestion_batch_id"] for entry in result.results if entry["bank_id"] == bank.id
         }
         assert len(batch_ids) == 1
         batch = db_session.get(IngestionBatch, UUID(next(iter(batch_ids))))
@@ -234,9 +232,7 @@ def test_publish_writes_canonical_market_data_for_every_bank(
         assert raw is not None
 
     # Zero vendor quota consumed: not even a zero-unit ledger row.
-    assert (
-        db_session.scalar(select(func.count()).select_from(MarketDataQuotaUsage)) or 0
-    ) == 0
+    assert (db_session.scalar(select(func.count()).select_from(MarketDataQuotaUsage)) or 0) == 0
 
     # Bitemporality: valid time on the rows, transaction time on the record.
     refreshed = determinations.get(db_session, determination.id)
@@ -337,9 +333,7 @@ def test_partial_failure_records_error_and_keeps_successes(
             raise RuntimeError(msg)
         return real_execute_pull(db, **kwargs)
 
-    monkeypatch.setattr(
-        "app.services.market_desk.publication.execute_pull", flaky_execute_pull
-    )
+    monkeypatch.setattr("app.services.market_desk.publication.execute_pull", flaky_execute_pull)
 
     result = publication.publish(db_session, determination.id, actor=LEAD)
 

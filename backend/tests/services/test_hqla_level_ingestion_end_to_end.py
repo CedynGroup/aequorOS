@@ -133,9 +133,7 @@ def test_a_pushed_hqla_level_reaches_the_canonical_position_verbatim(
             row.source_reference: row
             for row in session.scalars(
                 select(CanonicalPositionSnapshot).where(
-                    CanonicalPositionSnapshot.source_reference.in_(
-                        ("SEC-L2A-0001", "SEC-BAD-0002")
-                    )
+                    CanonicalPositionSnapshot.source_reference.in_(("SEC-L2A-0001", "SEC-BAD-0002"))
                 )
             )
         }
@@ -192,9 +190,7 @@ def test_the_ingested_level_2a_is_haircut_and_capped_in_the_lcr(
         facts = _derived_securities(session)
         bank = session.get(Bank, SAMPLE_BANK_ID)
         assert bank is not None
-        hqla = regulatory_parameters.resolve_hqla_parameters(
-            session, bank, as_of=FIXTURE_AS_OF
-        )
+        hqla = regulatory_parameters.resolve_hqla_parameters(session, bank, as_of=FIXTURE_AS_OF)
         assert hqla.haircut_pct["L2A"] == Decimal("15")
 
         level1_amount = sum(

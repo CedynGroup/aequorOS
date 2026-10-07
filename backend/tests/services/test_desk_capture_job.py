@@ -386,8 +386,7 @@ def test_not_yet_published_monthly_edition_is_soft_pending(
     def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
         attempts.append(source_key)
         raise _http_error(
-            "https://www.bog.gov.gh/notice/"
-            "annual-percentage-rates-apr-of-banks-as-at-august-2026/",
+            "https://www.bog.gov.gh/notice/annual-percentage-rates-apr-of-banks-as-at-august-2026/",
             404,
         )
 
