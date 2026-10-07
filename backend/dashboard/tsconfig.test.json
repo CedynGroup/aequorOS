@@ -123,6 +123,7 @@
     "app/api/impersonation/status/route.ts",
     "lib/outbound.ts",
     "lib/outbound.test.ts",
-    "lib/ip-version.test.ts"
+    "lib/ip-version.test.ts",
+    "components/forecasting/reviewRegressions.test.tsx"
   ]
 }

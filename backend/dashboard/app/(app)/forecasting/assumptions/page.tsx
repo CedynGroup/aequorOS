@@ -295,7 +295,7 @@ function PresetCatalogue({
       subtitle={
         scenarios.assumptionVersion
           ? `${provenanceLabel(scenarios.assumptionVersion)} — presets fill most fields; the engine defaults cover the rest`
-          : "No approved assumption version is in force — forecasts are not computable until one is approved"
+          : "No approved assumption version covers the catalogue date — forecasting requires an approved version effective on or before the run's book date"
       }
       noPadding
     >

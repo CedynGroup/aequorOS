@@ -93,17 +93,31 @@ export function provenanceLabel(
   )} · effective from ${fmtDateUTC(provenance.effectiveFrom)}`;
 }
 
-export default function AssumptionRegister({
-  bankId,
-  register,
-  canEdit,
-  canApprove,
-}: {
+type AssumptionRegisterProps = {
   bankId: string;
   register: ForecastAssumptionRegisterRead;
   canEdit: boolean;
   canApprove: boolean;
-}) {
+};
+
+export default function AssumptionRegister(props: AssumptionRegisterProps) {
+  const open = props.register.versions.find(
+    (v) => v.id === props.register.openVersionId,
+  );
+  return (
+    <AssumptionRegisterContent
+      key={`${props.bankId}:${open?.id ?? "new"}:${open?.status ?? "new"}`}
+      {...props}
+    />
+  );
+}
+
+function AssumptionRegisterContent({
+  bankId,
+  register,
+  canEdit,
+  canApprove,
+}: AssumptionRegisterProps) {
   const effective = register.versions.find(
     (v) => v.id === register.effectiveVersionId,
   );
@@ -112,12 +126,17 @@ export default function AssumptionRegister({
 
   return (
     <div className="space-y-6">
-      <InForce effective={effective} asOf={register.asOf} />
+      <InForce
+        effective={effective}
+        asOf={register.asOf}
+        hasApproved={register.versions.some((v) => v.status === "approved")}
+      />
 
       {editing ? (
         <VersionEditor
+          key={open?.id ?? "new"}
           bankId={bankId}
-          draft={open?.status === "draft" ? open : undefined}
+          draft={open}
           basis={open?.presets ?? effective?.presets}
           defaultEffectiveFrom={register.asOf ?? isoDate(new Date())}
           onDone={() => setEditing(false)}
@@ -152,9 +171,11 @@ export default function AssumptionRegister({
 function InForce({
   effective,
   asOf,
+  hasApproved,
 }: {
   effective: ForecastAssumptionVersionRead | undefined;
   asOf: string | null;
+  hasApproved: boolean;
 }) {
   if (!effective) {
     return (
@@ -164,13 +185,21 @@ function InForce({
       >
         <p className="font-medium inline-flex items-center gap-2">
           <ShieldAlert size={15} aria-hidden />
-          No approved forecast assumptions
-          {asOf ? ` for the ${fmtDateUTC(new Date(asOf))} book` : ""}
+          {asOf
+            ? `No approved forecast assumptions${hasApproved ? " in force" : ""} for the ${fmtDateUTC(new Date(asOf))} book`
+            : "Forecasting needs a book date"}
         </p>
         <p className="mt-1 text-slate">
+          {asOf
+            ? hasApproved
+              ? "An approved version must be effective on or before this book date."
+              : "A version must be drafted, submitted and approved by a second person."
+            : "Ingest a book so forecasting can resolve the approved version effective on or before its date."}
+          {!asOf &&
+            !hasApproved &&
+            " No approved forecast assumptions exist yet; a version must also be drafted, submitted and approved by a second person."}{" "}
           Forecasts, the What-if Lab and the Optimizer are not computable until
-          a version is drafted, submitted and approved by a second person.
-          Nothing is substituted in the meantime.
+          then. Nothing is substituted in the meantime.
         </p>
       </div>
     );
@@ -512,8 +541,8 @@ function VersionEditor({
             className="mt-1 w-full px-2 py-1.5 text-body text-navy border border-border rounded bg-surface-raised"
           />
           <span className="mt-1 block font-normal text-slate">
-            The first book date the version governs. It cannot precede the
-            version in force.
+            A run resolves the approved version with the latest effective-from
+            date on or before its book date. Ties use the latest approval time.
           </span>
         </label>
 

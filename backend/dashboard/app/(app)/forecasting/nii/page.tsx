@@ -71,11 +71,13 @@ export default function NiiForecastPage() {
 }
 
 /** "Custom · 2026-06 · 1a2b3c4d · assumptions v2" — how a saved run is named here. */
-function runOptionLabel(run: ForecastRunSummaryRead): string {
+function runOptionLabel(run: ForecastRunSummaryRead | ForecastRunRead): string {
+  const periodLabel =
+    "periodLabel" in run ? run.periodLabel : run.path[0]?.periodLabel;
   const version = run.assumptionVersion
     ? ` · assumptions v${run.assumptionVersion.versionNumber}`
     : "";
-  return `${scenarioLabel(run.scenarioCode)} · ${run.periodLabel} · ${shortId(run.id)}${version}`;
+  return `${scenarioLabel(run.scenarioCode)}${periodLabel ? ` · ${periodLabel}` : ""} · ${shortId(run.id)}${version}`;
 }
 
 function NiiForecastWorkspace() {
@@ -114,6 +116,10 @@ function NiiForecastWorkspace() {
       scenarioSet.severelyAdverse ??
       undefined);
   const primaryId = primary?.id ?? chosenRunId ?? "";
+  const selectableRuns =
+    primary && !succeeded.some((run) => run.id === primary.id)
+      ? [primary, ...succeeded]
+      : succeeded;
 
   return (
     <>
@@ -121,7 +127,7 @@ function NiiForecastWorkspace() {
         eyebrow="Forecasting"
         title="Net Interest Income Forecast"
         action={
-          succeeded.length > 0 ? (
+          selectableRuns.length > 0 ? (
             <select
               value={primaryId}
               onChange={(e) => setSelectedRunId(e.target.value)}
@@ -129,7 +135,7 @@ function NiiForecastWorkspace() {
               className="max-w-xs px-3 py-2 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface"
             >
               {primaryId === "" && <option value="">Select a run</option>}
-              {succeeded.map((run) => (
+              {selectableRuns.map((run) => (
                 <option key={run.id} value={run.id}>
                   {runOptionLabel(run)}
                 </option>
