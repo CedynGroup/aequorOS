@@ -82,6 +82,7 @@
   "FinancialReportingPeriod": "app.models.financial.FinancialReportingPeriod",
   "FinancialSourceRow": "app.models.financial.FinancialSourceRow",
   "FinancialValidationIssue": "app.models.financial.FinancialValidationIssue",
+  "ForecastAssumptionVersion": "app.forecasting.models.ForecastAssumptionVersion",
   "IcaapAiSuggestion": "app.models.icaap_ai.IcaapAiSuggestion",
   "IcaapAiSuggestionDecision": "app.models.icaap_ai.IcaapAiSuggestionDecision",
   "IcaapAppetiteMetric": "app.models.icaap_risk_capital.IcaapAppetiteMetric",
