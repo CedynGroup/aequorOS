@@ -55,7 +55,7 @@ name: Dashboard CI
 # `if:` fed by the `changes` job, and the `gate` job below aggregates the result
 # into one context that always reports. Trade-off: every pull request in the
 # repository now pays for two ~30-second jobs; the expensive job still runs only
-# when the dashboard or the generated client changes. The context to mark
+# when inputs match the predicate in `changes` below. The context to mark
 # required is `Dashboard gate` (a status context is the job's name), never the
 # `dashboard` job itself, which legitimately reports `skipped`.
 

@@ -140,8 +140,8 @@ name: Risk Service CI
 # trigger, so this workflow reports on every pull request, and the filtering
 # moved one level down into `if:` conditions fed by the `preflight` job. Two
 # short jobs — `preflight` and `gate` — therefore run on EVERY pull request; the
-# seven expensive jobs still run only when backend-relevant paths change, and
-# report `skipped` otherwise. `gate` aggregates all of them with `if: always()`
+# expensive jobs use the separate input predicates in `preflight` below, and
+# report `skipped` when irrelevant. `gate` aggregates them with `if: always()`
 # and fails if any needed job failed or was cancelled, so it is a single,
 # always-reported, honest context.
 #
@@ -227,7 +227,7 @@ jobs:
         run: python3 .github/scripts/mise_wiring_preflight.py
       # Three areas, because the jobs read three different slices of the tree.
       # The Python suites read backend/ (the dashboard sources included: several
-      # parity tests read them) and nothing JavaScript, so a lockfile-only or
+      # parity tests read them), so a root JavaScript lockfile-only or
       # generated-client-only change no longer costs a Postgres run. The
       # architecture guards also read EVERY workflow and CI script, so any
       # change under .github/ runs them. The client freshness check needs both.
@@ -682,7 +682,7 @@ jobs:
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/real-data.xml"
 
   # The single context to mark required. Every job above can legitimately report
-  # `skipped` — because this pull request does not touch the backend, or because
+  # `skipped` — because this pull request does not touch its inputs, or because
   # `REAL_DATA_CI_ENABLED` is unset — and a skipped required check is NOT a
   # passing one: GitHub waits on it forever. This job always runs, always
   # reports, and is red if and only if something it depends on actually failed
