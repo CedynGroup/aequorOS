@@ -14,8 +14,8 @@ identity. A branch that predates a move rebases (git carries its edits to the ne
 paths) and then runs ``rewrite`` to rename whatever old-path references it added.
 
 The rewrite covers every tracked text file a module path can appear in: Python under
-``app/``, ``tests/``, ``alembic/`` and ``scripts/``, embedded Python in JavaScript and
-TypeScript, the Markdown docs, and the ``mise`` and CI configuration. It rewrites
+``app/``, ``tests/``, ``alembic/`` and ``scripts/``, Python programs embedded in Python,
+JavaScript and TypeScript, the Markdown docs, and the ``mise`` and CI configuration. It rewrites
 
 * dotted names: imports, ``importlib`` string constants, ``mock.patch`` targets, prose;
 * ``from app.old import moved_module`` into ``from app.new import leaf as moved_module``,
@@ -520,11 +520,48 @@ def rewrite_embedded_python(text: str, rename: Renamer, backend: Path) -> str:
     return literals.sub(replace, text)
 
 
+def rewrite_python_strings(text: str, rename: Renamer, backend: Path) -> str:
+    """Apply the shared import rewrite to Python-hosted program strings."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return text
+    starts = _offsets(text)
+    edits: list[tuple[int, int, str]] = []
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, ast.JoinedStr) or (
+            isinstance(node, ast.Constant) and isinstance(node.value, str)
+        ):
+            changed = False
+            for value in ast.walk(node):
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    updated = _rewrite_import_snippets(value.value, rename, backend)
+                    if updated != value.value:
+                        value.value = updated
+                        changed = True
+            if changed:
+                start = _char_offset(text, starts, node.lineno, node.col_offset)
+                end = _char_offset(
+                    text, starts, node.end_lineno or node.lineno, node.end_col_offset or 0
+                )
+                edits.append((start, end, ast.unparse(node)))
+            return
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    visit(tree)
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
 def rewrite_text(relative: str, text: str, rename: Renamer, backend: Path) -> str:
     """Every rewrite pass for one backend-relative file."""
     module, is_package = _module_of(relative)
     if module is not None:
         text = rewrite_imports(text, module, is_package, rename, backend)
+        text = rewrite_python_strings(text, rename, backend)
     elif Path(relative).suffix in _SCRIPT_SUFFIXES:
         text = rewrite_embedded_python(text, rename, backend)
     text = rewrite_dotted(text, rename)

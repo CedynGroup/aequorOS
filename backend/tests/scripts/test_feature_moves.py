@@ -402,6 +402,63 @@ def test_the_repository_uses_no_old_module_name() -> None:
 
 
 @pytest.mark.parametrize("command", ["move", "rewrite"])
+@pytest.mark.parametrize("kind", ["quoted", "adjacent", "triple", "raw", "fstring", "format"])
+def test_python_hosted_program_imports_remain_executable(
+    repository: Path, command: str, kind: str
+) -> None:
+    if command == "rewrite":
+        _run(repository, "move")
+    program = (
+        "extra = 5\n"
+        "label = 'ok'\n"
+        "from app.services import (\n"
+        "    audit,\n"
+        "    regulatory_fx as fx,\n"
+        ")\n"
+        "def result():\n"
+        "    from app.services import regulatory_fx as lazy\n"
+        "    assert audit is not None and label == 'ok'\n"
+        + r'    assert "\\n" == chr(92) + "n"' + "\n"
+        "    return fx.run() + lazy.run() + extra\n"
+    )
+    if kind == "adjacent":
+        literal = "(\n" + "\n".join(repr(line) for line in program.splitlines(True)) + "\n)"
+    elif kind in {"triple", "raw"}:
+        body = program if kind == "raw" else program.replace("\\", "\\\\")
+        literal = ("r" if kind == "raw" else "") + f'"""{body}"""'
+    elif kind in {"fstring", "format"}:
+        body = program.replace("extra = 5", "extra = {amount}").replace(
+            "label = 'ok'", "label = {marker!r}"
+        )
+        literal = (
+            "f" + repr(body)
+            if kind == "fstring"
+            else repr(body) + ".format(amount=amount, marker=marker)"
+        )
+    else:
+        literal = repr(program)
+    host = repository / "backend/scripts/generator.py"
+    host.write_text(
+        "from pathlib import Path\n"
+        "amount = 5\nmarker = 'ok'\n"
+        f"emoji = '€'; PROGRAM = {literal}\n"
+        "def generate():\n"
+        "    assert emoji == '€'\n"
+        "    Path('generated.py').write_text(PROGRAM)\n"
+    )
+    if command == "move":
+        _python(repository, "from scripts.generator import generate\ngenerate()")
+        assert _python(repository, "from generated import result\nprint(result())") == "7"
+    else:
+        assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, command)
+    _python(repository, "from scripts.generator import generate\ngenerate()")
+    assert _python(repository, "from generated import result\nprint(result())") == "7"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize("command", ["move", "rewrite"])
 @pytest.mark.parametrize("kind", ["interpolated", "escaped", "both"])
 def test_embedded_parent_imports_with_template_expressions_remain_executable(
     repository: Path, command: str, kind: str

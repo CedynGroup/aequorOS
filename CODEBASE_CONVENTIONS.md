@@ -349,8 +349,8 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **Moving code.** A move PR runs `uv run python scripts/feature_moves.py move OLD NEW` from
   `backend/` for each module or package it moves. The codemod `git mv`s the files, appends one
   ledger pair per moved module, and rewrites every import, string patch target, slash path and
-  doc reference, including embedded Python in JavaScript and TypeScript consumers. It validates
-  a batch before changing files; overlapping moves run as separate commands.
+  doc reference, including generated Python in Python, JavaScript and TypeScript strings.
+  It validates a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path, so in-flight branches rebase
   cleanly onto the move and then run `scripts/feature_moves.py rewrite`;
   current and historical locations of each relative import must identify one canonical target
