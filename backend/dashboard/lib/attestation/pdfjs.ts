@@ -21,16 +21,19 @@
  * 3. **The `legacy` build.** The default build uses `Promise.withResolvers`,
  *    which is absent from browsers a bank's standard desktop image may still be
  *    on. A signer who cannot open the document cannot sign it.
- * 4. **Standard font data is bundled, for the same reason as the worker.** A
- *    return is rendered by reportlab against the PDF standard-14 faces and
- *    embeds none of them, so pdf.js has to load its substitutes — and without
- *    them it throws `UnknownErrorException: Ensure that the
+ * 4. **Standard font data and image decoders are bundled, for the same reason
+ *    as the worker.** A return is rendered by reportlab against the PDF
+ *    standard-14 faces and embeds none of them, so pdf.js has to load its
+ *    substitutes — and without them it throws `Ensure that the
  *    'standardFontDataUrl' API parameter is provided` and falls back to
  *    whatever the browser has. A signer reading a return with substituted
- *    glyph metrics is reading something other than the filed document.
- *    `standardFontDataUrl` is a base URL pdf.js appends filenames to, which a
- *    bundler that content-hashes assets cannot provide, so the fonts are
- *    resolved through a factory over an explicit name→asset map instead.
+ *    glyph metrics is reading something other than the filed document. The
+ *    JPEG 2000 and JBIG2 decoders are WebAssembly files pdf.js loads the same
+ *    way; without them such an image is silently left off the page.
+ *    `standardFontDataUrl` and `wasmUrl` are base URLs pdf.js appends filenames
+ *    to, which a bundler that content-hashes assets cannot provide, so the
+ *    files are resolved through a factory over an explicit name→asset map
+ *    instead.
  */
 
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -38,10 +41,11 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 
 /**
- * Every file pdf.js can ask :class:`BundledStandardFontDataFactory` for, named
- * exactly as pdf.js names it. `new URL(…, import.meta.url)` makes the bundler emit
- * each one as a same-origin asset — the whole set is ~1 MB and only loads for a
- * face a document actually uses, because each entry is fetched on demand.
+ * Every standard font pdf.js can ask :class:`BundledBinaryDataFactory` for,
+ * named exactly as pdf.js names it. `new URL(…, import.meta.url)` makes the
+ * bundler emit each one as a same-origin asset — the whole set is ~1 MB and only
+ * loads for a face a document actually uses, because each entry is fetched on
+ * demand.
  */
 const STANDARD_FONT_DATA: Record<string, URL> = {
   "FoxitDingbats.pfb": new URL(
@@ -103,25 +107,45 @@ const STANDARD_FONT_DATA: Record<string, URL> = {
 };
 
 /**
- * pdf.js' `StandardFontDataFactory` port, satisfied from the bundle.
- *
- * pdf.js constructs this itself with a `{ baseUrl }` it takes from
- * `standardFontDataUrl`; the argument is ignored here because the map, not a
- * directory, is the source of truth.
+ * The WebAssembly image decoders pdf.js can ask for, fetched on demand like the
+ * fonts: only a document carrying a JPEG 2000 or JBIG2 image loads one.
  */
-class BundledStandardFontDataFactory {
-  async fetch({ filename }: { filename: string }): Promise<Uint8Array> {
-    const asset = STANDARD_FONT_DATA[filename];
+const WASM_DATA: Record<string, URL> = {
+  "jbig2.wasm": new URL("pdfjs-dist/wasm/jbig2.wasm", import.meta.url),
+  "openjpeg.wasm": new URL("pdfjs-dist/wasm/openjpeg.wasm", import.meta.url),
+};
+
+/** The bundled files, by the pdf.js API option whose base URL they replace. */
+const BUNDLED_BINARY_DATA: Record<string, Record<string, URL>> = {
+  standardFontDataUrl: STANDARD_FONT_DATA,
+  wasmUrl: WASM_DATA,
+};
+
+/**
+ * pdf.js' `BinaryDataFactory` port, satisfied from the bundle.
+ *
+ * pdf.js constructs this itself with the `cMapUrl`, `standardFontDataUrl` and
+ * `wasmUrl` base URLs; they are ignored here because the maps, not a
+ * directory, are the source of truth. CMaps are not bundled: reportlab's
+ * standard-14 text needs none.
+ */
+class BundledBinaryDataFactory {
+  async fetch({
+    kind,
+    filename,
+  }: {
+    kind: string;
+    filename: string;
+  }): Promise<Uint8Array> {
+    const asset = BUNDLED_BINARY_DATA[kind]?.[filename];
     if (asset === undefined) {
       throw new Error(
-        `pdf.js requested standard font data (${filename}) that is not bundled.`,
+        `pdf.js requested ${kind} data (${filename}) that is not bundled.`,
       );
     }
     const response = await fetch(asset.href);
     if (!response.ok) {
-      throw new Error(
-        `Standard font data ${filename} failed to load (${response.status}).`,
-      );
+      throw new Error(`${filename} failed to load (${response.status}).`);
     }
     return new Uint8Array(await response.arrayBuffer());
   }
@@ -143,9 +167,11 @@ function pdfjs(): Promise<PdfJs> {
 /**
  * Parse PDF bytes into a document handle.
  *
- * `isEvalSupported: false` turns off pdf.js' font-compilation eval path: the
- * bytes come from our own artifact store, but a viewer that evaluates code out
- * of a document is not something to run beside a signing key.
+ * Release it with `document.loadingTask.destroy()`, which also tears down the
+ * worker-side copy of the document. There is no eval switch to set: pdf.js 5.7
+ * removed its eval-based font and PostScript compilation (and the
+ * `isEvalSupported` option with it), so nothing in a document is ever
+ * evaluated as code beside a signing key.
  */
 export async function loadPdfDocument(
   data: ArrayBuffer,
@@ -153,7 +179,6 @@ export async function loadPdfDocument(
   const lib = await pdfjs();
   return lib.getDocument({
     data,
-    isEvalSupported: false,
-    StandardFontDataFactory: BundledStandardFontDataFactory,
+    BinaryDataFactory: BundledBinaryDataFactory,
   }).promise;
 }

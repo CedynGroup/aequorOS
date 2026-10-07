@@ -62,7 +62,7 @@ export default function DocumentCanvas({
     loadPdfDocument(bytes.slice(0))
       .then((doc) => {
         if (cancelled) {
-          void doc.destroy();
+          void doc.loadingTask.destroy();
           return;
         }
         opened = doc;
@@ -79,7 +79,7 @@ export default function DocumentCanvas({
       });
     return () => {
       cancelled = true;
-      void opened?.destroy();
+      void opened?.loadingTask.destroy();
       setDocument(null);
     };
   }, [bytes]);
@@ -99,12 +99,10 @@ export default function DocumentCanvas({
         const ratio = window.devicePixelRatio || 1;
         canvas.width = Math.floor(viewport.width * ratio);
         canvas.height = Math.floor(viewport.height * ratio);
-        const context = canvas.getContext('2d');
-        if (!context) return;
         setSize({ width: viewport.width, height: viewport.height });
         spaceRef.current(pageSpace(pageIndex, viewport));
         const render = page.render({
-          canvasContext: context,
+          canvas,
           viewport,
           transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
         });
