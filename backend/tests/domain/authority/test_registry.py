@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -166,11 +165,11 @@ def test_engine_identifiers_are_frozen() -> None:
 def test_filed_golden_packages_name_frozen_engines() -> None:
     golden = (Path(__file__).parents[2] / "fixtures" / "pre_p0_packages").glob("*.json")
     named = {
-        engine
+        methodology["calculation_engine"]
         for path in golden
-        for engine in re.findall(
-            r'"calculation_engine": "([^"]+)"', path.read_text(encoding="utf-8")
-        )
+        for methodology in json.loads(path.read_text(encoding="utf-8"))["snapshot"]["provenance"][
+            "declared_methodologies"
+        ]
     }
     assert "app.domain.stress.orchestrator:run_enterprise_stress" in named
     assert named <= set(ENGINE_LOCATIONS)
