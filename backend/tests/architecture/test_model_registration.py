@@ -252,9 +252,7 @@ def test_the_probe_sees_a_feature_model_outside_the_registry_package(
         "fx/domain/models/training.py",
     ],
 )
-def test_the_probe_does_not_import_unrelated_model_modules(
-    tmp_path: Path, model_path: str
-) -> None:
+def test_the_probe_does_not_import_unrelated_model_modules(tmp_path: Path, model_path: str) -> None:
     root = tmp_path / "probe_app"
     (root / "models").mkdir(parents=True)
     model = root / model_path

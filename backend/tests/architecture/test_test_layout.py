@@ -149,9 +149,7 @@ def test_every_feature_fixture_module_is_registered_and_exists(pytestconfig: pyt
         if path.parent.name in FEATURES
     }
     registered = _registered_plugins(pytestconfig.pluginmanager)
-    assert registered == on_disk, (
-        "pytest must load exactly the feature fixture modules"
-    )
+    assert registered == on_disk, "pytest must load exactly the feature fixture modules"
 
 
 @pytest.mark.parametrize("baseid", ["tests", ""])
