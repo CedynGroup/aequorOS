@@ -3,8 +3,8 @@
 A maker drafts and submits a complete set, a DIFFERENT checker approves it, and
 the next forecast resolves it and records which version it used, while the run
 saved before the approval keeps its inputs, hash and results. Approval is
-four-eyes by construction, effective dating never rewrites an earlier book date,
-and a bank with no approved version stays not computable.
+four-eyes by construction, saved runs stay immutable through effective-dated
+corrections, and a bank with no approved version stays not computable.
 """
 
 from __future__ import annotations
@@ -301,15 +301,17 @@ def test_maker_drafts_checker_approves_and_the_next_run_resolves_the_new_version
     ]
 
 
-def test_a_version_effective_after_the_book_date_leaves_that_book_on_the_old_one(
+def test_a_future_approved_version_allows_current_corrections_without_changing_saved_runs(
     db_client: TestClient,
 ) -> None:
     period_id, period_end = _seed_book()
     maker, checker = _maker_and_checker()
 
-    later = _approved(
-        db_client, maker, checker, period_end + timedelta(days=1), _revised(nim_pct="6")
-    )
+    before = _run(db_client, maker, period_id)
+    future_date = period_end + timedelta(days=1)
+
+    later = _approved(db_client, maker, checker, future_date, _revised(nim_pct="6"))
+    future_saved = db_client.get(f"{VERSIONS}/{later['id']}", headers=maker).json()
 
     run = _run(db_client, maker, period_id)
     assert run["assumption_version"]["version_number"] == 1
@@ -318,18 +320,43 @@ def test_a_version_effective_after_the_book_date_leaves_that_book_on_the_old_one
     assert register["as_of"] == period_end.isoformat()
     assert register["effective_version_id"] != later["id"]
 
-    # And nothing may now take effect before it: history is append-only.
-    refused = db_client.post(
-        VERSIONS,
+    correction = _draft(db_client, maker, period_end, _revised(nim_pct="5.2"))
+    correction_url = f"{VERSIONS}/{correction['id']}"
+    corrected_date = period_end - timedelta(days=1)
+    revised = db_client.patch(
+        correction_url,
         headers=maker,
-        json={
-            "effective_from": period_end.isoformat(),
-            "presets": _revised(),
-            "change_note": "Back-dated",
-        },
+        json={"effective_from": corrected_date.isoformat(), "presets": _revised(nim_pct="5.5")},
     )
-    assert refused.status_code == 409, refused.text
-    assert refused.json()["error"]["details"]["error_code"] == "effective_date_precedes_current"
+    assert revised.status_code == 200, revised.text
+    assert revised.json()["effective_from"] == corrected_date.isoformat()
+    submitted = db_client.post(f"{correction_url}/submit", headers=maker)
+    assert submitted.status_code == 200, submitted.text
+    approved = db_client.post(f"{correction_url}/approve", headers=checker, json={})
+    assert approved.status_code == 200, approved.text
+
+    after = _run(db_client, maker, period_id)
+    assert after["status"] == "succeeded"
+    assert after["assumption_version"]["version_id"] == correction["id"]
+    assert after["assumption_version"]["effective_from"] == corrected_date.isoformat()
+    assert after["assumptions"]["nim_pct"] == "5.5"
+    assert after["input_hash"] != run["input_hash"]
+    assert after["summary"]["cumulative_net_income"] != run["summary"]["cumulative_net_income"]
+    register = db_client.get(VERSIONS, headers=maker).json()
+    assert register["effective_version_id"] == correction["id"]
+    for saved in (before, run):
+        reread = db_client.get(f"{BASE}/runs/{saved['id']}", headers=maker)
+        assert reread.status_code == 200, reread.text
+        assert reread.json() == saved
+    assert db_client.get(f"{VERSIONS}/{later['id']}", headers=maker).json() == future_saved
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        future = service.resolve_effective(
+            session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=future_date
+        )
+        assert future.provenance is not None
+        assert future.provenance["version_id"] == later["id"]
+        assert future.presets["base"]["nim_pct"] == Decimal("6")
 
 
 def test_the_checker_must_not_have_drafted_or_submitted_the_version(

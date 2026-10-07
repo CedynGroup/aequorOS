@@ -14,10 +14,9 @@ proposal is the single decision everyone reviews before another is authored.
 
 Effective dating is by BOOK date: a run on a book dated ``d`` resolves the
 approved version with the latest ``effective_from <= d`` (a later approval on the
-same date supersedes). A new version may not take effect before the bank's
-current one, so approving it never changes what an earlier book date resolves —
-re-running a past period reproduces the same assumptions and ``input_hash``,
-while saved runs are immutable regardless.
+same date supersedes). Corrections may take effect before an already approved
+version, including a future-dated one. New runs resolve the current approvals;
+saved runs keep their snapshots, ``input_hash``, results and provenance.
 
 Nothing here substitutes a value. A bank with no approved version effective on
 the book date resolves no presets and its runs refuse with ``missing_parameter``;
@@ -164,7 +163,6 @@ def create_version(
     actor = _require_actor(ctx)
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
     presets = _validated(payload.presets)
-    _require_not_before_current(db, bank, payload.effective_from)
     next_number = (
         db.scalar(
             select(func.max(ForecastAssumptionVersion.version_number)).where(
@@ -214,7 +212,6 @@ def update_version(
     if payload.presets is not None:
         version.presets = _stored(_validated(payload.presets))
     if payload.effective_from is not None:
-        _require_not_before_current(db, bank, payload.effective_from)
         version.effective_from = payload.effective_from
     if payload.change_note is not None:
         version.change_note = payload.change_note
@@ -230,7 +227,6 @@ def submit_version(
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
     version = _version_or_404(db, ctx, bank, version_id, for_update=True)
     _require_status(version, "draft", "Only a draft can be submitted for approval")
-    _require_not_before_current(db, bank, version.effective_from)
     version.status = "submitted"
     version.submitted_by = actor
     version.submitted_at = utc_now()
@@ -252,7 +248,6 @@ def approve_version(
     payload: ForecastAssumptionDecision,
 ) -> ForecastAssumptionVersionRead:
     version, bank = _decision_target(db, ctx, bank_id, version_id)
-    _require_not_before_current(db, bank, version.effective_from)
     _decide(version, ctx, "approved", payload.note)
     _audit(db, ctx, version, "forecast_assumptions.approved")
     enqueue_bank_change(
@@ -378,27 +373,6 @@ def _effective_version(
         )
         .limit(1)
     )
-
-
-def _require_not_before_current(db: Session, bank: Bank, effective_from: date) -> None:
-    """A new version starts on or after the bank's latest approved one.
-
-    History is append-only: back-dating a version before the current one would
-    change what an already-forecast book date resolves.
-    """
-    current = db.scalar(
-        select(func.max(ForecastAssumptionVersion.effective_from)).where(
-            ForecastAssumptionVersion.organization_id == bank.organization_id,
-            ForecastAssumptionVersion.bank_id == bank.id,
-            ForecastAssumptionVersion.status == "approved",
-        )
-    )
-    if current is not None and effective_from < current:
-        raise _conflict(
-            "effective_date_precedes_current",
-            f"The bank's approved assumptions take effect from {current.isoformat()}; a new "
-            "version cannot take effect before that date.",
-        )
 
 
 def _version_or_404(
