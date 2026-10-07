@@ -346,3 +346,10 @@ feature. New code goes in the target layout; existing code moves one feature per
   `uv run python -c "import tests.architecture.test_feature_boundaries as t; t.write_baseline()"`
   and review that the diff only deletes entries. `write_baseline()` owns the generated JSON's
   formatting.
+- **Moving code.** A move PR runs `uv run python scripts/feature_moves.py move OLD NEW` from
+  `backend/` for each module or package it moves. The codemod `git mv`s the files, appends one
+  ledger pair per moved module, and rewrites every import, string patch target, slash path and
+  doc reference. It leaves no compatibility shim at the old path, so in-flight branches rebase
+  cleanly onto the move and then run `scripts/feature_moves.py rewrite`;
+  `scripts/feature_moves.py check` fails while anything still uses an old name. The diff of a
+  move PR is the renames plus the codemod's output; logic changes go in separate PRs.

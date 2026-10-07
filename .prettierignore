@@ -6,5 +6,8 @@ backend/openapi-schema.json
 # Deterministic JSON formatting is owned by test_feature_boundaries.write_baseline().
 backend/tests/architecture/feature_boundary_baseline.json
 
+# One pair per line, written by backend/scripts/feature_moves.py.
+backend/scripts/feature_module_moves.json
+
 # Lockfile formatting is owned by pnpm.
 pnpm-lock.yaml
