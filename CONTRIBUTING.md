@@ -15,7 +15,8 @@ are always welcome.
   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md) first — they are the law of
   the repo (tenancy/RLS patterns, immutable calculation runs, adapter
   boundaries, design tokens).
-- Backend gates: `ruff check`, `basedpyright`, and
+- Backend gates: `ruff check`, the basedpyright strict
+  [typing ratchet](CODEBASE_CONVENTIONS.md#typing-ratchet), and
   `CASHFLOW_FAST_TEST=1 pytest` must be green; tests are hermetic (no ambient
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
 - Backend database fixture isolation and parallel execution are documented in the

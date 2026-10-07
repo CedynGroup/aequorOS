@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import DateTime, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.schema import SchemaItem
 
 from app.core.ids import new_uuid4, new_uuid7
 
@@ -26,13 +27,18 @@ def utc_now() -> datetime:
 #: module would silently reorder flushes and could break a foreign key. Pinning the
 #: key keeps flush order independent of where the code lives. A new model records
 #: its key here; ``tests/architecture/test_model_flush_order.py`` enforces it.
-FLUSH_ORDER: dict[str, str] = json.loads(
-    Path(__file__).with_name("flush_order.json").read_text(encoding="utf-8")
+FLUSH_ORDER = cast(
+    dict[str, str],
+    json.loads(Path(__file__).with_name("flush_order.json").read_text(encoding="utf-8")),
 )
+
+#: A model's ``__table_args__``: its constraints and indexes. ``DeclarativeBase``
+#: types the attribute as ``Any``; annotating it keeps a model strict.
+type TableArgs = tuple[SchemaItem, ...]
 
 
 class Base(DeclarativeBase):
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
         mapper = cls.__dict__.get("__mapper__")
         if mapper is not None and cls.__name__ in FLUSH_ORDER:

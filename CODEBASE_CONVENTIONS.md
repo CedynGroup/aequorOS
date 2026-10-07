@@ -16,16 +16,42 @@ Paths below describe the existing layered tree; new feature code follows
   `select = ["E", "F", "I", "UP", "B", "SIM", "PL"]`, `ignore = ["PLR2004"]`. When a function
   legitimately needs many parameters, the existing code suppresses per-line with
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
-- **basedpyright**: `typeCheckingMode = "standard"`, `pythonVersion = "3.13"`,
-  with included paths defined in `backend/pyproject.toml`; `reportAny`, `reportExplicitAny`, and the
-  `reportUnknown*` family are disabled.
+- **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
+  defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
+  `reportExplicitAny` is off so the JSON-column type below stands. The
+  [typing ratchet](#typing-ratchet) enforces it.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
+
+### Typing ratchet
+
+New code is strict; legacy code may only get stricter.
+
+- `mise run risk-service:typecheck` runs `backend/scripts/typing_ratchet.py check`. It type-checks
+  the backend once and counts each module's errors per rule against
+  `backend/scripts/typing_baseline.json`.
+- **A module without a baseline entry is strict**: any error fails. That covers every new module,
+  every module that passed when the baseline was recorded, and the script's `STRICT_MODULES` (the
+  feature packages and kernel seams created by the feature-layout work), which the baseline may
+  never cover.
+- **A legacy module may not add errors.** A rule's count above its baseline fails.
+- **Record every fix.** A count below its baseline also fails until
+  `uv run python scripts/typing_ratchet.py update`, run from `backend/`, writes the lower count.
+  `update` refuses to run while any count is above its baseline, so it only lowers numbers and
+  deletes entries; review that the diff does only that.
+- Baseline keys are canonical module names through the feature-move ledger
+  (`backend/scripts/feature_module_moves.json`), so a codemod move keeps its entries and stays a
+  pure rename. Code written in a feature package is strict.
+- Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
+  not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
+  (`.tuples()`, `.scalars()`) rather than silencing it.
 
 ### SQLAlchemy models (`app/models/*.py`)
 
 - SQLAlchemy 2.0 declarative style only: `Mapped[...]` + `mapped_column(...)`. No legacy
   `Column =` assignments, no `relationship()` (the codebase queries explicitly instead).
+- Annotate `__table_args__: TableArgs` (from `app/db/base.py`); `DeclarativeBase` types it as
+  `Any`, which strict mode rejects.
 - Base and mixins from `app/db/base.py`:
   - `UuidV4PrimaryKeyMixin` — default for workflow tables (cases, runs, findings, capital).
   - `UuidV7PrimaryKeyMixin` — used by the `financial_*` canonical tables (time-ordered ids).

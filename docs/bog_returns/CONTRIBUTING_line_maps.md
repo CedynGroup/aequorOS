@@ -58,8 +58,9 @@ into your doc under "Framework asks" and stop there.
    row-by-row table (row · official label · status · source/filters · note), a "Residual unmapped
    lines — data the bank must supply" list, and cross-form dependencies. Generate the table from
    the line map (see how `bsd2_line_map.md` was produced) so it cannot drift.
-9. Gates before you finish: `uv run ruff check <your files>` clean, `uv run basedpyright <your
-   files>` clean, `DATABASE_URL="" uv run pytest tests/services/test_bog_forms_framework.py
+9. Gates before you finish: `uv run ruff check <your files>` clean, the typing ratchet
+   (`uv run python scripts/typing_ratchet.py check`) clean,
+   `DATABASE_URL="" uv run pytest tests/services/test_bog_forms_framework.py
    tests/services/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
 
 Report back: files created, mapped/input_required/coa-mapping counts per sheet, the critical

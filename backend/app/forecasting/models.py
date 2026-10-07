@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
+from app.db.base import Base, TableArgs, TimestampMixin, UuidV4PrimaryKeyMixin
 
 #: ``draft`` → ``submitted`` → ``approved`` | ``rejected``. Only ``approved`` ever
 #: resolves for a run; approved and rejected versions are final.
@@ -50,7 +50,7 @@ class ForecastAssumptionVersion(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "forecast_assumption_versions"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint(f"status IN {_in(VERSION_STATUSES)}", name="ck_fav_status"),
         CheckConstraint("version_number >= 1", name="ck_fav_version_number"),
         CheckConstraint(

@@ -25,7 +25,7 @@ the bank must author and approve its own set.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -95,7 +95,7 @@ def resolve_effective(
     )
 
 
-def provenance_read(payload: Any) -> ForecastAssumptionProvenanceRead | None:
+def provenance_read(payload: object) -> ForecastAssumptionProvenanceRead | None:
     """A run's recorded provenance, or ``None`` for a run that resolved no version."""
     if not isinstance(payload, dict):
         return None
@@ -457,7 +457,7 @@ def _plain(value: Decimal) -> str:
     return format(value.normalize(), "f")
 
 
-def _decimal_presets(stored: dict[str, Any]) -> PresetValues:
+def _decimal_presets(stored: Mapping[str, Mapping[str, object]]) -> PresetValues:
     return {
         code: {key: Decimal(str(value)) for key, value in values.items()}
         for code, values in stored.items()
@@ -480,7 +480,7 @@ def _names(db: Session, organization_id: str, user_ids: Iterable[UUID | None]) -
         select(User.id, User.display_name, User.email).where(
             User.organization_id == organization_id, User.id.in_(ids)
         )
-    )
+    ).tuples()
     return {user_id: display_name or email for user_id, display_name, email in rows}
 
 

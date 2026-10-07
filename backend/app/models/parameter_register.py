@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
+from app.db.base import Base, TableArgs, TimestampMixin, UuidV4PrimaryKeyMixin
 
 
 class RegulatoryParameterMixin(UuidV4PrimaryKeyMixin, TimestampMixin):
@@ -42,7 +42,7 @@ class RegulatoryParameterMixin(UuidV4PrimaryKeyMixin, TimestampMixin):
 
 class ParamLcrRunoffRate(RegulatoryParameterMixin, Base):
     __tablename__ = "param_lcr_runoff_rate"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint(
             "flow_direction IN ('outflow', 'inflow')",
             name="ck_param_lcr_runoff_rate_flow_direction",
@@ -64,7 +64,7 @@ class ParamLcrRunoffRate(RegulatoryParameterMixin, Base):
 
 class ParamNsfrWeight(RegulatoryParameterMixin, Base):
     __tablename__ = "param_nsfr_weight"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint("side IN ('asf', 'rsf')", name="ck_param_nsfr_weight_side"),
         UniqueConstraint(
             "organization_id",
@@ -83,7 +83,7 @@ class ParamNsfrWeight(RegulatoryParameterMixin, Base):
 
 class ParamRiskWeight(RegulatoryParameterMixin, Base):
     __tablename__ = "param_risk_weight"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         UniqueConstraint(
             "organization_id",
             "jurisdiction_code",
@@ -99,7 +99,7 @@ class ParamRiskWeight(RegulatoryParameterMixin, Base):
 
 class ParamStressShock(RegulatoryParameterMixin, Base):
     __tablename__ = "param_stress_shock"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint(
             "module IN ('liquidity', 'capital', 'forecast', 'irr', 'fx', 'ftp')",
             name="ck_param_stress_shock_module",
@@ -124,7 +124,7 @@ class ParamStressShock(RegulatoryParameterMixin, Base):
 
 class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     __tablename__ = "param_capital_threshold"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         UniqueConstraint(
             "organization_id",
             "jurisdiction_code",
@@ -154,7 +154,7 @@ class ParamConcentrationLimit(RegulatoryParameterMixin, Base):
     """
 
     __tablename__ = "param_concentration_limit"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint(
             "dimension IN ('single_name', 'sector', 'geography', 'product', "
             "'collateral', 'funding', 'employer')",
@@ -188,7 +188,7 @@ class ParamCreditThreshold(RegulatoryParameterMixin, Base):
     concentration limits: no instrument prescribes the values."""
 
     __tablename__ = "param_credit_threshold"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         UniqueConstraint(
             "organization_id",
             "jurisdiction_code",
@@ -216,7 +216,7 @@ class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
     """
 
     __tablename__ = "param_liquidity_threshold"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint(
             "institution_class IN ('bank', 'sdi')",
             name="ck_param_liquidity_threshold_institution_class",
@@ -252,7 +252,7 @@ class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
     """
 
     __tablename__ = "param_liquidity_haircut"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         UniqueConstraint(
             "organization_id",
             "jurisdiction_code",
@@ -278,7 +278,7 @@ class ParamEclAssumption(RegulatoryParameterMixin, Base):
     """
 
     __tablename__ = "param_ecl_assumption"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         CheckConstraint("stage IN (1, 2, 3)", name="ck_param_ecl_assumption_stage"),
         UniqueConstraint(
             "organization_id",
@@ -308,7 +308,7 @@ class ParamCrmHaircut(RegulatoryParameterMixin, Base):
     """
 
     __tablename__ = "param_crm_haircut"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         UniqueConstraint(
             "organization_id",
             "jurisdiction_code",
