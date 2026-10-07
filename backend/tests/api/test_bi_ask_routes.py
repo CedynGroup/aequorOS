@@ -71,8 +71,8 @@ from app.services.ai import client as ai_client
 from app.services.ai import features, gates
 from app.services.bi import nlq
 from app.services.bi.nlq.schema import NlqDraft, NlqQueryDraft, NlqTimeDraft
-from tests.api.helpers import ORG_1, headers
 from tests.api.test_bi_routes import AS_OF, BANK_ID, seed_bi_mart
+from tests.support.helpers import ORG_1, headers
 
 BASE = f"/api/v1/banks/{BANK_ID}/bi"
 READER = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")

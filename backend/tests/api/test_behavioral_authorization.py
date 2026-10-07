@@ -30,8 +30,8 @@ from app.ml.behavioral.config import MODEL_VERSIONS, Accuracy, ModelResult
 from app.models import AuditEvent, AuthorizationBinding, Bank, IngestionBatch, User
 from app.services import authorization, behavioral_models
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers, integration_key_headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/behavioral"
 SIBLING_BANK_ID = "BK-BEH00002"

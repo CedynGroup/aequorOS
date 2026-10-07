@@ -29,7 +29,7 @@ from app.core.config import get_settings
 from app.features import manage_bi_notifications as notifications
 from app.models import Bank
 from app.schemas.feature_flags import FeatureFlagsRead
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 URL = "/api/v1/feature-flags"
 

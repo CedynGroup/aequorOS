@@ -21,7 +21,7 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import get_template
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

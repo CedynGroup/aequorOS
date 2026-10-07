@@ -32,13 +32,13 @@ from app.models import Bank, BankReportingPeriod, CanonicalPositionSnapshot
 from app.services import ingestion, regulatory_reporting
 from app.services.fact_derivation import _INCLUDED_VALIDATION_STATUSES
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
-from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.canonical import seed_canonical_fixture
 
 
 def test_unvalidated_status_is_a_real_status_that_no_engine_reads() -> None:

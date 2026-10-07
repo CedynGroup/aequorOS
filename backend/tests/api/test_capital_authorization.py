@@ -38,11 +38,11 @@ from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import authorization, regulatory_capital
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 CHECKER_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 SIBLING_BANK_ID = "BK-CAP00002"

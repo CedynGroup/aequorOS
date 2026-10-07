@@ -30,9 +30,9 @@ from app.schemas.icaap_risk_capital import (
     IcaapRiskPut,
 )
 from app.services.icaap import audit_reviews, challenges, participants, risks, supervisory_addons
-from tests.api.helpers import ORG_1
 from tests.services.icaap.test_attachments import pdf_bytes
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 REVIEWER = uuid4()
 CHECKER = uuid4()

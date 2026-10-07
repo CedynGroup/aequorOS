@@ -8,7 +8,7 @@ from app.api.deps import TenantContext
 from app.models import RiskCase
 from app.schemas.common import JsonObject
 from app.services import cases
-from tests.factories import case_payload
+from tests.support.factories import case_payload
 
 
 @dataclass(frozen=True)

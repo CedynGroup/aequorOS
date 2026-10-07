@@ -97,7 +97,6 @@ from app.services.attestation.signers import (
     signer_subject,
 )
 from scripts import bootstrap_openbao_pki
-from tests.api.helpers import ORG_1, ORG_2
 from tests.services.test_attestation_artifact_signing import (
     CHECKER,
     MAKER,
@@ -108,6 +107,7 @@ from tests.services.test_attestation_artifact_signing import (
     _trust,
     _version,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 DIGEST = hashlib.sha256(b"aequoros attestation payload").digest()
 SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"
@@ -142,9 +142,7 @@ class BaoServer:
     #: Where the bootstrap wrote the PKI root, for ATTESTATION_TRUST_ROOTS.
     trust_roots: Path = Path()
 
-    def admin(
-        self, method: str, path: str, body: dict[str, Any] | None = None
-    ) -> httpx.Response:
+    def admin(self, method: str, path: str, body: dict[str, Any] | None = None) -> httpx.Response:
         return httpx.request(
             method,
             f"{self.address}/v1/{path}",
@@ -198,26 +196,25 @@ def _provision(address: str, token: str, trust_roots: Path) -> BaoServer:
             role=PKI_ROLE,
             key_prefix=prefix,
         )
-        assert server.admin(
-            "PUT", f"sys/policies/acl/{name}", {"policy": policy}
-        ).status_code < 400
-        assert server.admin(
-            "POST",
-            f"auth/approle/role/{name}",
-            {
-                "token_policies": name,
-                # A short token TTL on purpose: the renewal path is then
-                # exercised by any suite that runs longer than the lease.
-                "token_ttl": "10m",
-                "token_max_ttl": "1h",
-            },
-        ).status_code < 400
-        role_id = server.admin("GET", f"auth/approle/role/{name}/role-id").json()["data"][
-            "role_id"
+        assert server.admin("PUT", f"sys/policies/acl/{name}", {"policy": policy}).status_code < 400
+        assert (
+            server.admin(
+                "POST",
+                f"auth/approle/role/{name}",
+                {
+                    "token_policies": name,
+                    # A short token TTL on purpose: the renewal path is then
+                    # exercised by any suite that runs longer than the lease.
+                    "token_ttl": "10m",
+                    "token_max_ttl": "1h",
+                },
+            ).status_code
+            < 400
+        )
+        role_id = server.admin("GET", f"auth/approle/role/{name}/role-id").json()["data"]["role_id"]
+        secret_id = server.admin("POST", f"auth/approle/role/{name}/secret-id").json()["data"][
+            "secret_id"
         ]
-        secret_id = server.admin(
-            "POST", f"auth/approle/role/{name}/secret-id"
-        ).json()["data"]["secret_id"]
         roles[f"{name}_role"] = role_id
         roles[f"{name}_secret"] = secret_id
 
@@ -311,9 +308,7 @@ def test_the_vault_version_prefix_is_stripped_and_the_body_decoded() -> None:
 
     assert _decode_signature(envelope, key_ref="k") == der
     # The version moves with key rotation and must not confuse the parser.
-    assert _decode_signature(
-        f"vault:v27:{base64.b64encode(der).decode()}", key_ref="k"
-    ) == der
+    assert _decode_signature(f"vault:v27:{base64.b64encode(der).decode()}", key_ref="k") == der
 
 
 @pytest.mark.parametrize(
@@ -526,9 +521,7 @@ def test_a_transit_signature_verifies_against_the_public_key_openbao_reports(
     public_key.verify(signature, DIGEST, ec.ECDSA(utils.Prehashed(hashes.SHA256())))
     # … and equivalently over the original message, which is what a third party
     # holding only the filed document would compute.
-    public_key.verify(
-        signature, b"aequoros attestation payload", ec.ECDSA(hashes.SHA256())
-    )
+    public_key.verify(signature, b"aequoros attestation payload", ec.ECDSA(hashes.SHA256()))
 
 
 def test_a_transit_signature_does_not_verify_over_a_different_digest(
@@ -616,9 +609,7 @@ def test_a_wrong_approle_secret_raises_rather_than_returning_a_signature(
 
 def test_a_destroyed_secret_id_stops_working_immediately(bao: BaoServer) -> None:
     """Revocation is the operator's kill switch; it must actually kill."""
-    disposable = bao.admin(
-        "POST", "auth/approle/role/aequoros-test/secret-id"
-    ).json()["data"]
+    disposable = bao.admin("POST", "auth/approle/role/aequoros-test/secret-id").json()["data"]
     signer = OpenBaoTransitRawSigner(
         address=bao.address, role_id=bao.role_id, secret_id=disposable["secret_id"]
     )
@@ -698,9 +689,7 @@ def test_a_denial_that_survives_re_authentication_is_reported_as_forbidden(
     scoped = OpenBaoTransitRawSigner(
         address=bao.address, role_id=bao.scoped_role_id, secret_id=bao.scoped_secret_id
     )
-    scoped._token = _Token(
-        value="hvs.thisTokenWasNeverIssued", lease_seconds=3600, renewable=False
-    )
+    scoped._token = _Token(value="hvs.thisTokenWasNeverIssued", lease_seconds=3600, renewable=False)
 
     with pytest.raises(SignerBackendForbidden):
         scoped.sign_digest(DIGEST, key_ref=_fresh_key_ref(ORG_2))
@@ -737,9 +726,7 @@ def _hand_built_csr(
         {
             "certification_request_info": info,
             "signature_algorithm": {"algorithm": "sha256_ecdsa"},
-            "signature": private_key.sign(
-                digest, ec.ECDSA(utils.Prehashed(hashes.SHA256()))
-            ),
+            "signature": private_key.sign(digest, ec.ECDSA(utils.Prehashed(hashes.SHA256()))),
         }
     )
     return asn1_pem.armor("CERTIFICATE REQUEST", request.dump()).decode("ascii")
@@ -875,9 +862,7 @@ def test_a_csr_that_does_not_prove_possession_is_never_submitted(
     with pytest.raises(SignerBackendError, match="does not verify"):
         bao_issuer.issue(
             key_ref=key_ref,
-            subject=signer_subject(
-                signer_id=SIGNER_ID, display_name=None, organization_name=None
-            ),
+            subject=signer_subject(signer_id=SIGNER_ID, display_name=None, organization_name=None),
             signer_id=SIGNER_ID,
             ttl_seconds=3600,
         )
@@ -915,9 +900,7 @@ def test_the_issued_certificate_verifies_against_the_pki_root(
         current.verify_directly_issued_by(parent)
         current = parent
     assert current.subject == current.issuer  # the root signs itself
-    assert current.fingerprint(hashes.SHA256()) == bao.root_certificate.fingerprint(
-        hashes.SHA256()
-    )
+    assert current.fingerprint(hashes.SHA256()) == bao.root_certificate.fingerprint(hashes.SHA256())
     assert bao_issuer.trust_anchor().fingerprint(hashes.SHA256()) == current.fingerprint(
         hashes.SHA256()
     )
@@ -928,9 +911,7 @@ def test_the_issued_certificate_verifies_against_the_pki_root(
     assert not usage.key_cert_sign
     # Revocation has somewhere to be published to and somewhere to be read from.
     assert issued.certificate.extensions.get_extension_for_class(x509.CRLDistributionPoints)
-    assert issued.certificate.extensions.get_extension_for_class(
-        x509.AuthorityInformationAccess
-    )
+    assert issued.certificate.extensions.get_extension_for_class(x509.AuthorityInformationAccess)
 
 
 def test_the_signer_id_is_recoverable_from_the_certificate_alone(
@@ -1010,36 +991,45 @@ def test_a_role_that_forbids_the_signer_id_fails_the_enrolment_loudly(
     issue a certificate with the identifier stripped.
     """
     lax_role = "aequoros-test-no-serial"
-    assert bao.admin(
-        "POST",
-        f"{PKI_MOUNT}/roles/{lax_role}",
-        {
-            "allow_any_name": True,
-            "enforce_hostnames": False,
-            "cn_validations": ["disabled"],
-            "allowed_serial_numbers": [],
-            "key_type": "any",
-            "ttl": "1h",
-            "max_ttl": "1h",
-        },
-    ).status_code < 400
-    assert bao.admin(
-        "PUT",
-        f"sys/policies/acl/{lax_role}",
-        {"policy": f'path "{PKI_MOUNT}/sign/{lax_role}" {{ capabilities = ["update"] }}\n'},
-    ).status_code < 400
+    assert (
+        bao.admin(
+            "POST",
+            f"{PKI_MOUNT}/roles/{lax_role}",
+            {
+                "allow_any_name": True,
+                "enforce_hostnames": False,
+                "cn_validations": ["disabled"],
+                "allowed_serial_numbers": [],
+                "key_type": "any",
+                "ttl": "1h",
+                "max_ttl": "1h",
+            },
+        ).status_code
+        < 400
+    )
+    assert (
+        bao.admin(
+            "PUT",
+            f"sys/policies/acl/{lax_role}",
+            {"policy": f'path "{PKI_MOUNT}/sign/{lax_role}" {{ capabilities = ["update"] }}\n'},
+        ).status_code
+        < 400
+    )
     scoped = OpenBaoTransitRawSigner(
         address=bao.address, role_id=bao.role_id, secret_id=bao.secret_id
     )
-    assert bao.admin(
-        "POST",
-        "auth/approle/role/aequoros-test",
-        {
-            "token_policies": f"aequoros-test,{lax_role}",
-            "token_ttl": "10m",
-            "token_max_ttl": "1h",
-        },
-    ).status_code < 400
+    assert (
+        bao.admin(
+            "POST",
+            "auth/approle/role/aequoros-test",
+            {
+                "token_policies": f"aequoros-test,{lax_role}",
+                "token_ttl": "10m",
+                "token_max_ttl": "1h",
+            },
+        ).status_code
+        < 400
+    )
     signer_id = f"SGN-{secrets.token_hex(8).upper()}"
     key_ref = new_transit_key_ref(organization_id=ORG_1, signer_id=signer_id)
     scoped.create_key(key_ref=key_ref)
@@ -1069,27 +1059,21 @@ def test_a_role_that_forbids_the_signer_id_fails_the_enrolment_loudly(
 def test_a_missing_pki_role_names_the_bootstrap_rather_than_self_signing(
     bao_signer: OpenBaoTransitRawSigner,
 ) -> None:
-    """"Cannot certify" must read as an operational gap, not as a mystery."""
+    """ "Cannot certify" must read as an operational gap, not as a mystery."""
     key_ref = _fresh_key_ref()
     bao_signer.create_key(key_ref=key_ref)
-    issuer = OpenBaoPkiIssuer(
-        signer=bao_signer, pki_mount="pki-does-not-exist", role=PKI_ROLE
-    )
+    issuer = OpenBaoPkiIssuer(signer=bao_signer, pki_mount="pki-does-not-exist", role=PKI_ROLE)
 
     with pytest.raises(SignerBackendError) as failure:
         issuer.issue(
             key_ref=key_ref,
-            subject=signer_subject(
-                signer_id=SIGNER_ID, display_name=None, organization_name=None
-            ),
+            subject=signer_subject(signer_id=SIGNER_ID, display_name=None, organization_name=None),
             signer_id=SIGNER_ID,
             ttl_seconds=3600,
         )
     with pytest.raises(SignerKeyMaterialMissing):
         bao_signer.certificate(key_ref=key_ref)
-    assert "bootstrap_openbao_pki" in str(failure.value) or "may not issue" in str(
-        failure.value
-    )
+    assert "bootstrap_openbao_pki" in str(failure.value) or "may not issue" in str(failure.value)
 
 
 def test_a_key_with_no_certificate_reports_that_rather_than_guessing(
@@ -1166,9 +1150,7 @@ def test_enrolment_records_openbao_custody_and_a_ca_issued_certificate(
     # The stored certificate and the stored key_ref must agree: the ceremony
     # signs with one and files the other as the verification material.
     signature = service.signer.sign_digest(DIGEST, key_ref=record.key_ref)
-    public_key = x509.load_pem_x509_certificate(
-        record.certificate_pem.encode("ascii")
-    ).public_key()
+    public_key = x509.load_pem_x509_certificate(record.certificate_pem.encode("ascii")).public_key()
     assert isinstance(public_key, ec.EllipticCurvePublicKey)
     public_key.verify(signature, DIGEST, ec.ECDSA(utils.Prehashed(hashes.SHA256())))
     # The row carries the whole path, so a verifier reading only the database
@@ -1191,7 +1173,7 @@ def test_enrolment_records_openbao_custody_and_a_ca_issued_certificate(
 def test_the_enrolment_audit_event_names_the_certificate_authority(
     db_session: Session,
 ) -> None:
-    """"Who vouched for this officer?" must be answerable from the register."""
+    """ "Who vouched for this officer?" must be answerable from the register."""
     from app.services.attestation.identity import ensure_signer_identity  # noqa: PLC0415
 
     assert MAKER.actor_user_id is not None
@@ -1293,9 +1275,7 @@ def test_the_serial_matches_the_format_openbao_keys_its_store_by(
     bao_signer.create_key(key_ref=key_ref)
     issued = bao_issuer.issue(
         key_ref=key_ref,
-        subject=signer_subject(
-            signer_id=signer_id, display_name=None, organization_name=None
-        ),
+        subject=signer_subject(signer_id=signer_id, display_name=None, organization_name=None),
         signer_id=signer_id,
         ttl_seconds=3600,
     )
@@ -1375,12 +1355,8 @@ def test_the_full_certification_ceremony_runs_on_openbao(
     """
     package = _seed(db_session)
 
-    preparer = _certify(
-        db_session, MAKER, package, role="preparer", display_name="Kwesi Owusu"
-    )
-    approver = _certify(
-        db_session, CHECKER, package, role="approver", display_name="Ama Mensah"
-    )
+    preparer = _certify(db_session, MAKER, package, role="preparer", display_name="Kwesi Owusu")
+    approver = _certify(db_session, CHECKER, package, role="approver", display_name="Ama Mensah")
     db_session.refresh(package)
     assert package.attestation_state == "fully_certified"
 
@@ -1396,9 +1372,7 @@ def test_the_full_certification_ceremony_runs_on_openbao(
     ]
 
     trust = _trust(db_session)
-    statuses = [
-        validate_pdf_signature(sig, signer_validation_context=trust) for sig in embedded
-    ]
+    statuses = [validate_pdf_signature(sig, signer_validation_context=trust) for sig in embedded]
     for status in statuses:
         assert status.intact, status.summary()
         assert status.valid, status.summary()
@@ -1409,9 +1383,7 @@ def test_the_full_certification_ceremony_runs_on_openbao(
 
     # The detached attestation verifies too, against the certificate on the row.
     for signature in (preparer, approver):
-        key = db_session.scalar(
-            select(SignerKey).where(SignerKey.signer_id == signature.signer_id)
-        )
+        key = db_session.scalar(select(SignerKey).where(SignerKey.signer_id == signature.signer_id))
         assert key is not None
         public_key = x509.load_pem_x509_certificate(
             key.certificate_pem.encode("ascii")
@@ -1440,9 +1412,7 @@ def test_a_filed_return_anchors_on_the_institutional_root(
     """
     package = _seed(db_session)
     _certify(db_session, MAKER, package, role="preparer", display_name="Kwesi Owusu")
-    approver = _certify(
-        db_session, CHECKER, package, role="approver", display_name="Ama Mensah"
-    )
+    approver = _certify(db_session, CHECKER, package, role="approver", display_name="Ama Mensah")
 
     institutional = ValidationContext(
         trust_roots=[
@@ -1456,8 +1426,7 @@ def test_a_filed_return_anchors_on_the_institutional_root(
     final = _bytes(db_session, storage, _version(db_session, approver))
     embedded = PdfFileReader(io.BytesIO(final)).embedded_regular_signatures
     for status in (
-        validate_pdf_signature(sig, signer_validation_context=institutional)
-        for sig in embedded
+        validate_pdf_signature(sig, signer_validation_context=institutional) for sig in embedded
     ):
         assert status.intact, status.summary()
         assert status.valid, status.summary()
@@ -1555,9 +1524,7 @@ def test_an_issued_certificate_has_revocation_material_to_embed(
         revocation_mode="hard-fail",
     )
     validator = CertificateValidator(
-        asn1_x509.Certificate.load(
-            issued.certificate.public_bytes(serialization.Encoding.DER)
-        ),
+        asn1_x509.Certificate.load(issued.certificate.public_bytes(serialization.Encoding.DER)),
         intermediate_certs=[
             asn1_x509.Certificate.load(certificate.public_bytes(serialization.Encoding.DER))
             for certificate in x509.load_pem_x509_certificates(
@@ -1577,13 +1544,9 @@ def test_the_recorded_signature_method_never_claims_pss_for_an_ecdsa_key(
 ) -> None:
     """Verification reads the recorded method; a wrong one is silent nonsense."""
     package = _seed(db_session)
-    signature = _certify(
-        db_session, MAKER, package, role="preparer", display_name="Kwesi Owusu"
-    )
+    signature = _certify(db_session, MAKER, package, role="preparer", display_name="Kwesi Owusu")
 
-    key = db_session.scalar(
-        select(SignerKey).where(SignerKey.signer_id == signature.signer_id)
-    )
+    key = db_session.scalar(select(SignerKey).where(SignerKey.signer_id == signature.signer_id))
     assert key is not None
     assert key.algorithm == ECDSA_P256_SHA256
     assert signature.signature_method == "detached_ecdsa_p256_sha256"

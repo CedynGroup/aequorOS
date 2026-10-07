@@ -33,8 +33,8 @@ from app.schemas.icaap_risk_capital import (
     IcaapRetire,
 )
 from app.services.icaap import params, pillar2
-from tests.api.helpers import ORG_1
 from tests.domain.icaap.pillar2.conftest import seed_body
+from tests.support.helpers import ORG_1
 
 #: A second person in the same tenant: the checker in every maker-checker test.
 CHECKER = uuid4()
@@ -120,9 +120,7 @@ def test_a_new_cycle_offers_every_framework_component_and_holds_no_figures(
     # Both IRRBB methods are offered now: the interim one for reporting dates
     # before the framework commences, the framework itself from that date on.
     assert irrbb.deferred_methods == []
-    assert {"irrbb_interim_delta_eve", "irrbb_standardised_framework"} <= set(
-        irrbb.allowed_methods
-    )
+    assert {"irrbb_interim_delta_eve", "irrbb_standardised_framework"} <= set(irrbb.allowed_methods)
     assert all(row.baseline is None for row in register.table5_totals.rows)
 
 
@@ -363,9 +361,7 @@ def test_a_method_that_is_not_built_yet_says_so_precisely(
     declared and quietly left unimplemented.
     """
     assert set(DEFERRED_METHODS) == set()
-    monkeypatch.setattr(
-        pillar2, "DEFERRED_METHODS", frozenset({"irrbb_standardised_framework"})
-    )
+    monkeypatch.setattr(pillar2, "DEFERRED_METHODS", frozenset({"irrbb_standardised_framework"}))
     with pytest.raises(HTTPException) as caught:
         pillar2.create_item(
             canonical_book,
@@ -561,9 +557,7 @@ def test_a_deleted_sovereign_grid_is_the_only_thing_that_reads_as_missing(
 ) -> None:
     """``missing_parameter`` must mean the row is absent, never unparseable."""
     canonical_book.execute(
-        delete(RegulatoryParameter).where(
-            RegulatoryParameter.param_code == "sov_p2_haircut_pct"
-        )
+        delete(RegulatoryParameter).where(RegulatoryParameter.param_code == "sov_p2_haircut_pct")
     )
     canonical_book.commit()
     item = _create_sovereign(canonical_book, access, cycle)

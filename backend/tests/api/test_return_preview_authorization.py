@@ -12,9 +12,9 @@ from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital, regulatory_liquidity
-from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.api.test_liquidity_scoped_authorization import BASE, CTX, _auth, _grant, _seed_book
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 
 @pytest.fixture(autouse=True)

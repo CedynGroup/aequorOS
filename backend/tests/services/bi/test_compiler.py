@@ -58,7 +58,7 @@ from app.services.bi import alerts, compiler, mart_builder
 from app.services.bi.compiler import CompiledQuery, compile_query
 from app.services.bi.errors import BiQueryError, InvalidQuery, UnknownMember, is_member_id
 from app.services.bi.execution import execute
-from tests.api.helpers import ORG_1, ORG_2
+from tests.support.helpers import ORG_1, ORG_2
 
 AUG_31 = date(2026, 8, 31)
 SEP_15 = date(2026, 9, 15)

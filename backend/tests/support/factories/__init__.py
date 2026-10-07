@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.factories.payloads import (
+from tests.support.factories.payloads import (
     AssessmentPayload,
     CasePayload,
     UploadPayload,
@@ -8,7 +8,7 @@ from tests.factories.payloads import (
     case_payload,
     upload_payload,
 )
-from tests.factories.protocols import CreatesApiCase, CreatesServiceCase
+from tests.support.factories.protocols import CreatesApiCase, CreatesServiceCase
 
 __all__ = [
     "AssessmentPayload",

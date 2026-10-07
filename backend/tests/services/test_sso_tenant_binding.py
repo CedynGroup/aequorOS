@@ -24,7 +24,7 @@ from app.db.session import get_sessionmaker
 from app.models import SsoConnection, User
 from app.services import authentication
 from app.services.attestation import stepup
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 _ISSUER = "https://idp.tenant-one.example"
 _OTHER_ISSUER = "https://idp.tenant-two.example"

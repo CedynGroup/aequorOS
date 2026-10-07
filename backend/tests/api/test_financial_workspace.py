@@ -21,8 +21,8 @@ from app.models import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 
 def test_financial_workspace_returns_empty_groups_for_valid_case(db_client: TestClient) -> None:

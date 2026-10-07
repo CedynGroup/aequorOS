@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.schemas.cases import CaseRead
 from app.schemas.common import JsonObject
-from tests.api.helpers import ORG_1, headers
-from tests.factories import case_payload
+from tests.support.factories import case_payload
+from tests.support.helpers import ORG_1, headers
 
 
 @dataclass(frozen=True)

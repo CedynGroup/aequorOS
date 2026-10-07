@@ -19,8 +19,8 @@ from fastapi.testclient import TestClient
 from app.db.session import get_sessionmaker
 from app.services.regulatory_reporting.bog_forms.layout import load_layout
 from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
-from tests.api.helpers import headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import headers
 
 SHEET = "20 LARGEST WITHDRAWALS"
 ROWS = range(11, 31)

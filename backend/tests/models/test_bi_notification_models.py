@@ -55,7 +55,7 @@ from app.schemas import bi_notifications as wire
 from app.services.bi import alerts as alerts_service
 from app.services.bi import exports, subscriptions
 from app.services.bi.exports import policy
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 6, 30)
 BANK_ID = "BK-NOTIFMD1"

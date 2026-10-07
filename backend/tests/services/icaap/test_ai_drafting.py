@@ -39,7 +39,7 @@ from app.schemas.icaap_ai import (
 from app.services import job_queue
 from app.services.ai import client as ai_client
 from app.services.icaap import ai_drafting, ai_jobs, blocks, sections
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
 

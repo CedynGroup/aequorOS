@@ -37,7 +37,7 @@ from app.services.ai import features, gates, quota
 from app.services.bi import nlq
 from app.services.bi.nlq import candidates
 from app.services.bi.nlq.schema import NlqDraft, NlqQueryDraft, NlqTimeDraft
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 BANK_ID = "BK-NLQJOB01"
 AS_OF = dt.date(2026, 8, 31)

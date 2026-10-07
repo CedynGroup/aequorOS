@@ -24,7 +24,7 @@ from app.schemas.stress import (
 )
 from app.services import default_macro_scenarios, macro_scenarios
 from app.services.institution_types import SEED_TYPES
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 CHECKER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

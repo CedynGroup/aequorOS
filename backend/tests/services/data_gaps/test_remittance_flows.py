@@ -36,11 +36,11 @@ from app.models import Bank, CanonicalReferenceRow
 from app.services.regulatory_reporting.bog_forms.linemaps import bsd17, line_maps_for
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
 from scripts.ingest_push import read_rows
-from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, headers, integration_key_headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 SAMPLE_DIR = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank"

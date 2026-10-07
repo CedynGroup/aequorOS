@@ -32,11 +32,11 @@ from app.services.market_desk.capture_job import (
     run_desk_capture,
 )
 from app.services.market_desk.sources.fetch import FetchError, RawFetch
-from tests.api.helpers import ORG_1, ORG_2
 from tests.services.test_market_desk_calculation import (
     COB,
     _seed_fixture_observations,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 LEAD = "desk-lead@aequoros.com"
 
@@ -386,8 +386,7 @@ def test_not_yet_published_monthly_edition_is_soft_pending(
     def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
         attempts.append(source_key)
         raise _http_error(
-            "https://www.bog.gov.gh/notice/"
-            "annual-percentage-rates-apr-of-banks-as-at-august-2026/",
+            "https://www.bog.gov.gh/notice/annual-percentage-rates-apr-of-banks-as-at-august-2026/",
             404,
         )
 

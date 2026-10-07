@@ -28,11 +28,11 @@ from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding, BankReportingPeriod, RegulatoryParameter, User
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import authorization, regulatory_capital
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
 AS_OF = date(2025, 12, 31)

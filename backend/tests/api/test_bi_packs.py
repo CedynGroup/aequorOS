@@ -40,8 +40,8 @@ from app.domain.bi.packs import pack_ids, packs
 from app.models import Bank
 from app.models.bi import BiQueryLog
 from app.services.bi.authorization import query_members
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_bi_routes import AS_OF, BANK_ID, BASE, Grant, grant_only, seed_bi_mart
+from tests.support.helpers import ORG_1, USER_1, headers
 
 #: An institution of the same tenant on the s.29 regime. The seven packs are
 #: certified against CRD authorities, so this is the institution D-070 says must

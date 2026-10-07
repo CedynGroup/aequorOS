@@ -22,7 +22,7 @@ from app.models import (
 )
 from app.services import regulatory_capital, sdi_capital
 from app.services import sdi_capital_checks as checks
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
 _CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

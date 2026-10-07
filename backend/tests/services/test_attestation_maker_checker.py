@@ -703,7 +703,7 @@ def test_a_signature_relaxed_return_still_completes_its_bare_approval(
     db_session: Session,
 ) -> None:
     """Regression. The non-ceremonial workflow is the one every non-attestation
-    suite depends on (tests/factories/attestation.py), and it must be untouched:
+    suite depends on (tests/support/factories/attestation.py), and it must be untouched:
     an institution that relaxed signing for a return has no ceremony, takes the
     bare decision, and files.
     """

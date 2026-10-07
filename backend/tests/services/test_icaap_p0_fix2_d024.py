@@ -82,7 +82,7 @@ from tests.services.test_icaap_stress_appendix2_report import (
     _seed_checker,
     storage,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 __all__ = ["storage"]
 

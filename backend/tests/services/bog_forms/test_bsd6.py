@@ -52,12 +52,12 @@ from app.services.regulatory_reporting.bog_forms.sources_ext.bsd6 import (
     bucket_for,
 )
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
-from tests.api.helpers import headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import headers
 
 BAND_COLUMNS = dict(zip(BUCKETS, "DEFGHIJK", strict=True))
 MILLION = Decimal("1000000")

@@ -31,7 +31,7 @@ from tests.services.test_icaap_stress_reverse_stress import (
     _seed,
     storage,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.usefixtures(
     "forecasting_run_authority", "return_generation_authority", "capital_run_authority"

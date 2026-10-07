@@ -27,8 +27,8 @@ from app.schemas.temenos_connections import (
     TemenosConnectionUpdate,
 )
 from app.services import temenos_connections
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.outbound import stub_dns, stub_public_dns
+from tests.support.factories.outbound import stub_dns, stub_public_dns
+from tests.support.helpers import ORG_1, USER_1
 
 MASTER_KEY = "temenos-outbound-test-key"
 CREDS = {"username": "SVC.AEQUOROS", "password": "must-never-leak"}

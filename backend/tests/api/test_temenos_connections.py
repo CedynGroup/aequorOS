@@ -22,8 +22,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
-from tests.factories.outbound import stub_public_dns
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
+from tests.support.factories.outbound import stub_public_dns
 
 pytestmark = requires_real_data
 

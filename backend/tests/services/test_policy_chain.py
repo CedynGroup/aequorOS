@@ -22,7 +22,7 @@ from app.domain.policy import PolicyUnresolvedError
 from app.models import Bank, Jurisdiction, RegulatoryParameter
 from app.services import institution_types, jurisdictions
 from app.services import regulatory_parameters as rp
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
 

@@ -38,10 +38,17 @@ from app.models import (
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from app.services.regulatory_reporting import version_chain
-from tests.api.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
+)
+from tests.support.helpers import (
+    ORG_1,
+    ORG_2,
+    USER_1,
+    error_envelope,
+    headers,
+    integration_key_headers,
 )
 
 OTHER_ORG_BANK_ID = "BK-PKOTH001"

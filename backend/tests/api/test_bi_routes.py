@@ -63,7 +63,7 @@ from app.services import authorization
 from app.services.bi import compiler, query_log
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 AS_OF = dt.date(2026, 8, 31)
 BUILT_AT = dt.datetime(2026, 9, 1, 2, tzinfo=dt.UTC)
@@ -496,6 +496,7 @@ AGGREGATE_ONLY: tuple[Grant, ...] = (
     Grant(ModuleScope.RISK),
 )
 
+
 def grant_only(db: Session, grants: tuple[Grant, ...]) -> int:
     """Replace the fixture's org-wide sentence with exactly ``grants``.
 
@@ -637,7 +638,7 @@ def test_a_machine_key_never_reaches_a_bi_query(
 ) -> None:
     """D-026 / S9. The refusal is the authentication boundary's: an integration
     key is admitted on the push routes only."""
-    from tests.api.helpers import integration_key_headers  # noqa: PLC0415 - issues a real key
+    from tests.support.helpers import integration_key_headers  # noqa: PLC0415 - issues a real key
 
     response = call(
         db_client,

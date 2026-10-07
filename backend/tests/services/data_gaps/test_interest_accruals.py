@@ -42,11 +42,11 @@ from app.models import CanonicalReferenceRow
 from app.services.regulatory_reporting.bog_forms.layout import load_layout
 from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
 from scripts import ingest_push
-from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, headers, integration_key_headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 CSV = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank" / "interest_accruals.csv"

@@ -23,7 +23,7 @@ from app.core.authorization import (
 from app.models import AuthorizationBinding, Bank, User
 from app.services import authorization, scoped_authorization
 from app.services.regulatory_reporting import family_access
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 BANK_ID = "BK-SCOPE001"
 

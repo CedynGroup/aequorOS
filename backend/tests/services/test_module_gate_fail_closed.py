@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_sessionmaker
 from app.models import Bank
 from app.services import institution_types
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, headers
 
 # A gated bank-only module endpoint (same dependency as every other gated router).
 GATED_ENDPOINT = "/api/v1/banks/{bank_id}/fx/dashboard"

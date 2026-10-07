@@ -52,7 +52,7 @@ from app.models.icaap import IcaapBlockBinding, IcaapCycle, IcaapDataBlock, Icaa
 from app.services import authorization
 from app.services.icaap import parameters, readiness
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BANK_ID = "BK-ICAAP001"
 SDI_BANK_ID = "BK-ICAAPSD1"

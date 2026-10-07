@@ -27,13 +27,13 @@ from app.models import (
     LiveMetric,
 )
 from app.services.reporting_periods import new_snapshot_period
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
 from tests.fixtures.live_plane import materialize_live_plane
+from tests.support.helpers import ORG_1, headers
 
 #: The section each dashboard must populate from the live plane in current mode.
 _SECTION_FIELDS = {

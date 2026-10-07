@@ -21,7 +21,6 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, Bank, CanonicalWithdrawal, Job, SystemOfRecordDeclaration
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_system_of_record import (
     APPROVER_USER,
     FIXTURE_SOURCE,
@@ -30,7 +29,8 @@ from tests.api.test_system_of_record import (
     WITHDRAWALS_URL,
     _seed,
 )
-from tests.factories.canonical import FIXTURE_AS_OF
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1, USER_1, headers
 
 SIBLING_BANK_ID = "BK-SOR00002"
 

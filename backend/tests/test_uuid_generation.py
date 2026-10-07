@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.ids import new_uuid4, new_uuid7
 from app.models import FinancialInstitution, RiskCase
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 
 def uuid7_timestamp_ms(value: UUID) -> int:

@@ -14,8 +14,8 @@ from app.models import (
     FinancialInstitution,
     FinancialManualEditHistory,
 )
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_2, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_2, headers
 
 
 def test_resource_specific_manual_entry_and_correction_refresh_validation_and_history(

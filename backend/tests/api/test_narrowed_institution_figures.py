@@ -34,7 +34,6 @@ from app.models.regulatory_reporting import RETURN_FAMILIES
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.services import data_activation, job_queue, pipeline, regulatory_credit, scheduler
 from app.services.regulatory_reporting.registry import REGISTRY
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_credit_authorization import _seed_live_rows
 from tests.api.test_credit_route_authorization import (
     BASE,
@@ -47,8 +46,9 @@ from tests.api.test_credit_route_authorization import (
 )
 from tests.api.test_fx_authorization import _add_regulatory_run
 from tests.api.test_package_authorization import _read_routes
-from tests.factories.canonical import FIXTURE_AS_OF
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1, USER_1, headers
 
 
 def _seed_return_packages() -> dict[str, tuple[UUID, UUID, UUID, str]]:

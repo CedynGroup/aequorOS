@@ -71,7 +71,6 @@ from app.services.regulatory_reporting.eligibility import (
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -81,7 +80,8 @@ from tests.fixtures.canonical_bank_fixture import (
 from tests.services.test_lrt_packs import (
     _seed_full_register,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

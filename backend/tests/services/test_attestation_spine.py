@@ -36,9 +36,9 @@ from app.services.attestation.policy import (
     resolve_policy,
 )
 from app.services.public_ids import is_signer_id
-from tests.api.helpers import ORG_1
-from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import DEMO_USER_ID, SAMPLE_BANK_ID
+from tests.support.factories.attestation import relax_signing
+from tests.support.helpers import ORG_1
 
 PEPPER = "test-signer-pepper-not-production-0000"
 
@@ -55,9 +55,7 @@ def _ctx() -> TenantContext:
     return TenantContext(organization_id=ORG_1, actor_user_id=DEMO_USER_ID)
 
 
-def _required_policy(
-    *, approver_titles: tuple[str, ...] = ()
-) -> SigningPolicy:
+def _required_policy(*, approver_titles: tuple[str, ...] = ()) -> SigningPolicy:
     """A policy that an institution has opted into — signature mandatory.
 
     The guard tests must use this rather than ``default_policy``, because the
@@ -697,7 +695,7 @@ def test_chain_entry_hash_is_sensitive_to_every_input() -> None:
 # --- the submission gate ----------------------------------------------------
 #
 # Several suites now opt their return out of mandatory signing so they can test
-# channels or regulator decisions in isolation (tests/factories/attestation.py).
+# channels or regulator decisions in isolation (tests/support/factories/attestation.py).
 # That is only defensible if the gate is genuinely proved somewhere, which is
 # here: these are the tests those relaxations are trusting.
 

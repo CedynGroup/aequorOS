@@ -17,7 +17,7 @@ from app.adapters.market_data.credential_manager import (
 )
 from app.models.market_data import MarketDataConnection
 from app.models.regulatory import Bank
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 MASTER_KEY = derive_master_key("unit-test-master-key")
 CREDENTIALS = {

@@ -30,8 +30,8 @@ from app.models import (
     ScenarioAssumption,
 )
 from app.services import calculations
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 # Calculation publication uses raw commits and PostgreSQL advisory locks.
 requires_committing_db = pytest.mark.committing_db

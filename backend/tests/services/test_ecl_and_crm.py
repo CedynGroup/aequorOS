@@ -38,7 +38,6 @@ from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
-from tests.factories.reconciliation import allow_fixture_balance_gap
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -46,6 +45,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
+from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
 

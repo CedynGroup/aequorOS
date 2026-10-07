@@ -62,8 +62,8 @@ from app.services.bi.authorization import (
 from app.services.bi.compiler import _DIM_JOIN_KEYS, compile_query
 from app.services.bi.errors import BiQueryError
 from app.services.bi.execution import execute
-from tests.api.helpers import ORG_1, USER_1
 from tests.services.bi.test_compiler import BUILT_AT, SEP_18, seed_compiler_mart
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = SEP_18
 

@@ -12,8 +12,8 @@ from app.api.deps import TenantContext
 from app.domain.ingestion.contracts import CanonicalRecords, PositionData
 from app.models import Bank, CanonicalPosition, IngestionBatch, LineageRecord
 from app.services.ingestion import _lock_position_identities, _reserve_position_identities
-from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.helpers import ORG_1
 
 
 def test_postgresql_lock_statement_has_bounded_parameters_for_large_batches() -> None:

@@ -36,8 +36,8 @@ from app.models import (
 )
 from app.services.market_desk import calculation, determinations, publication, register
 from app.services.market_desk.calculation import CalculationError, run_pipeline
-from tests.api.helpers import ORG_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "market_desk" / "series"
 COB = date(2026, 8, 7)
@@ -103,10 +103,10 @@ def _seed_fixture_observations(db: Session) -> None:  # noqa: PLR0912 - one seed
         day = date.fromisoformat(row["date"])
         if float(row["discount_rate"]) <= 0.0 or day > COB:
             continue
-        wanted = (tenor == 91 and (day >= date(2025, 11, 1) or
-                                   date(2024, 5, 1) <= day <= date(2024, 6, 30))) or (
-            tenor in (182, 364) and day >= date(2026, 6, 1)
-        )
+        wanted = (
+            tenor == 91
+            and (day >= date(2025, 11, 1) or date(2024, 5, 1) <= day <= date(2024, 6, 30))
+        ) or (tenor in (182, 364) and day >= date(2026, 6, 1))
         if wanted:
             rows.append(_obs(f"GHS.TBILL.{tenor}.DISCOUNT", day, row["discount_rate"]))
             rows.append(_obs(f"GHS.TBILL.{tenor}.YIELD", day, row["interest_rate"]))
@@ -276,9 +276,7 @@ class TestRealFixtureIntegration:
         assert diagnostic["status"] == "computed"
         assert diagnostic["verdict"] in {"cointegrated_at_5pct", "not_cointegrated_at_5pct"}
 
-    def test_compute_finalizes_the_snapshot_with_windowed_history(
-        self, desk: Session
-    ) -> None:
+    def test_compute_finalizes_the_snapshot_with_windowed_history(self, desk: Session) -> None:
         draft = determinations.create_draft(desk, cob_date=COB, prepared_by=ANALYST)
         assert len(draft.input_snapshot) == len(determinations.DEFAULT_INPUT_SERIES)
         digest_before = draft.input_digest
@@ -287,17 +285,13 @@ class TestRealFixtureIntegration:
         calculation.compute_determination(desk, draft, methodology=methodology)
 
         interbank_entries = [
-            entry
-            for entry in draft.input_snapshot
-            if entry["series_code"] == "GHS.INTERBANK.ON"
+            entry for entry in draft.input_snapshot if entry["series_code"] == "GHS.INTERBANK.ON"
         ]
         assert len(interbank_entries) > 20  # the rolling window rode into the snapshot
         assert draft.input_digest != digest_before
         assert draft.input_digest == determinations.snapshot_digest(draft.input_snapshot)
 
-    def test_compute_refuses_non_draft_and_mismatched_methodology(
-        self, desk: Session
-    ) -> None:
+    def test_compute_refuses_non_draft_and_mismatched_methodology(self, desk: Session) -> None:
         draft = _computed_draft(desk)
         determinations.submit_for_review(desk, draft.id)
         methodology = register.get_version(desk, register.DEFAULT_METHODOLOGY_CODE, 1)
@@ -341,8 +335,9 @@ class TestReproducibility:
         assert _canonical(stored) == _canonical(first_derived)
         # Curve digests are value-based and stable.
         for code in ("AEQ.GHS.SOV.ZERO", "AEQ.GHS.SOV.FWD", "AEQ.GHS.OIS"):
-            assert first_derived["curves"][code]["digest"] == (
-                second_derived["curves"][code]["digest"]
+            assert (
+                first_derived["curves"][code]["digest"]
+                == (second_derived["curves"][code]["digest"])
             )
 
     def test_two_drafts_over_identical_observations_match(self, desk: Session) -> None:
@@ -447,9 +442,10 @@ class TestTreatments:
         assert calculation.resolve_treatment("GHS.APR.GCB", PARAMS)["role"] == (
             "lending_indicator_input"
         )
-        assert calculation.resolve_treatment(
-            "GHS.GOG.BOND.20330329.1250.CLEAN", PARAMS
-        )["treatment"] == "bond_quote"
+        assert (
+            calculation.resolve_treatment("GHS.GOG.BOND.20330329.1250.CLEAN", PARAMS)["treatment"]
+            == "bond_quote"
+        )
 
     def test_every_series_in_a_computed_snapshot_resolves(self, desk: Session) -> None:
         draft = _computed_draft(desk)

@@ -27,8 +27,8 @@ from app.models import (
     LineageRecord,
 )
 from app.services.market_desk import operating_environment as oe
-from tests.api.helpers import ORG_1, ORG_2
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, ORG_2
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 COB = date(2026, 8, 7)
 ANALYST = "analyst@aequoros.com"
@@ -277,14 +277,10 @@ def test_approve_requires_pending_review(db_session: Session) -> None:
     assert excinfo.value.status_code == 409
 
 
-def test_auto_pull_sovereign_and_mpr(
-    db_session: Session, banks: tuple[Bank, Bank]
-) -> None:
+def test_auto_pull_sovereign_and_mpr(db_session: Session, banks: tuple[Bank, Bank]) -> None:
     """With no explicit sovereign/MPR, the service resolves the published
     sovereign rating (CCC → governor binds) and the GHS.MPR reference index."""
-    _seed_published_market_data(
-        db_session, banks[0], sovereign_rating="CCC+", mpr_pct="27"
-    )
+    _seed_published_market_data(db_session, banks[0], sovereign_rating="CCC+", mpr_pct="27")
     preview = oe.compute_preview(
         db_session, jurisdiction_code="GH", cob_date=COB, inputs=dict(_AUTOPULL_INPUTS)
     )

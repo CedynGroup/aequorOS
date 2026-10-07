@@ -17,9 +17,9 @@ from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
-from tests.api.helpers import ORG_1
 from tests.api.test_ingestion import seed_bank
 from tests.api.test_push_api import _human_headers, commit, open_push, stage
+from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.committing_db
 

@@ -8,7 +8,7 @@ import pytest
 from app.storage.access_log import HashChainedAccessLog
 from app.storage.client import StorageClient
 from tests.storage.contract import StorageContractSuite
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 
 class TestInMemoryStorageContract(StorageContractSuite):

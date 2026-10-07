@@ -22,14 +22,14 @@ from app.db.session import get_sessionmaker
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
 from app.services import authorization, job_queue, module_scope, pipeline
 from tests.adapters.excel_csv import fixtures
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
-from tests.factories.canonical import (
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
     seed_hedge_and_swap_positions,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"

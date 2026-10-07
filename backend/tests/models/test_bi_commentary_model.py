@@ -31,7 +31,7 @@ from app.models.bi_commentary import (
     AI_COMMENTARY_PAYLOAD_MODES,
     AiCommentaryDraft,
 )
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 6, 30)
 PRIOR = date(2026, 5, 31)

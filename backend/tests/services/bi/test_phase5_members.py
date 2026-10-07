@@ -35,7 +35,6 @@ from app.domain.bi.catalogue.dimensions import GL_BRANCH_DIMENSION_IDS, POSITION
 from app.models import Bank, BiDimBranch, BiFactGlBranchMonthly
 from app.schemas.bi import BiQuery
 from app.services.bi.compiler import _resolve
-from tests.api.helpers import ORG_1
 from tests.services.bi.test_compiler import (
     BUILT_AT,
     SEP_18,
@@ -45,6 +44,7 @@ from tests.services.bi.test_compiler import (
     _position,
     _run,
 )
+from tests.support.helpers import ORG_1
 
 MAY_31 = date(2026, 5, 31)
 JUN_30 = date(2026, 6, 30)

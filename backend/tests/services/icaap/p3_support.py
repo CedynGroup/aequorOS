@@ -33,9 +33,9 @@ from app.schemas.icaap import (
     IcaapSubmitForReview,
 )
 from app.services.icaap import guards, sections, workflow
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import ORG_1, USER_1
 
 FRAMEWORK_ROOT = Path(__file__).parents[2] / "fixtures" / "icaap" / "frameworks"
 TEST_FRAMEWORK = ("test_icaap", "e2e.1")

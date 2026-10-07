@@ -64,13 +64,13 @@ from app.services.regulatory_reporting.provenance import (
     template_digest,
 )
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 from app.db.session import get_sessionmaker  # isort: skip
 

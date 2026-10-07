@@ -31,7 +31,7 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import RefreshToken, User
 from app.services import authentication, authorization
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _EMAIL = "demo.user.one@example.test"  # conftest._seed_demo_tenants
 _PASSWORD = "S3cure-Passphrase!"

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.adapters.market_data.manual_upload.adapter import ManualUploadAdapter
 from app.models import Bank
 from app.services.ingestion import bank_slug
-from tests.api.helpers import ORG_1, USER_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 # Module paths whose ``get_storage_client`` must resolve to the in-memory
 # client: the pull runner (raw tier + cache hand-off), the cache module, and

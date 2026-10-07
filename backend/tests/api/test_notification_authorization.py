@@ -14,9 +14,9 @@ from app.models import AuthorizationBinding, Bank, Notification, RegulatorySubmi
 from app.schemas.regulatory_reporting import ReportingObligationRead
 from app.services import notifications, reporting_deadline_scan
 from app.services.regulatory_reporting.registry import REGISTRY
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_package_authorization import _add_bank, _grant, _package
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 BASE = "/api/v1/notifications"
 SIBLING = "BK-NOTIF002"

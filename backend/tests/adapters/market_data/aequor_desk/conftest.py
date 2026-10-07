@@ -11,8 +11,8 @@ from app.adapters.market_data.aequor_desk.adapter import AequorDeskAdapter
 from app.models import Bank, DeskDetermination
 from app.services.ingestion import bank_slug
 from app.services.market_desk import determinations, observations, register
-from tests.api.helpers import ORG_1, USER_1
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 # Module paths whose ``get_storage_client`` must resolve to the in-memory
 # client: the pull runner (raw tier) and the cache module. The desk adapter

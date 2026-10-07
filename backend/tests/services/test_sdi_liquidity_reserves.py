@@ -20,7 +20,7 @@ from app.models import Bank
 from app.services.regulatory_reporting.le_generation import (
     _append_liquidity_reserve_check,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 _AS_OF = date(2026, 6, 30)
 

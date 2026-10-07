@@ -1,1 +1,19 @@
-[]
+[
+  ["tests.api.helpers", "tests.support.helpers"],
+  ["tests.api.factories", "tests.support.api_factories"],
+  ["tests.api.factories.assessments", "tests.support.api_factories.assessments"],
+  ["tests.api.factories.cases", "tests.support.api_factories.cases"],
+  ["tests.api.factories.documents", "tests.support.api_factories.documents"],
+  ["tests.api.factories.suite", "tests.support.api_factories.suite"],
+  ["tests.factories", "tests.support.factories"],
+  ["tests.factories.attestation", "tests.support.factories.attestation"],
+  ["tests.factories.authorization", "tests.support.factories.authorization"],
+  ["tests.factories.canonical", "tests.support.factories.canonical"],
+  ["tests.factories.defaults", "tests.support.factories.defaults"],
+  ["tests.factories.filing_chain", "tests.support.factories.filing_chain"],
+  ["tests.factories.outbound", "tests.support.factories.outbound"],
+  ["tests.factories.payloads", "tests.support.factories.payloads"],
+  ["tests.factories.protocols", "tests.support.factories.protocols"],
+  ["tests.factories.reconciliation", "tests.support.factories.reconciliation"],
+  ["tests.storage.inmemory", "tests.support.inmemory_storage"]
+]

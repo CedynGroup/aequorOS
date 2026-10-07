@@ -75,7 +75,7 @@ from app.services.bi.authorization import (
 )
 from app.services.bi.errors import UnknownMember
 from app.services.bi.exports import policy
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 BACKEND = Path(__file__).parents[3]
 

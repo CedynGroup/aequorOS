@@ -42,9 +42,9 @@ from app.services.fact_derivation import (
     _resolve_gl_chart,
     derive_facts,
 )
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 _MAY = date(2026, 5, 31)
 _JUNE = FIXTURE_AS_OF

@@ -9,8 +9,6 @@ from app.db.session import get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Organization, RiskCase
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1
 from tests.conftest import (
     FakeStorage,
     _db_client_lifecycle,
@@ -19,7 +17,9 @@ from tests.conftest import (
     _rollback_sessionmaker_lifecycle,
     _TestDatabase,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 _ROLLBACK_ORGANIZATION_ID = "OR-TXROLL01"
 _COMMITTED_ORGANIZATION_ID = "OR-TXCOMM01"

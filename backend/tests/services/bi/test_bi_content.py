@@ -47,7 +47,7 @@ from app.schemas.bi import BiLayoutItem, BiPackQuery, BiPackWidget
 from app.schemas.bi_content import BiDashboardSpec
 from app.services import authorization, grant_administration
 from app.services.bi import content
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 BANK_ID = "BK-BICSVC01"
 OTHER_TENANT_BANK = "BK-BICSVC02"

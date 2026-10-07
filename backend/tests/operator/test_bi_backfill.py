@@ -22,8 +22,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models import Job, OperatorAuditLog
 from app.services.bi.versions import BUILDER_VERSION
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.operator.conftest import operator_headers, provision_payload, start_inspection
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
 BASE = "/operator/v1/tenants"
 UNTIL = date(2026, 1, 31)

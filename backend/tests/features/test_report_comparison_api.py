@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_sessionmaker
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 BASE = "/api/v1"
 

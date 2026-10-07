@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
 from app.models import User
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import seed_bank
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
 

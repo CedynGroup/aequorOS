@@ -28,9 +28,9 @@ from app.models import (
     LineageRecord,
     User,
 )
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.api.test_ingestion import seed_bank
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1, headers
 
 REGISTER_URL = "/api/v1/banks/{bank_id}/system-of-record"
 ASSESSMENT_URL = "/api/v1/banks/{bank_id}/system-of-record-assessment"

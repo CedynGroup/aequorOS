@@ -1139,7 +1139,7 @@ earlier section's detail.
   `ensure_signing_configured` raises `signing_not_configured` naming the settings, and in
   production `/health/ready` 503s (boot only WARNS, so the administrator who could fix the
   configuration is never locked out). Banks relax per return in Settings (an audited PUT);
-  tests use `tests/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0`
+  tests use `tests/support/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0`
   (default 1) is the deployment-wide kill-switch: applied after policy resolution
   (`attestation/policy.py::_apply_esign_kill_switch`, `source="esign_disabled"`), it
   suspends the requirement everywhere — configured mandatory rows go dormant, every return

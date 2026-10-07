@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_2, USER_1, USER_2, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_2, USER_1, USER_2, headers
 
 
 def score_case(client: TestClient, case_id: str) -> dict:

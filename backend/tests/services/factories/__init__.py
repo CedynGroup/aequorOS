@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from tests.factories import (
-    AssessmentPayload,
-    UploadPayload,
-    assessment_payload,
-    upload_payload,
-)
 from tests.services.factories.assessments import AssessmentServiceFactory
 from tests.services.factories.cases import CaseServiceFactory
 from tests.services.factories.documents import DocumentServiceFactory
 from tests.services.factories.financial_workspace import FinancialWorkspaceFactory
 from tests.services.factories.shared import MutableObjectStorage
 from tests.services.factories.suite import ServiceFactories
+from tests.support.factories import (
+    AssessmentPayload,
+    UploadPayload,
+    assessment_payload,
+    upload_payload,
+)
 
 __all__ = [
     "AssessmentPayload",

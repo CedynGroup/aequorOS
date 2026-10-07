@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.domain.authority.provenance import CalculationProvenance
 from app.models import Bank, RegulatoryParameter
 from app.services import regulatory_parameters as rp
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 
 def _bank(db: Session) -> Bank:

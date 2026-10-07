@@ -49,13 +49,13 @@ from app.services.regulatory_reporting import (
 )
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.regulatory_reporting.registry import REGISTRY, get_definition
-from tests.factories.filing_chain import complete_chain
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.filing_chain import complete_chain
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -165,7 +165,7 @@ def test_a_return_with_no_required_documents_is_submittable_as_before(
     """The unchanged path: no policy attachment, no family hook, no new refusal."""
     materialize_canonical_test_book(db_session)
     package = _package(db_session)
-    from tests.factories.attestation import relax_signing  # noqa: PLC0415
+    from tests.support.factories.attestation import relax_signing  # noqa: PLC0415
 
     relax_signing(db_session, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     attestation_workflow.ensure_submittable(db_session, MAKER, package)  # no raise
@@ -542,7 +542,7 @@ def test_a_family_requirement_is_not_relaxable_by_the_signing_policy(
     _ = stub_hooks
     materialize_canonical_test_book(db_session)
     package = _package(db_session)
-    from tests.factories.attestation import relax_signing  # noqa: PLC0415
+    from tests.support.factories.attestation import relax_signing  # noqa: PLC0415
 
     relax_signing(db_session, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     policy = attestation_workflow.package_policy(db_session, MAKER, package)

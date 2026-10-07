@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.models import AuditEvent
 from app.schemas.ai import AiCommentarySettingsUpdate
 from app.services.ai import tenant_settings
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("ai_enabled")
 

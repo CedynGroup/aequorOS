@@ -38,7 +38,7 @@ from app.models import (
 from app.models.regulatory import RegulatoryParameterMixin
 from app.services import parameter_register
 from app.services.reporting_periods import new_snapshot_period
-from tests.factories.reconciliation import allow_fixture_balance_gap
+from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
 # format; Crockford charset). Real tenants — the primary DB sandbox included —

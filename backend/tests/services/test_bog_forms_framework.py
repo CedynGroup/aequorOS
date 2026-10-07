@@ -59,12 +59,12 @@ from app.services.regulatory_reporting.bog_forms.render import (
 from app.services.regulatory_reporting.exports import render_bog_form_pdf, render_bog_form_xlsx
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import TEMPLATES
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.helpers import ORG_1, headers
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 

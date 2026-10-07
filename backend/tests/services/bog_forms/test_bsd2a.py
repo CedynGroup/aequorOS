@@ -57,11 +57,11 @@ from app.services.regulatory_reporting.bog_forms.linemaps.bsd2a import (
 )
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
-from tests.api.helpers import ORG_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, headers
 
 M = Decimal("1000000")
 CATEGORY_COLUMNS = ("E", "G", "H", "N")

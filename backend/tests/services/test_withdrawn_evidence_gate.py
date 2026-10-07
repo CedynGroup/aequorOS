@@ -57,9 +57,9 @@ from app.models import (
 )
 from app.services import canonical_withdrawal, regulatory_liquidity, withdrawal_impact
 from app.services.withdrawal_impact import WithdrawnEvidenceError
-from tests.api.helpers import ORG_1, USER_1, USER_2
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1, USER_2
 
 SECOND_SOURCE = "API_PUSH"
 

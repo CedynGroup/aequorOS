@@ -31,7 +31,7 @@ from app.models import (
     LineageRecord,
 )
 from app.services import liquidity_ewi as ewi
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

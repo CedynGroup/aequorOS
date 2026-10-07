@@ -36,13 +36,13 @@ from alembic import command
 # registers the ``after_begin`` listener that sets the tenant GUC.
 from app.db.session import set_tenant_rls_context
 from app.models.bi import BiFactPositionDaily
-from tests.api.helpers import ORG_1, ORG_2
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.helpers import ORG_1, ORG_2
 
 _ = set_tenant_rls_context
 

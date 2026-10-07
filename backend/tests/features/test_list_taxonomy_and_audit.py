@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.db.session import get_engine
 from app.models import AuditEvent
-from tests.api.factories import CaseFactory
-from tests.api.helpers import headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import headers
 
 # This test verifies committed audit writes through an independently opened engine.
 requires_committing_db = pytest.mark.committing_db

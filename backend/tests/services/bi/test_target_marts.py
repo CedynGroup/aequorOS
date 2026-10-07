@@ -7,7 +7,7 @@ four states a scope can be in, plus the end-to-end proof that what the builder
 writes is what the catalogue's variants then read.
 
 The figures are worked from the canonical fixture's own amounts
-(``tests/factories/canonical.py``): seven converted loans totalling 84 850 000
+(``tests/support/factories/canonical.py``): seven converted loans totalling 84 850 000
 in the reporting currency at 2026-06-30.
 """
 
@@ -34,7 +34,6 @@ from app.services.bi.mart_builder import (
     resolve_target_for_scope,
     target_window,
 )
-from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import (
     AS_OF,
@@ -43,6 +42,7 @@ from tests.services.bi.test_mart_builder import (
     new_batch,
     seed_book,
 )
+from tests.support.helpers import ORG_1
 
 LOANS = "loans.balance_rc"
 NPL_PCT = "loans.npl_ratio_pct"

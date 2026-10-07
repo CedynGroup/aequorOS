@@ -51,7 +51,6 @@ LAYERED_DIRECTORIES = frozenset(
         "api",
         "domain",
         "etl",
-        "factories",
         "features",
         "ml",
         "models",
@@ -96,7 +95,8 @@ FEATURES = frozenset(LAYERS) - {KERNEL, COMPOSITION}
 
 
 def _test_directories() -> set[str]:
-    return {path.name for path in TESTS.iterdir() if path.is_dir() and path.name != "__pycache__"}
+    """Top-level test directories holding Python; a leftover of bytecode alone is not one."""
+    return {path.name for path in TESTS.iterdir() if path.is_dir() and any(path.rglob("*.py"))}
 
 
 def _root_fixture_names(manager: FixtureManager, baseid: str) -> set[str]:

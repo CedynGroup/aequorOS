@@ -21,7 +21,7 @@ from app.models import (
     MarketDataConnection,
     MarketDataQuotaUsage,
 )
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
 

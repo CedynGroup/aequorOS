@@ -36,8 +36,8 @@ from app.db.session import get_sessionmaker
 from app.domain.ingestion.attributes import attribute_key, attributes_from_columns
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
-from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.helpers import ORG_1, headers, integration_key_headers
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank" / "loans_template.csv"
 

@@ -51,9 +51,9 @@ from app.models.bi_notifications import BiAlert, BiAlertEvent
 from app.services import authorization, job_queue
 from app.services.bi import alerts, limits, provenance
 from app.services.bi.errors import BiQueryTimeout
-from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import AS_OF, FIXTURE_LOANS_RC, build, seed_book
+from tests.support.helpers import ORG_1, USER_1
 
 LOANS = "loans.balance_rc"
 #: A liquidity ratio the fixture's board register holds a limit for, and which the

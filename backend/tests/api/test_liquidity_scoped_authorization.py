@@ -52,11 +52,11 @@ from app.services import (
     regulatory_liquidity,
     window_analytics,
 )
-from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.helpers import ORG_1, USER_1, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)

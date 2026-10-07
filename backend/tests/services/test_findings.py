@@ -18,8 +18,8 @@ from app.models import (
     StoredObject,
 )
 from app.services import assessments, findings
-from tests.api.helpers import ORG_2
 from tests.services.factories import ServiceFactories
+from tests.support.helpers import ORG_2
 
 
 def create_finding(

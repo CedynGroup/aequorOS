@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from tests.api.helpers import ORG_1, headers
+from tests.support.helpers import ORG_1, headers
 
 
 def test_rejects_unknown_tenant(db_client: TestClient) -> None:

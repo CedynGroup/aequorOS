@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.base import utc_now
 from app.models import Job
 from app.services import job_queue
-from tests.api.helpers import ORG_1, ORG_2
+from tests.support.helpers import ORG_1, ORG_2
 
 
 def test_enqueue_inserts_queued_job(db_session: Session) -> None:

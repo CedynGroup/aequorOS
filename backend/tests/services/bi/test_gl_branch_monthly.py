@@ -44,10 +44,10 @@ from app.models import (
 )
 from app.models.canonical import CanonicalGlAccount
 from app.services.bi import authorization, compiler
-from tests.api.helpers import ORG_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_gl_monthly import M, _seed_ledger
 from tests.services.bi.test_mart_builder import AS_OF, build, new_batch, seed_book
+from tests.support.helpers import ORG_1
 
 JUN, MAY = AS_OF, date(2026, 5, 31)
 KIND = gl_segment_balances.SCHEMA.kind

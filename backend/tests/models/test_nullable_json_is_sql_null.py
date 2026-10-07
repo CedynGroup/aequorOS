@@ -36,7 +36,7 @@ from app.core.authorization import (
 )
 from app.db.base import Base, utc_now
 from app.models import AuthorizationBinding
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 
 def test_the_two_are_actually_different_in_sql() -> None:

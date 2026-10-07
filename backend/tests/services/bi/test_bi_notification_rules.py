@@ -45,7 +45,7 @@ from app.schemas.bi_notifications import (
     BiAlertUpsert,
 )
 from app.services.bi import subscriptions
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 LOANS = "loans.balance_rc"
 BANK_ID = "BK-BINOTR01"

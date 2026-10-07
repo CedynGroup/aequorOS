@@ -29,7 +29,7 @@ from app.domain.forecasting.engine import ProjectionYear
 from app.models import Bank, RegulatoryPackage
 from app.services.regulatory_forecasting import _balance_ties_row
 from app.services.regulatory_reporting import validation
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 
 def _bank(db: Session) -> Bank:
@@ -362,6 +362,4 @@ def test_the_old_unconditional_assurance_is_gone() -> None:
 
     source = Path(__file__).resolve().parents[2] / "app" / "services" / "regulatory_forecasting.py"
     text = source.read_text()
-    assert (
-        '"Projected assets equal liabilities plus equity in every forecast year."' not in text
-    )
+    assert '"Projected assets equal liabilities plus equity in every forecast year."' not in text

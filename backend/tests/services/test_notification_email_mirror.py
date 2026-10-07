@@ -19,10 +19,10 @@ from app.services.notification_email_mirror import (
     enqueue_due_notification_mirror,
     run_notification_email_mirror,
 )
-from tests.api.helpers import ORG_1, USER_1
 from tests.api.test_package_authorization import _add_bank, _package
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import ORG_1, USER_1
 
 APPROVER_ID = UUID("dddddddd-1111-4ddd-8ddd-ddddddddddd1")
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

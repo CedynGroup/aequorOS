@@ -34,7 +34,7 @@ from app.api.deps import TenantContext
 from app.core import security
 from app.models import SsoConnection, User
 from app.services.attestation import stepup
-from tests.api.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1
 
 _ISSUER = "https://idp.example.test"
 _CLIENT_ID = "aequoros-step-up-client"
@@ -87,9 +87,7 @@ def _assert_refused(error: HTTPException) -> None:
         assert leak not in body["message"].lower()
 
 
-def test_a_malformed_id_token_refuses_instead_of_raising(
-    db_session: Session, signer: User
-) -> None:
+def test_a_malformed_id_token_refuses_instead_of_raising(db_session: Session, signer: User) -> None:
     """Reachable with no attacker at all: ``unverified_claims`` raises before
     any connection lookup, so this was a 500 on every garbled round-trip."""
     with pytest.raises(stepup.StepUpFailed) as refused:

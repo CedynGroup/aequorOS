@@ -33,7 +33,7 @@ from app.models import Bank, Organization, User
 from app.schemas.bi_nlq import QUESTION_MAX_CHARS
 from app.services.bi import nlq
 from app.services.bi.nlq import candidates
-from tests.api.helpers import ORG_1
+from tests.support.helpers import ORG_1
 
 BANK_ID = "BK-NLQPAY01"
 BANK_NAME = "Nlq Payload Test Bank"

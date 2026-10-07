@@ -20,8 +20,8 @@ from app.models import (
     RiskFinding,
     RiskFindingEvidence,
 )
-from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.support.api_factories import CaseFactory
+from tests.support.helpers import ORG_1, ORG_2, headers
 
 # Capital publication reaches calculation advisory-lock transaction boundaries.
 pytestmark = pytest.mark.committing_db

@@ -69,14 +69,14 @@ from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import artifact_versions, generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation
-from tests.factories.authorization import grant_institution_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1

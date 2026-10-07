@@ -53,7 +53,7 @@ from app.core.config import get_settings
 from app.models import AuditEvent, AuthorizationBinding, Bank, Organization, User
 from app.models.bi import BiQueryLog
 from app.services import authorization
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 BANK_ID = "BK-BICAPI01"
 SIBLING_BANK_ID = "BK-BICAPI02"

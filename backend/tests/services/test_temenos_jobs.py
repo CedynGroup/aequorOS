@@ -22,9 +22,9 @@ from app.core.config import get_settings
 from app.models import Bank, CanonicalPosition, Job
 from app.models.temenos import TemenosConnection
 from app.services import job_queue, temenos_connections, temenos_jobs
-from tests.api.helpers import ORG_1, USER_1
-from tests.factories.outbound import stub_dns, stub_public_dns
-from tests.storage.inmemory import InMemoryStorageClient
+from tests.support.factories.outbound import stub_dns, stub_public_dns
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 OFS_FIXTURES = Path(__file__).resolve().parents[1] / "adapters/temenos_t24/ofs/fixtures"
 MASTER_KEY = "temenos-jobs-test-key"
