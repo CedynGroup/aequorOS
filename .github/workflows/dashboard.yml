@@ -84,15 +84,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # backend/app and its lock are in scope because the parity tests
-      # (lib/accessRequests.test.ts, lib/api/grantRequirements.parity.test.ts)
-      # import the backend's own contract through `uv run`.
+      # Dashboard tests consume backend/app/, backend/pyproject.toml and
+      # backend/uv.lock (contracts loaded through `uv run`),
+      # backend/tests/fixtures/icaap/editor_schema_samples.json (editor parity),
+      # and backend/alembic/versions/202608280046_initial_org_owner_assignment.py
+      # (BI role labels).
       - id: areas
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh dashboard
-          '^(backend/dashboard/|backend/app/|backend/pyproject\.toml$|backend/uv\.lock$|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
+          '^(backend/dashboard/|backend/app/|backend/pyproject\.toml$|backend/uv\.lock$|backend/tests/fixtures/icaap/editor_schema_samples\.json$|backend/alembic/versions/202608280046_initial_org_owner_assignment\.py$|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
 
   dashboard:
     needs: changes
