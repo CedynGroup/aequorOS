@@ -214,7 +214,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      backend: ${{ steps.areas.outputs.backend }}
+      backend: ${{ steps.backend.outputs.backend }}
+      guards: ${{ steps.guards.outputs.guards }}
+      api_client: ${{ steps.api_client.outputs.api_client }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -223,12 +225,32 @@ jobs:
           fetch-depth: 0
       - name: Verify the mise task wiring
         run: python3 .github/scripts/mise_wiring_preflight.py
+      # Three areas, because the jobs read three different slices of the tree.
+      # The Python suites read backend/ (the dashboard sources included: several
+      # parity tests read them) and nothing JavaScript, so a lockfile-only or
+      # generated-client-only change no longer costs a Postgres run. The
+      # architecture guards also read EVERY workflow and CI script, so any
+      # change under .github/ runs them. The client freshness check needs both.
       - name: Detect whether this pull request touches the risk service
-        id: areas
+        id: backend
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh backend
+          '^(backend/|mise\.toml$|\.github/workflows/risk-service\.yml$|\.github/scripts/)'
+      - name: Detect whether this pull request touches what the CI guards read
+        id: guards
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh guards
+          '^(backend/|mise\.toml$|\.github/)'
+      - name: Detect whether this pull request touches the generated API client
+        id: api_client
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh api_client
           '^(backend/|packages/risk-service-api/|mise\.toml$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/risk-service\.yml$|\.github/scripts/)'
 
   static:
@@ -260,7 +282,7 @@ jobs:
     name: Architecture and CI guards
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
+    if: needs.preflight.outputs.guards == 'true'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -610,7 +632,7 @@ jobs:
     name: Generated API client freshness
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
+    if: needs.preflight.outputs.api_client == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
