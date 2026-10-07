@@ -27,7 +27,7 @@ class RegulatoryParameterMixin(UuidV4PrimaryKeyMixin, TimestampMixin):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    # NO default (enterprise audit 2026-08-20 §6). This mixin is inherited by NINE
+    # NO default (enterprise audit 2026-08-20 §6). This mixin is shared by the
     # parameter tables, so a single ``default="GH"`` silently filed every board
     # register generation under Ghana — including a Nigerian tenant's. The
     # jurisdiction is part of the parameter's identity (it is in the resolution
