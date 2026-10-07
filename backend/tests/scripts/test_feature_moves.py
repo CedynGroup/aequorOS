@@ -273,11 +273,21 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
 def test_frozen_engine_identifiers_survive_while_their_locations_move(
     repository: Path,
 ) -> None:
-    _run(repository, "move")
-    engines = _read(repository, "backend/app/domain/authority/engines.py")
-    assert '"app.domain.fx.engine:compute": ("app.fx.domain.engine", "compute")' in engines
-    registry = _read(repository, "backend/app/domain/authority/registry.py")
-    assert registry == 'ENGINE = "app.domain.fx.engine:compute"\n'
+    for command in ("move", "rewrite"):
+        assert "exit 0" in _run(repository, command)
+        assert (
+            _python(
+                repository,
+                "from importlib import import_module\n"
+                "from app.domain.authority.engines import ENGINE_LOCATIONS\n"
+                "from app.domain.authority.registry import ENGINE\n"
+                "assert ENGINE == 'app.domain.fx.engine:compute'\n"
+                "assert ENGINE_LOCATIONS == {ENGINE: ('app.fx.domain.engine', 'compute')}\n"
+                "module, attribute = ENGINE_LOCATIONS[ENGINE]\n"
+                "print(getattr(import_module(module), attribute)())\n",
+            )
+            == "2"
+        )
 
 
 def test_rewritten_python_still_parses(repository: Path) -> None:
