@@ -556,8 +556,7 @@ def test_scanner_resolves_synthetic_modules_and_registry_imports(
     bank_module, bank_feature, fx_module = layout
     files = {
         "app.models.__init__": (
-            f"from {bank_module} import Bank\n"
-            f"from {bank_module} import Bank as Institution\n"
+            f"from {bank_module} import Bank\nfrom {bank_module} import Bank as Institution\n"
         ),
         bank_module: "class Bank: pass\n",
         fx_module: "def quote(): pass\n",
@@ -585,6 +584,32 @@ def test_scanner_resolves_synthetic_modules_and_registry_imports(
         _model_reexports.cache_clear()
 
 
+def _write_synthetic_module(app: Path, module: str, content: str = "") -> Path:
+    path = app.joinpath(*module.split(".")[1:]).with_suffix(".py")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _synthetic_import_content(app: Path, source: str, target: str, import_style: str) -> str:
+    if import_style == "registry":
+        _write_synthetic_module(app, "app.models.__init__", f"from {target} import Authority\n")
+        return "from app.models import Authority\n"
+    if import_style == "relative":
+        parents = source.split(".")[:-1]
+        parts = target.split(".")
+        common = 0
+        for left, right in zip(parents, parts, strict=False):
+            if left != right:
+                break
+            common += 1
+        relative = "." * (len(parents) - common + 1) + ".".join(parts[common:])
+        return f"from {relative} import Authority\n"
+    if import_style == "dynamic":
+        return f"importlib.import_module({target!r})\n"
+    return f"from {target} import Authority\n"
+
+
 @pytest.mark.parametrize("move_source,move_target", [(True, False), (False, True), (True, True)])
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 def test_recorded_moves_preserve_the_ratchet(
@@ -606,10 +631,7 @@ def test_recorded_moves_preserve_the_ratchet(
     target = "app.services.scoped_authorization"
 
     def write_module(module: str, content: str = "") -> Path:
-        path = app.joinpath(*module.split(".")[1:]).with_suffix(".py")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        return path
+        return _write_synthetic_module(app, module, content)
 
     def scan() -> frozenset[str]:
         _owners.cache_clear()
@@ -617,22 +639,7 @@ def test_recorded_moves_preserve_the_ratchet(
         return violations()
 
     def import_content() -> str:
-        if import_style == "registry":
-            write_module("app.models.__init__", f"from {target} import Authority\n")
-            return "from app.models import Authority\n"
-        if import_style == "relative":
-            parents = source.split(".")[:-1]
-            parts = target.split(".")
-            common = 0
-            for left, right in zip(parents, parts, strict=False):
-                if left != right:
-                    break
-                common += 1
-            relative = "." * (len(parents) - common + 1) + ".".join(parts[common:])
-            return f"from {relative} import Authority\n"
-        if import_style == "dynamic":
-            return f"importlib.import_module({target!r})\n"
-        return f"from {target} import Authority\n"
+        return _synthetic_import_content(app, source, target, import_style)
 
     try:
         write_module("app.models.__init__")
@@ -648,7 +655,10 @@ def test_recorded_moves_preserve_the_ratchet(
             ([[source, "app.bi.service.authorization"]] if move_source else [])
             + ([[target, "app.identity.service.scoped_authorization"]] if move_target else [])
             + [
-                ["app.bi.service.authorization" if move_source else source, "app.bi.service.authority"]
+                [
+                    "app.bi.service.authorization" if move_source else source,
+                    "app.bi.service.authority",
+                ]
             ]
         )
         for index, (old, new) in enumerate(moves, start=1):
