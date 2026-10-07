@@ -11,6 +11,7 @@
 import PageContainer from "@/components/ui/PageContainer";
 import { Loader2, Search, Trophy } from "lucide-react";
 import type {
+  ForecastAssumptionProvenanceRead,
   OptimizerResultRead,
   RegulatoryRunRead,
 } from "@aequoros/risk-service-api";
@@ -25,6 +26,7 @@ import ChartFrame from "@/components/ui/ChartFrame";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import RunProvenance from "@/components/forecasting/RunProvenance";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
+import { assumptionVersionOf } from "@/components/forecasting/lib";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   useRegulatoryRun,
@@ -85,7 +87,12 @@ type OptimizerView = {
   feasibleCount: number;
   histogram: Record<string, number>;
   top: CandidateView[];
-  provenance: { runId: string; inputHash: string; createdAt: Date | null };
+  provenance: {
+    runId: string;
+    inputHash: string;
+    createdAt: Date | null;
+    assumptionVersion: ForecastAssumptionProvenanceRead | null;
+  };
 };
 
 function fromResult(result: OptimizerResultRead): OptimizerView {
@@ -97,6 +104,7 @@ function fromResult(result: OptimizerResultRead): OptimizerView {
       runId: result.runId,
       inputHash: result.inputHash,
       createdAt: result.createdAt,
+      assumptionVersion: result.assumptionVersion,
     },
     top: result.top.map((candidate) => ({
       decision: {
@@ -161,6 +169,7 @@ function fromStoredRun(run: RegulatoryRunRead): OptimizerView | null {
       runId: run.id,
       inputHash: run.inputHash,
       createdAt: run.createdAt,
+      assumptionVersion: assumptionVersionOf(run),
     },
     top: metrics.top.map((candidate) => ({
       decision: {
@@ -364,7 +373,10 @@ export default function StrategicOptimizer() {
                   title="No feasible strategy in this search"
                   subtitle="Every candidate breached at least one capital or liquidity floor"
                   footer={
-                    <RunProvenance createdAt={view.provenance.createdAt} />
+                    <RunProvenance
+                      createdAt={view.provenance.createdAt}
+                      assumptionVersion={view.provenance.assumptionVersion}
+                    />
                   }
                 >
                   <p className="text-body text-navy/80 leading-relaxed max-w-3xl">
@@ -397,6 +409,7 @@ export default function StrategicOptimizer() {
                     footer={
                       <RunProvenance
                         createdAt={view.provenance.createdAt}
+                        assumptionVersion={view.provenance.assumptionVersion}
                         note="Kept as saved optimizer projections."
                       />
                     }

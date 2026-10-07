@@ -213,6 +213,14 @@ export type ModuleScope = {
   forecastingConfidentialView?: boolean;
   /** Exact FCST/confidential run authority for the projection, optimizer, what-if, and reverse stress. */
   forecastingRun?: boolean;
+  /** Exact FCST/confidential edit authority: draft, revise and submit forecast assumptions. */
+  forecastingEdit?: boolean;
+  /**
+   * STRUCTURAL FCST/confidential approve authority: whether to OFFER the
+   * checker's decision on a submitted assumption version. The server still
+   * refuses whoever drafted or submitted it.
+   */
+  forecastingApprove?: boolean;
   /** Exact BEH/aggregated view authority for model estimates and liquidity effects. */
   behavioralAggregatedView?: boolean;
   /** Exact BEH/confidential run authority for retraining a model. */

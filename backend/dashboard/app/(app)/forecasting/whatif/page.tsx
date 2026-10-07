@@ -24,6 +24,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { FlaskConical, Loader2, PlayCircle } from "lucide-react";
 import type {
+  ForecastAssumptionProvenanceRead,
   ProjectionYearRead,
   RegulatoryRunRead,
   WhatIfResultRead,
@@ -40,7 +41,10 @@ import RunProvenance from "@/components/forecasting/RunProvenance";
 import ScenarioLinesChart, {
   type ScenarioPoint,
 } from "@/components/forecasting/charts/ScenarioLinesChart";
-import { ASSUMPTION_FIELDS } from "@/components/forecasting/lib";
+import {
+  ASSUMPTION_FIELDS,
+  assumptionVersionOf,
+} from "@/components/forecasting/lib";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useSdiCapitalSummary } from "@/components/basel/sdiHooks";
@@ -132,7 +136,12 @@ type WhatIfView = {
   };
   baseAssumptions: Record<string, number>;
   shockedAssumptions: Record<string, number>;
-  provenance: { runId: string; inputHash: string; createdAt: Date | null };
+  provenance: {
+    runId: string;
+    inputHash: string;
+    createdAt: Date | null;
+    assumptionVersion: ForecastAssumptionProvenanceRead | null;
+  };
 };
 
 function pointFromRead(p: ProjectionYearRead): PathPoint {
@@ -190,6 +199,7 @@ function fromResult(result: WhatIfResultRead): WhatIfView | null {
       runId: result.runId,
       inputHash: result.inputHash,
       createdAt: result.createdAt,
+      assumptionVersion: result.assumptionVersion,
     },
   };
 }
@@ -257,6 +267,7 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
       runId: run.id,
       inputHash: run.inputHash,
       createdAt: run.createdAt,
+      assumptionVersion: assumptionVersionOf(run),
     },
   };
 }
@@ -745,6 +756,7 @@ function ShockResult({
         footer={
           <RunProvenance
             createdAt={view.provenance.createdAt}
+            assumptionVersion={view.provenance.assumptionVersion}
             note="Shocked and base paths computed by the same engine on identical canonical inputs."
           />
         }

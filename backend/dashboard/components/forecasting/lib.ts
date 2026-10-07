@@ -7,11 +7,14 @@
  * only from persisted run payloads and label the derivation where they do.
  */
 
-import type {
-  ForecastRunRead,
-  ForecastRunSummaryRead,
-  ProjectionYearRead,
-  ResolvedForecastAssumptions,
+import {
+  ForecastAssumptionProvenanceReadFromJSON,
+  type ForecastAssumptionProvenanceRead,
+  type ForecastRunRead,
+  type ForecastRunSummaryRead,
+  type ProjectionYearRead,
+  type RegulatoryRunRead,
+  type ResolvedForecastAssumptions,
 } from '@aequoros/risk-service-api';
 import { num } from '@/lib/api/values';
 
@@ -198,6 +201,19 @@ export function latestSucceededId(
         (scenarioCode === undefined || r.scenarioCode === scenarioCode)
     )?.id ?? null
   );
+}
+
+/**
+ * The approved assumption version a run from the generic run registry
+ * recorded. The registry serves it untyped (every module shares that read);
+ * forecasting runs carry the forecasting provenance shape.
+ */
+export function assumptionVersionOf(
+  run: RegulatoryRunRead
+): ForecastAssumptionProvenanceRead | null {
+  return run.assumptionProvenance
+    ? ForecastAssumptionProvenanceReadFromJSON(run.assumptionProvenance)
+    : null;
 }
 
 export function yearLabel(point: ProjectionYearRead): string {
