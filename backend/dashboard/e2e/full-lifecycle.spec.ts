@@ -11,6 +11,9 @@
  *  4. the reviewer's other exit — send back for corrections with a note, and the
  *     return is unfrozen, unsigned and unsubmittable again
  *  5. institution register (seeded ORASS code) → LRT corporate pack generates
+ *  6. a signed official BoG form (BSD2) hands over every artifact the command
+ *     bar offers — Signed PDF, official XLSX, formula copy, CSV bundle — and
+ *     each downloaded file is opened and checked against the figures on screen
  *
  * Every LCR-NSFR journey now passes through the SIGNING CEREMONY for real, because
  * signing is required for every return by default and an unsigned return must
@@ -38,13 +41,17 @@
  * Independence: each LCR-NSFR journey claims its OWN reporting period (indices
  * 1..4 — index 0 stays with the pre-existing submission-lifecycle spec) and
  * mints the liquidity baseline run LCR-NSFR draws on, so no journey shares a
- * package version chain with another. Sandbox behavior is configured through
- * the API with the minted admin token (PUT channel-configs/orass_sandbox).
+ * package version chain with another. The BoG form journey claims index 5; an
+ * official form reads the canonical book directly, so it needs no run. Sandbox
+ * behavior is configured through the API with the minted admin token (PUT
+ * channel-configs/orass_sandbox).
  */
 
 import { test, expect, type Browser, type Page } from "@playwright/test";
+import { readFile } from "fs/promises";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { readPdf, readWorkbook, readZip } from "./support/artifacts";
 import { mintBackendToken } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
@@ -57,11 +64,26 @@ import {
 } from "./support/ceremony";
 
 const SAMPLE_BANK_ID = "BK-SAMP0001";
+/** The platform's liquidity return — the one the filing journeys transmit. */
+const LIQUIDITY_RETURN = "LCR-NSFR";
+/** BoG's own balance-sheet form, generated from the official template. */
+const BOG_FORM = "BSD2";
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const adminState = path.join(E2E_TMP, "admin.json");
 const approverState = path.join(E2E_TMP, "approver.json");
 const validatorState = path.join(E2E_TMP, "validator.json");
+/** The committed official layouts — the sheet structure BoG published. */
+const bogLayoutsDir = path.join(
+  __dirname,
+  "..",
+  "..",
+  "app",
+  "services",
+  "regulatory_reporting",
+  "bog_forms",
+  "layouts",
+);
 
 // ---------------------------------------------------------------------------
 // Backend API helpers (admin token minted the same way global-setup does).
@@ -91,8 +113,14 @@ async function api(
 
 let adminToken: string;
 
-/** One reporting date (ISO) per LCR-NSFR journey — never the latest period. */
-const journeyDates = { ack: "", downtime: "", reject: "", sendBack: "" };
+/** One reporting date (ISO) per journey that mints a package — never the latest period. */
+const journeyDates = {
+  ack: "",
+  downtime: "",
+  reject: "",
+  sendBack: "",
+  bogForm: "",
+};
 
 test.beforeAll(async () => {
   requireObjectStorage();
@@ -121,6 +149,10 @@ test.beforeAll(async () => {
       scenario_code: "baseline",
     });
   }
+  journeyDates.bogForm = String(periods[claims.length + 1].period_end).slice(
+    0,
+    10,
+  );
 });
 
 /** Replace the ORASS sandbox channel config (behavior + downtime switch). */
@@ -138,15 +170,19 @@ function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a fresh LCR-NSFR package for `date`; the checks run with it.
+ * Generate a fresh package of `code` for `date`; the checks run with it.
  *
  * The checks must pass — failing checks keep certification locked, and that is a
  * product bug this helper would surface rather than paper over. What it will not
  * do is press a "Validate" button, because there is no longer one to press: the
  * assertion below is that the button is ABSENT and the checks ran regardless.
  */
-async function generateAndClearChecks(page: Page, date: string): Promise<void> {
-  await page.goto(returnsUrl("LCR-NSFR", date));
+async function generateAndClearChecks(
+  page: Page,
+  code: string,
+  date: string,
+): Promise<void> {
+  await page.goto(returnsUrl(code, date));
   await expect(
     page.getByRole("heading", { name: /returns workspace/i }),
   ).toBeVisible();
@@ -164,7 +200,7 @@ async function generateAndClearChecks(page: Page, date: string): Promise<void> {
 }
 
 /**
- * Walk a fresh LCR-NSFR package all the way to `approved` — through the ceremony.
+ * Walk a fresh package all the way to `approved` — through the ceremony.
  *
  * Two officers, two sessions, as maker-checker requires: the admin session
  * prepares and certifies, a separate approver session approves and signs. The
@@ -174,10 +210,11 @@ async function generateAndClearChecks(page: Page, date: string): Promise<void> {
 async function certifyAndApprove(
   page: Page,
   browser: Browser,
+  code: string,
   date: string,
 ): Promise<void> {
-  await generateAndClearChecks(page, date);
-  await certifyAsPreparer(page, "LCR-NSFR", date);
+  await generateAndClearChecks(page, code, date);
+  await certifyAsPreparer(page, code, date);
   await approveAndSignAsChecker(browser, approverState, date);
 }
 
@@ -217,7 +254,7 @@ async function openFilingSession(
   // cannot be given twice.
   await expect(page.getByTestId("open-transmit")).toBeEnabled();
   await expect(page.getByTestId("validator-approve")).toBeDisabled();
-  await page.goto(returnsUrl("LCR-NSFR", date));
+  await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
   return { page, close: () => context.close() };
 }
 
@@ -276,6 +313,106 @@ async function fileViaSandbox(page: Page): Promise<void> {
   await file.click();
 }
 
+type TakenArtifact = {
+  /** The name the browser saved the file under. */
+  filename: string;
+  /** The name the server's Content-Disposition gave it. */
+  servedAs: string;
+  contentType: string;
+  bytes: Buffer;
+};
+
+/** The download route of every artifact a return's command bar produces. */
+const EXPORTED_ARTIFACT = /\/regulatory-artifacts\/[^/]+\/download$/;
+
+/**
+ * Press one artifact button in the command bar and keep what the browser saved.
+ *
+ * The button is the file: it produces what does not exist yet, then fetches and
+ * saves it through a blob link. A blob carries no HTTP headers, so the content
+ * type and served filename are read off the download response it was built
+ * from — the one whose path matches `servedFrom`.
+ */
+async function takeArtifact(
+  page: Page,
+  label: RegExp,
+  servedFrom: RegExp,
+): Promise<TakenArtifact> {
+  const served = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      servedFrom.test(new URL(response.url()).pathname),
+    { timeout: 60_000 },
+  );
+  const saved = page.waitForEvent("download", { timeout: 60_000 });
+  await page
+    .getByTestId("return-command-bar")
+    .getByRole("button", { name: label })
+    .click();
+  const response = await served;
+  expect(response.ok()).toBeTruthy();
+  const download = await saved;
+  const bytes = await readFile(await download.path());
+  // What the officer keeps is exactly what the server serves. Read back
+  // independently: the page consumed this response into a blob, so the
+  // browser no longer holds its body.
+  const independent = await fetch(response.url(), {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  expect(independent.ok).toBeTruthy();
+  expect(bytes.equals(Buffer.from(await independent.arrayBuffer()))).toBe(true);
+  const disposition = response.headers()["content-disposition"] ?? "";
+  return {
+    filename: download.suggestedFilename(),
+    servedAs: /filename="([^"]+)"/.exec(disposition)?.[1] ?? "",
+    contentType: response.headers()["content-type"] ?? "",
+    bytes,
+  };
+}
+
+/** A figure as the snapshot preview prints it: "1,234.5", "(1,234.5)", "—". */
+function parseDisplayedFigure(text: string): number | null {
+  const trimmed = text.trim();
+  if (trimmed === "—") return null;
+  const magnitude = Number(trimmed.replace(/[(),]/g, ""));
+  return trimmed.startsWith("(") ? -magnitude : magnitude;
+}
+
+/** Parse one CSV document into rows (RFC 4180 quoting, `\n` line ends). */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(field);
+      field = "";
+    } else if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else if (char !== "\r") {
+      field += char;
+    }
+  }
+  if (field !== "" || row.length > 0) rows.push([...row, field]);
+  return rows;
+}
+
 // ---------------------------------------------------------------------------
 // Journeys
 // ---------------------------------------------------------------------------
@@ -294,7 +431,7 @@ test.describe("full lifecycle", () => {
     // greyed out with a blocked reason, and asked a preparer to work out from
     // four dead controls that none of it was theirs. Absent, not disabled
     // (docs/filing_workflow_redesign.md §4b.1, §4b.6).
-    await generateAndClearChecks(page, journeyDates.ack);
+    await generateAndClearChecks(page, LIQUIDITY_RETURN, journeyDates.ack);
 
     for (const forbidden of [/ORASS/i, /downtime/i, /re-upload/i]) {
       await expect(page.getByText(forbidden)).toHaveCount(0);
@@ -319,7 +456,7 @@ test.describe("full lifecycle", () => {
     const date = journeyDates.ack;
     await setSandboxConfig({ sandbox_behavior: "ack" });
 
-    await certifyAndApprove(page, browser, date);
+    await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
     const filing = await openFilingSession(browser, date);
     try {
       await fileViaSandbox(filing.page);
@@ -346,7 +483,7 @@ test.describe("full lifecycle", () => {
     const date = journeyDates.downtime;
     await setSandboxConfig({ sandbox_behavior: "ack", downtime: true });
 
-    await certifyAndApprove(page, browser, date);
+    await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
     const filing = await openFilingSession(browser, date);
     const filingPage = filing.page;
     try {
@@ -404,7 +541,7 @@ test.describe("full lifecycle", () => {
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: "reject" });
 
-    await certifyAndApprove(page, browser, date);
+    await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
     const filing = await openFilingSession(browser, date);
     try {
       await fileViaSandbox(filing.page);
@@ -432,7 +569,7 @@ test.describe("full lifecycle", () => {
     // Rejected = returned for correction, and the rework is the PREPARER's.
     // Their screen offers exactly one act, and it is the correction — not a
     // greyed-out row of everyone else's controls.
-    await page.goto(returnsUrl("LCR-NSFR", date));
+    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
     const rework = page.getByTestId("primary-filing-action");
     await expect(rework).toHaveText(/generate a corrected version/i);
     await expect(rework).toBeEnabled();
@@ -457,14 +594,14 @@ test.describe("full lifecycle", () => {
     const date = journeyDates.sendBack;
     const note = "Line 12 double-counts the placement maturing 2 April.";
 
-    await generateAndClearChecks(page, date);
-    await certifyAsPreparer(page, "LCR-NSFR", date);
+    await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
+    await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
     await sendBackAsChecker(browser, approverState, date, note);
 
     // Back with the preparer, and genuinely correctable: the certification that
     // froze the figures is withdrawn, the note is on the record, and nothing on
     // the screen claims the return may be filed.
-    await page.goto(returnsUrl("LCR-NSFR", date));
+    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
     await expect(page.getByText("Unsigned").first()).toBeVisible();
     await expect(page.getByTestId("attestation-clearance").first()).toHaveText(
       /^Not cleared to submit/i,
@@ -538,6 +675,183 @@ test.describe("full lifecycle", () => {
       await page.screenshot({
         path: path.join(evidenceDir, "lrt-profile-pack-generated.png"),
         fullPage: true,
+      });
+    }
+  });
+
+  test("journey 6: a signed BoG form hands over every artifact, and each file is the return on screen", async ({
+    page,
+    browser,
+  }) => {
+    const date = journeyDates.bogForm;
+    // BSD2 is a landscape form. At the default width its page is wider than
+    // the signing workspace's document pane, which centres it and clips its
+    // left edge — where the signature fields go — under the field palette.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await certifyAndApprove(page, browser, BOG_FORM, date);
+    await page.goto(returnsUrl(BOG_FORM, date));
+
+    // The figure an officer reads on screen, located through the package's own
+    // snapshot: the preview deliberately hides each line's workbook cell, so
+    // the snapshot is what says where that figure must sit in the files.
+    const listing = await api(
+      adminToken,
+      "GET",
+      `/banks/${SAMPLE_BANK_ID}/regulatory-packages?return_code=${BOG_FORM}&reporting_date=${date}&include_superseded=false&limit=1`,
+    );
+    const packagePath = `/banks/${SAMPLE_BANK_ID}/regulatory-packages/${listing.packages[0].id}`;
+    const pkg = await api(adminToken, "GET", packagePath);
+    type Line = {
+      code: string;
+      value: string | null;
+      cell: string;
+      status: string;
+    };
+    const balanceSheet: { code: string; rows: Line[] } =
+      pkg.snapshot.sections.find(
+        (section: { title: string }) => section.title === BOG_FORM,
+      );
+    const line = balanceSheet.rows.find(
+      (row) => row.status === "mapped" && Number(row.value ?? 0) !== 0,
+    );
+    if (!line) throw new Error(`${BOG_FORM} has no mapped, non-zero line.`);
+    const section = page
+      .locator("div")
+      .filter({ has: page.getByText(balanceSheet.code, { exact: true }) })
+      .filter({ has: page.getByRole("table") })
+      .last();
+    const onScreen = section
+      .getByRole("row")
+      .filter({ has: page.getByText(line.code, { exact: true }) })
+      .getByRole("cell")
+      .last();
+    const figure = parseDisplayedFigure(await onScreen.innerText());
+    expect(figure).not.toBeNull();
+
+    // An official form offers all four, the PDF already as the signed return.
+    const artifacts = page
+      .getByTestId("return-command-bar")
+      .getByRole("button", { name: /download/i });
+    await expect(artifacts).toHaveText([
+      "Signed PDF",
+      "XLSX",
+      "Formula copy",
+      "CSV",
+    ]);
+
+    // The Signed PDF is the revision both officers signed, not a fresh render.
+    const chain = await api(
+      adminToken,
+      "GET",
+      `${packagePath}/artifact-versions`,
+    );
+    const filed = chain.versions.find(
+      (version: { is_filed: boolean }) => version.is_filed,
+    );
+    const pdf = await takeArtifact(
+      page,
+      /^download signed pdf$/i,
+      new RegExp(`/regulatory-artifact-versions/${filed.id}/download$`),
+    );
+    expect(pdf.filename).toMatch(new RegExp(`^${BOG_FORM}.*\\.pdf$`));
+    expect(pdf.servedAs).toBe(pdf.filename);
+    expect(pdf.contentType).toBe("application/pdf");
+    expect(pdf.bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    const document = await readPdf(pdf.bytes);
+    expect(document.pageCount).toBeGreaterThan(0);
+    expect(document.text).toContain(BOG_FORM);
+    expect(document.signatureFields).toEqual(
+      expect.arrayContaining(["Sig_Preparer", "Sig_Approver"]),
+    );
+    expect(document.signatureCount).toBe(2);
+
+    // Both workbooks carry BoG's sheets, in BoG's order, plus the notes.
+    const layout = JSON.parse(
+      await readFile(path.join(bogLayoutsDir, `${BOG_FORM}.json`), "utf8"),
+    ) as { sheets: { name: string }[] };
+    const officialSheets = [
+      ...layout.sheets.map((sheet) => sheet.name.slice(0, 31)),
+      "Completion notes",
+    ];
+    const spreadsheet =
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    // The official copy is values only, and every form sheet is locked.
+    const official = await takeArtifact(
+      page,
+      /^(produce and )?download xlsx$/i,
+      EXPORTED_ARTIFACT,
+    );
+    expect(official.filename).toBe(`${BOG_FORM}.xlsx`);
+    expect(official.servedAs).toBe(official.filename);
+    expect(official.contentType).toBe(spreadsheet);
+    const sealed = readWorkbook(official.bytes);
+    expect(sealed.sheets.map((sheet) => sheet.name)).toEqual(officialSheets);
+    expect(sealed.title).toBe(`${BOG_FORM} — official sealed export`);
+    for (const sheet of sealed.sheets.slice(0, -1)) {
+      expect(sheet.isProtected, sheet.name).toBe(true);
+      expect(sheet.formulaCount, sheet.name).toBe(0);
+    }
+    expect(sealed.sheet(BOG_FORM).cell(line.cell)).toBeCloseTo(figure!, 2);
+    expect(
+      sealed
+        .sheet("Completion notes")
+        .strings.some((text) => text.includes("FORMULA COPY")),
+    ).toBe(false);
+
+    // The formula copy keeps the template's live formulas, says what it is in
+    // its own title and notes, and holds the same input figure.
+    const working = await takeArtifact(
+      page,
+      /^(produce and )?download formula copy$/i,
+      EXPORTED_ARTIFACT,
+    );
+    expect(working.filename).toBe(`${BOG_FORM}.working.xlsx`);
+    expect(working.servedAs).toBe(working.filename);
+    expect(working.contentType).toBe(spreadsheet);
+    const live = readWorkbook(working.bytes);
+    expect(live.sheets.map((sheet) => sheet.name)).toEqual(officialSheets);
+    expect(live.title).toMatch(new RegExp(`^${BOG_FORM} — FORMULA COPY`));
+    expect(
+      live
+        .sheet("Completion notes")
+        .strings.some((text) => text.startsWith("FORMULA COPY")),
+    ).toBe(true);
+    expect(live.sheet(BOG_FORM).formulaCount).toBeGreaterThan(0);
+    expect(live.sheet(BOG_FORM).isProtected).toBe(false);
+    expect(live.sheet(BOG_FORM).cell(line.cell)).toBeCloseTo(figure!, 2);
+
+    // A multi-sheet form's CSV is a bundle: metadata, one file per sheet,
+    // provenance — and it is served as the zip it is.
+    const csv = await takeArtifact(
+      page,
+      /^(produce and )?download csv$/i,
+      EXPORTED_ARTIFACT,
+    );
+    expect(csv.filename).toBe(`${BOG_FORM}.zip`);
+    expect(csv.servedAs).toBe(csv.filename);
+    expect(csv.contentType).toBe("application/zip");
+    const bundle = readZip(csv.bytes);
+    const names = Array.from(bundle.keys());
+    expect(names[0]).toBe("00_metadata.csv");
+    expect(names.at(-1)).toBe("99_provenance.csv");
+    const sheetFile = names.find((name) =>
+      name.endsWith(`_${balanceSheet.code}.csv`),
+    );
+    expect(sheetFile).toBeDefined();
+    const csvRow = parseCsv(bundle.get(sheetFile!)!.toString("utf8")).find(
+      (row) => row[0] === line.code,
+    );
+    expect(csvRow).toBeDefined();
+    expect(
+      csvRow!.some(
+        (cell) => cell !== "" && Math.abs(Number(cell) - figure!) < 0.005,
+      ),
+    ).toBe(true);
+
+    if (evidenceDir) {
+      await page.getByTestId("return-command-bar").screenshot({
+        path: path.join(evidenceDir, "bog-form-artifacts-downloaded.png"),
       });
     }
   });

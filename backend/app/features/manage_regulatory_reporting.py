@@ -88,6 +88,20 @@ _ARTIFACT_MEDIA_TYPES = {
     "pdf": "application/pdf",
 }
 
+
+def _artifact_media_type(kind: str, object_path: str) -> str:
+    """The media type of the stored file itself.
+
+    The kind names what an artifact is FOR, not its container: a multi-section
+    return's ``csv`` artifact is a ``.zip`` of CSVs (``exports/csv.py``), and
+    labelling those bytes ``text/csv`` hands a client an archive it was told
+    is text.
+    """
+    if PurePosixPath(object_path).suffix == ".zip":
+        return "application/zip"
+    return _ARTIFACT_MEDIA_TYPES.get(kind, "application/octet-stream")
+
+
 type ChannelPath = Literal["orass_api", "orass_sandbox", "email", "manual"]
 type BasisFilter = Literal["solo", "consolidated"]
 type PackageStatusFilter = Literal[
@@ -332,7 +346,7 @@ def download_regulatory_artifact(
     filename = PurePosixPath(artifact.object_path).name
     return StreamingResponse(
         stream,
-        media_type=_ARTIFACT_MEDIA_TYPES.get(artifact.kind, "application/octet-stream"),
+        media_type=_artifact_media_type(artifact.kind, artifact.object_path),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -442,7 +456,7 @@ def download_regulatory_artifact_version(
     filename = PurePosixPath(version.object_path).name
     return StreamingResponse(
         io.BytesIO(payload),
-        media_type=_ARTIFACT_MEDIA_TYPES.get(version.kind, "application/octet-stream"),
+        media_type=_artifact_media_type(version.kind, version.object_path),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -496,8 +510,8 @@ def download_email_fallback_eml(
                 ),
             ) from exc
         payload = b"".join(stream)
-        maintype, _, subtype = _ARTIFACT_MEDIA_TYPES.get(
-            attachment.kind, "application/octet-stream"
+        maintype, _, subtype = _artifact_media_type(
+            attachment.kind, attachment.object_path
         ).partition("/")
         message.add_attachment(
             payload, maintype=maintype, subtype=subtype, filename=attachment.filename
