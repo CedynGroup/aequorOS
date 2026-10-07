@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import json
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -30,6 +31,7 @@ FILES: dict[str, str] = {
     "backend/pyproject.toml": "[tool.ruff]\nline-length = 100\n",
     "backend/scripts/feature_module_moves.json": "[]\n",
     "backend/app/__init__.py": "",
+    "backend/app/blocked": "not a directory\n",
     "backend/app/services/__init__.py": '"""Services."""\n',
     "backend/app/services/audit.py": "def record() -> None:\n    pass\n",
     "backend/app/services/regulatory_fx.py": "def run() -> int:\n    return 1\n",
@@ -122,12 +124,11 @@ def _read(repository: Path, relative: str) -> str:
     return (repository / relative).read_text()
 
 
-def test_renamer_composes_moves_in_order_and_inverts() -> None:
+def test_renamer_composes_moves_in_order() -> None:
     rename = Renamer((("app.a", "app.b"), ("app.b.x", "app.c")))
     assert rename("app.a.x.f") == "app.c.f"
     assert rename("app.a") == "app.b"
     assert rename("app.ab") == "app.ab"
-    assert rename.original("app.c.f") == "app.a.x.f"
     assert rename.roots == {"app"}
 
 
@@ -150,6 +151,16 @@ def test_stale_bytecode_at_the_destination_does_not_block_a_move(repository: Pat
     assert (repository / "backend/app/fx/domain/engine.py").is_file()
     assert (repository / "backend/app/fx/__init__.py").is_file()
     assert not (repository / "backend/app/fx/domain/fx").exists()
+
+
+def test_stale_bytecode_beside_a_module_does_not_hide_its_source(repository: Path) -> None:
+    stale = repository / "backend/app/services/regulatory_fx/__pycache__"
+    stale.mkdir(parents=True)
+    (stale / "__init__.cpython-313.pyc").write_bytes(b"")
+    assert "exit 0" in _run(repository, "move")
+    assert _python(repository, "from app.fx.service import run\nprint(run())") == "1"
+    assert MOVES[0] in feature_moves.load_ledger(repository / "backend")
+    assert _run(repository, "check") == ["exit 0"]
 
 
 def test_a_move_records_every_moved_module_in_the_ledger(repository: Path) -> None:
@@ -198,8 +209,8 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
     agents = _read(repository, "AGENTS.md")
     assert "`backend/app/fx/service.py` (`app.fx.service`)" in agents
     assert "`app/fx/domain/`" in agents
+    assert _read(repository, "backend/dashboard/README.md") == "Unrelated: app/fx/service.py\n"
     untouched = (
-        "backend/dashboard/README.md",
         "backend/scripts/feature_moves.py",
         # The boundary guard maps moves back through the ledger; its baseline keeps old names.
         "backend/tests/architecture/feature_boundary_baseline.json",
@@ -252,6 +263,136 @@ def test_a_move_from_a_missing_module_stops_before_touching_anything(repository:
     with pytest.raises(SystemExit, match="cannot move"):
         _run(repository, "move", [("app.services.missing", "app.fx.missing")])
     assert _read(repository, "backend/scripts/feature_module_moves.json") == "[]\n"
+
+
+def _python(repository: Path, script: str) -> str:
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repository / "backend",
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "backend/dashboard/lib/probe.test.ts",
+        "backend/dashboard/lib/api/probe.test.tsx",
+        "console/probe.test.js",
+        "frontend/probe.test.jsx",
+    ],
+)
+@pytest.mark.parametrize("literal", ["template", "quoted"])
+@pytest.mark.parametrize("command", ["move", "rewrite"])
+def test_embedded_python_references_remain_executable(
+    repository: Path, relative: str, literal: str, command: str
+) -> None:
+    if command == "rewrite":
+        _run(repository, "move")
+    script = (
+        "from unittest.mock import patch\n"
+        "from app.services import regulatory_fx\n"
+        "from app.services.regulatory_fx import run\n"
+        'with patch("app.services.regulatory_fx.run", return_value=7):\n'
+        "    print(regulatory_fx.run(), run())\n"
+    )
+    embedded = f"`{script}`" if literal == "template" else json.dumps(script)
+    path = repository / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        'import { execFileSync } from "node:child_process";\n'
+        f"const script = {embedded};\n"
+        f"process.stdout.write(execFileSync({json.dumps(sys.executable)}, "
+        '["-c", script], {encoding: "utf8"}));\n'
+    )
+    if command == "rewrite":
+        assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, command)
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=path.read_text(),
+        cwd=repository / "backend",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "7 1"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize(
+    ("relative", "statement", "module"),
+    [
+        ("app/fx/domain/helpers.py", "from ..service import run", "app.fx.domain.helpers"),
+        ("app/fx/domain/__init__.py", "from .. import service as executor", "app.fx.domain"),
+    ],
+)
+def test_cumulative_rewrites_preserve_current_relative_imports(
+    repository: Path, relative: str, statement: str, module: str
+) -> None:
+    _run(repository, "move")
+    assert _python(
+        repository,
+        "from app.fx.domain.helpers import VALUE\n"
+        "from app.services.pipeline import lazy\nprint(VALUE, lazy())",
+    ) == "3 3"
+    path = repository / "backend" / relative
+    expression = "run()" if relative.endswith("helpers.py") else "executor.run()"
+    path.write_text(f"{statement}\nVALUE = {expression}\n")
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _python(repository, f"from {module} import VALUE\nprint(VALUE)") == "1"
+    path.write_text(
+        f"{statement}\nfrom app.domain.fx.engine import compute\n"
+        f"VALUE = {expression} + compute()\n"
+    )
+    assert _run(repository, "check")[-1] == "exit 1"
+    _run(repository, "rewrite")
+    assert _python(repository, f"from {module} import VALUE\nprint(VALUE)") == "3"
+    _run(repository, "move", [("app.fx.service", "app.currency.service")])
+    assert _python(repository, f"from {module} import VALUE\nprint(VALUE)") == "3"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
+@pytest.mark.parametrize(
+    "later",
+    [
+        ("app.services.missing", "app.fx.missing"),
+        ("app.services.audit", "app.domain.risk"),
+        ("app.services.audit", "app.fx.service"),
+        ("app.services.audit", "app.fx.service.extra"),
+        ("app.services.audit", "app.fx"),
+        ("app.services.audit", "app.blocked.child"),
+        ("app.domain.fx", "app.domain.fx.nested"),
+        ("app.services.untracked", "app.fx.untracked"),
+        ("app.domain.fx", "app.assets"),
+    ],
+)
+def test_an_invalid_batch_does_not_apply_earlier_moves(
+    repository: Path, later: tuple[str, str]
+) -> None:
+    if later[0] == "app.services.untracked":
+        (repository / "backend/app/services/untracked.py").write_text("VALUE = 1\n")
+    if later[1] == "app.assets":
+        assets = repository / "backend/app/assets"
+        assets.mkdir()
+        (assets / "payload.txt").write_text("preserved\n")
+    before = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    with pytest.raises(SystemExit, match="cannot move"):
+        _run(repository, "move", [MOVES[0], later])
+    after = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    assert before == after
+    assert not (repository / "backend/app/fx").exists()
+    assert _python(repository, "from app.services.regulatory_fx import run\nprint(run())") == "1"
+    assert json.loads(_read(repository, "backend/scripts/feature_module_moves.json")) == []
 
 
 def test_the_repository_uses_no_old_module_name() -> None:

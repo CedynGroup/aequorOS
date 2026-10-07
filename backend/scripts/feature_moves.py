@@ -14,8 +14,8 @@ identity. A branch that predates a move rebases (git carries its edits to the ne
 paths) and then runs ``rewrite`` to rename whatever old-path references it added.
 
 The rewrite covers every tracked text file a module path can appear in: Python under
-``app/``, ``tests/``, ``alembic/`` and ``scripts/``, the Markdown docs, and the ``mise``
-and CI configuration. It rewrites
+``app/``, ``tests/``, ``alembic/`` and ``scripts/``, embedded Python in JavaScript and
+TypeScript, the Markdown docs, and the ``mise`` and CI configuration. It rewrites
 
 * dotted names: imports, ``importlib`` string constants, ``mock.patch`` targets, prose;
 * ``from app.old import moved_module`` into ``from app.new import leaf as moved_module``,
@@ -53,9 +53,11 @@ BACKEND = Path(__file__).resolve().parents[1]
 LEDGER = Path("scripts") / "feature_module_moves.json"
 
 #: Tracked files the rewrite reads, by suffix.
-_TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".yml", ".yaml", ".ini", ".cfg"})
-#: Repository paths no module path is ever written in, and generated code.
-_SKIPPED_PREFIXES = ("backend/dashboard/", "console/", "frontend/", "packages/")
+_SCRIPT_SUFFIXES = frozenset({".js", ".jsx", ".ts", ".tsx"})
+_TEXT_SUFFIXES = (
+    frozenset({".py", ".md", ".toml", ".yml", ".yaml", ".ini", ".cfg"}) | _SCRIPT_SUFFIXES
+)
+_SKIPPED_PREFIXES = ("packages/",)
 #: Files that name old paths on purpose: this script and its own tests.
 _FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_feature_moves.py"})
 #: The architecture guards address source files relative to ``app/``.
@@ -75,13 +77,6 @@ class Renamer:
                 name = new + name[len(old) :]
         return name
 
-    def original(self, name: str) -> str:
-        """The name a module had before every move (the inverse rename)."""
-        for old, new in reversed(self.moves):
-            if name == new or name.startswith(f"{new}."):
-                name = old + name[len(new) :]
-        return name
-
     @property
     def roots(self) -> frozenset[str]:
         return frozenset(name.split(".", 1)[0] for move in self.moves for name in move)
@@ -96,7 +91,7 @@ def _paths(backend: Path, old: str, new: str) -> tuple[Path, Path]:
     """The source and destination of a move: package directories, or ``.py`` modules."""
     source = backend / old.replace(".", "/")
     destination = backend / new.replace(".", "/")
-    if source.is_dir() or destination.is_dir():
+    if source.is_dir() and _exists(source):
         return source, destination
     return source.with_suffix(".py"), destination.with_suffix(".py")
 
@@ -126,7 +121,10 @@ def _ensure_packages(backend: Path, destination: Path, source: Path) -> None:
 def _exists(path: Path) -> bool:
     """Whether a module or package is present; a directory of bytecode alone is not."""
     if path.is_dir():
-        return any(path.rglob("*.py"))
+        return any(
+            child.is_file() and (child.suffix != ".pyc" or child.parent.name != "__pycache__")
+            for child in path.rglob("*")
+        )
     return path.is_file()
 
 
@@ -143,7 +141,7 @@ def write_ledger(backend: Path, pairs: Sequence[tuple[str, str]]) -> None:
 def module_pairs(backend: Path, old: str, new: str) -> list[tuple[str, str]]:
     """The ledger pairs a move adds: every module it carries, a package before its modules."""
     source = backend / old.replace(".", "/")
-    if not source.is_dir():
+    if not source.is_dir() or not _exists(source):
         return [(old, new)]
     suffixes: list[tuple[str, ...]] = []
     for path in source.rglob("*.py"):
@@ -155,22 +153,58 @@ def module_pairs(backend: Path, old: str, new: str) -> list[tuple[str, str]]:
     ]
 
 
-def move_files(backend: Path, requests: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
-    """``git mv`` each requested module or package and return the ledger pairs it adds.
+def plan_moves(
+    backend: Path, requests: Sequence[tuple[str, str]]
+) -> tuple[list[tuple[Path, Path]], list[tuple[str, str]]]:
+    """Validate the whole batch before creating packages or moving files.
 
-    Old paths are left empty: no compatibility shims.
+    Overlapping moves must be separate commands, with each recorded before the next.
     """
+    paths: list[tuple[Path, Path]] = []
     added: list[tuple[str, str]] = []
+    tracked = set(_git(backend, "ls-files", "-z").split("\0"))
     for old, new in requests:
         source, destination = _paths(backend, old, new)
-        if not _exists(source) or _exists(destination):
+        relative = source.relative_to(backend).as_posix()
+        tracked_source = relative in tracked or any(
+            name.startswith(f"{relative}/") for name in tracked
+        )
+        parents = destination.relative_to(backend).parents
+        blocked_parent = any(
+            (backend / parent).is_file() or (backend / parent).with_suffix(".py").is_file()
+            for parent in parents
+        )
+        if (
+            not _exists(source)
+            or not tracked_source
+            or _exists(destination)
+            or (not source.is_dir() and destination.exists())
+            or blocked_parent
+        ):
             raise SystemExit(f"cannot move {old} -> {new}: check {source} and {destination}")
+        for path in (source, destination):
+            others = [other for pair in paths for other in pair]
+            others.append(destination if path == source else source)
+            module = path.with_suffix("") if path.suffix == ".py" else path
+            modules = [
+                other.with_suffix("") if other.suffix == ".py" else other for other in others
+            ]
+            if any(
+                module.is_relative_to(other) or other.is_relative_to(module) for other in modules
+            ):
+                raise SystemExit(f"cannot move {old} -> {new}: overlapping moves")
+        paths.append((source, destination))
         added += module_pairs(backend, old, new)
+    return paths, added
+
+
+def move_files(backend: Path, paths: Sequence[tuple[Path, Path]]) -> None:
+    """``git mv`` each validated module or package, leaving no compatibility shim."""
+    for source, destination in paths:
         if destination.is_dir():
             shutil.rmtree(destination)  # stale bytecode; git mv would nest the package in it
         _ensure_packages(backend, destination, source)
         _git(backend, "mv", str(source), str(destination))
-    return added
 
 
 def _module_exists(backend: Path, module: str) -> bool:
@@ -243,7 +277,7 @@ def _absolute_base(
 ) -> str | None:
     """The absolute module a ``from`` import reads from, or ``None`` to leave it alone.
 
-    A relative import is resolved against the file's name before the move and made
+    A relative import is resolved against the file's current name and made
     absolute only when, from the file's new location, it would resolve elsewhere.
     """
     if not node.level:
@@ -306,7 +340,7 @@ def _statement_span(
 def rewrite_imports(text: str, module: str | None, is_package: bool, rename: Renamer) -> str:
     """Rewrite the ``from ... import`` statements a move affects.
 
-    ``module`` is the file's dotted name before any move. A ``from`` import of a moved
+    ``module`` is the file's current dotted name. A ``from`` import of a moved
     module becomes its own statement that keeps the local name, so the rest of the
     file (and every ``monkeypatch.setattr`` on that name) is unchanged.
     """
@@ -377,11 +411,35 @@ def _module_of(relative: str) -> tuple[str | None, bool]:
     return ".".join(path.with_suffix("").parts), False
 
 
+def rewrite_embedded_python(text: str, rename: Renamer) -> str:
+    """Rewrite absolute Python imports inside JavaScript string literals."""
+    literals = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`')
+
+    def replace(match: re.Match[str]) -> str:
+        literal = match.group()
+        if literal.startswith("`"):
+            body = literal[1:-1]
+            if "\\" in body or "${" in body:
+                return literal
+            updated = rewrite_imports(body, None, False, rename)
+            return f"`{updated}`"
+        try:
+            body = ast.literal_eval(literal)
+        except (SyntaxError, ValueError):
+            return literal
+        updated = rewrite_imports(body, None, False, rename)
+        return json.dumps(updated, ensure_ascii=False) if updated != body else literal
+
+    return literals.sub(replace, text)
+
+
 def rewrite_text(relative: str, text: str, rename: Renamer) -> str:
     """Every rewrite pass for one backend-relative file."""
     module, is_package = _module_of(relative)
     if module is not None:
-        text = rewrite_imports(text, rename.original(module), is_package, rename)
+        text = rewrite_imports(text, module, is_package, rename)
+    elif Path(relative).suffix in _SCRIPT_SUFFIXES:
+        text = rewrite_embedded_python(text, rename)
     text = rewrite_dotted(text, rename)
     text = rewrite_paths(text, rename, app_relative=relative.startswith(_ARCHITECTURE_DIR))
     return text
@@ -409,7 +467,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
-        relative = path.relative_to(backend).as_posix() if path.is_relative_to(backend) else ""
+        relative = path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
         if relative in _FROZEN_FILES:
             continue
         original = path.read_text(encoding="utf-8")
@@ -513,8 +571,7 @@ def format_python(backend: Path, files: Iterable[Path], formatted: set[Path]) ->
 # --------------------------------------------------------------------------
 
 
-def _rewrite(backend: Path, rename: Renamer, echo: Callable[[str], None]) -> None:
-    planned = plan_rewrites(backend, rename)
+def _rewrite(backend: Path, planned: dict[Path, str], echo: Callable[[str], None]) -> None:
     formatted = formatted_files(backend, planned)
     for path, text in planned.items():
         path.write_text(text, encoding="utf-8")
@@ -527,14 +584,25 @@ def move(
 ) -> int:
     """Move each ``(old, new)`` module or package, record it, and rewrite every reference."""
     backend = backend.resolve()
+    ledger = load_ledger(backend)
+    paths, added = plan_moves(backend, requests)
+    ledger += added
+    rename = Renamer(tuple(ledger))
+    planned = plan_rewrites(backend, rename)
+    relocated: dict[Path, str] = {}
+    for path, text in planned.items():
+        target = path
+        for source, destination in paths:
+            if path.is_relative_to(source):
+                target = destination / path.relative_to(source)
+                break
+        relocated[target] = text
     coverage = guard_coverage(backend)
-    added = move_files(backend, requests)
+    move_files(backend, paths)
     for old, new in requests:
         echo(f"moved {old} -> {new}")
-    ledger = [*load_ledger(backend), *added]
     write_ledger(backend, ledger)
-    rename = Renamer(tuple(ledger))
-    _rewrite(backend, rename, echo)
+    _rewrite(backend, relocated, echo)
     for drop in coverage_drops(coverage, guard_coverage(backend), rename):
         echo(f"guard scans fewer files, review it: {drop}")
     return 0
@@ -543,7 +611,7 @@ def move(
 def rewrite(backend: Path, echo: Callable[[str], None] = print) -> int:
     """Rewrite every reference to a module the ledger moved."""
     backend = backend.resolve()
-    _rewrite(backend, Renamer(tuple(load_ledger(backend))), echo)
+    _rewrite(backend, plan_rewrites(backend, Renamer(tuple(load_ledger(backend)))), echo)
     return 0
 
 
