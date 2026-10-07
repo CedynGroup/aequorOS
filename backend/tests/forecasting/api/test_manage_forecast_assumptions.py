@@ -603,17 +603,17 @@ def test_mutations_wait_for_the_version_lock_and_refuse_a_concurrent_final_decis
     maker, _ = _maker_and_checker()
     version = _draft(db_client, maker, date(2026, 1, 1), _revised())
     version_id = UUID(version["id"])
-    initial_status = "draft"
     if verb in {"approve", "reject"}:
         assert db_client.post(f"{VERSIONS}/{version_id}/submit", headers=maker).status_code == 200
-        initial_status = "submitted"
     loaded_by_racer = Event()
 
     def mutate() -> int:
         with sessionmaker() as session:
             session.info["organization_id"] = ORG_1
             loaded = session.get(ForecastAssumptionVersion, version_id)
-            assert loaded is not None and loaded.status == initial_status
+            assert loaded is not None and loaded.status == (
+                "submitted" if verb in {"approve", "reject"} else "draft"
+            )
             loaded_by_racer.set()
             actor = USER_1 if verb in {"revise", "submit"} else CHECKER_ID
             user = session.get(User, actor)
