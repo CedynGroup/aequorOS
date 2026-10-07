@@ -14,7 +14,7 @@ exists:
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from fastapi.routing import APIRoute
@@ -43,9 +43,11 @@ from tests.fixtures.canonical_bank_fixture import (
 
 SDI_BANK_ID = "BK-ICSDI001"
 OTHER_ORG_BANK_ID = "BK-ICOTH001"
-CYCLE_ID = uuid4()
-BLOCK_ID = uuid4()
-ATTACHMENT_ID = uuid4()
+# Fixed rather than uuid4(): they appear in the sweep's test ids, and pytest-xdist
+# refuses to run unless every worker collects identical ids.
+CYCLE_ID = UUID("c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1")
+BLOCK_ID = UUID("b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1")
+ATTACHMENT_ID = UUID("a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1")
 
 
 @pytest.fixture(autouse=True)

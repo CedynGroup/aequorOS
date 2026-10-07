@@ -366,6 +366,13 @@ available; point `TEST_DATABASE_URL` at it to reuse that service.
   and reseeded before each test. Only `tests/db` migration tests build schemas of
   their own. A test that needs a fresh schema is the exception to justify, not the
   default to reach for.
+  `risk-service:test-postgres-suite` runs under pytest-xdist (`-n auto --dist loadfile`),
+  so each worker builds its own pair of schemas, and a module's tests stay on one worker.
+  Two consequences: test ids must be deterministic (xdist refuses to start when workers
+  collect different ids, so never put `uuid4()` or set order into a parametrize id), and
+  a test may not depend on another module having run first. `tests/db` stays serial: each
+  of its tests migrates a schema in one transaction, and running them in parallel exhausts
+  the server's shared lock table (`max_locks_per_transaction`).
 
 ## Lint And Type Check
 
