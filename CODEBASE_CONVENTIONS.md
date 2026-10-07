@@ -175,8 +175,8 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 ### Tests (`backend/tests/`)
 
-- Layout: `tests/api/` (HTTP-level, the default style), `tests/services/`, `tests/features/`,
-  `tests/db/`, plus `tests/conftest.py`.
+- Layout and fixture ownership follow [the feature layout](#5-feature-layout).
+  HTTP-level tests are the default style.
 - **Database fixtures**: see [CONTRIBUTING.md](CONTRIBUTING.md) for fixture selection and
   the [backend test database guide](backend/README.md#test-databases-and-the-primary-database)
   for isolation and application reuse.
@@ -331,7 +331,12 @@ feature. New code goes in the target layout; existing code moves one feature per
   engines. The kernel imports no feature. Feature code never imports through the `app.models`
   aggregator; it is a registry, not an API.
 - **Target test layout mirrors the source**: `app/<feature>/service.py` is tested under
-  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/`.
+  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/` and shared
+  helpers in `tests/support/`. `tests/conftest.py` keeps only the fixtures every feature shares
+  (settings, database, session, client, storage fakes, demo tenants); a feature's fixtures live in
+  `tests/<feature>/fixtures.py`, registered by the root `pytest_plugins`.
+  `tests/architecture/test_test_layout.py` guards new top-level directory names and
+  registered fixture ownership; its legacy layer-directory list shrinks as tests move.
 - **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
   records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
   does a baseline entry that no longer occurs, so the baseline only shrinks.

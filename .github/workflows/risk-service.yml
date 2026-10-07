@@ -359,6 +359,8 @@ jobs:
       postgres:
         image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
         env:
+          # Full-schema DDL needs more shared lock slots than the default 64.
+          POSTGRES_INITDB_ARGS: --set=max_locks_per_transaction=256
           POSTGRES_DB: risk_service
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
@@ -461,6 +463,8 @@ jobs:
       postgres:
         image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
         env:
+          # Parallel worker cleanup holds locks for multiple complete schemas.
+          POSTGRES_INITDB_ARGS: --set=max_locks_per_transaction=256
           POSTGRES_DB: risk_service
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
