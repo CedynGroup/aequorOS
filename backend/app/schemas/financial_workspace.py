@@ -18,6 +18,7 @@ from app.schemas.common import JsonObject, JsonValue
 
 type FinancialValidationSeverity = Literal["error", "warning", "info"]
 type FinancialString120 = Annotated[str, Field(max_length=120)]
+type NonEmptyFinancialString120 = Annotated[str, Field(min_length=1, max_length=120)]
 type FinancialCurrency = Annotated[str, Field(min_length=3, max_length=3)]
 type FinancialAmount = Annotated[Decimal, Field(max_digits=20, decimal_places=4)]
 type FinancialRate = Annotated[Decimal, Field(max_digits=10, decimal_places=6)]
@@ -172,7 +173,7 @@ class FinancialCashFlowCreate(ManualMutationPayload):
     amount: FinancialAmount
     currency: FinancialCurrency | None = None
     direction: Literal["inflow", "outflow"]
-    category: FinancialString120 = Field(min_length=1)
+    category: NonEmptyFinancialString120
     metadata: JsonObject = Field(default_factory=dict)
 
 
@@ -183,7 +184,7 @@ class FinancialCashFlowUpdate(ManualUpdatePayload):
     amount: FinancialAmount = Decimal(0)
     currency: FinancialCurrency | None = None
     direction: Literal["inflow", "outflow"] = "inflow"
-    category: FinancialString120 = Field(default="", min_length=1)
+    category: NonEmptyFinancialString120 = ""
     metadata: JsonObject | None = None
 
 
@@ -242,7 +243,7 @@ class FinancialReportingPeriodUpdate(ManualUpdatePayload):
 class FinancialBalanceCreate(ManualMutationPayload):
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    balance_type: FinancialString120 = Field(min_length=1)
+    balance_type: NonEmptyFinancialString120
     amount: FinancialAmount
     currency: FinancialCurrency | None = None
     as_of_date: date | None = None
@@ -252,7 +253,7 @@ class FinancialBalanceCreate(ManualMutationPayload):
 class FinancialBalanceUpdate(ManualUpdatePayload):
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    balance_type: FinancialString120 = Field(default="", min_length=1)
+    balance_type: NonEmptyFinancialString120 = ""
     amount: FinancialAmount = Decimal(0)
     currency: FinancialCurrency | None = None
     as_of_date: date | None = None
@@ -263,7 +264,7 @@ class FinancialObligationCreate(ManualMutationPayload):
     institution_id: UUID | None = None
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    obligation_type: FinancialString120 = Field(min_length=1)
+    obligation_type: NonEmptyFinancialString120
     facility_type: FinancialString120 | None = None
     principal_amount: FinancialAmount | None = None
     outstanding_amount: FinancialAmount | None = None
@@ -279,7 +280,7 @@ class FinancialObligationUpdate(ManualUpdatePayload):
     institution_id: UUID | None = None
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    obligation_type: FinancialString120 = Field(default="", min_length=1)
+    obligation_type: NonEmptyFinancialString120 = ""
     facility_type: FinancialString120 | None = None
     principal_amount: FinancialAmount | None = None
     outstanding_amount: FinancialAmount | None = None
@@ -320,7 +321,7 @@ class FinancialCovenantCreate(ManualMutationPayload):
     obligation_id: UUID | None = None
     reporting_period_id: UUID | None = None
     name: str = Field(min_length=1)
-    metric: FinancialString120 = Field(min_length=1)
+    metric: NonEmptyFinancialString120
     operator: FinancialCovenantOperator
     threshold: FinancialCovenantAmount
     actual_value: FinancialCovenantAmount | None = None
@@ -334,7 +335,7 @@ class FinancialCovenantUpdate(ManualUpdatePayload):
     obligation_id: UUID | None = None
     reporting_period_id: UUID | None = None
     name: str = Field(default="", min_length=1)
-    metric: FinancialString120 = Field(default="", min_length=1)
+    metric: NonEmptyFinancialString120 = ""
     operator: FinancialCovenantOperator = "eq"
     threshold: FinancialCovenantAmount = Decimal(0)
     actual_value: FinancialCovenantAmount | None = None

@@ -18,6 +18,13 @@ import {
   ActionItemInMinSeverityToJSON,
   ActionItemInMinSeverityToJSONTyped,
 } from "./ActionItemInMinSeverity";
+import type { StressScenarioType } from "./StressScenarioType";
+import {
+  StressScenarioTypeFromJSON,
+  StressScenarioTypeFromJSONTyped,
+  StressScenarioTypeToJSON,
+  StressScenarioTypeToJSONTyped,
+} from "./StressScenarioType";
 import type { Description1 } from "./Description1";
 import {
   Description1FromJSON,
@@ -60,13 +67,6 @@ import {
   BankIdToJSON,
   BankIdToJSONTyped,
 } from "./BankId";
-import type { ScenarioTypeInput } from "./ScenarioTypeInput";
-import {
-  ScenarioTypeInputFromJSON,
-  ScenarioTypeInputFromJSONTyped,
-  ScenarioTypeInputToJSON,
-  ScenarioTypeInputToJSONTyped,
-} from "./ScenarioTypeInput";
 
 /**
  *
@@ -130,10 +130,10 @@ export interface MacroScenarioCreate {
   reason: string;
   /**
    *
-   * @type {ScenarioTypeInput}
+   * @type {StressScenarioType}
    * @memberof MacroScenarioCreate
    */
-  scenarioType: ScenarioTypeInput;
+  scenarioType: StressScenarioType;
   /**
    *
    * @type {ActionItemInMinSeverity}
@@ -198,7 +198,7 @@ export function MacroScenarioCreateFromJSONTyped(
         : NarrativeFromJSON(json["narrative"]),
     paths: (json["paths"] as Array<any>).map(MacroPathInFromJSON),
     reason: json["reason"],
-    scenarioType: ScenarioTypeInputFromJSON(json["scenario_type"]),
+    scenarioType: StressScenarioTypeFromJSON(json["scenario_type"]),
     severity:
       json["severity"] == null
         ? undefined
@@ -232,7 +232,7 @@ export function MacroScenarioCreateToJSONTyped(
     narrative: NarrativeToJSON(value["narrative"]),
     paths: (value["paths"] as Array<any>).map(MacroPathInToJSON),
     reason: value["reason"],
-    scenario_type: ScenarioTypeInputToJSON(value["scenarioType"]),
+    scenario_type: StressScenarioTypeToJSON(value["scenarioType"]),
     severity: ActionItemInMinSeverityToJSON(value["severity"]),
     source: Source1ToJSON(value["source"]),
   };

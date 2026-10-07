@@ -375,7 +375,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   PRs.
 - **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
   rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
-  those keys so moving a model never reorders a flush (a new model adds its key).
+  those keys so moving a model never reorders a flush (a new model adds its key). Metric
+  `calculation_engine` ids are persisted in filed packages and stay frozen;
+  `app/domain/authority/engines.py` maps them to the engines' current locations.
   `backend/tests/architecture/feature_boundary_split_origins.json` freezes the exact pre-existing
   importer/target pairs affected by the model split. Only those pairs retain their historical
   target module and feature after reversing the move ledger; all other imports use current

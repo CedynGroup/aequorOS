@@ -37,6 +37,9 @@ _FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_featu
 #: The architecture guards address source files relative to ``app/``.
 _ARCHITECTURE_DIR = "tests/architecture/"
 _LINE_LENGTH = 100
+#: The frozen calculation-engine identifiers: the keys of this module's table.
+_ENGINE_TABLE = "app.domain.authority.engines"
+_ENGINE_TABLE_NAME = "ENGINE_LOCATIONS"
 
 
 @dataclass(frozen=True)
@@ -533,17 +536,64 @@ def rewrite_python_strings(text: str, rename: Renamer, backend: Path) -> str:
     return text
 
 
-def rewrite_text(relative: str, text: str, rename: Renamer, backend: Path) -> str:
-    """Every rewrite pass for one backend-relative file."""
+def frozen_identifiers(backend: Path, rename: Renamer) -> frozenset[str]:
+    """The calculation-engine identifiers no rewrite may touch.
+
+    They are the keys of ``ENGINE_LOCATIONS``: filed packages carry them, so they keep
+    the path an engine had when it was registered while its location follows the code.
+    """
+    path = backend / (rename(_ENGINE_TABLE).replace(".", "/") + ".py")
+    if not path.is_file():
+        return frozenset()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.AnnAssign):
+            targets, value = [node.target], node.value
+        elif isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        else:
+            continue
+        named = any(isinstance(t, ast.Name) and t.id == _ENGINE_TABLE_NAME for t in targets)
+        if named and isinstance(value, ast.Dict):
+            return frozenset(
+                key.value
+                for key in value.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            )
+    return frozenset()
+
+
+def _mask(text: str, frozen: frozenset[str]) -> tuple[str, Callable[[str], str]]:
+    """Hide ``frozen`` strings behind placeholders; return the text and the restorer."""
+    if not frozen:
+        return text, lambda masked: masked
+    ordered = sorted(frozen, key=len, reverse=True)
+    pattern = re.compile("|".join(rf"{re.escape(item)}(?!\w)" for item in ordered))
+    index = {item: position for position, item in enumerate(ordered)}
+    masked = pattern.sub(lambda match: f"\ue000{index[match.group(0)]}\ue001", text)
+    placeholder = re.compile("\ue000(\\d+)\ue001")
+    return masked, lambda rewritten: placeholder.sub(
+        lambda match: ordered[int(match.group(1))], rewritten
+    )
+
+
+def rewrite_text(
+    relative: str,
+    text: str,
+    rename: Renamer,
+    backend: Path,
+    frozen: frozenset[str] = frozenset(),
+) -> str:
+    """Every rewrite pass for one backend-relative file, leaving ``frozen`` strings alone."""
     module, is_package = _module_of(relative)
     if module is not None:
         text = rewrite_imports(text, module, is_package, rename, backend)
         text = rewrite_python_strings(text, rename, backend)
     elif Path(relative).suffix in _SCRIPT_SUFFIXES:
         text = rewrite_embedded_python(text, rename, backend)
+    text, restore = _mask(text, frozen)
     text = rewrite_dotted(text, rename)
     text = rewrite_paths(text, rename, app_relative=relative.startswith(_ARCHITECTURE_DIR))
-    return text
+    return restore(text)
 
 
 def tracked_text_files(backend: Path) -> list[Path]:
@@ -570,6 +620,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     planned: dict[Path, str] = {}
     if not rename.moves:
         return planned
+    frozen = frozen_identifiers(backend, rename)
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
@@ -579,7 +630,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         if relative in _FROZEN_FILES:
             continue
         original = path.read_text(encoding="utf-8")
-        updated = rewrite_text(relative, original, rename, backend)
+        updated = rewrite_text(relative, original, rename, backend, frozen)
         if updated != original:
             planned[path] = updated
     return planned

@@ -13433,6 +13433,14 @@
         "title": "CaseRead",
         "type": "object"
       },
+      "CaseScenarioType": {
+        "enum": [
+          "baseline",
+          "downside",
+          "custom"
+        ],
+        "type": "string"
+      },
       "CaseSort": {
         "enum": [
           "created_at_desc",
@@ -20794,7 +20802,7 @@
           "account_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -21000,7 +21008,7 @@
           "account_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -21108,7 +21116,7 @@
             "title": "As Of Date"
           },
           "balance_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+            "$ref": "#/components/schemas/NonEmptyFinancialString120"
           },
           "currency": {
             "anyOf": [
@@ -21298,7 +21306,7 @@
             "title": "As Of Date"
           },
           "balance_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
+            "$ref": "#/components/schemas/NonEmptyFinancialString120",
             "default": ""
           },
           "currency": {
@@ -21374,7 +21382,7 @@
             "title": "Cash Flow Date"
           },
           "category": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+            "$ref": "#/components/schemas/NonEmptyFinancialString120"
           },
           "currency": {
             "anyOf": [
@@ -21578,7 +21586,7 @@
             "title": "Cash Flow Date"
           },
           "category": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
+            "$ref": "#/components/schemas/NonEmptyFinancialString120",
             "default": ""
           },
           "currency": {
@@ -21678,7 +21686,7 @@
             "$ref": "#/components/schemas/JsonObject-Input"
           },
           "metric": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+            "$ref": "#/components/schemas/NonEmptyFinancialString120"
           },
           "name": {
             "minLength": 1,
@@ -21894,7 +21902,7 @@
             "$ref": "#/components/schemas/JsonObject-Input"
           },
           "metric": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
+            "$ref": "#/components/schemas/NonEmptyFinancialString120",
             "default": ""
           },
           "name": {
@@ -22073,7 +22081,7 @@
           "institution_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22094,7 +22102,7 @@
           "reference_code": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22201,7 +22209,7 @@
           "institution_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22230,7 +22238,7 @@
           "reference_code": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22360,7 +22368,7 @@
           "facility_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22402,7 +22410,7 @@
             "title": "Maturity Date"
           },
           "obligation_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+            "$ref": "#/components/schemas/NonEmptyFinancialString120"
           },
           "outstanding_amount": {
             "anyOf": [
@@ -22718,7 +22726,7 @@
           "facility_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+                "$ref": "#/components/schemas/FinancialString120"
               },
               {
                 "type": "null"
@@ -22760,7 +22768,7 @@
             "title": "Maturity Date"
           },
           "obligation_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
+            "$ref": "#/components/schemas/NonEmptyFinancialString120",
             "default": ""
           },
           "outstanding_amount": {
@@ -23284,6 +23292,10 @@
         ],
         "title": "FinancialSourceRowRead",
         "type": "object"
+      },
+      "FinancialString120": {
+        "maxLength": 120,
+        "type": "string"
       },
       "FinancialValidationEntityType": {
         "enum": [
@@ -43465,7 +43477,7 @@
             "type": "string"
           },
           "scenario_type": {
-            "$ref": "#/components/schemas/ScenarioType-Input"
+            "$ref": "#/components/schemas/StressScenarioType"
           },
           "severity": {
             "anyOf": [
@@ -43656,7 +43668,7 @@
             "type": "array"
           },
           "scenario_type": {
-            "$ref": "#/components/schemas/app__schemas__stress__ScenarioType"
+            "$ref": "#/components/schemas/StressScenarioType"
           },
           "severity": {
             "anyOf": [
@@ -43796,7 +43808,7 @@
             "type": "integer"
           },
           "scenario_type": {
-            "$ref": "#/components/schemas/app__schemas__stress__ScenarioType"
+            "$ref": "#/components/schemas/StressScenarioType"
           },
           "severity": {
             "anyOf": [
@@ -43948,7 +43960,7 @@
           "scenario_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ScenarioType-Input"
+                "$ref": "#/components/schemas/StressScenarioType"
               },
               {
                 "type": "null"
@@ -45794,6 +45806,11 @@
         ],
         "title": "MonthlyFlowRead",
         "type": "object"
+      },
+      "NonEmptyFinancialString120": {
+        "maxLength": 120,
+        "minLength": 1,
+        "type": "string"
       },
       "NotificationListRead": {
         "additionalProperties": false,
@@ -54336,7 +54353,7 @@
             "type": "string"
           },
           "scenario_type": {
-            "$ref": "#/components/schemas/app__schemas__scenarios__ScenarioType"
+            "$ref": "#/components/schemas/CaseScenarioType"
           },
           "updated_at": {
             "format": "date-time",
@@ -54598,17 +54615,6 @@
         ],
         "title": "ScenarioTranslationRead",
         "type": "object"
-      },
-      "ScenarioType-Input": {
-        "enum": [
-          "base",
-          "adverse",
-          "historical",
-          "hypothetical",
-          "reverse",
-          "supervisory"
-        ],
-        "type": "string"
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
@@ -57525,6 +57531,17 @@
         "title": "StressScenarioRead",
         "type": "object"
       },
+      "StressScenarioType": {
+        "enum": [
+          "base",
+          "adverse",
+          "historical",
+          "hypothetical",
+          "reverse",
+          "supervisory"
+        ],
+        "type": "string"
+      },
       "StressScenarioUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -60288,34 +60305,6 @@
         ],
         "title": "YieldCurveViewRead",
         "type": "object"
-      },
-      "app__schemas__financial_workspace__FinancialString120__1": {
-        "maxLength": 120,
-        "minLength": 1,
-        "type": "string"
-      },
-      "app__schemas__financial_workspace__FinancialString120__2": {
-        "maxLength": 120,
-        "type": "string"
-      },
-      "app__schemas__scenarios__ScenarioType": {
-        "enum": [
-          "baseline",
-          "downside",
-          "custom"
-        ],
-        "type": "string"
-      },
-      "app__schemas__stress__ScenarioType": {
-        "enum": [
-          "base",
-          "adverse",
-          "historical",
-          "hypothetical",
-          "reverse",
-          "supervisory"
-        ],
-        "type": "string"
       }
     },
     "securitySchemes": {
@@ -119686,7 +119675,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/ScenarioType-Input"
+                  "$ref": "#/components/schemas/StressScenarioType"
                 },
                 {
                   "type": "null"

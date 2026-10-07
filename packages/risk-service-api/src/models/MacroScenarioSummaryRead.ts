@@ -18,6 +18,13 @@ import {
   ActionItemInMinSeverityToJSON,
   ActionItemInMinSeverityToJSONTyped,
 } from "./ActionItemInMinSeverity";
+import type { StressScenarioType } from "./StressScenarioType";
+import {
+  StressScenarioTypeFromJSON,
+  StressScenarioTypeFromJSONTyped,
+  StressScenarioTypeToJSON,
+  StressScenarioTypeToJSONTyped,
+} from "./StressScenarioType";
 import type { CreatedBy } from "./CreatedBy";
 import {
   CreatedByFromJSON,
@@ -46,13 +53,6 @@ import {
   BankId1ToJSON,
   BankId1ToJSONTyped,
 } from "./BankId1";
-import type { AppSchemasStressScenarioType } from "./AppSchemasStressScenarioType";
-import {
-  AppSchemasStressScenarioTypeFromJSON,
-  AppSchemasStressScenarioTypeFromJSONTyped,
-  AppSchemasStressScenarioTypeToJSON,
-  AppSchemasStressScenarioTypeToJSONTyped,
-} from "./AppSchemasStressScenarioType";
 import type { ScenarioStatus } from "./ScenarioStatus";
 import {
   ScenarioStatusFromJSON,
@@ -141,10 +141,10 @@ export interface MacroScenarioSummaryRead {
   pathCount: number;
   /**
    *
-   * @type {AppSchemasStressScenarioType}
+   * @type {StressScenarioType}
    * @memberof MacroScenarioSummaryRead
    */
-  scenarioType: AppSchemasStressScenarioType;
+  scenarioType: StressScenarioType;
   /**
    *
    * @type {ActionItemInMinSeverity}
@@ -226,7 +226,7 @@ export function MacroScenarioSummaryReadFromJSONTyped(
     owner:
       json["owner"] == null ? undefined : ScenarioOwnerFromJSON(json["owner"]),
     pathCount: json["path_count"],
-    scenarioType: AppSchemasStressScenarioTypeFromJSON(json["scenario_type"]),
+    scenarioType: StressScenarioTypeFromJSON(json["scenario_type"]),
     severity: ActionItemInMinSeverityFromJSON(json["severity"]),
     status: ScenarioStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
@@ -261,7 +261,7 @@ export function MacroScenarioSummaryReadToJSONTyped(
     name: value["name"],
     owner: ScenarioOwnerToJSON(value["owner"]),
     path_count: value["pathCount"],
-    scenario_type: AppSchemasStressScenarioTypeToJSON(value["scenarioType"]),
+    scenario_type: StressScenarioTypeToJSON(value["scenarioType"]),
     severity: ActionItemInMinSeverityToJSON(value["severity"]),
     status: ScenarioStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),

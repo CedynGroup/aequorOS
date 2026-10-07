@@ -18,6 +18,13 @@ import {
   Source2ToJSON,
   Source2ToJSONTyped,
 } from "./Source2";
+import type { StressScenarioType } from "./StressScenarioType";
+import {
+  StressScenarioTypeFromJSON,
+  StressScenarioTypeFromJSONTyped,
+  StressScenarioTypeToJSON,
+  StressScenarioTypeToJSONTyped,
+} from "./StressScenarioType";
 import type { CreatedBy } from "./CreatedBy";
 import {
   CreatedByFromJSON,
@@ -46,13 +53,6 @@ import {
   Narrative1ToJSON,
   Narrative1ToJSONTyped,
 } from "./Narrative1";
-import type { AppSchemasStressScenarioType } from "./AppSchemasStressScenarioType";
-import {
-  AppSchemasStressScenarioTypeFromJSON,
-  AppSchemasStressScenarioTypeFromJSONTyped,
-  AppSchemasStressScenarioTypeToJSON,
-  AppSchemasStressScenarioTypeToJSONTyped,
-} from "./AppSchemasStressScenarioType";
 import type { ActionItemInMinSeverity } from "./ActionItemInMinSeverity";
 import {
   ActionItemInMinSeverityFromJSON,
@@ -213,10 +213,10 @@ export interface MacroScenarioRead {
   paths: Array<MacroPathRead>;
   /**
    *
-   * @type {AppSchemasStressScenarioType}
+   * @type {StressScenarioType}
    * @memberof MacroScenarioRead
    */
-  scenarioType: AppSchemasStressScenarioType;
+  scenarioType: StressScenarioType;
   /**
    *
    * @type {ActionItemInMinSeverity}
@@ -325,7 +325,7 @@ export function MacroScenarioReadFromJSONTyped(
     owner:
       json["owner"] == null ? undefined : ScenarioOwnerFromJSON(json["owner"]),
     paths: (json["paths"] as Array<any>).map(MacroPathReadFromJSON),
-    scenarioType: AppSchemasStressScenarioTypeFromJSON(json["scenario_type"]),
+    scenarioType: StressScenarioTypeFromJSON(json["scenario_type"]),
     severity: ActionItemInMinSeverityFromJSON(json["severity"]),
     source: Source2FromJSON(json["source"]),
     status: ScenarioStatusFromJSON(json["status"]),
@@ -366,7 +366,7 @@ export function MacroScenarioReadToJSONTyped(
     organization_id: value["organizationId"],
     owner: ScenarioOwnerToJSON(value["owner"]),
     paths: (value["paths"] as Array<any>).map(MacroPathReadToJSON),
-    scenario_type: AppSchemasStressScenarioTypeToJSON(value["scenarioType"]),
+    scenario_type: StressScenarioTypeToJSON(value["scenarioType"]),
     severity: ActionItemInMinSeverityToJSON(value["severity"]),
     source: Source2ToJSON(value["source"]),
     status: ScenarioStatusToJSON(value["status"]),

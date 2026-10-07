@@ -30,8 +30,11 @@ Design rules
 3. **Never invent a regulatory rule.** Where the repository does not establish a
    legal basis, the entry carries
    :data:`EXTERNAL_REGULATORY_VERIFICATION_REQUIRED` rather than a guess.
-4. **Engines are import-checkable.** ``calculation_engine`` is a
-   ``module.path:callable`` string; the test suite imports every one of them.
+4. **Engines are import-checkable.** ``calculation_engine`` is a frozen
+   ``module.path:callable`` identifier, recorded in every filed package's
+   provenance. It names where the engine lived when it was registered; its
+   current home is ``engines.ENGINE_LOCATIONS[identifier]``, and the test suite
+   imports every one of them.
 
 Repo reality that contradicts the audit's shorthand — read this
 ---------------------------------------------------------------
@@ -337,7 +340,9 @@ class MetricAuthority:
     """Dotted path of the function that resolves this metric's parameters."""
 
     calculation_engine: str = ""
-    """``module.path:callable`` — import-checked by the registry test suite."""
+    """Frozen ``module.path:callable`` identifier (a key of ``engines.ENGINE_LOCATIONS``).
+
+    Persisted in package provenance, so it never follows the code when it moves."""
 
     calculation_version: str = ""
     """The declared ``ENGINE_VERSION`` constant for that engine."""

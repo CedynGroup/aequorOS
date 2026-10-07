@@ -18,7 +18,7 @@ class ClosedModel(BaseModel):
 
 
 type MacroModule = Literal["liquidity", "capital", "irr", "fx", "ftp"]
-type ScenarioType = Literal[
+type StressScenarioType = Literal[
     "base", "adverse", "historical", "hypothetical", "reverse", "supervisory"
 ]
 type Severity = Literal["mild", "moderate", "severe"]
@@ -55,7 +55,7 @@ class MacroScenarioCreate(ClosedModel):
     code: str = Field(min_length=1, max_length=60)
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
-    scenario_type: ScenarioType
+    scenario_type: StressScenarioType
     severity: Severity | None = None
     horizon_years: int = Field(default=3, ge=1, le=10)
     narrative: str | None = Field(default=None, max_length=8000)
@@ -95,7 +95,7 @@ class MacroScenarioUpdate(ClosedModel):
 
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
-    scenario_type: ScenarioType | None = None
+    scenario_type: StressScenarioType | None = None
     severity: Severity | None = None
     horizon_years: int | None = Field(default=None, ge=1, le=10)
     narrative: str | None = Field(default=None, max_length=8000)
@@ -144,7 +144,7 @@ class MacroScenarioRead(ClosedModel):
     code: str
     name: str
     description: str | None
-    scenario_type: ScenarioType
+    scenario_type: StressScenarioType
     severity: Severity | None
     horizon_years: int
     narrative: str | None
@@ -168,7 +168,7 @@ class MacroScenarioSummaryRead(ClosedModel):
     bank_id: str | None
     code: str
     name: str
-    scenario_type: ScenarioType
+    scenario_type: StressScenarioType
     severity: Severity | None
     horizon_years: int
     status: ScenarioStatus

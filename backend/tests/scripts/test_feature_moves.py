@@ -63,6 +63,13 @@ FILES: dict[str, str] = {
         "\n"
         "VALUE = compute() + LIMIT\n"
     ),
+    "backend/app/domain/authority/__init__.py": "",
+    "backend/app/domain/authority/engines.py": (
+        "ENGINE_LOCATIONS: dict[str, tuple[str, str]] = {\n"
+        '    "app.domain.fx.engine:compute": ("app.domain.fx.engine", "compute"),\n'
+        "}\n"
+    ),
+    "backend/app/domain/authority/registry.py": 'ENGINE = "app.domain.fx.engine:compute"\n',
     "backend/tests/architecture/test_guard.py": (
         'PLANE = ("services/regulatory_fx.py", "domain/fx", "services/regulatory_*.py")\n'
     ),
@@ -261,6 +268,16 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
     )
     for relative in untouched:
         assert _read(repository, relative) == FILES[relative]
+
+
+def test_frozen_engine_identifiers_survive_while_their_locations_move(
+    repository: Path,
+) -> None:
+    _run(repository, "move")
+    engines = _read(repository, "backend/app/domain/authority/engines.py")
+    assert '"app.domain.fx.engine:compute": ("app.fx.domain.engine", "compute")' in engines
+    registry = _read(repository, "backend/app/domain/authority/registry.py")
+    assert registry == 'ENGINE = "app.domain.fx.engine:compute"\n'
 
 
 def test_rewritten_python_still_parses(repository: Path) -> None:
