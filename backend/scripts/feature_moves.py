@@ -332,24 +332,22 @@ def _absolute_base(
 ) -> str | None:
     """The absolute module a ``from`` import reads from, or ``None`` to leave it alone.
 
-    Prefer a resolvable current location, otherwise require one historical target.
+    Require one canonical target across current and historical locations.
     """
     if not node.level:
         return node.module
     if module is None:
         return None
     current_base = _resolve(_package_of(module, is_package), node.level, node.module)
-    base = current_base
-    if not _import_available(backend, base, node, rename):
-        candidates: dict[tuple[str, ...], str] = {}
-        for location in rename.locations(module)[1:]:
-            candidate = _resolve(_package_of(location, is_package), node.level, node.module)
-            if _import_available(backend, candidate, node, rename):
-                target = (rename(candidate), *(rename(f"{candidate}.{a.name}") for a in node.names))
-                candidates[target] = candidate
-        if len(candidates) != 1:
-            raise UnresolvedImport(f"cannot resolve relative import in {module}: {ast.unparse(node)}")
-        base = next(iter(candidates.values()))
+    candidates: dict[tuple[str, ...], str] = {}
+    for location in rename.locations(module):
+        candidate = _resolve(_package_of(location, is_package), node.level, node.module)
+        if _import_available(backend, candidate, node, rename):
+            target = tuple(rename(f"{candidate}.{a.name}") for a in node.names)
+            candidates.setdefault(target, candidate)
+    if len(candidates) != 1:
+        raise UnresolvedImport(f"cannot resolve relative import in {module}: {ast.unparse(node)}")
+    base = next(iter(candidates.values()))
     new_base = _resolve(_package_of(rename(module), is_package), node.level, node.module)
     still_resolves = base == current_base and rename(base) == new_base and all(
         rename(f"{base}.{alias.name}") == f"{new_base}.{alias.name}" for alias in node.names

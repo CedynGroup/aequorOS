@@ -477,20 +477,91 @@ def test_rebased_relative_imports_resolve_from_historical_locations(
     assert _run(repository, "rewrite") == ["exit 0"]
 
 
+@pytest.mark.parametrize("package", [False, True])
+@pytest.mark.parametrize(
+    ("statement", "expression"),
+    [
+        ("from ..risk import LIMIT", "LIMIT"),
+        ("from ..risk import LIMIT as bound", "bound"),
+        ("from .. import risk", "risk.LIMIT"),
+        ("from .. import risk as bound", "bound.LIMIT"),
+        ("from ..risk import *", "LIMIT"),
+    ],
+)
+def test_ambiguous_rebased_imports_refuse_all_commands(
+    repository: Path, package: bool, statement: str, expression: str
+) -> None:
+    leaf = "__init__" if package else "helpers"
+    original = repository / f"backend/app/domain/fx/{leaf}.py"
+    original_module = "app.domain.fx" + ("" if package else ".helpers")
+    if statement.endswith("*"):
+        added = f"\n\n{statement}\nREPLAYED = {expression}\n"
+        probe = "REPLAYED"
+    else:
+        added = f"\n\ndef replayed():\n    {statement}\n    return {expression}\n"
+        probe = "replayed()"
+    _git(repository, "branch", "before-move")
+    _git(repository, "switch", "-qc", "caller")
+    with original.open("a") as output:
+        output.write(added)
+    _git(repository, "add", str(original.relative_to(repository)))
+    _git(
+        repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "caller"
+    )
+    assert _python(repository, f"import {original_module} as caller\nprint(caller.{probe})") == "1"
+    _git(repository, "switch", "-qc", "migration", "before-move")
+    _run(repository, "move")
+    current_risk = repository / "backend/app/fx/risk.py"
+    current_risk.write_text("LIMIT = 9\n")
+    _git(repository, "add", "-u")
+    _git(repository, "add", str(current_risk.relative_to(repository)))
+    _git(
+        repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "move"
+    )
+    _git(repository, "switch", "-q", "caller")
+    _git(repository, "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "migration")
+    current_module = "app.fx.domain" + ("" if package else ".helpers")
+    assert _python(repository, f"import {current_module} as caller\nprint(caller.{probe})") == "9"
+    before = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    assert _run(repository, "check")[-1] == "exit 1"
+    with pytest.raises(feature_moves.UnresolvedImport):
+        _run(repository, "rewrite")
+    with pytest.raises(feature_moves.UnresolvedImport):
+        _run(repository, "move", [("app.fx.service", "app.currency.service")])
+    after = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    assert before == after
+    assert not (repository / "backend/app/currency").exists()
+    current = repository / f"backend/app/fx/domain/{leaf}.py"
+    explicit = statement.replace("..risk", "app.domain.risk").replace(
+        ".. import", "app.domain import"
+    )
+    current.write_text(current.read_text().replace(statement, explicit))
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _run(repository, "check") == ["exit 0"]
+    assert _python(repository, f"import {current_module} as caller\nprint(caller.{probe})") == "1"
+
+
 @pytest.mark.parametrize("parent_import", [False, True])
-def test_valid_current_relative_targets_take_priority(
+def test_equivalent_current_and_historical_targets_remain_executable(
     repository: Path, parent_import: bool
 ) -> None:
     _run(repository, "move")
-    (repository / "backend/app/fx/risk.py").write_text("LIMIT = 9\n")
+    _run(repository, "move", [("app.domain.risk", "app.fx.risk")])
     statement = "from .. import risk" if parent_import else "from ..risk import LIMIT"
     value = "risk.LIMIT" if parent_import else "LIMIT"
     helpers = repository / "backend/app/fx/domain/helpers.py"
     with helpers.open("a") as output:
-        output.write(f"\n\ndef current():\n    {statement}\n    return {value}\n")
+        output.write(f"\n\ndef equivalent():\n    {statement}\n    return {value}\n")
     assert _run(repository, "check") == ["exit 0"]
     assert _run(repository, "rewrite") == ["exit 0"]
-    assert _python(repository, "from app.fx.domain.helpers import current\nprint(current())") == "9"
+    assert (
+        _python(repository, "from app.fx.domain.helpers import equivalent\nprint(equivalent())")
+        == "1"
+    )
 
 
 def test_rebased_imports_can_use_an_intermediate_location(repository: Path) -> None:

@@ -353,7 +353,7 @@ feature. New code goes in the target layout; existing code moves one feature per
   a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path, so in-flight branches rebase
   cleanly onto the move and then run `scripts/feature_moves.py rewrite`;
-  relative imports keep valid current targets, otherwise historical locations must identify
-  one target or the rewrite refuses to proceed.
+  current and historical locations of each relative import must identify one canonical target
+  or the rewrite refuses to proceed.
   `scripts/feature_moves.py check` fails while anything still uses an old name. The diff of a
   move PR is the renames plus the codemod's output; logic changes go in separate PRs.
