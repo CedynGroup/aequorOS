@@ -123,7 +123,7 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^api/v1/__init__$", KERNEL),
     (r"^(services|schemas|models|features|domain|jobs|ml)/__init__$", KERNEL),
     (r"^services/(audit|mailer|job_queue|jobs|public_ids)$", KERNEL),
-    (r"^models/(audit_event|organization)$", KERNEL),
+    (r"^models/(audit_event|job|organization)$", KERNEL),
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
@@ -138,7 +138,7 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "identity",
     ),
     (
-        r"^models/(authorization|user|refresh_token|sso_connection|integration_key"
+        r"^models/(authorization|bank|user|refresh_token|sso_connection|integration_key"
         r"|institution_profile)$",
         "identity",
     ),
@@ -158,7 +158,7 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"|parameter_register|params|sdi_regime)$",
         "policy",
     ),
-    (r"^models/(regulatory_parameter|jurisdiction|institution_type)$", "policy"),
+    (r"^models/(regulatory_parameter|parameter_register|jurisdiction|institution_type)$", "policy"),
     (r"^domain/policy/", "policy"),
     # ---- notifications
     (
