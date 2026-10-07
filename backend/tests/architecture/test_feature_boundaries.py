@@ -47,6 +47,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
@@ -631,6 +632,128 @@ def _synthetic_import_content(app: Path, source: str, target: str, import_style:
     return f"from {target} import Authority\n"
 
 
+def _scan_synthetic_boundaries() -> frozenset[str]:
+    _owners.cache_clear()
+    _model_reexports.cache_clear()
+    return violations()
+
+
+@dataclass
+class _ModelSplitScenario:
+    app: Path
+    baseline: Path
+    ledger: Path
+    origins: Path
+    source: str
+    import_style: str
+    original: frozenset[str]
+    baseline_bytes: bytes
+
+    def check_source_move(self, path: Path, target: str, moves: list[list[str]]) -> Path:
+        moved_source = {
+            "app.api.deps": "app.core.dependency",
+            "app.services.ai.grounding": "app.ai.service",
+            "app.services.fact_derivation": "app.live.service",
+        }[self.source]
+        path.unlink()
+        moved_path = _write_synthetic_module(
+            self.app,
+            moved_source,
+            _synthetic_import_content(self.app, moved_source, target, self.import_style),
+        )
+        self.ledger.write_text(json.dumps([*moves, [self.source, moved_source]]), encoding="utf-8")
+        assert _scan_synthetic_boundaries() == self.original
+        test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+        moved_path.unlink()
+        path = _write_synthetic_module(
+            self.app,
+            self.source,
+            _synthetic_import_content(self.app, self.source, target, self.import_style),
+        )
+        self.ledger.write_text(json.dumps(moves), encoding="utf-8")
+        return path
+
+    def check_new_sibling(self, path: Path, target: str, split: str) -> None:
+        sibling = "parameter_register" if split == "bank" else "bank"
+        sibling_target = f"app.models.{sibling}"
+        sibling_path = _write_synthetic_module(self.app, sibling_target, "class Authority: pass\n")
+        path.write_text(
+            _synthetic_import_content(self.app, self.source, target, self.import_style)
+            + _synthetic_import_content(self.app, self.source, sibling_target, "direct"),
+            encoding="utf-8",
+        )
+        _scan_synthetic_boundaries()
+        with pytest.raises(AssertionError, match="These imports break the feature layout"):
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+        sibling_path.unlink()
+        path.write_text(
+            _synthetic_import_content(self.app, self.source, target, self.import_style),
+            encoding="utf-8",
+        )
+
+    def check_split(self, source_path: Path, split: str, feature: str) -> Path:
+        target = f"app.models.{split}"
+        self.origins.write_text(
+            json.dumps(
+                {
+                    target: {
+                        "module": "app.models.regulatory",
+                        "feature": "live",
+                        "importers": [self.source],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        target_path = _write_synthetic_module(self.app, target, "class Authority: pass\n")
+        source_path.write_text(
+            _synthetic_import_content(self.app, self.source, target, self.import_style),
+            encoding="utf-8",
+        )
+        assert feature_of(target_path) == feature
+        assert _scan_synthetic_boundaries() == self.original
+        test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+        write_baseline()
+        assert self.baseline.read_bytes() == self.baseline_bytes
+
+        moved = f"app.{feature}.models.{split}"
+        moved_again = f"app.{feature}.models.authority"
+        for destination in [moved, moved_again]:
+            target_path.unlink()
+            target_path = _write_synthetic_module(self.app, destination, "class Authority: pass\n")
+            source_path.write_text(
+                _synthetic_import_content(self.app, self.source, destination, self.import_style),
+                encoding="utf-8",
+            )
+            moves = [[target, moved]]
+            if destination == moved_again:
+                moves.append([moved, moved_again])
+            self.ledger.write_text(json.dumps(moves), encoding="utf-8")
+            assert _scan_synthetic_boundaries() == self.original
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+
+        source_path = self.check_source_move(source_path, moved_again, moves)
+        self.check_new_sibling(source_path, moved_again, split)
+
+        new_source = "app.stress.new_service"
+        new_path = _write_synthetic_module(
+            self.app,
+            new_source,
+            _synthetic_import_content(self.app, new_source, moved_again, self.import_style),
+        )
+        _scan_synthetic_boundaries()
+        with pytest.raises(AssertionError, match="These imports break the feature layout"):
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+        new_path.unlink()
+        source_path.write_text("", encoding="utf-8")
+        with pytest.raises(AssertionError, match="Delete resolved split dependencies"):
+            _scan_synthetic_boundaries()
+        target_path.unlink()
+        self.ledger.write_text("[]", encoding="utf-8")
+        self.origins.write_text("{}", encoding="utf-8")
+        return source_path
+
+
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
@@ -654,112 +777,6 @@ def test_model_splits_preserve_historical_boundary_identities(
     monkeypatch.setattr(f"{__name__}.SPLIT_ORIGINS", origins)
     ledger.write_text("[]", encoding="utf-8")
 
-    def scan() -> frozenset[str]:
-        _owners.cache_clear()
-        _model_reexports.cache_clear()
-        return violations()
-
-    def check_source_move(path: Path, target: str, moves: list[list[str]]) -> Path:
-        moved_source = {
-            "app.api.deps": "app.core.dependency",
-            "app.services.ai.grounding": "app.ai.service",
-            "app.services.fact_derivation": "app.live.service",
-        }[source]
-        path.unlink()
-        moved_path = _write_synthetic_module(
-            app,
-            moved_source,
-            _synthetic_import_content(app, moved_source, target, import_style),
-        )
-        ledger.write_text(json.dumps([*moves, [source, moved_source]]), encoding="utf-8")
-        assert scan() == original
-        test_no_new_boundary_violation_and_the_baseline_only_shrinks()
-        moved_path.unlink()
-        path = _write_synthetic_module(
-            app, source, _synthetic_import_content(app, source, target, import_style)
-        )
-        ledger.write_text(json.dumps(moves), encoding="utf-8")
-        return path
-
-    def check_new_sibling(path: Path, target: str, split: str) -> None:
-        sibling = "parameter_register" if split == "bank" else "bank"
-        sibling_target = f"app.models.{sibling}"
-        sibling_path = _write_synthetic_module(app, sibling_target, "class Authority: pass\n")
-        path.write_text(
-            _synthetic_import_content(app, source, target, import_style)
-            + _synthetic_import_content(app, source, sibling_target, "direct"),
-            encoding="utf-8",
-        )
-        scan()
-        with pytest.raises(AssertionError, match="These imports break the feature layout"):
-            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
-        sibling_path.unlink()
-        path.write_text(
-            _synthetic_import_content(app, source, target, import_style),
-            encoding="utf-8",
-        )
-
-    def check_split(source_path: Path, split: str, feature: str) -> Path:
-        target = f"app.models.{split}"
-        origins.write_text(
-            json.dumps(
-                {
-                    target: {
-                        "module": "app.models.regulatory",
-                        "feature": "live",
-                        "importers": [source],
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-        target_path = _write_synthetic_module(app, target, "class Authority: pass\n")
-        source_path.write_text(
-            _synthetic_import_content(app, source, target, import_style), encoding="utf-8"
-        )
-        assert feature_of(target_path) == feature
-        assert scan() == original
-        test_no_new_boundary_violation_and_the_baseline_only_shrinks()
-        write_baseline()
-        assert baseline.read_bytes() == baseline_bytes
-
-        moved = f"app.{feature}.models.{split}"
-        moved_again = f"app.{feature}.models.authority"
-        for destination in [moved, moved_again]:
-            target_path.unlink()
-            target_path = _write_synthetic_module(app, destination, "class Authority: pass\n")
-            source_path.write_text(
-                _synthetic_import_content(app, source, destination, import_style),
-                encoding="utf-8",
-            )
-            moves = [[target, moved]]
-            if destination == moved_again:
-                moves.append([moved, moved_again])
-            ledger.write_text(json.dumps(moves), encoding="utf-8")
-            assert scan() == original
-            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
-
-        source_path = check_source_move(source_path, moved_again, moves)
-        check_new_sibling(source_path, moved_again, split)
-
-        new_source = "app.stress.new_service"
-        new_path = _write_synthetic_module(
-            app,
-            new_source,
-            _synthetic_import_content(app, new_source, moved_again, import_style),
-        )
-        scan()
-        with pytest.raises(AssertionError, match="These imports break the feature layout"):
-            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
-        new_path.unlink()
-        source_path.write_text("", encoding="utf-8")
-        with pytest.raises(AssertionError, match="Delete resolved split dependencies"):
-            scan()
-        target_path.unlink()
-        ledger.write_text("[]", encoding="utf-8")
-        origins.write_text("{}", encoding="utf-8")
-        return source_path
-
     try:
         _write_synthetic_module(app, "app.models.__init__")
         _write_synthetic_module(app, "app.models.regulatory", "class Authority: pass\n")
@@ -768,14 +785,17 @@ def test_model_splits_preserve_historical_boundary_identities(
             source,
             _synthetic_import_content(app, source, "app.models.regulatory", import_style),
         )
-        original = scan()
+        original = _scan_synthetic_boundaries()
         write_baseline()
         baseline_bytes = baseline.read_bytes()
+        scenario = _ModelSplitScenario(
+            app, baseline, ledger, origins, source, import_style, original, baseline_bytes
+        )
         for split, feature in [("bank", "identity"), ("parameter_register", "policy")]:
-            source_path = check_split(source_path, split, feature)
+            source_path = scenario.check_split(source_path, split, feature)
 
         source_path.write_text("", encoding="utf-8")
-        assert scan() == frozenset()
+        assert _scan_synthetic_boundaries() == frozenset()
         write_baseline()
         assert _baseline() == []
     finally:
@@ -848,22 +868,14 @@ def test_recorded_moves_preserve_the_ratchet(
     source = "app.services.bi.authorization"
     target = "app.services.scoped_authorization"
 
-    def write_module(module: str, content: str = "") -> Path:
-        return _write_synthetic_module(app, module, content)
-
-    def scan() -> frozenset[str]:
-        _owners.cache_clear()
-        _model_reexports.cache_clear()
-        return violations()
-
     def import_content() -> str:
         return _synthetic_import_content(app, source, target, import_style)
 
     try:
-        write_module("app.models.__init__")
-        write_module(target)
-        source_path = write_module(source, import_content())
-        original = scan()
+        _write_synthetic_module(app, "app.models.__init__")
+        _write_synthetic_module(app, target)
+        source_path = _write_synthetic_module(app, source, import_content())
+        original = _scan_synthetic_boundaries()
         assert original == {
             f"private bi->identity: {source} -> {target}",
         }
@@ -883,25 +895,25 @@ def test_recorded_moves_preserve_the_ratchet(
             app.joinpath(*old.split(".")[1:]).with_suffix(".py").unlink()
             source = new if source == old else source
             target = new if target == old else target
-            write_module(target)
-            source_path = write_module(source, import_content())
+            _write_synthetic_module(app, target)
+            source_path = _write_synthetic_module(app, source, import_content())
             ledger.write_text(json.dumps(moves[:index]), encoding="utf-8")
-            assert scan() == original
+            assert _scan_synthetic_boundaries() == original
             test_no_new_boundary_violation_and_the_baseline_only_shrinks()
             write_baseline()
             assert baseline.read_bytes() == baseline_bytes
 
-        write_module("app.identity.service.new_authority")
+        _write_synthetic_module(app, "app.identity.service.new_authority")
         source_path.write_text(
             import_content() + "from app.identity.service.new_authority import Authority\n",
             encoding="utf-8",
         )
-        scan()
+        _scan_synthetic_boundaries()
         with pytest.raises(AssertionError, match="These imports break the feature layout"):
             test_no_new_boundary_violation_and_the_baseline_only_shrinks()
 
         source_path.write_text("", encoding="utf-8")
-        assert scan() == frozenset()
+        assert _scan_synthetic_boundaries() == frozenset()
         with pytest.raises(AssertionError, match="These violations are gone"):
             test_no_new_boundary_violation_and_the_baseline_only_shrinks()
         write_baseline()
