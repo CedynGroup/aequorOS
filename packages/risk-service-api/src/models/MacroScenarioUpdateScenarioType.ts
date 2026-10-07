@@ -10,13 +10,13 @@
  * Do not edit the class manually.
  */
 
-import type { ScenarioTypeInput } from "./ScenarioTypeInput";
+import type { StressScenarioType } from "./StressScenarioType";
 import {
-  ScenarioTypeInputFromJSON,
-  ScenarioTypeInputFromJSONTyped,
-  ScenarioTypeInputToJSON,
-  ScenarioTypeInputToJSONTyped,
-} from "./ScenarioTypeInput";
+  StressScenarioTypeFromJSON,
+  StressScenarioTypeFromJSONTyped,
+  StressScenarioTypeToJSON,
+  StressScenarioTypeToJSONTyped,
+} from "./StressScenarioType";
 
 /**
  *

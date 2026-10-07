@@ -1005,11 +1005,13 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
   HTML. The symptom is a WHITE PAGE with no console error worth the name, and it does
   not self-heal on reload. Fix: `rm -rf backend/dashboard/.next` and restart the dev
   server.
-- **Two schema shapes break generation itself:** two Pydantic classes sharing a NAME
-  across modules (FastAPI then emits `app__schemas__x__Name` component keys the
-  generator cannot map back), and a `Decimal` form field (Pydantic types it
-  `number | string`, and the alias lands in an operation request interface, not in
-  `src/models/`).
+- **Schema component names must survive module moves.** Give Pydantic models and
+  named type aliases globally unique names, including distinct names for differently
+  constrained variants of an alias. Collisions make FastAPI emit module-qualified
+  component keys, coupling the schema and generated client exports to source paths and
+  potentially breaking generation. Define these names in the backend schemas.
+- **A `Decimal` form field breaks generation:** Pydantic types it `number | string`,
+  and the alias lands in an operation request interface, not in `src/models/`.
 - **A STALE GENERATED CLIENT DROPS A NEW REQUEST FIELD SILENTLY, AND THE SERVER THEN
   DEFAULTS IT.** The two directions degrade differently, and only one of them is
   visible. `<Model>FromJSON` opens with `...json`, so an unknown RESPONSE field

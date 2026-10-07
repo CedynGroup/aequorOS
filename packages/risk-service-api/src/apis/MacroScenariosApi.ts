@@ -22,7 +22,7 @@ import type {
   MacroScenarioUpdate,
   ScenarioStatus,
   ScenarioTranslationRead,
-  ScenarioTypeInput,
+  StressScenarioType,
 } from "../models/index";
 import {
   ErrorResponseFromJSON,
@@ -45,8 +45,8 @@ import {
   ScenarioStatusToJSON,
   ScenarioTranslationReadFromJSON,
   ScenarioTranslationReadToJSON,
-  ScenarioTypeInputFromJSON,
-  ScenarioTypeInputToJSON,
+  StressScenarioTypeFromJSON,
+  StressScenarioTypeToJSON,
 } from "../models/index";
 
 export interface ApproveMacroScenarioRequest {
@@ -74,7 +74,7 @@ export interface GetMacroScenarioRequest {
 
 export interface ListMacroScenariosRequest {
   bankId?: string | null;
-  scenarioType?: ScenarioTypeInput | null;
+  scenarioType?: StressScenarioType | null;
   status?: ScenarioStatus | null;
   includeArchived?: boolean;
 }

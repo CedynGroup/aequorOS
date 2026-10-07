@@ -25,7 +25,7 @@ from app.schemas.stress import (
     MacroScenarioUpdate,
     ScenarioStatus,
     ScenarioTranslationRead,
-    ScenarioType,
+    StressScenarioType,
 )
 from app.services import macro_scenarios
 
@@ -55,7 +55,7 @@ def list_macro_scenarios(  # noqa: PLR0913 - query surface of one read
     db: DbSession,
     ctx: Tenant,
     bank_id: Annotated[str | None, Query()] = None,
-    scenario_type: Annotated[ScenarioType | None, Query()] = None,
+    scenario_type: Annotated[StressScenarioType | None, Query()] = None,
     status_filter: Annotated[ScenarioStatus | None, Query(alias="status")] = None,
     include_archived: Annotated[bool, Query()] = False,
 ) -> MacroScenarioListRead:

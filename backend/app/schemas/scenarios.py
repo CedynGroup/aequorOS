@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-type ScenarioType = Literal["baseline", "downside", "custom"]
+type CaseScenarioType = Literal["baseline", "downside", "custom"]
 type AssumptionCategory = Literal[
     "growth", "expenses", "cash_flow_timing", "credit_usage", "repayment_behavior", "other"
 ]
@@ -56,7 +56,7 @@ class ScenarioRead(BaseModel):
     case_id: UUID
     name: str
     description: str | None
-    scenario_type: ScenarioType
+    scenario_type: CaseScenarioType
     copied_from_scenario_id: UUID | None
     created_by: UUID | None
     archived_at: datetime | None

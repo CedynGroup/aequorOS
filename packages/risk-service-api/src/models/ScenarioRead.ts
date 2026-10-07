@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { AppSchemasScenariosScenarioType } from "./AppSchemasScenariosScenarioType";
+import type { CaseScenarioType } from "./CaseScenarioType";
 import {
-  AppSchemasScenariosScenarioTypeFromJSON,
-  AppSchemasScenariosScenarioTypeFromJSONTyped,
-  AppSchemasScenariosScenarioTypeToJSON,
-  AppSchemasScenariosScenarioTypeToJSONTyped,
-} from "./AppSchemasScenariosScenarioType";
+  CaseScenarioTypeFromJSON,
+  CaseScenarioTypeFromJSONTyped,
+  CaseScenarioTypeToJSON,
+  CaseScenarioTypeToJSONTyped,
+} from "./CaseScenarioType";
 import type { ScenarioAssumptionRead } from "./ScenarioAssumptionRead";
 import {
   ScenarioAssumptionReadFromJSON,
@@ -94,10 +94,10 @@ export interface ScenarioRead {
   organizationId: string;
   /**
    *
-   * @type {AppSchemasScenariosScenarioType}
+   * @type {CaseScenarioType}
    * @memberof ScenarioRead
    */
-  scenarioType: AppSchemasScenariosScenarioType;
+  scenarioType: CaseScenarioType;
   /**
    *
    * @type {Date}
@@ -159,9 +159,7 @@ export function ScenarioReadFromJSONTyped(
     id: json["id"],
     name: json["name"],
     organizationId: json["organization_id"],
-    scenarioType: AppSchemasScenariosScenarioTypeFromJSON(
-      json["scenario_type"],
-    ),
+    scenarioType: CaseScenarioTypeFromJSON(json["scenario_type"]),
     updatedAt: new Date(json["updated_at"]),
   };
 }
@@ -194,7 +192,7 @@ export function ScenarioReadToJSONTyped(
     id: value["id"],
     name: value["name"],
     organization_id: value["organizationId"],
-    scenario_type: AppSchemasScenariosScenarioTypeToJSON(value["scenarioType"]),
+    scenario_type: CaseScenarioTypeToJSON(value["scenarioType"]),
     updated_at: value["updatedAt"].toISOString(),
   };
 }

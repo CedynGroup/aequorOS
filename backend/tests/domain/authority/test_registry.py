@@ -9,11 +9,14 @@ without documenting its divergence.
 from __future__ import annotations
 
 import importlib
+import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from app.domain.authority.engines import ENGINE_LOCATIONS
 from app.domain.authority.registry import (
     ACCEPTED_BY_AUTHORITY,
     EXTERNAL_REGULATORY_VERIFICATION_REQUIRED,
@@ -32,6 +35,8 @@ from app.domain.authority.registry import (
     get_authority,
     multi_authority_metrics,
 )
+
+FROZEN_ENGINE_IDS = Path(__file__).with_name("frozen_engine_ids.json")
 
 
 def _authority(**overrides: object) -> MetricAuthority:
@@ -129,18 +134,45 @@ def test_unknown_metric_lookups_raise() -> None:
 # -- every registered engine actually exists -------------------------------
 
 
-def test_every_registered_engine_imports_and_is_callable() -> None:
+def test_every_engine_location_imports_and_is_callable() -> None:
+    for engine_id, (module_path, attribute) in ENGINE_LOCATIONS.items():
+        target = getattr(importlib.import_module(module_path), attribute, None)
+        assert target is not None, f"{engine_id}: {module_path}:{attribute} does not exist"
+        assert callable(target), f"{engine_id}: {module_path}:{attribute} is not callable"
+
+
+def test_every_registered_engine_has_a_location() -> None:
     for entry in REGISTRY:
         assert entry.calculation_engine, f"{entry.key} has no calculation_engine"
-        module_path, sep, attribute = entry.calculation_engine.partition(":")
-        if not sep:
-            # A module-level authority (a formula evaluator, not one callable).
-            importlib.import_module(module_path)
-            continue
-        module = importlib.import_module(module_path)
-        target = getattr(module, attribute, None)
-        assert target is not None, f"{entry.key}: {entry.calculation_engine} does not exist"
-        assert callable(target), f"{entry.key}: {entry.calculation_engine} is not callable"
+        assert entry.calculation_engine in ENGINE_LOCATIONS, (
+            f"{entry.key}: add {entry.calculation_engine} to ENGINE_LOCATIONS and "
+            f"{FROZEN_ENGINE_IDS.name}"
+        )
+    unused = set(ENGINE_LOCATIONS) - {entry.calculation_engine for entry in REGISTRY}
+    assert unused == set(), f"no metric uses these engines any more: {sorted(unused)}"
+
+
+def test_engine_identifiers_are_frozen() -> None:
+    """Filed packages carry these identifiers; renaming one changes their content.
+
+    Moving an engine updates its location in ``ENGINE_LOCATIONS``, never its key.
+    A new engine adds its identifier to the snapshot deliberately.
+    """
+    frozen = json.loads(FROZEN_ENGINE_IDS.read_text(encoding="utf-8"))
+    assert sorted(ENGINE_LOCATIONS) == frozen
+
+
+def test_filed_golden_packages_name_frozen_engines() -> None:
+    golden = (Path(__file__).parents[2] / "fixtures" / "pre_p0_packages").glob("*.json")
+    named = {
+        methodology["calculation_engine"]
+        for path in golden
+        for methodology in json.loads(path.read_text(encoding="utf-8"))["snapshot"]["provenance"][
+            "declared_methodologies"
+        ]
+    }
+    assert "app.domain.stress.orchestrator:run_enterprise_stress" in named
+    assert named <= set(ENGINE_LOCATIONS)
 
 
 def test_every_registered_policy_resolver_imports_where_it_names_one() -> None:
@@ -472,9 +504,7 @@ def test_every_declared_calculation_version_is_a_live_engine_version() -> None:
     Bumping the constants fixes that instance; this test is what makes the NEXT
     bump impossible to apply in only one of the two places, in either direction.
     """
-    live = {
-        importlib.import_module(name).ENGINE_VERSION for name in _ENGINE_VERSION_MODULES
-    }
+    live = {importlib.import_module(name).ENGINE_VERSION for name in _ENGINE_VERSION_MODULES}
     stale = sorted(
         {
             entry.calculation_version

@@ -63,6 +63,13 @@ FILES: dict[str, str] = {
         "\n"
         "VALUE = compute() + LIMIT\n"
     ),
+    "backend/app/domain/authority/__init__.py": "",
+    "backend/app/domain/authority/engines.py": (
+        "ENGINE_LOCATIONS: dict[str, tuple[str, str]] = {\n"
+        '    "app.domain.fx.engine:compute": ("app.domain.fx.engine", "compute"),\n'
+        "}\n"
+    ),
+    "backend/app/domain/authority/registry.py": 'ENGINE = "app.domain.fx.engine:compute"\n',
     "backend/tests/architecture/test_guard.py": (
         'PLANE = ("services/regulatory_fx.py", "domain/fx", "services/regulatory_*.py")\n'
     ),
@@ -261,6 +268,26 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
     )
     for relative in untouched:
         assert _read(repository, relative) == FILES[relative]
+
+
+def test_frozen_engine_identifiers_survive_while_their_locations_move(
+    repository: Path,
+) -> None:
+    for command in ("move", "rewrite"):
+        assert "exit 0" in _run(repository, command)
+        assert (
+            _python(
+                repository,
+                "from importlib import import_module\n"
+                "from app.domain.authority.engines import ENGINE_LOCATIONS\n"
+                "from app.domain.authority.registry import ENGINE\n"
+                "assert ENGINE == 'app.domain.fx.engine:compute'\n"
+                "assert ENGINE_LOCATIONS == {ENGINE: ('app.fx.domain.engine', 'compute')}\n"
+                "module, attribute = ENGINE_LOCATIONS[ENGINE]\n"
+                "print(getattr(import_module(module), attribute)())\n",
+            )
+            == "2"
+        )
 
 
 def test_rewritten_python_still_parses(repository: Path) -> None:
