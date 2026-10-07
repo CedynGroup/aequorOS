@@ -127,6 +127,7 @@ new topic, add a row here.
 | Generated API client: regeneration and serializer hazards      | [ARCHITECTURE.md §6](ARCHITECTURE.md#generated-client-hazards)                                                                           |
 | CI enforcement and E2E                                         | [ARCHITECTURE.md §8](ARCHITECTURE.md#ci-enforcement)                                                                                     |
 | Liquidity, stress and capital extensions (product.md §Phase 2) | [ARCHITECTURE.md](ARCHITECTURE.md#liquidity-stress-and-capital-extensions)                                                               |
+| Governed forecast assumptions                                  | [ARCHITECTURE.md](ARCHITECTURE.md#governed-forecast-assumptions)                                                                         |
 | Authorization foundation, ownership, grants, filing authority  | [backend/docs/authorization_foundation.md](backend/docs/authorization_foundation.md#standing-rules-at-a-glance)                          |
 | Integration keys as bank-scoped machine principals             | [backend/docs/integration_key_machine_principal_rollout.md](backend/docs/integration_key_machine_principal_rollout.md#standing-contract) |
 | ICAAP workspace and filing                                     | [backend/docs/icaap_workspace_and_filing.md](backend/docs/icaap_workspace_and_filing.md#standing-rules-at-a-glance)                      |

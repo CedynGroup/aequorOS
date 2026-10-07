@@ -389,6 +389,25 @@ def _step_parameters(
     state.record("parameters", "succeeded", f"{institution_class}: {result.summary()}")
 
 
+def _step_forecast_assumptions(db: Session, bank: Bank, state: _SagaState) -> None:
+    """Report forecast readiness without providing assumption values."""
+    institution_class = institution_types.get_type(db, bank).institution_class
+    if institution_class != "bank":
+        state.record(
+            "forecast_assumptions",
+            "skipped",
+            f"{institution_class}: no balance-sheet projection, so no forecast assumptions.",
+        )
+        return
+    state.record(
+        "forecast_assumptions",
+        "skipped",
+        "Forecasting is not computable: missing approved base, adverse and severely_adverse "
+        "assumptions. The bank must author a version and a different authorized user "
+        "must approve it.",
+    )
+
+
 def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _SagaState) -> None:
     org_ok = (
         db.scalar(select(Organization.id).where(Organization.id == organization_id)) is not None
@@ -527,6 +546,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
         administrator = _step_first_admin(db, payload, organization.id, state)
         _step_first_owner(db, organization.id, administrator, operator, state)
         _step_parameters(db, bank, operator, state)
+        _step_forecast_assumptions(db, bank, state)
         _step_readiness(db, organization.id, bank.id, state)
     except _SagaAbort:
         db.rollback()

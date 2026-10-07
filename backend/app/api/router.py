@@ -100,6 +100,9 @@ from app.features.run_regulatory_liquidity import router as regulatory_liquidity
 from app.features.run_reverse_stress import router as reverse_stress_router
 from app.features.run_scenario_analysis import router as scenario_analysis_router
 from app.features.track_jobs import router as jobs_router
+from app.forecasting.api.manage_forecast_assumptions import (
+    router as forecast_assumptions_router,
+)
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -184,6 +187,10 @@ v1_router.include_router(integration_keys_router)
 v1_router.include_router(notifications_router)
 v1_router.include_router(
     forecasting_router,
+    dependencies=(*BANK_ROUTE_DEPENDENCIES, require_module_access("forecasting")),
+)
+v1_router.include_router(
+    forecast_assumptions_router,
     dependencies=(*BANK_ROUTE_DEPENDENCIES, require_module_access("forecasting")),
 )
 v1_router.include_router(implied_rating_router, dependencies=BANK_ROUTE_DEPENDENCIES)

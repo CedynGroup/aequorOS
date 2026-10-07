@@ -99,6 +99,14 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     #: statement — this run resolved no governed parameter — and the two must
     #: never be collapsed.
     parameter_provenance: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    #: Forecasting runs only: WHICH approved forecast assumption version supplied
+    #: the presets (id, number, effective date, approver), beside the snapshot
+    #: for the same reason as ``parameter_provenance``. ``None`` on every other
+    #: module, on a forecasting run that resolved no approved version (it
+    #: refused with ``missing_parameter``), and on runs that predate the column.
+    assumption_provenance: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

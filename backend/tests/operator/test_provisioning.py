@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -12,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import get_operator_settings
+from app.forecasting.service import resolve_effective
 from app.models import (
     AuthorizationBinding,
     Bank,
+    ForecastAssumptionVersion,
     OperatorAuditLog,
     Organization,
     OrganizationOwnerAssignment,
@@ -424,6 +427,43 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert steps["storage"]["status"] == "failed"
     assert "not configured" in steps["storage"]["detail"]
     assert operator_db.scalar(select(Organization)) is None
+
+
+@pytest.mark.parametrize("institution_type", ["universal_bank", "savings_and_loans"])
+def test_provisioning_leaves_forecast_assumptions_for_the_bank_to_author(
+    operator_client: TestClient, operator_db: Session, institution_type: str
+) -> None:
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(institution_type=institution_type),
+        headers=operator_headers(),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is True
+    step = _steps_by_name(body)["forecast_assumptions"]
+    assert step["status"] == "skipped"
+    if institution_type == "universal_bank":
+        assert "not computable" in step["detail"]
+        assert "missing approved base, adverse and severely_adverse" in step["detail"]
+    else:
+        assert "no balance-sheet projection" in step["detail"]
+    assert (
+        operator_db.scalar(
+            select(func.count())
+            .select_from(ForecastAssumptionVersion)
+            .where(ForecastAssumptionVersion.bank_id == body["bank_id"])
+        )
+        == 0
+    )
+    effective = resolve_effective(
+        operator_db,
+        organization_id=body["organization_id"],
+        bank_id=body["bank_id"],
+        as_of=date(2026, 1, 1),
+    )
+    assert effective.presets == {}
+    assert effective.provenance is None
 
 
 def test_parameters_step_seeds_the_board_register(operator_client: TestClient) -> None:

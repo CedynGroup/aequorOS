@@ -32,6 +32,13 @@ import {
   OptimizerRunErrorToJSON,
   OptimizerRunErrorToJSONTyped,
 } from "./OptimizerRunError";
+import type { OptimizerAssumptionVersion } from "./OptimizerAssumptionVersion";
+import {
+  OptimizerAssumptionVersionFromJSON,
+  OptimizerAssumptionVersionFromJSONTyped,
+  OptimizerAssumptionVersionToJSON,
+  OptimizerAssumptionVersionToJSONTyped,
+} from "./OptimizerAssumptionVersion";
 import type { OptimizerBaseAssumptions } from "./OptimizerBaseAssumptions";
 import {
   OptimizerBaseAssumptionsFromJSON,
@@ -46,6 +53,12 @@ import {
  * @interface OptimizerResultRead
  */
 export interface OptimizerResultRead {
+  /**
+   *
+   * @type {OptimizerAssumptionVersion}
+   * @memberof OptimizerResultRead
+   */
+  assumptionVersion: OptimizerAssumptionVersion;
   /**
    *
    * @type {string}
@@ -132,6 +145,11 @@ export interface OptimizerResultRead {
 export function instanceOfOptimizerResultRead(
   value: object,
 ): value is OptimizerResultRead {
+  if (
+    !("assumptionVersion" in value) ||
+    value["assumptionVersion"] === undefined
+  )
+    return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("baseAssumptions" in value) || value["baseAssumptions"] === undefined)
     return false;
@@ -176,6 +194,9 @@ export function OptimizerResultReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionVersion: OptimizerAssumptionVersionFromJSON(
+      json["assumption_version"],
+    ),
     bankId: json["bank_id"],
     baseAssumptions: OptimizerBaseAssumptionsFromJSON(json["base_assumptions"]),
     bindingConstraintHistogram: json["binding_constraint_histogram"],
@@ -205,6 +226,9 @@ export function OptimizerResultReadToJSONTyped(
   }
 
   return {
+    assumption_version: OptimizerAssumptionVersionToJSON(
+      value["assumptionVersion"],
+    ),
     bank_id: value["bankId"],
     base_assumptions: OptimizerBaseAssumptionsToJSON(value["baseAssumptions"]),
     binding_constraint_histogram: value["bindingConstraintHistogram"],

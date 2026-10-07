@@ -1,3 +1,4 @@
+from app.forecasting.models import ForecastAssumptionVersion
 from app.models.ai import AiCommentarySettings
 from app.models.attestation import (
     AdoptedSignatureAppearance,
@@ -280,6 +281,7 @@ __all__ = [
     "BiSubscription",
     "BiSubscriptionDelivery",
     "FinancialFactRow",
+    "ForecastAssumptionVersion",
     "IcaapAiSuggestion",
     "IcaapAiSuggestionDecision",
     "IcaapAppetiteMetric",

@@ -12,6 +12,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    ForecastAssumptionVersion,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
     ParamNsfrWeight,
@@ -21,6 +22,8 @@ from app.models import (
 from app.services.params import get_active_params
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
+    DEMO_USER_ID,
+    FORECAST_APPROVER_ID,
     ISOLATED_ORG_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -34,7 +37,9 @@ EXPECTED_FACTS = 1308
 # 177 since 2026-09-19 (founder directive D-042): the four governed capital
 # minima (car_min, cet1_min, tier1_min, leverage_min) are no longer seeded into a
 # tenant register; the clamp supplies the control-plane value.
-EXPECTED_PARAMS = 177
+# 156 since the governed forecast assumption register: the 21 forecast preset
+# rows are an approved ``ForecastAssumptionVersion`` now, not register rows.
+EXPECTED_PARAMS = 156
 OTHER_ASSETS_FLOOR = Decimal("40000000")
 
 
@@ -204,7 +209,17 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
     assert _count(db_session, ParamCapitalThreshold) == 24
     # 101 = the long-standing 99 plus the two BoG GHS ±450 bp IRRBB parallel
     # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
-    assert _count(db_session, ParamStressShock) == 113  # + usd stress + NMD run-off
+    assert _count(db_session, ParamStressShock) == 92  # + usd stress + NMD run-off
+    # The forecast presets are the bank's approved assumption version 1.
+    version = db_session.scalar(select(ForecastAssumptionVersion))
+    assert version is not None
+    assert (version.version_number, version.status, version.reviewed_by) == (
+        1,
+        "approved",
+        FORECAST_APPROVER_ID,
+    )
+    assert version.created_by == version.submitted_by == DEMO_USER_ID
+    assert version.reviewed_by != version.created_by
 
     rwa_multiplier = db_session.scalar(
         select(ParamCapitalThreshold).where(

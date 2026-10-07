@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ForecastSummaryAssumptionVersion } from "./ForecastSummaryAssumptionVersion";
+import {
+  ForecastSummaryAssumptionVersionFromJSON,
+  ForecastSummaryAssumptionVersionFromJSONTyped,
+  ForecastSummaryAssumptionVersionToJSON,
+  ForecastSummaryAssumptionVersionToJSONTyped,
+} from "./ForecastSummaryAssumptionVersion";
 import type { RegulatoryRunStatus } from "./RegulatoryRunStatus";
 import {
   RegulatoryRunStatusFromJSON,
@@ -67,6 +74,12 @@ import {
  * @interface ForecastRunSummaryRead
  */
 export interface ForecastRunSummaryRead {
+  /**
+   *
+   * @type {ForecastSummaryAssumptionVersion}
+   * @memberof ForecastRunSummaryRead
+   */
+  assumptionVersion: ForecastSummaryAssumptionVersion;
   /**
    *
    * @type {ForecastSummaryAvgROEPct}
@@ -147,6 +160,11 @@ export interface ForecastRunSummaryRead {
 export function instanceOfForecastRunSummaryRead(
   value: object,
 ): value is ForecastRunSummaryRead {
+  if (
+    !("assumptionVersion" in value) ||
+    value["assumptionVersion"] === undefined
+  )
+    return false;
   if (!("avgRoePct" in value) || value["avgRoePct"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("error" in value) || value["error"] === undefined) return false;
@@ -186,6 +204,9 @@ export function ForecastRunSummaryReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionVersion: ForecastSummaryAssumptionVersionFromJSON(
+      json["assumption_version"],
+    ),
     avgRoePct: ForecastSummaryAvgROEPctFromJSON(json["avg_roe_pct"]),
     createdAt: new Date(json["created_at"]),
     error: ForecastRunSummaryErrorFromJSON(json["error"]),
@@ -216,6 +237,9 @@ export function ForecastRunSummaryReadToJSONTyped(
   }
 
   return {
+    assumption_version: ForecastSummaryAssumptionVersionToJSON(
+      value["assumptionVersion"],
+    ),
     avg_roe_pct: ForecastSummaryAvgROEPctToJSON(value["avgRoePct"]),
     created_at: value["createdAt"].toISOString(),
     error: ForecastRunSummaryErrorToJSON(value["error"]),

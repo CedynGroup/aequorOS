@@ -35,6 +35,7 @@ type ProvisioningStepName = Literal[
     # provisioned, ingests its whole book, and still cannot produce a single
     # successful calculation run (founder review 2026-08-23).
     "parameters",
+    "forecast_assumptions",
     "readiness",
     "desk_market_data",
     "cleanup",

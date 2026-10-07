@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { PresetAssumptionVersion } from "./PresetAssumptionVersion";
+import {
+  PresetAssumptionVersionFromJSON,
+  PresetAssumptionVersionFromJSONTyped,
+  PresetAssumptionVersionToJSON,
+  PresetAssumptionVersionToJSONTyped,
+} from "./PresetAssumptionVersion";
 import type { ForecastAssumptionDefaultsRead } from "./ForecastAssumptionDefaultsRead";
 import {
   ForecastAssumptionDefaultsReadFromJSON,
@@ -27,11 +34,20 @@ import {
 } from "./ForecastScenarioRead";
 
 /**
+ * The presets a run on the bank's latest book resolves, and their approved version.
  *
+ * Every preset comes from the one approved version named by
+ * ``assumption_version``; ``None`` (with no scenarios) means none is effective.
  * @export
  * @interface ForecastScenarioListRead
  */
 export interface ForecastScenarioListRead {
+  /**
+   *
+   * @type {PresetAssumptionVersion}
+   * @memberof ForecastScenarioListRead
+   */
+  assumptionVersion: PresetAssumptionVersion;
   /**
    *
    * @type {string}
@@ -58,6 +74,11 @@ export interface ForecastScenarioListRead {
 export function instanceOfForecastScenarioListRead(
   value: object,
 ): value is ForecastScenarioListRead {
+  if (
+    !("assumptionVersion" in value) ||
+    value["assumptionVersion"] === undefined
+  )
+    return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("defaults" in value) || value["defaults"] === undefined) return false;
   if (!("scenarios" in value) || value["scenarios"] === undefined) return false;
@@ -79,6 +100,9 @@ export function ForecastScenarioListReadFromJSONTyped(
   }
   return {
     ...json,
+    assumptionVersion: PresetAssumptionVersionFromJSON(
+      json["assumption_version"],
+    ),
     bankId: json["bank_id"],
     defaults: ForecastAssumptionDefaultsReadFromJSON(json["defaults"]),
     scenarios: (json["scenarios"] as Array<any>).map(
@@ -102,6 +126,9 @@ export function ForecastScenarioListReadToJSONTyped(
   }
 
   return {
+    assumption_version: PresetAssumptionVersionToJSON(
+      value["assumptionVersion"],
+    ),
     bank_id: value["bankId"],
     defaults: ForecastAssumptionDefaultsReadToJSON(value["defaults"]),
     scenarios: (value["scenarios"] as Array<any>).map(

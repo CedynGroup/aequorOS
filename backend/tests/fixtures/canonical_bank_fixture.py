@@ -27,6 +27,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    ForecastAssumptionVersion,
     Organization,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
@@ -38,6 +39,7 @@ from app.models import (
 from app.models.regulatory import RegulatoryParameterMixin
 from app.services import parameter_register
 from app.services.reporting_periods import new_snapshot_period
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
@@ -48,6 +50,8 @@ DEMO_ORG_NAME = "AequorOS Demo Organization"
 DEMO_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 DEMO_USER_EMAIL = "demo.user.one@example.test"
 DEMO_USER_NAME = "Demo User One"
+FORECAST_APPROVER_ID = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+FORECAST_APPROVER_NAME = "Forecast Fixture Checker"
 ISOLATED_ORG_ID = "OR-1S000002"
 ISOLATED_ORG_NAME = "AequorOS Isolated Tenant"
 SAMPLE_BANK_ID = "BK-SAMP0001"
@@ -451,35 +455,6 @@ _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
             "fx_rwa_multiplier": "1.6",
         },
     },
-    "forecast": {
-        "base": {
-            "loan_growth_pct": "18",
-            "deposit_growth_pct": "16",
-            "nim_pct": "4.8",
-            "cost_to_income_pct": "48",
-            "credit_loss_rate_pct": "1.0",
-            "fx_depreciation_pct": "0",
-            "dividend_payout_pct": "30",
-        },
-        "adverse": {
-            "loan_growth_pct": "8",
-            "deposit_growth_pct": "6",
-            "nim_pct": "4.2",
-            "cost_to_income_pct": "54",
-            "credit_loss_rate_pct": "1.5",
-            "fx_depreciation_pct": "15",
-            "dividend_payout_pct": "0",
-        },
-        "severely_adverse": {
-            "loan_growth_pct": "-2",
-            "deposit_growth_pct": "-8",
-            "nim_pct": "3.6",
-            "cost_to_income_pct": "60",
-            "credit_loss_rate_pct": "2.0",
-            "fx_depreciation_pct": "40",
-            "dividend_payout_pct": "0",
-        },
-    },
     "irr": _IRR_STRESS,
 }
 # The tenant parameter catalogue is defined ONCE, in the application
@@ -570,6 +545,7 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
         fact_count += len(facts)
 
     param_count = _seed_parameters(session)
+    _seed_forecast_assumptions(session)
     session.flush()
 
     _set_tenant_context(session, ISOLATED_ORG_ID)
@@ -695,6 +671,7 @@ _DEPENDENT_TABLES: tuple[str, ...] = (
     # Governed data-integrity exceptions (audit P0-10): FK'd to banks, so a
     # reseed must clear them before the bank row is deleted.
     "reconciliation_exceptions",
+    "forecast_assumption_versions",
     "regulatory_runs",
     "canonical_position_snapshots",
     "canonical_positions",
@@ -1547,6 +1524,36 @@ def set_board_threshold(session: Session, code: str, value: str | None) -> None:
             )
         )
     session.flush()
+
+
+def _seed_forecast_assumptions(session: Session) -> None:
+    """The canonical book's approved assumptions with distinct fixture maker and checker."""
+    if session.get(User, FORECAST_APPROVER_ID) is None:
+        session.add(
+            User(
+                id=FORECAST_APPROVER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="forecast.checker@example.test",
+                display_name=FORECAST_APPROVER_NAME,
+                is_active=True,
+            )
+        )
+    session.add(
+        ForecastAssumptionVersion(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            version_number=1,
+            status="approved",
+            effective_from=EFFECTIVE_FROM,
+            presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
+            change_note="Hermetic fixture: the canonical book's approved forecast assumptions.",
+            reviewed_at=APPROVAL_TIMESTAMP,
+            created_by=DEMO_USER_ID,
+            submitted_by=DEMO_USER_ID,
+            submitted_at=APPROVAL_TIMESTAMP,
+            reviewed_by=FORECAST_APPROVER_ID,
+        )
+    )
 
 
 def _seed_parameters(session: Session) -> int:

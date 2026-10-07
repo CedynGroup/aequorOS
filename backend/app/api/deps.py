@@ -343,6 +343,8 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_ai_settings_administration",
         "require_fx_run",
         "require_forecasting_run",
+        "require_forecasting_assumption_edit",
+        "require_forecasting_assumption_review",
         "require_markets_run",
         "require_markets_upload",
         "require_markets_overlay_create",
@@ -1829,6 +1831,49 @@ def require_forecasting_run(
     )
 
 
+def require_forecasting_assumption_edit(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """Draft, revise or submit a forecast assumption version (the maker's verbs)."""
+
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.EDIT,
+        surface="forecast_assumption_edit",
+        detail="Editing forecast assumptions requires an active scoped binding.",
+    )
+
+
+def require_forecasting_assumption_review(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """Reach the checker's decision on a forecast assumption version.
+
+    ``review`` is the route's contract; the service then requires ``approve``
+    with the maker-checker verdict for the exact version, which only it can
+    load.
+    """
+
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.REVIEW,
+        surface="forecast_assumption_review",
+        detail="Reviewing forecast assumptions requires an active scoped binding.",
+    )
+
+
 def require_capital_plan_write(
     db: DbSession,
     ctx: Tenant,
@@ -2545,6 +2590,12 @@ ForecastingRunDetailView = Annotated[
     InstitutionPermissionAccess, Depends(require_forecasting_run_detail_view)
 ]
 ForecastingRun = Annotated[InstitutionPermissionAccess, Depends(require_forecasting_run)]
+ForecastingAssumptionEdit = Annotated[
+    InstitutionPermissionAccess, Depends(require_forecasting_assumption_edit)
+]
+ForecastingAssumptionReview = Annotated[
+    InstitutionPermissionAccess, Depends(require_forecasting_assumption_review)
+]
 MarketsPublishedView = Annotated[
     InstitutionPermissionAccess, Depends(require_markets_published_view)
 ]

@@ -6,6 +6,8 @@ from fastapi.routing import APIRoute
 
 from app.main import create_app
 
+_ASSUMPTIONS = "/api/v1/banks/{bank_id}/forecast/assumption-versions"
+
 _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/forecast/scenarios"): "require_forecasting_aggregated_view",
     ("GET", "/api/v1/banks/{bank_id}/forecast/runs"): "require_forecasting_aggregated_view",
@@ -19,6 +21,15 @@ _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/reverse-stress/latest"): (
         "require_forecasting_confidential_view"
     ),
+    ("GET", f"{_ASSUMPTIONS}"): "require_forecasting_confidential_view",
+    ("GET", f"{_ASSUMPTIONS}/{{version_id}}"): "require_forecasting_confidential_view",
+    ("POST", f"{_ASSUMPTIONS}"): "require_forecasting_assumption_edit",
+    ("PATCH", f"{_ASSUMPTIONS}/{{version_id}}"): "require_forecasting_assumption_edit",
+    ("POST", f"{_ASSUMPTIONS}/{{version_id}}/submit"): "require_forecasting_assumption_edit",
+    # The route requires ``review``; the service then requires ``approve`` with
+    # the maker-checker verdict for the exact version.
+    ("POST", f"{_ASSUMPTIONS}/{{version_id}}/approve"): "require_forecasting_assumption_review",
+    ("POST", f"{_ASSUMPTIONS}/{{version_id}}/reject"): "require_forecasting_assumption_review",
 }
 
 

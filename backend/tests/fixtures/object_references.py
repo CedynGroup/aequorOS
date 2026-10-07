@@ -56,6 +56,7 @@ from app.models import (
     FinancialInstitution,
     FinancialObligation,
     FinancialReportingPeriod,
+    ForecastAssumptionVersion,
     IcaapAiSuggestion,
     IcaapAppetiteMetric,
     IcaapAttachment,
@@ -103,6 +104,7 @@ from app.models import (
 )
 from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
 from app.models.bi_notifications import BiAlert, BiSubscription
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -663,6 +665,25 @@ def _macro_scenario(session: Session, tenant: TenantSeed, _objects: ObjectSet) -
             name=tenant.marker,
             scenario_type="hypothetical",
             created_by=tenant.actor_id,
+        ),
+    )
+
+
+def _forecast_assumption_version(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """A version awaiting its checker, so every verb has a live target."""
+    return _uuid(
+        session,
+        ForecastAssumptionVersion(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            version_number=1,
+            status="submitted",
+            effective_from=PERIOD_START,
+            presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
+            change_note=tenant.marker,
+            created_by=tenant.maker_id,
+            submitted_by=tenant.maker_id,
+            submitted_at=_NOW,
         ),
     )
 
@@ -1617,6 +1638,11 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         "declaration", _declaration, (f"{_BANK_PREFIX}/system-of-record/{{declaration_id}}",)
     ),
     ObjectKind(
+        "forecast_assumption_version",
+        _forecast_assumption_version,
+        (f"{_BANK_PREFIX}/forecast/assumption-versions/{{version_id}}",),
+    ),
+    ObjectKind(
         "macro_scenario",
         _macro_scenario,
         ("/api/v1/macro-scenarios/{scenario_id}",),
@@ -1887,6 +1913,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "stress_scenario": StressScenario,
     "withdrawal": CanonicalWithdrawal,
     "declaration": SystemOfRecordDeclaration,
+    "forecast_assumption_version": ForecastAssumptionVersion,
     "macro_scenario": MacroScenario,
     "management_action_plan": ManagementActionPlan,
     "case": RiskCase,
