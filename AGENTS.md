@@ -64,6 +64,10 @@ Each rule is stated in full in the document the index names.
   `banks.id` (`BK-…`) are the primary key, API path token, `org` claim, RLS GUC
   value and UI identity. Never reintroduce UUID columns or a separate public id for
   either; every other entity keeps UUID primary keys.
+- **Code is filed by feature.** The backend is moving to `app/<feature>/` packages that
+  cross features only through `public.py` or pure `domain/`.
+  `backend/tests/architecture/test_feature_boundaries.py` ratchets the import graph; its
+  baseline only shrinks.
 - **`app/domain/*` stays pure.** A future corporate entity is a sibling of `banks`
   (`CO-` platform id), never a nullable-heavy `banks` row.
 - **Every route that accepts an object id must be in the IDOR census.**
@@ -132,6 +136,7 @@ new topic, add a row here.
 | Attestation and e-signature                                    | [docs/attestation_esignature.md](docs/attestation_esignature.md#attestation-standing-rules)                                              |
 | No seeded bank data                                            | [docs/data_engine.md](docs/data_engine.md#standing-order-no-seeded-bank-data)                                                            |
 | Jurisdiction is data                                           | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
+| Feature layout and the boundary ratchet                        | [CODEBASE_CONVENTIONS.md §5](CODEBASE_CONVENTIONS.md#5-feature-layout)                                                                   |
 | Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |

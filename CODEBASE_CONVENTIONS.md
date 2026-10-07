@@ -303,3 +303,31 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 - Banks are created only by staff provisioning (`provision_institution`), which takes
   `currency` and `jurisdiction_code` explicitly; ingestion requires the bank to exist
   (`_get_bank_or_404`).
+
+## 5. Feature layout
+
+The risk service is moving from a layer-first tree (`app/services/`, `app/domain/`,
+`app/models/`, `app/schemas/`, `app/features/`, `app/jobs/`) to one package per product
+feature. New code goes in the target layout; existing code moves one feature per change.
+
+- **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
+  only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
+  `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  feature has worker handlers. A role is one module until it passes about 1,000 lines. The
+  kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
+  composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
+  `app/services/scheduler.py` and the `app.models` metadata registry.
+- **Feature names and layers** live in `LAYERS` in
+  `backend/tests/architecture/test_feature_boundaries.py`: kernel, then identity, policy and
+  notifications, data engine and market data, live and AI, the regulatory engines, stress and
+  attestation, reporting, ICAAP, BI and the legacy case vertical, and the operator console.
+- **Imports.** A feature imports only lower layers (same-layer only along a declared
+  `PEER_EDGES` direction), and only another feature's `public` module or pure `domain`
+  engines. The kernel imports no feature. Feature code never imports through the `app.models`
+  aggregator; it is a registry, not an API.
+- **Tests mirror the source**: `app/<feature>/service.py` is tested under
+  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/`.
+- **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
+  records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
+  does a baseline entry that no longer occurs, so the baseline only shrinks.
