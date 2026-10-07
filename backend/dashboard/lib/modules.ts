@@ -218,7 +218,8 @@ export type ModuleScope = {
   /**
    * STRUCTURAL FCST/confidential approve authority: whether to OFFER the
    * checker's decision on a submitted assumption version. The server still
-   * refuses whoever drafted or submitted it.
+   * enforces the version's maker-checker condition; see
+   * backend/docs/forecasting_enforcement_rollout.md.
    */
   forecastingApprove?: boolean;
   /** Exact BEH/aggregated view authority for model estimates and liquidity effects. */

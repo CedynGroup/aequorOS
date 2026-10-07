@@ -1,7 +1,7 @@
-import { Clock, ShieldCheck } from 'lucide-react';
-import type { ForecastAssumptionProvenanceRead } from '@aequoros/risk-service-api';
-import { fmtTimestamp } from '@/lib/api/values';
-import { provenanceLabel } from './AssumptionRegister';
+import { Clock, ShieldCheck } from "lucide-react";
+import type { ForecastAssumptionProvenanceRead } from "@aequoros/risk-service-api";
+import { fmtTimestamp } from "@/lib/api/values";
+import { provenanceLabel } from "./AssumptionRegister";
 
 /**
  * Computed-at meta row for what-if / optimizer results, with the approved

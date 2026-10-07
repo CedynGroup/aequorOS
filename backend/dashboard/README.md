@@ -47,11 +47,32 @@ documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-
 
 ### Forecasting tools
 
-The Assumptions page currently displays preset, custom-override and engine-default
-values; authoring and approving governed versions uses the
-[tenant API workflow](../README.md#forecast-assumption-workflow). The page does not
-yet display the API's approved-version provenance. NII currently shows the latest
-preset runs with five-year labels; it does not select an edited custom saved run.
+On **Forecasting → Assumptions**, choose **Propose new version**, enter an
+effective-from date, all seven drivers for each preset scenario, and a change
+note, then **Save draft**. Use **Edit draft** to revise it and **Submit for
+approval** to send it to a checker. The checker can **Approve** or **Reject**;
+rejection requires a decision note. The page shows the version in force for the
+latest book, the pending change with differences against it, and version history.
+The [Forecasting authorization contract](../docs/forecasting_enforcement_rollout.md#dashboard-controls)
+owns the view, edit and decision permissions and checker independence. See the
+[readiness guidance](../README.md#forecast-assumption-workflow) when no approved
+version covers the book date; without a book, the register asks the bank to ingest
+one before forecasting can resolve a version.
+
+Balance Sheet, NII, Assumptions, What-if and Optimizer show the approved assumption
+version recorded on the run, including its approver, approval time and
+effective-from date. The Assumptions preset catalogue also shows its resolved
+version; the latest run's values retain their preset, custom-override or
+engine-default source labels.
+
+NII reads the saved run selected in its run picker or linked with
+`/forecasting/nii?run=<run-id>`, including edited custom runs. After running an
+edited scenario, choose **Open NII forecast** in Scenarios to inspect that run.
+The page identifies the run and follows its stored horizon for year axes and
+labels. Without a selection it reads the latest succeeded base run, falling back
+to adverse then severely adverse. Scenario comparisons include the latest
+succeeded preset runs and the selected run when distinct; missing comparison
+years display no value.
 
 The What-if Lab describes each shock's fixed adjustments to the base assumptions.
 These are illustrative projections, not calibrated macroeconomic models. The

@@ -4,10 +4,9 @@
  * The governed forecast assumption register: the approved version in force,
  * the one change in flight, and the version history.
  *
- * Maker-checker is the server's: a maker with Forecasting edit drafts and
- * submits a complete set; a checker with Forecasting approve who neither
- * drafted nor submitted it approves or rejects it. The controls here are
- * offers drawn from the projected capabilities — the server decides.
+ * Controls offer actions from projected edit and structural approval
+ * capabilities. The server enforces the maker-checker contract documented in
+ * backend/docs/forecasting_enforcement_rollout.md.
  */
 
 import { useState } from "react";
