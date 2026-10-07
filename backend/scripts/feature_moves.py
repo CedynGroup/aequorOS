@@ -15,7 +15,8 @@ paths) and then runs ``rewrite`` to rename whatever old-path references it added
 
 The rewrite covers every tracked text file a module path can appear in: Python under
 ``app/``, ``tests/``, ``alembic/`` and ``scripts/``, Python programs embedded in Python,
-JavaScript and TypeScript, the Markdown docs, and the ``mise`` and CI configuration. It rewrites
+JavaScript and TypeScript, Dockerfiles, the Markdown docs, and the ``mise`` and CI
+configuration. It rewrites
 
 * dotted names: imports, ``importlib`` string constants, ``mock.patch`` targets, prose;
 * ``from app.old import moved_module`` into ``from app.new import leaf as moved_module``,
@@ -570,7 +571,7 @@ def rewrite_text(relative: str, text: str, rename: Renamer, backend: Path) -> st
 
 
 def tracked_text_files(backend: Path) -> list[Path]:
-    """Tracked files the rewrite may touch, by suffix and location."""
+    """Tracked files the rewrite may touch, by name, suffix and location."""
     repository = Path(_git(backend, "rev-parse", "--show-toplevel").strip())
     files: list[Path] = []
     listed = _git(repository, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
@@ -578,7 +579,12 @@ def tracked_text_files(backend: Path) -> list[Path]:
         if not line or line.startswith(_SKIPPED_PREFIXES):
             continue
         path = repository / line
-        if path.suffix in _TEXT_SUFFIXES:
+        if (
+            path.suffix in _TEXT_SUFFIXES
+            or path.name == "Dockerfile"
+            or path.name.startswith("Dockerfile.")
+            or path.suffix.lower() == ".dockerfile"
+        ):
             files.append(path)
     return files
 

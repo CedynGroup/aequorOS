@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import ast
 import json
+import shlex
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -141,6 +143,48 @@ def test_a_move_relocates_files_without_shims(repository: Path) -> None:
     assert (backend / "app/fx/__init__.py").is_file()
     assert not (backend / "app/services/regulatory_fx.py").exists()
     assert not (backend / "app/domain/fx").exists()
+
+
+@pytest.mark.parametrize("command", ["move", "rewrite"])
+@pytest.mark.parametrize(
+    "dockerfile",
+    [
+        "backend/Dockerfile",
+        "backend/dashboard/Dockerfile",
+        "backend/dashboard/Dockerfile.production",
+        "backend/dashboard/production.dockerfile",
+    ],
+)
+def test_dockerfile_copy_contract_follows_package_assets(
+    repository: Path, command: str, dockerfile: str
+) -> None:
+    """Consume the normalized COPY contract and materialize its build-stage assets."""
+    package = repository / "backend/app/services/attestation"
+    (package / "fonts").mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "fonts/Caveat-Regular.ttf").write_bytes(b"signature font")
+    _git(repository, "add", ".")
+    moves = (("app.services.attestation", "app.attestation.service"),)
+    if command == "rewrite":
+        assert "exit 0" in _run(repository, "move", moves)
+    path = repository / dockerfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "COPY backend/app/services/attestation/fonts backend/app/services/attestation/fonts\n"
+    )
+    _git(repository, "add", str(path.relative_to(repository)))
+    if command == "rewrite":
+        assert _run(repository, "check") == [f"old name still used: {dockerfile}", "exit 1"]
+    assert "exit 0" in _run(repository, command, moves)
+    instruction, source, destination = shlex.split(path.read_text())
+    assert instruction.upper() == "COPY"
+    build_stage = repository / "build-stage"
+    shutil.copytree(repository / source, build_stage / destination)
+    assert (
+        build_stage / "backend/app/attestation/service/fonts/Caveat-Regular.ttf"
+    ).read_bytes() == b"signature font"
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
 
 
 def test_stale_bytecode_at_the_destination_does_not_block_a_move(repository: Path) -> None:
