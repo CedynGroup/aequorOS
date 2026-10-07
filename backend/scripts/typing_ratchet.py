@@ -18,8 +18,8 @@ Run from ``backend/``::
     uv run python scripts/typing_ratchet.py update  # record fixed errors; never adds one
 
 ``update`` refuses to run while any count is above its baseline. Baseline keys are
-dotted module names mapped back through the feature-move ledger, so a codemod move
-keeps its entries and stays a pure rename, as the feature-boundary baseline does.
+current dotted module names; moved modules must pass strict checking at their new
+location before ``update`` can remove their old entries.
 """
 
 from __future__ import annotations
@@ -38,8 +38,6 @@ from pydantic import TypeAdapter
 
 BACKEND = Path(__file__).resolve().parents[1]
 BASELINE = BACKEND / "scripts" / "typing_baseline.json"
-#: The feature-move ledger: ``[old, new]`` dotted module names in move order.
-LEDGER = BACKEND / "scripts" / "feature_module_moves.json"
 
 #: Strict from the start: the feature packages and kernel seams the feature-layout work
 #: created. The baseline may never cover them, even by a hand edit.
@@ -85,12 +83,11 @@ class _Report(TypedDict):
 
 _REPORT = TypeAdapter(_Report)
 _COUNTS = TypeAdapter(dict[str, dict[str, int]])
-_MOVES = TypeAdapter(list[tuple[str, str]])
 
 
 @dataclass(frozen=True)
 class Diagnostic:
-    """One basedpyright error, charged to its module's canonical name."""
+    """One basedpyright error, charged to its module's current name."""
 
     module: str
     rule: str
@@ -127,14 +124,6 @@ class Comparison:
         return not (self.grown or self.shrunk or self.strict_entries)
 
 
-def canonical_module(module: str, moves: Sequence[tuple[str, str]]) -> str:
-    """The name ``module`` had before any recorded move."""
-    for old, new in reversed(moves):
-        if module == new:
-            module = old
-    return module
-
-
 def module_of(path: Path) -> str:
     """Dotted module name of a backend file, naming a package by its directory."""
     relative = path.resolve().relative_to(BACKEND).with_suffix("")
@@ -156,26 +145,26 @@ def run_basedpyright() -> list[Diagnostic]:
     )
     if result.returncode not in (0, 1):
         sys.exit(f"basedpyright failed (exit {result.returncode}):\n{result.stderr}{result.stdout}")
-    return parse_report(result.stdout, _MOVES.validate_json(LEDGER.read_bytes()))
+    return parse_report(result.stdout)
 
 
-def parse_report(output: str, moves: Sequence[tuple[str, str]]) -> list[Diagnostic]:
+def parse_report(output: str) -> list[Diagnostic]:
     """The errors and warnings in basedpyright's ``--outputjson`` report."""
     return [
-        _diagnostic(raw, moves)
+        _diagnostic(raw)
         for raw in _REPORT.validate_json(output)["generalDiagnostics"]
         if raw["severity"] in ("error", "warning")
     ]
 
 
-def _diagnostic(raw: _RawDiagnostic, moves: Sequence[tuple[str, str]]) -> Diagnostic:
+def _diagnostic(raw: _RawDiagnostic) -> Diagnostic:
     path = Path(raw["file"])
     location = path.relative_to(BACKEND).as_posix() if path.is_relative_to(BACKEND) else str(path)
     if "range" in raw:
         start = raw["range"]["start"]
         location = f"{location}:{start['line'] + 1}:{start['character'] + 1}"
     return Diagnostic(
-        module=canonical_module(module_of(path), moves),
+        module=module_of(path),
         rule=raw.get("rule", UNRULED),
         location=location,
         message=raw["message"].splitlines()[0],

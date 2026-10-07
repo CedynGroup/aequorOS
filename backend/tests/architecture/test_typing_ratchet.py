@@ -10,9 +10,12 @@ strict module, and its comparison and ``update`` rules fire on synthetic reports
 from __future__ import annotations
 
 import json
+import shlex
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import pytest
 from pydantic import TypeAdapter
@@ -39,8 +42,12 @@ class _Pyproject(TypedDict):
     tool: _Tool
 
 
+class _MiseTask(TypedDict):
+    run: NotRequired[str | list[str]]
+
+
 class _MiseFile(TypedDict):
-    tasks: dict[str, dict[str, object]]
+    tasks: dict[str, _MiseTask]
 
 
 def _basedpyright_config() -> dict[str, object]:
@@ -69,16 +76,58 @@ def test_basedpyright_is_configured_strict() -> None:
     assert config["exclude"] == [".venv"]
 
 
-def test_the_typecheck_gate_runs_the_ratchet() -> None:
-    """Plain ``basedpyright`` fails on every legacy error; the gates run the ratchet."""
+@pytest.mark.parametrize("task_name", ["risk-service:typecheck", "risk-service:smoke"])
+@pytest.mark.parametrize("ratchet_exit", [0, 1])
+def test_the_typecheck_gate_runs_the_ratchet(
+    tmp_path: Path, task_name: str, ratchet_exit: int
+) -> None:
+    """Execute the configured task bodies and observe invocation and failure propagation."""
     tasks = TypeAdapter(_MiseFile).validate_python(
         tomllib.loads((BACKEND / "mise.toml").read_text(encoding="utf-8"))
     )["tasks"]
-    runs = {name: str(task.get("run", "")) for name, task in tasks.items()}
-    ratchet_check = "uv run python scripts/typing_ratchet.py check"
-    assert runs["risk-service:typecheck"] == ratchet_check
-    assert ratchet_check in runs["risk-service:smoke"]
-    assert [name for name, run in runs.items() if "uv run basedpyright" in run] == []
+    run = tasks[task_name].get("run")
+    assert run is not None
+    commands = [run] if isinstance(run, str) else run
+    invocations = tmp_path / "invocations.jsonl"
+    uv = tmp_path / "uv"
+    stub = (
+        "import json, os, sys\n"
+        "with open(os.environ['INVOCATIONS'], 'a') as log:\n"
+        "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "if sys.argv[1:] == ['run', 'python', 'scripts/typing_ratchet.py', 'check']:\n"
+        "    sys.exit(int(os.environ['RATCHET_EXIT']))\n"
+    )
+    uv.write_text(
+        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -c {shlex.quote(stub)} "$@"\n',
+        encoding="utf-8",
+    )
+    uv.chmod(0o755)
+    result = subprocess.run(
+        ["/bin/sh", "-ec", "\n".join(commands)],
+        cwd=BACKEND,
+        env={
+            "PATH": str(tmp_path),
+            "INVOCATIONS": str(invocations),
+            "RATCHET_EXIT": str(ratchet_exit),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    calls = (
+        [
+            TypeAdapter(list[str]).validate_json(line)
+            for line in invocations.read_text(encoding="utf-8").splitlines()
+        ]
+        if invocations.exists()
+        else []
+    )
+    ratchet_call = ["run", "python", "scripts/typing_ratchet.py", "check"]
+    assert calls.count(ratchet_call) == 1
+    assert all(call[:2] != ["run", "basedpyright"] for call in calls)
+    assert result.returncode == ratchet_exit, result.stderr
+    if ratchet_exit:
+        assert calls[-1] == ratchet_call
 
 
 def test_the_baseline_is_canonical() -> None:
@@ -98,12 +147,9 @@ def test_strict_modules_exist_and_have_no_baseline_entry() -> None:
     assert covered == []
 
 
-def test_modules_are_named_by_their_canonical_location() -> None:
+def test_modules_are_named_by_their_current_location() -> None:
     assert ratchet.module_of(BACKEND / "app" / "forecasting" / "__init__.py") == "app.forecasting"
     assert ratchet.module_of(BACKEND / "app" / "db" / "base.py") == "app.db.base"
-    moves = [("app.services.fx", "app.fx.engine"), ("app.fx.engine", "app.fx.service")]
-    assert ratchet.canonical_module("app.fx.service", moves) == "app.services.fx"
-    assert ratchet.canonical_module("app.fx.public", moves) == "app.fx.public"
 
 
 def test_the_report_parser_keeps_errors_and_warnings() -> None:
@@ -121,8 +167,8 @@ def test_the_report_parser_keeps_errors_and_warnings() -> None:
             ]
         }
     )
-    assert ratchet.parse_report(output, [("app.services.fx", "app.fx.service")]) == [
-        Diagnostic("app.services.fx", "reportAny", "app/fx/service.py:5:3", "m"),
+    assert ratchet.parse_report(output) == [
+        Diagnostic("app.fx.service", "reportAny", "app/fx/service.py:5:3", "m"),
         Diagnostic("app.live.public", "reportDeprecated", "app/live/public.py", "m"),
         Diagnostic("app.live.public", ratchet.UNRULED, "app/live/public.py", "m"),
     ]
@@ -159,6 +205,46 @@ def scratch_baseline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _report(monkeypatch: pytest.MonkeyPatch, *diagnostics: Diagnostic) -> None:
     monkeypatch.setattr(ratchet, "run_basedpyright", lambda: list(diagnostics))
+
+
+@pytest.mark.parametrize(
+    ("old", "current"),
+    [
+        ("tests.api.helpers", "tests.support.helpers"),
+        ("app.services.regulatory_forecasting", "app.forecasting.engine"),
+    ],
+)
+def test_moved_modules_cannot_inherit_legacy_allowances(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch, old: str, current: str
+) -> None:
+    scratch_baseline.write_text(ratchet.render({old: {"reportAny": 1}}), encoding="utf-8")
+    before = scratch_baseline.read_bytes()
+    output = json.dumps(
+        {
+            "generalDiagnostics": [
+                {
+                    "file": str(BACKEND.joinpath(*current.split(".")).with_suffix(".py")),
+                    "severity": "error",
+                    "message": "m",
+                    "rule": "reportAny",
+                }
+            ]
+        }
+    )
+
+    def checker(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(["basedpyright", "--outputjson"], 1, output, "")
+
+    monkeypatch.setattr(ratchet.subprocess, "run", checker)
+    assert ratchet.main(["check"]) == 1
+    assert ratchet.main(["update"]) == 1
+    assert scratch_baseline.read_bytes() == before
+
+    output = json.dumps({"generalDiagnostics": []})
+    assert ratchet.main(["check"]) == 1
+    assert ratchet.main(["update"]) == 0
+    assert ratchet.load_baseline() == {}
+    assert ratchet.main(["check"]) == 0
 
 
 def test_check_fails_on_growth_and_on_unrecorded_fixes(
