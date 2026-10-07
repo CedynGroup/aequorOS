@@ -151,7 +151,8 @@ Rendering: `bog_forms/render.py` (`mode="official"|"working"`); kinds admitted b
 The `csv` kind names the machine-readable export, not necessarily its container: a single-section
 return downloads as `.csv` (`text/csv`), while a multi-section return downloads as one `.zip`
 (`application/zip`) containing metadata, one CSV per section and provenance. Browser downloads and
-downtime-email attachments derive their media type from that stored extension.
+downtime-email attachments recognize that `.zip` extension before mapping the remaining artifact
+kinds to their media types.
 
 **Both Excel copies of an official BoG form are filed (founder decision 2026-09-20).** BoG prefer
 the Excel form with its formulas live, so `xlsx_working` joins the filing set alongside the

@@ -131,8 +131,8 @@ backend/app/services/regulatory_reporting/bog_forms/
 - **Governance:** because each form is a registered return, it automatically participates
   in the existing package lifecycle — immutable snapshot + content hash, maker-checker
   approval, artifact versions, lineage/provenance, signing policy, submission channels.
-- **Three export artifacts from one sealed run (2026-08-16):**
-  `export(return_code, package_id, kind=pdf|xlsx_official|xlsx_working)` on the existing
+- **Four export artifacts from one sealed run (2026-08-16):**
+  `export(return_code, package_id, kind=pdf|xlsx_official|xlsx_working|csv)` on the existing
   package-export endpoint (`POST …/regulatory-packages/{id}/export?kind=`).
 
   | kind                     | content                                                                                                                                                                                                                                                                                                                                                                            | role                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -140,8 +140,9 @@ backend/app/services/regulatory_reporting/bog_forms/
   | `pdf`                    | values only (generic sections renderer)                                                                                                                                                                                                                                                                                                                                            | **the Bank of Ghana submission package** (filed via ORASS/email as the product supports)                                                                                                                                                                                                                                                                                                                   |
   | `xlsx` / `xlsx_official` | the OFFICIAL workbook layout with every cell as an evaluated NUMBER, sheets protected, run metadata + Completion notes                                                                                                                                                                                                                                                             | the immutable, hashed, maker-checked Excel twin of the PDF — governance/audit, not the filing format                                                                                                                                                                                                                                                                                                       |
   | `xlsx_working`           | the same official layout with the template's **live formulas** (SUM, Domestic+Foreign→Total, cross-sheet annex links) and inputs as values; cross-WORKBOOK links (BSD8→[1]BSD2) written as evaluated values; labelled _FORMULA COPY — filed with the protected values copy · not the signed record · figures recalculate_ (workbook title, print header, footer, Completion notes) | **filed alongside the sealed copy and never signed** (founder decision 2026-09-20: BoG prefer the Excel form with live formulas; opted in by kind AND by generator — `workflow.WORKING_ARTIFACT_FILING_GENERATORS` names `bog_form` only, so an SDI packet's working sheet is NOT filed); ALM/Finance review and challenge; only official BoG BSD forms have it — 409 `working_copy_unavailable` elsewhere |
+  | `csv`                    | one ZIP bundle containing metadata, one CSV per official sheet and provenance                                                                                                                                                                                                                                                                                                      | machine-readable filing artifact and downstream-analysis hand-off                                                                                                                                                                                                                                                                                                                                          |
 
-  Migration `202608160015` admits the kind. The historical sealed kind stays `xlsx`
+  Migration `202608160015` admits `xlsx_working`. The historical sealed kind stays `xlsx`
   (`xlsx_official` is the explicit alias) so existing artifacts, signatures and the
   dashboard keep working.
 
@@ -183,10 +184,11 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   only in `sources_ext/<form>.py`); the engine then **evaluates the templates' own formulas**
   (`formulas.py`: SUM/IF/+−×÷/%/`[n]Sheet!` external links — every formula cell) so every
   roll-up is BoG's — never re-implement or "simplify" a BoG line, never bind a formula cell.
-- **Export = THREE artifacts per sealed run:** `pdf` (values — the BoG submission package,
+- **Export = FOUR artifacts per sealed run:** `pdf` (values — the BoG submission package,
   and the signed record), `xlsx`/`xlsx_official` (official layout, values-only, sheets
   protected — audit twin), `xlsx_working` (official layout with the template's LIVE
-  formulas, labelled FORMULA COPY; BSD forms only) — with a "Completion notes" sheet.
+  formulas, labelled FORMULA COPY; BSD forms only) — with a "Completion notes" sheet — and
+  `csv` (one ZIP bundle containing metadata, one CSV per official sheet and provenance).
   **BOTH Excel copies of a BoG FORM are FILED** — BoG prefer the form with live formulas,
   so `xlsx_working` rides alongside the protected copy; it is filed and NEVER signed, the
   values-only/PDF artifact stays the signed record of truth, and every surface that shows
