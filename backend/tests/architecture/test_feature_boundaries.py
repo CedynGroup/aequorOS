@@ -57,6 +57,10 @@ from tests.architecture._planes import APP, imported_modules, module_name
 
 BASELINE = Path(__file__).with_name("feature_boundary_baseline.json")
 MODULE_MOVES = Path(__file__).parents[2] / "scripts" / "feature_module_moves.json"
+SPLIT_ORIGINS = {
+    "app.models.bank": ("app.models.regulatory", "live"),
+    "app.models.parameter_register": ("app.models.regulatory", "live"),
+}
 
 KERNEL = "kernel"
 COMPOSITION = "composition"
@@ -425,11 +429,11 @@ def _violation(source: str, dest: str, target: str) -> str | None:
     return None if _is_interface(target, dest) else "private"
 
 
-def _canonical_module(module: str, moves: list[list[str]]) -> str:
+def _canonical_dependency(module: str, feature: str, moves: list[list[str]]) -> tuple[str, str]:
     for old, new in reversed(moves):
         if module == new:
             module = old
-    return module
+    return SPLIT_ORIGINS.get(module, (module, feature))
 
 
 def violations() -> frozenset[str]:
@@ -450,10 +454,12 @@ def violations() -> frozenset[str]:
             if target is None or target == module:
                 continue
             dest = owners[target]
-            if (kind := _violation(source, dest, target)) is not None:
-                importer = _canonical_module(module, moves)
-                imported = _canonical_module(target, moves)
-                found.add(f"{kind} {source}->{dest}: {importer} -> {imported}")
+            if _violation(source, dest, target) is None:
+                continue
+            importer, origin_source = _canonical_dependency(module, source, moves)
+            imported, origin_dest = _canonical_dependency(target, dest, moves)
+            if (kind := _violation(origin_source, origin_dest, target)) is not None:
+                found.add(f"{kind} {origin_source}->{origin_dest}: {importer} -> {imported}")
     return frozenset(found)
 
 
@@ -608,6 +614,123 @@ def _synthetic_import_content(app: Path, source: str, target: str, import_style:
     if import_style == "dynamic":
         return f"importlib.import_module({target!r})\n"
     return f"from {target} import Authority\n"
+
+
+@pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
+@pytest.mark.parametrize(
+    "source",
+    ["app.api.deps", "app.services.ai.grounding", "app.services.fact_derivation"],
+)
+def test_model_splits_preserve_historical_boundary_identities(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    import_style: str,
+    source: str,
+) -> None:
+    app = tmp_path / "app"
+    baseline = tmp_path / "baseline.json"
+    ledger = tmp_path / "moves.json"
+    monkeypatch.setattr(_planes, "APP", app)
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.BASELINE", baseline)
+    monkeypatch.setattr(f"{__name__}.MODULE_MOVES", ledger)
+    ledger.write_text("[]", encoding="utf-8")
+
+    def scan() -> frozenset[str]:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
+        return violations()
+
+    try:
+        _write_synthetic_module(app, "app.models.__init__")
+        _write_synthetic_module(app, "app.models.regulatory", "class Authority: pass\n")
+        source_path = _write_synthetic_module(
+            app,
+            source,
+            _synthetic_import_content(app, source, "app.models.regulatory", import_style),
+        )
+        original = scan()
+        write_baseline()
+        baseline_bytes = baseline.read_bytes()
+        for split, feature in [("bank", "identity"), ("parameter_register", "policy")]:
+            target = f"app.models.{split}"
+            target_path = _write_synthetic_module(app, target, "class Authority: pass\n")
+            source_path.write_text(
+                _synthetic_import_content(app, source, target, import_style), encoding="utf-8"
+            )
+            assert feature_of(target_path) == feature
+            assert scan() == original
+            test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+            write_baseline()
+            assert baseline.read_bytes() == baseline_bytes
+
+            moved = f"app.{feature}.models.{split}"
+            moved_again = f"app.{feature}.models.authority"
+            for destination in [moved, moved_again]:
+                target_path.unlink()
+                target_path = _write_synthetic_module(app, destination, "class Authority: pass\n")
+                source_path.write_text(
+                    _synthetic_import_content(app, source, destination, import_style),
+                    encoding="utf-8",
+                )
+                moves = [[target, moved]]
+                if destination == moved_again:
+                    moves.append([moved, moved_again])
+                ledger.write_text(json.dumps(moves), encoding="utf-8")
+                assert scan() == original
+                test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+
+            new_source = "app.stress.new_service"
+            new_path = _write_synthetic_module(
+                app,
+                new_source,
+                _synthetic_import_content(app, new_source, moved_again, import_style),
+            )
+            scan()
+            with pytest.raises(AssertionError, match="These imports break the feature layout"):
+                test_no_new_boundary_violation_and_the_baseline_only_shrinks()
+            new_path.unlink()
+            target_path.unlink()
+            ledger.write_text("[]", encoding="utf-8")
+
+        source_path.write_text("", encoding="utf-8")
+        assert scan() == frozenset()
+        write_baseline()
+        assert _baseline() == []
+    finally:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
+
+
+@pytest.mark.parametrize("split", ["bank", "parameter_register"])
+def test_split_importers_preserve_or_retire_their_boundary_debt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split: str
+) -> None:
+    app = tmp_path / "app"
+    ledger = tmp_path / "moves.json"
+    monkeypatch.setattr(_planes, "APP", app)
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.MODULE_MOVES", ledger)
+    ledger.write_text("[]", encoding="utf-8")
+    content = "from app.models.user import User\n"
+
+    def scan() -> frozenset[str]:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
+        return violations()
+
+    try:
+        _write_synthetic_module(app, "app.models.__init__")
+        _write_synthetic_module(app, "app.models.user", "class User: pass\n")
+        original_path = _write_synthetic_module(app, "app.models.regulatory", content)
+        original = scan()
+        assert original == {"private live->identity: app.models.regulatory -> app.models.user"}
+        original_path.write_text("", encoding="utf-8")
+        _write_synthetic_module(app, f"app.models.{split}", content)
+        assert scan() == (frozenset() if split == "bank" else original)
+    finally:
+        _owners.cache_clear()
+        _model_reexports.cache_clear()
 
 
 @pytest.mark.parametrize("move_source,move_target", [(True, False), (False, True), (True, True)])
