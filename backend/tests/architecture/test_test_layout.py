@@ -15,8 +15,11 @@ the old shape while the move is under way:
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
+from types import ModuleType
+
+import pytest
+from _pytest.fixtures import FixtureManager
 
 from tests.architecture.test_feature_boundaries import COMPOSITION, KERNEL, LAYERS
 
@@ -96,24 +99,24 @@ def _test_directories() -> set[str]:
     return {path.name for path in TESTS.iterdir() if path.is_dir() and path.name != "__pycache__"}
 
 
-def _is_fixture(decorator: ast.expr) -> bool:
-    target = decorator.func if isinstance(decorator, ast.Call) else decorator
-    return isinstance(target, ast.Attribute) and target.attr == "fixture"
+def _root_fixture_names(manager: FixtureManager, baseid: str) -> set[str]:
+    return {
+        definition.argname
+        for definitions in manager._arg2fixturedefs.values()
+        for definition in definitions
+        if definition.has_location and definition.baseid == baseid
+    }
 
 
-def _root_conftest() -> ast.Module:
-    return ast.parse(ROOT_CONFTEST.read_text(encoding="utf-8"))
-
-
-def _registered_plugins() -> list[str]:
-    for node in _root_conftest().body:
-        if (
-            isinstance(node, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "pytest_plugins" for t in node.targets)
-            and isinstance(node.value, ast.List)
-        ):
-            return [ast.literal_eval(element) for element in node.value.elts]
-    return []
+def _registered_plugins(manager: pytest.PytestPluginManager) -> set[str]:
+    return {
+        plugin.__name__
+        for plugin in manager.get_plugins()
+        if isinstance(plugin, ModuleType)
+        and len(parts := plugin.__name__.split(".")) == 3
+        and parts[0] == "tests"
+        and parts[2] == "fixtures"
+    }
 
 
 def test_new_test_directories_are_named_for_a_feature() -> None:
@@ -129,12 +132,9 @@ def test_the_layered_directory_list_only_shrinks() -> None:
     assert emptied == [], f"Remove these from LAYERED_DIRECTORIES; they are gone: {emptied}"
 
 
-def test_the_root_conftest_defines_only_shared_fixtures() -> None:
-    defined = {
-        node.name
-        for node in _root_conftest().body
-        if isinstance(node, ast.FunctionDef) and any(map(_is_fixture, node.decorator_list))
-    }
+def test_the_root_conftest_defines_only_shared_fixtures(request: pytest.FixtureRequest) -> None:
+    baseid = "/".join(ROOT_CONFTEST.parent.relative_to(request.config.rootpath).parts)
+    defined = _root_fixture_names(request._fixturemanager, baseid)
     feature_specific = sorted(defined - GLOBAL_FIXTURES)
     assert feature_specific == [], (
         "Move these fixtures to tests/<feature>/fixtures.py and register the module in "
@@ -142,14 +142,62 @@ def test_the_root_conftest_defines_only_shared_fixtures() -> None:
     )
 
 
-def test_every_feature_fixture_module_is_registered_and_exists() -> None:
-    on_disk = sorted(
+def test_every_feature_fixture_module_is_registered_and_exists(pytestconfig: pytest.Config) -> None:
+    on_disk = {
         f"tests.{path.parent.name}.fixtures"
         for path in TESTS.glob("*/fixtures.py")
         if path.parent.name in FEATURES
-    )
-    registered = _registered_plugins()
-    assert registered == sorted(registered), "keep pytest_plugins sorted"
+    }
+    registered = _registered_plugins(pytestconfig.pluginmanager)
     assert registered == on_disk, (
-        "tests/conftest.py pytest_plugins must list exactly the feature fixture modules"
+        "pytest must load exactly the feature fixture modules"
     )
+
+
+@pytest.mark.parametrize("baseid", ["tests", ""])
+def test_fixture_ownership_uses_registered_names_and_all_definitions(baseid: str) -> None:
+    root = ModuleType("probe_root")
+    exec(
+        "from pytest import fixture as alias\n"
+        "@alias(name='registered_alias')\n"
+        "def implementation_name():\n"
+        "    return 1\n"
+        "@alias\n"
+        "async def async_fixture():\n"
+        "    return 2\n"
+        "if False:\n"
+        "    @alias\n"
+        "    def dead_fixture():\n"
+        "        return 3\n",
+        root.__dict__,
+    )
+    child = ModuleType("probe_child")
+    exec(
+        "import pytest\n"
+        "@pytest.fixture(name='registered_alias')\n"
+        "def child_implementation():\n"
+        "    return 4\n"
+        "@pytest.fixture\n"
+        "def child_only():\n"
+        "    return 5\n",
+        child.__dict__,
+    )
+    config = pytest.Config.fromdictargs({}, ["--noconftest"])
+    try:
+        manager = FixtureManager(pytest.Session.from_config(config))
+        child_baseid = f"{baseid}/fx".lstrip("/")
+        manager.parsefactories(root, baseid)
+        manager.parsefactories(child, child_baseid)
+        assert _root_fixture_names(manager, baseid) == {"registered_alias", "async_fixture"}
+        assert _root_fixture_names(manager, child_baseid) == {"registered_alias", "child_only"}
+    finally:
+        config._ensure_unconfigure()
+
+
+def test_feature_plugins_are_identified_by_loaded_modules() -> None:
+    manager = pytest.PytestPluginManager()
+    manager.register(ModuleType("tests.fx.fixtures"), name="alias")
+    manager.register(ModuleType("tests.unowned.fixtures"))
+    manager.register(ModuleType("unrelated_plugin"))
+    manager.set_blocked("tests.credit.fixtures")
+    assert _registered_plugins(manager) == {"tests.fx.fixtures", "tests.unowned.fixtures"}
