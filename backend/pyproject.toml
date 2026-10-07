@@ -86,6 +86,7 @@ dev = [
   "pre-commit==4.6.2",
   "pytest",
   "ruff",
+  "pytest-xdist",
 ]
 
 [tool.pytest.ini_options]

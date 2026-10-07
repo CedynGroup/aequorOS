@@ -14,7 +14,7 @@ proposing a capital-plan update needs the plan's own drafting authority.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -41,13 +41,15 @@ from tests.fixtures.canonical_bank_fixture import (
 
 SDI_BANK_ID = "BK-P2SDI001"
 OTHER_ORG_BANK_ID = "BK-P2OTH001"
-CYCLE_ID = uuid4()
-ITEM_ID = uuid4()
-METRIC_ID = uuid4()
-REVIEW_ID = uuid4()
-CHALLENGE_ID = uuid4()
-LINE_ID = uuid4()
-ADDON_ID = uuid4()
+# Fixed rather than uuid4(): they appear in the sweep's test ids, and pytest-xdist
+# refuses to run unless every worker collects identical ids.
+CYCLE_ID = UUID("c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2")
+ITEM_ID = UUID("c2c2c2c2-0000-4000-8000-000000000001")
+METRIC_ID = UUID("c2c2c2c2-0000-4000-8000-000000000002")
+REVIEW_ID = UUID("c2c2c2c2-0000-4000-8000-000000000003")
+CHALLENGE_ID = UUID("c2c2c2c2-0000-4000-8000-000000000004")
+LINE_ID = UUID("c2c2c2c2-0000-4000-8000-000000000005")
+ADDON_ID = UUID("c2c2c2c2-0000-4000-8000-000000000006")
 REVIEWER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 
 
