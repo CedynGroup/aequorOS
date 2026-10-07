@@ -3517,9 +3517,6 @@
   "reportPrivateUsage": 1,
   "reportUnusedFunction": 1
  },
- "tests.domain.authority.test_registry": {
-  "reportAny": 2
- },
  "tests.domain.authority.test_registry_completeness": {
   "reportAny": 3,
   "reportUnnecessaryComparison": 1

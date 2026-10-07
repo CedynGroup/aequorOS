@@ -9,12 +9,13 @@ without documenting its divergence.
 from __future__ import annotations
 
 import importlib
-import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
+from pydantic import TypeAdapter
 
 from app.domain.authority.engines import ENGINE_LOCATIONS
 from app.domain.authority.registry import (
@@ -37,6 +38,22 @@ from app.domain.authority.registry import (
 )
 
 FROZEN_ENGINE_IDS = Path(__file__).with_name("frozen_engine_ids.json")
+
+
+class _DeclaredMethodology(TypedDict):
+    calculation_engine: str
+
+
+class _Provenance(TypedDict):
+    declared_methodologies: list[_DeclaredMethodology]
+
+
+class _Snapshot(TypedDict):
+    provenance: _Provenance
+
+
+class _FiledPackage(TypedDict):
+    snapshot: _Snapshot
 
 
 def _authority(**overrides: object) -> MetricAuthority:
@@ -136,7 +153,7 @@ def test_unknown_metric_lookups_raise() -> None:
 
 def test_every_engine_location_imports_and_is_callable() -> None:
     for engine_id, (module_path, attribute) in ENGINE_LOCATIONS.items():
-        target = getattr(importlib.import_module(module_path), attribute, None)
+        target: object = getattr(importlib.import_module(module_path), attribute, None)
         assert target is not None, f"{engine_id}: {module_path}:{attribute} does not exist"
         assert callable(target), f"{engine_id}: {module_path}:{attribute} is not callable"
 
@@ -158,7 +175,7 @@ def test_engine_identifiers_are_frozen() -> None:
     Moving an engine updates its location in ``ENGINE_LOCATIONS``, never its key.
     A new engine adds its identifier to the snapshot deliberately.
     """
-    frozen = json.loads(FROZEN_ENGINE_IDS.read_text(encoding="utf-8"))
+    frozen = TypeAdapter(list[str]).validate_json(FROZEN_ENGINE_IDS.read_bytes())
     assert sorted(ENGINE_LOCATIONS) == frozen
 
 
@@ -167,9 +184,9 @@ def test_filed_golden_packages_name_frozen_engines() -> None:
     named = {
         methodology["calculation_engine"]
         for path in golden
-        for methodology in json.loads(path.read_text(encoding="utf-8"))["snapshot"]["provenance"][
-            "declared_methodologies"
-        ]
+        for methodology in TypeAdapter(_FiledPackage).validate_json(path.read_bytes())["snapshot"][
+            "provenance"
+        ]["declared_methodologies"]
     }
     assert "app.domain.stress.orchestrator:run_enterprise_stress" in named
     assert named <= set(ENGINE_LOCATIONS)
@@ -182,9 +199,8 @@ def test_every_registered_policy_resolver_imports_where_it_names_one() -> None:
             continue
         module_path, _, attribute = resolver.partition(":")
         module = importlib.import_module(module_path)
-        assert callable(getattr(module, attribute, None)), (
-            f"{entry.key}: policy_resolver {resolver} is not a callable"
-        )
+        target: object = getattr(module, attribute, None)
+        assert callable(target), f"{entry.key}: policy_resolver {resolver} is not a callable"
 
 
 # -- alternate methodologies must document their divergence ----------------
@@ -504,7 +520,11 @@ def test_every_declared_calculation_version_is_a_live_engine_version() -> None:
     Bumping the constants fixes that instance; this test is what makes the NEXT
     bump impossible to apply in only one of the two places, in either direction.
     """
-    live = {importlib.import_module(name).ENGINE_VERSION for name in _ENGINE_VERSION_MODULES}
+    live: set[str] = set()
+    for name in _ENGINE_VERSION_MODULES:
+        version: object = getattr(importlib.import_module(name), "ENGINE_VERSION", None)
+        assert isinstance(version, str), f"{name}: ENGINE_VERSION is not a string"
+        live.add(version)
     stale = sorted(
         {
             entry.calculation_version
