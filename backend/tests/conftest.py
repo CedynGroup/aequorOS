@@ -378,11 +378,12 @@ class _TestDatabase:
 
 @dataclass
 class _LazyTestApp:
+    factory: Callable[[], FastAPI] = create_app
     app: FastAPI | None = None
 
     def get(self) -> FastAPI:
         if self.app is None:
-            self.app = create_app()
+            self.app = self.factory()
         return self.app
 
 
@@ -836,16 +837,19 @@ def _committing_test_database(
 @pytest.fixture
 def committing_db_client(
     _committing_test_database: _TestDatabase,
+    _shared_app: _LazyTestApp,
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
-    """A reset schema, engine, application, and committing client for one test."""
+    """A reset schema and engine with a committing client over the shared app.
+
+    The app resolves its engine per request, so the process-wide app serves the
+    committing schema as well as the rollback one; building one per test cost
+    more than the test itself.
+    """
     _ = _committing_test_database
-    app = create_app()
-    app.dependency_overrides[get_object_storage] = lambda: fake_storage
-    app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    with _db_client_lifecycle(_shared_app.get(), fake_storage, storage_engine) as client:
+        yield client
 
 
 @pytest.fixture

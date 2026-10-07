@@ -30,6 +30,7 @@ from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
 from tests.conftest import (
+    _LazyTestApp,
     _rollback_sessionmaker_lifecycle,
     _TestDatabase,
     build_test_database,
@@ -345,20 +346,30 @@ def _operator_bound_sessionmaker(
         yield maker
 
 
+@pytest.fixture(scope="session")
+def _shared_operator_app() -> _LazyTestApp:
+    """Build the operator app once per process, inside the first test's environment."""
+    return _LazyTestApp(create_operator_app)
+
+
 @pytest.fixture
 def operator_client(
     _operator_bound_sessionmaker: sessionmaker,
+    _shared_operator_app: _LazyTestApp,
     fake_s3: FakeS3Client,
 ) -> Iterator[TestClient]:
     """Operator app over the rollback-isolated database with the fake S3 injected."""
     _ = _operator_bound_sessionmaker
-    app = create_operator_app()
+    app = _shared_operator_app.get()
     app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
         s3_client=fake_s3,
         storage_settings=fake_storage_settings(),
     )
-    with TestClient(app, raise_server_exceptions=False) as client:
-        yield client
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
