@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import get_operator_settings
+from app.forecasting.service import resolve_effective
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -427,50 +429,41 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert operator_db.scalar(select(Organization)) is None
 
 
-def test_forecast_assumptions_are_offered_as_an_unapproved_draft(
-    operator_client: TestClient, operator_db: Session
+@pytest.mark.parametrize("institution_type", ["universal_bank", "savings_and_loans"])
+def test_provisioning_leaves_forecast_assumptions_for_the_bank_to_author(
+    operator_client: TestClient, operator_db: Session, institution_type: str
 ) -> None:
-    """A new bank is given a starting position to REVIEW, never an approved one.
-
-    Forecasting resolves only an approved version, so the tenant stays not
-    computable until a maker submits a set and a different checker approves it.
-    An SDI, which has no balance-sheet projection, is offered nothing.
-    """
     response = operator_client.post(
-        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+        "/operator/v1/tenants",
+        json=provision_payload(institution_type=institution_type),
+        headers=operator_headers(),
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert _steps_by_name(body)["forecast_assumptions"]["status"] == "succeeded"
-    versions = operator_db.scalars(
-        select(ForecastAssumptionVersion).where(
-            ForecastAssumptionVersion.bank_id == body["bank_id"]
-        )
-    ).all()
-    assert [(v.version_number, v.status, v.origin, v.created_by) for v in versions] == [
-        (1, "draft", "starting_position", None)
-    ]
-    assert versions[0].effective_from == parameter_register.REGISTER_EFFECTIVE_FROM
-
-    sdi = operator_client.post(
-        "/operator/v1/tenants",
-        json=provision_payload(
-            organization_name="SDI Forecast Tenant",
-            bank_name="SDI Forecast Bank",
-            institution_type="savings_and_loans",
-            admin_email="admin@sdiforecast.example",
-        ),
-        headers=operator_headers(),
-    ).json()
-    assert _steps_by_name(sdi)["forecast_assumptions"]["status"] == "skipped"
+    assert body["succeeded"] is True
+    step = _steps_by_name(body)["forecast_assumptions"]
+    assert step["status"] == "skipped"
+    if institution_type == "universal_bank":
+        assert "not computable" in step["detail"]
+        assert "missing approved base, adverse and severely_adverse" in step["detail"]
+    else:
+        assert "no balance-sheet projection" in step["detail"]
     assert (
         operator_db.scalar(
             select(func.count())
             .select_from(ForecastAssumptionVersion)
-            .where(ForecastAssumptionVersion.bank_id == sdi["bank_id"])
+            .where(ForecastAssumptionVersion.bank_id == body["bank_id"])
         )
         == 0
     )
+    effective = resolve_effective(
+        operator_db,
+        organization_id=body["organization_id"],
+        bank_id=body["bank_id"],
+        as_of=date(2026, 1, 1),
+    )
+    assert effective.presets == {}
+    assert effective.provenance is None
 
 
 def test_parameters_step_seeds_the_board_register(operator_client: TestClient) -> None:

@@ -30,7 +30,6 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
-from app.forecasting.domain.assumptions import STARTING_POSITION
 from app.models import (
     AuthorizationAccessRequest,
     AuthorizationBinding,
@@ -105,6 +104,7 @@ from app.models import (
 )
 from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
 from app.models.bi_notifications import BiAlert, BiSubscription
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -680,7 +680,7 @@ def _forecast_assumption_version(session: Session, tenant: TenantSeed, _objects:
             status="submitted",
             origin="tenant",
             effective_from=PERIOD_START,
-            presets={code: dict(values) for code, values in STARTING_POSITION.items()},
+            presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
             change_note=tenant.marker,
             created_by=tenant.maker_id,
             submitted_by=tenant.maker_id,

@@ -30,10 +30,7 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 VERSION_STATUSES: Final = ("draft", "submitted", "approved", "rejected")
 OPEN_STATUSES: Final = ("draft", "submitted")
 
-#: Who wrote the values: a person in the bank (``tenant``), provisioning's
-#: illustrative starting position (``starting_position``), or the pre-governance
-#: board register rows the migration carried over (``register``).
-VERSION_ORIGINS: Final = ("tenant", "starting_position", "register")
+VERSION_ORIGINS: Final = ("tenant", "register")
 
 
 def _in(values: tuple[str, ...]) -> str:

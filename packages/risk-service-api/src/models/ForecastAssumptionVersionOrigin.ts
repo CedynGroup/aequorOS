@@ -16,7 +16,6 @@
  */
 export const ForecastAssumptionVersionOrigin = {
   Tenant: "tenant",
-  StartingPosition: "starting_position",
   Register: "register",
 } as const;
 export type ForecastAssumptionVersionOrigin =

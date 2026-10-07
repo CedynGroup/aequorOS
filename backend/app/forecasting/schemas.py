@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 type ForecastAssumptionVersionStatus = Literal["draft", "submitted", "approved", "rejected"]
-type ForecastAssumptionVersionOrigin = Literal["tenant", "starting_position", "register"]
+type ForecastAssumptionVersionOrigin = Literal["tenant", "register"]
 
 
 class ClosedModel(BaseModel):

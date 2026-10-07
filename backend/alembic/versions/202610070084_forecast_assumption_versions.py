@@ -57,7 +57,7 @@ TABLE = "forecast_assumption_versions"
 #: this chain, so a later model edit cannot change what this revision created.
 _STATUSES = "'draft', 'submitted', 'approved', 'rejected'"
 _OPEN_STATUSES = "'draft', 'submitted'"
-_ORIGINS = "'tenant', 'starting_position', 'register'"
+_ORIGINS = "'tenant', 'register'"
 _PRESET_CODES = ("base", "adverse", "severely_adverse")
 _ASSUMPTION_KEYS = (
     "loan_growth_pct",

@@ -9,17 +9,17 @@ import pytest
 from app.forecasting.domain.assumptions import (
     ASSUMPTION_KEYS,
     PRESET_CODES,
-    STARTING_POSITION,
     InvalidAssumptionSet,
     validate_presets,
 )
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 
 
 def _complete() -> dict[str, dict[str, object]]:
-    return {code: dict(values) for code, values in STARTING_POSITION.items()}
+    return {code: dict(values) for code, values in FORECAST_PRESETS.items()}
 
 
-def test_the_starting_position_is_a_complete_admissible_set() -> None:
+def test_a_complete_admissible_set() -> None:
     values = validate_presets(_complete())
 
     assert list(values) == list(PRESET_CODES)

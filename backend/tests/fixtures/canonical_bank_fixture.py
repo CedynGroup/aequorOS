@@ -23,7 +23,6 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.forecasting.domain.assumptions import STARTING_POSITION
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -40,6 +39,7 @@ from app.models import (
 from app.models.regulatory import RegulatoryParameterMixin
 from app.services import parameter_register
 from app.services.reporting_periods import new_snapshot_period
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
@@ -1540,7 +1540,7 @@ def _seed_forecast_assumptions(session: Session) -> None:
             status="approved",
             origin="register",
             effective_from=EFFECTIVE_FROM,
-            presets={code: dict(values) for code, values in STARTING_POSITION.items()},
+            presets={code: dict(values) for code, values in FORECAST_PRESETS.items()},
             change_note="Hermetic fixture: the canonical book's approved forecast assumptions.",
             reviewed_at=APPROVAL_TIMESTAMP,
             approver_label=APPROVED_BY,

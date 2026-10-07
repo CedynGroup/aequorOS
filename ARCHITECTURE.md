@@ -1212,8 +1212,9 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   never changes what an earlier book date resolves.
 - **Runs record `assumption_provenance` beside the snapshot** (version, effective date,
   approver), never inside the value-based `input_hash`.
-- **Provisioning offers an unapproved draft starting position**; nothing substitutes a value,
-  so a bank with no approved version stays not computable (`missing_parameter`).
+- **Provisioning writes no forecast assumption values** and reports the missing approved
+  base, adverse and severely adverse assumptions. The bank authors its own set; until a
+  different authorized user approves it, forecasting stays not computable (`missing_parameter`).
 
 ### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
 

@@ -26,8 +26,6 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.forecasting import service
-from app.forecasting.domain.assumptions import STARTING_POSITION
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -43,6 +41,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast"
 VERSIONS = f"{BASE}/assumption-versions"
@@ -144,7 +143,7 @@ def _headers_for(user_id: UUID) -> dict[str, str]:
 
 
 def _revised(**base: str) -> dict[str, dict[str, str]]:
-    presets = {code: dict(values) for code, values in STARTING_POSITION.items()}
+    presets = {code: dict(values) for code, values in FORECAST_PRESETS.items()}
     presets["base"].update(base)
     return presets
 
@@ -435,7 +434,7 @@ def test_each_verb_requires_its_own_authority(db_client: TestClient) -> None:
     )
 
 
-def test_the_starting_position_never_resolves_until_approved(db_client: TestClient) -> None:
+def test_bank_authored_assumptions_never_resolve_until_approved(db_client: TestClient) -> None:
     period_id, _ = _seed_book()
     maker, checker = _maker_and_checker()
     with get_sessionmaker()() as session:
@@ -445,24 +444,15 @@ def test_the_starting_position_never_resolves_until_approved(db_client: TestClie
                 ForecastAssumptionVersion.bank_id == SAMPLE_BANK_ID
             )
         )
-        draft = service.seed_starting_position(
-            session,
-            organization_id=ORG_1,
-            bank_id=SAMPLE_BANK_ID,
-            effective_from=date(2000, 1, 1),
-        )
-        assert draft is not None
-        assert (
-            service.seed_starting_position(
-                session,
-                organization_id=ORG_1,
-                bank_id=SAMPLE_BANK_ID,
-                effective_from=date(2000, 1, 1),
-            )
-            is None
-        )
         session.commit()
-        draft_id = draft.id
+
+    register = db_client.get(VERSIONS, headers=maker).json()
+    assert register["versions"] == []
+    assert register["open_version_id"] is None
+    draft = _draft(db_client, maker, date(2000, 1, 1), _revised())
+    draft_id = draft["id"]
+    assert draft["origin"] == "tenant"
+    assert draft["created_by"] == str(USER_1)
 
     refused = _run(db_client, maker, period_id)
     assert refused["status"] == "failed"
@@ -472,11 +462,10 @@ def test_the_starting_position_never_resolves_until_approved(db_client: TestClie
     assert scenarios["scenarios"] == []
     assert scenarios["assumption_version"] is None
 
-    # Submitting it unrevised makes the submitter its maker.
     assert db_client.post(f"{VERSIONS}/{draft_id}/submit", headers=maker).status_code == 200
     approved = db_client.post(f"{VERSIONS}/{draft_id}/approve", headers=checker, json={})
     assert approved.status_code == 200, approved.text
-    assert approved.json()["origin"] == "starting_position"
+    assert approved.json()["origin"] == "tenant"
 
     run = _run(db_client, maker, period_id)
     assert run["status"] == "succeeded"

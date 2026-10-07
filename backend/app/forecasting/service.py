@@ -3,8 +3,7 @@
 Every forecast, what-if and optimizer run resolves its base, adverse and severely
 adverse assumptions from here, and only from an APPROVED version. The lifecycle:
 
-* a maker with Forecasting ``edit`` drafts a complete set (or revises the draft
-  provisioning offered) and submits it;
+* a maker with Forecasting ``edit`` drafts a complete set and submits it;
 * a checker with Forecasting ``approve`` who neither wrote nor submitted it
   approves or rejects it — maker ≠ checker is a runtime condition of the
   ``approve`` decision itself, not a convention of the screen;
@@ -19,7 +18,7 @@ while saved runs are immutable regardless.
 
 Nothing here substitutes a value. A bank with no approved version effective on
 the book date resolves no presets and its runs refuse with ``missing_parameter``;
-provisioning's starting position is a DRAFT for exactly that reason.
+the bank must author and approve its own set.
 """
 
 from __future__ import annotations
@@ -40,7 +39,6 @@ from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.forecasting.domain.assumptions import (
-    STARTING_POSITION,
     InvalidAssumptionSet,
     PresetValues,
     validate_presets,
@@ -61,11 +59,6 @@ from app.live.public import Bank, BankReportingPeriod
 from app.services.audit import record_event
 
 _ENTITY = "forecast_assumption_version"
-
-STARTING_POSITION_NOTE = (
-    "Illustrative starting position offered at provisioning. It is calibrated to no "
-    "institution: review every value against the bank's own plan before submitting."
-)
 
 
 @dataclass(frozen=True)
@@ -104,40 +97,6 @@ def provenance_read(payload: Any) -> ForecastAssumptionProvenanceRead | None:
     if not isinstance(payload, dict):
         return None
     return ForecastAssumptionProvenanceRead.model_validate(payload)
-
-
-def seed_starting_position(
-    db: Session, *, organization_id: str, bank_id: str, effective_from: date
-) -> ForecastAssumptionVersion | None:
-    """Offer a new bank the illustrative starting position as an unapproved DRAFT.
-
-    Idempotent: a bank that already has any version keeps its register. The
-    draft resolves for nothing until a maker submits it and a checker approves
-    it, so provisioning never makes forecasting computable on its own.
-    """
-    exists = db.scalar(
-        select(ForecastAssumptionVersion.id)
-        .where(
-            ForecastAssumptionVersion.organization_id == organization_id,
-            ForecastAssumptionVersion.bank_id == bank_id,
-        )
-        .limit(1)
-    )
-    if exists is not None:
-        return None
-    version = ForecastAssumptionVersion(
-        organization_id=organization_id,
-        bank_id=bank_id,
-        version_number=1,
-        status="draft",
-        origin="starting_position",
-        effective_from=effective_from,
-        presets={code: dict(values) for code, values in STARTING_POSITION.items()},
-        change_note=STARTING_POSITION_NOTE,
-    )
-    db.add(version)
-    db.flush()
-    return version
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +203,7 @@ def update_version(
     version_id: UUID,
     payload: ForecastAssumptionVersionUpdate,
 ) -> ForecastAssumptionVersionRead:
-    actor = _require_actor(ctx)
+    _require_actor(ctx)
     bank = resolve_bank(db, ctx, bank_id, module=Module.FORECASTING)
     version = _version_or_404(db, ctx, bank, version_id)
     _require_status(version, "draft", "Only a draft can be revised")
@@ -255,11 +214,6 @@ def update_version(
         version.effective_from = payload.effective_from
     if payload.change_note is not None:
         version.change_note = payload.change_note
-    # Revising provisioning's starting position makes it the reviser's own
-    # proposal: they are its author from here on, and so cannot also approve it.
-    if version.created_by is None:
-        version.created_by = actor
-        version.origin = "tenant"
     _audit(db, ctx, version, "forecast_assumptions.revised")
     db.commit()
     return _read_one(db, version)
