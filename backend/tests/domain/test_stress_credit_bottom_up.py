@@ -175,6 +175,8 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
     assert year1.pd_multiplier == Decimal("1.15")
     assert year2.pd_multiplier == Decimal("1.09")
     # A deeper trough in year 1 ⇒ a larger credit-RWA uplift than year 2.
+    assert year1.credit_rwa_uplift_factor is not None
+    assert year2.credit_rwa_uplift_factor is not None
     assert year1.credit_rwa_uplift_factor > year2.credit_rwa_uplift_factor > Decimal("1")
 
 
@@ -198,21 +200,28 @@ def test_an_empty_book_refuses_rather_than_reporting_a_neutral_uplift() -> None:
     assert exc.value.details[0].items == ("fact:credit_exposure",)
 
 
-def test_a_book_with_no_base_credit_rwa_refuses_the_uplift_factor() -> None:
-    """The uplift is a ratio; a book with zero base RWA has no denominator (D-8)."""
+@pytest.mark.requirement("BoG CRD (June 2018) ¶98")
+def test_zero_base_rwa_preserves_losses_and_positive_migration_delta() -> None:
+    """BoG CRD (June 2018) ¶98: undefined uplift cannot suppress measured losses or RWA.
+
+    https://www.bog.gov.gh/wp-content/uploads/2022/05/Basel-II-BOG-CRD-Final-27-June-2018-Basel-Committee-BSD.pdf
+    """
     zero_rwa_book = (
         CreditExposure("E1", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
-                       Decimal("0")),
+                       Decimal("0"), credit_category="corporate_unrated:RW0"),
     )
-    with pytest.raises(NotComputable) as exc:
-        compute_bottom_up_credit(
-            zero_rwa_book,
-            pd_multiplier=Decimal("2"),
-            lgd_multiplier=Decimal("2"),
-            fx_fraction=Decimal("0"),
-        )
-    assert exc.value.state is OutcomeState.NOT_COMPUTABLE
-    assert exc.value.details[0].metric_id == "credit_rwa_uplift_factor"
+    result = compute_bottom_up_credit(
+        zero_rwa_book, pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("2"),
+        fx_fraction=Decimal("0"),
+    )
+    assert result.credit_rwa_uplift_factor is None
+    assert result.serialize()["credit_rwa_uplift_factor"] is None
+    assert result.base_credit_rwa == Decimal("0")
+    assert result.stressed_credit_rwa == result.migration_rwa == Decimal("25000000")
+    assert result.rwa_delta_by_category == {"corporate_unrated:RW0": Decimal("25000000")}
+    assert result.base_expected_loss == Decimal("900000")
+    assert result.stressed_expected_loss == Decimal("3600000")
+    assert result.incremental_expected_loss == Decimal("2700000")
 
 
 def test_an_unregistered_crd_class_refuses_instead_of_becoming_other() -> None:

@@ -252,9 +252,22 @@ def capital_credit_class(
         category, code = public_credit_class(
             row, foreign=foreign, sovereign_names=sovereign_names, domestic_country=domestic_country
         )
-        if category != "other_securities" or row.counterparty_type not in (
-            "BANK_OECD",
-            "BANK_NON_OECD",
+        regulatory_category = (row.regulatory_category or "").upper()
+        debt = not regulatory_category.startswith("EQUITY") and (
+            regulatory_category in ("BOND", "CORPORATE_BOND")
+            or attribute_text(row.attributes, "instrument")
+            in (
+                "bill",
+                "certificate_of_deposit",
+                "bond_issued",
+                "finsap_bond",
+                "ssnit_educational_bond",
+            )
+        )
+        if (
+            category != "other_securities"
+            or row.counterparty_type not in ("BANK_OECD", "BANK_NON_OECD")
+            or not debt
         ):
             return f"securities:{category}", code
     if row.position_type == "LOAN" and row.ifrs9_stage == 3:

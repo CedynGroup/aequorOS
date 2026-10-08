@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.domain.capital.engine import CapitalFact
 from app.domain.forecasting.engine import ForecastFact
-from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.domain.stress.credit_bottom_up import BottomUpCreditInputs, compute_bottom_up_credit
+from app.domain.stress.orchestrator import EnterpriseStressInputs, run_enterprise_stress
 from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
 from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRunCreate
@@ -32,6 +33,7 @@ from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     base_paths,
     bog_forecast_params,
+    liquidity_facts,
     sample_bank_latest_facts,
     severe_paths,
 )
@@ -268,7 +270,7 @@ def test_fully_provided_claim_has_zero_rwa_increment_but_gross_expected_loss() -
         book, pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
     )
     assert result.base_credit_rwa == result.stressed_credit_rwa == Decimal("0")
-    assert result.credit_rwa_uplift_factor == Decimal("1")
+    assert result.credit_rwa_uplift_factor is None
     assert result.base_expected_loss == Decimal("9")
     assert result.stressed_expected_loss == Decimal("18")
     decomposition = enterprise_stress._credit_overlays(book, list(severe_paths()), 3)  # pyright: ignore[reportPrivateUsage]
@@ -348,3 +350,126 @@ def test_reverse_stress_stale_basis_is_actionable_and_creates_no_frontier(
         db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.module == "reverse_stress"))
         is None
     )
+
+
+def test_mixed_zero_rwa_book_preserves_gross_losses_and_projected_deltas() -> None:
+    """BoG CRD (June 2018) ¶98, ¶106: provided SME plus domestic BoG claim has zero RWA."""
+    loan = replace(
+        _row(
+            "SME/PROVIDED",
+            "LOAN",
+            balance="1000",
+            regulatory_category="SME_UNRATED",
+            attributes={"specific_provision_ghs": "1000"},
+        ),
+        ifrs9_stage=1,
+    )
+    placement = replace(
+        _row(
+            "BOG/PLACEMENT",
+            "INTERBANK_PLACEMENT",
+            balance="1000",
+            counterparty_type="CENTRAL_BANK",
+            product_code="BOG",
+        ),
+        counterparty_country="GH",
+        counterparty_resident=True,
+    )
+    params = bog_capital_params()
+    capital = _capital_facts([loan, placement])
+    assert _credit_rwa(loan, placement) == Decimal("0")
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
+        [_stress_row(loan), _stress_row(placement)],
+        params,
+        domestic_country="GH",
+        capital_facts=capital,
+    )
+    assert {
+        item.exposure_id: (item.ead, item.credit_amount, item.risk_weight_pct) for item in book
+    } == {
+        "SME/PROVIDED": (Decimal("1000"), Decimal("0"), Decimal("100")),
+        "BOG/PLACEMENT": (Decimal("1000"), Decimal("1000"), Decimal("0")),
+    }
+    paths = base_paths()
+    result = compute_bottom_up_credit(
+        book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0")
+    )
+    assert result.base_credit_rwa == result.stressed_credit_rwa == Decimal("0")
+    assert result.base_expected_loss == result.stressed_expected_loss == Decimal("9")
+    assert result.incremental_expected_loss == Decimal("0")
+    assert result.credit_rwa_uplift_factor is None
+    assert result.serialize()["credit_rwa_uplift_factor"] is None
+    assert result.rwa_delta_by_category == {
+        "sme_retail:RW100": Decimal("0"),
+        "interbank:domestic_sovereign:bog:RW0": Decimal("0"),
+    }
+    assert result.stressed_amount_by_category == {
+        "sme_retail:RW100": Decimal("0"),
+        "interbank:domestic_sovereign:bog:RW0": Decimal("1000"),
+    }
+    decomposition = enterprise_stress._credit_overlays(book, list(paths), 3)  # pyright: ignore[reportPrivateUsage]
+    assert set(decomposition) == {1, 2, 3}
+    assert all(sum(losses.values()) == 0 for losses in decomposition.values())
+    facts = [
+        fact
+        for fact in sample_bank_latest_facts()
+        if fact.fact_group in ("capital_component", "operational_income")
+    ]
+    facts.extend(
+        [
+            ForecastFact("balance_sheet", "cash_vault", Decimal("1000"), side="asset"),
+            ForecastFact(
+                "balance_sheet", "retail_deposits_stable", Decimal("1000"), side="liability"
+            ),
+            ForecastFact("loan_exposure", "sme_retail", Decimal("1000"), risk_weight_code="RW100"),
+        ]
+    )
+    facts.extend(
+        ForecastFact(
+            fact.fact_group, fact.category, fact.amount, risk_weight_code=fact.risk_weight_code
+        )
+        for fact in capital
+        if fact.fact_group == "credit_exposure"
+    )
+    projection = project_enterprise(
+        EnterpriseProjectionInputs(
+            scenario_code="MIXED-ZERO",
+            scenario_paths=paths,
+            facts=facts,
+            params=bog_forecast_params(),
+            plan=BASE_ASSUMPTIONS,
+            credit_exposures=book,
+        )
+    )
+    for year in (*projection.base, *projection.stress):
+        assert year.rwa.credit_rwa == Decimal("0")
+        assert year.rwa.operational_rwa > 0
+    outcome = run_enterprise_stress(
+        EnterpriseStressInputs(
+            scenario_code="MIXED-ZERO",
+            scenario_paths=paths,
+            capital_facts=[
+                CapitalFact(
+                    fact.fact_group,
+                    fact.category,
+                    fact.amount,
+                    risk_weight_code=fact.risk_weight_code,
+                    capital_tier=fact.capital_tier,
+                    income_year=fact.income_year,
+                    side=fact.side,
+                    is_deduction=fact.is_deduction,
+                )
+                for fact in facts
+            ],
+            capital_params=params,
+            liquidity_facts=liquidity_facts(),
+            liquidity_params=bog_forecast_params().liquidity,
+            baseline_annual_preprovision_income=Decimal("1000"),
+            baseline_credit_allowance=Decimal("1000"),
+            bottom_up_credit=BottomUpCreditInputs(exposures=book),
+        )
+    )
+    assert outcome.bottom_up_credit is not None
+    assert outcome.bottom_up_credit.base_expected_loss == Decimal("9")
+    assert outcome.bottom_up_credit.base_credit_rwa == Decimal("0")
+    assert outcome.bottom_up_credit.credit_rwa_uplift_factor is None

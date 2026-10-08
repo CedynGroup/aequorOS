@@ -40,8 +40,8 @@ Design (pure, deterministic, Decimal-only — no DB, no FastAPI):
 
 Every channel is neutral under a base scenario (``pd_mult == 1``, ``fx_frac ==
 0``): ``migration_fraction`` is 0, the stressed EAD equals the base EAD, the
-uplift factor is 1.0 and the incremental loss is 0 — the zero-delta invariant
-the whole stress framework relies on.
+uplift factor is 1.0 when base RWA is positive and the incremental loss is 0 —
+the zero-delta invariant the whole stress framework relies on.
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ class BottomUpCreditResult:
     stressed_credit_rwa: Decimal
     fx_revaluation_rwa: Decimal
     migration_rwa: Decimal
-    credit_rwa_uplift_factor: Decimal
+    credit_rwa_uplift_factor: Decimal | None
     base_expected_loss: Decimal
     stressed_expected_loss: Decimal
     incremental_expected_loss: Decimal
@@ -211,7 +211,11 @@ class BottomUpCreditResult:
             "stressed_credit_rwa": str(self.stressed_credit_rwa),
             "fx_revaluation_rwa": str(self.fx_revaluation_rwa),
             "migration_rwa": str(self.migration_rwa),
-            "credit_rwa_uplift_factor": str(self.credit_rwa_uplift_factor),
+            "credit_rwa_uplift_factor": (
+                str(self.credit_rwa_uplift_factor)
+                if self.credit_rwa_uplift_factor is not None
+                else None
+            ),
             "base_expected_loss": str(self.base_expected_loss),
             "stressed_expected_loss": str(self.stressed_expected_loss),
             "incremental_expected_loss": str(self.incremental_expected_loss),
@@ -275,11 +279,9 @@ def compute_bottom_up_credit(
     depreciation the FX path implies. All three are 1.0 / 1.0 / 0.0 under a base
     scenario, collapsing the stress onto the base.
 
-    Refuses an empty book: the result includes a credit-RWA **uplift
-    factor**, and an empty book
-    used to yield 1.0 — "the rating migration and FX revaluation add nothing" —
-    from the absence of the exposure data rather than from the book's resilience
-    (audit 2026-08-22 D-8).
+    Refuses an empty book as missing exposure data. With supplied exposures,
+    losses and RWA remain computable even if zero base RWA makes the aggregate
+    uplift ratio undefined; that ratio is then absent.
     """
     if not exposures:
         raise NotComputable(
@@ -366,36 +368,10 @@ def compute_bottom_up_credit(
     stressed_credit_rwa = money(sum((impact.stressed_rwa for impact in by_class), _ZERO))
     base_el = money(sum((impact.base_expected_loss for impact in by_class), _ZERO))
     stressed_el = money(sum((impact.stressed_expected_loss for impact in by_class), _ZERO))
-    # The uplift factor is a ratio, and a ratio needs a denominator. A book whose
-    # every exposure carries a zero EAD or a zero risk weight has no base credit
-    # RWA, and the factor used to come back as 1.0 — applied downstream to the
-    # PROJECTION's real credit RWA, so the projection's stress leg carried no
-    # migration or revaluation uplift at all (audit 2026-08-22 D-8).
-    fully_netted = all(
-        exposure.credit_amount is not None
-        and exposure.credit_amount - exposure.collateral_amount <= _ZERO
-        and exposure.ead > _ZERO
-        for exposure in exposures
-    )
-    if base_credit_rwa <= _ZERO and not fully_netted:
-        raise NotComputable(
-            outcome(
-                OutcomeState.NOT_COMPUTABLE,
-                metric_id="credit_rwa_uplift_factor",
-                reason=(
-                    f"The {len(exposures)} supplied credit exposures produce no base "
-                    "credit RWA, so the rating-migration and FX-revaluation uplift has "
-                    "no denominator and is not a number. Check the exposure balances "
-                    "and their governed risk weights."
-                ),
-                items=("input:base_credit_rwa",),
-                context={"exposure_count": len(exposures)},
-            )
-        )
     uplift = (
-        _ONE
-        if fully_netted
-        else (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
+        (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
+        if base_credit_rwa > _ZERO
+        else None
     )
     return BottomUpCreditResult(
         pd_multiplier=pd_multiplier,

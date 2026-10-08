@@ -775,6 +775,17 @@ short-term unrated-bank weight requires domestic currency and an original term
 of at most three calendar months, established by `origination_date` and
 `contractual_maturity`. A short remaining maturity alone grants no preference.
 
+Bank-issued securities enter this assessment only with a `BOND` or
+`CORPORATE_BOND` product category or a documented debt instrument (`bill`,
+`certificate_of_deposit`, `bond_issued`, `finsap_bond`,
+`ssnit_educational_bond`). Equity categories override a debt instrument label.
+Other non-debt and unknown holdings retain the securities fallback.
+
+Bottom-up stress still returns losses and exposure-level RWA for a known
+zero-RWA book. Its aggregate `credit_rwa_uplift_factor` is `null` when base
+credit RWA is zero; annual projection consumes the exposure-level deltas.
+An absent exposure book remains a missing-input refusal.
+
 `specific_provision_ghs` explicitly states the
 specific provision on a loan, security or interbank claim. If absent, the
 bank's `ecl_provision_ghs` is specific only for an NPL classified by

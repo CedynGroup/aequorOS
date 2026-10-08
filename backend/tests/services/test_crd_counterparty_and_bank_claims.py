@@ -185,6 +185,7 @@ def test_bank_security_specific_deduction_preserves_gross_expected_loss() -> Non
         "SECURITY_HOLDING",
         balance="1000",
         counterparty_type="BANK_NON_OECD",
+        regulatory_category="CORPORATE_BOND",
         attributes={"external_rating_grade": "6", "specific_provision_ghs": "200"},
     )
     assert _credit_rwa(row) == Decimal("1200")
@@ -227,3 +228,71 @@ def test_inherited_public_borrower_retains_specific_deduction_and_shared_crm() -
     assert book[0].ead == Decimal("1000")
     assert book[0].credit_amount == Decimal("800")
     assert book[0].collateral_amount == Decimal("200")
+
+
+@pytest.mark.parametrize("counterparty", ["BANK_OECD", "BANK_NON_OECD"])
+@pytest.mark.parametrize("foreign", [False, True])
+@pytest.mark.parametrize("grade", [None, "6", "invalid"])
+@pytest.mark.parametrize(
+    "holding",
+    [
+        ("EQUITY_GSE_LISTED", None),
+        ("EQUITY_GSE_LISTED", "certificate_of_deposit"),
+        ("EQUITY_UNLISTED", None),
+        (None, "equity"),
+        (None, "unknown"),
+        ("OTHER_SECURITY", None),
+    ],
+)
+def test_bank_equity_and_unknown_holdings_keep_securities_fallback(
+    counterparty: str, foreign: bool, grade: str | None, holding: tuple[str | None, str | None]
+) -> None:
+    """BoG CRD (June 2018) ¶123–124: bank debt preference cannot cover non-debt holdings."""
+    category, instrument = holding
+    attributes: dict[str, str] = {}
+    if grade is not None:
+        attributes["external_rating_grade"] = grade
+    if instrument is not None:
+        attributes["instrument"] = instrument
+    row = _row(
+        "BANK/NONDEBT",
+        "SECURITY_HOLDING",
+        balance="1000",
+        balance_ghs="1000",
+        currency="USD" if foreign else "GHS",
+        counterparty_type=counterparty,
+        regulatory_category=category,
+        attributes=attributes,
+    )
+    assert _credit_rwa(row) == Decimal("1000")
+    book = _build_credit_exposures(
+        [_stress_row(row)], bog_capital_params(), capital_facts=_capital_facts([row])
+    )
+    assert book[0].risk_weight_pct == Decimal("100")
+    assert book[0].credit_category == "securities:other_securities:RW100"
+    assert book[0].ead == book[0].credit_amount == Decimal("1000")
+
+
+@pytest.mark.parametrize("category", ["BOND", "CORPORATE_BOND"])
+@pytest.mark.parametrize("counterparty", ["BANK_OECD", "BANK_NON_OECD"])
+@pytest.mark.parametrize("foreign", [False, True])
+def test_bank_bond_product_establishes_debt_without_instrument_override(
+    category: str, counterparty: str, foreign: bool
+) -> None:
+    """BoG CRD (June 2018) ¶123: typed bond products establish bank debt claims."""
+    row = _row(
+        "BANK/BOND",
+        "SECURITY_HOLDING",
+        balance="1000",
+        balance_ghs="1000",
+        currency="USD" if foreign else "GHS",
+        counterparty_type=counterparty,
+        regulatory_category=category,
+        attributes={"external_rating_grade": "6"},
+    )
+    assert _credit_rwa(row) == Decimal("1500")
+    book = _build_credit_exposures(
+        [_stress_row(row)], bog_capital_params(), capital_facts=_capital_facts([row])
+    )
+    assert book[0].risk_weight_pct == Decimal("150")
+    assert book[0].credit_category == "securities:banks:RW150"
