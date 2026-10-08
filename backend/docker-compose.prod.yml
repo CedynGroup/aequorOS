@@ -146,8 +146,8 @@ services:
   # Staff control plane (operator API): the app behind console.aequoros.com.
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated
   # domain to container port 8100 (e.g. op.aequoros.com); the console app's
-  # OPERATOR_API_URL points at it. Auth is workforce-OIDC-only in production
-  # (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
+  # OPERATOR_API_URL points at it. Auth accepts password sessions and workforce
+  # OIDC (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
   # WORKER_DATABASE_URL from the shared .env when unset.
   risk-operator:
     build: .
