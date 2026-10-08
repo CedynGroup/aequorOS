@@ -8,8 +8,8 @@ engine-self-referential.
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from collections.abc import Sequence
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest

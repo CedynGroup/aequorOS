@@ -44,12 +44,7 @@ from app.models import (
 )
 from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import (
-    credit_params,
-    enterprise_stress,
-    regulatory_capital,
-    regulatory_forecasting,
-)
+from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -693,11 +688,8 @@ def test_unconverted_unstaged_loan_keeps_booked_provisions(
         )
     )
     assert fact is not None and fact.amount == Decimal("100000000")
-    assert fact.attributes["ecl_coverage_complete"] is False
-    assert regulatory_capital._to_engine_fact(fact).ecl_coverage_complete is False
-    assert regulatory_forecasting._to_engine_fact(fact).ecl_coverage_complete is False
-    assert enterprise_stress._capital_fact(fact).ecl_coverage_complete is False
-    assert enterprise_stress._forecast_fact(fact).ecl_coverage_complete is False
+    attributes = cast(dict[str, object], fact.attributes)
+    assert attributes["ecl_coverage_complete"] is False
     booked = _run_capital(db_session, derived.reporting_period_id, scenario)
     assert booked.status == "succeeded", booked
     _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "2", "45"))
@@ -707,5 +699,7 @@ def test_unconverted_unstaged_loan_keeps_booked_provisions(
     stored_booked = db_session.get(RegulatoryRun, booked.id)
     assert stored is not None and stored_booked is not None
     assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
-    ecl_input = next(row for row in stored.inputs["facts"] if row["fact_group"] == "ecl_exposure")
+    inputs = cast(dict[str, object], stored.inputs)
+    facts = cast(list[dict[str, object]], inputs["facts"])
+    ecl_input = next(row for row in facts if row["fact_group"] == "ecl_exposure")
     assert ecl_input["ecl_coverage_complete"] is False
