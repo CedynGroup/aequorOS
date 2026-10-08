@@ -51,7 +51,7 @@ from app.models.canonical import (
 from app.models.regulatory import BankFinancialFact
 from app.services import market_data_sources
 
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, refuse_unstated_foreign_rows, resolver, stated_amount
 
 #: Column key → days BEFORE the week's Wednesday (the PERIOD / reporting date).
 #: The template's own header formulas fix this: ``B28 = B3-6`` (THURS) … ``H28 = B3``.
@@ -66,8 +66,6 @@ DAY_COLUMNS: dict[str, int] = {
 }
 #: The DEPOSITS block reports the previous week (``B7 = B3-13``).
 PREVIOUS_WEEK_SHIFT = 7
-
-_ZERO = Decimal(0)
 
 
 def target_date(rc: ResolveContext, params: dict[str, Any]) -> date | None:
@@ -142,19 +140,21 @@ def _attribute_equals(key: str, value: Any) -> Any:
     return or_(text_match, attribute.as_float() == float(value))
 
 
+def _is_native(params: dict[str, Any]) -> bool:
+    """``measure="native"``: the raw balance in the position's own currency
+    (Annex 1 balances by currency), not a reporting-currency amount."""
+    return params.get("measure") == "native"
+
+
 def _cedi_measure(rc: ResolveContext, params: dict[str, Any]) -> Any:
     """Balance in BASE units: the raw balance for base-currency positions, the
     ingested ``attributes.balance_ghs`` for foreign-currency ones (the same
-    convention fact derivation applies). ``measure="native"`` returns the raw
-    balance in the position's own currency (Annex 1 balances by currency)."""
-    if params.get("measure") == "native":
+    convention fact derivation applies); see ``reporting_currency_amount``."""
+    if _is_native(params):
         return CanonicalPositionSnapshot.balance
-    converted = func.coalesce(
-        CanonicalPositionSnapshot.attributes["balance_ghs"].as_numeric(28, 6), _ZERO
-    )
     return case(
         (CanonicalPosition.currency == rc.bank.currency, CanonicalPositionSnapshot.balance),
-        else_=converted,
+        else_=stated_amount("balance_ghs"),
     )
 
 
@@ -209,6 +209,8 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
         stmt = stmt.where(CanonicalPosition.currency == str(currency))
     if excluded := params.get("currencies_not_in"):
         stmt = stmt.where(CanonicalPosition.currency.not_in(list(excluded)))
+    if not _is_native(params):
+        refuse_unstated_foreign_rows(rc, stmt, "balance_ghs", metric_id="bsd1.ladder_sum")
     value = rc.db.scalar(stmt)
     return Decimal(str(value or 0))
 

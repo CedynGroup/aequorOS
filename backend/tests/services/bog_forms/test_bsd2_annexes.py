@@ -167,6 +167,8 @@ class _Seeder:
         self.db.add(position)
         self.db.flush()
         attrs: dict[str, Any] = {"balance_ghs": str(amount), **(attributes or {})}
+        if notional:
+            attrs["notional_ghs"] = str(amount)
         self.db.add(
             CanonicalPositionSnapshot(
                 **self.common,

@@ -609,9 +609,18 @@ def _seed_probe_rows(session: Session) -> None:
     position(
         "LC/1", "LC_GUARANTEE", "GHS", "0", "30", corp_cp, {"obs_category": "letter_of_credit"}
     )
-    position("LC/2", "LC_GUARANTEE", "USD", "0", "50", corp_cp, {"obs_category": "guarantee"})
+    # A foreign row states its cedi equivalent (at par here, so the figures read as given).
+    position(
+        "LC/2",
+        "LC_GUARANTEE",
+        "USD",
+        "0",
+        "50",
+        corp_cp,
+        {"obs_category": "guarantee", "notional_ghs": str(50 * M)},
+    )
     position("IBP/1", "INTERBANK_PLACEMENT", "GHS", "10", "0", bank_cp, {})
-    position("IBP/2", "INTERBANK_PLACEMENT", "USD", "5", "0", bank_cp, {})
+    position("IBP/2", "INTERBANK_PLACEMENT", "USD", "5", "0", bank_cp, {"balance_ghs": str(5 * M)})
     session.flush()
 
 

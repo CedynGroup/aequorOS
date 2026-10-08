@@ -499,6 +499,35 @@ def test_le_top_100_cap_truncates_with_info_finding(db_session: Session) -> None
     assert truncation and truncation[0].severity == "INFO"
 
 
+def test_le_foreign_position_without_cedi_amount_refuses_the_return(db_session: Session) -> None:
+    """IAS 21 ¶23(a) as an input: a foreign-currency exposure the bank has not stated in
+    the reporting currency cannot be measured against Net Own Funds, so the return is
+    refused rather than generated with that exposure at zero."""
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    counterparty = seeder.counterparty("CP/USD", "Dollar Borrower", "CORPORATE")
+    seeder.position("LOAN/GHS", "LOAN", Decimal("1000000"), counterparty=counterparty)
+    seeder.position(
+        "LOAN/USD", "LOAN", Decimal("80000"), counterparty=counterparty, currency="USD"
+    )
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "LOAN/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.attributes = {}
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LE-MONTHLY")
+
+    assert refused.value.status_code == 409
+    assert "foreign_amount_not_stated" in str(refused.value.detail)
+    assert "1 foreign-currency position(s) in USD" in str(refused.value.detail)
+
+
 def test_le_validates_and_exports_round_trip(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:

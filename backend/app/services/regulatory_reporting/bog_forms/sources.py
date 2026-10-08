@@ -20,12 +20,14 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import JSON, ColumnElement, Numeric, Select, and_, case, func, or_, select
+from sqlalchemy import cast as sql_cast
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.engine import assert_capital_register_usable
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
@@ -94,6 +96,82 @@ def _currency_predicate(column: Column, currency_col: Any, base_currency: str) -
     if column == "foreign":
         return currency_col != base_currency
     return None
+
+
+# ---------------------------------------------------------------------------
+# reporting-currency amounts (IAS 21 ¶23(a) as an input)
+# ---------------------------------------------------------------------------
+
+
+def stated_amount(ghs_attr: str) -> ColumnElement[Decimal]:
+    """The position's ingested reporting-currency ``ghs_attr`` as an exact NUMERIC
+    (never a float), NULL when the bank did not state it."""
+    attribute = cast(
+        "JSON.Comparator[Any]", CanonicalPositionSnapshot.attributes[ghs_attr].comparator
+    )
+    return sql_cast(attribute.as_string(), Numeric(28, 6))
+
+
+def reporting_currency_amount(
+    rc: ResolveContext, ghs_attr: str, native: InstrumentedAttribute[Decimal | None]
+) -> ColumnElement[Decimal]:
+    """A position's amount in the reporting currency, as a SQL expression.
+
+    A base-currency position's own amount is already in the reporting currency;
+    a foreign-currency one counts only through its ingested ``ghs_attr``
+    (``balance_ghs`` / ``notional_ghs``) and is otherwise NULL — never its native
+    amount taken as cedis. Pair it with :func:`refuse_unstated_foreign_rows`.
+    """
+    stated = stated_amount(ghs_attr)
+    return case(
+        (CanonicalPosition.currency == rc.bank.currency, func.coalesce(stated, native)),
+        else_=stated,
+    )
+
+
+def refuse_unstated_foreign_rows(
+    rc: ResolveContext, stmt: Select[Any], ghs_attr: str, *, metric_id: str
+) -> None:
+    """Raise when ``stmt``'s rows include a foreign-currency position with no
+    ingested reporting-currency amount.
+
+    Basis: Prudential return; input: IAS 21 ¶23(a) (foreign-currency monetary
+    items at the closing rate), as the bank states it in ``ghs_attr``. Summing
+    the rest would file a total that silently leaves those positions out, and
+    summing their native amount would report foreign currency as cedis, so the
+    cell refuses and names what is missing. ``stmt`` must already join
+    ``CanonicalPosition`` and carry the cell's filters.
+    """
+    counts = (
+        stmt.with_only_columns(CanonicalPosition.currency, func.count())
+        .where(
+            and_(
+                CanonicalPosition.currency != rc.bank.currency,
+                stated_amount(ghs_attr).is_(None),
+            )
+        )
+        .group_by(CanonicalPosition.currency)
+        .order_by(CanonicalPosition.currency)
+    )
+    unstated = rc.db.execute(counts).tuples().all()
+    if not unstated:
+        return
+    count = sum(rows for _, rows in unstated)
+    listed = ", ".join(currency for currency, _ in unstated)
+    raise NotComputable(
+        outcome(
+            OutcomeState.MISSING_REQUIRED_INPUT,
+            metric_id=metric_id,
+            reason=(
+                f"{count} foreign-currency position(s) in {listed} carry no {ghs_attr}, so "
+                f"they cannot be stated in {rc.bank.currency}: leaving them out would "
+                f"understate the line, and adding their native amount would report "
+                f"{listed} as {rc.bank.currency}. Ingest {ghs_attr} for every "
+                f"foreign-currency position."
+            ),
+            items=tuple(f"position_attribute:{ghs_attr}:{currency}" for currency, _ in unstated),
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -206,15 +284,15 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
     are counted (one snapshot per position).
     """
     # Amounts in CEDIS: the canonical cedi value of a position lives in
-    # snapshot.attributes["balance_ghs"] (what fact_derivation / LMT use); fall
-    # back to the native balance where absent. The Guide's Foreign column is
-    # "converted into cedis" — never a sum of mixed native currencies.
+    # snapshot.attributes["balance_ghs"] (what fact_derivation / LMT use). The
+    # Guide's Foreign column is "converted into cedis" — never a sum of mixed
+    # native currencies — so a foreign row without it refuses the cell.
     is_notional = params.get("measure") == "notional"
     native = (
         CanonicalPositionSnapshot.notional if is_notional else CanonicalPositionSnapshot.balance
     )
     ghs_attr = "notional_ghs" if is_notional else "balance_ghs"
-    measure = func.coalesce(CanonicalPositionSnapshot.attributes[ghs_attr].as_float(), native)
+    measure = reporting_currency_amount(rc, ghs_attr, native)
     latest = (
         select(
             CanonicalPositionSnapshot.position_id.label("pid"),
@@ -299,9 +377,10 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
         pred = _currency_predicate(rc.column, CanonicalPosition.currency, rc.bank.currency)
         if pred is not None:
             stmt = stmt.where(pred)
+    refuse_unstated_foreign_rows(rc, stmt, ghs_attr, metric_id="positions.sum")
     value = rc.db.scalar(stmt)
     sign = Decimal(str(params.get("sign", 1)))
-    return Decimal(value or 0) * sign
+    return Decimal(str(value or 0)) * sign
 
 
 # ---------------------------------------------------------------------------

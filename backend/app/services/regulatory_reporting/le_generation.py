@@ -370,9 +370,8 @@ def _load_canonical_rows(
             if position.currency == base_currency:
                 balance_ghs = Decimal(str(snapshot.balance or _ZERO))
             else:
-                # Mirrors fact_derivation: a foreign-currency book without an
-                # ingested GHS conversion contributes zero, never a made-up
-                # converted amount (surfaced as an INFO finding).
+                # Never a made-up converted amount: generation refuses the
+                # return while any foreign-currency row is unstated.
                 balance_ghs = _ZERO
                 has_ghs_value = False
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
@@ -834,6 +833,19 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
             "position data for the period end before generating the Large Exposures "
             "return.",
         )
+    unstated = [row for row in rows if not row.has_ghs_value]
+    if unstated:
+        # IAS 21 ¶23(a) as an input: an exposure the bank has not stated in the
+        # reporting currency cannot be measured against Net Own Funds, and
+        # filing without it could hide a large exposure.
+        currencies = ", ".join(sorted({row.currency for row in unstated}))
+        raise _conflict_409(
+            "foreign_amount_not_stated",
+            f"{len(unstated)} foreign-currency position(s) in {currencies} carry no "
+            "balance_ghs, so their exposure cannot be stated in the reporting currency "
+            "and nothing is converted at a made-up rate. Ingest balance_ghs for every "
+            "foreign-currency position before generating the Large Exposures return.",
+        )
 
     entities, unattributed_ghs, unattributed_count = _aggregate_entities(rows)
     threshold = nof * _LE_THRESHOLD_FRACTION
@@ -872,17 +884,6 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
                 f"{unattributed_count} position(s) totalling {unattributed_ghs} GHS "
                 "carry neither a counterparty link nor an issuer attribute and are "
                 "excluded from the counterparty templates.",
-            )
-        )
-    unconverted = sum(1 for row in rows if not row.has_ghs_value)
-    if unconverted:
-        findings.append(
-            _finding(
-                "le.missing_ghs_conversion",
-                "INFO",
-                f"{unconverted} foreign-currency position(s) without an ingested "
-                "balance_ghs conversion contribute zero exposure (mirrors the fact "
-                "pipeline; nothing is converted at a made-up rate).",
             )
         )
 

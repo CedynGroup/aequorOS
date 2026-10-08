@@ -71,7 +71,13 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 
-from ..sources import ResolveContext, get_resolver, resolver
+from ..sources import (
+    ResolveContext,
+    get_resolver,
+    refuse_unstated_foreign_rows,
+    reporting_currency_amount,
+    resolver,
+)
 
 #: Band keys in template column order (D … K); the line map binds them to the
 #: sheet's bucket columns and the resolver reads them from ``rc.column``.
@@ -161,11 +167,13 @@ class _PositionRow:
 def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
     rc: ResolveContext, params: dict[str, Any], *, bsd2_column: str
 ) -> list[_PositionRow]:
-    measure = (
+    native = (
         CanonicalPositionSnapshot.notional
         if params.get("measure") == "notional"
         else CanonicalPositionSnapshot.balance
     )
+    ghs_attr = "notional_ghs" if native is CanonicalPositionSnapshot.notional else "balance_ghs"
+    measure = reporting_currency_amount(rc, ghs_attr, native)
     latest = (
         select(
             CanonicalPositionSnapshot.position_id.label("pid"),
@@ -244,6 +252,7 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
         stmt = stmt.where(CanonicalPosition.currency == rc.bank.currency)
     elif currency == "FX" or (currency is None and bsd2_column == "foreign"):
         stmt = stmt.where(CanonicalPosition.currency != rc.bank.currency)
+    refuse_unstated_foreign_rows(rc, stmt, ghs_attr, metric_id="bsd6.position_rows")
     sign = Decimal(str(params.get("sign", 1)))
     rows: list[_PositionRow] = []
     for amount, ptype, maturity, behavioural, account_type, attributes in rc.db.execute(stmt):
