@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -1324,11 +1324,11 @@ def _live_calculation(
     engine_methodology = _methodology(methodology.parameters)
     z_now = _systematic_factor(environment, methodology.parameters)
     pit = compute_rating(
-        RatingInputs(**{**inputs.__dict__, "basis": "PIT", "systematic_factor": z_now}),
+        replace(inputs, basis="PIT", systematic_factor=z_now),
         engine_methodology,
     )
     ttc = compute_rating(
-        RatingInputs(**{**inputs.__dict__, "basis": "TTC", "systematic_factor": z_now}),
+        replace(inputs, basis="TTC", systematic_factor=z_now),
         engine_methodology,
     )
     stress = ddep_stress(
@@ -1562,11 +1562,11 @@ def run(
     engine_methodology = _methodology(methodology.parameters)
     z_now = _systematic_factor(environment, methodology.parameters)
     pit = compute_rating(
-        RatingInputs(**{**inputs.__dict__, "basis": "PIT", "systematic_factor": z_now}),
+        replace(inputs, basis="PIT", systematic_factor=z_now),
         engine_methodology,
     )
     ttc = compute_rating(
-        RatingInputs(**{**inputs.__dict__, "basis": "TTC", "systematic_factor": z_now}),
+        replace(inputs, basis="TTC", systematic_factor=z_now),
         engine_methodology,
     )
     stress = ddep_stress(

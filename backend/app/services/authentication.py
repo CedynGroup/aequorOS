@@ -33,6 +33,7 @@ import datetime as dt
 import hashlib
 import hmac
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -132,18 +133,19 @@ def issue_tokens(
     db.refresh(user)
     now = utc_now()
     token_id = uuid4()
-    common = {
-        "subject": user.id,
-        "organization_id": user.organization_id,
-        "roles": [user.role],
-        "authorization_version": user.authorization_version,
-        "email": user.email,
-        "name": user.display_name,
-        "now": now,
-        "settings": settings,
-    }
-    access_token = security.create_token(token_type="access", **common)
-    refresh_token = security.create_token(token_type="refresh", jti=str(token_id), **common)
+    create_token = partial(
+        security.create_token,
+        subject=user.id,
+        organization_id=user.organization_id,
+        roles=[user.role],
+        authorization_version=user.authorization_version,
+        email=user.email,
+        name=user.display_name,
+        now=now,
+        settings=settings,
+    )
+    access_token = create_token(token_type="access")
+    refresh_token = create_token(token_type="refresh", jti=str(token_id))
     db.add(
         RefreshToken(
             id=token_id,

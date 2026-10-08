@@ -1203,7 +1203,6 @@
  },
  "app.services.authentication": {
   "reportAny": 6,
-  "reportArgumentType": 17,
   "reportMissingTypeArgument": 1,
   "reportUnknownArgumentType": 3,
   "reportUnknownMemberType": 1,
@@ -1312,10 +1311,7 @@
   "reportUnnecessaryCast": 1
  },
  "app.services.calculations": {
-  "reportAny": 99,
-  "reportArgumentType": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 99
  },
  "app.services.canonical_withdrawal": {
   "reportAny": 6
@@ -1688,11 +1684,9 @@
  },
  "app.services.icaap.snapshot": {
   "reportAny": 19,
-  "reportArgumentType": 1,
-  "reportCallIssue": 1,
-  "reportUnknownArgumentType": 5,
+  "reportUnknownArgumentType": 4,
   "reportUnknownMemberType": 6,
-  "reportUnknownVariableType": 5,
+  "reportUnknownVariableType": 4,
   "reportUnnecessaryIsInstance": 1
  },
  "app.services.icaap.validation_rules": {
@@ -1710,8 +1704,7 @@
   "reportAny": 2
  },
  "app.services.implied_rating": {
-  "reportAny": 167,
-  "reportArgumentType": 32
+  "reportAny": 167
  },
  "app.services.ingestion": {
   "reportAny": 77,
@@ -1766,9 +1759,7 @@
   "reportDeprecated": 1
  },
  "app.services.management_action_plans": {
-  "reportAny": 23,
-  "reportArgumentType": 1,
-  "reportCallIssue": 1
+  "reportAny": 23
  },
  "app.services.market_data": {
   "reportAny": 20
@@ -1792,12 +1783,10 @@
   "reportUnnecessaryCast": 1
  },
  "app.services.market_desk.calculation": {
-  "reportAny": 83,
-  "reportArgumentType": 5,
-  "reportCallIssue": 1,
+  "reportAny": 81,
   "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 5,
-  "reportUnknownVariableType": 9
+  "reportUnknownMemberType": 3,
+  "reportUnknownVariableType": 8
  },
  "app.services.market_desk.capture_job": {
   "reportAny": 22
@@ -2140,9 +2129,6 @@
   "reportAny": 1,
   "reportPrivateUsage": 2
  },
- "app.services.regulatory_reporting.exports.pdf": {
-  "reportArgumentType": 1
- },
  "app.services.regulatory_reporting.exports.pdf_parts": {
   "reportAny": 24
  },
@@ -2168,8 +2154,6 @@
  },
  "app.services.regulatory_reporting.le_generation": {
   "reportAny": 53,
-  "reportArgumentType": 1,
-  "reportCallIssue": 1,
   "reportUnknownArgumentType": 5,
   "reportUnknownMemberType": 8,
   "reportUnknownVariableType": 3
@@ -2293,8 +2277,7 @@
   "reportUnknownVariableType": 1
  },
  "app.storage.access_log": {
-  "reportAny": 4,
-  "reportArgumentType": 1
+  "reportAny": 4
  },
  "app.storage.provisioning": {
   "reportMissingParameterType": 7,

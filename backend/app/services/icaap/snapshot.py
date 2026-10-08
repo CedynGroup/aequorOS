@@ -487,60 +487,56 @@ def build(  # noqa: PLR0913 - the snapshot is assembled from named parts
                 for row in section_rows
                 if framework.has_section(row.section_key)
             ],
-            "blocks": sorted(
-                (
-                    {
-                        # The editor's ``dataBlock``/``factRef`` nodes reference
-                        # this UUID (``editor_schema.json`` ``blockId``), so the
-                        # exporters cannot resolve a table or a quoted figure
-                        # without it — a frozen section would print "no longer
-                        # part of this cycle" over a block that is right here.
-                        "block_id": str(block.id),
-                        "block_key": block.block_key,
-                        "block_type": block.block_type,
-                        "title": block.title or BLOCK_CATALOGUE[block.block_type].title,
-                        "seq": None if binding is None else binding.seq,
-                        "payload_sha256": None if binding is None else binding.payload_sha256,
-                        "source_kind": None if binding is None else binding.source_kind,
-                        "source_key": None if binding is None else binding.source_key,
-                        "source_as_of": (
-                            None
-                            if binding is None or binding.source_as_of is None
-                            else binding.source_as_of.isoformat()
-                        ),
-                        "pin_reason": block.pin_reason,
-                        "payload": None if binding is None else binding.payload,
-                        "facts": None if binding is None else binding.facts,
-                        "never_public": block.block_type
-                        in (
-                            framework.disclosure.never_public_block_types
-                            if framework.disclosure is not None
-                            else ()
-                        ),
-                    }
-                    for block, binding in blocks
-                ),
-                key=lambda entry: entry["block_key"],
-            ),
-            "attachments": sorted(
-                (
-                    {
-                        "kind": row.kind,
-                        "title": row.title,
-                        "sha256": row.sha256,
-                        "byte_size": row.byte_size,
-                        "media_type": row.media_type,
-                        "gate": (
-                            framework.attachment(row.kind).gate
-                            if any(entry.kind == row.kind for entry in framework.attachments)
-                            else "optional"
-                        ),
-                        "attributes": row.attributes or {},
-                    }
-                    for row in attachments
-                ),
-                key=lambda entry: (entry["kind"], entry["sha256"]),
-            ),
+            "blocks": [
+                {
+                    # The editor's ``dataBlock``/``factRef`` nodes reference
+                    # this UUID (``editor_schema.json`` ``blockId``), so the
+                    # exporters cannot resolve a table or a quoted figure
+                    # without it — a frozen section would print "no longer
+                    # part of this cycle" over a block that is right here.
+                    "block_id": str(block.id),
+                    "block_key": block.block_key,
+                    "block_type": block.block_type,
+                    "title": block.title or BLOCK_CATALOGUE[block.block_type].title,
+                    "seq": None if binding is None else binding.seq,
+                    "payload_sha256": None if binding is None else binding.payload_sha256,
+                    "source_kind": None if binding is None else binding.source_kind,
+                    "source_key": None if binding is None else binding.source_key,
+                    "source_as_of": (
+                        None
+                        if binding is None or binding.source_as_of is None
+                        else binding.source_as_of.isoformat()
+                    ),
+                    "pin_reason": block.pin_reason,
+                    "payload": None if binding is None else binding.payload,
+                    "facts": None if binding is None else binding.facts,
+                    "never_public": block.block_type
+                    in (
+                        framework.disclosure.never_public_block_types
+                        if framework.disclosure is not None
+                        else ()
+                    ),
+                }
+                for block, binding in sorted(blocks, key=lambda pair: pair[0].block_key)
+            ],
+            "attachments": [
+                {
+                    "kind": row.kind,
+                    "title": row.title,
+                    "sha256": row.sha256,
+                    "byte_size": row.byte_size,
+                    "media_type": row.media_type,
+                    "gate": (
+                        framework.attachment(row.kind).gate
+                        if any(entry.kind == row.kind for entry in framework.attachments)
+                        else "optional"
+                    ),
+                    "attributes": row.attributes or {},
+                }
+                for row in sorted(
+                    attachments, key=lambda attachment: (attachment.kind, attachment.sha256)
+                )
+            ],
             "attachment_requirements": [
                 {
                     "kind": requirement.kind,

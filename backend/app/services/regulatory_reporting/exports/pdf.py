@@ -25,6 +25,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     BaseDocTemplate,
+    Flowable,
     Frame,
     NextPageTemplate,
     PageBreak,
@@ -720,7 +721,7 @@ def render_pdf(
     # sections on LANDSCAPE, and the provenance appendix back on portrait. Each
     # ``NextPageTemplate`` takes effect at the following page break, which
     # ``_sections`` and ``_provenance`` each begin with.
-    story = [
+    story: list[Flowable] = [
         *_cover(rendered),
         *_attestation(
             rendered, signing_required=signing_required, officers=officers

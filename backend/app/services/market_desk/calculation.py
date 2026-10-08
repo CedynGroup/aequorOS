@@ -1781,7 +1781,7 @@ def _apply_research_adjustments(
     """
     if not adjustments:
         return
-    rates = derived_values.setdefault("rates", {})
+    rates: dict[str, Any] = derived_values.setdefault("rates", {})
     flags = qa_results.setdefault("flags", [])
     if not isinstance(flags, list):
         flags = []
@@ -1792,8 +1792,10 @@ def _apply_research_adjustments(
         kind = str(adj.get("kind") or "")
         if not series or not kind:
             continue
-        entry = rates.get(series)
-        if entry is None or not isinstance(entry, dict):
+        existing = rates.get(series)
+        if isinstance(existing, dict):
+            entry: dict[str, Any] = existing
+        else:
             # Create a research-only rate row when overriding a series the
             # pipeline did not emit (still auditable and publishable).
             entry = {

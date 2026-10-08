@@ -489,30 +489,27 @@ def plan_snapshot(db: Session, plan: ManagementActionPlan) -> dict[str, Any]:
     return {
         "code": plan.code,
         "version": plan.version,
-        "actions": sorted(
-            (
-                {
-                    "action_id": item.action_id,
-                    "kind": item.kind,
-                    "trigger_kind": item.trigger_kind,
-                    "watch_minima": sorted(item.watch_minima) if item.watch_minima else [],
-                    "min_severity": item.min_severity,
-                    "effective_year": item.effective_year,
-                    "capital_raise_ghs": str(Decimal(item.capital_raise_ghs)),
-                    "capital_raise_tier": item.capital_raise_tier,
-                    "counts_as_paid_up": item.counts_as_paid_up,
-                    "sizing": item.sizing,
-                    "dividend_reduction_pct": str(Decimal(item.dividend_reduction_pct)),
-                    "rwa_reduction_ghs": str(Decimal(item.rwa_reduction_ghs)),
-                    "shrinks_leverage_exposure": item.shrinks_leverage_exposure,
-                    "severity_factors": (
-                        {k: str(Decimal(str(v))) for k, v in item.severity_factors.items()}
-                        if item.severity_factors
-                        else None
-                    ),
-                }
-                for item in items
-            ),
-            key=lambda entry: entry["action_id"],
-        ),
+        "actions": [
+            {
+                "action_id": item.action_id,
+                "kind": item.kind,
+                "trigger_kind": item.trigger_kind,
+                "watch_minima": sorted(item.watch_minima) if item.watch_minima else [],
+                "min_severity": item.min_severity,
+                "effective_year": item.effective_year,
+                "capital_raise_ghs": str(Decimal(item.capital_raise_ghs)),
+                "capital_raise_tier": item.capital_raise_tier,
+                "counts_as_paid_up": item.counts_as_paid_up,
+                "sizing": item.sizing,
+                "dividend_reduction_pct": str(Decimal(item.dividend_reduction_pct)),
+                "rwa_reduction_ghs": str(Decimal(item.rwa_reduction_ghs)),
+                "shrinks_leverage_exposure": item.shrinks_leverage_exposure,
+                "severity_factors": (
+                    {k: str(Decimal(str(v))) for k, v in item.severity_factors.items()}
+                    if item.severity_factors
+                    else None
+                ),
+            }
+            for item in sorted(items, key=lambda action: action.action_id)
+        ],
     }

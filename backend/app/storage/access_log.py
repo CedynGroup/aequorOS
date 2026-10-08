@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -100,7 +100,7 @@ class HashChainedAccessLog:
             result=result,
             prev_hash=prev_hash,
         )
-        sealed = AccessLogEntry(**{**entry.__dict__, "entry_hash": entry.compute_hash()})
+        sealed = replace(entry, entry_hash=entry.compute_hash())
         self.entries.append(sealed)
 
     def export_jsonl(self) -> str:
