@@ -2349,13 +2349,20 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
 
     Emits ``"<family>:stage<n>"`` rows only for loans carrying an ingested
     IFRS 9 stage — an unstaged book derives nothing, and the capital engine
-    then falls back to ingested provisions rather than modeling on air.
+    then falls back to ingested provisions rather than modeling on air. A
+    partly staged book is counted in the group warnings: the capital engine
+    then keeps the booked provisions, because a modeled figure over part of the
+    book must not replace the allowance booked against all of it.
     """
     totals: dict[str, Decimal] = {}
+    unstaged: list[_LoanRow] = []
     for loan in loan_rows:
         stage = loan.row.ifrs9_stage
         balance = loan.row.balance_ghs
-        if stage is None or balance is None:
+        if balance is None:
+            continue
+        if stage is None:
+            unstaged.append(loan)
             continue
         key = f"{loan.category}:stage{stage}"
         totals[key] = totals.get(key, _ZERO) + balance
@@ -2369,7 +2376,21 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
         for category, amount in sorted(totals.items())
     ]
     if specs:
-        groups.append(GroupResult(group="ecl_exposure", status="derived", rows=len(specs)))
+        warnings: list[str] = []
+        if unstaged:
+            unstaged_ead = sum((loan.row.balance_ghs or _ZERO for loan in unstaged), _ZERO)
+            warnings.append(
+                f"{len(unstaged)} LOAN position(s) totalling {unstaged_ead:,.2f} in the "
+                "reporting currency carry no ingested IFRS 9 stage, so the modelled ECL "
+                "does not reach them and the capital run keeps the booked general "
+                "provisions. Ingest the stage for: "
+                f"{_shown([loan.row.source_reference for loan in unstaged])}."
+            )
+        groups.append(
+            GroupResult(
+                group="ecl_exposure", status="derived", rows=len(specs), warnings=warnings
+            )
+        )
     else:
         # Audit §3 / P0-10 companion: the empty case used to append NO group at
         # all, so a capital run with no IFRS 9 ECL looked complete. It is now an

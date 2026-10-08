@@ -10,7 +10,11 @@ by definition regardless of the assumption row.
 Assumptions resolve per (segment, stage) with an ``ALL`` segment fallback;
 an exposure whose segment+stage has no assumption is reported as uncovered
 rather than silently priced at zero — the caller decides whether that blocks
-the run or falls back to ingested provisions.
+the run or falls back to ingested provisions. Segments compare under
+:func:`normalize_segment` on both sides, so the register's stored spelling
+and the exposure's fact category cannot drift apart by case.
+
+Basis: Accounting (IFRS 9), modelled estimate — not the bank's booked allowance.
 """
 
 from __future__ import annotations
@@ -25,6 +29,17 @@ STAGE_3 = 3
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
 _MONEY_Q = Decimal("0.0001")
+
+
+def normalize_segment(segment: str) -> str:
+    """The one spelling an ECL segment is stored and matched under.
+
+    The assumptions register stores upper-case (``CORPORATE_UNRATED``) while
+    loan-family fact categories are lower-case (``corporate_unrated``). An exact
+    match between the two never succeeded, so every Board-adopted segment row was
+    silently replaced by the ``ALL`` fallback or left the exposure unpriced.
+    """
+    return segment.strip().upper()
 
 
 def _money(value: Decimal) -> Decimal:
@@ -95,7 +110,9 @@ class EclComputationError(Exception):
 def _resolve(
     assumptions: Mapping[tuple[str, int], EclAssumption], segment: str, stage: int
 ) -> EclAssumption | None:
-    return assumptions.get((segment, stage)) or assumptions.get((ALL_SEGMENTS, stage))
+    return assumptions.get((normalize_segment(segment), stage)) or assumptions.get(
+        (ALL_SEGMENTS, stage)
+    )
 
 
 def _capped_pct(value: Decimal) -> Decimal:
@@ -113,7 +130,7 @@ def compute_ecl(
         raise EclComputationError(
             f"Scenario weights must sum to 100% (got {weight_total}%)."
         )
-    lookup = {(row.segment, row.stage): row for row in assumptions}
+    lookup = {(normalize_segment(row.segment), row.stage): row for row in assumptions}
     items: list[EclItem] = []
     uncovered: list[tuple[str, int]] = []
     stage_totals: dict[int, Decimal] = {}

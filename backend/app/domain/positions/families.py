@@ -25,6 +25,11 @@ LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
 #: The (exposure category, risk weight code) a loan lands in once it is 90+
 #: days past due, whatever its regulatory class.
 PAST_DUE_CATEGORY: tuple[str, str] = ("past_due_90", "RW150")
+#: Every exposure category a classified loan can land in — the vocabulary an
+#: IFRS 9 ECL assumption segment must name to ever price an exposure.
+LOAN_EXPOSURE_CATEGORIES: frozenset[str] = frozenset(
+    {category for category, _ in LOAN_CATEGORY_MAP.values()} | {PAST_DUE_CATEGORY[0]}
+)
 #: The exposure categories that count as retail (LCR inflow treatment).
 RETAIL_LOAN_CATEGORIES: tuple[str, ...] = ("retail_other", "residential_mortgage")
 

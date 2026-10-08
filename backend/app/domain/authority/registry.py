@@ -2642,7 +2642,7 @@ REGISTRY.register_all(
                 "Active ONLY when ecl_exposure facts AND the ecl-assumptions register both "
                 "exist; otherwise the ingested-provisions path is byte-identical. An exposure "
                 "whose (segment, stage) has no assumption is reported UNCOVERED, never priced "
-                "at zero - the caller decides whether that blocks the run."
+                "at zero, and the capital run fails on it."
             ),
         )
         for metric_id in ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")

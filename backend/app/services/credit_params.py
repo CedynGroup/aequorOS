@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
+from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.models import (
     Bank,
     ParamConcentrationLimit,
@@ -107,6 +109,32 @@ def get_ecl_register(
     )
 
 
+#: The segments an ECL assumption may name: the ``ALL`` fallback or a loan
+#: exposure category, in the register's stored spelling.
+_ECL_SEGMENTS = frozenset(
+    {ALL_SEGMENTS} | {normalize_segment(category) for category in LOAN_EXPOSURE_CATEGORIES}
+)
+
+
+def _require_ecl_segment(raw: str) -> str:
+    """The stored spelling of an ECL segment, refusing one no loan can land in.
+
+    IFRS 9 ¶B5.5.5 groups exposures by shared credit risk characteristics; the
+    group a Board assumption names must be the grouping the exposures carry, or
+    the assumption prices nothing and the run silently uses the fallback.
+    """
+    segment = normalize_segment(raw)
+    if segment not in _ECL_SEGMENTS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"ECL segment '{raw.strip()}' is not a loan exposure category. "
+                f"Use one of: {', '.join(sorted(_ECL_SEGMENTS))}."
+            ),
+        )
+    return segment
+
+
 def update_ecl_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: EclAssumptionUpdate
 ) -> EclAssumptionRegisterRead:
@@ -115,7 +143,7 @@ def update_ecl_register(
     seen: set[tuple[str, int]] = set()
     now = utc_now()
     for entry in payload.assumptions:
-        segment = entry.segment.strip().upper()
+        segment = _require_ecl_segment(entry.segment)
         key = (segment, entry.stage)
         if key in seen:
             raise HTTPException(

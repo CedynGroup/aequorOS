@@ -36,6 +36,8 @@ from app.domain.capital.ecl import (
     compute_ecl,
 )
 from app.domain.capital.engine import (
+    FACT_GROUP_ECL_EXPOSURE,
+    FACT_GROUP_LOAN_EXPOSURE,
     TRIGGER_EARLY_WARNING,
     CapitalComputationError,
     CapitalFact,
@@ -257,6 +259,9 @@ class CapitalScenarioAnalysis:
     stress: CapitalStressResult | None
     params: CapitalParams
     ecl: EclResult | None
+    #: Loan EAD the modeled ECL did not reach because those loans carry no
+    #: ingested IFRS 9 stage. ``None`` when no modeled ECL ran.
+    ecl_unstaged_ead: Decimal | None = None
 
 
 def _execute_scenario_compute(
@@ -286,18 +291,31 @@ def _execute_scenario_compute(
         key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
     }
     ecl = _modeled_ecl(engine_facts, active, shocks)
-    gp_override = ecl.general_ecl if ecl is not None else None
+    unstaged_ead = _unstaged_loan_ead(engine_facts) if ecl is not None else None
+    # A modeled figure over part of the book would replace provisions the bank
+    # booked against ALL of it, so partial staging keeps the booked figure.
+    gp_override = ecl.general_ecl if ecl is not None and not unstaged_ead else None
     if not stress_shocks:
         rwa = compute_rwa(engine_facts, engine_params)
         ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
         return CapitalScenarioAnalysis(
-            rwa=rwa, ratios=ratios, stress=None, params=engine_params, ecl=ecl
+            rwa=rwa,
+            ratios=ratios,
+            stress=None,
+            params=engine_params,
+            ecl=ecl,
+            ecl_unstaged_ead=unstaged_ead,
         )
     stress = run_capital_stress(
         scenario_code, engine_facts, engine_params, stress_shocks, gp_override
     )
     return CapitalScenarioAnalysis(
-        rwa=stress.rwa, ratios=stress.ratios, stress=stress, params=engine_params, ecl=ecl
+        rwa=stress.rwa,
+        ratios=stress.ratios,
+        stress=stress,
+        params=engine_params,
+        ecl=ecl,
+        ecl_unstaged_ead=unstaged_ead,
     )
 
 
@@ -699,6 +717,7 @@ def _create_and_execute(
             analysis.stress,
             base_currency(bank),
             analysis.ecl,
+            analysis.ecl_unstaged_ead,
         )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -759,7 +778,11 @@ def _modeled_ecl(
 ) -> EclResult | None:
     """IFRS 9 modeled ECL (item 8) — active only when BOTH staged exposures
     and Board-configured assumptions exist; otherwise the run keeps the
-    ingested-provisions path untouched."""
+    ingested-provisions path untouched.
+
+    A staged exposure no assumption row covers fails the run: pricing it at
+    zero would understate the allowance the run reports.
+    """
     exposures = []
     for fact in facts:
         if fact.fact_group != "ecl_exposure":
@@ -783,7 +806,37 @@ def _modeled_ecl(
         )
     else:
         scenarios = (BASE_SCENARIO,)
-    return compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    result = compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    if result.uncovered:
+        uncovered = [f"{segment}:stage{stage}" for segment, stage in result.uncovered]
+        raise CapitalRunError(
+            "ecl_segment_uncovered",
+            "Staged loan exposures have no ECL assumption for their segment and stage, "
+            "and no ALL fallback row covers them.",
+            {
+                "uncovered": uncovered,
+                "corrective_action": (
+                    "Add an ECL assumption for each listed segment and stage, or an ALL "
+                    "row for the stage, to the ECL assumptions register."
+                ),
+            },
+        )
+    return result
+
+
+def _unstaged_loan_ead(facts: tuple[CapitalFact, ...]) -> Decimal:
+    """Loan EAD with no ingested IFRS 9 stage: loan exposure the staged ECL
+    buckets do not reach. Both fact groups bucket the same loans by the same
+    exposure category, so the shortfall is exactly the unstaged balance."""
+    loans = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
+        Decimal("0"),
+    )
+    staged = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE),
+        Decimal("0"),
+    )
+    return max(loans - staged, Decimal("0"))
 
 
 def _persist_success(  # noqa: PLR0913
@@ -796,6 +849,7 @@ def _persist_success(  # noqa: PLR0913
     stress: CapitalStressResult | None,
     currency: str,
     ecl: EclResult | None = None,
+    ecl_unstaged_ead: Decimal | None = None,
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -810,16 +864,15 @@ def _persist_success(  # noqa: PLR0913
     }
     if ecl is not None:
         # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
-        # general-provisions component in this run's Tier 2 (still capped).
+        # general-provisions component in this run's Tier 2 (still capped)
+        # unless part of the loan book was unstaged.
         metrics["ecl_total_ghs"] = str(ecl.total_ecl)
         metrics["ecl_general_ghs"] = str(ecl.general_ecl)
         metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)
         for stage in (1, 2, 3):
             metrics[f"ecl_stage{stage}_ghs"] = str(ecl.stage_totals.get(stage, Decimal("0")))
-        if ecl.uncovered:
-            metrics["ecl_uncovered_segments"] = ",".join(
-                f"{segment}:stage{stage}" for segment, stage in ecl.uncovered
-            )
+        if ecl_unstaged_ead:
+            metrics["ecl_unstaged_ead_ghs"] = str(ecl_unstaged_ead)
     if stress is not None:
         metrics["stress_path"] = [
             {
