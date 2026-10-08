@@ -210,7 +210,7 @@ def _report(monkeypatch: pytest.MonkeyPatch, *diagnostics: Diagnostic) -> None:
 @pytest.mark.parametrize(
     ("old", "current"),
     [
-        ("tests.api.helpers", "tests.support.helpers"),
+        ("tests.legacy.helpers", "tests.support.helpers"),
         ("app.services.regulatory_forecasting", "app.forecasting.engine"),
     ],
 )
