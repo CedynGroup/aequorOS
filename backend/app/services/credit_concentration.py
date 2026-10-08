@@ -141,8 +141,8 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
     if institution_types.institution_class(db, bank) == "sdi":
         try:
             nof = sdi_capital.net_own_funds(db, ctx, bank, as_of)
-        except Exception:  # noqa: BLE001 - an unresolvable base is a real state
-            return None
+        except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+            raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
         return nof if nof > _ZERO else None
     try:
         current = load_current_facts(db, ctx, bank, ("capital_component",))

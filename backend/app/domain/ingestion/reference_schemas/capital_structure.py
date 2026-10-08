@@ -15,6 +15,7 @@ Docs: docs/API_INTEGRATION.md §3.5.
 from __future__ import annotations
 
 import dataclasses
+from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 from app.domain.ingestion.capital_tiers import DOCUMENTED_TIERS, parse_capital_tier
@@ -36,13 +37,19 @@ _DECLARED = ReferenceSchema(
     ),
     grain="one row per capital component per reporting date",
     required=("capital_component", "amount_ghs", "tier"),
-    numeric=("amount_ghs",),
 )
 
 
 def validate_capital_structure_row(row: dict[str, object]) -> list[str]:
     """Schema problems plus the tier vocabulary rule."""
     problems = cast(_DeclarativeChecks, _DECLARED).validate_row(row)
+    amount = row.get("amount_ghs")
+    if amount not in (None, ""):
+        try:
+            if not Decimal(str(amount)).is_finite():
+                raise InvalidOperation
+        except InvalidOperation:
+            problems.append(f"field 'amount_ghs' must be a finite Decimal (got {amount!r})")
     tier = row.get("tier")
     if tier not in (None, "") and parse_capital_tier(tier) is None:
         problems.append(

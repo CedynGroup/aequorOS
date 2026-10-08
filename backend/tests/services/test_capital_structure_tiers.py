@@ -9,6 +9,7 @@ excludes from the capital base.
 
 from __future__ import annotations
 
+import csv
 import json
 from datetime import date
 from decimal import Decimal
@@ -82,12 +83,12 @@ def test_capital_tier_vocabulary_is_closed(raw: str | None, expected: object) ->
     assert parse_capital_tier(raw) == expected
 
 
-def _row(tier: str) -> ReferenceRowData:
+def _row(tier: str, amount: str = "20000000") -> ReferenceRowData:
     return ReferenceRowData(
         dataset_kind="capital_structure",
         source_locator="capital_structure.csv!A2",
         row_index=1,
-        payload={"capital_component": "subordinated_debt", "amount_ghs": "20000000", "tier": tier},
+        payload={"capital_component": "subordinated_debt", "amount_ghs": amount, "tier": tier},
     )
 
 
@@ -98,6 +99,25 @@ def test_unknown_capital_tier_is_rejected_at_ingestion() -> None:
         _row("garbage")
     with pytest.raises(ValueError, match="missing required field 'tier'"):
         _row("")
+
+
+@pytest.mark.parametrize(
+    "amount",
+    ["-20,000,000", "-20%", "NaN", "sNaN", "Infinity", "-Infinity", float("nan"), float("inf")],
+)
+def test_capital_amount_requires_an_unchanged_finite_decimal(amount: object) -> None:
+    """BoG CRD 2018 ¶32: refused capital amounts cannot reach Decimal consumers."""
+    with pytest.raises(ValueError, match="amount_ghs.*finite Decimal"):
+        _row("CET1_DEDUCTION", str(amount))
+
+
+@pytest.mark.parametrize(
+    "amount", ["-20000000", "0", "20000000.123456", "2e7", Decimal("-20.25"), 20, 20.25]
+)
+def test_finite_capital_amounts_reach_consumers_without_value_changes(amount: object) -> None:
+    """BoG CRD 2018 ¶32: finite Decimal representations retain their signed amount."""
+    row = _row("CET1_DEDUCTION", str(amount))
+    assert sdi_capital.signed_component_amount(row.payload) == -abs(Decimal(str(amount)))
 
 
 def _push_register(db: Session, *rows: tuple[str, str, str]) -> None:
@@ -219,8 +239,22 @@ def test_credit_risk_reserve_is_not_in_sdi_net_own_funds(db_session: Session) ->
 
 
 @pytest.mark.parametrize("source_system", ["EXCEL_CSV", "API_PUSH"])
+@pytest.mark.parametrize(
+    ("refused_tier", "refused_amount"),
+    [
+        ("garbage", "-20000000"),
+        ("CET1_DEDUCTION", "-20,000,000"),
+        ("CET1_DEDUCTION", "-20%"),
+        ("CET1_DEDUCTION", "NaN"),
+        ("CET1_DEDUCTION", "Infinity"),
+    ],
+)
 def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_register(
-    db_session: Session, tmp_path: Path, source_system: SourceSystem
+    db_session: Session,
+    tmp_path: Path,
+    source_system: SourceSystem,
+    refused_tier: str,
+    refused_amount: str,
 ) -> None:
     """BoG CRD 2018 ¶32: a refused deduction must never leave a partial capital register."""
     materialize_canonical_test_book(db_session)
@@ -257,13 +291,12 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
             source.write_text(json.dumps({"reference": {"capital_structure": rows}}))
         else:
             source = tmp_path / "capital_structure.csv"
-            source.write_text(
-                "capital_component,amount_ghs,tier\n"
-                + "\n".join(
-                    f"{row['capital_component']},{row['amount_ghs']},{row['tier']}" for row in rows
+            with source.open("w", newline="") as csv_file:
+                writer = csv.DictWriter(
+                    csv_file, fieldnames=["capital_component", "amount_ghs", "tier"]
                 )
-                + "\n"
-            )
+                writer.writeheader()
+                writer.writerows(rows)
         result = ingestion.start_ingestion(
             db_session,
             MAKER,
@@ -281,7 +314,7 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
         assert batch is not None
         return batch
 
-    rejected = ingest("garbage", "-20000000")
+    rejected = ingest(refused_tier, refused_amount)
     assert rejected.status == "rejected"
     assert rejected.records_translated == 1
     assert rejected.records_accepted == 0
@@ -296,12 +329,12 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
     finding = findings[0]
     assert finding["severity"] == "BLOCKER"
     assert finding["source_locator"] == failure.source_locator
-    assert "garbage" in finding["detail"]
+    assert (refused_tier if refused_tier == "garbage" else refused_amount) in finding["detail"]
 
     accepted = ingest("CET1_DEDUCTION", "-10000000")
     assert accepted.status == "accepted"
     assert net_own_funds(db_session, MAKER, bank, REPORTING_DATE) == Decimal("90000000")
-    rejected = ingest("garbage", "-20000000")
+    rejected = ingest(refused_tier, refused_amount)
     assert rejected.status == "rejected"
     current = sdi_capital.latest_capital_structure_rows(db_session, MAKER, bank, REPORTING_DATE)
     assert {row.ingestion_batch_id for row in current} == {accepted.id}

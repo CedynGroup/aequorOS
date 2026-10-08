@@ -60,6 +60,8 @@ class TypeCoercer(Preprocessor):
         rid = _record_id(record)
         ops: list[ETLOperation] = []
         for source_field, value in record.data.items():
+            if record.dataset_kind == "capital_structure" and source_field == "amount_ghs":
+                continue
             op = self._coerce_field(rid, source_field, value)
             if op is not None:
                 ops.append(op)

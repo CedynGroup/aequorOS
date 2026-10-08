@@ -371,7 +371,8 @@ def signed_component_amount(payload: Mapping[str, object]) -> Decimal:
                 OutcomeState.DATA_QUALITY_BLOCK,
                 metric_id="net_own_funds_ghs",
                 reason=f"capital_structure component {component!r} carries an unrecognised "
-                f"tier {payload.get('tier')!r}; correct the register before computing capital.",
+                f"tier {payload.get('tier')!r}; correct the tiers, re-ingest the complete "
+                "register and re-derive facts before computing capital.",
                 items=(f"capital_structure:{component}",),
             )
         )

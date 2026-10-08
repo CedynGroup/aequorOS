@@ -877,11 +877,14 @@ def _prefetch_dashboard_batch(
         policy_scope.currency,
         dates,
     )
-    sdi_net_own_funds = (
-        sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
-        if policy_scope.institution_class == "sdi"
-        else {}
-    )
+    try:
+        sdi_net_own_funds = (
+            sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
+            if policy_scope.institution_class == "sdi"
+            else {}
+        )
+    except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+        raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
     return _IrrDashboardBatch(
         runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
             db,
@@ -1425,7 +1428,10 @@ def _capital_base(
     trend point.
     """
     if institution_types.institution_class(db, bank) == "sdi":
-        return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+        try:
+            return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+        except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+            raise IrrRunError(exc.state.value, str(exc)) from exc
     return _tier1_from_facts(facts)
 
 

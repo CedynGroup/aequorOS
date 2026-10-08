@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.authorization import ModuleScope, SensitivityScope
@@ -23,12 +23,14 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
+from app.domain.irr.standardised_params import REQUIRED_CODES
 from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalReferenceRow,
     CurrentFinancialFact,
+    RegulatoryParameter,
     RegulatoryRun,
 )
 from app.models.stress import MacroScenario, MacroScenarioPath
@@ -111,6 +113,89 @@ def _assert_named_refusal(code: str | None, message: str | None) -> None:
     assert message is not None
     assert "capital_structure" in message
     assert "re-ingest" in message and "re-derive" in message
+
+
+@pytest.mark.parametrize(
+    "surface",
+    ["official", "dashboard", "trend", "live", "workbench", "sf", "concentration", "credit_live"],
+)
+def test_sdi_capital_refusals_use_each_surfaces_named_failure_contract(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    surface: str,
+) -> None:
+    """BoG CRD 2018 ¶32: SDI capital refusals retain named outcomes and correction guidance."""
+    bank, period = refused_book
+    bank.institution_type = "savings_and_loans"
+    db_session.flush()
+    if surface == "official":
+        batch = regulatory_irr.run_all_irr_scenarios(
+            db_session,
+            MAKER,
+            bank.id,
+            IrrScenarioBatchCreate(reporting_period_id=period.id),
+        )
+        for run in batch.runs:
+            assert run.status == "failed" and run.error is not None
+            assert run.error.code == OutcomeState.DATA_QUALITY_BLOCK.value
+            assert "re-ingest" in run.error.message and "re-derive" in run.error.message
+            stored = db_session.get(RegulatoryRun, run.id)
+            assert stored is not None and stored.completed_at is not None
+    elif surface == "sf":
+        db_session.execute(
+            update(RegulatoryParameter)
+            .where(
+                RegulatoryParameter.scope_key == "bank",
+                RegulatoryParameter.param_code.in_(REQUIRED_CODES),
+            )
+            .values(scope_key="sdi")
+        )
+        seed_fx(db_session, base="USD", quote="GHS", rate="12.85")
+        run = regulatory_irr_sf.run_standardised_framework(
+            db_session,
+            MAKER,
+            bank.id,
+            IrrbbSfRunCreate(reporting_period_id=period.id),
+        )
+        assert run.status == "failed" and run.error is not None
+        assert run.error.code == OutcomeState.DATA_QUALITY_BLOCK.value
+        assert "re-ingest" in run.error.message and "re-derive" in run.error.message
+        stored = db_session.get(RegulatoryRun, run.id)
+        assert stored is not None and stored.completed_at is not None
+    elif surface in ("live", "workbench"):
+        if surface == "live":
+            with pytest.raises(regulatory_irr.IrrRunError) as refused:
+                regulatory_irr.compute_live(db_session, MAKER, bank, period)
+            code, reason = refused.value.code, refused.value.message
+        else:
+            analysis = analysis_workbench.run_analysis(
+                db_session,
+                MAKER,
+                bank.id,
+                "irr",
+                AnalysisRunCreate(
+                    reporting_period_id=period.id,
+                    scenarios=[ScenarioRefIn(kind="system", code="baseline")],
+                ),
+            )
+            assert analysis.results[0].status == "failed"
+            code, reason = analysis.results[0].error_code, analysis.results[0].error_message
+        assert code == OutcomeState.DATA_QUALITY_BLOCK.value
+        assert reason is not None and "re-ingest" in reason and "re-derive" in reason
+    else:
+        with pytest.raises(ModuleDataUnavailable) as refused_input:
+            if surface == "dashboard":
+                regulatory_irr.get_irr_dashboard(db_session, MAKER, bank.id)
+            elif surface == "trend":
+                regulatory_irr._build_trend(db_session, MAKER, bank, [period])
+            elif surface == "concentration":
+                regulatory_credit.get_credit_concentration(db_session, MAKER, bank.id)
+            else:
+                regulatory_credit.compute_live(db_session, MAKER, bank, period)
+        assert refused_input.value.error_code == OutcomeState.DATA_QUALITY_BLOCK.value
+        assert (
+            "re-ingest" in refused_input.value.reason and "re-derive" in refused_input.value.reason
+        )
 
 
 @pytest.mark.parametrize("column", ["quarter", "ptd"])

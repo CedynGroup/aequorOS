@@ -43,7 +43,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
-from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
@@ -732,14 +731,13 @@ def compute_live(
 
 
 def _concentration_or_none(db: Session, ctx: TenantContext, bank: Bank, as_of: date):
-    """The standing monitor, or ``None`` when there is nothing to measure —
-    concentration must never take the whole live credit view down."""
+    """The standing monitor, or ``None`` when there are no credit exposures."""
     from app.services import credit_concentration  # noqa: PLC0415 - service cycle
 
     try:
         return credit_concentration.monitor(db, ctx, bank, as_of)
     except ModuleDataUnavailable as exc:
-        if exc.error_code == CAPITAL_REGISTER_REFUSED_CATEGORY:
+        if exc.error_code != "no_credit_exposures":
             raise
         return None
 
