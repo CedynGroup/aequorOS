@@ -192,9 +192,10 @@ test("the case that cost a session: Approver at Confidential is inert", () => {
       sensitivityScope: "confidential" as GrantDraft["sensitivityScope"],
     }),
   );
-  assert.ok(warning, "an Approver at Confidential must warn");
-  assert.match(warning, /Restricted/);
-  assert.match(warning, /approve returns/);
+  assert.equal(
+    warning,
+    "This grant won't let them approve returns or send them back: that needs Restricted data.",
+  );
 });
 
 test("a sound grant says nothing", () => {
@@ -220,9 +221,11 @@ test("a narrow module is caught too, and both misses are named together", () => 
       sensitivityScope: "aggregated" as GrantDraft["sensitivityScope"],
     }),
   );
-  assert.ok(warning);
-  assert.match(warning, /Regulatory Reporting/);
-  assert.match(warning, /Restricted/);
+  assert.equal(
+    warning,
+    "This grant won't let them approve returns or send them back: that needs " +
+      "Regulatory Reporting and Restricted data.",
+  );
 });
 
 test("the Validator bundle is covered — it needs Restricted too", () => {
@@ -266,9 +269,10 @@ test("a second grant beside an existing one is flagged as not widening it", () =
   // The live case: sensitivity fixed by issuing a SECOND approver row, module
   // changed at the same time, two partial rows, neither authorising anything.
   const notice = overlappingGrantNotice(draft({}), [heldApprover]);
-  assert.ok(notice, "an existing same-bundle grant must be reported");
-  assert.match(notice, /SEPARATE row/);
-  assert.match(notice, /revoke it and issue one complete replacement/);
+  assert.equal(
+    notice,
+    "They already have Approver here; this adds a separate grant rather than widening it.",
+  );
 });
 
 test("only same bundle on the same institution counts", () => {
@@ -417,12 +421,10 @@ test("a narrowed coverage warns about the figures it cannot answer", () => {
       dataScope: { kind: "branch", values: ["001"] },
     }),
   );
-  assert.ok(warning, "a branch-scoped grant must say what it does not include");
-  assert.match(warning, /institution as a whole/);
-  assert.match(warning, /whole-book Credit grant/);
-  assert.match(warning, /sensitivity required by that surface/);
-  assert.match(warning, /Regulatory Reporting authority/);
-  assert.match(warning, /ICAAP requires Capital/);
+  assert.equal(
+    warning,
+    "It covers only the branches you chose, so figures for the institution as a whole stay refused.",
+  );
   assert.ok(
     dataScopeShortfall(
       draft({

@@ -161,7 +161,10 @@ test("reverse account administration conflict shows the server finding at Define
     .fill("Exercise reverse account administration conflict");
   // The reverse direction names the operational grant the member holds,
   // never account administration they do not have.
-  await expect(composer.getByRole("alert")).toHaveText(
+  await expect(composer.getByRole("alert")).toContainText(
+    "This grant can't be given",
+  );
+  await expect(composer.getByRole("alert")).toContainText(
     "E2E Approver already has the Approver grant (all modules, every institution). " +
       "Making E2E Approver an Organization Administrator would let one person both do " +
       "operational work and decide who has access to it. Remove the Approver grant first, " +
@@ -238,7 +241,13 @@ test("a conflicting grant added after Review is refused with the server's findin
     await composer.getByRole("button", { name: "Grant access" }).click();
     const response = await refused;
     expect(response.status()).toBe(409);
-    await expect(composer.getByRole("alert")).toHaveText(filingMessage);
+    // The refused create's own findings replace the preview's, in the same
+    // single notice; no second, generic refusal is shown beside it.
+    await expect(composer.getByRole("alert")).toHaveCount(1);
+    await expect(composer.getByRole("alert")).toContainText(
+      "This grant can't be given",
+    );
+    await expect(composer.getByRole("alert")).toContainText(filingMessage);
     await expect(
       composer.getByText("Grant created", { exact: true }),
     ).toHaveCount(0);

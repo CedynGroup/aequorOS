@@ -24,7 +24,7 @@
  * fails if the two disagree — fix the mirror, never the test.
  */
 
-import type { GrantDraft } from "./grants";
+import { ROLE_OPTIONS, type GrantDraft } from "./grants";
 
 type GrantScope = Pick<
   GrantDraft,
@@ -61,7 +61,9 @@ function coversSensitivity(scope: string): boolean {
 }
 
 /**
- * One sentence naming what this grant will NOT do, or null when it is sound.
+ * One short sentence naming what this grant will NOT do, or null when it is
+ * sound. Scopes match exactly, so a narrower module or sensitivity grants
+ * nothing here.
  *
  * A warning, never a block: the server is the authority on what it accepts, and
  * a narrower grant may be exactly what the Owner intends for a role they are
@@ -77,16 +79,10 @@ export function grantShortfall(draft: GrantScope): string | null {
   if (moduleOk && sensitivityOk) return null;
 
   const missing: string[] = [];
-  if (!moduleOk) missing.push("Regulatory Reporting (or all modules)");
-  if (!sensitivityOk) missing.push("Restricted (or all sensitivity levels)");
+  if (!moduleOk) missing.push("Regulatory Reporting");
+  if (!sensitivityOk) missing.push("Restricted data");
 
-  return (
-    `This grant will not let them ${work}. Deciding on a return is evaluated ` +
-    `against ${missing.join(" and ")}, and scopes are matched exactly — a ` +
-    `narrower level does not include a wider one. Ordinary returns stay hidden ` +
-    `without whole-institution Regulatory Reporting / Restricted view authority. ` +
-    `A visible return still requires its action permission.`
-  );
+  return `This grant won't let them ${work}: that needs ${missing.join(" and ")}.`;
 }
 
 /**
@@ -109,14 +105,7 @@ export function dataScopeShortfall(draft: GrantDraft): string | null {
   if (draft.dataScope.kind === "all") return null;
   const chosen =
     draft.dataScope.kind === "branch" ? "the branches" : "the regions";
-  return (
-    `This Credit grant covers only ${chosen} you chose in the loan book, ` +
-    `activity and facets. Figures for the institution as a whole are refused ` +
-    `by this narrowed grant, including Credit live summaries, alerts and history. ` +
-    `For those Credit figures, use a whole-book Credit grant at the sensitivity ` +
-    `required by that surface. Regulatory returns require ` +
-    `whole-institution Regulatory Reporting authority; ICAAP requires Capital.`
-  );
+  return `It covers only ${chosen} you chose, so figures for the institution as a whole stay refused.`;
 }
 
 /**
@@ -160,11 +149,8 @@ export function overlappingGrantNotice(
   );
   if (same.length === 0) return null;
 
-  return (
-    `They already hold ${same.length === 1 ? "an active" : `${same.length} active`} ` +
-    `${draft.roleBundle} grant here. A new grant is a SEPARATE row — scopes do ` +
-    `not merge across rows, so this one has to be complete on its own, and the ` +
-    `existing one keeps whatever it already allows. If you meant to widen the ` +
-    `existing grant, revoke it and issue one complete replacement.`
-  );
+  const role =
+    ROLE_OPTIONS.find(([value]) => value === draft.roleBundle)?.[1] ??
+    draft.roleBundle;
+  return `They already have ${role} here; this adds a separate grant rather than widening it.`;
 }

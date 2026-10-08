@@ -367,15 +367,19 @@ test.describe("separation-of-duties at Define", () => {
     await composer.getByLabel("Reason category").selectOption("other");
     await composer.getByLabel("Detail").fill("Separation-of-duties check");
 
-    // Approving and transmitting returns on one identity is a hard block. The
-    // notice names the grant they already hold and what to change.
+    // Approving and transmitting returns on one identity is a hard block. One
+    // notice names the grant they already hold and what to change; the scope
+    // note is left out, because a grant that cannot be given needs no advice.
     await composer.getByLabel("Role bundle").selectOption("validator");
     const refusal = composer.getByRole("alert");
-    await expect(refusal).toHaveText(
+    await expect(composer.getByTestId("grant-notice")).toHaveCount(1);
+    await expect(refusal).toContainText("This grant can't be given");
+    await expect(refusal).toContainText(
       "E2E Approver already has the Approver grant (all modules, every institution). " +
         "Making E2E Approver a Validator would let one person both approve a return " +
         "and file it with the regulator. Remove the Approver grant first, or choose someone else.",
     );
+    await expect(refusal).not.toContainText("won't let them");
     await expect(
       composer.getByRole("button", { name: "Cannot be granted" }),
     ).toBeDisabled();
@@ -399,6 +403,8 @@ test.describe("separation-of-duties at Define", () => {
         "Making E2E Approver an Analyst lets one person both prepare and check work here.",
     });
     await expect(warning).toBeVisible();
+    await expect(warning).toContainText("Check before granting");
+    await expect(composer.getByTestId("grant-notice")).toHaveCount(1);
     if (evidenceDir) {
       await warning.scrollIntoViewIfNeeded();
       await page.screenshot({
@@ -443,16 +449,13 @@ test.describe("Credit-only book coverage", () => {
     await composer.getByLabel("Sensitivity").selectOption("restricted");
     await composer.getByLabel("Only the branches I choose").check();
     await composer.getByRole("checkbox", { name: /Head Office/ }).check();
-    await expect(composer).toContainText(
-      "Figures for the institution as a whole are refused",
-    );
-    await expect(composer).toContainText(
-      "Regulatory Reporting authority; ICAAP requires Capital",
+    const notice = composer.getByTestId("grant-notice");
+    await expect(notice).toContainText("Check before granting");
+    await expect(notice).toContainText(
+      "It covers only the branches you chose, so figures for the institution as a whole stay refused.",
     );
     if (evidenceDir) {
-      await expect(
-        composer.getByTestId("grant-coverage-shortfall"),
-      ).toBeInViewport({ ratio: 1 });
+      await notice.scrollIntoViewIfNeeded();
       await page.screenshot({
         path: path.join(evidenceDir, "after-credit.png"),
         fullPage: true,

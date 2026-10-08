@@ -684,9 +684,19 @@ function GrantComposer({
   // A block is final: the create call would refuse it, so say so at Define and
   // keep Review out of reach instead of walking the Owner to a 409.
   const previewBlocked = previewDecision?.outcome === "block";
-  const shortfall = grantShortfall(draft);
-  const coverageShortfall = dataScopeShortfall(draft);
-  const overlap = overlappingGrantNotice(draft, member.grants);
+  // One short client-side line about the scope itself; the policy findings
+  // come from the server. Scopes are matched exactly, so "Approver ·
+  // Confidential" reads complete and authorises nothing — said here, at the
+  // moment of the choice, never as a block.
+  const scopeNote =
+    grantShortfall(draft) ??
+    dataScopeShortfall(draft) ??
+    overlappingGrantNotice(draft, member.grants);
+  // A refused create replaces the preview's decision with the server's own.
+  const reviewDecision: NoticeDecision | null =
+    sodBlocks.length > 0
+      ? { outcome: "block", findings: [...sodBlocks] }
+      : previewDecision;
 
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
@@ -861,6 +871,7 @@ function GrantComposer({
             Member <strong className="font-medium text-navy">{name}</strong> is
             fixed for this grant.
           </p>
+          <GrantNotice decision={previewDecision} scopeNote={scopeNote} />
           <div className="grid gap-4 sm:grid-cols-2">
             <GrantSelect
               label="Role bundle"
@@ -947,46 +958,7 @@ function GrantComposer({
               {error}
             </p>
           )}
-          {/* A sentence can read perfectly and authorise nothing: scopes are
-              matched exactly, so "Approver · Confidential" is inert. The
-              composer's own default sensitivity is `confidential`, which makes
-              this the likely path rather than an unlikely one. Said here, at
-              the moment of the choice — not later, as a 403 on the grantee's
-              screen blaming a scalar role. A warning, never a block: a narrower
-              grant may be exactly what is intended. */}
-          {overlap && (
-            <p
-              data-testid="grant-overlap"
-              className="rounded-md border border-action/25 bg-action-light/40 px-4 py-3 text-caption leading-relaxed text-navy/85"
-            >
-              <span className="font-medium text-navy">
-                This does not widen an existing grant.
-              </span>{" "}
-              {overlap}
-            </p>
-          )}
-          {shortfall && (
-            <p
-              data-testid="grant-shortfall"
-              className="rounded-md border border-warning/30 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy/85"
-            >
-              <span className="font-medium text-navy">Check this scope.</span>{" "}
-              {shortfall}
-            </p>
-          )}
-          {coverageShortfall && (
-            <p
-              data-testid="grant-coverage-shortfall"
-              className="rounded-md border border-warning/30 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy/85"
-            >
-              <span className="font-medium text-navy">
-                Check this coverage.
-              </span>{" "}
-              {coverageShortfall}
-            </p>
-          )}
           {previewSentence && <SentencePreview sentence={previewSentence} />}
-          <SodDecisionNotice decision={previewDecision} />
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -1020,8 +992,8 @@ function GrantComposer({
           <p className="text-body text-slate">
             Review the exact authority before granting it.
           </p>
+          <GrantNotice decision={reviewDecision} scopeNote={scopeNote} />
           <SentencePreview sentence={previewSentence} />
-          <SodDecisionNotice decision={previewDecision} />
           {/* The sentence above is the server's and is the authority. This is
               the coverage chosen, shown as a field rather than prose so it is
               visible even where the sentence words it differently. */}
@@ -1047,20 +1019,15 @@ function GrantComposer({
               </p>
             )}
           </div>
-          {error && (
-            <div
+          {/* A policy refusal is shown in the notice above, in the server's
+              own findings; this is only for refusals that carry none. */}
+          {error && sodBlocks.length === 0 && (
+            <p
               role="alert"
               className="rounded-md bg-critical-light px-4 py-3 text-caption text-critical"
             >
-              {/* A policy refusal speaks in the server's plain findings, which
-                  name the conflicting grant and what to change; the generic
-                  headline is only for refusals that carry none. */}
-              {sodBlocks.length > 0 ? (
-                <SodFindingMessages findings={sodBlocks} />
-              ) : (
-                <p>{error}</p>
-              )}
-            </div>
+              {error}
+            </p>
           )}
           <div className="flex justify-end gap-3">
             <button
@@ -1193,44 +1160,51 @@ function GrantSelect({
 }
 
 /**
- * The server's assignment-time separation-of-duties decision for the draft,
- * from the preview. `allow` shows nothing; `warn` and `block` show the server's
- * plain-language findings verbatim — each names the member's conflicting grant
- * and, for a block, what to change — so nothing here can contradict the rule
- * that fired.
+ * Everything worth checking before a grant, in one notice at the top of the
+ * step, styled by its strongest finding.
+ *
+ * A block or warning carries the server's assignment-time separation-of-duties
+ * findings verbatim — each names the member's conflicting grant and, for a
+ * block, what to change — so nothing here can contradict the rule that fired.
+ * The one-line scope note is added only when the grant can still be given;
+ * on a block it would be advice about a grant that cannot exist.
  */
-function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
-  if (!decision || decision.outcome === "allow") return null;
-  if (decision.outcome === "warn") {
-    return (
-      <div
-        role="status"
-        className="rounded-md border-l-4 border-warning bg-warning-light/50 px-4 py-3 text-body leading-relaxed text-navy"
-      >
-        <SodFindingMessages findings={decision.findings} />
-      </div>
-    );
-  }
+type NoticeDecision = Readonly<{
+  outcome: SodDecisionRead["outcome"];
+  findings: readonly SodFinding[];
+}>;
+
+function GrantNotice({
+  decision,
+  scopeNote,
+}: {
+  decision: NoticeDecision | null;
+  scopeNote: string | null;
+}) {
+  const blocked = decision?.outcome === "block";
+  const findings =
+    decision && decision.outcome !== "allow" ? decision.findings : [];
+  const note = blocked ? null : scopeNote;
+  if (findings.length === 0 && !note) return null;
   return (
     <div
-      role="alert"
-      className="rounded-md border-l-4 border-critical bg-critical-light px-4 py-3 text-body leading-relaxed text-navy"
+      role={blocked ? "alert" : "status"}
+      data-testid="grant-notice"
+      className={`rounded-md border-l-4 px-4 py-3 text-body leading-relaxed text-navy ${
+        blocked
+          ? "border-critical bg-critical-light"
+          : "border-warning bg-warning-light/50"
+      }`}
     >
-      <SodFindingMessages findings={decision.findings} />
-    </div>
-  );
-}
-
-function SodFindingMessages({
-  findings,
-}: {
-  findings: readonly { code: string; message: string }[];
-}) {
-  return (
-    <div className="space-y-2">
-      {findings.map((finding) => (
-        <p key={finding.code || finding.message}>{finding.message}</p>
-      ))}
+      <p className="font-semibold">
+        {blocked ? "This grant can't be given" : "Check before granting"}
+      </p>
+      <div className="mt-1 space-y-1">
+        {findings.map((finding) => (
+          <p key={finding.code || finding.message}>{finding.message}</p>
+        ))}
+        {note && <p>{note}</p>}
+      </div>
     </div>
   );
 }
