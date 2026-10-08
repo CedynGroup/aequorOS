@@ -44,6 +44,7 @@ from app.services.regulatory_reporting.bog_forms.sources import (
     reporting_currency_value,
 )
 from app.services.regulatory_reporting.bog_forms.sources_ext.bsd8 import load_loans
+from app.services.regulatory_reporting.le_generation import _load_canonical_rows
 from app.services.sdi_views import get_liquidity_monitoring
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -639,6 +640,83 @@ def test_off_balance_consumers_can_use_a_governed_notional_quote(
     assert book.resolver("bsd11.register", "off_balance")(
         {"register": "large_exposures", "rank": 1}
     ) == Decimal("120000000")
+
+
+@pytest.mark.parametrize("available", [True, False])
+@pytest.mark.parametrize("currencies", [("USD",), ("USD", "EUR")])
+def test_canonical_loader_looks_up_each_foreign_notional_quote_once(
+    book: _Book,
+    monkeypatch: pytest.MonkeyPatch,
+    available: bool,
+    currencies: tuple[str, ...],
+) -> None:
+    for currency in currencies:
+        for index in range(20):
+            snapshot = book.position(
+                f"OBS/{currency}/{index}",
+                "LC_GUARANTEE" if index % 2 == 0 else "COMMITMENT_UNDRAWN",
+                {"credit_conversion_factor": "0.5"},
+                currency=currency,
+            )
+            snapshot.notional = Decimal("100000")
+    book.db.flush()
+    calls: list[tuple[str, str, date]] = []
+
+    def quoted_spot(*args: object) -> FxRateView | None:
+        currency, base, as_of = cast(tuple[str, str, date], args[3:])
+        calls.append((currency, base, as_of))
+        if not available:
+            return None
+        return FxRateView(
+            base_currency=currency,
+            quote_currency=base,
+            rate=Decimal("12" if currency == "USD" else "14"),
+            as_of_date=as_of,
+            attribution=SourceAttribution(
+                source_system="EXCEL_CSV",
+                ingestion_batch_id=book.batch_id,
+                ingested_at=datetime(2026, 3, 31, tzinfo=UTC),
+                stale=False,
+                age_seconds=0,
+            ),
+        )
+
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", quoted_spot)
+    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    if available:
+        rows = _load_canonical_rows(
+            book.db, ctx, book.bank, book.period.period_end, ("LC_GUARANTEE", "COMMITMENT_UNDRAWN")
+        )
+        assert [(row.currency, row.notional_ghs, row.undrawn_ccf_ghs) for row in rows] == [
+            (
+                currency,
+                Decimal("1200000" if currency == "USD" else "1400000"),
+                Decimal("600000" if currency == "USD" else "700000"),
+            )
+            for currency in sorted(currencies)
+            for _ in range(20)
+        ]
+        assert all(row.balance_ghs == 0 for row in rows)
+    else:
+        with pytest.raises(HTTPException) as refused:
+            _load_canonical_rows(
+                book.db,
+                ctx,
+                book.bank,
+                book.period.period_end,
+                ("LC_GUARANTEE", "COMMITMENT_UNDRAWN"),
+            )
+        assert refused.value.status_code == 409
+        detail = cast(dict[str, str], refused.value.detail)
+        assert detail["error_code"] == "foreign_amount_not_stated"
+        for currency in currencies:
+            for index in range(20):
+                assert f"OBS/{currency}/{index} (notional_ghs)" in detail["message"]
+        assert "Ingest" in detail["message"]
+
+    assert sorted(calls) == [
+        (currency, book.bank.currency, book.period.period_end) for currency in sorted(currencies)
+    ]
 
 
 @pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])

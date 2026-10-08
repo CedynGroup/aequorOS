@@ -374,6 +374,7 @@ def _load_canonical_rows(
     rows: list[_CanonicalRow] = []
     unstated: list[str] = []
     unstated_currencies: set[str] = set()
+    spot_rates: dict[tuple[str, str, date], Decimal | None] = {}
     # SQLAlchemy's inferred tuple omits the nullable sides of the outer joins.
     for snapshot, position, counterparty, product in cast(
         Sequence[
@@ -402,11 +403,15 @@ def _load_canonical_rows(
                 notional_ghs = _dec_or_none(snapshot.notional)
         else:
             if off_balance and notional_ghs is None and snapshot.notional is not None:
-                quote = market_data_sources.preferred_fx_spot(
-                    db, ctx.organization_id, bank.id, position.currency, base_currency, as_of
-                )
-                if quote is not None:
-                    notional_ghs = snapshot.notional * Decimal(str(quote.rate))
+                key = (position.currency, base_currency, as_of)
+                if key not in spot_rates:
+                    quote = market_data_sources.preferred_fx_spot(
+                        db, ctx.organization_id, bank.id, position.currency, base_currency, as_of
+                    )
+                    spot_rates[key] = Decimal(str(quote.rate)) if quote is not None else None
+                rate = spot_rates[key]
+                if rate is not None:
+                    notional_ghs = snapshot.notional * rate
             missing: list[str] = []
             if balance_ghs is None:
                 missing.append("balance_ghs")
