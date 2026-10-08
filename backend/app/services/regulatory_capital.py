@@ -30,14 +30,13 @@ from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
     EclAssumption,
+    EclComputationError,
     EclExposure,
     EclResult,
     EclScenario,
     compute_ecl,
 )
 from app.domain.capital.engine import (
-    FACT_GROUP_ECL_EXPOSURE,
-    FACT_GROUP_LOAN_EXPOSURE,
     TRIGGER_EARLY_WARNING,
     CapitalComputationError,
     CapitalFact,
@@ -53,6 +52,7 @@ from app.domain.capital.engine import (
     money,
     ratio_pct,
     run_capital_stress,
+    unstaged_loan_ead,
 )
 from app.domain.reporting import period_windows
 from app.models import (
@@ -134,7 +134,7 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v2.0.0"
+ENGINE_VERSION = "regulatory-capital-v3.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -291,7 +291,7 @@ def _execute_scenario_compute(
         key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
     }
     ecl = _modeled_ecl(engine_facts, active, shocks)
-    unstaged_ead = _unstaged_loan_ead(engine_facts) if ecl is not None else None
+    unstaged_ead = unstaged_loan_ead(engine_facts) if ecl is not None else None
     # A modeled figure over part of the book would replace provisions the bank
     # booked against ALL of it, so partial staging keeps the booked figure.
     gp_override = ecl.general_ecl if ecl is not None and not unstaged_ead else None
@@ -807,7 +807,9 @@ def _modeled_ecl(
     else:
         scenarios = (BASE_SCENARIO,)
     result = compute_ecl(exposures, active.ecl_assumptions, scenarios)
-    if result.uncovered:
+    try:
+        result.require_coverage()
+    except EclComputationError as exc:
         uncovered = [f"{segment}:stage{stage}" for segment, stage in result.uncovered]
         raise CapitalRunError(
             "ecl_segment_uncovered",
@@ -820,23 +822,8 @@ def _modeled_ecl(
                     "row for the stage, to the ECL assumptions register."
                 ),
             },
-        )
+        ) from exc
     return result
-
-
-def _unstaged_loan_ead(facts: tuple[CapitalFact, ...]) -> Decimal:
-    """Loan EAD with no ingested IFRS 9 stage: loan exposure the staged ECL
-    buckets do not reach. Both fact groups bucket the same loans by the same
-    exposure category, so the shortfall is exactly the unstaged balance."""
-    loans = sum(
-        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
-        Decimal("0"),
-    )
-    staged = sum(
-        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE),
-        Decimal("0"),
-    )
-    return max(loans - staged, Decimal("0"))
 
 
 def _persist_success(  # noqa: PLR0913

@@ -8,11 +8,12 @@ engine-self-referential.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from decimal import Decimal
 
 import pytest
 
-from app.domain.capital.ecl import EclAssumption, EclExposure
+from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.fx.engine import FxPosition
 from app.domain.icaap.pillar2 import fx as icaap_fx
 from app.domain.irr.engine import IrrPosition
@@ -530,3 +531,73 @@ def test_a_cedi_appreciation_override_is_shocked_the_other_way() -> None:
     assert appreciation.loss.worst_loss == Decimal("4000000.0000")
     assert appreciation.pillar1_fx_capital == Decimal("4500000.0000")
     assert appreciation.addon == Decimal("0.0000")
+
+
+@pytest.mark.parametrize("paths", [base_macro_paths(), severe_paths()])
+def test_stress_composition_refuses_uncovered_ecl(paths: Sequence[MacroPathPoint]) -> None:
+    """IFRS 9 ¶5.5.17: baseline and conditioned stress refuse unpriced staged EAD."""
+    with pytest.raises(EclComputationError, match="retail_other:stage2"):
+        compose_capital_shocks(
+            scenario_paths=paths,
+            baseline_annual_preprovision_income=_BASELINE_PREPROVISION_INCOME,
+            baseline_credit_allowance=_BASELINE_ALLOWANCE,
+            ecl_exposures=(
+                EclExposure("corporate_unrated", 1, Decimal("100000000")),
+                EclExposure("retail_other", 2, Decimal("20000000")),
+            ),
+            ecl_assumptions=(EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+        )
+
+
+def test_enterprise_stress_refuses_partial_staging() -> None:
+    """IFRS 9 ¶5.5.17: a partial model cannot replace the whole-book allowance in stress."""
+    with pytest.raises(EclComputationError, match="unstaged loan exposure"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                ecl_exposures=(EclExposure("corporate_unrated", 1, Decimal("100000000")),),
+                ecl_assumptions=(
+                    EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
+                ),
+            )
+        )
+
+
+def test_enterprise_stress_prices_a_fully_staged_book() -> None:
+    """IFRS 9 ¶B5.5.5: complete segment coverage prices both baseline and stress."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            severe_paths(),
+            ecl_exposures=exposures,
+            ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
+        )
+    )
+    assert result.capital.composition.ecl_source == "ecl_engine"
+    assert result.capital.composition.ecl_base == Decimal("12600000.0000")
+    assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
+    assert result.engine_version == "enterprise-stress-v3.0.0"
+
+
+
+def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:
+    """IFRS 9 ¶5.5.17: a full staged book still requires assumptions for every funded bucket."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    with pytest.raises(EclComputationError, match="retail_other:stage1"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                ecl_exposures=exposures,
+                ecl_assumptions=(
+                    EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
+                ),
+            )
+        )

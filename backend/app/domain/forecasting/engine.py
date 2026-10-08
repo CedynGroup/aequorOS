@@ -112,6 +112,7 @@ from app.domain.capital.engine import (
     CapitalParams,
     compute_capital_ratios,
     compute_rwa,
+    unstaged_loan_ead,
 )
 from app.domain.liquidity.engine import (
     LiquidityFact,
@@ -1156,7 +1157,11 @@ def _general_provisions_override(
     exposures = _ecl_exposures(capital_facts)
     if not exposures:
         return None
-    return compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,)).general_ecl
+    result = compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,))
+    result.require_coverage()
+    if unstaged_loan_ead(capital_facts):
+        return None
+    return result.general_ecl
 
 
 def _regulatory_ratios(

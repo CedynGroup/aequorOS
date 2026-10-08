@@ -15,6 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
+from app.domain.capital.ecl import EclAssumption, EclComputationError
 from app.domain.capital.engine import CapitalParams, classify_capital_ratio
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameterError
 from app.domain.forecasting.engine import (
@@ -605,3 +606,53 @@ def test_invalid_horizon_and_labels_raise_projection_errors() -> None:
             period_labels=["only-one"],
         )
     assert labels_error.value.code == "invalid_period_labels"
+
+
+@pytest.mark.parametrize("path", ["projection", "whatif", "optimizer"])
+def test_forecast_consumers_refuse_uncovered_staged_ead(path: str) -> None:
+    """IFRS 9 ¶5.5.17: every projected ECL consumer refuses unpriced staged EAD."""
+    facts = sample_bank_latest_facts() + (
+        _f("ecl_exposure", "corporate_unrated:stage1", "560"),
+        _f("ecl_exposure", "retail_other:stage2", "250"),
+    )
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+    )
+    with pytest.raises(EclComputationError, match="retail_other:stage2"):
+        if path == "projection":
+            project(facts, params, BASE_ASSUMPTIONS)
+        elif path == "whatif":
+            run_whatif(WHATIF_SHOCK_CODES[0], facts, params, BASE_ASSUMPTIONS)
+        else:
+            run_optimizer(facts, params, BASE_ASSUMPTIONS, BASE_CONSTRAINTS)
+
+
+def test_partly_staged_forecast_keeps_booked_provisions_in_every_year() -> None:
+    """IFRS 9 ¶5.5.17: partial model coverage cannot replace the booked allowance."""
+    facts = sample_bank_latest_facts() + (_f("ecl_exposure", "corporate_unrated:stage1", "560"),)
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+    )
+    booked = project(facts, bog_forecast_params(), BASE_ASSUMPTIONS)
+    partial = project(facts, params, BASE_ASSUMPTIONS)
+    assert partial.years == booked.years
+    assert partial.summary == booked.summary
+
+
+def test_fully_staged_forecast_applies_modelled_provisions() -> None:
+    """IFRS 9 ¶B5.5.5: complete staged coverage reaches every projected loan family."""
+    facts = sample_bank_latest_facts()
+    staged = tuple(
+        ForecastFact("ecl_exposure", f"{fact.category}:stage1", fact.amount)
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
+    )
+    booked = project(facts + staged, bog_forecast_params(), BASE_ASSUMPTIONS)
+    modelled = project(facts + staged, params, BASE_ASSUMPTIONS)
+    assert modelled.years[0].car_pct < booked.years[0].car_pct

@@ -102,6 +102,11 @@ class EclResult:
     #: (segment, stage) pairs with EAD but no assumption row — never priced.
     uncovered: tuple[tuple[str, int], ...] = field(default=())
 
+    def require_coverage(self) -> None:
+        if self.uncovered:
+            buckets = ", ".join(f"{segment}:stage{stage}" for segment, stage in self.uncovered)
+            raise EclComputationError(f"Staged loan exposures have no ECL assumption: {buckets}.")
+
 
 class EclComputationError(Exception):
     pass
@@ -135,6 +140,8 @@ def compute_ecl(
     uncovered: list[tuple[str, int]] = []
     stage_totals: dict[int, Decimal] = {}
     for exposure in exposures:
+        if exposure.ead == _ZERO:
+            continue
         assumption = _resolve(lookup, exposure.segment, exposure.stage)
         if assumption is None:
             uncovered.append((exposure.segment, exposure.stage))

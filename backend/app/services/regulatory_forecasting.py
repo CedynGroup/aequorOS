@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.domain.capital.ecl import EclAssumption
+from app.domain.capital.ecl import EclAssumption, EclComputationError
 from app.domain.capital.engine import (
     CapitalComputationError,
     CapitalParams,
@@ -127,7 +127,7 @@ from app.services.live_types import LiveModuleResult, findings_from_validations,
 from app.services.params import get_active_params
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
-ENGINE_VERSION = "regulatory-forecasting-v1.0.0"
+ENGINE_VERSION = "regulatory-forecasting-v2.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "forecast-projection-v1"
 MODULE_FORECAST = "forecast"
@@ -585,7 +585,7 @@ def _run_error(exc: Exception) -> ForecastRunError:  # noqa: PLR0911
         return ForecastRunError(exc.code, str(exc), None)
     if isinstance(exc, UnknownShockError):
         return ForecastRunError("unknown_shock", str(exc), {"shock_code": exc.shock_code})
-    if isinstance(exc, LiquidityComputationError | CapitalComputationError):
+    if isinstance(exc, LiquidityComputationError | CapitalComputationError | EclComputationError):
         return ForecastRunError("calculation_error", str(exc), None)
     return ForecastRunError(
         "calculation_error",

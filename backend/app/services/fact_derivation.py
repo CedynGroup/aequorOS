@@ -2359,10 +2359,10 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
     for loan in loan_rows:
         stage = loan.row.ifrs9_stage
         balance = loan.row.balance_ghs
-        if balance is None:
-            continue
         if stage is None:
             unstaged.append(loan)
+            continue
+        if balance is None:
             continue
         key = f"{loan.category}:stage{stage}"
         totals[key] = totals.get(key, _ZERO) + balance
@@ -2375,17 +2375,23 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
         )
         for category, amount in sorted(totals.items())
     ]
-    if specs:
-        warnings: list[str] = []
-        if unstaged:
-            unstaged_ead = sum((loan.row.balance_ghs or _ZERO for loan in unstaged), _ZERO)
+    warnings: list[str] = []
+    if unstaged:
+        unstaged_ead = sum((loan.row.balance_ghs or _ZERO for loan in unstaged), _ZERO)
+        warnings.append(
+            f"{len(unstaged)} LOAN position(s) with known balances totalling {unstaged_ead:,.2f} "
+            "in the reporting currency carry no ingested IFRS 9 stage, so the modelled ECL "
+            "does not reach them and the capital run keeps the booked general "
+            "provisions. Ingest the stage for: "
+            f"{_shown([loan.row.source_reference for loan in unstaged])}."
+        )
+        unconverted = sum(loan.row.balance_ghs is None for loan in unstaged)
+        if unconverted:
             warnings.append(
-                f"{len(unstaged)} LOAN position(s) totalling {unstaged_ead:,.2f} in the "
-                "reporting currency carry no ingested IFRS 9 stage, so the modelled ECL "
-                "does not reach them and the capital run keeps the booked general "
-                "provisions. Ingest the stage for: "
-                f"{_shown([loan.row.source_reference for loan in unstaged])}."
+                f"{unconverted} unstaged LOAN position(s) lack a reporting-currency balance; "
+                "their EAD is excluded from the known total."
             )
+    if specs:
         groups.append(
             GroupResult(
                 group="ecl_exposure", status="derived", rows=len(specs), warnings=warnings
@@ -2400,6 +2406,7 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
             GroupResult(
                 group="ecl_exposure",
                 status="skipped",
+                warnings=warnings,
                 note="Not computable: no LOAN position carries an ingested IFRS 9 stage, so "
                 "no staged EAD buckets exist. The capital run uses INGESTED provisions "
                 "instead of a modelled ECL — the impairment figure is the bank's own, not "

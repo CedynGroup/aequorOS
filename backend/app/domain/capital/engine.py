@@ -239,6 +239,21 @@ class CapitalFact:
     side: str | None = None
 
 
+def unstaged_loan_ead(facts: Sequence[CapitalFact]) -> Decimal:
+    """Loan EAD with no ingested IFRS 9 stage: loan exposure the staged ECL
+    buckets do not reach. Both fact groups bucket the same loans by the same
+    exposure category, so the shortfall is exactly the unstaged balance."""
+    loans = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
+        Decimal("0"),
+    )
+    staged = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE),
+        Decimal("0"),
+    )
+    return max(loans - staged, Decimal("0"))
+
+
 @dataclass(frozen=True)
 class CapitalParams:
     """Active parameter set resolved as of the reporting-period end."""

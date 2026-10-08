@@ -256,7 +256,7 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
     # silently dropped from the modelled book.
     ecl_group = next(group for group in result.groups if group.group == "ecl_exposure")
     assert len(ecl_group.warnings) == 1
-    assert ecl_group.warnings[0].startswith("1 LOAN position(s) totalling 7,000,000.00")
+    assert ecl_group.warnings[0].startswith("1 LOAN position(s) with known balances totalling 7,000,000.00")
     assert "ECL/L4" in ecl_group.warnings[0]
 
 
@@ -497,3 +497,102 @@ def test_partly_staged_book_keeps_the_booked_general_provisions(db_session: Sess
     # The canonical book holds far more loan EAD than the 130M staged here.
     assert _metric(stored, "ecl_unstaged_ead_ghs") > Decimal("0")
     assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
+
+
+@pytest.mark.parametrize("stage", [1, 2, 3])
+def test_zero_ead_does_not_require_an_assumption(stage: int) -> None:
+    """IFRS 9 ¶5.5.17: a closed zero-EAD bucket is not an unpriced exposure."""
+    result = compute_ecl(
+        (
+            EclExposure("corporate_unrated", 1, Decimal("100000000")),
+            EclExposure("residential_mortgage", stage, Decimal("0")),
+        ),
+        (EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+    )
+    result.require_coverage()
+    assert result.uncovered == ()
+    assert result.total_ecl == Decimal("900000.0000")
+
+
+@pytest.mark.parametrize("staged", [False, True])
+@pytest.mark.parametrize("unconverted", [False, True])
+def test_unstaged_diagnostic_survives_empty_buckets_and_missing_conversion(
+    db_session: Session, staged: bool, unconverted: bool
+) -> None:
+    """IFRS 9 ¶5.5.17: every unstaged loan is counted even without a converted EAD."""
+    materialize_canonical_test_book(db_session)
+    allow_fixture_balance_gap(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        actor_user_id=DEMO_USER_ID,
+        max_gap_fraction=Decimal("1"),
+    )
+    seeder = _CanonicalSeeder(db_session)
+    product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
+    for index in range(5):
+        seeder.position(
+            f"UNSTAGED/{index}",
+            "LOAN",
+            Decimal("1000000"),
+            product=product,
+            currency="USD" if unconverted and index == 0 else "GHS",
+            extra_attributes={"balance_ghs": None} if unconverted and index == 0 else None,
+        )
+    if staged:
+        seeder.position("STAGED/1", "LOAN", Decimal("1000000"), product=product, ifrs9_stage=1)
+    result = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    group = next(group for group in result.groups if group.group == "ecl_exposure")
+    assert group.status == ("derived" if staged else "skipped")
+    assert group.rows == (1 if staged else 0)
+    assert group.warnings[0].startswith("5 LOAN position(s)")
+    assert "UNSTAGED/0" in group.warnings[0]
+    assert ("4,000,000.00" if unconverted else "5,000,000.00") in group.warnings[0]
+    if unconverted:
+        assert group.warnings[1].startswith("1 unstaged LOAN position(s) lack")
+
+
+def test_new_capital_version_preserves_historical_runs(db_session: Session) -> None:
+    """Reproducibility contract: a new calculation version never rewrites a sealed run."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    historical = _run_capital(db_session, period.id, "baseline")
+    stored = db_session.get(RegulatoryRun, historical.id)
+    assert stored is not None
+    stored.engine_version = "regulatory-capital-v2.0.0"
+    db_session.commit()
+    snapshot, metrics, input_hash = stored.inputs, stored.metrics, stored.input_hash
+    current = _run_capital(db_session, period.id, "baseline")
+    assert current.engine_version == "regulatory-capital-v3.0.0"
+    db_session.refresh(stored)
+    assert stored.engine_version == "regulatory-capital-v2.0.0"
+    assert (stored.inputs, stored.metrics, stored.input_hash) == (snapshot, metrics, input_hash)
+    assert current.id != historical.id
+
+
+
+def test_capital_run_accepts_an_unpriced_zero_ead_bucket(db_session: Session) -> None:
+    """IFRS 9 ¶5.5.17: a closed zero-EAD mortgage cannot block funded covered loans."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    db_session.add(
+        BankFinancialFact(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=period.id,
+            fact_group="ecl_exposure",
+            category="residential_mortgage:stage2",
+            amount=Decimal("0"),
+            currency="GHS",
+        )
+    )
+    for fact in db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.category.in_(["commercial_loans:stage2", "past_due_unsecured:stage3"]),
+        )
+    ):
+        db_session.delete(fact)
+    _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "1.5", "45"))
+    run = _run_capital(db_session, period.id, "baseline")
+    assert run.status == "succeeded", run
