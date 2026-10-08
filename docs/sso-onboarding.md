@@ -137,8 +137,16 @@ specific refusal reason.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in _your_ IdP.
-- **No password custody:** AequorOS never sees or stores your users' passwords;
-  authentication happens entirely on your IdP, including your MFA policy.
+- **SSO password custody:** during an OIDC sign-in, authentication and MFA
+  happen at your IdP; AequorOS does not receive that IdP password. AequorOS also
+  supports local password sign-in. Staff provisioning generates an initial
+  administrator password and can reveal it once in the console
+  (`backend/app/operator/services/tenant_provisioning.py:306`,
+  `console/app/(shell)/(developer)/onboard/page.tsx:508`). Accounts with a local
+  password retain that fallback after linking SSO
+  (`backend/app/services/authentication.py:284`). **Planned:** enforced SSO and
+  removal of that fallback under [#130](https://github.com/CedynGroup/aequorOS/issues/130).
+  SSO support alone does not mean MFA is required for every user.
 - **Pre-provisioning gate:** a valid corporate identity alone is not enough;
   the user must also exist in AequorOS with a role. Offboard by disabling the
   user in your IdP (blocks sign-in) and deactivating them in AequorOS.

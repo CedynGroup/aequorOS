@@ -627,17 +627,21 @@ After acceptance, every attempted identity-field change produces a non-configura
 
 ### 8.4 Audit Log
 
-Separate from the lineage graph, a linear audit log records every user action:
+Separate from the lineage graph, `audit_events` records selected business and
+authorization actions. Database triggers prohibit UPDATE and DELETE
+(`backend/alembic/versions/202607250027_attestation_foundation.py:95`); this is
+an append-only control, not a hash chain over every user action. The storage
+access recorder has a separate hash chain
+(`backend/app/storage/access_log.py:75`, `backend/app/storage/factory.py:20`).
+Neither proves complete login history, a bank SIEM feed, or seven years of
+operational retention.
 
-- Login and logout
-- Report generation
-- Configuration changes (mapping, validation rules, assumptions)
-- Manual overrides
-- Data acceptance decisions (accepting a batch with warnings, forcing through an error, etc.)
-- Model retraining events
-- Any change to a canonical record
-
-The audit log is append-only, tamper-evident (hash-chained records), and retained per regulatory requirement (7+ years).
+**Planned:** login history and account audit visibility under
+[#297](https://github.com/CedynGroup/aequorOS/issues/297) and
+[#131](https://github.com/CedynGroup/aequorOS/issues/131); bank-visible staff
+access under [#351](https://github.com/CedynGroup/aequorOS/issues/351).
+**To confirm:** the security owner must provide the log coverage, SIEM delivery
+plan and retention schedule. See the [BoG evidence pack](compliance/bog-evidence-pack.md).
 
 ---
 
@@ -969,45 +973,70 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Every canonical record is stamped with `institution_id`.
-- Every database query is scoped to `institution_id`.
-- Row-level security enforced at the database level, not just the application.
-- Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
+The database RLS tenant is the organization, with bank-scoped queries required
+inside it. Worker and operator sessions can read across organizations; the
+operator inspector can also change configuration. It is not an aggregated-only
+interface. Sources: [Architecture §2](../ARCHITECTURE.md#2-tenancy-model),
+`backend/app/operator/features/inspector_fix.py:154`.
+
+**Planned:** restrict staff to identity support, time-limit access and expose it
+to the bank under [#351](https://github.com/CedynGroup/aequorOS/issues/351).
 
 ### 14.2 Encryption
 
-- At rest: AES-256 via AWS KMS or GCP KMS with customer-managed keys.
-- In transit: TLS 1.3 for all connections.
-- Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
-- PII masking in non-production environments; synthetic data only for development and testing.
+| Control                       | Current evidence                                                                                                                                                                                                                                                                          | Planned delivery or confirmation                                                                                                                                                                                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Object encryption             | The S3 client requests SSE-KMS when a key is configured; its deployment note describes a shared platform key (`backend/app/storage/s3_compatible.py:10`, `:129`). Per-tenant KMS provisioning defaults off (`backend/app/core/config.py:1338`). This is not customer-managed key custody. | **Planned:** bank-held keys, including file and backup coverage, [#352](https://github.com/CedynGroup/aequorOS/issues/352); key health and support controls, [#354](https://github.com/CedynGroup/aequorOS/issues/354). **To confirm:** operations must supply active encryption settings. |
+| Credentials and signing keys  | Credential envelopes use AES-256-GCM under a platform master key (`backend/app/adapters/market_data/credential_manager.py:87`). OpenBao signing is implemented; bank-HSM signing is unproven and the cloud-KMS signer is unbuilt (`backend/app/services/attestation/signers.py:11`).      | **Planned:** bank-controlled credential and signing keys, [#355](https://github.com/CedynGroup/aequorOS/issues/355).                                                                                                                                                                       |
+| Database and sensitive fields | Borrower identity fields are ordinary model columns (`backend/app/models/canonical.py:217`). Database at-rest encryption is not established by those columns or the database URL.                                                                                                         | **Planned:** sensitive-field encryption, [#353](https://github.com/CedynGroup/aequorOS/issues/353). **To confirm:** operations must establish database and backup encryption.                                                                                                              |
+| TLS 1.3 on every connection   | The database engine does not pin TLS parameters (`backend/app/db/session.py:58`); OpenBao has a plaintext container listener behind its proxy (`deploy/openbao/docker-compose.openbao.yml:84`). End-to-end TLS 1.3 is not evidenced.                                                      | **Planned:** transport hardening; [#356](https://github.com/CedynGroup/aequorOS/issues/356) records the evidence question, not an implementation. **To confirm:** operations must name the delivery issue and supply per-hop TLS settings.                                                 |
+| Non-production masking        | The primary-database and read-only live-data rules are documented (`backend/README.md`, “Test databases and the primary database”). They do not prove automatic PII masking or complete production isolation.                                                                             | **Planned:** masking and environment isolation. **To confirm:** engineering must supply the access policy, evidence and delivery issue; tracked as an open question in [#356](https://github.com/CedynGroup/aequorOS/issues/356).                                                          |
 
 ### 14.3 Access Control
 
-- SSO integration with bank Active Directory / LDAP.
-- MFA required for all users.
-- Role-based access control with defined roles: CRO, Treasurer, ALCO member, risk analyst, IT admin, external auditor (read-only).
-- Segregation of duties: maker/checker workflow for sensitive operations (mapping changes, validation rule changes, manual overrides above threshold).
+| Control               | Current evidence                                                                                                                                                                                                                                                     | Planned delivery                                                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bank sign-in          | OIDC relying-party SSO is built. MFA on that path depends on the bank's IdP policy; a local password fallback remains for accounts with a password (`backend/app/services/authentication.py:284`). Direct LDAP sign-in and universal MFA are not claimed.            | **Planned:** enforce bank SSO, [#130](https://github.com/CedynGroup/aequorOS/issues/130).                                                                                   |
+| Staff sign-in         | Password sessions last eight hours; workforce OIDC is an additional path (`backend/app/operator/services/operator_auth.py:52`, `backend/app/operator/deps.py:186`). An allowlist/VPN statement in a settings docstring is not enforcement.                           | **Planned:** workforce SSO with enforced MFA, network restrictions and short sessions, [#351](https://github.com/CedynGroup/aequorOS/issues/351).                           |
+| Authority and signing | Scoped authorization bindings are built (`backend/app/services/authorization.py:71`). Filing signatures have maker-checker checks (`backend/app/services/attestation/workflow.py:347`). These do not establish maker-checker enforcement for every sensitive action. | **Planned:** filing segregation and signer-role work, [#129](https://github.com/CedynGroup/aequorOS/issues/129), [#185](https://github.com/CedynGroup/aequorOS/issues/185). |
 
 ### 14.4 Data Residency
 
-- AWS Cape Town region for African customers requiring in-country residency.
-- Configurable per-institution.
-- Analytical/aggregated data may reside elsewhere if permitted; transactional data respects residency requirements.
+Production compose delegates the database and object store to deployment
+configuration (`backend/docker-compose.prod.yml:6`). The tenant storage registry
+has no region field (`backend/app/models/operator.py:146`). No Ghana residency or
+per-bank region selection is established. Cape Town is in South Africa and
+cannot establish Ghana residency.
+
+**Planned:** residency arrangements and BI deployment guidance under
+[#209](https://github.com/CedynGroup/aequorOS/issues/209).
+**To confirm:** operations must identify every processing and backup location;
+the bank and counsel must confirm permitted transfers. The
+[BoG evidence pack](compliance/bog-evidence-pack.md) records those questions.
 
 ### 14.5 Compliance Certifications
 
-- SOC 2 Type II: target Year 2.
-- ISO 27001: follow SOC 2.
-- Ghana Data Protection Act compliance from day one.
-- Banking secrecy compliance: no cross-institution data visibility, no data reuse without consent.
+No SOC 2, ISO 27001 or regulatory certification is held or claimed
+([README, “License & security”](../README.md#license--security)). **Planned:** independent assessment and a certification roadmap; the security
+owner must name the delivery issue and dates (evidence-pack Q17).
+[#245](https://github.com/CedynGroup/aequorOS/issues/245) covers public disclosure
+and security-page work; it explicitly excludes certifications and pen-test
+summaries. It is not an assessment delivery commitment.
+
+Data-protection compliance and banking-secrecy compliance are not asserted.
+**Planned:** privacy policy under [#243](https://github.com/CedynGroup/aequorOS/issues/243)
+and counsel-reviewed MSA/DPA, confidentiality and attestation wording under
+[#246](https://github.com/CedynGroup/aequorOS/issues/246). DPC registration and
+staff declarations remain owner questions in the evidence pack.
 
 ### 14.6 Business Continuity
 
-- RPO ≤ 1 hour (backup frequency).
-- RTO ≤ 4 hours (DR failover).
-- Uptime SLA: 99.9%.
-- Multi-AZ deployment with automatic failover.
-- Quarterly DR drills with documented results.
+| Item                                               | Current evidence                                                                                                                                                                                                                    | Planned delivery or confirmation                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tested recovery                                    | One local database restore drill is documented, with about 123 seconds for the database step alone. It did not restore object storage or test production failover ([README, “License & security”](../README.md#license--security)). | **Planned:** production-volume worker recovery rehearsal, [#331](https://github.com/CedynGroup/aequorOS/issues/331). **To confirm:** operations must provide full-service restore evidence and its delivery issue (Q16).                                                                                                           |
+| Recovery point objective (RPO)                     | The documented absence of a backup schedule leaves effective RPO unbounded; point-in-time recovery is not evidenced (same README section).                                                                                          | **Planned:** scheduled backups, retention and tested RPO. **To confirm:** operations must name the delivery issue (Q03/Q16); [#331](https://github.com/CedynGroup/aequorOS/issues/331) covers worker recovery, not a backup schedule. A one-hour RPO is a former target, not an achieved control or agreed regulatory threshold.   |
+| Recovery time objective (RTO), failover and drills | No achieved service RTO, Multi-AZ automatic failover or quarterly drill programme is evidenced. The committed OpenBao stack has one service/node (`deploy/openbao/docker-compose.openbao.yml:53`).                                  | **Planned:** full-service failover and recurring drills, delivery issue to be confirmed (Q16). Related: worker recovery rehearsal, [#331](https://github.com/CedynGroup/aequorOS/issues/331). **To confirm:** operations and the bank must agree objectives and test cadence; a four-hour RTO is a former target, not a guarantee. |
+| Availability terms                                 | A 99.9% uptime SLA is not evidenced by a signed agreement or monitoring report.                                                                                                                                                     | **Planned:** counsel-reviewed SLA under [#246](https://github.com/CedynGroup/aequorOS/issues/246); operational evidence under [#331](https://github.com/CedynGroup/aequorOS/issues/331).                                                                                                                                           |
 
 ---
 

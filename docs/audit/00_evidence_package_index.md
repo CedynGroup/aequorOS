@@ -86,8 +86,10 @@ Production measurements were taken **read-only** against the primary database un
 
 - **No certification of any kind.** No SOC 2, no ISO, no regulatory approval, no
   "audit-proof", no "compliant". The strongest formulation used anywhere in this package is:
-  *all repository-verifiable controls identified by the audits have been implemented and
-  verified; the system is ready for independent regulatory/compliance assessment.*
+  *the cited evidence describes selected implemented controls and their verification;
+  completeness and regulatory compliance require independent assessment.* The current
+  [BoG evidence draft](../compliance/bog-evidence-pack.md) distinguishes built controls,
+  planned work and deployment facts still awaiting owner confirmation.
 - **No live regulatory filing.** No return has ever been submitted to the Bank of Ghana.
   Measured: 53 packages, exactly **2** certified (both `LCR-NSFR`, carrying no capital
   figures), and all 7 submission events against a simulation channel. See §06 and §15.

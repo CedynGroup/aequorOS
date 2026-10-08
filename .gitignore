@@ -68,6 +68,9 @@ coverage/
 !/docs/DASHBOARD_DESIGN_SYSTEM.md
 !/docs/sso-onboarding.md
 !/docs/sdi_onboarding_runbook.md
+# Issue #356 explicitly requests a publishable, repository-backed BoG evidence
+# draft. It contains no tenant data, credentials or live infrastructure addresses.
+!/docs/compliance/bog-evidence-pack.md
 
 # Domain specifications
 !/docs/ai_engine.md
