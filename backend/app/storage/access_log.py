@@ -1,4 +1,4 @@
-"""Hash-chained storage access log (storage.md §9).
+"""Hash-chained storage access log.
 
 Every storage operation produces an entry whose ``entry_hash`` covers the
 previous entry's hash, forming a tamper-evident chain: modifying any past
@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -100,7 +100,7 @@ class HashChainedAccessLog:
             result=result,
             prev_hash=prev_hash,
         )
-        sealed = AccessLogEntry(**{**entry.__dict__, "entry_hash": entry.compute_hash()})
+        sealed = replace(entry, entry_hash=entry.compute_hash())
         self.entries.append(sealed)
 
     def export_jsonl(self) -> str:
@@ -132,9 +132,8 @@ class HashChainedAccessLog:
 def verify_chain(jsonl: str) -> tuple[bool, str]:
     """Re-verify an exported chain; returns (intact, detail).
 
-    Runs as a scheduled job in production (storage.md §9.3); any mismatch
-    names the first broken sequence number so investigation starts exactly
-    where tampering (or corruption) begins.
+    Any mismatch names the first broken sequence number so investigation
+    starts exactly where tampering (or corruption) begins.
     """
     prev_hash = GENESIS_HASH
     for line in filter(None, jsonl.splitlines()):

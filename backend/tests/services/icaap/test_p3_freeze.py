@@ -11,9 +11,11 @@ from __future__ import annotations
 import copy
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import TypedDict
 
 import pytest
 from fastapi import HTTPException
+from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,6 +38,32 @@ from tests.services.icaap.p3_support import (
     submit,
     write_every_section,
 )
+
+
+class _OrderedAttachment(TypedDict):
+    kind: str
+    sha256: str
+
+
+class _OrderedBlock(TypedDict):
+    block_key: str
+
+
+class _OrderedIcaap(TypedDict):
+    attachments: list[_OrderedAttachment]
+    blocks: list[_OrderedBlock]
+
+
+class _OrderedMetadata(TypedDict):
+    icaap: _OrderedIcaap
+
+
+class _OrderedSnapshot(TypedDict):
+    metadata: _OrderedMetadata
+
+
+#: The slice of a frozen package whose order the canonical-order test pins.
+_ORDERED_SNAPSHOT = TypeAdapter(_OrderedSnapshot)
 
 
 def _codes(report) -> set[str]:  # noqa: ANN001
@@ -504,6 +532,30 @@ class TestTheTransaction:
         assert moved["metadata"]["icaap"]["review_digest"] == digest
         moved["metadata"]["icaap"]["review_digest"] = "f" * 64
         assert digest_service.content_digest(moved) != digest_service.content_digest(first.snapshot)
+
+    def test_the_snapshot_orders_blocks_and_attachments_canonically(
+        self, canonical_book: Session, extra_frameworks: None
+    ) -> None:
+        """Upload order never reaches the digest: attachments sort by (kind, sha256)."""
+        db = canonical_book
+        access, _r, _a, cycle = _build(db)
+        attach(db, access, cycle.id, "senior_management_report", sha="0" * 64)
+        attach(db, access, cycle.id, "board_minutes", sha="f" * 64)
+        digest = workflow.get_stages(db, access, cycle.id).review_digest
+        out = freeze.freeze_cycle(
+            db, access, cycle.id, IcaapFreezeCreate(review_digest=digest, reason="Seal the report.")
+        )
+        package = db.get(RegulatoryPackage, out.package.id)
+        assert package is not None
+        icaap = _ORDERED_SNAPSHOT.validate_python(package.snapshot)["metadata"]["icaap"]
+        assert [(entry["kind"], entry["sha256"]) for entry in icaap["attachments"]] == [
+            ("board_minutes", "f" * 64),
+            ("senior_management_report", "0" * 64),
+            ("senior_management_report", "a" * 64),
+        ]
+        block_keys = [entry["block_key"] for entry in icaap["blocks"]]
+        assert block_keys
+        assert block_keys == sorted(block_keys)
 
 
 class TestTheCycleIsSealedAfterwards:

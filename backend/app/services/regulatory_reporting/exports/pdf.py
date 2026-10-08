@@ -25,6 +25,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     BaseDocTemplate,
+    Flowable,
     Frame,
     NextPageTemplate,
     PageBreak,
@@ -341,9 +342,7 @@ def _attestation(
         story.append(Spacer(0, 4 * mm))
         printed = True
     if not printed:
-        story.append(
-            Paragraph("No officer decisions are recorded against this version.", _BODY)
-        )
+        story.append(Paragraph("No officer decisions are recorded against this version.", _BODY))
         story.append(Spacer(0, 4 * mm))
 
     for line in rendered.attestation_lines:
@@ -720,11 +719,9 @@ def render_pdf(
     # sections on LANDSCAPE, and the provenance appendix back on portrait. Each
     # ``NextPageTemplate`` takes effect at the following page break, which
     # ``_sections`` and ``_provenance`` each begin with.
-    story = [
+    story: list[Flowable] = [
         *_cover(rendered),
-        *_attestation(
-            rendered, signing_required=signing_required, officers=officers
-        ),
+        *_attestation(rendered, signing_required=signing_required, officers=officers),
         NextPageTemplate(_LANDSCAPE_TEMPLATE),
         *_sections(rendered),
         NextPageTemplate(_PORTRAIT_TEMPLATE),

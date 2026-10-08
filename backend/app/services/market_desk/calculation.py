@@ -462,8 +462,7 @@ def _build_credit_curve(
             "as_of": cob.isoformat(),
             "method": "gfim_corporate_closing_yield_as_zero_proxy",
             "inputs": [
-                {"series": s, "tenor_months": m, "yield_pct": _fmt(z * 100.0)}
-                for m, z, s in points
+                {"series": s, "tenor_months": m, "yield_pct": _fmt(z * 100.0)} for m, z, s in points
             ],
             "disclosure": (
                 "Stage 3 credit curve: GFIM corporate closing yields as continuous "
@@ -622,9 +621,7 @@ def _parse_bond_code(series_code: str) -> tuple[date, float]:
         maturity = date(int(parts[0][0:4]), int(parts[0][4:6]), int(parts[0][6:8]))
         coupon_bps = int(parts[1])
     except (ValueError, IndexError) as exc:
-        raise CalculationError(
-            f"bond series {series_code!r} does not follow {grammar}"
-        ) from exc
+        raise CalculationError(f"bond series {series_code!r} does not follow {grammar}") from exc
     return maturity, coupon_bps / 10_000.0
 
 
@@ -659,9 +656,7 @@ def _admit_bonds(ctx: _Ctx, bonds: list[_BondInput]) -> list[_BondInput]:
     """Admission: unique maturities (deterministic keep-first by series code),
     strictly beyond the bill span — the bootstrap's structural requirements,
     enforced with flags instead of hard failures."""
-    last_bill_time = max(
-        ((ctx.cob + timedelta(days=t)) for t in TBILL_TENOR_DAYS), default=ctx.cob
-    )
+    last_bill_time = max(((ctx.cob + timedelta(days=t)) for t in TBILL_TENOR_DAYS), default=ctx.cob)
     admitted: dict[date, _BondInput] = {}
     for bond in sorted(bonds, key=lambda b: (b.maturity, b.series_code)):
         if bond.maturity <= last_bill_time:
@@ -967,18 +962,14 @@ def _curve_block(  # noqa: PLR0913 - definition, nodes, QA and lineage are one u
 ) -> dict[str, Any]:
     build = CurveBuildResult.create(
         definition,
-        CurveNodes(
-            tenor_years=tuple(t for t, _ in nodes), values=tuple(v for _, v in nodes)
-        ),
+        CurveNodes(tenor_years=tuple(t for t, _ in nodes), values=tuple(v for _, v in nodes)),
         qa,
         raw_inputs,
     )
     block: dict[str, Any] = {
         "curve_type": definition.curve_kind,
         "points": _curve_points(month_nodes),
-        "nodes": [
-            {"tenor_years": _fmt(t), "value_pct": _fmt(v * 100.0)} for t, v in nodes
-        ],
+        "nodes": [{"tenor_years": _fmt(t), "value_pct": _fmt(v * 100.0)} for t, v in nodes],
         "definition": definition.as_payload(),
         "digest": build.input_digest,
     }
@@ -1137,9 +1128,7 @@ def _forward_grid_family(ctx: _Ctx, sovereign: _SovereignBuild) -> dict[str, Any
     }
 
 
-def _agd_block(
-    ctx: _Ctx, agd: _AgdBuild, sovereign: _SovereignBuild
-) -> dict[str, Any]:
+def _agd_block(ctx: _Ctx, agd: _AgdBuild, sovereign: _SovereignBuild) -> dict[str, Any]:
     if sovereign.curve is None:
         return {
             "curve_type": "discount",
@@ -1279,9 +1268,7 @@ def _grr_check(ctx: _Ctx) -> dict[str, Any]:
     month_end = published.as_of.replace(day=1) - timedelta(days=1)
     month_start = month_end.replace(day=1)
     month_prints = [
-        obs
-        for obs in ctx.series.get(INTERBANK_SERIES, [])
-        if month_start <= obs.as_of <= month_end
+        obs for obs in ctx.series.get(INTERBANK_SERIES, []) if month_start <= obs.as_of <= month_end
     ]
     mpr = ctx.prevailing(MPR_SERIES, month_end)
     discount = ctx.prevailing("GHS.TBILL.91.DISCOUNT", month_end)
@@ -1296,9 +1283,7 @@ def _grr_check(ctx: _Ctx) -> dict[str, Any]:
     tbill_yield = discount_to_yield(discount.value / 100.0, 91) * 100.0
     formula = ctx.params.get("grr_formula", {})
     weights = [float(w) for w in formula.get("weights", [1 / 3, 1 / 3, 1 / 3])]
-    reconstructed = (
-        weights[0] * mpr.value + weights[1] * monthly_avg + weights[2] * tbill_yield
-    )
+    reconstructed = weights[0] * mpr.value + weights[1] * monthly_avg + weights[2] * tbill_yield
     gap = published.value - reconstructed
     tolerance = float(ctx.params.get("grr_check_tolerance_pp", 1.0))
     verdict = "pass" if abs(gap) <= tolerance else "mismatch_flagged"
@@ -1404,9 +1389,7 @@ def _fx_section(ctx: _Ctx) -> tuple[dict[str, Any], dict[str, str]]:
     flat: dict[str, str] = {}
     mid = ctx.latest(USDGHS_MID_SERIES) or ctx.latest(USDGHS_FX_MID_SERIES)
     mid_code = (
-        USDGHS_MID_SERIES
-        if ctx.latest(USDGHS_MID_SERIES) is not None
-        else USDGHS_FX_MID_SERIES
+        USDGHS_MID_SERIES if ctx.latest(USDGHS_MID_SERIES) is not None else USDGHS_FX_MID_SERIES
     )
     ref = ctx.latest(USDGHS_REF_SERIES)
     pair: dict[str, Any] = {}
@@ -1473,9 +1456,7 @@ def _cointegration_diagnostic(ctx: _Ctx) -> dict[str, Any]:
         result = engle_granger(y, x, maxlag=int(config.get("adf_maxlag", 8)))
     except CointegrationError as exc:
         return {**base, "status": "error", "detail": str(exc), "n_pairs": len(y)}
-    verdict = (
-        "cointegrated_at_5pct" if result.is_cointegrated("5%") else "not_cointegrated_at_5pct"
-    )
+    verdict = "cointegrated_at_5pct" if result.is_cointegrated("5%") else "not_cointegrated_at_5pct"
     return {
         **base,
         "status": "computed",
@@ -1549,9 +1530,7 @@ def run_pipeline(
     # fail (rates-first product decision). Core policy + interbank prints are
     # the minimum rates-package signal.
     curves_qa_passed = sovereign.error is None and forward_gate_passed
-    rates_qa_passed = (
-        bool(rates) and MPR_SERIES in rates and INTERBANK_SERIES in rates
-    )
+    rates_qa_passed = bool(rates) and MPR_SERIES in rates and INTERBANK_SERIES in rates
     # ``qa_passed`` follows rates readiness so approve/publish paths that still
     # read the legacy key gate on the rates package, not curve oscillation.
     qa_passed = rates_qa_passed
@@ -1613,15 +1592,11 @@ def _forward_qa_payload(qa: ForwardQaResult | None) -> dict[str, Any] | None:
 
 
 def _history_lookback_days(parameters: dict[str, Any]) -> int:
-    window_bdays = int(
-        parameters.get("cointegration", {}).get("diagnostic_window_bdays", 250)
-    )
+    window_bdays = int(parameters.get("cointegration", {}).get("diagnostic_window_bdays", 250))
     return math.ceil(window_bdays * 7 / 5) + 14
 
 
-def _rows_between(
-    db: Session, series_code: str, start: date, end: date
-) -> list[DeskObservation]:
+def _rows_between(db: Session, series_code: str, start: date, end: date) -> list[DeskObservation]:
     return list(
         db.scalars(
             select(DeskObservation)
@@ -1649,9 +1624,7 @@ def _latest_row(db: Session, series_code: str, on_or_before: date) -> DeskObserv
     )
 
 
-def _latest_rows_by_pattern(
-    db: Session, prefix: str, on_or_before: date
-) -> list[DeskObservation]:
+def _latest_rows_by_pattern(db: Session, prefix: str, on_or_before: date) -> list[DeskObservation]:
     rows = db.scalars(
         select(DeskObservation)
         .where(
@@ -1781,7 +1754,7 @@ def _apply_research_adjustments(
     """
     if not adjustments:
         return
-    rates = derived_values.setdefault("rates", {})
+    rates: dict[str, Any] = derived_values.setdefault("rates", {})
     flags = qa_results.setdefault("flags", [])
     if not isinstance(flags, list):
         flags = []
@@ -1792,8 +1765,10 @@ def _apply_research_adjustments(
         kind = str(adj.get("kind") or "")
         if not series or not kind:
             continue
-        entry = rates.get(series)
-        if entry is None or not isinstance(entry, dict):
+        existing = rates.get(series)
+        if isinstance(existing, dict):
+            entry: dict[str, Any] = existing
+        else:
             # Create a research-only rate row when overriding a series the
             # pipeline did not emit (still auditable and publishable).
             entry = {
@@ -1801,9 +1776,7 @@ def _apply_research_adjustments(
                 "unit": "pct",
                 "treatment": "research_adjustment",
                 "source_series": [],
-                "as_of": derived_values.get("rates", {})
-                .get(MPR_SERIES, {})
-                .get("as_of", ""),
+                "as_of": derived_values.get("rates", {}).get(MPR_SERIES, {}).get("as_of", ""),
                 "staleness_flag": False,
             }
             rates[series] = entry
@@ -1867,9 +1840,7 @@ def compute_determination(
     if determination.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Determination is {determination.status!r}; only a draft can be computed."
-            ),
+            detail=(f"Determination is {determination.status!r}; only a draft can be computed."),
         )
     if (
         methodology.methodology_code != determination.methodology_code
@@ -1913,8 +1884,7 @@ def ensure_approvable(determination: DeskDetermination) -> None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "Determination has not been computed; run Compute before "
-                "submitting for approval."
+                "Determination has not been computed; run Compute before submitting for approval."
             ),
         )
     rates_ready = derived.get("rates_qa_passed")

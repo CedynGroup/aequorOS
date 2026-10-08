@@ -947,7 +947,7 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
         # invariant for the reader and the type checker in one line.
         assert tier1 is not None
         totals.insert(0, snapshot_row("tier1_ghs", "Tier 1 Capital", tier1, unit="ghs"))
-    metadata = {
+    metadata: dict[str, object] = {
         "nof_basis": (
             "Net Own Funds from the governed Act 930 s.29 SDI capital calculation."
             if is_sdi
