@@ -106,15 +106,11 @@ ignore = ["PLR2004"]
 
 [tool.basedpyright]
 pythonVersion = "3.13"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 include = ["app", "tests", "alembic", "scripts"]
 exclude = [".venv"]
-reportAny = false
+reportAny = "error"
 reportExplicitAny = false
-reportUnknownMemberType = false
-reportUnknownVariableType = false
-reportUnknownArgumentType = false
-reportUnknownLambdaType = false
 
 # --- torch: CPU-only wheels on Linux -----------------------------------------
 # On Linux the default PyPI torch wheel drags the full NVIDIA CUDA stack

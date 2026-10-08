@@ -9,12 +9,12 @@ from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, UuidV4PrimaryKeyMixin, utc_now
+from app.db.base import Base, TableArgs, UuidV4PrimaryKeyMixin, utc_now
 
 
 class Job(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "jobs"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         Index("ix_jobs_status_run_after", "status", "run_after"),
         Index("ix_jobs_organization_id_coalesce_key", "organization_id", "coalesce_key"),
     )

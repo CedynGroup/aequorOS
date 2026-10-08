@@ -6,13 +6,13 @@ from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, TableArgs, TimestampMixin
 from app.services.public_ids import new_bank_public_id
 
 
 class Bank(TimestampMixin, Base):
     __tablename__ = "banks"
-    __table_args__ = (
+    __table_args__: TableArgs = (
         Index("ix_banks_organization_id", "organization_id"),
         Index(
             "uq_banks_storage_slug",

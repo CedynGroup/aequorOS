@@ -160,8 +160,8 @@ run = [
 ]
 
 [tasks."risk-service:typecheck"]
-description = "Run BasedPyright"
-run = "uv run basedpyright"
+description = "Run the BasedPyright strict typing ratchet"
+run = "uv run python scripts/typing_ratchet.py check"
 
 [tasks."risk-service:check"]
 description = "Run lint, typecheck, and tests"
@@ -232,6 +232,6 @@ description = "Run local smoke checks that do not require Postgres"
 depends = ["risk-service:sync"]
 run = [
   "uv run ruff check .",
-  "uv run basedpyright",
+  "uv run python scripts/typing_ratchet.py check",
   "uv run pytest",
 ]
