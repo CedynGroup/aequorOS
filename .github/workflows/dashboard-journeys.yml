@@ -7,7 +7,7 @@ name: Dashboard Playwright journeys
 # The stack Playwright boots (backend/dashboard/playwright.config.ts) includes
 # the local OIDC issuer the SSO journeys sign in at (backend/scripts/e2e_idp.py).
 # It is a plain Python process started as a Playwright web server, so unlike
-# MinIO below it needs no container and no step of its own here.
+# MinIO below it needs no step of its own here.
 on:
   workflow_dispatch:
 
@@ -49,26 +49,10 @@ jobs:
       - name: Install browser system dependencies
         if: steps.playwright-browsers.outputs.cache-hit == 'true'
         run: mise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium
-      # Keep this identical to the proven Storage contract setup in
-      # risk-service.yml. A services: container cannot pass MinIO's
-      # `server /data` command, and the built-in KMS is required by the
-      # platform's encrypted write path.
+      # Shared with Storage contract CI: real SSE-KMS storage on loopback.
       - name: Start MinIO with built-in KMS
-        run: |
-          set -euo pipefail
-          docker run -d --name aequoros-e2e-minio \
-            -e MINIO_ROOT_USER=ciminio \
-            -e MINIO_ROOT_PASSWORD=ciminio123 \
-            -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
-            -p 9000:9000 \
-            public.ecr.aws/chainguard/minio:latest@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285 server /data
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
-              echo "MinIO is live"; exit 0
-            fi
-            sleep 1
-          done
-          echo "MinIO did not become live"; docker logs aequoros-e2e-minio; exit 1
+        id: minio
+        uses: ./.github/actions/setup-minio
       - name: Run dashboard journeys
         env:
           S3_ENDPOINT: http://127.0.0.1:9000
@@ -108,5 +92,7 @@ jobs:
             (.integrityErrors | length) == 0
           ' "$RUNNER_TEMP/journeys.json" >/dev/null
       - name: Stop MinIO
-        if: always()
-        run: docker rm -f aequoros-e2e-minio || true
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true

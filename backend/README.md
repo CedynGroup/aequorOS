@@ -374,6 +374,17 @@ The migration chain requires no extensions: `gen_random_uuid()` is built into
 PostgreSQL 17. If a migration adds an extension dependency, install its PostgreSQL
 17 package in that action and verify availability before running migrations.
 
+CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
+[OpenBao action](../.github/actions/setup-openbao/action.yml) download official
+release binaries and verify pinned SHA256 digests before execution. MinIO runs
+only for the storage contract and manual dashboard journeys, with a disposable
+built-in KMS key named `aequoros-key`. OpenBao runs only for the full-suite job's
+live signing tests. Both listen on loopback and stop at job cleanup. Other API,
+health and operator provisioning tests retain their in-process storage fakes;
+credential-vault encryption tests need no vault server. The live storage and
+OpenBao execution guards remain in
+[Risk Service CI](../.github/workflows/risk-service.yml).
+
 ### Test databases and the primary database
 
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
