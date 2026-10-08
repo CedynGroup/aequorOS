@@ -3,9 +3,8 @@
 
 ``Pkcs11RawSigner`` is the cautionary tale this suite exists to avoid repeating:
 carefully written, never executed, correctness therefore unknown. So everything
-below the ``OPENBAO_TEST_ADDR`` gate runs against a REAL OpenBao server — dev
-mode in CI (``.github/workflows/risk-service.yml`` runs one as a job service),
-``docker run openbao/openbao server -dev`` locally. Nothing is mocked: the
+below the ``OPENBAO_TEST_ADDR`` gate runs against a REAL OpenBao server — see
+``backend/README.md#run-tests`` for CI service setup. Nothing is mocked: the
 signatures are produced by the server, the certificates are issued by a PKI
 mount this suite bootstraps with the shipped operational script, and the PDFs
 are validated by pyHanko afterwards.
