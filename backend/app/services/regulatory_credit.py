@@ -731,13 +731,14 @@ def compute_live(
 
 
 def _concentration_or_none(db: Session, ctx: TenantContext, bank: Bank, as_of: date):
-    """The standing monitor, or ``None`` when there is nothing to measure —
-    concentration must never take the whole live credit view down."""
+    """The standing monitor, or ``None`` when there are no credit exposures."""
     from app.services import credit_concentration  # noqa: PLC0415 - service cycle
 
     try:
         return credit_concentration.monitor(db, ctx, bank, as_of)
-    except ModuleDataUnavailable:
+    except ModuleDataUnavailable as exc:
+        if exc.error_code != "no_credit_exposures":
+            raise
         return None
 
 

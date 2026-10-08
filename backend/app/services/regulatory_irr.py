@@ -43,7 +43,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.domain.capital.engine import CapitalFact, tier1_capital
+from app.domain.capital.engine import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    CapitalFact,
+    CapitalRegisterRefused,
+    tier1_capital,
+)
+from app.domain.irr import IrrRunError
 from app.domain.irr.engine import (
     BASE_CURVE_SCENARIO,
     EAR_DOWN_BP,
@@ -139,16 +145,6 @@ _CAPITAL_COMPONENT_GROUP = "capital_component"
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
-
-
-class IrrRunError(Exception):
-    """Domain input failure persisted onto the run instead of raising HTTP 500."""
-
-    def __init__(self, code: str, message: str, details: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.details = details
 
 
 @dataclass(frozen=True)
@@ -829,7 +825,11 @@ def _build_trend(
             continue
         try:
             analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
-        except (MissingParameterError, IrrComputationError, IrrRunError, UnsupportedShockError):
+        except IrrRunError as exc:
+            if exc.code == CAPITAL_REGISTER_REFUSED_CATEGORY:
+                raise ModuleDataUnavailable(exc.code, exc.message) from exc
+            continue
+        except (MissingParameterError, IrrComputationError, UnsupportedShockError):
             continue
         points.append(
             IrrTrendPointRead(
@@ -868,11 +868,14 @@ def _prefetch_dashboard_batch(
         policy_scope.currency,
         dates,
     )
-    sdi_net_own_funds = (
-        sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
-        if policy_scope.institution_class == "sdi"
-        else {}
-    )
+    try:
+        sdi_net_own_funds = (
+            sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
+            if policy_scope.institution_class == "sdi"
+            else {}
+        )
+    except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+        raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
     return _IrrDashboardBatch(
         runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
             db,
@@ -1416,7 +1419,10 @@ def _capital_base(
     trend point.
     """
     if institution_types.institution_class(db, bank) == "sdi":
-        return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+        try:
+            return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+        except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+            raise IrrRunError(exc.state.value, str(exc)) from exc
     return _tier1_from_facts(facts)
 
 
@@ -1432,7 +1438,10 @@ def _tier1_from_facts(facts: Sequence[FinancialFactRow]) -> Decimal:
         for fact in facts
         if fact.fact_group == _CAPITAL_COMPONENT_GROUP
     ]
-    return tier1_capital(capital_facts)
+    try:
+        return tier1_capital(capital_facts)
+    except CapitalRegisterRefused as exc:
+        raise IrrRunError(exc.code, str(exc), None) from exc
 
 
 def _load_irr_params_or_none(

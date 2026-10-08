@@ -50,16 +50,22 @@ Methodology notes:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
     OutcomeState,
     outcome,
+)
+from app.domain.ingestion.capital_tiers import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    TIER_AT1,
+    TIER_CET1,
+    TIER_T2,
 )
 
 MONEY = Decimal("0.0001")
@@ -122,9 +128,6 @@ GENERAL_PROVISIONS_CATEGORY = "general_provisions"
 #: The CET1 deduction a stress scenario takes for the increase in modelled
 #: stage 1+2 ECL over its unconditioned baseline.
 MODELLED_ECL_CHARGE_CATEGORY = "modelled_ecl_stress_charge"
-TIER_CET1 = "CET1"
-TIER_AT1 = "AT1"
-TIER_T2 = "T2"
 _TIER_ORDER = {TIER_CET1: 0, TIER_AT1: 1, TIER_T2: 2}
 
 # Zero-weight balance-sheet transparency rows: (line_code, description,
@@ -188,6 +191,47 @@ class UnsupportedShockError(Exception):
 
 class CapitalComputationError(Exception):
     """The supplied facts produce a degenerate ratio (zero denominator)."""
+
+
+class CapitalRegisterRefused(CapitalComputationError, NotComputable):
+    """The authoritative capital register failed derivation."""
+
+    def __init__(self) -> None:
+        NotComputable.__init__(
+            self,
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=CAPITAL_REGISTER_REFUSED_CATEGORY,
+                reason="The capital_structure register was refused. Correct the refused "
+                "rows' tiers, re-ingest the complete register and re-derive facts before "
+                "computing capital or any calculation that depends on it.",
+                items=("register:capital_structure",),
+            ),
+        )
+
+    @property
+    def code(self) -> str:
+        return CAPITAL_REGISTER_REFUSED_CATEGORY
+
+
+class _CapitalRegisterFact(Protocol):
+    """Equality-only attributes, compatible with ORM descriptors and pure facts."""
+
+    @property
+    def fact_group(self) -> object: ...
+
+    @property
+    def category(self) -> object: ...
+
+
+def assert_capital_register_usable(facts: Iterable[_CapitalRegisterFact]) -> None:
+    """Refuse an explicit register failure while preserving absent-register behavior."""
+    if any(
+        fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT
+        and fact.category == CAPITAL_REGISTER_REFUSED_CATEGORY
+        for fact in facts
+    ):
+        raise CapitalRegisterRefused()
 
 
 class BiaGrossIncomeUnavailable(CapitalComputationError, NotComputable):
@@ -428,11 +472,13 @@ def tier1_capital(facts: Sequence[CapitalFact]) -> Decimal:
     Reused by non-capital engines (e.g. IRRBB) that need Tier 1 as the
     denominator for a supervisory limit without re-running the full RWA build.
     """
+    assert_capital_register_usable(facts)
     components = [fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT]
     return money(_tier_total(components, TIER_CET1) + _tier_total(components, TIER_AT1))
 
 
 def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResult:
+    assert_capital_register_usable(facts)
     credit_items = _credit_line_items(facts, params)
     credit_rwa = money(sum((item.weighted_amount for item in credit_items), _ZERO))
 
@@ -614,6 +660,7 @@ def compute_capital_ratios(
     figure of record, and a modelled increase reaches capital only as a CET1
     charge (:data:`MODELLED_ECL_CHARGE_CATEGORY`).
     """
+    assert_capital_register_usable(facts)
     components = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT),
         key=lambda fact: (

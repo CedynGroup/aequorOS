@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.domain.capital.engine import CapitalFact, tier1_capital
+from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
     ConcentrationLimit,
     ConcentrationMonitorResult,
@@ -141,9 +141,18 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
     if institution_types.institution_class(db, bank) == "sdi":
         try:
             nof = sdi_capital.net_own_funds(db, ctx, bank, as_of)
-        except Exception:  # noqa: BLE001 - an unresolvable base is a real state
-            return None
-        return nof if nof > _ZERO else None
+            if not nof.is_finite():
+                raise ValueError("Net Own Funds must be finite.")
+            return nof if nof > _ZERO else None
+        except sdi_capital.SdiCapitalPolicyUnresolved as exc:
+            raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
+        except Exception as exc:
+            raise ModuleDataUnavailable(
+                "capital_base_unavailable",
+                "The SDI Net Own Funds denominator is unavailable. Review the stored "
+                "capital_structure amounts and re-ingest the complete register before "
+                "measuring concentration against capital.",
+            ) from exc
     try:
         current = load_current_facts(db, ctx, bank, ("capital_component",))
     except ModuleDataUnavailable:
@@ -161,7 +170,10 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
     ]
     if not capital_facts:
         return None
-    tier1 = tier1_capital(capital_facts)
+    try:
+        tier1 = tier1_capital(capital_facts)
+    except CapitalRegisterRefused as exc:
+        raise ModuleDataUnavailable(exc.code, str(exc)) from exc
     return tier1 if tier1 > _ZERO else None
 
 

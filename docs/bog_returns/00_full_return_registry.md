@@ -207,3 +207,13 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   on Friday close (the Guide fixes cadence, not weekday). Gate:
   `tests/services/test_bog_forms_framework.py` and `tests/services/bog_forms/`; matrix
   `scripts/bog_coverage_matrix.py`.
+- **A refused capital register makes capital-dependent inputs unavailable.**
+  `facts.sum` for `capital_component`, `bsd5.capital_facts` and capital-run
+  metric resolvers check the register before selecting categories, tiers or
+  currencies, including before reusing a succeeded capital run. BSD7A's
+  `bsd7.average_facts` checks every reporting period in the averaging window
+  before filtering; a refused month cannot disappear from the average. The
+  form records the corrective reason and leaves the affected input blank
+  (`input_required`). Input and correction contract:
+  [API integration §3.5](../API_INTEGRATION.md#capital_structure-contract).
+  Regression coverage: `backend/tests/services/test_capital_register_refusal.py`.

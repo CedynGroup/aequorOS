@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
 from app.domain.rating.engine import ComponentScore, grade_for_score, score_components
 from app.domain.rating.sdi_scorecard import (
     CANDIDATE_COMPONENTS,
@@ -203,12 +204,13 @@ def _capital_evidence(
     from app.services import sdi_capital  # noqa: PLC0415 - breaks an import cycle
 
     try:
+        components = _capital_components(db, ctx, bank, as_of)
         summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
     except Exception as exc:  # noqa: BLE001 - an unresolved capital policy is evidence, not a crash
         return [
-            RatioEvidence("car_headroom_pp", None, "sdi_capital", str(exc)[:200]),
-            RatioEvidence("paid_up_coverage_x", None, "sdi_capital", "capital summary unavailable"),
-            RatioEvidence("reserve_fund_pct", None, "sdi_capital", "capital summary unavailable"),
+            RatioEvidence("car_headroom_pp", None, "sdi_capital", str(exc)),
+            RatioEvidence("paid_up_coverage_x", None, "sdi_capital", str(exc)),
+            RatioEvidence("reserve_fund_pct", None, "sdi_capital", str(exc)),
         ]
     car = _dec(getattr(summary, "car_pct", None))
     floor = _dec(getattr(summary, "car_min_pct", None))
@@ -219,7 +221,6 @@ def _capital_evidence(
     # — GHS 15m for savings-&-loans, 2m for a microfinance bank). They were
     # written off as "unbuilt" on 2026-08-23 without anyone checking, which
     # blocked the whole capital component behind evidence that already existed.
-    components = _capital_components(db, ctx, bank, as_of)
     paid_up = components.get("paid_up_capital")
     statutory = components.get("statutory_reserves")
     floor = _paid_up_floor(db, bank, as_of)
@@ -316,10 +317,13 @@ def _capital_components(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> dict[str, Decimal]:
     """Derived ``capital_component`` facts at ``as_of``, by category."""
-    return {
+    components = {
         category: amount
         for _, category, amount in _facts(db, ctx, bank, as_of, ("capital_component",))
     }
+    if CAPITAL_REGISTER_REFUSED_CATEGORY in components:
+        raise CapitalRegisterRefused()
+    return components
 
 
 def _paid_up_floor(db: Session, bank: Bank, as_of: date) -> Decimal | None:
@@ -589,16 +593,20 @@ def _earnings_evidence(
     missing = "no operational_income facts at this date (an income statement must be ingested)"
     return [
         RatioEvidence(
-            "roa_pct", roa, "operational_income/net_income ÷ total assets",
+            "roa_pct",
+            roa,
+            "operational_income/net_income ÷ total assets",
             None if roa is not None else missing,
         ),
         RatioEvidence(
-            "net_interest_margin_pct", nim,
+            "net_interest_margin_pct",
+            nim,
             "operational_income/net_interest_income ÷ earning assets",
             None if nim is not None else missing,
         ),
         RatioEvidence(
-            "cost_to_income_pct", cti,
+            "cost_to_income_pct",
+            cti,
             "operational_income/operating_expenses ÷ gross_income",
             None if cti is not None else missing,
         ),
@@ -610,9 +618,7 @@ def _earnings_evidence(
 # ---------------------------------------------------------------------------
 
 
-def assessment_state(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> SdiAssessment:
+def assessment_state(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> SdiAssessment:
     """The dossier §4 state for this institution at this date.
 
     Never raises for a missing input: an absent prerequisite is state 1 and an
@@ -643,9 +649,7 @@ def assessment_state(
     available: dict[str, Decimal] = {
         item.code: item.value for item in evidence if item.value is not None
     }
-    present_components = {
-        ratio.component for ratio in CANDIDATE_RATIOS if ratio.code in available
-    }
+    present_components = {ratio.component for ratio in CANDIDATE_RATIOS if ratio.code in available}
     omitted = tuple(
         sorted(
             component.code
@@ -708,9 +712,7 @@ def assessment_state(
         operating_environment_matrix=_IDENTITY_ENVIRONMENT,
     )
     composite = sum((component.contribution for component in components), _ZERO)
-    standalone = grade_for_score(
-        min(max(composite, _ZERO), _ONE), grade_cutpoints(), GRADE_ORDER
-    )
+    standalone = grade_for_score(min(max(composite, _ZERO), _ONE), grade_cutpoints(), GRADE_ORDER)
     # The sovereign ceiling binds an SDI exactly as it binds a bank: a domestic
     # institution is not stronger than the sovereign whose paper it holds and
     # whose economy it lends into. Resolved from the SAME tenant-ingested agency
@@ -744,9 +746,7 @@ def assessment_state(
     )
 
 
-def _sovereign_ceiling(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> str | None:
+def _sovereign_ceiling(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> str | None:
     """Ghana's own grade from the tenant's ingested agency observations, or None.
 
     ``None`` means no observation exists for this tenant — the ceiling is then

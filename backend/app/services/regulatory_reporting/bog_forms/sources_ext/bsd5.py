@@ -52,7 +52,7 @@ from sqlalchemy import select
 from app.models import RegulatoryLineItem, RegulatoryRun
 from app.models.regulatory import BankFinancialFact
 
-from ..sources import ResolveContext, get_resolver, resolver
+from ..sources import ResolveContext, get_resolver, require_usable_capital_register, resolver
 
 _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
@@ -62,6 +62,8 @@ def _capital_run(rc: ResolveContext, params: dict[str, Any]) -> RegulatoryRun | 
     """Latest succeeded run of ``module``/``scenario`` for the period (memoised
     under the same cache key ``run.metric`` uses, so one lookup serves both)."""
     module = str(params.get("module", "capital"))
+    if module == "capital":
+        require_usable_capital_register(rc)
     scenario = str(params.get("scenario", "baseline"))
     key = f"run:{module}:{scenario}"
     run = rc.cache.get(key)
@@ -120,6 +122,7 @@ def _capital_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
     subtracts them). ``currency`` is ignored — capital is reported in the base
     currency.
     """
+    require_usable_capital_register(rc)
     categories = [str(c) for c in params.get("categories") or ()]
     tiers = [str(t) for t in params.get("tiers") or ()]
     exclude = {str(c) for c in params.get("exclude") or ()}

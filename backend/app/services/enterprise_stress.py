@@ -43,7 +43,9 @@ from app.domain.capital.engine import (
     TIER_T2,
     CapitalFact,
     CapitalParams,
+    CapitalRegisterRefused,
     RiskWeightUnavailable,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
     resolve_risk_weight,
@@ -1621,6 +1623,10 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     _require_complete_scenario(scenario.code, paths, payload)
 
     capital_rows = _load_facts(db, ctx, bank, period, _CAPITAL_GROUPS)
+    try:
+        assert_capital_register_usable(capital_rows)
+    except CapitalRegisterRefused as exc:
+        raise EnterpriseStressError(exc.code, str(exc)) from exc
     liquidity_rows = _load_facts(db, ctx, bank, period, _LIQUIDITY_GROUPS)
     forecast_rows = _load_facts(db, ctx, bank, period, _FORECAST_GROUPS)
     if not capital_rows or not forecast_rows:

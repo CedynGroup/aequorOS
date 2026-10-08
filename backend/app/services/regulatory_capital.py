@@ -48,10 +48,12 @@ from app.domain.capital.engine import (
     CapitalLineItem,
     CapitalParams,
     CapitalRatiosResult,
+    CapitalRegisterRefused,
     CapitalStressResult,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
     money,
@@ -292,6 +294,7 @@ def _execute_scenario_compute(
     lower capital. Conservative: no tax shield applied pending a governed
     tax-rate parameter and supported deferred-tax recognition.
     """
+    assert_capital_register_usable(facts)
     if not facts:
         raise CapitalRunError(
             "financial_facts_missing",
@@ -778,7 +781,11 @@ def _create_and_execute(
             db,
             ctx,
             run_id,
-            CapitalRunError("calculation_error", str(exc), None),
+            CapitalRunError(
+                exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error",
+                str(exc),
+                None,
+            ),
         )
     except HTTPException:
         raise
@@ -1415,6 +1422,8 @@ def _build_trend(
             continue
         try:
             _rwa, ratios, _params = _compute_inline_from_batch(db, ctx, bank, period, batch)
+        except CapitalRegisterRefused as exc:
+            raise ModuleDataUnavailable(exc.code, str(exc)) from exc
         except (MissingParameterError, CapitalComputationError, CapitalRunError):
             continue
         points.append(
@@ -1600,7 +1609,9 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
     except CapitalRunError as exc:
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
-        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
+        raise ModuleDataUnavailable(
+            exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error", str(exc)
+        ) from exc
 
 
 def current_input_hash(
@@ -2368,6 +2379,10 @@ def capital_breach_multiplier(
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    try:
+        assert_capital_register_usable(engine_facts)
+    except CapitalRegisterRefused as exc:
+        raise CapitalRunError(exc.code, str(exc)) from exc
     if not shocks:
         raise CapitalRunError(
             "missing_parameter",

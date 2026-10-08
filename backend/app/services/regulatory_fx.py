@@ -42,7 +42,12 @@ from app.domain.authority.outcomes import (
     OutcomeState,
     outcome,
 )
-from app.domain.capital.engine import CapitalFact, tier1_capital
+from app.domain.capital.engine import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    CapitalFact,
+    CapitalRegisterRefused,
+    tier1_capital,
+)
 from app.domain.fx.engine import (
     FxComputationError,
     FxHedge,
@@ -943,7 +948,11 @@ def _build_trend(
             continue
         try:
             analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
-        except (MissingParameterError, FxComputationError, FxRunError, NotComputable):
+        except FxRunError as exc:
+            if exc.code == CAPITAL_REGISTER_REFUSED_CATEGORY:
+                raise ModuleDataUnavailable(exc.code, exc.message) from exc
+            continue
+        except (MissingParameterError, FxComputationError, NotComputable):
             continue
         points.append(
             FxTrendPointRead(
@@ -1459,7 +1468,10 @@ def _tier1_from_facts(facts: Sequence[FinancialFactRow]) -> Decimal:
         for fact in facts
         if fact.fact_group == _CAPITAL_COMPONENT_GROUP
     ]
-    return tier1_capital(capital_facts)
+    try:
+        return tier1_capital(capital_facts)
+    except CapitalRegisterRefused as exc:
+        raise FxRunError(exc.code, str(exc), None) from exc
 
 
 def _load_fx_params_or_none(

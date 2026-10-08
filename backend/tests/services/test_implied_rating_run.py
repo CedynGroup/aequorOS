@@ -1,8 +1,15 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
 from app.api.deps import TenantContext
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -28,7 +35,7 @@ PERIOD_END = date(2026, 3, 31)
 CTX = TenantContext(organization_id=ORG_ID, actor_user_id=USER_ID)
 
 
-def _canonical_metadata(db_session):
+def _canonical_metadata(db_session: Session) -> dict[str, object]:
     batch = IngestionBatch(
         organization_id=ORG_ID,
         bank_id=BANK_ID,
@@ -61,7 +68,7 @@ def _canonical_metadata(db_session):
     }
 
 
-def _fact(period_id, group: str, category: str, amount: str) -> BankFinancialFact:
+def _fact(period_id: UUID, group: str, category: str, amount: str) -> BankFinancialFact:
     return BankFinancialFact(
         organization_id=ORG_ID,
         bank_id=BANK_ID,
@@ -74,7 +81,7 @@ def _fact(period_id, group: str, category: str, amount: str) -> BankFinancialFac
     )
 
 
-def _successful_run(period_id, module: str, metrics: dict[str, str]) -> RegulatoryRun:
+def _successful_run(period_id: UUID, module: str, metrics: dict[str, str]) -> RegulatoryRun:
     return RegulatoryRun(
         organization_id=ORG_ID,
         bank_id=BANK_ID,
@@ -94,7 +101,10 @@ def _successful_run(period_id, module: str, metrics: dict[str, str]) -> Regulato
     )
 
 
-def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_session) -> None:  # noqa: PLR0915 - one deliberate sealed->live->credit-switch journey over a single fixture
+def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(  # noqa: PLR0915 - one sealed->live->credit-switch fixture journey
+    db_session: Session,
+) -> None:
+    """BoG CRD 2018 ¶32: both rating tiers refuse invalid capital despite retained metrics."""
     db_session.add_all(
         [
             Organization(id=ORG_ID, name="Rating integration tenant"),
@@ -285,7 +295,9 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
     )
     db_session.commit()
 
-    live = implied_rating.compute_live(db_session, CTX, db_session.get(Bank, BANK_ID), period)
+    bank = db_session.get(Bank, BANK_ID)
+    assert bank is not None
+    live = implied_rating.compute_live(db_session, CTX, bank, period)
 
     assert live.metrics["pit_rating_grade"] == "ccc+"
     assert live.metrics["pit_pd_upper_pct"]
@@ -329,9 +341,56 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
     assert relive.input_hash is not None
     assert relive.input_hash != hash_before_credit
 
+    run_count = db_session.query(ImpliedRatingRun).count()
+    for model in (BankFinancialFact, CurrentFinancialFact):
+        db_session.execute(
+            delete(model).where(
+                model.organization_id == ORG_ID,
+                model.bank_id == BANK_ID,
+                model.fact_group == "capital_component",
+            )
+        )
+    db_session.execute(delete(LiveMetric).where(LiveMetric.module == "credit"))
+    db_session.add_all(
+        [
+            _fact(period.id, "capital_component", CAPITAL_REGISTER_REFUSED_CATEGORY, "0"),
+            CurrentFinancialFact(
+                organization_id=ORG_ID,
+                bank_id=BANK_ID,
+                source_as_of_date=PERIOD_END,
+                source_generation=2,
+                fact_group="capital_component",
+                category=CAPITAL_REGISTER_REFUSED_CATEGORY,
+                amount=Decimal("0"),
+                currency="GHS",
+                attributes={"refused_rows": ["intangible_assets ('garbage')"]},
+            ),
+        ]
+    )
+    retained_capital = db_session.scalar(select(LiveMetric).where(LiveMetric.module == "capital"))
+    assert retained_capital is not None
+    retained_capital.pipeline_state = "failed"
+    db_session.commit()
+    assert retained_capital.metrics["car_pct"] == "16.4"
+    refused_live = implied_rating.compute_live(db_session, CTX, bank, period)
+    assert refused_live.metrics["availability"] == "unavailable"
+    assert refused_live.input_hash is None
+    assert "capital_register_refused" in refused_live.metrics["reason"]
+    assert "re-ingest" in refused_live.metrics["reason"]
+    assert "re-derive" in refused_live.metrics["reason"]
+    with pytest.raises(HTTPException) as refused:
+        implied_rating.run(db_session, CTX, BANK_ID, period.id)
+    assert refused.value.status_code == 409
+    assert isinstance(refused.value.detail, dict)
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == CAPITAL_REGISTER_REFUSED_CATEGORY
+    assert "re-ingest" in detail["message"]
+    assert "re-derive" in detail["message"]
+    assert db_session.query(ImpliedRatingRun).count() == run_count
+
 
 def test_sdi_live_rating_refuses_the_bank_scorecard_until_its_methodology_is_approved(
-    db_session,
+    db_session: Session,
 ) -> None:
     db_session.add_all(
         [

@@ -292,16 +292,18 @@ class PositionData(BaseModel):
 
 
 #: Reference dataset kinds whose registered schema is ENFORCED on ingestion.
-#: Deliberately not every kind: nine of the eleven registered schemas describe
-#: their shape but have never been enforced, and tenants have rows stored under
-#: them today, so switching those on would refuse data that currently lands
-#: (H-027). These two are new in this release and have no stored rows anywhere,
-#: so enforcing them rejects nothing that already exists. ``gl_segment_balances``
-#: (P5-B) joins them on the same argument: it is new in this release, no tenant has
-#: a row under it, and an unenforced row there would become a silent orphan in the
-#: branch mart rather than a reported translation failure at the boundary.
+#: Deliberately not every kind: other schemas describe their shape without
+#: enforcement, and tenants have rows stored under them, so switching those on
+#: would refuse data that currently lands (H-027). ``performance_targets`` and
+#: ``business_units`` were enforced from their introduction, as was
+#: ``gl_segment_balances`` (P5-B): an unenforced row there would become a silent
+#: orphan in the branch mart rather than a reported translation failure at the
+#: boundary.
+#: ``capital_structure`` joins them on a different argument: an unrecognised tier
+#: used to be counted as CET1, so a refused row is the correction, not a
+#: regression — a stored row with such a tier fails the capital derivation too.
 ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset(
-    {"performance_targets", "business_units", "gl_segment_balances"}
+    {"performance_targets", "business_units", "gl_segment_balances", "capital_structure"}
 )
 
 
