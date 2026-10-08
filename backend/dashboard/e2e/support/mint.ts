@@ -58,6 +58,11 @@ export const E2E_USERS: Record<
     roles: ["analyst"],
     authv: 3,
   },
+  sod_owner: {
+    ...identities.journey.sod_owner,
+    roles: ["admin"],
+    authv: 4,
+  },
   viewer: {
     id: identities.bootstrap.viewer,
     roles: ["viewer"],

@@ -19,6 +19,7 @@ import type {
   AccessRequestRead,
   GrantReasonCategory,
   MemberRead,
+  MemberListRead,
   SodDecisionRead,
 } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -66,6 +67,11 @@ import {
   type SodFinding,
 } from "@/lib/api/sodDecision";
 import BookCoverageControl from "./BookCoverageControl";
+import {
+  grantDraftStorageKey,
+  readGrantDraft,
+  storeGrantDraft,
+} from "@/lib/api/grantDraftStorage";
 import {
   GrantReasonFields,
   reasonDraftComplete,
@@ -119,6 +125,29 @@ function grantorLabel(grant: BindingRead): string {
   return `${grant.grantedByName} · Organization member`;
 }
 
+async function resolveConflictMember(
+  member: MemberRead,
+  findings: readonly SodFinding[],
+): Promise<MemberRead> {
+  const ids = new Set(member.grants.map((grant) => grant.id));
+  if (
+    !findings.some((finding) =>
+      finding.conflictingBindingIds?.some((id) => !ids.has(id)),
+    )
+  )
+    return member;
+  try {
+    const refreshed = await authorizationApi.listOrganizationMembers();
+    return (
+      refreshed.members.find(
+        (candidate) => candidate.userId === member.userId,
+      ) ?? member
+    );
+  } catch {
+    return member;
+  }
+}
+
 export default function MembersPanel() {
   const queryClient = useQueryClient();
   const membersQuery = useQuery({
@@ -148,6 +177,35 @@ export default function MembersPanel() {
   const [rejecting, setRejecting] = useState<AccessRequestRead | null>(null);
 
   const members = membersQuery.data?.members ?? [];
+  useEffect(() => {
+    if (granting || !profile || !membersQuery.data || !institutionsQuery.data)
+      return;
+    for (const member of membersQuery.data.members) {
+      const stored = readGrantDraft(
+        grantDraftStorageKey(
+          profile.organizationId,
+          profile.userId,
+          member.userId,
+        ),
+      );
+      if (!stored || !canAddGrantToMember(member)) continue;
+      const request = stored.accessRequestId
+        ? accessRequestsQuery.data?.requests.find(
+            (candidate) => candidate.id === stored.accessRequestId,
+          )
+        : undefined;
+      if (stored.accessRequestId && !request) continue;
+      setRequestedGrant(request ?? null);
+      setGranting(member);
+      break;
+    }
+  }, [
+    granting,
+    profile,
+    membersQuery.data,
+    institutionsQuery.data,
+    accessRequestsQuery.data,
+  ]);
   const currentSelected = selected
     ? (members.find((member) => member.userId === selected.userId) ?? selected)
     : null;
@@ -267,7 +325,17 @@ export default function MembersPanel() {
       )}
       {currentGranting && (
         <GrantComposer
+          key={`${profile?.organizationId}:${profile?.userId}:${currentGranting.userId}:${requestedGrant?.id ?? ""}`}
           member={currentGranting}
+          storageKey={
+            profile
+              ? grantDraftStorageKey(
+                  profile.organizationId,
+                  profile.userId,
+                  currentGranting.userId,
+                )
+              : undefined
+          }
           accessRequest={requestedGrant ?? undefined}
           banks={institutionsQuery.data?.institutions ?? []}
           selfUserId={profile?.userId}
@@ -275,10 +343,22 @@ export default function MembersPanel() {
           // The members list and the revoke route share one server gate, so a
           // loaded list proves this viewer may revoke what the notice names.
           canAdministerGrants={membersQuery.isSuccess}
-          onViewGrant={(grant) => {
+          onViewGrant={(grant, conflictMember) => {
+            queryClient.setQueryData<MemberListRead>(MEMBERS_KEY, (current) =>
+              current
+                ? {
+                    ...current,
+                    members: current.members.map((candidate) =>
+                      candidate.userId === conflictMember.userId
+                        ? conflictMember
+                        : candidate,
+                    ),
+                  }
+                : current,
+            );
             setDraftParked(true);
             setFocusGrantId(grant.id);
-            setSelected(currentGranting);
+            setSelected(conflictMember);
           }}
           onClose={() => {
             setGranting(null);
@@ -696,6 +776,7 @@ function initialDraft(
 
 function GrantComposer({
   member,
+  storageKey,
   accessRequest: initialAccessRequest,
   banks,
   selfUserId,
@@ -706,6 +787,7 @@ function GrantComposer({
   onSaved,
 }: {
   member: MemberRead;
+  storageKey?: string;
   accessRequest?: AccessRequestRead;
   banks: readonly { id: string; name: string }[];
   /** The acting user's id: a grant to oneself ends the very session composing it. */
@@ -713,7 +795,7 @@ function GrantComposer({
   /** Whether this viewer may open and revoke the grants a notice names. */
   canAdministerGrants: boolean;
   /** Open a conflicting grant; the composer is kept, hidden, meanwhile. */
-  onViewGrant: (grant: BindingRead) => void;
+  onViewGrant: (grant: BindingRead, conflictMember: MemberRead) => void;
   hidden?: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -721,19 +803,34 @@ function GrantComposer({
   const [accessRequest, setAccessRequest] = useState(initialAccessRequest);
   const isSelfGrant = Boolean(selfUserId) && member.userId === selfUserId;
   const [step, setStep] = useState<"define" | "review" | "done">("define");
-  const [draft, setDraft] = useState<GrantDraft>(() =>
-    initialDraft(banks, accessRequest),
-  );
+  const [draft, setDraft] = useState<GrantDraft>(() => {
+    const stored = readGrantDraft(storageKey);
+    return stored && stored.accessRequestId === accessRequest?.id
+      ? stored.draft
+      : initialDraft(banks, accessRequest);
+  });
   const [saved, setSaved] = useState<BindingCreateResponse | null>(null);
   const [previewResult, setPreviewResult] = useState<{
     key: string;
     sentence: string;
     sodDecision: NoticeDecision;
+    conflictMember: MemberRead;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const previewKeyRef = useRef("");
   const name = memberName(member);
   const isPendingApproval = member.accessRequestState === "approval_needed";
+  useEffect(() => {
+    if (step !== "done")
+      storeGrantDraft(storageKey, {
+        draft,
+        accessRequestId: accessRequest?.id,
+      });
+  }, [storageKey, draft, accessRequest, step]);
+  const closeComposer = () => {
+    storeGrantDraft(storageKey, null);
+    onClose();
+  };
 
   // One institution's branch register. Scoped per organization, actor,
   // authorization generation and institution — `institutionBranchesKey`.
@@ -795,12 +892,17 @@ function GrantComposer({
     const requestedKey = previewKey;
     const timeout = window.setTimeout(() => {
       previewAuthority(undefined, {
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
+          const conflictMember = await resolveConflictMember(
+            member,
+            result.sodDecision.findings,
+          );
           if (previewKeyRef.current === requestedKey) {
             setPreviewResult({
               key: requestedKey,
               sentence: result.authoritySentence,
               sodDecision: result.sodDecision,
+              conflictMember,
             });
           }
         },
@@ -812,7 +914,7 @@ function GrantComposer({
       });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [previewAuthority, previewKey, scopeRefusal, step]);
+  }, [member, previewAuthority, previewKey, scopeRefusal, step]);
 
   const submit = useMutation({
     onMutate: () => previewResult,
@@ -841,15 +943,17 @@ function GrantComposer({
       });
     },
     onSuccess: (result) => {
+      storeGrantDraft(storageKey, null);
       setSaved(result);
       setStep("done");
       onSaved();
     },
     onError: async (failure, _variables, submittedPreview) => {
       const normalized = await normalizeApiError(failure);
+      const findings = sodFindings(normalized.details);
+      const conflictMember = await resolveConflictMember(member, findings);
       if (!submittedPreview || submittedPreview.key !== previewKeyRef.current)
         return;
-      const findings = sodFindings(normalized.details);
       setError(findings.length > 0 ? null : normalized.message);
       if (findings.length > 0) {
         setPreviewResult((current) =>
@@ -857,6 +961,7 @@ function GrantComposer({
             ? {
                 ...submittedPreview,
                 sodDecision: { outcome: "block", findings },
+                conflictMember,
               }
             : current,
         );
@@ -874,7 +979,7 @@ function GrantComposer({
   // decision, and only Define re-asks the server.
   const viewGrant = (grant: BindingRead) => {
     setStep("define");
-    onViewGrant(grant);
+    onViewGrant(grant, previewResult?.conflictMember ?? member);
   };
 
   const updateRole = (roleBundle: GrantDraft["roleBundle"]) => {
@@ -913,7 +1018,7 @@ function GrantComposer({
           ? `Complete access for ${name}`
           : `Add grant for ${name}`
       }
-      onClose={onClose}
+      onClose={closeComposer}
       wide
       hidden={hidden}
     >
@@ -976,7 +1081,7 @@ function GrantComposer({
             decision={previewDecision}
             scopeNote={scopeNote}
             memberName={name}
-            grants={member.grants}
+            grants={previewResult?.conflictMember.grants ?? member.grants}
             canAdministerGrants={canAdministerGrants}
             onViewGrant={viewGrant}
           />
@@ -1070,7 +1175,7 @@ function GrantComposer({
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeComposer}
               className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
             >
               Cancel
@@ -1104,7 +1209,7 @@ function GrantComposer({
             decision={previewDecision}
             scopeNote={scopeNote}
             memberName={name}
-            grants={member.grants}
+            grants={previewResult?.conflictMember.grants ?? member.grants}
             canAdministerGrants={canAdministerGrants}
             onViewGrant={viewGrant}
           />
@@ -1217,7 +1322,7 @@ function GrantComposer({
               <>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={closeComposer}
                   className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
                 >
                   Done

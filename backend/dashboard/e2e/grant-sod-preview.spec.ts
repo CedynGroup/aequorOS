@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
-import { E2E_USERS, mintBackendToken } from "./support/mint";
+import { E2E_PASSWORD, E2E_USERS, mintBackendToken } from "./support/mint";
 
 const API = `${E2E_API_ORIGIN}/api/v1`;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
@@ -182,157 +182,209 @@ test("reverse account administration conflict shows the server finding at Define
     });
 });
 
-test("a conflicting grant added after Review is refused with the server's finding", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 1100 });
-  const headers = {
-    Authorization: `Bearer ${await mintBackendToken("admin")}`,
-  };
-  await page.goto("/access/members");
-  await page
-    .locator("li")
-    .filter({ hasText: "E2E Fx Member" })
-    .first()
-    .getByRole("button", { name: "Add grant" })
-    .click();
-  const composer = page.getByRole("dialog", {
-    name: "Add grant for E2E Fx Member",
-  });
-  await composer.getByLabel("Role bundle").selectOption("validator");
-  await composer.getByLabel("Module").selectOption("reg");
-  await composer.getByLabel("Sensitivity").selectOption("restricted");
-  await composer.getByLabel("Reason category").selectOption("other");
-  await composer
-    .getByLabel("Detail")
-    .fill("Filing responsibilities pending independent checker allocation");
-  await composer.getByRole("button", { name: "Review grant" }).click();
-  await expect(composer.getByRole("alert")).toHaveCount(0);
-  const competingPayload = {
-    principal_user_id: E2E_USERS.fx_member.id,
-    role_bundle: "approver",
-    institution_scope: "institution",
-    institution_id: "BK-SAMP0001",
-    module_scope: "reg",
-    sensitivity_scope: "restricted",
-    reason_category: "other",
-    reason_detail: "Concurrent checker allocation in isolated race journey",
-  };
-  const preview = await page.request.post(
-    `${API}/authorization/bindings/preview`,
-    { headers, data: competingPayload },
-  );
-  expect(preview.ok()).toBeTruthy();
-  const competing = await page.request.post(`${API}/authorization/bindings`, {
-    headers,
-    data: {
-      ...competingPayload,
-      expected_authority_sentence: (await preview.json()).authority_sentence,
-    },
-  });
-  expect(competing.status()).toBe(201);
-  const competingBody = await competing.json();
-  let viewerBindingId: string | undefined;
-  try {
-    const refused = page.waitForResponse(
-      (response) =>
-        response.url() === `${API}/authorization/bindings` &&
-        response.request().method() === "POST",
-    );
-    await composer.getByRole("button", { name: "Grant access" }).click();
-    const response = await refused;
-    expect(response.status()).toBe(409);
-    // The refused create's own findings replace the preview's, in the same
-    // single notice; no second, generic refusal is shown beside it.
-    await expect(composer.getByRole("alert")).toHaveCount(1);
-    await expect(composer.getByRole("alert")).toContainText(
-      "This grant can't be given",
-    );
-    await expect(composer.getByRole("alert")).toContainText(filingMessage);
-    await expect(
-      composer.getByRole("button", { name: "Grant access" }),
-    ).toBeDisabled();
-    await expect(
-      composer.getByText("Grant created", { exact: true }),
-    ).toHaveCount(0);
-    const listed = await page.request.get(
-      `${API}/authorization/bindings?principal_user_id=${E2E_USERS.fx_member.id}`,
-      { headers },
-    );
-    expect(listed.ok()).toBeTruthy();
-    expect(
-      (await listed.json()).bindings.some(
-        (binding: { role_bundle: string }) =>
-          binding.role_bundle === "validator",
-      ),
-    ).toBeFalsy();
-    if (evidenceDir) {
-      await page.screenshot({
-        path: path.join(evidenceDir, "grant-create-race-refusal.png"),
-      });
-      await writeFile(
-        path.join(evidenceDir, "grant-create-race-response.json"),
-        JSON.stringify(
-          {
-            status: response.status(),
-            body: await response.json(),
-            validatorBindingCreated: false,
-          },
-          null,
-          2,
-        ),
-      );
-    }
-    await composer.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(
-      composer.getByRole("button", { name: "Cannot be granted" }),
-    ).toBeDisabled();
-    await composer.getByLabel("Role bundle").selectOption("viewer");
-    await composer.getByRole("button", { name: "Review grant" }).click();
-    await expect(composer.getByRole("alert")).toHaveCount(0);
-    await expect(composer).not.toContainText(filingMessage);
-    const allowed = page.waitForResponse(
-      (response) =>
-        response.url() === `${API}/authorization/bindings` &&
-        response.request().method() === "POST",
-    );
-    await composer.getByRole("button", { name: "Grant access" }).click();
-    const allowedResponse = await allowed;
-    expect(allowedResponse.status()).toBe(201);
-    viewerBindingId = (await allowedResponse.json()).binding.id;
-    await expect(
-      composer.getByText("Grant created", { exact: true }),
-    ).toBeVisible();
-    await composer.getByRole("button", { name: "Add another grant" }).click();
-    await composer.getByLabel("Role bundle").selectOption("viewer");
+for (const missingAfterRefresh of [false, true]) {
+  test(`a concurrent conflict ${missingAfterRefresh ? "keeps the administrator fallback when missing" : "links to the refreshed grant"}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 1100 });
+    const headers = {
+      Authorization: `Bearer ${await mintBackendToken("admin")}`,
+    };
+    await page.goto("/access/members");
+    await page
+      .locator("li")
+      .filter({ hasText: "E2E Fx Member" })
+      .first()
+      .getByRole("button", { name: "Add grant" })
+      .click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Fx Member",
+    });
+    await composer.getByLabel("Role bundle").selectOption("validator");
+    await composer.getByLabel("Module").selectOption("reg");
+    await composer.getByLabel("Sensitivity").selectOption("restricted");
     await composer.getByLabel("Reason category").selectOption("other");
     await composer
       .getByLabel("Detail")
-      .fill("New independent draft after refusal");
+      .fill("Filing responsibilities pending independent checker allocation");
     await composer.getByRole("button", { name: "Review grant" }).click();
     await expect(composer.getByRole("alert")).toHaveCount(0);
-    await expect(composer).not.toContainText(filingMessage);
-  } finally {
-    if (viewerBindingId) {
-      const revokedViewer = await page.request.post(
-        `${API}/authorization/bindings/${viewerBindingId}/revoke`,
+    const competingPayload = {
+      principal_user_id: E2E_USERS.fx_member.id,
+      role_bundle: "approver",
+      institution_scope: "institution",
+      institution_id: "BK-SAMP0001",
+      module_scope: "reg",
+      sensitivity_scope: "restricted",
+      reason_category: "other",
+      reason_detail: "Concurrent checker allocation in isolated race journey",
+    };
+    const preview = await page.request.post(
+      `${API}/authorization/bindings/preview`,
+      { headers, data: competingPayload },
+    );
+    expect(preview.ok()).toBeTruthy();
+    const competing = await page.request.post(`${API}/authorization/bindings`, {
+      headers,
+      data: {
+        ...competingPayload,
+        expected_authority_sentence: (await preview.json()).authority_sentence,
+      },
+    });
+    expect(competing.status()).toBe(201);
+    const competingBody = await competing.json();
+    let memberRefreshes = 0;
+    await page.route(`${API}/organization/members`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      memberRefreshes += 1;
+      if (missingAfterRefresh) {
+        for (const member of body.members) {
+          member.grants = member.grants.filter(
+            (grant: { id: string }) => grant.id !== competingBody.binding.id,
+          );
+        }
+      }
+      await route.fulfill({ response, json: body });
+    });
+    let viewerBindingId: string | undefined;
+    try {
+      const refused = page.waitForResponse(
+        (response) =>
+          response.url() === `${API}/authorization/bindings` &&
+          response.request().method() === "POST",
+      );
+      await composer.getByRole("button", { name: "Grant access" }).click();
+      const response = await refused;
+      expect(response.status()).toBe(409);
+      // The refused create's own findings replace the preview's, in the same
+      // single notice; no second, generic refusal is shown beside it.
+      await expect(composer.getByRole("alert")).toHaveCount(1);
+      await expect(composer.getByRole("alert")).toContainText(
+        "This grant can't be given",
+      );
+      await expect(composer.getByRole("alert")).toContainText(filingMessage);
+      expect(memberRefreshes).toBeGreaterThan(0);
+      const conflictLink = composer.getByRole("button", {
+        name: "View E2E Fx Member's Approver grant",
+      });
+      if (missingAfterRefresh) {
+        await expect(conflictLink).toHaveCount(0);
+        await expect(composer.getByRole("alert")).toContainText(
+          "Ask an account administrator.",
+        );
+      } else {
+        await expect(conflictLink).toBeVisible();
+        await expect(composer.getByRole("alert")).not.toContainText(
+          "Ask an account administrator.",
+        );
+      }
+      await expect(
+        composer.getByRole("button", { name: "Grant access" }),
+      ).toBeDisabled();
+      await expect(
+        composer.getByText("Grant created", { exact: true }),
+      ).toHaveCount(0);
+      const listed = await page.request.get(
+        `${API}/authorization/bindings?principal_user_id=${E2E_USERS.fx_member.id}`,
+        { headers },
+      );
+      expect(listed.ok()).toBeTruthy();
+      expect(
+        (await listed.json()).bindings.some(
+          (binding: { role_bundle: string }) =>
+            binding.role_bundle === "validator",
+        ),
+      ).toBeFalsy();
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "grant-create-race-refusal.png"),
+        });
+        await writeFile(
+          path.join(evidenceDir, "grant-create-race-response.json"),
+          JSON.stringify(
+            {
+              status: response.status(),
+              body: await response.json(),
+              validatorBindingCreated: false,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+      if (missingAfterRefresh) {
+        await composer
+          .getByRole("button", { name: "Back", exact: true })
+          .click();
+      } else {
+        await conflictLink.click();
+        const detail = page.getByRole("dialog", { name: "E2E Fx Member" });
+        await expect(detail.getByTestId("focused-grant")).toContainText(
+          "Approver in Regulatory Reporting for Sample Bank Ltd",
+        );
+        await expect(detail.getByTestId("focused-grant")).toContainText(
+          "Granted by",
+        );
+        await expect(
+          detail
+            .getByTestId("focused-grant")
+            .getByRole("button", { name: "Revoke this access" }),
+        ).toBeVisible();
+        await detail
+          .getByRole("button", { name: "Back to your draft grant" })
+          .click();
+      }
+      await expect(
+        composer.getByRole("button", { name: "Cannot be granted" }),
+      ).toBeDisabled();
+      await composer.getByLabel("Role bundle").selectOption("viewer");
+      await composer.getByRole("button", { name: "Review grant" }).click();
+      await expect(composer.getByRole("alert")).toHaveCount(0);
+      await expect(composer).not.toContainText(filingMessage);
+      const allowed = page.waitForResponse(
+        (response) =>
+          response.url() === `${API}/authorization/bindings` &&
+          response.request().method() === "POST",
+      );
+      await composer.getByRole("button", { name: "Grant access" }).click();
+      const allowedResponse = await allowed;
+      expect(allowedResponse.status()).toBe(201);
+      viewerBindingId = (await allowedResponse.json()).binding.id;
+      await expect(
+        composer.getByText("Grant created", { exact: true }),
+      ).toBeVisible();
+      await composer.getByRole("button", { name: "Add another grant" }).click();
+      await composer.getByLabel("Role bundle").selectOption("viewer");
+      await composer.getByLabel("Reason category").selectOption("other");
+      await composer
+        .getByLabel("Detail")
+        .fill("New independent draft after refusal");
+      await composer.getByRole("button", { name: "Review grant" }).click();
+      await expect(composer.getByRole("alert")).toHaveCount(0);
+      await expect(composer).not.toContainText(filingMessage);
+    } finally {
+      if (viewerBindingId) {
+        const revokedViewer = await page.request.post(
+          `${API}/authorization/bindings/${viewerBindingId}/revoke`,
+          {
+            headers,
+            data: { reason: "Clean up replacement draft journey" },
+          },
+        );
+        expect(revokedViewer.ok()).toBeTruthy();
+      }
+      const revoked = await page.request.post(
+        `${API}/authorization/bindings/${competingBody.binding.id}/revoke`,
         {
           headers,
-          data: { reason: "Clean up replacement draft journey" },
+          data: { reason: "Clean up isolated race journey" },
         },
       );
-      expect(revokedViewer.ok()).toBeTruthy();
+      expect(revoked.ok()).toBeTruthy();
     }
-    const revoked = await page.request.post(
-      `${API}/authorization/bindings/${competingBody.binding.id}/revoke`,
-      {
-        headers,
-        data: { reason: "Clean up isolated race journey" },
-      },
-    );
-    expect(revoked.ok()).toBeTruthy();
-  }
-});
+  });
+}
 
 test("the notice links to the conflicting grant and the draft survives revoking it", async ({
   page,
@@ -464,6 +516,158 @@ test("the notice links to the conflicting grant and the draft survives revoking 
         { headers, data: { reason: "Clean up isolated link journey" } },
       );
       expect(cleanup.ok()).toBeTruthy();
+    }
+  }
+});
+
+test("a self-revocation draft survives reauthentication and clears on submit or cancel", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("sod_owner")}`,
+  };
+  const payload = {
+    principal_user_id: E2E_USERS.sod_owner.id,
+    role_bundle: "account_admin",
+    institution_scope: "organization",
+    module_scope: "account",
+    sensitivity_scope: "all",
+    reason_category: "other",
+    reason_detail: "Isolated self-revocation draft journey",
+  };
+  const preview = await page.request.post(
+    `${API}/authorization/bindings/preview`,
+    { headers, data: payload },
+  );
+  expect(preview.ok()).toBeTruthy();
+  const created = await page.request.post(`${API}/authorization/bindings`, {
+    headers,
+    data: {
+      ...payload,
+      expected_authority_sentence: (await preview.json()).authority_sentence,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const adminId = (await created.json()).binding.id as string;
+  let revoked = false;
+  let analystId: string | undefined;
+  const signIn = async () => {
+    await page.goto("/login?reason=access_changed");
+    await page
+      .getByLabel("Email", { exact: true })
+      .fill("e2e.sod_owner@aequoros.example");
+    await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).not.toHaveURL(/\/login/);
+    await page.goto("/access/members");
+  };
+  try {
+    await context.clearCookies();
+    await signIn();
+    await page
+      .locator("li")
+      .filter({ hasText: "E2E Sod Owner" })
+      .first()
+      .getByRole("button", { name: "Add grant" })
+      .click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Sod Owner",
+    });
+    await composer.getByLabel("Role bundle").selectOption("analyst");
+    await composer.getByLabel("Module").selectOption("reg");
+    await composer.getByLabel("Sensitivity").selectOption("restricted");
+    await composer.getByLabel("Reason category").selectOption("other");
+    await composer
+      .getByLabel("Detail")
+      .fill("Keep this draft while removing delegated administration");
+    await composer.getByLabel("Reference").fill("SOD-SELF-1");
+    await composer
+      .getByRole("button", {
+        name: "View E2E Sod Owner's Organization Administrator grant",
+      })
+      .click();
+    await page
+      .getByRole("dialog", { name: "E2E Sod Owner", exact: true })
+      .getByTestId("focused-grant")
+      .getByRole("button", { name: "Revoke this access" })
+      .click();
+    const revokeDialog = page.getByRole("dialog", { name: "Revoke access" });
+    await revokeDialog
+      .getByLabel("Reason")
+      .fill(
+        "Remove my delegated administration before taking operational work",
+      );
+    const revokeResponse = page.waitForResponse(
+      (response) =>
+        response.url() === `${API}/authorization/bindings/${adminId}/revoke` &&
+        response.request().method() === "POST",
+    );
+    const staleMembers = page.waitForResponse(
+      (response) =>
+        response.url() === `${API}/organization/members` &&
+        response.status() === 401,
+    );
+    await revokeDialog
+      .getByRole("button", { name: "Revoke access", exact: true })
+      .click();
+    expect((await revokeResponse).status()).toBe(200);
+    revoked = true;
+    await staleMembers;
+    await expect(composer).toHaveCount(0);
+    await signIn();
+    await expect(composer).toBeVisible();
+    await expect(composer.getByLabel("Role bundle")).toHaveValue("analyst");
+    await expect(composer.getByLabel("Module")).toHaveValue("reg");
+    await expect(composer.getByLabel("Sensitivity")).toHaveValue("restricted");
+    await expect(composer.getByLabel("Detail")).toHaveValue(
+      "Keep this draft while removing delegated administration",
+    );
+    await expect(composer.getByLabel("Reference")).toHaveValue("SOD-SELF-1");
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    await composer.getByRole("button", { name: "Review grant" }).click();
+    const submitted = page.waitForResponse(
+      (response) =>
+        response.url() === `${API}/authorization/bindings` &&
+        response.request().method() === "POST",
+    );
+    await composer.getByRole("button", { name: "Grant access" }).click();
+    const submittedResponse = await submitted;
+    expect(submittedResponse.status()).toBe(201);
+    analystId = (await submittedResponse.json()).binding.id;
+    await signIn();
+    await expect(composer).toHaveCount(0);
+    await page
+      .locator("li")
+      .filter({ hasText: "E2E Sod Owner" })
+      .first()
+      .getByRole("button", { name: "Add grant" })
+      .click();
+    await composer
+      .getByLabel("Detail")
+      .fill("A cancelled draft should not return");
+    await composer.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Add grant", exact: true }),
+    ).toBeVisible();
+    await expect(composer).toHaveCount(0);
+  } finally {
+    const currentHeaders = {
+      Authorization: `Bearer ${await mintBackendToken("sod_owner", revoked ? (analystId ? 7 : 6) : 5)}`,
+    };
+    for (const id of [analystId, revoked ? undefined : adminId]) {
+      if (id) {
+        const cleanup = await page.request.post(
+          `${API}/authorization/bindings/${id}/revoke`,
+          {
+            headers: currentHeaders,
+            data: { reason: "Clean up isolated self-revocation journey" },
+          },
+        );
+        expect(cleanup.ok()).toBeTruthy();
+      }
     }
   }
 });

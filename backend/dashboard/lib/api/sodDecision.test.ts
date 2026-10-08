@@ -102,12 +102,24 @@ const finding = (ids: string[]) => ({
 
 test("a grant administrator gets the conflicting grant to review, once", () => {
   const actions = conflictGrantActions(
-    [finding(["g-approver"]), finding(["g-approver", "missing"])],
+    [finding(["g-approver"]), finding(["g-approver"])],
     [approverGrant, ownerGrant],
     true,
   );
   assert.deepEqual(actions.reviewable, [approverGrant]);
   assert.equal(actions.askAdministrator, false);
+});
+
+test("a missing conflict retains the administrator fallback for every viewer", () => {
+  for (const canAdminister of [true, false]) {
+    const actions = conflictGrantActions(
+      [finding(["g-approver", "missing"])],
+      [approverGrant],
+      canAdminister,
+    );
+    assert.deepEqual(actions.reviewable, canAdminister ? [approverGrant] : []);
+    assert.equal(actions.askAdministrator, true);
+  }
 });
 
 test("anyone else is told to ask an account administrator, with no link", () => {

@@ -97,15 +97,20 @@ export function conflictGrantActions<G extends ConflictGrant>(
   const byId = new Map(grants.map((grant) => [grant.id, grant]));
   const seen = new Set<string>();
   const conflicting: G[] = [];
+  let missing = false;
   for (const finding of findings) {
     for (const id of finding.conflictingBindingIds ?? []) {
       const grant = byId.get(id);
-      if (!grant || seen.has(id) || !canRevokeFromMembers(grant)) continue;
+      if (!grant) {
+        missing = true;
+        continue;
+      }
+      if (seen.has(id) || !canRevokeFromMembers(grant)) continue;
       seen.add(id);
       conflicting.push(grant);
     }
   }
   return canAdministerGrants
-    ? { reviewable: conflicting, askAdministrator: false }
-    : { reviewable: [], askAdministrator: conflicting.length > 0 };
+    ? { reviewable: conflicting, askAdministrator: missing }
+    : { reviewable: [], askAdministrator: missing || conflicting.length > 0 };
 }

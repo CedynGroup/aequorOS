@@ -24,6 +24,10 @@
     "sso_analyst": "eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1"
   },
   "journey": {
+    "sod_owner": {
+      "id": "eeeeeeee-1014-4eee-8eee-eeeeeeee1014",
+      "organizationId": "OR-SOD00001"
+    },
     "fresh_forecast_analyst": {
       "id": "eeeeeeee-2900-4eee-8eee-eeeeeeee2900",
       "organizationId": "OR-FRSH0001"
