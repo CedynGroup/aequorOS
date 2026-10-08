@@ -1201,7 +1201,7 @@ function GrantSelect({
  * The server's assignment-time separation-of-duties decision for the draft,
  * from the preview. `allow` shows nothing; `warn` explains what the person will
  * hold; `block` is the refusal the create call would return, shown before
- * anyone reaches it, with the remedy when the rule has one.
+ * anyone reaches it.
  */
 function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
   if (!decision || decision.outcome === "allow") return null;
@@ -1215,7 +1215,6 @@ function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
       </p>
     );
   }
-  const remedy = sodRemedy(decision.findings);
   return (
     <div
       role="alert"
@@ -1229,7 +1228,6 @@ function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
           <li key={finding.code || finding.message}>{finding.message}</li>
         ))}
       </ul>
-      {remedy && <p className="mt-2">{remedy}</p>}
     </div>
   );
 }
