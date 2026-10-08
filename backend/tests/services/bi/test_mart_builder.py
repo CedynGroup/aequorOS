@@ -339,10 +339,10 @@ def test_builder_projects_every_included_current_generation_snapshot(db_session:
     assert usd_loan.balance_rc == Decimal("12850000")
     assert usd_loan.classification_exposure_rc == Decimal("12850000")
     assert usd_loan.fx_unconverted is False
-    # an unconverted foreign-currency NON-loan: NULL balance, counted, no classification column
+    # A foreign-currency NON-loan with a stated zero balance is converted.
     guarantee = rows["LC/1"]
-    assert guarantee.balance_rc is None
-    assert guarantee.fx_unconverted is True
+    assert guarantee.balance_rc == Decimal("0")
+    assert guarantee.fx_unconverted is False
     assert guarantee.classification_exposure_rc is None
     assert guarantee.notional_rc == Decimal("2000000")
     deposit = rows["DEP/1"]
@@ -368,6 +368,15 @@ def test_unconverted_loan_carries_both_fx_rules_and_withdrawn_rows_never_appear(
     add_position(
         db_session,
         common,
+        "LC/XFC",
+        "LC_GUARANTEE",
+        "USD",
+        balance="100000",
+        extra={"notional_ghs": "2000000"},
+    )
+    add_position(
+        db_session,
+        common,
         "LOAN/GONE",
         "LOAN",
         "GHS",
@@ -381,8 +390,13 @@ def test_unconverted_loan_carries_both_fx_rules_and_withdrawn_rows_never_appear(
 
     outcome = build(db_session)
     rows = daily_rows(db_session)
-    assert outcome.row_counts["bi_fact_position_daily"] == FIXTURE_ROWS + 1
+    assert outcome.row_counts["bi_fact_position_daily"] == FIXTURE_ROWS + 2
     assert "LOAN/GONE" not in rows
+    guarantee = rows["LC/XFC"]
+    assert guarantee.balance_rc is None
+    assert guarantee.fx_unconverted is True
+    assert guarantee.classification_exposure_rc is None
+    assert guarantee.notional_rc == Decimal("2000000")
     unconverted = rows["LOAN/XFC"]
     assert unconverted.balance_rc is None  # derivation rule: excluded, counted
     assert unconverted.fx_unconverted is True
@@ -425,7 +439,7 @@ def test_daily_aggregates_are_additive_sums_over_the_inserted_rows(db_session: S
     )
     assert _cell_total(cells, "non_performing_exposure_rc_sum") == Decimal("3000000")
     assert _cell_total(cells, "classification_exposure_rc_sum") == FIXTURE_LOANS_RC
-    assert sum(cell.fx_unconverted_count for cell in cells) == 1
+    assert sum(cell.fx_unconverted_count for cell in cells) == 0
     assert _cell_total(cells, "provision_held_rc_sum") == Decimal("1560000")
     expected_rate_x = sum(
         (
