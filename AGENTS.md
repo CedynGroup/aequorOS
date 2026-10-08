@@ -69,7 +69,7 @@ Each rule is stated in full in the document the index names.
   `backend/tests/architecture/test_feature_boundaries.py` ratchets the import graph; its
   baseline only shrinks.
 - **New backend code is basedpyright strict** (`reportAny` and `reportUnknown*` included).
-  Legacy errors are counted in `backend/scripts/typing_baseline.json`, which only shrinks;
+  Legacy errors are counted in `backend/scripts/type_check_baseline.json`, which only shrinks;
   `mise run risk-service:typecheck` is the gate, not plain `basedpyright`.
 - **`app/domain/*` stays pure.** A future corporate entity is a sibling of `banks`
   (`CO-` platform id), never a nullable-heavy `banks` row.
@@ -141,7 +141,7 @@ new topic, add a row here.
 | No seeded bank data                                            | [docs/data_engine.md](docs/data_engine.md#standing-order-no-seeded-bank-data)                                                            |
 | Jurisdiction is data                                           | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
 | Feature layout and the boundary ratchet                        | [CODEBASE_CONVENTIONS.md §5](CODEBASE_CONVENTIONS.md#5-feature-layout)                                                                   |
-| Strict typing and the typing ratchet                           | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#typing-ratchet)                                                                     |
+| Strict typing and the type-check baseline                      | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#type-check-baseline)                                                                |
 | Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |

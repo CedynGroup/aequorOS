@@ -1081,7 +1081,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 | Target                   | Commands                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/typing_ratchet.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                            |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                       |
 | risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
@@ -1225,6 +1225,6 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
 
 ### Known pre-existing typing debt
 
-Legacy type-error counts are recorded in `backend/scripts/typing_baseline.json`; the
-[typing ratchet](CODEBASE_CONVENTIONS.md#typing-ratchet) owns their maintenance rules.
+Legacy type-error counts are recorded in `backend/scripts/type_check_baseline.json`; the
+[type-check baseline](CODEBASE_CONVENTIONS.md#type-check-baseline) owns their maintenance rules.
 Current lint and typecheck results come from the [validation commands](#8-validation-commands).

@@ -46,10 +46,10 @@ This file is the starting point for agents working in `backend`.
   evidence through the shared tenant-scoped finding tables, and bind every evidence locator to the
   calculation run and immutable input hash.
 - New code passes basedpyright strict, `reportAny` and `reportUnknown*` included; legacy errors
-  live in `scripts/typing_baseline.json`, which only shrinks. The gate is
+  live in `scripts/type_check_baseline.json`, which only shrinks. The gate is
   `mise run risk-service:typecheck`; after fixing legacy errors run
-  `uv run python scripts/typing_ratchet.py update`. Rules:
-  [the typing ratchet](../CODEBASE_CONVENTIONS.md#typing-ratchet).
+  `uv run python scripts/type_check_baseline.py update`. Rules:
+  [the type-check baseline](../CODEBASE_CONVENTIONS.md#type-check-baseline).
 
 ## Legacy case vertical
 

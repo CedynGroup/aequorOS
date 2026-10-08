@@ -58,8 +58,8 @@ value_columns={…}, row_sources=…)` naming the official data rows/columns you
    row-by-row table (row · official label · status · source/filters · note), a "Residual unmapped
    lines — data the bank must supply" list, and cross-form dependencies. Generate the table from
    the line map (see how `bsd2_line_map.md` was produced) so it cannot drift.
-9. Gates before you finish: `uv run ruff check <your files>` clean, the typing ratchet
-   (`uv run python scripts/typing_ratchet.py check`) clean,
+9. Gates before you finish: `uv run ruff check <your files>` clean, the type-check baseline
+   (`uv run python scripts/type_check_baseline.py check`) clean,
    `DATABASE_URL="" uv run pytest tests/services/test_bog_forms_framework.py
 tests/services/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
 

@@ -19,34 +19,35 @@ Paths below describe the existing layered tree; new feature code follows
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
   `reportExplicitAny` is off so the JSON-column type below stands. The
-  [typing ratchet](#typing-ratchet) enforces it.
+  [type-check baseline](#type-check-baseline) enforces it.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
-### Typing ratchet
+### Type-check baseline
 
 New code is strict; legacy code may only get stricter.
 
-- `mise run risk-service:typecheck` runs `backend/scripts/typing_ratchet.py check`. It type-checks
-  the backend once and counts each module's errors and warnings per rule against
-  `backend/scripts/typing_baseline.json`.
+- `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
+  type-checks the backend once and counts each module's errors and warnings per rule against
+  `backend/scripts/type_check_baseline.json`.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script.
 - **A legacy module may not add errors.** A rule's count above its baseline fails.
 - **Record every fix.** A count below its baseline also fails until
-  `uv run python scripts/typing_ratchet.py update`, run from `backend/`, writes the lower count.
+  `uv run python scripts/type_check_baseline.py update`, run from `backend/`, writes the lower
+  count.
   `update` refuses to run while any count is above its baseline, so it only lowers numbers and
   deletes entries; review that the diff does only that.
 - **Moves.** A module moved by a layout PR keeps its legacy allowance until its package is
-  promoted, so a move PR stays a pure rename (§5). The ratchet counts it under the name it had
+  promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
   already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
   removes its old entry.
 - **Promoting a package.** A package joins `STRICT_MODULES` once it is clean: fix its modules'
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
-  `tests/architecture/test_typing_ratchet.py` then rejects any baseline entry for it.
+  `tests/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
@@ -402,8 +403,8 @@ feature. New code goes in the target layout; existing code moves one feature per
   review and update those guards by hand so they retain their coverage.
   `uv run python scripts/feature_moves.py check` fails when a recorded module remains at its
   old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
-  Move PRs must also satisfy the [typing ratchet](#typing-ratchet); logic changes go in separate
-  PRs.
+  Move PRs must also satisfy the [type-check baseline](#type-check-baseline); logic changes go in
+  separate PRs.
 - **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
   rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
   those keys so moving a model never reorders a flush (a new model adds its key). Metric
