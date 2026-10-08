@@ -141,9 +141,18 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
     if institution_types.institution_class(db, bank) == "sdi":
         try:
             nof = sdi_capital.net_own_funds(db, ctx, bank, as_of)
+            if not nof.is_finite():
+                raise ValueError("Net Own Funds must be finite.")
+            return nof if nof > _ZERO else None
         except sdi_capital.SdiCapitalPolicyUnresolved as exc:
             raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
-        return nof if nof > _ZERO else None
+        except Exception as exc:
+            raise ModuleDataUnavailable(
+                "capital_base_unavailable",
+                "The SDI Net Own Funds denominator is unavailable. Review the stored "
+                "capital_structure amounts and re-ingest the complete register before "
+                "measuring concentration against capital.",
+            ) from exc
     try:
         current = load_current_facts(db, ctx, bank, ("capital_component",))
     except ModuleDataUnavailable:

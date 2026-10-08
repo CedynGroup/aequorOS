@@ -115,6 +115,45 @@ def _assert_named_refusal(code: str | None, message: str | None) -> None:
     assert "re-ingest" in message and "re-derive" in message
 
 
+@pytest.mark.parametrize("surface", ["denominator", "concentration", "credit_live"])
+@pytest.mark.parametrize("amount", ["not-a-number", "NaN", "Infinity"])
+def test_malformed_stored_sdi_amount_has_an_unavailable_denominator_with_a_reason(
+    db_session: Session, surface: str, amount: str
+) -> None:
+    """BoG CRD 2018 ¶32: malformed stored capital cannot escape as a server failure."""
+    _seed_book(db_session)
+    derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    derive_current_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    period = db_session.get(BankReportingPeriod, derived.reporting_period_id)
+    assert bank is not None and period is not None
+    bank.institution_type = "savings_and_loans"
+    _push_register(
+        db_session,
+        ("paid_up_capital", "100000000", "CET1"),
+        ("intangible_assets", amount, "CET1_DEDUCTION"),
+    )
+    with pytest.raises(ModuleDataUnavailable) as unavailable:
+        if surface == "denominator":
+            credit_concentration.capital_base(db_session, MAKER, bank, REPORTING_DATE)
+        elif surface == "concentration":
+            regulatory_credit.get_credit_concentration(db_session, MAKER, bank.id)
+        else:
+            regulatory_credit.compute_live(db_session, MAKER, bank, period)
+    assert unavailable.value.error_code == "capital_base_unavailable"
+    assert "Net Own Funds denominator is unavailable" in unavailable.value.reason
+    assert "capital_structure amounts" in unavailable.value.reason
+    assert "re-ingest" in unavailable.value.reason
+    _push_register(
+        db_session,
+        ("paid_up_capital", "100000000", "CET1"),
+        ("intangible_assets", "-20000000", "CET1_DEDUCTION"),
+    )
+    assert credit_concentration.capital_base(db_session, MAKER, bank, REPORTING_DATE) == Decimal(
+        "80000000"
+    )
+
+
 @pytest.mark.parametrize(
     "surface",
     ["official", "dashboard", "trend", "live", "workbench", "sf", "concentration", "credit_live"],
