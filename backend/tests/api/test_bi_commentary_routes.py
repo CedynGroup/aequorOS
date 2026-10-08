@@ -678,13 +678,22 @@ def test_a_colleagues_own_request_is_their_own_row(
 # --- staleness and expiry ----------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("plane", "surfaces_on", "consented")
+@pytest.mark.parametrize("metric_date", [AS_OF, PRIOR])
+@pytest.mark.parametrize(("metric_tier", "expected_stale"), [("live", False), ("official", True)])
 def test_a_draft_written_against_an_older_book_is_reported_as_stale(
-    db_client: TestClient, db_session: Session, plane: Bank, surfaces_on: None, consented: Any
+    db_client: TestClient,
+    db_session: Session,
+    metric_date: dt.date,
+    metric_tier: str,
+    expected_stale: bool,
 ) -> None:
-    """The book moves under a finished draft: the prose is still served, and the
-    reader is told it describes different figures."""
+    """Only official figures at either date make a finished draft stale.
 
-    _ = plane, surfaces_on, consented
+    The prose is still served, and the reader is told it describes different
+    figures when the official book moves; the live tier is not in its sheet.
+    """
+
     assert _post(db_client, db_session).status_code == 202
     draft = _drafts(db_session)[0]
     row = _run(db_session, draft.id, _result(_grounded(_current_fid(draft))))
@@ -692,24 +701,29 @@ def test_a_draft_written_against_an_older_book_is_reported_as_stale(
     fresh = _get(db_client, db_session).json()
     assert fresh["stale"] is False, "nothing moved yet; this test would be vacuous"
 
-    # Move one engine figure at the reporting date. ``fact_sheet_hash`` is
-    # value-based, so it moves with the FIGURE rather than with a rebuild.
+    # Select the exact figure: an unordered first() could change the live tier
+    # even though commentary reads only official figures. The hash is value-based.
     metric = db_session.scalars(
         select(BiFactEngineMetric).where(
-            BiFactEngineMetric.bank_id == BANK_ID, BiFactEngineMetric.as_of_date == AS_OF
+            BiFactEngineMetric.organization_id == ORG_1,
+            BiFactEngineMetric.bank_id == BANK_ID,
+            BiFactEngineMetric.as_of_date == metric_date,
+            BiFactEngineMetric.module == "capital",
+            BiFactEngineMetric.metric_id == "car_pct",
+            BiFactEngineMetric.regime == "crd",
+            BiFactEngineMetric.tier == metric_tier,
         )
-    ).first()
-    assert metric is not None
+    ).one()
     metric.value = (metric.value or Decimal("0")) + Decimal("1.75")
     db_session.commit()
 
     response = _get(db_client, db_session)
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["stale"] is True
+    assert payload["stale"] is expected_stale
     assert payload["author"] == "model", "a stale draft is reported, not withheld"
-    assert payload["fact_sheet_hash"] != row.fact_sheet_hash
-    assert "have changed since this draft was prepared" in payload["notice"]
+    assert (payload["fact_sheet_hash"] != row.fact_sheet_hash) is expected_stale
+    assert ("have changed since this draft was prepared" in payload["notice"]) is expected_stale
 
 
 def test_an_expired_queued_request_stops_being_polled(
