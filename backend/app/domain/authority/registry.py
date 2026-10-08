@@ -2633,7 +2633,7 @@ REGISTRY.register_all(
             calculation_version=_CAPITAL_VERSION,
             parameter_set=("ParamEclAssumption",),
             authoritative_run_type="capital",
-            reporting_mappings=("CAR-RWA",),
+            reporting_mappings=(),
             expected_tolerance=Decimal("0"),
             forbidden_alternative_sources=_FORBID_CASE_PLANE,
             advisory_designation=AdvisoryDesignation.ADVISORY_ONLY,
