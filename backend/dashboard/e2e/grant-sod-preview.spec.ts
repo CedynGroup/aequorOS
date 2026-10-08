@@ -11,12 +11,17 @@ const filingMessage =
 
 test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-test("live previews are read-only and match allowed, warned and refused creates", async ({ request }) => {
-  const headers = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
+test("live previews are read-only and match allowed, warned and refused creates", async ({
+  request,
+}) => {
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("admin")}`,
+  };
   const payload = (principal: string, role: string) => ({
     principal_user_id: E2E_USERS[principal].id,
     role_bundle: role,
-    institution_scope: role === "account_admin" ? "organization" : "institution",
+    institution_scope:
+      role === "account_admin" ? "organization" : "institution",
     institution_id: role === "account_admin" ? null : "BK-SAMP0001",
     module_scope: role === "account_admin" ? "account" : "reg",
     sensitivity_scope: role === "account_admin" ? "all" : "restricted",
@@ -24,7 +29,9 @@ test("live previews are read-only and match allowed, warned and refused creates"
     reason_detail: "Isolated preview/create policy parity journey",
   });
   const list = async () => {
-    const response = await request.get(`${API}/authorization/bindings`, { headers });
+    const response = await request.get(`${API}/authorization/bindings`, {
+      headers,
+    });
     expect(response.ok()).toBeTruthy();
     return response.json();
   };
@@ -40,14 +47,20 @@ test("live previews are read-only and match allowed, warned and refused creates"
   ];
   const previews = [];
   for (const entry of cases) {
-    const response = await request.post(`${API}/authorization/bindings/preview`, {
-      headers, data: payload(entry.principal, entry.role),
-    });
+    const response = await request.post(
+      `${API}/authorization/bindings/preview`,
+      {
+        headers,
+        data: payload(entry.principal, entry.role),
+      },
+    );
     expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body.authority_sentence).toBeTruthy();
     expect(body.sod_decision.outcome).toBe(entry.outcome);
-    expect(body.sod_decision.findings.length).toBe(entry.outcome === "allow" ? 0 : 1);
+    expect(body.sod_decision.findings.length).toBe(
+      entry.outcome === "allow" ? 0 : 1,
+    );
     previews.push({ ...entry, body });
   }
   const after = await list();
@@ -59,95 +72,197 @@ test("live previews are read-only and match allowed, warned and refused creates"
   for (const entry of previews.filter((entry) => entry.principal !== "admin")) {
     const response = await request.post(`${API}/authorization/bindings`, {
       headers,
-      data: { ...payload(entry.principal, entry.role), expected_authority_sentence: entry.body.authority_sentence },
+      data: {
+        ...payload(entry.principal, entry.role),
+        expected_authority_sentence: entry.body.authority_sentence,
+      },
     });
     expect(response.status()).toBe(entry.outcome === "block" ? 409 : 201);
     const body = await response.json();
-    const decision = entry.outcome === "block" ? body.error.details.sod_decision : body.sod_decision;
+    const decision =
+      entry.outcome === "block"
+        ? body.error.details.sod_decision
+        : body.sod_decision;
     expect(decision).toEqual(entry.body.sod_decision);
-    creates.push({ principal: entry.principal, role: entry.role, status: response.status(), body });
+    creates.push({
+      principal: entry.principal,
+      role: entry.role,
+      status: response.status(),
+      body,
+    });
     if (response.status() === 201) {
-      const revoke = await request.post(`${API}/authorization/bindings/${body.binding.id}/revoke`, {
-        headers, data: { reason: "Clean up isolated policy parity journey" },
-      });
+      const revoke = await request.post(
+        `${API}/authorization/bindings/${body.binding.id}/revoke`,
+        {
+          headers,
+          data: { reason: "Clean up isolated policy parity journey" },
+        },
+      );
       expect(revoke.ok()).toBeTruthy();
     }
   }
-  const unauthorized = await request.post(`${API}/authorization/bindings/preview`, {
-    headers: { Authorization: `Bearer ${await mintBackendToken("analyst")}` },
-    data: payload("approver", "analyst"),
-  });
+  const unauthorized = await request.post(
+    `${API}/authorization/bindings/preview`,
+    {
+      headers: { Authorization: `Bearer ${await mintBackendToken("analyst")}` },
+      data: payload("approver", "analyst"),
+    },
+  );
   expect(unauthorized.status()).toBe(403);
   if (evidenceDir) {
-    await writeFile(path.join(evidenceDir, "grant-preview-create-responses.json"), JSON.stringify({
-      previews, bindingsBeforePreview: before, bindingsAfterPreview: after, creates,
-      unauthorizedPreview: { status: unauthorized.status(), body: await unauthorized.json() },
-    }, null, 2));
+    await writeFile(
+      path.join(evidenceDir, "grant-preview-create-responses.json"),
+      JSON.stringify(
+        {
+          previews,
+          bindingsBeforePreview: before,
+          bindingsAfterPreview: after,
+          creates,
+          unauthorizedPreview: {
+            status: unauthorized.status(),
+            body: await unauthorized.json(),
+          },
+        },
+        null,
+        2,
+      ),
+    );
   }
 });
 
-test("reverse account administration conflict shows the server finding at Define", async ({ page }) => {
+test("reverse account administration conflict shows the server finding at Define", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 1100 });
   await page.goto("/access/members");
-  await page.locator("li").filter({ hasText: "E2E Approver" }).first()
-    .getByRole("button", { name: "Add grant" }).click();
-  const composer = page.getByRole("dialog", { name: "Add grant for E2E Approver" });
+  await page
+    .locator("li")
+    .filter({ hasText: "E2E Approver" })
+    .first()
+    .getByRole("button", { name: "Add grant" })
+    .click();
+  const composer = page.getByRole("dialog", {
+    name: "Add grant for E2E Approver",
+  });
   await composer.getByLabel("Role bundle").selectOption("account_admin");
   await composer.getByLabel("Reason category").selectOption("other");
-  await composer.getByLabel("Detail").fill("Exercise reverse account administration conflict");
+  await composer
+    .getByLabel("Detail")
+    .fill("Exercise reverse account administration conflict");
   await expect(composer.getByRole("alert")).toContainText(
     "Account administration and operational maker/checker authority must remain separated for one identity.",
   );
-  await expect(composer.getByRole("button", { name: "Cannot be granted" })).toBeDisabled();
-  await expect(composer).not.toContainText("revoke this identity's account administration first");
-  if (evidenceDir) await page.screenshot({ path: path.join(evidenceDir, "grant-reverse-c9-define.png") });
+  await expect(
+    composer.getByRole("button", { name: "Cannot be granted" }),
+  ).toBeDisabled();
+  await expect(composer).not.toContainText(
+    "revoke this identity's account administration first",
+  );
+  if (evidenceDir)
+    await page.screenshot({
+      path: path.join(evidenceDir, "grant-reverse-c9-define.png"),
+    });
 });
 
-test("a conflicting grant added after Review is refused with the server's finding", async ({ page }) => {
+test("a conflicting grant added after Review is refused with the server's finding", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 1100 });
-  const headers = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("admin")}`,
+  };
   await page.goto("/access/members");
-  await page.locator("li").filter({ hasText: "E2E Fx Member" }).first()
-    .getByRole("button", { name: "Add grant" }).click();
-  const composer = page.getByRole("dialog", { name: "Add grant for E2E Fx Member" });
+  await page
+    .locator("li")
+    .filter({ hasText: "E2E Fx Member" })
+    .first()
+    .getByRole("button", { name: "Add grant" })
+    .click();
+  const composer = page.getByRole("dialog", {
+    name: "Add grant for E2E Fx Member",
+  });
   await composer.getByLabel("Role bundle").selectOption("validator");
   await composer.getByLabel("Module").selectOption("reg");
   await composer.getByLabel("Sensitivity").selectOption("restricted");
   await composer.getByLabel("Reason category").selectOption("other");
-  await composer.getByLabel("Detail").fill("Filing responsibilities pending independent checker allocation");
+  await composer
+    .getByLabel("Detail")
+    .fill("Filing responsibilities pending independent checker allocation");
   await composer.getByRole("button", { name: "Review grant" }).click();
   await expect(composer.getByRole("alert")).toHaveCount(0);
   const competingPayload = {
     principal_user_id: E2E_USERS.fx_member.id,
-    role_bundle: "approver", institution_scope: "institution", institution_id: "BK-SAMP0001",
-    module_scope: "reg", sensitivity_scope: "restricted", reason_category: "other",
+    role_bundle: "approver",
+    institution_scope: "institution",
+    institution_id: "BK-SAMP0001",
+    module_scope: "reg",
+    sensitivity_scope: "restricted",
+    reason_category: "other",
     reason_detail: "Concurrent checker allocation in isolated race journey",
   };
-  const preview = await page.request.post(`${API}/authorization/bindings/preview`, { headers, data: competingPayload });
+  const preview = await page.request.post(
+    `${API}/authorization/bindings/preview`,
+    { headers, data: competingPayload },
+  );
   expect(preview.ok()).toBeTruthy();
   const competing = await page.request.post(`${API}/authorization/bindings`, {
-    headers, data: { ...competingPayload, expected_authority_sentence: (await preview.json()).authority_sentence },
+    headers,
+    data: {
+      ...competingPayload,
+      expected_authority_sentence: (await preview.json()).authority_sentence,
+    },
   });
   expect(competing.status()).toBe(201);
   const competingBody = await competing.json();
   try {
-    const refused = page.waitForResponse((response) => response.url() === `${API}/authorization/bindings` && response.request().method() === "POST");
+    const refused = page.waitForResponse(
+      (response) =>
+        response.url() === `${API}/authorization/bindings` &&
+        response.request().method() === "POST",
+    );
     await composer.getByRole("button", { name: "Grant access" }).click();
     const response = await refused;
     expect(response.status()).toBe(409);
     await expect(composer.getByRole("alert")).toContainText(filingMessage);
-    await expect(composer.getByText("Grant created", { exact: true })).toHaveCount(0);
-    const listed = await page.request.get(`${API}/authorization/bindings?principal_user_id=${E2E_USERS.fx_member.id}`, { headers });
+    await expect(
+      composer.getByText("Grant created", { exact: true }),
+    ).toHaveCount(0);
+    const listed = await page.request.get(
+      `${API}/authorization/bindings?principal_user_id=${E2E_USERS.fx_member.id}`,
+      { headers },
+    );
     expect(listed.ok()).toBeTruthy();
-    expect((await listed.json()).bindings.some((binding: { role_bundle: string }) => binding.role_bundle === "validator")).toBeFalsy();
+    expect(
+      (await listed.json()).bindings.some(
+        (binding: { role_bundle: string }) =>
+          binding.role_bundle === "validator",
+      ),
+    ).toBeFalsy();
     if (evidenceDir) {
-      await page.screenshot({ path: path.join(evidenceDir, "grant-create-race-refusal.png") });
-      await writeFile(path.join(evidenceDir, "grant-create-race-response.json"), JSON.stringify({ status: response.status(), body: await response.json(), validatorBindingCreated: false }, null, 2));
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-create-race-refusal.png"),
+      });
+      await writeFile(
+        path.join(evidenceDir, "grant-create-race-response.json"),
+        JSON.stringify(
+          {
+            status: response.status(),
+            body: await response.json(),
+            validatorBindingCreated: false,
+          },
+          null,
+          2,
+        ),
+      );
     }
   } finally {
-    const revoked = await page.request.post(`${API}/authorization/bindings/${competingBody.binding.id}/revoke`, {
-      headers, data: { reason: "Clean up isolated race journey" },
-    });
+    const revoked = await page.request.post(
+      `${API}/authorization/bindings/${competingBody.binding.id}/revoke`,
+      {
+        headers,
+        data: { reason: "Clean up isolated race journey" },
+      },
+    );
     expect(revoked.ok()).toBeTruthy();
   }
 });
