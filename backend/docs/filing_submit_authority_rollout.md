@@ -142,8 +142,8 @@ condition that would catch approve-then-file at action time belongs to the stage
 engine and does not exist yet (redesign §3.3 layer 3). Relax it to a warning only
 when that condition is live — never to make an assignment pass.
 
-C9 still applies: an Org Owner or Account Administrator cannot hold `validator`
-either, because it is an operational maker/checker bundle.
+For account-administration conflicts and the Org Owner exception, follow the
+[assignment-time policy](authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
 
 ## Inventory
 

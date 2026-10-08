@@ -397,6 +397,12 @@ repeats warnings at Review. A block disables "Review grant" and labels the
 control "Cannot be granted". Create requires that exact sentence, refuses if
 names or scope presentation changed before commit, and re-evaluates the policy;
 the composer displays the server's findings if create is refused.
+Each finding carries a plain-language `message` and `conflicting_binding_ids`
+for the member's existing bindings that triggered it. The composer shows the
+server's message verbatim: it names the member and existing authority, including
+module and institution coverage for conflicting grants. Blocking findings tell
+the administrator to remove every conflicting grant or choose someone else;
+the client does not invent a remedy from policy codes.
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
