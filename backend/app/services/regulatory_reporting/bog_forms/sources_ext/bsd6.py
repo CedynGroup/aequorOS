@@ -241,9 +241,14 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
     sign = Decimal(str(params.get("sign", 1)))
     rows: list[_PositionRow] = []
     for snapshot, position in rc.db.execute(stmt).tuples():
+        if position.currency == rc.bank.currency:
+            native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
+            amount = native or Decimal("0")
+        else:
+            amount = reporting_currency_value(rc, snapshot, position, ghs_attr=ghs_attr)
         rows.append(
             _PositionRow(
-                amount=reporting_currency_value(rc, snapshot, position, ghs_attr=ghs_attr) * sign,
+                amount=amount * sign,
                 position_type=position.position_type,
                 contractual_maturity=snapshot.contractual_maturity,
                 behavioral_maturity_months=snapshot.behavioral_maturity_months,

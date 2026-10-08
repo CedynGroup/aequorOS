@@ -43,6 +43,7 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
+from app.policy.public import base_currency
 
 from ..sources import ResolveContext, reporting_currency_value, resolver
 
@@ -229,6 +230,18 @@ class _Facility:
     amount_ghs: Decimal
 
 
+def _amount_ghs(
+    rc: ResolveContext, snapshot: CanonicalPositionSnapshot, position: CanonicalPosition
+) -> Decimal:
+    if position.currency == base_currency(rc.bank) and position.position_type in OFF_BALANCE_TYPES:
+        notional = _dec((snapshot.attributes or {}).get("notional_ghs"))
+        if notional is not None:
+            return notional
+        if snapshot.notional is not None:
+            return snapshot.notional
+    return reporting_currency_value(rc, snapshot, position)
+
+
 def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> list[_Facility]:
     key = f"bsd11:facilities:{','.join(position_types)}"
     cached = rc.cache.get(key)
@@ -297,7 +310,7 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
             snapshot=snapshot,
             counterparty=counterparty,
             product=product,
-            amount_ghs=reporting_currency_value(rc, snapshot, position),
+            amount_ghs=_amount_ghs(rc, snapshot, position),
         )
         for snapshot, position, counterparty, product in records
     ]

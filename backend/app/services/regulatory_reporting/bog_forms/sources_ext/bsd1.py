@@ -51,7 +51,7 @@ from app.models.canonical import (
 from app.models.regulatory import BankFinancialFact
 from app.services import market_data_sources
 
-from ..sources import OFF_BALANCE_TYPES, ResolveContext, reporting_currency_value, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: Column key → days BEFORE the week's Wednesday (the PERIOD / reporting date).
 #: The template's own header formulas fix this: ``B28 = B3-6`` (THURS) … ``H28 = B3``.
@@ -199,12 +199,8 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
         stmt = stmt.where(CanonicalPosition.currency.not_in(list(excluded)))
     return sum(
         (
-            (
-                snapshot.notional or Decimal("0")
-                if position.position_type in OFF_BALANCE_TYPES
-                else snapshot.balance
-            )
-            if _is_native(params)
+            snapshot.balance
+            if _is_native(params) or position.currency == rc.bank.currency
             else reporting_currency_value(rc, snapshot, position, valuation_date=day)
             for snapshot, position in rc.db.execute(stmt).tuples()
         ),

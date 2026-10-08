@@ -31,8 +31,8 @@ Population rules (from the Wave-2 brief; recorded in docs/bog_returns/bsd3a_line
 Exposure = drawn (LOAN, INTERBANK_PLACEMENT, SECURITY_HOLDING balances) +
 undrawn (COMMITMENT_UNDRAWN) + other contingent (LC_GUARANTEE) — the Guide's
 "total exposure column should include drawn and undrawn facilities and other
-contingent liabilities"; off-balance amounts take ``notional_ghs``, the
-LMT Table 2 convention. Foreign / cedi components split on the
+contingent liabilities"; off-balance amounts take ``notional_ghs`` (else the
+balance), the LMT Table 2 convention. Foreign / cedi components split on the
 POSITION currency against the bank's base currency (Guide item 6: "the cedi
 equivalent of foreign component"). Amounts are BASE units (cedis).
 
@@ -126,8 +126,8 @@ class Ranking:
 def _row_amount(row: Any) -> Decimal:
     """LMT Table 2 convention: off-balance rows report their GHS notional."""
     off_balance = (*UNDRAWN_POSITION_TYPES, *CONTINGENT_POSITION_TYPES)
-    if row.position_type in off_balance:
-        return Decimal(str(row.notional_ghs)) if row.notional_ghs is not None else _ZERO
+    if row.position_type in off_balance and row.notional_ghs is not None:
+        return Decimal(str(row.notional_ghs))
     return Decimal(str(row.balance_ghs))
 
 

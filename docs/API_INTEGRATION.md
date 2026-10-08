@@ -420,7 +420,7 @@ value overrides the counterparty's for that facility.
 | `balance_ghs` / `notional_ghs`                | any foreign-currency position                                                                  | number (cedi equivalent at `as_of_date`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | every `positions.sum` line of BSD2 (Foreign column "converted into cedis"), BSD1, BSD4, BSD8, BSD14 weights, module fact derivation                                                                                                  | The bank's own cedi equivalents for the applicable measure. Off-balance-sheet rows use `notional_ghs` and do not require `balance_ghs`; governed FX quotes and generation refusals follow the rules below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 For prudential returns, native foreign amounts are never treated as cedis.
-Reporting-currency amounts follow these rules:
+Foreign amounts follow these reporting-currency rules:
 
 - `positions.sum`, BSD1 cedi measures, BSD4, BSD6, BSD8 and BSD11 amounts, and BSD14
   weights, use the stated amount for the measure (`balance_ghs` or `notional_ghs`),
@@ -434,6 +434,11 @@ Reporting-currency amounts follow these rules:
   require `balance_ghs`: their measure is the stated `notional_ghs`, else their native
   notional converted using a governed preferred FX spot at the valuation date
   (including LE, BSD3 and LMT). The return applies CCF where its measure requires it.
+
+Domestic measures retain each return's existing convention. BSD3, BSD11 and BSD8
+contingent exposures use the stated or native notional where present, with their
+existing balance fallback when absent. BSD1 and BSD6 use native domestic amounts;
+`positions.sum` uses the stated amount or native amount for its requested measure.
 
 Missing required conversions abort generation with HTTP 409 `foreign_amount_not_stated`,
 naming the positions and the amounts to ingest. A package missing these conversion inputs

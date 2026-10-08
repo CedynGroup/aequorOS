@@ -642,16 +642,101 @@ def test_off_balance_consumers_can_use_a_governed_notional_quote(
 
 
 @pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
-def test_native_currency_ladder_uses_off_balance_notional(book: _Book, position_type: str) -> None:
-    snapshot = book.position("OBS/NATIVE", position_type, {"fixture": "native_obs"})
-    snapshot.balance = Decimal("999")
-    snapshot.notional = Decimal("200000")
+@pytest.mark.parametrize(
+    "amounts",
+    [
+        (None, None, "600000", "600000", "600000"),
+        (None, None, "700000", "700000", "600000"),
+        (None, None, None, "600000", "600000"),
+        ("200000", None, "700000", "200000", "200000"),
+        ("0", None, "700000", "0", "0"),
+        (None, "0", "700000", "0", "0"),
+        ("200000", "300000", "700000", "300000", "300000"),
+        (None, "300000", "700000", "300000", "300000"),
+    ],
+)
+def test_domestic_off_balance_exposures_preserve_each_returns_balance_fallback(
+    book: _Book,
+    position_type: str,
+    amounts: tuple[str | None, str | None, str | None, str, str],
+) -> None:
+    notional, notional_ghs, balance_ghs, expected, bsd8_expected = amounts
+    attributes: dict[str, str] = {}
+    if notional_ghs is not None:
+        attributes["notional_ghs"] = notional_ghs
+    if balance_ghs is not None:
+        attributes["balance_ghs"] = balance_ghs
+    snapshot = book.position("OBS/DOMESTIC", position_type, attributes, currency="GHS")
+    snapshot.balance = Decimal("600000")
+    snapshot.notional = Decimal(notional) if notional is not None else None
+    book.db.flush()
+
+    assert book.resolver("bsd3.rank", "total")(
+        {"kind": "non_monetary_exposure", "rank": 1, "field": "total"}
+    ) == Decimal(expected)
+    assert book.resolver("bsd11.register", "off_balance")(
+        {"register": "large_exposures", "rank": 1}
+    ) == Decimal(expected)
+
+    book.position("LOAN/ADVERSE", "LOAN", {"bog_classification": "doubtful"}, currency="GHS")
+    assert book.resolver("bsd8.annexure", "obs")({"rank": 1}) == Decimal(bsd8_expected)
+
+
+@pytest.mark.parametrize("position_type", ["LOAN", "LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+@pytest.mark.parametrize("notional", [None, "0", "200000"])
+@pytest.mark.parametrize("stated", [False, True])
+def test_domestic_sums_and_buckets_preserve_their_requested_measures(
+    book: _Book, position_type: str, notional: str | None, stated: bool
+) -> None:
+    attributes = {"fixture": "domestic_measure"}
+    if stated:
+        attributes.update(balance_ghs="700000", notional_ghs="300000")
+    snapshot = book.position("POSITION/DOMESTIC", position_type, attributes, currency="GHS")
+    snapshot.balance = Decimal("600000")
+    snapshot.notional = Decimal(notional) if notional is not None else None
+    book.db.flush()
+    params: dict[str, object] = {
+        "position_types": [position_type],
+        "attribute_eq": {"fixture": "domestic_measure"},
+    }
+    native_notional = Decimal(notional) if notional is not None else Decimal("0")
+    assert book.resolver("positions.sum", "domestic")(params) == Decimal(
+        "700000" if stated else "600000"
+    )
+    assert book.resolver("positions.sum", "domestic")({**params, "measure": "notional"}) == (
+        Decimal("300000") if stated else native_notional
+    )
+    assert book.resolver("bsd1.daily", "total")({**params, "days_before": 0}) == Decimal("600000")
+    for measure, expected in (("balance", Decimal("600000")), ("notional", native_notional)):
+        assert book.resolver("bsd6.bucket", "total")(
+            {
+                "bsd2_column": "domestic",
+                "side": "liability",
+                "components": [
+                    {"source": "positions.sum", "params": {**params, "measure": measure}}
+                ],
+            }
+        ) == expected
+
+
+@pytest.mark.parametrize("position_type", ["CASH", "INTERBANK_PLACEMENT"])
+@pytest.mark.parametrize("currency", ["GHS", "USD"])
+def test_bsd1_native_balances_preserve_the_official_population_measure(
+    book: _Book, position_type: str, currency: str
+) -> None:
+    snapshot = book.position(
+        "POSITION/NATIVE",
+        position_type,
+        {"fixture": "native_measure", "balance_ghs": "700000"},
+        currency=currency,
+    )
+    snapshot.balance = Decimal("600000")
     book.db.flush()
     assert book.resolver("bsd1.daily", "total")(
         {
             "days_before": 0,
             "position_types": [position_type],
             "measure": "native",
-            "attribute_eq": {"fixture": "native_obs"},
+            "attribute_eq": {"fixture": "native_measure"},
         }
-    ) == Decimal("200000")
+    ) == Decimal("600000")

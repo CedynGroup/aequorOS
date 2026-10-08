@@ -277,12 +277,18 @@ def _load_obs_by_customer(rc: ResolveContext) -> dict[UUID, Decimal]:
         )
     )
     totals: dict[UUID, Decimal] = {}
+    base = jurisdictions.base_currency(rc.bank)
     for row in rc.db.execute(stmt).tuples().all():
         snapshot, position = row[0], row[1]
         attrs = snapshot.attributes if isinstance(cast(object, snapshot.attributes), dict) else {}
-        amount = reporting_currency_value(
-            rc, snapshot, position, attributes=attrs, ghs_attr="notional_ghs"
-        )
+        if position.currency == base:
+            amount = _dec(attrs.get("notional_ghs"))
+            if amount is None:
+                amount = snapshot.notional if snapshot.notional is not None else snapshot.balance
+        else:
+            amount = reporting_currency_value(
+                rc, snapshot, position, attributes=attrs, ghs_attr="notional_ghs"
+            )
         cp = snapshot.counterparty_id
         if cp is not None:
             totals[cp] = totals.get(cp, _ZERO) + amount

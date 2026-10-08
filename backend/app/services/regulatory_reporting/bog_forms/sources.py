@@ -143,8 +143,8 @@ def reporting_currency_value(
     ghs_attr: str = "balance_ghs",
     valuation_date: date | None = None,
 ) -> Decimal:
-    off_balance = position.position_type in OFF_BALANCE_TYPES
-    if off_balance:
+    base = base_currency(rc.bank)
+    if position.currency != base and position.position_type in OFF_BALANCE_TYPES:
         ghs_attr = "notional_ghs"
     values = attributes if attributes is not None else snapshot.attributes or {}
     stated = cast(object, values.get(ghs_attr))
@@ -154,7 +154,6 @@ def reporting_currency_value(
         except ArithmeticError:
             pass
     native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
-    base = base_currency(rc.bank)
     if position.currency == base:
         return native if native is not None else Decimal("0")
     as_of = valuation_date if valuation_date is not None else rc.period.period_end
