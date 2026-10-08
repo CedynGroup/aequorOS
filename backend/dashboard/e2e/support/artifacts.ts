@@ -232,7 +232,6 @@ export async function readPdf(bytes: Buffer): Promise<PdfDocument> {
   const document = await pdfjs.getDocument({
     data: new Uint8Array(bytes),
     standardFontDataUrl: STANDARD_FONTS,
-    isEvalSupported: false,
   }).promise;
   try {
     const pages: string[] = [];
@@ -256,6 +255,6 @@ export async function readPdf(bytes: Buffer): Promise<PdfDocument> {
       signatureCount: bytes.toString("latin1").split("/ByteRange").length - 1,
     };
   } finally {
-    await document.destroy();
+    await document.loadingTask.destroy();
   }
 }
