@@ -402,7 +402,7 @@ feature. New code goes in the target layout; existing code moves one feature per
   review and update those guards by hand so they retain their coverage.
   `uv run python scripts/feature_moves.py check` fails when a recorded module remains at its
   old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
-  The diff of a move PR is the renames plus the codemod's output; logic changes go in separate
+  Move PRs must also satisfy the [typing ratchet](#typing-ratchet); logic changes go in separate
   PRs.
 - **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
   rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
