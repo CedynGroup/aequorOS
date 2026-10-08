@@ -168,10 +168,10 @@ function pdfjs(): Promise<PdfJs> {
  * Parse PDF bytes into a document handle.
  *
  * Release it with `document.loadingTask.destroy()`, which also tears down the
- * worker-side copy of the document. There is no eval switch to set: pdf.js 5.7
- * removed its eval-based font and PostScript compilation (and the
- * `isEvalSupported` option with it), so nothing in a document is ever
- * evaluated as code beside a signing key.
+ * worker-side copy of the document. There is no eval switch to set: pdf.js 6
+ * has no `isEvalSupported` option and does not use JavaScript eval for font or
+ * PostScript rendering. PostScript functions may instead compile to
+ * WebAssembly, with a JavaScript interpreter as the fallback.
  */
 export async function loadPdfDocument(
   data: ArrayBuffer,

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The return, rendered. One page at a time onto a canvas, with an absolutely
@@ -13,11 +13,17 @@
  * blurred figure on the page a signer is certifying is not a cosmetic problem.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { loadPdfDocument } from '@/lib/attestation/pdfjs';
-import { pageSpace, type PageSpace } from '@/lib/attestation/geometry';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import { loadPdfDocument } from "@/lib/attestation/pdfjs";
+import { pageSpace, type PageSpace } from "@/lib/attestation/geometry";
 
 export default function DocumentCanvas({
   bytes,
@@ -41,7 +47,9 @@ export default function DocumentCanvas({
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(
+    null,
+  );
 
   // The callbacks come from a parent that re-renders on every drag frame;
   // holding them in refs keeps the (expensive) render effect keyed on the page
@@ -74,7 +82,7 @@ export default function DocumentCanvas({
         setError(
           cause instanceof Error
             ? `The document could not be opened: ${cause.message}`
-            : 'The document could not be opened.'
+            : "The document could not be opened.",
         );
       });
     return () => {
@@ -111,11 +119,14 @@ export default function DocumentCanvas({
       } catch (cause: unknown) {
         // A cancelled render is the expected outcome of paging or zooming
         // quickly; it is not a failure to report to a signer.
-        if (!cancelled && (cause as { name?: string })?.name !== 'RenderingCancelledException') {
+        if (
+          !cancelled &&
+          (cause as { name?: string })?.name !== "RenderingCancelledException"
+        ) {
           setError(
             cause instanceof Error
               ? `Page ${pageIndex + 1} could not be drawn: ${cause.message}`
-              : `Page ${pageIndex + 1} could not be drawn.`
+              : `Page ${pageIndex + 1} could not be drawn.`,
           );
         }
       } finally {
@@ -141,7 +152,9 @@ export default function DocumentCanvas({
           <AlertTriangle size={14} className="text-critical" aria-hidden />
           The return could not be displayed
         </p>
-        <p className="mt-1 text-caption text-navy/85 leading-relaxed">{error}</p>
+        <p className="mt-1 text-caption text-navy/85 leading-relaxed">
+          {error}
+        </p>
         <p className="mt-1.5 text-caption text-navy/85 leading-relaxed">
           Signing is blocked rather than allowed against a document nobody could
           see. Re-export the PDF artifact from the Export card and reopen this
@@ -175,7 +188,11 @@ export default function DocumentCanvas({
       {size && children}
       {(rendering || !document) && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-raised/60">
-          <Loader2 size={20} className="animate-spin text-action" aria-label="Rendering" />
+          <Loader2
+            size={20}
+            className="animate-spin text-action"
+            aria-label="Rendering"
+          />
         </div>
       )}
     </div>
