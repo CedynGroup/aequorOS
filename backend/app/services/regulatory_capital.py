@@ -1422,6 +1422,8 @@ def _build_trend(
             continue
         try:
             _rwa, ratios, _params = _compute_inline_from_batch(db, ctx, bank, period, batch)
+        except CapitalRegisterRefused as exc:
+            raise ModuleDataUnavailable(exc.code, str(exc)) from exc
         except (MissingParameterError, CapitalComputationError, CapitalRunError):
             continue
         points.append(
@@ -2377,6 +2379,10 @@ def capital_breach_multiplier(
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    try:
+        assert_capital_register_usable(engine_facts)
+    except CapitalRegisterRefused as exc:
+        raise CapitalRunError(exc.code, str(exc)) from exc
     if not shocks:
         raise CapitalRunError(
             "missing_parameter",

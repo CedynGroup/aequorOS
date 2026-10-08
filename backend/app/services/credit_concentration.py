@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.domain.capital.engine import CapitalFact, tier1_capital
+from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
     ConcentrationLimit,
     ConcentrationMonitorResult,
@@ -161,7 +161,10 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
     ]
     if not capital_facts:
         return None
-    tier1 = tier1_capital(capital_facts)
+    try:
+        tier1 = tier1_capital(capital_facts)
+    except CapitalRegisterRefused as exc:
+        raise ModuleDataUnavailable(exc.code, str(exc)) from exc
     return tier1 if tier1 > _ZERO else None
 
 

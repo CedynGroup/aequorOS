@@ -43,6 +43,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
@@ -737,7 +738,9 @@ def _concentration_or_none(db: Session, ctx: TenantContext, bank: Bank, as_of: d
 
     try:
         return credit_concentration.monitor(db, ctx, bank, as_of)
-    except ModuleDataUnavailable:
+    except ModuleDataUnavailable as exc:
+        if exc.error_code == CAPITAL_REGISTER_REFUSED_CATEGORY:
+            raise
         return None
 
 

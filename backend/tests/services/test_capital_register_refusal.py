@@ -6,10 +6,12 @@ from decimal import Decimal
 from typing import cast
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import ModuleScope, SensitivityScope
+from app.core.errors import ModuleDataUnavailable
 from app.domain.authority.outcomes import OutcomeState
 from app.domain.capital.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
@@ -20,22 +22,42 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
-from app.models import Bank, BankFinancialFact, BankReportingPeriod, CanonicalReferenceRow
+from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
+    CanonicalReferenceRow,
+    RegulatoryRun,
+)
 from app.models.stress import MacroScenario, MacroScenarioPath
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.forecasting import ForecastRunCreate, OptimizerRunCreate, WhatIfRunCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate, RegulatoryScenarioCode
-from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
+from app.schemas.regulatory_fx import FxScenarioBatchCreate
+from app.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
+from app.schemas.regulatory_liquidity import (
+    RegulatoryRunCreate,
+    RegulatoryScenarioCode,
+)
+from app.schemas.reverse_stress import ReverseStressRunCreate
+from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn, WorkbenchModule
 from app.services import (
     analysis_workbench,
+    credit_concentration,
     enterprise_stress,
     regulatory_capital,
+    regulatory_credit,
     regulatory_forecasting,
+    regulatory_fx,
+    regulatory_irr,
+    regulatory_irr_sf,
+    reverse_stress,
 )
 from app.services.fact_derivation import derive_current_facts, derive_facts
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.services.sf_book import seed_fx
 from tests.services.test_capital_structure_tiers import (
     MAKER,
     REPORTING_DATE,
@@ -88,6 +110,164 @@ def _assert_named_refusal(code: str | None, message: str | None) -> None:
     assert "re-ingest" in message and "re-derive" in message
 
 
+@pytest.mark.parametrize("module", ["irr", "fx"])
+def test_denominator_dependent_official_runs_preserve_refusal(
+    db_session: Session, refused_book: tuple[Bank, BankReportingPeriod], module: str
+) -> None:
+    """BoG CRD 2018 ¶32: IRR and FX runs record the named capital refusal."""
+    bank, period = refused_book
+    if module == "irr":
+        batch = regulatory_irr.run_all_irr_scenarios(
+            db_session,
+            MAKER,
+            bank.id,
+            IrrScenarioBatchCreate(reporting_period_id=period.id),
+        )
+    else:
+        batch = regulatory_fx.run_all_fx_scenarios(
+            db_session,
+            MAKER,
+            bank.id,
+            FxScenarioBatchCreate(reporting_period_id=period.id),
+        )
+    assert batch.runs
+    for run in batch.runs:
+        assert run.status == "failed" and run.error is not None
+        _assert_named_refusal(run.error.code, run.error.message)
+        assert run.metrics == {}
+
+
+@pytest.mark.parametrize("module", ["irr", "fx"])
+@pytest.mark.parametrize("official", [False, True])
+def test_denominator_dependent_dashboards_report_unavailable_capital(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    module: str,
+    official: bool,
+) -> None:
+    """BoG CRD 2018 ¶32: current and official dashboards provide corrective guidance."""
+    bank, period = refused_book
+    dashboard = (
+        regulatory_irr.get_irr_dashboard if module == "irr" else regulatory_fx.get_fx_dashboard
+    )
+    with pytest.raises(ModuleDataUnavailable) as refused:
+        dashboard(db_session, MAKER, bank.id, period.id if official else None)
+    _assert_named_refusal(refused.value.error_code, refused.value.reason)
+
+
+@pytest.mark.parametrize("module", ["irr", "fx", "capital"])
+def test_denominator_dependent_trends_report_refused_periods(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    module: str,
+) -> None:
+    """BoG CRD 2018 ¶32: a refused trend period retains the named corrective action."""
+    bank, period = refused_book
+    trend = {
+        "irr": regulatory_irr._build_trend,
+        "fx": regulatory_fx._build_trend,
+        "capital": regulatory_capital._build_trend,
+    }[module]
+    with pytest.raises(ModuleDataUnavailable) as refused:
+        trend(db_session, MAKER, bank, [period])
+    _assert_named_refusal(refused.value.error_code, refused.value.reason)
+
+
+@pytest.mark.parametrize("module", ["irr", "fx"])
+def test_denominator_dependent_live_metrics_preserve_refusal(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    module: str,
+) -> None:
+    """BoG CRD 2018 ¶32: live computations expose their established named run error."""
+    bank, period = refused_book
+    compute = regulatory_irr.compute_live if module == "irr" else regulatory_fx.compute_live
+    with pytest.raises((regulatory_irr.IrrRunError, regulatory_fx.FxRunError)) as refused:
+        compute(db_session, MAKER, bank, period)
+    _assert_named_refusal(refused.value.code, refused.value.message)
+
+
+@pytest.mark.parametrize("module", ["irr", "fx"])
+def test_denominator_dependent_workbenches_preserve_refusal(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    module: WorkbenchModule,
+) -> None:
+    """BoG CRD 2018 ¶32: workbench failures preserve capital correction instructions."""
+    bank, period = refused_book
+    analysis = analysis_workbench.run_analysis(
+        db_session,
+        MAKER,
+        bank.id,
+        module,
+        AnalysisRunCreate(
+            reporting_period_id=period.id, scenarios=[ScenarioRefIn(kind="system", code="baseline")]
+        ),
+    )
+    assert len(analysis.results) == 1
+    result = analysis.results[0]
+    assert result.status == "failed" and result.metrics == {}
+    _assert_named_refusal(result.error_code, result.error_message)
+
+
+def test_sf_book_refusal_is_recorded_as_a_failed_attempt(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+) -> None:
+    """BoG CRD 2018 ¶32: SF book assembly records a named failed attempt before compute."""
+    bank, period = refused_book
+    seed_fx(db_session, base="USD", quote="GHS", rate="12.85")
+    run = regulatory_irr_sf.run_standardised_framework(
+        db_session,
+        MAKER,
+        bank.id,
+        IrrbbSfRunCreate(reporting_period_id=period.id),
+    )
+    assert run.status == "failed" and run.error is not None, run
+    _assert_named_refusal(run.error.code, run.error.message)
+    assert run.metrics == {}
+    stored = db_session.get(RegulatoryRun, run.id)
+    assert stored is not None and stored.completed_at is not None
+
+
+@pytest.mark.parametrize("surface", ["concentration", "live"])
+def test_credit_surfaces_report_unavailable_capital(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    surface: str,
+) -> None:
+    """BoG CRD 2018 ¶32: concentration and live credit retain the refused denominator."""
+    bank, period = refused_book
+    with pytest.raises(ModuleDataUnavailable) as refused:
+        if surface == "concentration":
+            regulatory_credit.get_credit_concentration(db_session, MAKER, bank.id)
+        else:
+            regulatory_credit.compute_live(db_session, MAKER, bank, period)
+    _assert_named_refusal(refused.value.error_code, refused.value.reason)
+
+
+def test_reverse_stress_translates_refusal_to_a_named_conflict(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+) -> None:
+    """BoG CRD 2018 ¶32: reverse stress refuses before publishing a frontier."""
+    bank, period = refused_book
+    with pytest.raises(HTTPException) as refused:
+        reverse_stress.run_reverse_stress(
+            db_session,
+            MAKER,
+            bank.id,
+            ReverseStressRunCreate(reporting_period_id=period.id),
+        )
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    _assert_named_refusal(detail["error_code"], detail["message"])
+    assert (
+        db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.module == "reverse_stress"))
+        is None
+    )
+
+
 @pytest.mark.parametrize("scenario", ["baseline", "mild", "moderate", "severe"])
 def test_official_capital_runs_refuse_invalid_registers(
     db_session: Session,
@@ -117,7 +297,9 @@ def test_live_capital_and_forecast_refuse_invalid_registers(
     """BoG CRD 2018 ¶32: current facts carry the refusal into both live computations."""
     bank, period = refused_book
     compute = (
-        regulatory_capital.compute_live if module == "capital" else regulatory_forecasting.compute_live
+        regulatory_capital.compute_live
+        if module == "capital"
+        else regulatory_forecasting.compute_live
     )
     with pytest.raises(CapitalRegisterRefused) as refused:
         compute(db_session, MAKER, bank, period)
@@ -289,7 +471,9 @@ def test_books_without_a_register_keep_their_existing_zero_capital_behavior(
     """BoG CRD 2018 ¶32: refusal markers distinguish invalid registers from unsupplied ones."""
     _seed_book(db_session)
     db_session.execute(
-        delete(CanonicalReferenceRow).where(CanonicalReferenceRow.dataset_kind == "capital_structure")
+        delete(CanonicalReferenceRow).where(
+            CanonicalReferenceRow.dataset_kind == "capital_structure"
+        )
     )
     derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
     bank = db_session.get(Bank, derived.bank_id)
@@ -327,6 +511,19 @@ def test_correcting_the_register_clears_official_and_live_refusals(
     )
     assert not any(fact.category == CAPITAL_REGISTER_REFUSED_CATEGORY for fact in facts)
     assert tier1_capital(facts) == Decimal("80000000")
+    assert regulatory_irr.tier1_for_period(db_session, MAKER, bank, period) == Decimal("80000000")
+    assert credit_concentration.capital_base(db_session, MAKER, bank, REPORTING_DATE) == Decimal(
+        "80000000"
+    )
+    fx_batch = regulatory_fx.run_all_fx_scenarios(
+        db_session,
+        MAKER,
+        bank.id,
+        FxScenarioBatchCreate(reporting_period_id=period.id),
+    )
+    for fx_run in fx_batch.runs:
+        assert fx_run.status == "succeeded", fx_run.error
+        assert Decimal(cast(str, fx_run.metrics["tier1_ghs"])) == Decimal("80000000")
     live = regulatory_capital.compute_live(db_session, MAKER, bank, period)
     assert Decimal(cast(str, live.metrics["car_pct"])) > 0
     rc = ResolveContext(db_session, MAKER, bank, period, "total")

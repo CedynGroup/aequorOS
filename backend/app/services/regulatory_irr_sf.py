@@ -97,7 +97,7 @@ from app.services import (
     regulatory_parameters,
 )
 from app.services.audit import record_event
-from app.services.regulatory_irr import tier1_for_period
+from app.services.regulatory_irr import IrrRunError, tier1_for_period
 from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
     _read_regulatory_run_execution_result,
 )
@@ -1904,7 +1904,10 @@ def _continuous(annual: Decimal) -> Decimal:
 def _tier1(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> Decimal:
-    tier1 = tier1_for_period(db, ctx, bank, period)
+    try:
+        tier1 = tier1_for_period(db, ctx, bank, period)
+    except IrrRunError as exc:
+        raise SfRunError(exc.code, exc.message, exc.details) from exc
     if tier1 <= _ZERO:
         raise SfRunError(
             "tier1_unavailable",
