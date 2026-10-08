@@ -364,7 +364,18 @@ def signed_component_amount(payload: Mapping[str, object]) -> Decimal:
         return _ZERO
     amount = _dec(payload.get("amount_ghs"))
     parsed = parse_capital_tier(payload.get("tier"))
-    is_deduction = parsed is not None and parsed[1]
+    if parsed is None:
+        component = str(payload.get("capital_component", ""))
+        raise SdiCapitalPolicyUnresolved(
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id="net_own_funds_ghs",
+                reason=f"capital_structure component {component!r} carries an unrecognised "
+                f"tier {payload.get('tier')!r}; correct the register before computing capital.",
+                items=(f"capital_structure:{component}",),
+            )
+        )
+    is_deduction = parsed[1]
     return -abs(amount) if is_deduction else amount
 
 

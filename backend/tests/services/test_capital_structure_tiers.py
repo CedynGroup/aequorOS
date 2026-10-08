@@ -9,8 +9,11 @@ excludes from the capital base.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -18,15 +21,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import OutcomeState
 from app.domain.ingestion.capital_tiers import parse_capital_tier
-from app.domain.ingestion.contracts import ReferenceRowData
+from app.domain.ingestion.constants import SourceSystem
+from app.domain.ingestion.contracts import MappingConfig, ReferenceMapping, ReferenceRowData
 from app.models import (
     Bank,
     BankFinancialFact,
     CanonicalReferenceRow,
     IngestionBatch,
     LineageRecord,
+    TranslationFailure,
 )
+from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.services import ingestion, sdi_capital, sdi_capital_checks
 from app.services.fact_derivation import derive_facts
 from app.services.sdi_capital import net_own_funds
 from tests.fixtures.canonical_bank_fixture import (
@@ -36,6 +44,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.factories.canonical import seed_canonical_fixture
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -205,3 +214,130 @@ def test_credit_risk_reserve_is_not_in_sdi_net_own_funds(db_session: Session) ->
     assert bank is not None
 
     assert net_own_funds(db_session, MAKER, bank, REPORTING_DATE) == Decimal("20800000")
+
+
+@pytest.mark.parametrize("source_system", ["EXCEL_CSV", "API_PUSH"])
+def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_register(
+    db_session: Session, tmp_path: Path, source_system: SourceSystem
+) -> None:
+    """BoG CRD 2018 ¶32: a refused deduction must never leave a partial capital register."""
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    ingestion.create_mapping_config(
+        db_session,
+        MAKER,
+        bank.id,
+        MappingConfigCreate(
+            source_system=source_system,
+            name="Capital register",
+            config=MappingConfig(
+                reference_mappings={
+                    "bank_capital": ReferenceMapping(
+                        source_table="capital_structure", dataset_kind="capital_structure"
+                    )
+                }
+            ),
+            activate=True,
+            reason="Test capital register publication.",
+        ),
+        commit=False,
+    )
+    storage = InMemoryStorageClient()
+
+    def ingest(tier: str, amount: str) -> IngestionBatch:
+        rows = [
+            {"capital_component": "paid_up_capital", "amount_ghs": "100000000", "tier": "CET1"},
+            {"capital_component": "intangible_assets", "amount_ghs": amount, "tier": tier},
+        ]
+        if source_system == "API_PUSH":
+            source = tmp_path / "register.json"
+            source.write_text(json.dumps({"reference": {"capital_structure": rows}}))
+        else:
+            source = tmp_path / "capital_structure.csv"
+            source.write_text(
+                "capital_component,amount_ghs,tier\n"
+                + "\n".join(
+                    f"{row['capital_component']},{row['amount_ghs']},{row['tier']}" for row in rows
+                )
+                + "\n"
+            )
+        result = ingestion.start_ingestion(
+            db_session,
+            MAKER,
+            SAMPLE_BANK_ID,
+            IngestionBatchCreate(
+                source_system=source_system,
+                as_of_date=REPORTING_DATE,
+                location=str(source),
+                reason="Test register replacement.",
+            ),
+            storage,
+            commit=False,
+        )
+        batch = db_session.get(IngestionBatch, result.batch.id)
+        assert batch is not None
+        return batch
+
+    rejected = ingest("garbage", "-20000000")
+    assert rejected.status == "rejected"
+    assert rejected.records_translated == 1
+    assert rejected.records_accepted == 0
+    assert not sdi_capital.latest_capital_structure_rows(db_session, MAKER, bank, REPORTING_DATE)
+    failure = db_session.scalar(
+        select(TranslationFailure).where(TranslationFailure.ingestion_batch_id == rejected.id)
+    )
+    assert failure is not None
+    raw_record = cast(dict[str, object], failure.raw_record)
+    assert raw_record["capital_component"] == "intangible_assets"
+    findings = cast(list[dict[str, str]], rejected.validation_report["failures"])
+    finding = findings[0]
+    assert finding["severity"] == "BLOCKER"
+    assert finding["source_locator"] == failure.source_locator
+    assert "garbage" in finding["detail"]
+
+    accepted = ingest("CET1_DEDUCTION", "-10000000")
+    assert accepted.status == "accepted"
+    assert net_own_funds(db_session, MAKER, bank, REPORTING_DATE) == Decimal("90000000")
+    rejected = ingest("garbage", "-20000000")
+    assert rejected.status == "rejected"
+    current = sdi_capital.latest_capital_structure_rows(db_session, MAKER, bank, REPORTING_DATE)
+    assert {row.ingestion_batch_id for row in current} == {accepted.id}
+    assert net_own_funds(db_session, MAKER, bank, REPORTING_DATE) == Decimal("90000000")
+
+    corrected = ingest("CET1_DEDUCTION", "-20000000")
+    assert corrected.status == "accepted"
+    assert net_own_funds(db_session, MAKER, bank, REPORTING_DATE) == Decimal("80000000")
+
+
+@pytest.mark.parametrize("consumer", ["net_own_funds", "prefetch", "capital_checks", "summary"])
+@pytest.mark.parametrize("amount", ["-20000000", "20000000"])
+def test_stored_unknown_tier_refuses_sdi_capital_consumers(
+    db_session: Session, consumer: str, amount: str
+) -> None:
+    """BoG CRD 2018 ¶32: SDI capital refuses stored unknown tiers, including deductions."""
+    materialize_canonical_test_book(db_session)
+    _push_register(
+        db_session,
+        ("paid_up_capital", "100000000", "CET1"),
+        ("intangible_assets", amount, "garbage"),
+    )
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+
+    with pytest.raises(sdi_capital.SdiCapitalPolicyUnresolved) as refused:
+        if consumer == "net_own_funds":
+            net_own_funds(db_session, MAKER, bank, REPORTING_DATE)
+        elif consumer == "prefetch":
+            sdi_capital.prefetch_net_own_funds(db_session, MAKER, bank, [REPORTING_DATE])
+        elif consumer == "capital_checks":
+            sdi_capital_checks.capital_components(db_session, MAKER, bank, REPORTING_DATE)
+        else:
+            sdi_capital.compute_sdi_capital_summary(db_session, MAKER, bank, REPORTING_DATE)
+
+    assert refused.value.state == OutcomeState.DATA_QUALITY_BLOCK
+    assert refused.value.blocks_filing
+    assert refused.value.status_code == 409
+    detail = cast(str, refused.value.detail)
+    assert "intangible_assets" in detail
+    assert "garbage" in detail

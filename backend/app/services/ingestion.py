@@ -476,7 +476,10 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
         records,
         default_validation_config(),
         context,
-        extra_findings=_table_resolution_findings(extraction, mapping),
+        extra_findings=[
+            *_table_resolution_findings(extraction, mapping),
+            *_capital_register_translation_findings(extraction, records),
+        ],
     )
     if identity_savepoint is not None:
         if outcome.overall_status == "rejected":
@@ -1290,6 +1293,29 @@ def _resolve_mapping_config(
             detail=f"No active mapping config for {scope}; create and activate one first.",
         )
     return record
+
+
+def _capital_register_translation_findings(
+    extraction: ExtractionResult, records: CanonicalRecords
+) -> list[Finding]:
+    """Refuse publication of a capital register with untranslatable rows."""
+    capital_locators = {
+        record.source_locator
+        for record in extraction.records
+        if record.entity_type == "reference" and record.dataset_kind == "capital_structure"
+    }
+    return [
+        Finding(
+            rule="capital_register_translation_failure",
+            category="STRUCTURAL",
+            severity="BLOCKER",
+            entity_type="reference",
+            source_locator=failure.source_locator,
+            detail=f"capital_structure row refused: {failure.error_message}",
+        )
+        for failure in records.failures
+        if failure.entity_type == "reference" and failure.source_locator in capital_locators
+    ]
 
 
 def _table_resolution_findings(
