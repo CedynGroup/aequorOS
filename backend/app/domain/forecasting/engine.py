@@ -124,6 +124,7 @@ _TWO = Decimal("2")
 
 FACT_GROUP_BALANCE_SHEET = "balance_sheet"
 FACT_GROUP_LOAN_EXPOSURE = "loan_exposure"
+FACT_GROUP_CREDIT_EXPOSURE = "credit_exposure"
 FACT_GROUP_SECURITIES = "securities"
 FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_LCR_INFLOW = "lcr_inflow"
@@ -425,6 +426,7 @@ class _State:
     # the loan factor and never enter assets_total()/the funding plug.
     ecl_exposures: dict[str, Decimal] = dataclass_field(default_factory=dict)
     crm_collateral: dict[str, Decimal] = dataclass_field(default_factory=dict)
+    credit_exposures: dict[str, Decimal] = dataclass_field(default_factory=dict)
 
     def loans_total(self) -> Decimal:
         return sum(self.loans.values(), _ZERO)
@@ -475,6 +477,9 @@ class _Meta:
     #: year appends exactly one gross-income year, so the count of
     #: gross-income years carried never decreases.
     gi_window: int = 1
+    credit_risk_weights: Mapping[str, str | None] = dataclass_field(
+        default_factory=dict[str, str | None]
+    )
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -514,6 +519,12 @@ def project(  # noqa: PLR0913, PLR0915
     equity_prev = state.equity
 
     for year in range(1, years + 1):
+        _scale_credit_exposures(
+            state,
+            loan_factor,
+            deposit_factor,
+            securities_factor * (haircut_factor if year == 1 else _ONE),
+        )
         _scale_in_place(state.loans, loan_factor)
         _scale_in_place(state.off_balance, loan_factor)
         _scale_in_place(state.inflows, loan_factor)
@@ -845,6 +856,30 @@ def _apply_funding_plug(state: _State) -> None:
         )
 
 
+def _scale_credit_exposures(
+    state: _State,
+    loan_factor: Decimal,
+    cash_factor: Decimal,
+    securities_factor: Decimal,
+) -> None:
+    """Roll capital's net exposure basis with the matching accounting asset.
+
+    Corporate securities and interbank claims remain in constant residual
+    assets, matching the balance-sheet projection. Public-debt paper follows
+    its securities growth and mark-to-market shock.
+    """
+    for category in state.credit_exposures:
+        base_category = category.rsplit(":", 1)[0]
+        factor = _ONE
+        if base_category in state.loans or base_category.startswith("loans:"):
+            factor = loan_factor
+        elif base_category in state.cash:
+            factor = cash_factor
+        elif base_category.startswith(("securities:domestic_sovereign", "securities:pse_")):
+            factor = securities_factor
+        state.credit_exposures[category] = money(state.credit_exposures[category] * factor)
+
+
 def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa: PLR0912, PLR0915
     cash: dict[str, Decimal] = {}
     securities: dict[str, Decimal] = {}
@@ -862,6 +897,8 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
     components: dict[str, Decimal] = {}
     ecl_exposures: dict[str, Decimal] = {}
     crm_collateral: dict[str, Decimal] = {}
+    credit_exposures: dict[str, Decimal] = {}
+    credit_risk_weights: dict[str, str | None] = {}
     income_facts: list[tuple[int, str, Decimal]] = []
 
     loan_risk_weights: dict[str, str | None] = {}
@@ -896,6 +933,9 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
                     equity = amount
                 else:
                     constant_equity[fact.category] = amount
+        elif fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE:
+            credit_exposures[fact.category] = amount
+            credit_risk_weights[fact.category] = fact.risk_weight_code
         elif fact.fact_group == FACT_GROUP_LOAN_EXPOSURE:
             loans[fact.category] = amount
             loan_risk_weights[fact.category] = fact.risk_weight_code
@@ -946,6 +986,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         gi_history=sorted(income_facts),
         ecl_exposures=ecl_exposures,
         crm_collateral=crm_collateral,
+        credit_exposures=credit_exposures,
     )
     if not state.gi_history:
         # The capital engine requires at least one positive gross-income year;
@@ -954,6 +995,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
     meta = _Meta(
         gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
+        credit_risk_weights=credit_risk_weights,
         off_balance_ccf=off_balance_ccf,
         off_balance_risk_weights=off_balance_risk_weights,
         securities_group_hqla=securities_group_hqla,
@@ -982,6 +1024,15 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
     for category, amount in sorted(state.constant_equity.items()):
         rows.append(_bs_fact(category, amount, "equity"))
     rows.append(_bs_fact(CAPITAL_TOTAL_CATEGORY, state.equity, "equity"))
+    for category, amount in sorted(state.credit_exposures.items()):
+        rows.append(
+            ForecastFact(
+                fact_group=FACT_GROUP_CREDIT_EXPOSURE,
+                category=category,
+                amount=amount,
+                risk_weight_code=meta.credit_risk_weights.get(category),
+            )
+        )
     for category, amount in sorted(state.loans.items()):
         rows.append(
             ForecastFact(
@@ -1087,6 +1138,7 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
         FACT_GROUP_CRM_COLLATERAL,
         FACT_GROUP_ECL_EXPOSURE,
         FACT_GROUP_LOAN_EXPOSURE,
+        FACT_GROUP_CREDIT_EXPOSURE,
         FACT_GROUP_MARKET_RISK,
         FACT_GROUP_OFF_BALANCE,
         FACT_GROUP_OPERATIONAL_INCOME,

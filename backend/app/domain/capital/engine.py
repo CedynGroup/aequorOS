@@ -9,11 +9,13 @@ happens AFTER quantization so stored and displayed values agree.
 
 Methodology notes:
 
-- Credit RWA (standardized approach) covers the full balance sheet: granular
+- Credit RWA uses ``credit_exposure`` facts net of specific provisions and
+  interest in suspense (BoG CRD (June 2018) ¶98), independently of HQLA.
+  For older immutable snapshots without this group, the legacy path covers granular
   ``loan_exposure`` facts at their coded risk weights, the ``other_assets``
   balance-sheet row at RW100, and ``off_balance`` facts converted to an EAD via
   their CCF before weighting. Cash, BoG reserves, and sovereign securities are
-  RW0; one summary line each (``bog_bills``, ``gog_bonds``,
+  RW0 in legacy snapshots; one summary line each (``bog_bills``, ``gog_bonds``,
   ``cash_and_reserves`` — the latter aggregating the vault-cash and BoG reserve
   balance-sheet rows) is emitted with a zero weighted amount for transparency.
 - Market RWA charges ``fx_charge_pct`` of the larger open FX position and
@@ -87,6 +89,7 @@ type CapitalTriggerCode = Literal["early_warning", "breach", "critical"]
 
 FACT_GROUP_BALANCE_SHEET = "balance_sheet"
 FACT_GROUP_LOAN_EXPOSURE = "loan_exposure"
+FACT_GROUP_CREDIT_EXPOSURE = "credit_exposure"
 FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
@@ -888,17 +891,26 @@ def _crm_recognized_by_category(
 def _credit_line_items(
     facts: Sequence[CapitalFact], params: CapitalParams
 ) -> tuple[CapitalLineItem, ...]:
+    """Basis: BoG CRD (June 2018), in force.
+
+    Implements: ¶98: capital uses net credit exposures, separate from gross EAD.
+    Older immutable snapshots retain their original summary-based measurement.
+    """
     items: list[CapitalLineItem] = []
     crm_recognized = _crm_recognized_by_category(facts, params)
+    credit = [fact for fact in facts if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE]
     loans = sorted(
-        (fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
+        (credit or [fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE]),
         key=lambda fact: fact.category,
     )
     for fact in loans:
         weight = _risk_weight(params, fact.risk_weight_code, fact.category)
-        crm = min(crm_recognized.get(fact.category, _ZERO), money(fact.amount))
+        category = fact.category.rsplit(":", 1)[0] if credit else fact.category
+        available_crm = crm_recognized.get(category, _ZERO)
+        crm = min(available_crm, max(money(fact.amount), _ZERO))
+        crm_recognized[category] = available_crm - crm
         net_exposure = money(fact.amount - crm)
-        description = _describe(fact.category)
+        description = _describe(category)
         if crm > _ZERO:
             description = f"{description} (After CRM Collateral, Post-Haircut)"
         items.append(
@@ -914,7 +926,9 @@ def _credit_line_items(
     other_assets = [
         fact
         for fact in facts
-        if fact.fact_group == FACT_GROUP_BALANCE_SHEET and fact.category == OTHER_ASSETS_CATEGORY
+        if not credit
+        and fact.fact_group == FACT_GROUP_BALANCE_SHEET
+        and fact.category == OTHER_ASSETS_CATEGORY
     ]
     for fact in other_assets:
         weight = _risk_weight(params, OTHER_ASSETS_RISK_WEIGHT_CODE, fact.category)
@@ -952,7 +966,7 @@ def _credit_line_items(
         if fact.fact_group == FACT_GROUP_BALANCE_SHEET:
             balance_amounts[fact.category] = balance_amounts.get(fact.category, _ZERO) + fact.amount
     zero_weight = _risk_weight(params, ZERO_RISK_WEIGHT_CODE, ZERO_RISK_WEIGHT_CODE)
-    for line_code, description, categories in _ZERO_WEIGHT_SUMMARY_LINES:
+    for line_code, description, categories in () if credit else _ZERO_WEIGHT_SUMMARY_LINES:
         exposure = money(
             sum((balance_amounts.get(category, _ZERO) for category in categories), _ZERO)
         )
@@ -1096,6 +1110,13 @@ def resolve_risk_weight(params: CapitalParams, code: str | None, subject: str) -
     code at all is ``MISSING_REQUIRED_INPUT``, a code with no governed row for the
     institution's jurisdiction and effective date is ``POLICY_UNRESOLVED``.
     """
+    # BoG CRD (June 2018) ¶119 / ¶139: resolve both governed constituent
+    # weights; it grants no fallback if either register row is missing.
+    if code in ("RW50+RW20", "RW100+RW20"):
+        base, addon = code.split("+")
+        return resolve_risk_weight(params, base, subject) + resolve_risk_weight(
+            params, addon, subject
+        )
     if code is None:
         raise RiskWeightUnavailable(
             f"risk_weight_code:{subject}",

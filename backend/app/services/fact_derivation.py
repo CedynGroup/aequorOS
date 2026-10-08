@@ -79,8 +79,8 @@ balance_sheet
     (forensic re-audit D-1): the verdict was computed here and discarded, so a
     tenant 3.68% out of balance served a CAR marked ``ready``.
     SECURITY_HOLDING rows reach ``securities_bog_bills`` /
-    ``securities_gog_bonds`` only on positive evidence of sovereign or
-    central-bank issuance; anything else is carried in ``other_assets``. Those
+    ``securities_gog_bonds`` on positive evidence of sovereign, central-bank or
+    public-sector issuance; anything else is carried in ``other_assets``. Those
     two lines are unaffected by the HQLA level test below — a demotion out of
     Level 1 moves no balance-sheet figure.
 
@@ -88,7 +88,7 @@ loan_exposure
     LOAN positions partitioned by IFRS 9 stage and product
     ``regulatory_category``. Stage 3 → ``past_due_90`` (RW150). Category map:
     CORPORATE_UNRATED / CORPORATE_LOAN_UNRATED_100RW / AGRICULTURE →
-    ``corporate_unrated`` (RW100), SME_UNRATED → ``sme_retail`` (RW75),
+    ``corporate_unrated`` (RW100), SME_UNRATED → ``sme_retail`` (RW100),
     RETAIL_UNSECURED → ``retail_other`` (RW75), RESIDENTIAL_MORTGAGE →
     ``residential_mortgage`` (RW35), COMMERCIAL_REAL_ESTATE →
     ``commercial_real_estate`` (RW100). An unknown or missing category gets NO
@@ -98,17 +98,23 @@ loan_exposure
     and no directive licenses one from a product label. Σ exposures ==
     ``loans_gross`` by construction.
 
+credit_exposure
+    Capital-only on-balance exposures net of specific provisions and suspended
+    interest under BoG CRD (June 2018) ¶98. Securities are classified by issuer
+    and currency (¶106–119); interbank claims by ERG and original maturity
+    (¶123–124). Gross accounting balances and staged IFRS 9 EAD are preserved.
+
 securities
     The HQLA stock: the balance-sheet bills/bonds split re-emitted one row per
     established Basel HQLA level, plus the two cash-mirror rows
     (``cash_vault_hqla``, ``bog_excess_reserves_hqla``) carrying
     ``source="cash"`` so stress haircuts skip them. Two independent gates:
 
-    * **Issuer.** Only SOVEREIGN / central-bank paper reaches these rows —
-      ``_is_sovereign_security`` (typed ``counterparty_type``, the documented
-      ``attributes.instrument`` / ``issuer_class`` conventions, a sovereign
+    * **Issuer.** Public-debt paper reaches these rows —
+      ``_is_public_debt_security`` (typed ``counterparty_type``, the documented
+      ``attributes.instrument`` / closed public ``issuer_class`` conventions, a sovereign
       product code, or an issuer named in the jurisdiction registry). Paper with
-      none of those signals is not HQLA and is not zero-risk-weighted.
+      none of those signals is not HQLA. Capital weights are resolved separately.
     * **Level.** ``_classify_security_hqla`` then establishes L1 / L2A / L2B
       from the evidence, or refuses. Until 2026-08-22 all four emission sites
       stamped a literal ``"L1"`` (forensic re-audit D-6), so no Level-2 fact
@@ -272,6 +278,14 @@ from app.domain.ingestion.reference_schemas.business_units import (
 from app.domain.irr.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
 from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
 from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
+from app.domain.positions.credit import (
+    DOMESTIC_SOVEREIGN_INSTRUMENTS,
+    PSE_INSTRUMENT_CLASSES,
+    PSE_ISSUER_CLASSES,
+    attribute_text,
+    interbank_weight_code,
+    specific_deductions,
+)
 from app.domain.positions.families import LOAN_CATEGORY_MAP as _LOAN_CATEGORY_MAP
 from app.domain.positions.families import PAST_DUE_CATEGORY as _PAST_DUE_CATEGORY
 from app.domain.positions.families import RETAIL_LOAN_CATEGORIES as _RETAIL_LOAN_CATEGORIES
@@ -487,6 +501,7 @@ class _PositionRow:
     ccf: Decimal | None
     # The raw snapshot attributes: hedge/swap instrument terms live here.
     attributes: dict[str, Any]
+    origination_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -807,9 +822,10 @@ def _derive_specs(
         identity,
     ) = _derive_balance_sheet_block(canonical, groups, live=live)
     specs.extend(balance_sheet)
+    specs.extend(_derive_credit_exposure(canonical, loan_rows, balance_sheet, groups))
     specs.extend(_derive_loan_exposure(loan_rows, groups))
     specs.extend(_derive_ecl_exposure(loan_rows, groups))
-    specs.extend(_derive_crm_collateral(loan_rows, groups))
+    specs.extend(_derive_crm_collateral(canonical, loan_rows, groups))
     specs.extend(_derive_provision_held(loan_rows, groups))
     specs.extend(_derive_securities(securities, cash_amounts, groups))
     specs.extend(_derive_off_balance(canonical, groups))
@@ -1133,7 +1149,7 @@ def _sovereign_issuer_names(db: Session, bank: Bank) -> tuple[str, ...]:
     Registry-driven (``jurisdictions``), never a country literal — CLAUDE.md's
     jurisdiction rule. Used only as the last-resort signal in the SECURITY_HOLDING
     issuer test, behind the typed ``counterparty_type`` and the documented
-    ``attributes.instrument`` / ``attributes.issuer_class`` conventions.
+    ``attributes.instrument`` conventions.
     """
     row = jurisdictions.get_jurisdiction(db, bank)
     if row is None:
@@ -1201,6 +1217,7 @@ def _position_row(
         # for why it must not become zero.
         balance_ghs = balance
     return _PositionRow(
+        origination_date=position.origination_date,
         source_reference=snapshot.source_reference,
         source_system=snapshot.source_system,
         position_type=position.position_type,
@@ -2047,34 +2064,13 @@ def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-
     return specs, loan_rows, cash, securities, identity
 
 
-#: Counterparty types whose paper is sovereign / central-bank issuance, i.e. the
-#: only ``SECURITY_HOLDING`` rows the derivation may emit as Level-1 HQLA at a
-#: 0% risk weight. (Audit §3: every security was emitted L1/RW0 with no issuer
-#: or rating test, so a corporate bond financed the LCR and carried no RWA.)
-_SOVEREIGN_COUNTERPARTY_TYPES = frozenset(
-    {"SOVEREIGN", "CENTRAL_BANK", "GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK"}
-)
+#: Typed sovereign / central-bank evidence for the securities balance-sheet
+#: split. HQLA eligibility and capital weights each have a separate classifier;
+#: neither follows from this signal alone.
+_SOVEREIGN_COUNTERPARTY_TYPES = frozenset({"SOVEREIGN", "CENTRAL_BANK"})
 #: Documented ``attributes.instrument`` values (docs/API_INTEGRATION.md §3.4)
 #: that name sovereign or central-bank paper.
-_SOVEREIGN_INSTRUMENTS = frozenset(
-    {
-        "tbill",
-        "tbill_other",
-        "gog_bond",
-        "gog_bond_other",
-        "gog_stock",
-        "ggilb",
-        "bog_bill",
-        "bog_bond",
-        "bog_bond_other",
-        "bog_other",
-        "tor_bond",
-        "finsap_bond",
-        "cocoa_bill",
-        "grains_bill",
-        "cotton_bill",
-    }
-)
+_SOVEREIGN_INSTRUMENTS = DOMESTIC_SOVEREIGN_INSTRUMENTS
 #: Product-code tokens that name sovereign / central-bank paper directly. The
 #: pre-audit ``_is_bill`` split already keyed on this vocabulary to decide
 #: ``securities_bog_bills`` vs ``securities_gog_bonds``.
@@ -2092,23 +2088,27 @@ _SOVEREIGN_PRODUCT_TOKENS = (
 def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
     """Positive evidence that this holding is sovereign / central-bank paper.
 
-    Fail-closed by construction: absence of every signal below means the paper
-    is NOT recognised as Level-1 HQLA and NOT risk-weighted at 0%. Each signal
-    is ingested data, never an inference from a missing field:
+    Basis: BoG CRD (June 2018), in force.
+    Implements: ¶106–118: a public/private issuer class is never the sovereign.
+    This identifies issuance only; HQLA eligibility and capital risk weight are
+    established independently. Each positive signal below is ingested data:
 
     * the typed ``counterparty_type`` (SOVEREIGN / CENTRAL_BANK / …);
     * ``attributes.instrument`` from the documented BoG instrument vocabulary;
-    * ``attributes.issuer_class``, documented as GOVERNMENT_ENTITY-only;
     * a product code naming sovereign paper (TBILL / GOG / TREASURY / …);
     * an ``attributes.issuer`` naming the jurisdiction's sovereign or central
       bank, resolved from the jurisdictions registry — never a literal country.
     """
+    attributes: Mapping[str, object] = row.attributes
+    if (
+        bool(attribute_text(attributes, "issuer_class"))
+        or attribute_text(attributes, "instrument") in PSE_INSTRUMENT_CLASSES
+        or (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES
+    ):
+        return False
     if (row.counterparty_type or "").upper() in _SOVEREIGN_COUNTERPARTY_TYPES:
         return True
-    attributes = row.attributes or {}
     if str(attributes.get("instrument") or "").strip().lower() in _SOVEREIGN_INSTRUMENTS:
-        return True
-    if attributes.get("issuer_class"):
         return True
     code = f"{row.product_code or ''} {row.regulatory_category or ''}".upper()
     if any(token in code for token in _SOVEREIGN_PRODUCT_TOKENS):
@@ -2116,7 +2116,23 @@ def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) 
     issuer = str(attributes.get("issuer") or "").strip().lower()
     if not issuer:
         return False
-    return any(name in issuer for name in sovereign_names)
+    return issuer in sovereign_names
+
+
+def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
+    """The securities balance-sheet bucket, independently of capital weight.
+
+    PSE/MDB paper remains securities; its bank-declared HQLA determination is
+    still subject to the separate HQLA classifier. A closed public issuer class
+    cannot confer sovereign capital treatment.
+    """
+    attributes: Mapping[str, object] = row.attributes
+    return (
+        _is_sovereign_security(row, sovereign_names)
+        or attribute_text(attributes, "issuer_class") in PSE_ISSUER_CLASSES
+        or attribute_text(attributes, "instrument") in PSE_INSTRUMENT_CLASSES
+        or (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES
+    )
 
 
 #: The Basel HQLA levels this derivation may emit. Mirrors
@@ -2139,7 +2155,7 @@ class _SecuritiesSplit:
     """The SECURITY_HOLDING book split for the balance sheet AND for HQLA.
 
     ``bills``/``bonds`` are the balance-sheet lines and keep their historical
-    meaning (every sovereign holding, whatever its liquidity tier). The
+    meaning (every public-debt holding, whatever its liquidity tier). The
     remaining fields partition that same total by established Basel HQLA level,
     so ``l1_bills + l1_bonds + level2a + level2b + unclassified == bills + bonds``
     by construction — the securities fact group still ties to the balance-sheet
@@ -2158,7 +2174,7 @@ class _SecuritiesSplit:
 
 
 def _classify_security_hqla(row: _PositionRow, canonical: _Canonical) -> tuple[str | None, str]:
-    """The Basel HQLA level of one sovereign-bucket holding, or why there is none.
+    """The Basel HQLA level of one public-debt holding, or why there is none.
 
     Fail-closed by construction (forensic re-audit 2026-08-22 D-6). Until then
     every one of the four emission sites in ``_derive_securities`` stamped a
@@ -2229,16 +2245,16 @@ def _split_securities(
 
     Two independent tests, in this order:
 
-    1. **Is it sovereign paper?** ``_is_sovereign_security``. Non-sovereign
+    1. **Is it public debt paper?** ``_is_public_debt_security``. Other
        holdings leave the ``securities_bog_bills`` / ``securities_gog_bonds``
-       lines — which the capital engine zero-weights — and land in
-       ``other_assets`` (RW100, no HQLA credit) with a warning naming them. The
+       lines and land in ``other_assets`` with a warning naming them. Capital
+       independently classifies the positions in ``credit_exposure``. The
        balance-sheet total is unchanged; only the claim about what the paper IS
        changes.
     2. **What HQLA level is it?** ``_classify_security_hqla``, applied only
-       WITHIN the sovereign bucket, so this test can demote a holding out of
-       Level 1 but can never promote non-sovereign paper into HQLA. The
-       balance sheet, the risk weights and therefore capital are untouched by
+       WITHIN the public-debt bucket, so private or unknown issuance is never
+       promoted into HQLA by a missing issuer classification. The
+       balance sheet and the independent capital exposure basis are untouched by
        it: it decides only which securities fact carries which
        ``hqla_level``.
     """
@@ -2252,7 +2268,7 @@ def _split_securities(
     excluded: dict[str, tuple[Decimal, list[str]]] = {}
     holdings = canonical.by_type("SECURITY_HOLDING")
     for row, balance in _stated(holdings):
-        if not _is_sovereign_security(row, canonical.sovereign_issuer_names):
+        if not _is_public_debt_security(row, canonical.sovereign_issuer_names):
             non_sovereign += balance
             unsourced.append(row.source_reference)
             continue
@@ -2322,6 +2338,198 @@ def _is_bill(row: _PositionRow, as_of: date) -> bool:
 # ---------------------------------------------------------------------------
 # loan_exposure / securities / off_balance / lcr_inflow
 # ---------------------------------------------------------------------------
+
+
+def _security_credit_class(row: _PositionRow, canonical: _Canonical) -> tuple[str, str | None]:
+    """Basis: BoG CRD (June 2018), in force.
+
+    Implements: ¶106–107 and ¶117–119, independently of HQLA eligibility.
+    Foreign sovereign/MDB preferential weights require evidence the book does
+    not currently establish; those claims carry no weight and capital refuses.
+    """
+    attributes: Mapping[str, object] = row.attributes
+    instrument = attribute_text(attributes, "instrument")
+    issuer_class = PSE_INSTRUMENT_CLASSES.get(instrument) or attribute_text(
+        attributes, "issuer_class"
+    )
+    foreign = row.currency.upper() != canonical.base_currency.upper()
+    if issuer_class in PSE_ISSUER_CLASSES:
+        weight = 50 if issuer_class == "public_institution" else 100
+        return f"pse_{issuer_class}", f"RW{weight}+RW20" if foreign else f"RW{weight}"
+    if (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES:
+        return "unclassified_public_sector", None
+    issuer = attribute_text(attributes, "issuer")
+    domestic = (
+        instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS or issuer in canonical.sovereign_issuer_names
+    )
+    # These documented product tokens name the domestic issuance programme.
+    product = (row.product_code or "").upper().split(".")
+    domestic = domestic or bool({"TBILL", "GOG", "BOG"}.intersection(product))
+    domestic = domestic or (row.regulatory_category or "").upper() == "SOVEREIGN_LOCAL_CCY"
+    if domestic and issuer_class:
+        # Conflicting/unknown issuer evidence cannot establish a sovereign exemption.
+        return "unclassified_issuer", None
+    if domestic:
+        # Preserve the CRD issuer class consumed by Appendix II's loss allocation.
+        # The generic label is retained when the registry establishes domestic
+        # issuance but the source does not distinguish government from central bank.
+        counterparty = (row.counterparty_type or "").upper()
+        issuer_role = ""
+        if instrument.startswith("bog_") or "BOG" in product or counterparty == "CENTRAL_BANK":
+            issuer_role = "bog"
+        elif (
+            instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS
+            or {"TBILL", "GOG"}.intersection(product)
+            or counterparty == "SOVEREIGN"
+        ):
+            issuer_role = "gog"
+        category = f"domestic_sovereign:{issuer_role}" if issuer_role else "domestic_sovereign"
+        return category, "RW20" if foreign else "RW0"
+    if _is_sovereign_security(row, canonical.sovereign_issuer_names):
+        return "unclassified_sovereign", None
+    return "other_securities", "RW100"
+
+
+def _loan_credit_class(loan: _LoanRow, canonical: _Canonical) -> tuple[str, str | None]:
+    """BoG CRD (June 2018) ¶106–124, ¶139: counterparty treatment for loan claims.
+
+    Past-due classification keeps its existing precedence. A public-sector or
+    bank claim is not corporate merely because its source product says so.
+    """
+    row = loan.row
+    if loan.category == _PAST_DUE_CATEGORY[0]:
+        return loan.category, loan.risk_weight_code
+    if _is_public_debt_security(row, canonical.sovereign_issuer_names):
+        category, code = _security_credit_class(row, canonical)
+        return f"loans:{category}", code
+    if row.counterparty_type in ("BANK_OECD", "BANK_NON_OECD"):
+        return "loans:banks", interbank_weight_code(
+            row.attributes,
+            domestic=row.currency.upper() == canonical.base_currency.upper(),
+            origination=row.origination_date,
+            maturity=row.contractual_maturity,
+        )
+    if (
+        loan.category == "sme_retail"
+        and loan.risk_weight_code == "RW100"
+        and row.currency.upper() != canonical.base_currency.upper()
+    ):
+        return loan.category, "RW100+RW20"
+    return loan.category, loan.risk_weight_code
+
+
+def _derive_credit_exposure(
+    canonical: _Canonical,
+    loans: list[_LoanRow],
+    balance_sheet: list[_FactSpec],
+    groups: list[GroupResult],
+) -> list[_FactSpec]:
+    """Basis: BoG CRD (June 2018), in force.
+
+    Implements: ¶98, ¶106–107, ¶117–119, ¶123–124 and ¶139.
+    Capital exposures replace gross balance-sheet summaries exactly once.
+    Gross loans, staged IFRS 9 EAD and HQLA remain separate measurement bases.
+    Loan-loss GL contra accounts are removed from residual assets: specific
+    provisions are deducted per exposure, and general allowances are not RWA.
+    """
+    totals: dict[tuple[str, str | None], Decimal] = {}
+    warnings: list[str] = []
+
+    def add(row: _PositionRow, category: str, code: str | None) -> None:
+        if row.balance_ghs is None:
+            # A refusal fact prevents an incomplete book from appearing capital-ready.
+            category, code = f"unconverted_{row.currency}", None
+            amount = _ZERO
+        else:
+            try:
+                attributes: Mapping[str, object] = row.attributes
+                grade = normalise_bog_classification(attributes.get("bog_classification"))
+                non_performing = grade in NPL_GRADES if grade is not None else row.ifrs9_stage == 3
+                deduction = specific_deductions(attributes, non_performing=non_performing)
+            except ValueError as exc:
+                raise DerivationError(
+                    "invalid_specific_provision", f"{row.source_reference}: {exc}"
+                ) from exc
+            amount = max(row.balance_ghs - deduction, _ZERO)
+        key = (category, code)
+        totals[key] = totals.get(key, _ZERO) + amount
+        if code is None:
+            warnings.append(
+                f"{row.source_reference}: no established CRD capital risk weight "
+                f"for {category}; capital refuses."
+            )
+
+    for loan in loans:
+        category, code = _loan_credit_class(loan, canonical)
+        add(loan.row, category, code)
+    securities = canonical.by_type("SECURITY_HOLDING")
+    placements = canonical.by_type("INTERBANK_PLACEMENT")
+    for row in securities:
+        category, code = _security_credit_class(row, canonical)
+        add(row, f"securities:{category}", code)
+    for row in placements:
+        if _is_public_debt_security(row, canonical.sovereign_issuer_names):
+            category, code = _security_credit_class(row, canonical)
+            add(row, f"interbank:{category}", code)
+        else:
+            code = (
+                interbank_weight_code(
+                    row.attributes,
+                    domestic=row.currency.upper() == canonical.base_currency.upper(),
+                    origination=row.origination_date,
+                    maturity=row.contractual_maturity,
+                )
+                if row.counterparty_type in (None, "BANK_OECD", "BANK_NON_OECD")
+                else None
+            )
+            add(row, "interbank", code)
+    # Paper outside the public-debt bucket and interbank claims sit inside other_assets.
+    # Subtract their GROSS balances before adding their net classified exposures.
+    non_sovereign = sum(
+        (
+            amount
+            for row, amount in _stated(securities)
+            if not _is_public_debt_security(row, canonical.sovereign_issuer_names)
+        ),
+        _ZERO,
+    )
+    placements_total = sum((amount for _, amount in _stated(placements)), _ZERO)
+    allowance = sum(
+        (
+            _dec(account.balance)
+            for account in canonical.gl_accounts
+            if account.account_class == "ASSET"
+            and account.balance is not None
+            and _is_loan_loss_allowance_gl(account.account_code.strip(), account.name.lower())
+        ),
+        _ZERO,
+    )
+    for fact in balance_sheet:
+        if fact.category == "other_assets":
+            totals[("other_assets", "RW100")] = (
+                fact.amount - non_sovereign - placements_total - allowance
+            )
+        elif fact.category in ("cash_vault", "bog_required_reserves", "bog_excess_reserves"):
+            totals[(fact.category, "RW0")] = fact.amount
+    specs = [
+        _FactSpec(
+            fact_group="credit_exposure",
+            category=f"{category}:{code or 'unclassified'}",
+            amount=amount,
+            risk_weight_code=code,
+            derived_from=(
+                "BoG CRD (June 2018) Part 2; net of specific provisions "
+                "and interest in suspense (¶98)"
+            ),
+        )
+        for (category, code), amount in sorted(
+            totals.items(), key=lambda item: (item[0][0], item[0][1] or "")
+        )
+    ]
+    groups.append(
+        GroupResult(group="credit_exposure", status="derived", rows=len(specs), warnings=warnings)
+    )
+    return specs
 
 
 def _derive_loan_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
@@ -2498,7 +2706,9 @@ def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult])
     return specs
 
 
-def _derive_crm_collateral(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
+def _derive_crm_collateral(
+    canonical: _Canonical, loan_rows: list[_LoanRow], groups: list[GroupResult]
+) -> list[_FactSpec]:
     """CRM collateral/guarantee values per loan family + class (item 9).
 
     Reads the documented ``crm_collateral_ghs``/``crm_collateral_class`` and
@@ -2509,6 +2719,7 @@ def _derive_crm_collateral(loan_rows: list[_LoanRow], groups: list[GroupResult])
     """
     totals: dict[str, Decimal] = {}
     for loan in loan_rows:
+        category, _ = _loan_credit_class(loan, canonical)
         attributes = loan.row.attributes
         for value_key, class_key in (
             ("crm_collateral_ghs", "crm_collateral_class"),
@@ -2518,7 +2729,7 @@ def _derive_crm_collateral(loan_rows: list[_LoanRow], groups: list[GroupResult])
             collateral_class = attributes.get(class_key)
             if value is None or value <= _ZERO or not collateral_class:
                 continue
-            key = f"{loan.category}:{str(collateral_class).upper()}"
+            key = f"{category}:{str(collateral_class).upper()}"
             totals[key] = totals.get(key, _ZERO) + value
     specs = [
         _FactSpec(

@@ -63,7 +63,7 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
             "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', "
-            "'provision_held', 'cashflow')",
+            "'provision_held', 'cashflow', 'credit_exposure')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(

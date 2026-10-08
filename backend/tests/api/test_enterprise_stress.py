@@ -182,7 +182,7 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     assert response.status_code == 201, response.text
     run = response.json()
     assert len(run["input_hash"]) == 64
-    assert run["engine_version"] == "enterprise-stress-v4.2.0"
+    assert run["engine_version"] == "enterprise-stress-v5.0.0"
     assert run["scenario_code"] == "adverse_2027"
 
     # The outcome couples solvency and liquidity, both baseline vs stressed.

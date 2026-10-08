@@ -15,8 +15,9 @@ LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
     "CORPORATE_UNRATED": ("corporate_unrated", "RW100"),
     "CORPORATE_LOAN_UNRATED_100RW": ("corporate_unrated", "RW100"),
     "AGRICULTURE": ("corporate_unrated", "RW100"),
-    "SME_UNRATED": ("sme_retail", "RW75"),
-    "SME_RETAIL": ("sme_retail", "RW75"),
+    # BoG CRD (June 2018) ¶139: business-oriented retail remains SME at 100%.
+    "SME_UNRATED": ("sme_retail", "RW100"),
+    "SME_RETAIL": ("sme_retail", "RW100"),
     "RETAIL_UNSECURED": ("retail_other", "RW75"),
     "RETAIL_OTHER": ("retail_other", "RW75"),
     "RESIDENTIAL_MORTGAGE": ("residential_mortgage", "RW35"),

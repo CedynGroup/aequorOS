@@ -191,7 +191,6 @@ def test_currency_without_return_history_still_carries_the_capital_charge() -> N
         _row("S/1", "SECURITY_HOLDING", counterparty_type="SOVEREIGN"),
         _row("S/2", "SECURITY_HOLDING", counterparty_type="CENTRAL_BANK"),
         _row("S/3", "SECURITY_HOLDING", attributes={"instrument": "gog_bond"}),
-        _row("S/4", "SECURITY_HOLDING", attributes={"issuer_class": "public_institution"}),
         _row("S/5", "SECURITY_HOLDING", product_code="SEC.TBILL.91"),
         _row("S/6", "SECURITY_HOLDING", attributes={"issuer": "Government of Ghana"}),
     ],
@@ -207,6 +206,7 @@ def test_sovereign_evidence_is_recognised(row: _PositionRow) -> None:
         _row("C/2", "SECURITY_HOLDING", product_code="SEC.CORP.BOND.5Y"),
         _row("C/3", "SECURITY_HOLDING", attributes={"issuer": "Acme Manufacturing plc"}),
         _row("C/4", "SECURITY_HOLDING"),
+        _row("PSE/1", "SECURITY_HOLDING", attributes={"issuer_class": "public_institution"}),
     ],
 )
 def test_paper_without_sovereign_evidence_is_not_recognised(row: _PositionRow) -> None:
@@ -393,7 +393,7 @@ def test_absent_ecl_and_crm_report_an_explicit_not_computable_state(
     loan_rows = _classify_loans(canonical, [])
     groups: list[GroupResult] = []
     assert _derive_ecl_exposure(loan_rows, groups) == []
-    assert _derive_crm_collateral(loan_rows, groups) == []
+    assert _derive_crm_collateral(canonical, loan_rows, groups) == []
 
     ecl = next(item for item in groups if item.group == "ecl_exposure")
     assert ecl.status == "skipped"

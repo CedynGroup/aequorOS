@@ -747,3 +747,28 @@ never present with zeros.
 **Every pull is recorded** — the credential, the dataset, the cursor in and out,
 the reporting dates, the row count and whether it was allowed or refused. Ask
 your AequorOS administrator for that record whenever you need it.
+
+### Capital credit exposure attributes
+
+The capital derivation uses an internal `credit_exposure` basis under BoG CRD
+(June 2018) Part 2, separate from gross accounting loans and IFRS 9 EAD.
+`issuer_class` is a closed classification: `public_institution`,
+`public_enterprise`, `soe`, or `private`. Neither `private` nor an unknown value
+establishes sovereign status. The documented `tor_bond` and `cocoa_bill`
+instruments identify PSE enterprise and institution paper respectively.
+
+`external_rating_grade` on an `INTERBANK_PLACEMENT` or loan to a bank is the bank's ECAI
+assessment mapped to CRD ERG `1`–`6`, or `unrated`; it is not a raw agency rating.
+An absent grade is unrated, and an unknown grade refuses capital. The 20%
+short-term unrated-bank weight requires domestic currency and an original term
+of at most three calendar months, established by `origination_date` and
+`contractual_maturity`. A short remaining maturity alone grants no preference.
+
+`specific_provision_ghs` explicitly states the
+specific provision on a loan, security or interbank claim. If absent, the
+bank's `ecl_provision_ghs` is specific only for an NPL classified by
+`bog_classification`, or IFRS 9 stage 3 when no BoG classification exists.
+Capital deducts this specific provision and `interest_in_suspense_ghs` per
+exposure, floored at zero (CRD ¶98). Missing amounts grant no deduction;
+malformed or negative amounts refuse derivation. General allowances on
+performing loans remain outside this deduction.

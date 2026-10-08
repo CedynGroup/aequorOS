@@ -141,7 +141,8 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v4.0.0"
+#: v5 separates CRD net credit exposures from gross accounting and HQLA facts.
+ENGINE_VERSION = "regulatory-capital-v5.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -176,6 +177,7 @@ _CAPITAL_FACT_GROUPS = (
     "crm_collateral",
     "ecl_exposure",
     "loan_exposure",
+    "credit_exposure",
     "market_risk",
     "off_balance",
     "operational_income",

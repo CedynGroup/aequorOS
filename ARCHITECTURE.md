@@ -1201,6 +1201,17 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
 
 #### ECL assumption and coverage contract
 
+Capital's on-balance credit basis is the internal `credit_exposure` fact group,
+derived by `fact_derivation._derive_credit_exposure` under BoG CRD (June 2018)
+Part 2. It nets specific provisions and interest in suspense per exposure (¶98),
+classifies securities separately from HQLA, and uses original maturity for the
+short interbank weight (¶123–124). Accounting loan balances and staged IFRS 9
+EAD stay gross. Capital excludes loan-loss GL contra accounts from residual RWA
+to avoid deducting the same provision twice; general allowances do not reduce
+credit RWA. Official, live, forecast and enterprise-stress readers must include
+this group. Older immutable snapshots retain their original measurement basis.
+Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
+
 The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
 `ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
 is a what-if and stress estimate: Tier 2 always carries the bank's booked

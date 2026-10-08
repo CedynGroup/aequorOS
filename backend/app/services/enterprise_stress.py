@@ -149,7 +149,8 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: and an incomplete source book cannot supply a whole-book modelled allowance.
 #: v4 keeps the booked general provisions in Tier 2 on both legs: modelled ECL,
 #: stage 3 included, no longer stands in for them.
-ENGINE_VERSION = "enterprise-stress-v4.2.0"
+#: v5 uses the net CRD on-balance credit exposure basis on every capital leg.
+ENGINE_VERSION = "enterprise-stress-v5.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -170,6 +171,7 @@ _HUNDRED = Decimal("100")
 _CAPITAL_GROUPS = (
     "balance_sheet",
     "loan_exposure",
+    "credit_exposure",
     "off_balance",
     "market_risk",
     "operational_income",
@@ -187,6 +189,7 @@ _LIQUIDITY_GROUPS = (
 _FORECAST_GROUPS = (
     "balance_sheet",
     "loan_exposure",
+    "credit_exposure",
     "securities",
     "off_balance",
     "lcr_inflow",

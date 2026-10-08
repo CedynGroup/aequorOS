@@ -146,7 +146,7 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
             "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', "
-            "'provision_held', 'cashflow')",
+            "'provision_held', 'cashflow', 'credit_exposure')",
             name="ck_current_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
