@@ -1,7 +1,7 @@
-"""Hold the backend to basedpyright strict, ratcheting the legacy errors down.
+"""Hold the backend to basedpyright strict against a shrink-only legacy error baseline.
 
 Contributor commands and baseline maintenance rules are owned by
-``CODEBASE_CONVENTIONS.md`` §1, "Typing ratchet".
+``CODEBASE_CONVENTIONS.md`` §1, "Type-check baseline".
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import NotRequired, TypedDict
 from pydantic import TypeAdapter
 
 BACKEND = Path(__file__).resolve().parents[1]
-BASELINE = BACKEND / "scripts" / "typing_baseline.json"
+BASELINE = BACKEND / "scripts" / "type_check_baseline.json"
 #: The feature-move ledger: ``[old, new]`` dotted module names in move order.
 LEDGER = BACKEND / "scripts" / "feature_module_moves.json"
 
@@ -226,7 +226,7 @@ def report(diagnostics: Sequence[Diagnostic], comparison: Comparison) -> list[st
             found.setdefault((diagnostic.module, diagnostic.rule), []).append(diagnostic)
         lines.append(
             "New type errors. A module without a baseline entry is strict; a legacy "
-            "module may not add errors (CODEBASE_CONVENTIONS.md §1, Typing ratchet):"
+            "module may not add errors (CODEBASE_CONVENTIONS.md §1, Type-check baseline):"
         )
         for drift in comparison.grown:
             lines.append(f"  {drift}")
@@ -234,7 +234,7 @@ def report(diagnostics: Sequence[Diagnostic], comparison: Comparison) -> list[st
     if comparison.shrunk:
         lines.append(
             "These errors are fixed; record them with "
-            "`uv run python scripts/typing_ratchet.py update` so the baseline keeps the gain:"
+            "`uv run python scripts/type_check_baseline.py update` so the baseline keeps the gain:"
         )
         lines.extend(f"  {drift}" for drift in comparison.shrunk)
     return lines
@@ -244,7 +244,7 @@ def check() -> int:
     diagnostics = run_basedpyright()
     comparison = compare(count(diagnostics), load_baseline())
     if comparison.clean:
-        print(f"Typing ratchet clean: {len(diagnostics)} baselined legacy errors.")
+        print(f"Type-check baseline clean: {len(diagnostics)} baselined legacy errors.")
         return 0
     print("\n".join(report(diagnostics, comparison)))
     return 1

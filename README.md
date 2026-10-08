@@ -120,7 +120,7 @@ default deployment image — see `backend/README.md`.
 cd backend
 uv run pytest                 # hermetic suite
 uv run ruff check .
-uv run python scripts/typing_ratchet.py check   # basedpyright strict, legacy errors baselined
+uv run python scripts/type_check_baseline.py check   # basedpyright strict, legacy errors baselined
 ```
 
 The hermetic default runs on SQLite with row-level security switched off, so a

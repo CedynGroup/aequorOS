@@ -123,7 +123,7 @@ dir = "backend"
 run = "mise run risk-service:format"
 
 [tasks."risk-service:typecheck"]
-description = "Run the risk service BasedPyright strict typing ratchet"
+description = "Run the risk service BasedPyright strict type-check baseline"
 dir = "backend"
 run = "mise run risk-service:typecheck"
 

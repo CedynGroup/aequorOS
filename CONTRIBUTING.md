@@ -16,7 +16,7 @@ are always welcome.
   the repo (tenancy/RLS patterns, immutable calculation runs, adapter
   boundaries, design tokens).
 - Backend gates: `ruff check`, the basedpyright strict
-  [typing ratchet](CODEBASE_CONVENTIONS.md#typing-ratchet), and
+  [type-check baseline](CODEBASE_CONVENTIONS.md#type-check-baseline), and
   `CASHFLOW_FAST_TEST=1 pytest` must be green; tests are hermetic (no ambient
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
 - Backend database fixture isolation and parallel execution are documented in the
