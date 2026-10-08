@@ -2000,7 +2000,7 @@
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 32,
+  "reportAny": 30,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
@@ -2054,7 +2054,7 @@
   "reportUnusedFunction": 6
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd6": {
-  "reportAny": 33,
+  "reportAny": 23,
   "reportUnknownArgumentType": 1,
   "reportUnknownVariableType": 2,
   "reportUnusedFunction": 1
@@ -2626,7 +2626,7 @@
   "reportUnusedFunction": 2
  },
  "tests.api.test_bi_commentary_routes": {
-  "reportAny": 147
+  "reportAny": 146
  },
  "tests.api.test_bi_content_metering": {
   "reportAny": 9,

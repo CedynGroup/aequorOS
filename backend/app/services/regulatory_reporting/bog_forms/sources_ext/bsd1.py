@@ -39,7 +39,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, or_, select
 
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
@@ -51,7 +51,7 @@ from app.models.canonical import (
 from app.models.regulatory import BankFinancialFact
 from app.services import market_data_sources
 
-from ..sources import ResolveContext, refuse_unstated_foreign_rows, resolver, stated_amount
+from ..sources import OFF_BALANCE_TYPES, ResolveContext, reporting_currency_value, resolver
 
 #: Column key → days BEFORE the week's Wednesday (the PERIOD / reporting date).
 #: The template's own header formulas fix this: ``B28 = B3-6`` (THURS) … ``H28 = B3``.
@@ -146,21 +146,9 @@ def _is_native(params: dict[str, Any]) -> bool:
     return params.get("measure") == "native"
 
 
-def _cedi_measure(rc: ResolveContext, params: dict[str, Any]) -> Any:
-    """Balance in BASE units: the raw balance for base-currency positions, the
-    ingested ``attributes.balance_ghs`` for foreign-currency ones (the same
-    convention fact derivation applies); see ``reporting_currency_amount``."""
-    if _is_native(params):
-        return CanonicalPositionSnapshot.balance
-    return case(
-        (CanonicalPosition.currency == rc.bank.currency, CanonicalPositionSnapshot.balance),
-        else_=stated_amount("balance_ghs"),
-    )
-
-
 def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decimal:  # noqa: PLR0912
     stmt = (
-        select(func.coalesce(func.sum(_cedi_measure(rc, params)), 0))
+        select(CanonicalPositionSnapshot, CanonicalPosition)
         .select_from(CanonicalPositionSnapshot)
         .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
         .where(
@@ -209,10 +197,19 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
         stmt = stmt.where(CanonicalPosition.currency == str(currency))
     if excluded := params.get("currencies_not_in"):
         stmt = stmt.where(CanonicalPosition.currency.not_in(list(excluded)))
-    if not _is_native(params):
-        refuse_unstated_foreign_rows(rc, stmt, "balance_ghs", metric_id="bsd1.ladder_sum")
-    value = rc.db.scalar(stmt)
-    return Decimal(str(value or 0))
+    return sum(
+        (
+            (
+                snapshot.notional or Decimal("0")
+                if position.position_type in OFF_BALANCE_TYPES
+                else snapshot.balance
+            )
+            if _is_native(params)
+            else reporting_currency_value(rc, snapshot, position)
+            for snapshot, position in rc.db.execute(stmt).tuples()
+        ),
+        Decimal("0"),
+    )
 
 
 def _facts_sum(rc: ResolveContext, spec: dict[str, Any]) -> Decimal:

@@ -57,6 +57,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.market_data import public as market_data_sources
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -105,7 +106,13 @@ _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
 _PCT = Decimal("0.0001")
 
-_LE_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")
+_LE_POSITION_TYPES = (
+    "LOAN",
+    "INTERBANK_PLACEMENT",
+    "SECURITY_HOLDING",
+    "LC_GUARANTEE",
+    "COMMITMENT_UNDRAWN",
+)
 _EXEMPT_COUNTERPARTY_TYPES = ("SOVEREIGN", "CENTRAL_BANK", "GOVERNMENT_ENTITY")
 _SOVEREIGN_CATEGORY_PREFIX = "SOVEREIGN"
 _LE_THRESHOLD_FRACTION = Decimal("0.10")  # large exposure = ≥10% of NOF (¶11)
@@ -389,12 +396,21 @@ def _load_canonical_rows(
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
+        off_balance = position.position_type in _T2_OFF_BALANCE
+        if off_balance:
+            balance_ghs = _ZERO
         if position.currency == base_currency:
             if balance_ghs is None:
                 balance_ghs = Decimal(str(snapshot.balance or _ZERO))
             if notional_ghs is None:
                 notional_ghs = _dec_or_none(snapshot.notional)
         else:
+            if off_balance and notional_ghs is None and snapshot.notional is not None:
+                quote = market_data_sources.preferred_fx_spot(
+                    db, ctx.organization_id, bank.id, position.currency, base_currency, as_of
+                )
+                if quote is not None:
+                    notional_ghs = snapshot.notional * Decimal(str(quote.rate))
             missing: list[str] = []
             if balance_ghs is None:
                 missing.append("balance_ghs")
@@ -866,7 +882,7 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
     if not rows:
         raise _conflict_409(
             "no_canonical_positions",
-            "No accepted canonical LOAN, INTERBANK_PLACEMENT or SECURITY_HOLDING "
+            "No accepted canonical loan, placement, security or off-balance-sheet "
             f"position snapshots exist for {period.period_end.isoformat()}. Ingest "
             "position data for the period end before generating the Large Exposures "
             "return.",
@@ -1108,7 +1124,7 @@ def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: 
     and OBS sub-rows follow ``attributes["obs_category"]`` with documented
     per-type defaults. Amounts: on-balance rows use the GHS balance; OBS
     rows use the GHS notional (the unutilised amount itself, not a
-    CCF-weighted capital equivalent), falling back to balance.
+    CCF-weighted capital equivalent).
     """
     kind = row.position_type
     if kind in _T2_ADVANCES:
@@ -1129,7 +1145,7 @@ def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: 
     if kind in _T2_OTHER_LIABILITIES:
         return "9", row.balance_ghs
     if kind in _T2_OFF_BALANCE:
-        amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+        amount = row.notional_ghs if row.notional_ghs is not None else _ZERO
         category = (row.obs_category or "").strip().lower()
         target = _OBS_CATEGORY_ROWS.get(category)
         if target is None:
@@ -1305,7 +1321,7 @@ def _table1_inputs(rows: list[_CanonicalRow], as_of: date) -> dict[str, Decimal]
             row.contractual_maturity, as_of
         ):
             # ¶5 short-term liabilities (d): contingent liabilities ≤ 1 yr.
-            amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+            amount = row.notional_ghs if row.notional_ghs is not None else _ZERO
             inputs["short_term"] += amount
 
         if row.position_type in _TOTAL_ASSET_TYPES or (

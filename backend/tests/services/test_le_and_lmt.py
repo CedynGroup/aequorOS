@@ -618,6 +618,62 @@ def test_lmt_refuses_unstated_foreign_amounts_in_either_period(
     assert as_of.isoformat() in detail["message"]
 
 
+@pytest.mark.parametrize("return_code", ["LE-MONTHLY", "LMT"])
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+def test_off_balance_returns_measure_notional_without_a_drawn_balance(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, return_code: str, position_type: str
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    _run_liquidity_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    cp = seeder.counterparty("CP/OBS", "Off Balance Borrower", "CORPORATE")
+    seeder.position(
+        "OBS/USD",
+        position_type,
+        Decimal("100000"),
+        currency="USD",
+        counterparty=cp,
+        extra_attributes={
+            "balance_ghs": None,
+            "notional_ghs": "2000000",
+            "credit_conversion_factor": "0.2",
+        },
+    )
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "OBS/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.notional = Decimal("100000")
+    db_session.flush()
+    package = _generate(db_session, return_code)
+    sections = cast(dict[str, dict[str, list[dict[str, str]]]], _sections(package))
+    if return_code == "LE-MONTHLY":
+        exposure = sections["template_2"]["rows"][0]
+        assert Decimal(exposure["drawn_ghs"]) == Decimal("0")
+        assert Decimal(exposure["undrawn_ccf_ghs"]) == Decimal("400000")
+        assert Decimal(exposure["value"]) == Decimal("400000")
+    else:
+        row_code = "17" if position_type == "LC_GUARANTEE" else "15"
+        row = next(row for row in sections["maturity_ladder"]["rows"] if row["code"] == row_code)
+        assert Decimal(row["value"]) == Decimal("2000000")
+    snapshot.attributes = {"credit_conversion_factor": "0.2"}
+    db_session.flush()
+
+    def missing_spot(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", missing_spot)
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, return_code)
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "OBS/USD (notional_ghs)" in detail["message"]
+
+
 def test_le_validates_and_exports_round_trip(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
@@ -684,7 +740,7 @@ def _seed_lmt_book(db: Session) -> None:
     45 days out (row 6, 1-2 mths), an unclassified deposit (stable by
     complement, non-contractual), an undrawn commitment (row 15 default),
     an LC classified via obs_category (row 16) and a bare guarantee
-    (row 17 default, balance fallback, non-contractual).
+    (row 17 default, stated notional, non-contractual).
     """
     seeder = _CanonicalSeeder(db)
     depositor_a = seeder.counterparty("CP/DEP-A", "Kanda Pensions Trust", "NBFI")
@@ -727,7 +783,9 @@ def _seed_lmt_book(db: Session) -> None:
         maturity=date(2026, 4, 5),
         extra_attributes={"notional_ghs": "900000", "obs_category": "letter_of_credit"},
     )  # row 16, 2-7 days
-    seeder.position("LCG/G2", "LC_GUARANTEE", Decimal("600000"))  # default → row 17, NC
+    seeder.position(
+        "LCG/G2", "LC_GUARANTEE", Decimal("0"), extra_attributes={"notional_ghs": "600000"}
+    )  # default → row 17, NC
 
 
 def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PLR0915 - one linear pass over the printed grid

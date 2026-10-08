@@ -297,21 +297,7 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
             snapshot=snapshot,
             counterparty=counterparty,
             product=product,
-            amount_ghs=reporting_currency_value(
-                rc,
-                snapshot,
-                position,
-                ghs_attr=(
-                    "notional_ghs"
-                    if position.position_type in OFF_BALANCE_TYPES
-                    and (
-                        position.currency != rc.bank.currency
-                        or snapshot.notional is not None
-                        or (snapshot.attributes or {}).get("notional_ghs") not in (None, "")
-                    )
-                    else "balance_ghs"
-                ),
-            ),
+            amount_ghs=reporting_currency_value(rc, snapshot, position),
         )
         for snapshot, position, counterparty, product in records
     ]

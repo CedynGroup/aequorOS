@@ -491,7 +491,6 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
         "LC_GUARANTEE",
         "USD",
         balance="100000",
-        balance_ghs="0",  # off-balance-sheet LC; exposure is stated in notional_ghs
         counterparty=corporate_cp,
         extra_attributes={
             "notional_ghs": "2000000",

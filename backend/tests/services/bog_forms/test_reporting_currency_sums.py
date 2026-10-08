@@ -42,6 +42,7 @@ from app.services.regulatory_reporting.bog_forms.sources import (
     get_resolver,
     reporting_currency_value,
 )
+from app.services.sdi_views import get_liquidity_monitoring
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -377,11 +378,7 @@ def test_shared_conversion_preserves_stated_amounts_and_uses_governed_quotes(
 @pytest.mark.usefixtures("no_spot")
 @pytest.mark.parametrize("currency", ["GHS", "USD"])
 def test_bsd11_preserves_stated_contingent_amounts(book: _Book, currency: str) -> None:
-    attributes = (
-        {"balance_ghs": "1000000"}
-        if currency == "GHS"
-        else {"balance_ghs": "0", "notional_ghs": "1000000"}
-    )
+    attributes = {"notional_ghs": "1000000"} if currency == "GHS" else {"notional_ghs": "1000000"}
     snapshot = book.position("LC/STATED", "LC_GUARANTEE", attributes, currency=currency)
     if currency == "USD":
         snapshot.balance = Decimal("0")
@@ -391,3 +388,168 @@ def test_bsd11_preserves_stated_contingent_amounts(book: _Book, currency: str) -
     assert book.resolver("bsd11.register", "off_balance")(
         {"register": "large_exposures", "rank": 1}
     ) == Decimal("1000000")
+
+
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+@pytest.mark.parametrize(
+    ("resolver", "column", "params"),
+    [
+        ("positions.sum", "total", {"position_types": ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"]}),
+        (
+            "positions.sum",
+            "foreign",
+            {"position_types": ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"], "measure": "notional"},
+        ),
+        (
+            "bsd1.daily",
+            "total",
+            {"days_before": 0, "position_types": ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"]},
+        ),
+        ("bsd3.rank", "total", {"kind": "non_monetary_exposure", "rank": 1, "field": "total"}),
+        ("bsd11.register", "off_balance", {"register": "large_exposures", "rank": 1}),
+        (
+            "bsd6.bucket",
+            "total",
+            {
+                "bsd2_column": "foreign",
+                "side": "liability",
+                "components": [
+                    {
+                        "source": "positions.sum",
+                        "params": {"position_types": ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"]},
+                    }
+                ],
+            },
+        ),
+    ],
+)
+@pytest.mark.usefixtures("no_spot")
+def test_off_balance_consumers_use_notional_without_requiring_a_drawn_balance(
+    book: _Book, position_type: str, resolver: str, column: str, params: dict[str, object]
+) -> None:
+    snapshot = book.position("OBS/USD", position_type, {"notional_ghs": "123456789.50"})
+    snapshot.notional = Decimal("100000")
+    book.db.flush()
+    # Isolate sums from LC/1 while retaining the ordinary fixture for roster loaders.
+    if resolver in ("positions.sum", "bsd1.daily"):
+        params = {**params, "attribute_eq": {"notional_ghs": "123456789.50"}}
+    elif resolver == "bsd6.bucket":
+        params = {
+            **params,
+            "components": [
+                {
+                    "source": "positions.sum",
+                    "params": {
+                        "position_types": [position_type],
+                        "attribute_eq": {"notional_ghs": "123456789.50"},
+                    },
+                }
+            ],
+        }
+    assert book.resolver(resolver, column)(params) == Decimal("123456789.50")
+
+    snapshot.attributes = {}
+    book.db.flush()
+    # The same row is now unmeasurable; do not filter it out by its removed attribute.
+    if resolver in ("positions.sum", "bsd1.daily"):
+        params = {**params, "attribute_eq": {}}
+    elif resolver == "bsd6.bucket":
+        params = {
+            **params,
+            "components": [
+                {"source": "positions.sum", "params": {"position_types": [position_type]}}
+            ],
+        }
+    with pytest.raises((NotComputable, HTTPException)) as refused:
+        book.resolver(resolver, column)(params)
+    detail = str(refused.value)
+    assert "OBS/USD" in detail
+    assert "notional_ghs" in detail
+    assert "Ingest" in detail
+
+
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+@pytest.mark.usefixtures("no_spot")
+def test_liquidity_monitoring_accepts_stated_off_balance_notional_and_refuses_unstated(
+    book: _Book, position_type: str
+) -> None:
+    snapshot = book.position("OBS/MONITOR", position_type, {"notional_ghs": "2000000"})
+    snapshot.notional = Decimal("100000")
+    book.db.flush()
+    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    monitoring = get_liquidity_monitoring(book.db, ctx, book.bank, book.period.period_end)
+    assert monitoring.as_of == book.period.period_end
+    assert monitoring.maturity_ladder
+
+    snapshot.attributes = {}
+    book.db.flush()
+    with pytest.raises(HTTPException) as refused:
+        get_liquidity_monitoring(book.db, ctx, book.bank, book.period.period_end)
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "OBS/MONITOR (notional_ghs)" in detail["message"]
+
+
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+def test_off_balance_consumers_can_use_a_governed_notional_quote(
+    book: _Book, monkeypatch: pytest.MonkeyPatch, position_type: str
+) -> None:
+    snapshot = book.position("OBS/QUOTED", position_type, {"fixture": "quoted_obs"})
+    snapshot.notional = Decimal("10000000")
+    book.db.flush()
+    quote = FxRateView(
+        base_currency="USD",
+        quote_currency="GHS",
+        rate=Decimal("12"),
+        as_of_date=book.period.period_end,
+        attribution=SourceAttribution(
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=book.batch_id,
+            ingested_at=datetime(2026, 3, 31, tzinfo=UTC),
+            stale=False,
+            age_seconds=0,
+        ),
+    )
+
+    def quoted_spot(*_args: object, **_kwargs: object) -> FxRateView:
+        return quote
+
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", quoted_spot)
+    params: dict[str, object] = {
+        "position_types": [position_type],
+        "attribute_eq": {"fixture": "quoted_obs"},
+    }
+    assert book.resolver("positions.sum", "foreign")(params) == Decimal("120000000")
+    assert book.resolver("bsd1.daily", "total")({**params, "days_before": 0}) == Decimal(
+        "120000000"
+    )
+    assert book.resolver("bsd6.bucket", "total")(
+        {
+            "bsd2_column": "foreign",
+            "side": "liability",
+            "components": [{"source": "positions.sum", "params": params}],
+        }
+    ) == Decimal("120000000")
+    assert book.resolver("bsd3.rank", "total")(
+        {"kind": "non_monetary_exposure", "rank": 1, "field": "total"}
+    ) == Decimal("120000000")
+    assert book.resolver("bsd11.register", "off_balance")(
+        {"register": "large_exposures", "rank": 1}
+    ) == Decimal("120000000")
+
+
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+def test_native_currency_ladder_uses_off_balance_notional(book: _Book, position_type: str) -> None:
+    snapshot = book.position("OBS/NATIVE", position_type, {"fixture": "native_obs"})
+    snapshot.balance = Decimal("999")
+    snapshot.notional = Decimal("200000")
+    book.db.flush()
+    assert book.resolver("bsd1.daily", "total")(
+        {
+            "days_before": 0,
+            "position_types": [position_type],
+            "measure": "native",
+            "attribute_eq": {"fixture": "native_obs"},
+        }
+    ) == Decimal("200000")

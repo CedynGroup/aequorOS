@@ -22,9 +22,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import JSON, ColumnElement, Numeric, Select, and_, case, func, or_, select
-from sqlalchemy import cast as sql_cast
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
@@ -104,31 +103,7 @@ def _currency_predicate(column: Column, currency_col: Any, base_currency: str) -
 # reporting-currency amounts (IAS 21 ¶23(a) as an input)
 # ---------------------------------------------------------------------------
 
-
-def stated_amount(ghs_attr: str) -> ColumnElement[Decimal]:
-    """The position's ingested reporting-currency ``ghs_attr`` as an exact NUMERIC
-    (never a float), NULL when the bank did not state it."""
-    attribute = cast(
-        "JSON.Comparator[Any]", CanonicalPositionSnapshot.attributes[ghs_attr].comparator
-    )
-    return sql_cast(func.nullif(attribute.as_string(), ""), Numeric(28, 6))
-
-
-def reporting_currency_amount(
-    rc: ResolveContext, ghs_attr: str, native: InstrumentedAttribute[Decimal | None]
-) -> ColumnElement[Decimal]:
-    """A position's amount in the reporting currency, as a SQL expression.
-
-    A base-currency position's own amount is already in the reporting currency;
-    a foreign-currency one counts only through its ingested ``ghs_attr``
-    (``balance_ghs`` / ``notional_ghs``) and is otherwise NULL — never its native
-    amount taken as cedis. Pair it with :func:`refuse_unstated_foreign_rows`.
-    """
-    stated = stated_amount(ghs_attr)
-    return case(
-        (CanonicalPosition.currency == rc.bank.currency, func.coalesce(stated, native)),
-        else_=stated,
-    )
+OFF_BALANCE_TYPES = ("LC_GUARANTEE", "COMMITMENT_UNDRAWN")
 
 
 class ForeignAmountNotStated(NotComputable):
@@ -167,6 +142,9 @@ def reporting_currency_value(
     attributes: dict[str, Any] | None = None,
     ghs_attr: str = "balance_ghs",
 ) -> Decimal:
+    off_balance = position.position_type in OFF_BALANCE_TYPES
+    if off_balance:
+        ghs_attr = "notional_ghs"
     values = attributes if attributes is not None else snapshot.attributes or {}
     stated = cast(object, values.get(ghs_attr))
     if stated not in (None, ""):
@@ -175,11 +153,9 @@ def reporting_currency_value(
         except ArithmeticError:
             pass
     native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
-    if native is None:
-        native = snapshot.balance
     base = base_currency(rc.bank)
     if position.currency == base:
-        return native
+        return native if native is not None else Decimal("0")
     key = f"reporting:spot:{position.currency}"
     if key not in rc.cache:
         try:
@@ -195,7 +171,7 @@ def reporting_currency_value(
         except Exception:
             rc.cache[key] = None
     rate = cast(object, rc.cache[key])
-    if isinstance(rate, Decimal):
+    if isinstance(rate, Decimal) and native is not None:
         return native * rate
     raise foreign_amount_not_stated(
         rc,
@@ -203,37 +179,6 @@ def reporting_currency_value(
         ghs_attr,
         metric_id="positions.reporting_currency_amount",
     )
-
-
-def refuse_unstated_foreign_rows(
-    rc: ResolveContext, stmt: Select[Any], ghs_attr: str, *, metric_id: str
-) -> None:
-    """Raise when ``stmt``'s rows include a foreign-currency position with no
-    ingested reporting-currency amount.
-
-    Basis: Prudential return; input: IAS 21 ¶23(a) (foreign-currency monetary
-    items at the closing rate), as the bank states it in ``ghs_attr``. Summing
-    the rest would file a total that silently leaves those positions out, and
-    summing their native amount would report foreign currency as cedis, so the
-    cell refuses and names what is missing. ``stmt`` must already join
-    ``CanonicalPosition`` and carry the cell's filters.
-    """
-    missing = (
-        stmt.with_only_columns(
-            CanonicalPositionSnapshot.source_reference, CanonicalPosition.currency
-        )
-        .where(
-            and_(
-                CanonicalPosition.currency != rc.bank.currency,
-                stated_amount(ghs_attr).is_(None),
-            )
-        )
-        .order_by(CanonicalPosition.currency, CanonicalPositionSnapshot.source_reference)
-    )
-    unstated = cast(list[tuple[str, str]], rc.db.execute(missing).tuples().all())
-    if not unstated:
-        return
-    raise foreign_amount_not_stated(rc, unstated, ghs_attr, metric_id=metric_id)
 
 
 # ---------------------------------------------------------------------------
@@ -350,11 +295,7 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
     # Guide's Foreign column is "converted into cedis" — never a sum of mixed
     # native currencies — so a foreign row without it refuses the cell.
     is_notional = params.get("measure") == "notional"
-    native = (
-        CanonicalPositionSnapshot.notional if is_notional else CanonicalPositionSnapshot.balance
-    )
     ghs_attr = "notional_ghs" if is_notional else "balance_ghs"
-    measure = reporting_currency_amount(rc, ghs_attr, native)
     latest = (
         select(
             CanonicalPositionSnapshot.position_id.label("pid"),
@@ -372,7 +313,7 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
         .subquery()
     )
     stmt = (
-        select(func.coalesce(func.sum(measure), 0))
+        select(CanonicalPositionSnapshot, CanonicalPosition)
         .select_from(CanonicalPositionSnapshot)
         .join(
             latest,
@@ -439,10 +380,15 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
         pred = _currency_predicate(rc.column, CanonicalPosition.currency, rc.bank.currency)
         if pred is not None:
             stmt = stmt.where(pred)
-    refuse_unstated_foreign_rows(rc, stmt, ghs_attr, metric_id="positions.sum")
-    value = rc.db.scalar(stmt)
+    total = sum(
+        (
+            reporting_currency_value(rc, snapshot, position, ghs_attr=ghs_attr)
+            for snapshot, position in rc.db.execute(stmt).tuples()
+        ),
+        Decimal("0"),
+    )
     sign = Decimal(str(params.get("sign", 1)))
-    return Decimal(str(value or 0)) * sign
+    return total * sign
 
 
 # ---------------------------------------------------------------------------

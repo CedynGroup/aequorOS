@@ -17,6 +17,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalFxRate,
     CanonicalGlAccount,
+    CanonicalPositionSnapshot,
     CanonicalReferenceRow,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
@@ -111,6 +112,33 @@ def _by_group(facts: list[BankFinancialFact]) -> dict[str, dict[str, BankFinanci
     for fact in facts:
         grouped.setdefault(fact.fact_group, {})[fact.category] = fact
     return grouped
+
+
+@pytest.mark.parametrize("notional", [None, "0"])
+def test_off_balance_derivation_never_substitutes_a_balance_for_notional(
+    db_session: Session, notional: str | None
+) -> None:
+    _prepare(db_session)
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+            CanonicalPositionSnapshot.source_reference == "LC/1",
+        )
+    )
+    assert snapshot is not None
+    snapshot.attributes = {
+        "balance_ghs": "9999999",
+        "notional_ghs": notional,
+        "credit_conversion_factor": "0.2",
+    }
+    db_session.flush()
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    off_balance = _by_group(_facts(db_session, result)).get("off_balance", {})
+    assert sum((fact.amount for fact in off_balance.values()), Decimal("0")) == Decimal("0")
+    if notional is None:
+        assert any("LC/1" in warning and "EXCLUDED" in warning for warning in result.warnings)
+    else:
+        assert not any("LC/1" in warning and "EXCLUDED" in warning for warning in result.warnings)
 
 
 def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0915
