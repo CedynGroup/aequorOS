@@ -50,11 +50,11 @@ test("all conflicting grants must be revoked even when their modules differ from
     decisions.push(body);
   };
   try {
-    for (const module of ["liq", "cap"]) {
+    for (const moduleScope of ["liq", "cap"]) {
       const payload = {
         ...proposed,
         role_bundle: "approver",
-        module_scope: module,
+        module_scope: moduleScope,
       };
       const preview = await page.request.post(
         `${API}/authorization/bindings/preview`,
@@ -65,7 +65,8 @@ test("all conflicting grants must be revoked even when their modules differ from
         headers,
         data: {
           ...payload,
-          expected_authority_sentence: (await preview.json()).authority_sentence,
+          expected_authority_sentence: (await preview.json())
+            .authority_sentence,
         },
       });
       expect(created.status()).toBe(201);

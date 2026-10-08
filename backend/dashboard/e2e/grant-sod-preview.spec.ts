@@ -522,7 +522,9 @@ test("the notice links to the conflicting grant and the draft survives revoking 
     await expect(
       composer.getByRole("button", { name: "Review grant" }),
     ).toBeEnabled();
-    const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"), { readOnly: true });
+    const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"), {
+      readOnly: true,
+    });
     try {
       const audit = db
         .prepare(
@@ -532,7 +534,9 @@ test("the notice links to the conflicting grant and the draft survives revoking 
         .get(approverId);
       expect(audit?.actor_user_id).toBe(E2E_USERS.admin.id.replaceAll("-", ""));
       if (typeof audit?.details !== "string")
-        throw new Error("The linked revocation did not persist its audit details");
+        throw new Error(
+          "The linked revocation did not persist its audit details",
+        );
       const details: unknown = JSON.parse(audit.details);
       expect(details).toMatchObject({
         grantee_user_id: member.id,
@@ -680,7 +684,10 @@ test("a self-revocation draft survives reauthentication and clears on submit or 
     await expect(composer.getByRole("alert")).toHaveCount(0);
     if (evidenceDir)
       await page.screenshot({
-        path: path.join(evidenceDir, "grant-self-revocation-restored-draft.png"),
+        path: path.join(
+          evidenceDir,
+          "grant-self-revocation-restored-draft.png",
+        ),
       });
     await composer.getByRole("button", { name: "Review grant" }).click();
     const submitted = page.waitForResponse(
