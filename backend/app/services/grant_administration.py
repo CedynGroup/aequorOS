@@ -278,8 +278,9 @@ def check_sod_policy(
 
     # Approving a return and transmitting it to the regulator must not land on
     # one identity. Unlike the Analyst/Approver pair below this is NOT scope
-    # sensitive: transmission authority is a single Regulatory Reporting grant
-    # that files every family, so an approval grant on any module overlaps it.
+    # sensitive: Approver and Validator roles must stay with different people
+    # whatever their scopes. This does not imply that an Approver grant on
+    # another module can approve regulatory returns.
     # It is also a BLOCK rather than a warn, because the per-object condition
     # that would catch it at action time does not exist yet — the stage engine
     # owns it (docs/filing_workflow_redesign.md §3.3 layer 3). Relax this to a

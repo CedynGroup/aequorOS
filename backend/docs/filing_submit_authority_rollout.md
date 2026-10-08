@@ -133,16 +133,8 @@ The grant service advances the grantee's `authorization_version` and revokes the
 refresh families in the same transaction, so the Validator signs in again and their
 projected authority is current on the next request.
 
-**Separation of duties is enforced at assignment.** An identity holding an effective
-`approver` binding is refused a `validator` grant and vice versa
-(`approval_and_transmission_separation_required`, a **block**, not a warning). The
-check is scope-independent, unlike the Analyst/Approver warning, because one
-Validator grant files every return family. It is a block because the per-object
-condition that would catch approve-then-file at action time belongs to the stage
-engine and does not exist yet (redesign §3.3 layer 3). Relax it to a warning only
-when that condition is live — never to make an assignment pass.
-
-For account-administration conflicts and the Org Owner exception, follow the
+For Approver/Validator separation, account-administration conflicts, and the
+Org Owner exception, follow the
 [assignment-time policy](authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
 
 ## Inventory

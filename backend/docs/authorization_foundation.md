@@ -436,7 +436,8 @@ exception; the grant still requires a reason and is audited. An overlapping Anal
 and Approver pair is warned because per-object maker-checker remains a runtime
 condition that no additional binding may bypass. An Approver and Validator pair
 is BLOCKED, scope-independently, because no such runtime condition exists yet
-for approve-then-file.
+for approve-then-file. Relax it to a warning only when the stage engine enforces
+that per-object condition at action time — never to make an assignment pass.
 
 Revoke changes only the targeted row and records revoker, time, and reason.
 Create and revoke both write an `audit_events` record containing actor, grantee,

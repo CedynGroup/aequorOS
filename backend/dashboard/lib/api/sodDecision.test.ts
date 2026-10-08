@@ -1,11 +1,10 @@
 /**
  * A refused grant must say which rule refused it.
  *
- * The live case: an Org Owner granting themselves Validator is blocked by C9,
- * correctly — and was shown only "The scoped grant conflicts with
- * separation-of-duties policy", which names no rule and no remedy. The Owner's
- * natural next move is to re-compose the grant with different scopes, which
- * can never work: C9 is about who the identity is, not how narrow the grant is.
+ * Ownership alone receives a warning recording an accepted exception when
+ * granting operational authority. Delegated Account Admin authority causes
+ * the C9 block, regardless of scope. A refusal must show the server's finding
+ * instead of only "The scoped grant conflicts with separation-of-duties policy".
  *
  * Run by `pnpm --filter @aequoros/dashboard test`.
  */
