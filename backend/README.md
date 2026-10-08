@@ -366,6 +366,14 @@ in the dashboard's [local service guide](dashboard/README.md#local-services-with
 The existing `docker compose up -d risk-postgres` alternative also remains
 available; point `TEST_DATABASE_URL` at it to reuse that service.
 
+CI starts native PostgreSQL 17 through
+[`setup-postgres`](../.github/actions/setup-postgres/action.yml), shared by the
+schema/RLS/locks and full-suite jobs. It verifies the server version and raises
+`max_locks_per_transaction` to 256 before creating the restricted test roles.
+The migration chain requires no extensions: `gen_random_uuid()` is built into
+PostgreSQL 17. If a migration adds an extension dependency, install its PostgreSQL
+17 package in that action and verify availability before running migrations.
+
 ### Test databases and the primary database
 
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
