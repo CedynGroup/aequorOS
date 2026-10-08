@@ -39,6 +39,7 @@ from app.models.canonical import (
     CanonicalReferenceRow,
 )
 from app.models.regulatory import BankFinancialFact
+from app.services import jurisdictions, market_data_sources
 
 type Column = str  # domestic | foreign | total | <sheet-specific>
 
@@ -109,7 +110,7 @@ def stated_amount(ghs_attr: str) -> ColumnElement[Decimal]:
     attribute = cast(
         "JSON.Comparator[Any]", CanonicalPositionSnapshot.attributes[ghs_attr].comparator
     )
-    return sql_cast(attribute.as_string(), Numeric(28, 6))
+    return sql_cast(func.nullif(attribute.as_string(), ""), Numeric(28, 6))
 
 
 def reporting_currency_amount(
@@ -129,6 +130,80 @@ def reporting_currency_amount(
     )
 
 
+class ForeignAmountNotStated(NotComputable):
+    pass
+
+
+def foreign_amount_not_stated(
+    rc: ResolveContext,
+    positions: Iterable[tuple[str, str]],
+    ghs_attr: str,
+    *,
+    metric_id: str,
+) -> ForeignAmountNotStated:
+    unstated = tuple(positions)
+    currencies = ", ".join(sorted({currency for _, currency in unstated}))
+    references = ", ".join(reference for reference, _ in unstated)
+    return ForeignAmountNotStated(
+        outcome(
+            OutcomeState.MISSING_REQUIRED_INPUT,
+            metric_id=metric_id,
+            reason=(
+                f"{len(unstated)} foreign-currency position(s) in {currencies} carry no "
+                f"{ghs_attr}: {references}. They cannot be stated in {rc.bank.currency}. "
+                f"Ingest {ghs_attr} for these positions before generating the return."
+            ),
+            items=tuple(f"position:{reference}:{ghs_attr}" for reference, _ in unstated),
+        )
+    )
+
+
+def reporting_currency_value(
+    rc: ResolveContext,
+    snapshot: CanonicalPositionSnapshot,
+    position: CanonicalPosition,
+    *,
+    attributes: dict[str, Any] | None = None,
+    ghs_attr: str = "balance_ghs",
+) -> Decimal:
+    values = attributes if attributes is not None else snapshot.attributes or {}
+    stated = cast(object, values.get(ghs_attr))
+    if stated not in (None, ""):
+        try:
+            return Decimal(str(stated))
+        except ArithmeticError:
+            pass
+    native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
+    if native is None:
+        native = snapshot.balance
+    base = jurisdictions.base_currency(rc.bank)
+    if position.currency == base:
+        return native
+    key = f"reporting:spot:{position.currency}"
+    if key not in rc.cache:
+        try:
+            view = market_data_sources.preferred_fx_spot(
+                rc.db,
+                rc.ctx.organization_id,
+                rc.bank.id,
+                position.currency,
+                base,
+                rc.period.period_end,
+            )
+            rc.cache[key] = Decimal(str(view.rate)) if view is not None else None
+        except Exception:
+            rc.cache[key] = None
+    rate = cast(object, rc.cache[key])
+    if isinstance(rate, Decimal):
+        return native * rate
+    raise foreign_amount_not_stated(
+        rc,
+        ((snapshot.source_reference, position.currency),),
+        ghs_attr,
+        metric_id="positions.reporting_currency_amount",
+    )
+
+
 def refuse_unstated_foreign_rows(
     rc: ResolveContext, stmt: Select[Any], ghs_attr: str, *, metric_id: str
 ) -> None:
@@ -142,36 +217,22 @@ def refuse_unstated_foreign_rows(
     cell refuses and names what is missing. ``stmt`` must already join
     ``CanonicalPosition`` and carry the cell's filters.
     """
-    counts = (
-        stmt.with_only_columns(CanonicalPosition.currency, func.count())
+    missing = (
+        stmt.with_only_columns(
+            CanonicalPositionSnapshot.source_reference, CanonicalPosition.currency
+        )
         .where(
             and_(
                 CanonicalPosition.currency != rc.bank.currency,
                 stated_amount(ghs_attr).is_(None),
             )
         )
-        .group_by(CanonicalPosition.currency)
-        .order_by(CanonicalPosition.currency)
+        .order_by(CanonicalPosition.currency, CanonicalPositionSnapshot.source_reference)
     )
-    unstated = rc.db.execute(counts).tuples().all()
+    unstated = cast(list[tuple[str, str]], rc.db.execute(missing).tuples().all())
     if not unstated:
         return
-    count = sum(rows for _, rows in unstated)
-    listed = ", ".join(currency for currency, _ in unstated)
-    raise NotComputable(
-        outcome(
-            OutcomeState.MISSING_REQUIRED_INPUT,
-            metric_id=metric_id,
-            reason=(
-                f"{count} foreign-currency position(s) in {listed} carry no {ghs_attr}, so "
-                f"they cannot be stated in {rc.bank.currency}: leaving them out would "
-                f"understate the line, and adding their native amount would report "
-                f"{listed} as {rc.bank.currency}. Ingest {ghs_attr} for every "
-                f"foreign-currency position."
-            ),
-            items=tuple(f"position_attribute:{ghs_attr}:{currency}" for currency, _ in unstated),
-        )
-    )
+    raise foreign_amount_not_stated(rc, unstated, ghs_attr, metric_id=metric_id)
 
 
 # ---------------------------------------------------------------------------

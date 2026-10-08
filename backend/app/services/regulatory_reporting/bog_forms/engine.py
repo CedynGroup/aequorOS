@@ -24,7 +24,7 @@ from app.services.regulatory_reporting.common import unvalidated_book_detail, un
 from . import sources_ext  # noqa: F401 — registers per-form resolvers
 from .formulas import UnsupportedFormulaError, WorkbookEvaluator, workbook_units
 from .layout import FormLayout, load_layout
-from .sources import ResolveContext, get_resolver
+from .sources import ForeignAmountNotStated, ResolveContext, get_resolver
 from .spec import UNIT_DIVISOR, FormSpec, LineStatus, LineValue
 
 
@@ -219,6 +219,11 @@ def compute_form(  # noqa: PLR0912, PLR0913, PLR0915
                 )
                 try:
                     raw = get_resolver(line.source)(rc, dict(line.params))
+                except ForeignAmountNotStated as exc:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={"error_code": "foreign_amount_not_stated", "message": str(exc)},
+                    ) from exc
                 except HTTPException:
                     raise
                 except Exception as exc:  # noqa: BLE001 — one bad line must not sink the form

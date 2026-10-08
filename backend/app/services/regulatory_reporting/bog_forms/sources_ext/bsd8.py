@@ -36,7 +36,7 @@ derives a classification by heuristics:
 * **Amounts** are cedi equivalents (Guide: foreign-currency advances are
   reported converted): ``balance_ghs`` attribute when the source supplies it,
   the raw balance for base-currency loans, otherwise the platform's preferred
-  FX spot at period end (raw balance if no spot) — the BSD4 convention.
+  FX spot at period end; an unstated conversion blocks generation.
 * **Provisions**: Σ ``ecl_provision_ghs`` (the position-level allowance the
   capital/ECL engines consume); **interest in suspense**: Σ
   ``interest_in_suspense_ghs``; **allowable security**: Σ ``crm_collateral_ghs``
@@ -66,9 +66,9 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.services import jurisdictions, market_data_sources
+from app.services import jurisdictions
 
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 BUCKETS: tuple[str, ...] = ("current", "olem", "substandard", "doubtful", "loss")
 NPL_BUCKETS: frozenset[str] = frozenset({"substandard", "doubtful", "loss"})
@@ -160,40 +160,6 @@ def _merged_attrs(
     return merged
 
 
-def _spot(rc: ResolveContext, currency: str, base: str) -> Decimal | None:
-    key = f"bsd8:spot:{currency}"
-    if key in rc.cache:
-        cached = rc.cache[key]
-        return cached if isinstance(cached, Decimal) else None
-    rate: Decimal | None = None
-    try:
-        view = market_data_sources.preferred_fx_spot(
-            rc.db, rc.ctx.organization_id, rc.bank.id, currency, base, rc.period.period_end
-        )
-        rate = Decimal(str(view.rate)) if view is not None else None
-    except Exception:  # noqa: BLE001 — no spot ⇒ raw balance (documented fallback)
-        rate = None
-    rc.cache[key] = rate if rate is not None else False
-    return rate
-
-
-def _amount_ghs(
-    rc: ResolveContext,
-    raw_ghs: Any,
-    raw: Any,
-    currency: str,
-    base: str,
-) -> Decimal:
-    explicit = _dec(raw_ghs)
-    if explicit is not None:
-        return explicit
-    amount = _dec(raw) or _ZERO
-    if currency == base:
-        return amount
-    rate = _spot(rc, currency, base)
-    return amount * rate if rate is not None else amount
-
-
 def _cutoff(rc: ResolveContext, as_of: str) -> date:
     if as_of == "previous":
         return rc.period.period_start - timedelta(days=1)
@@ -212,7 +178,6 @@ def load_loans(rc: ResolveContext, as_of: str = "current") -> list[Loan]:
     cached = rc.cache.get(key)
     if isinstance(cached, list):
         return cached
-    base = jurisdictions.base_currency(rc.bank)
     snap = CanonicalPositionSnapshot
     latest = (
         select(snap.position_id.label("pid"), func.max(snap.as_of_date).label("as_of"))
@@ -263,9 +228,7 @@ def load_loans(rc: ResolveContext, as_of: str = "current") -> list[Loan]:
                 position=position,
                 counterparty=counterparty,
                 product=product,
-                amount_ghs=_amount_ghs(
-                    rc, attrs.get("balance_ghs"), snapshot.balance, position.currency, base
-                ),
+                amount_ghs=reporting_currency_value(rc, snapshot, position, attributes=attrs),
                 attrs=attrs,
                 bucket=bucket_of(snapshot.ifrs9_stage, attrs),
             )
@@ -281,7 +244,6 @@ def _load_obs_by_customer(rc: ResolveContext) -> dict[UUID, Decimal]:
     cached = rc.cache.get(key)
     if isinstance(cached, dict):
         return cached
-    base = jurisdictions.base_currency(rc.bank)
     snap = CanonicalPositionSnapshot
     latest = (
         select(snap.position_id.label("pid"), func.max(snap.as_of_date).label("as_of"))
@@ -316,8 +278,9 @@ def _load_obs_by_customer(rc: ResolveContext) -> dict[UUID, Decimal]:
     for row in rc.db.execute(stmt).all():
         snapshot, position = row[0], row[1]
         attrs = snapshot.attributes if isinstance(snapshot.attributes, dict) else {}
-        raw = snapshot.notional if snapshot.notional is not None else snapshot.balance
-        amount = _amount_ghs(rc, attrs.get("notional_ghs"), raw, position.currency, base)
+        amount = reporting_currency_value(
+            rc, snapshot, position, attributes=attrs, ghs_attr="notional_ghs"
+        )
         cp = snapshot.counterparty_id
         if cp is not None:
             totals[cp] = totals.get(cp, _ZERO) + amount

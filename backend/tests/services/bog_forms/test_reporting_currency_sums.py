@@ -9,23 +9,39 @@ that cannot be stated in the reporting currency now refuses the cell.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any, cast
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.authority.outcomes import NotComputable
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.models import (
     Bank,
     BankReportingPeriod,
+    CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     IngestionBatch,
     LineageRecord,
+    RegulatoryPackage,
 )
-from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
+from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.services.market_data import FxRateView, SourceAttribution
+from app.services.regulatory_reporting import generation
+from app.services.regulatory_reporting.bog_forms.catalog import form_spec
+from app.services.regulatory_reporting.bog_forms.engine import compute_form
+from app.services.regulatory_reporting.bog_forms.sources import (
+    ResolveContext,
+    Resolver,
+    get_resolver,
+    reporting_currency_value,
+)
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -41,6 +57,8 @@ _BSD1_DAILY: dict[str, object] = {
     "position_types": ["CASH"],
     "attribute_eq": _TAG,
 }
+
+pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
 
 class _Book:
@@ -78,8 +96,26 @@ class _Book:
         db.add(lineage)
         db.flush()
         self.batch_id, self.lineage_id = batch.id, lineage.id
+        counterparty = CanonicalCounterparty(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            as_of_date=period.period_end,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=batch.id,
+            lineage_id=lineage.id,
+            validation_status="accepted",
+            source_reference="CP/IAS21",
+            name="Reporting Currency Borrower",
+            counterparty_type="CORPORATE",
+            resident=True,
+        )
+        db.add(counterparty)
+        db.flush()
+        self.counterparty_id = counterparty.id
 
-    def cash(self, ref: str, currency: str, balance: str, balance_ghs: str | None) -> None:
+    def cash(
+        self, ref: str, currency: str, balance: str, balance_ghs: str | None
+    ) -> CanonicalPositionSnapshot:
         common = {
             "organization_id": DEMO_ORG_ID,
             "bank_id": SAMPLE_BANK_ID,
@@ -97,16 +133,31 @@ class _Book:
         attributes: dict[str, str] = dict(_TAG)
         if balance_ghs is not None:
             attributes["balance_ghs"] = balance_ghs
-        self.db.add(
-            CanonicalPositionSnapshot(
-                **common,
-                source_reference=ref,
-                position_id=position.id,
-                balance=Decimal(balance),
-                attributes=attributes,
-            )
+        snapshot = CanonicalPositionSnapshot(
+            **common,
+            source_reference=ref,
+            position_id=position.id,
+            balance=Decimal(balance),
+            attributes=attributes,
         )
+        self.db.add(snapshot)
         self.db.flush()
+        return snapshot
+
+    def position(
+        self, ref: str, position_type: str, attributes: dict[str, str], currency: str = "USD"
+    ) -> CanonicalPositionSnapshot:
+        snapshot = self.cash(ref, currency, "100000", None)
+        position = self.db.get(CanonicalPosition, snapshot.position_id)
+        assert position is not None
+        position.position_type = position_type
+        snapshot.attributes = attributes
+        snapshot.ifrs9_stage = 1
+        snapshot.interest_rate = Decimal("0.10")
+        snapshot.deposit_account_type = "SAVINGS" if position_type == "DEPOSIT" else None
+        snapshot.counterparty_id = self.counterparty_id
+        self.db.flush()
+        return snapshot
 
     def resolver(self, name: str, column: str) -> Callable[[dict[str, object]], object]:
         rc = ResolveContext(
@@ -160,3 +211,183 @@ def test_a_cell_that_excludes_the_unstated_row_still_resolves(book: _Book) -> No
     book.cash("CASH/USD-UNSTATED", "USD", "200000", None)
 
     assert book.resolver("positions.sum", "domestic")(_POSITIONS_SUM) == Decimal("5000000")
+
+
+@pytest.fixture
+def no_spot(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing_spot(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.services.market_data_sources.preferred_fx_spot", missing_spot)
+
+
+@pytest.mark.parametrize(
+    ("code", "position_type", "previous"),
+    [
+        ("BSD4", "LOAN", False),
+        ("BSD8", "LOAN", False),
+        ("BSD8", "LOAN", True),
+        ("BSD8", "LC_GUARANTEE", False),
+        ("BSD8", "COMMITMENT_UNDRAWN", False),
+        ("BSD14", "LOAN", False),
+        ("BSD14", "DEPOSIT", False),
+        ("BSD11", "LOAN", False),
+        ("BSD11", "LC_GUARANTEE", False),
+    ],
+)
+@pytest.mark.usefixtures("no_spot")
+def test_return_loaders_refuse_unstated_foreign_amounts(
+    book: _Book, code: str, position_type: str, previous: bool
+) -> None:
+    snapshot = book.position(
+        "POSITION/UNSTATED",
+        position_type,
+        {"sector": "agriculture.cocoa_production", "bog_classification": "loss"},
+    )
+    missing = "balance_ghs"
+    if previous:
+        snapshot.as_of_date = book.period.period_start - timedelta(days=1)
+    if position_type in ("LC_GUARANTEE", "COMMITMENT_UNDRAWN"):
+        snapshot.balance = Decimal("0")
+        snapshot.notional = Decimal("100000")
+        snapshot.attributes = {"balance_ghs": "0"}
+        missing = "notional_ghs"
+        if code == "BSD8":
+            book.position(
+                "LOAN/STATED",
+                "LOAN",
+                {"balance_ghs": "1000000", "bog_classification": "loss"},
+            )
+    book.db.flush()
+    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+
+    with pytest.raises(HTTPException) as refused:
+        compute_form(book.db, ctx, book.bank, book.period, form_spec(code))
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "POSITION/UNSTATED" in detail["message"]
+    assert f"Ingest {missing}" in detail["message"]
+
+
+@pytest.mark.parametrize("missing", [{}, {"notional_ghs": None}, {"notional_ghs": ""}])
+@pytest.mark.usefixtures("no_spot")
+def test_usd_contingent_without_cedi_notional_blocks_bsd2_package(
+    db_session: Session, missing: dict[str, str | None]
+) -> None:
+    book = _Book(db_session)
+    snapshot = book.position("LC/USD", "LC_GUARANTEE", {"balance_ghs": "0"})
+    snapshot.balance = Decimal("0")
+    snapshot.notional = Decimal("100000")
+    snapshot.attributes = {"balance_ghs": "0", **missing}
+    db_session.flush()
+    before = set(db_session.scalars(select(RegulatoryPackage.id)))
+    ctx = TenantContext(
+        organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        generation.generate_package(
+            db_session,
+            ctx,
+            SAMPLE_BANK_ID,
+            RegulatoryPackageCreate(return_code="BSD2", reporting_date=book.period.period_end),
+        )
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "LC/USD" in detail["message"]
+    assert "Ingest notional_ghs" in detail["message"]
+    assert set(db_session.scalars(select(RegulatoryPackage.id))) == before
+
+
+def test_preexisting_not_computable_cells_remain_input_required(
+    book: _Book, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def not_computable(_rc: ResolveContext, _params: dict[str, Any]) -> None:
+        raise NotComputable(
+            outcome(
+                OutcomeState.POLICY_UNRESOLVED,
+                metric_id="existing_metric",
+                reason="Existing policy is unresolved",
+            )
+        )
+
+    def resolve(_name: str) -> Resolver:
+        return not_computable
+
+    monkeypatch.setattr("app.services.regulatory_reporting.bog_forms.engine.get_resolver", resolve)
+    spec = form_spec("BSD2")
+    sheet = spec.sheets[0]
+    line = next(line for line in sheet.lines if line.source == "positions.sum")
+    spec = replace(spec, sheets=(replace(sheet, lines=(line,)),))
+    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    result = compute_form(book.db, ctx, book.bank, book.period, spec)
+
+    assert result.lines
+    assert all(line.status == "input_required" and line.value is None for line in result.lines)
+    assert len(result.errors) == len(result.lines)
+    assert all("Existing policy is unresolved" in error for error in result.errors)
+
+
+@pytest.mark.parametrize("ghs_attr", ["balance_ghs", "notional_ghs"])
+@pytest.mark.parametrize("stated", [None, "0", "1250000.50"])
+def test_shared_conversion_preserves_stated_amounts_and_uses_governed_quotes(
+    book: _Book, monkeypatch: pytest.MonkeyPatch, ghs_attr: str, stated: str | None
+) -> None:
+    snapshot = book.position("POSITION/QUOTED", "LOAN", {})
+    snapshot.notional = Decimal("200000")
+    if stated is not None:
+        snapshot.attributes = {ghs_attr: stated}
+    position = book.db.get(CanonicalPosition, snapshot.position_id)
+    assert position is not None
+    quote = FxRateView(
+        base_currency="USD",
+        quote_currency="GHS",
+        rate=Decimal("12"),
+        as_of_date=book.period.period_end,
+        attribution=SourceAttribution(
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=book.batch_id,
+            ingested_at=datetime(2026, 3, 31, tzinfo=UTC),
+            stale=False,
+            age_seconds=0,
+        ),
+    )
+
+    def quoted_spot(*_args: object, **_kwargs: object) -> FxRateView:
+        return quote
+
+    monkeypatch.setattr("app.services.market_data_sources.preferred_fx_spot", quoted_spot)
+    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    rc = ResolveContext(db=book.db, ctx=ctx, bank=book.bank, period=book.period, column="total")
+    expected = (
+        Decimal(stated)
+        if stated is not None
+        else Decimal("2400000")
+        if ghs_attr == "notional_ghs"
+        else Decimal("1200000")
+    )
+
+    assert reporting_currency_value(rc, snapshot, position, ghs_attr=ghs_attr) == expected
+
+
+@pytest.mark.usefixtures("no_spot")
+@pytest.mark.parametrize("currency", ["GHS", "USD"])
+def test_bsd11_preserves_stated_contingent_amounts(book: _Book, currency: str) -> None:
+    attributes = (
+        {"balance_ghs": "1000000"}
+        if currency == "GHS"
+        else {"balance_ghs": "0", "notional_ghs": "1000000"}
+    )
+    snapshot = book.position("LC/STATED", "LC_GUARANTEE", attributes, currency=currency)
+    if currency == "USD":
+        snapshot.balance = Decimal("0")
+        snapshot.notional = Decimal("200000")
+    book.db.flush()
+
+    assert book.resolver("bsd11.register", "off_balance")(
+        {"register": "large_exposures", "rank": 1}
+    ) == Decimal("1000000")

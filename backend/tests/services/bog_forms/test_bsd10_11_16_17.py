@@ -374,20 +374,17 @@ class _Seeder:
         *,
         counterparty: CanonicalCounterparty | None,
         product: CanonicalProduct | None = None,
-        currency: str = "GHS",
         rate: str | None = None,
         attributes: dict[str, Any] | None = None,
-        ghs: bool = True,
         notional: bool = False,
     ) -> None:
         position = CanonicalPosition(
-            **self.common, source_reference=ref, position_type=position_type, currency=currency
+            **self.common, source_reference=ref, position_type=position_type, currency="GHS"
         )
         self.db.add(position)
         self.db.flush()
         attrs: dict[str, Any] = dict(attributes or {})
-        if ghs:
-            attrs["notional_ghs" if notional else "balance_ghs"] = str(amount)
+        attrs["notional_ghs" if notional else "balance_ghs"] = str(amount)
         self.db.add(
             CanonicalPositionSnapshot(
                 **self.common,
@@ -497,8 +494,6 @@ def statutory_book(db_client: TestClient, hermetic_book: str) -> str:
             },
         )
         s.position("LC/VOLTA", "LC_GUARANTEE", VOLTA_LC, counterparty=volta, notional=True)
-        # a USD loan WITHOUT an ingested cedi conversion contributes zero
-        s.position("LOAN/VOLTA/USD", "LOAN", 9 * M, counterparty=volta, currency="USD", ghs=False)
         # sovereign holdings are not "customers" of the Section 47 list
         s.position("SEC/GOG", "SECURITY_HOLDING", 100 * M, counterparty=gog)
         # a deposit is not an exposure

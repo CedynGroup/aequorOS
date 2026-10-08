@@ -43,9 +43,7 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
-from app.services import jurisdictions
-
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: Roles that make a related party a *director* for Sheets 1/2/4 (Guide BSD11:
 #: "each Director of the bank (including Chairman and Managing Directors)").
@@ -105,32 +103,6 @@ def _fmt_number(value: Decimal) -> str:
     if value == value.to_integral_value():
         return f"{int(value):,}"
     return f"{value:,.2f}"
-
-
-def _amount_ghs(
-    snapshot: CanonicalPositionSnapshot,
-    position: CanonicalPosition,
-    base_currency: str,
-    *,
-    prefer_notional: bool,
-) -> Decimal:
-    """Cedi amount of a snapshot under the platform's documented convention:
-    an ingested ``balance_ghs``/``notional_ghs`` attribute wins; a base-currency
-    book uses the raw figure; a foreign-currency book WITHOUT an ingested
-    conversion contributes zero (never an invented rate)."""
-    attributes = snapshot.attributes or {}
-    if prefer_notional:
-        ingested = _dec(attributes.get("notional_ghs"))
-        if ingested is not None:
-            return ingested
-        if position.currency == base_currency and snapshot.notional is not None:
-            return Decimal(str(snapshot.notional))
-    ingested = _dec(attributes.get("balance_ghs"))
-    if ingested is not None:
-        return ingested
-    if position.currency == base_currency:
-        return Decimal(str(snapshot.balance or _ZERO))
-    return _ZERO
 
 
 # ---------------------------------------------------------------------------
@@ -309,18 +281,26 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
-    base = jurisdictions.base_currency(rc.bank)
     facilities = [
         _Facility(
             position=position,
             snapshot=snapshot,
             counterparty=counterparty,
             product=product,
-            amount_ghs=_amount_ghs(
+            amount_ghs=reporting_currency_value(
+                rc,
                 snapshot,
                 position,
-                base,
-                prefer_notional=position.position_type in OFF_BALANCE_TYPES,
+                ghs_attr=(
+                    "notional_ghs"
+                    if position.position_type in OFF_BALANCE_TYPES
+                    and (
+                        position.currency != rc.bank.currency
+                        or snapshot.notional is not None
+                        or (snapshot.attributes or {}).get("notional_ghs") not in (None, "")
+                    )
+                    else "balance_ghs"
+                ),
             ),
         )
         for snapshot, position, counterparty, product in records

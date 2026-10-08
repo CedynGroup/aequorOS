@@ -39,7 +39,7 @@ derives a sector by heuristics (product names, borrower names, …):
   Own books only — the query reads the current generation of snapshots.
 * **Units**: cedi equivalents — ``balance_ghs`` attribute when the source
   supplies it, the raw balance for base-currency loans, otherwise the
-  platform's preferred FX spot at period end (raw balance if no spot).
+  platform's preferred FX spot at period end; an unstated conversion blocks generation.
 """
 
 from __future__ import annotations
@@ -60,9 +60,7 @@ from app.models.canonical import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
 )
-from app.services import jurisdictions, market_data_sources
-
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 # ---------------------------------------------------------------------------
 # taxonomy — official rows and column groups of sheet ``BSD4``
@@ -325,43 +323,6 @@ def _merged_attrs(
     return merged
 
 
-def _spot(rc: ResolveContext, currency: str, base: str) -> Decimal | None:
-    key = f"bsd4:spot:{currency}"
-    if key in rc.cache:
-        cached = rc.cache[key]
-        return cached if isinstance(cached, Decimal) else None
-    rate: Decimal | None = None
-    try:
-        view = market_data_sources.preferred_fx_spot(
-            rc.db, rc.ctx.organization_id, rc.bank.id, currency, base, rc.period.period_end
-        )
-        rate = Decimal(str(view.rate)) if view is not None else None
-    except Exception:  # noqa: BLE001 — no spot ⇒ raw balance (documented fallback)
-        rate = None
-    rc.cache[key] = rate if rate is not None else False
-    return rate
-
-
-def _amount_ghs(
-    rc: ResolveContext,
-    snapshot: CanonicalPositionSnapshot,
-    position: CanonicalPosition,
-    attrs: dict[str, Any],
-    base: str,
-) -> Decimal:
-    raw = attrs.get("balance_ghs")
-    if raw not in (None, ""):
-        try:
-            return Decimal(str(raw))
-        except ArithmeticError:
-            pass
-    balance = Decimal(str(snapshot.balance or 0))
-    if position.currency == base:
-        return balance
-    rate = _spot(rc, position.currency, base)
-    return balance * rate if rate is not None else balance
-
-
 def load_loans(rc: ResolveContext) -> list[Loan]:
     """Current-generation LOAN snapshots (latest as-of ≤ period end) with their
     position and counterparty, cedi equivalents attached. Memoised."""
@@ -369,7 +330,6 @@ def load_loans(rc: ResolveContext) -> list[Loan]:
     cached = rc.cache.get(key)
     if isinstance(cached, list):
         return cached
-    base = jurisdictions.base_currency(rc.bank)
     snap = CanonicalPositionSnapshot
     latest = (
         select(snap.position_id.label("pid"), func.max(snap.as_of_date).label("as_of"))
@@ -413,7 +373,7 @@ def load_loans(rc: ResolveContext) -> list[Loan]:
                 snapshot=snapshot,
                 position=position,
                 counterparty=counterparty,
-                amount_ghs=_amount_ghs(rc, snapshot, position, attrs, base),
+                amount_ghs=reporting_currency_value(rc, snapshot, position, attributes=attrs),
                 attrs=attrs,
             )
         )
