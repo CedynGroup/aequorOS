@@ -499,6 +499,8 @@ class _PositionRow:
     # The raw snapshot attributes: hedge/swap instrument terms live here.
     attributes: dict[str, Any]
     origination_date: date | None = None
+    counterparty_country: str | None = None
+    counterparty_resident: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -668,6 +670,7 @@ class _Canonical:
     # jurisdiction (registry-driven, never a country literal) — the last of the
     # sovereign-paper signals in ``public_debt_evidence``.
     sovereign_issuer_names: tuple[str, ...] = ()
+    domestic_country: str | None = None
     # How this bank's OWN central bank is named in its chart of accounts
     # (registry-driven, never a country literal) — the GL cash classifier's
     # central-bank test. See ``_CentralBankNames``.
@@ -1058,6 +1061,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         reconciliation=policy,
         source_overlap=_source_overlap(positions, policy),
         sovereign_issuer_names=_sovereign_issuer_names(db, bank),
+        domestic_country=bank.jurisdiction_code,
         central_bank_names=_central_bank_names(db, bank),
         market_curve=market_curve,
         market_spots=market_spots,
@@ -1229,6 +1233,8 @@ def _position_row(
         product_code=product.product_code if product is not None else None,
         regulatory_category=product.regulatory_category if product is not None else None,
         counterparty_type=counterparty.counterparty_type if counterparty is not None else None,
+        counterparty_country=counterparty.country_code if counterparty is not None else None,
+        counterparty_resident=counterparty.resident if counterparty is not None else None,
         branch_id=attributes.get("branch_id"),
         ecl_ghs=_dec(attributes.get("ecl_provision_ghs"), _ZERO),
         notional_ghs=_dec(attributes.get("notional_ghs"), _ZERO),
@@ -1666,34 +1672,37 @@ def _is_asset_contra_gl(name: str) -> bool:
     )
 
 
+def _credit_contra_asset_type(code: str, name: str) -> str | None:
+    for low, high, asset_type in (
+        (1300, 1399, "LOAN"),
+        (1200, 1299, "SECURITY_HOLDING"),
+        (1100, 1199, "INTERBANK_PLACEMENT"),
+    ):
+        if _in_block(code, low, high):
+            return asset_type
+    if any(token in name for token in ("loan", "mortgage", "advance")):
+        return "LOAN"
+    if _is_securities_gl(code, name):
+        return "SECURITY_HOLDING"
+    if _is_interbank_placement_gl(code, name):
+        return "INTERBANK_PLACEMENT"
+    if name.strip() in ("suspended interest", "interest in suspense", "interest suspense"):
+        return "LOAN"
+    return None
+
+
 def _is_loan_loss_allowance_gl(code: str, name: str) -> bool:
-    loan_account = _in_block(code, 1300, 1399) or any(
-        token in name for token in ("loan", "mortgage", "advance")
-    )
-    suspended_interest = any(
-        token in name
-        for token in ("suspended interest", "interest in suspense", "interest suspense")
-    )
-    return suspended_interest or (
-        loan_account and any(token in name for token in _ALLOWANCE_NAME_TOKENS)
-    )
+    return _credit_contra_asset_type(code, name) == "LOAN" and _is_asset_contra_gl(name)
 
 
 def _is_covered_credit_contra_gl(
     code: str, name: str, *, loans: bool, securities: bool, placements: bool
 ) -> bool:
-    if not _is_asset_contra_gl(name):
-        return False
-    if any(
-        token in name
-        for token in ("suspended interest", "interest in suspense", "interest suspense")
-    ):
-        return loans or securities or placements
-    return (
-        (loans and _is_loan_loss_allowance_gl(code, name))
-        or (securities and _is_securities_gl(code, name))
-        or (placements and _is_interbank_placement_gl(code, name))
-    )
+    return _is_asset_contra_gl(name) and {
+        "LOAN": loans,
+        "SECURITY_HOLDING": securities,
+        "INTERBANK_PLACEMENT": placements,
+    }.get(_credit_contra_asset_type(code, name) or "", False)
 
 
 def _is_securities_gl(code: str, name: str) -> bool:
@@ -2313,6 +2322,7 @@ def _position_credit_class(row: _PositionRow, canonical: _Canonical) -> tuple[st
         row,
         foreign=row.currency.upper() != canonical.base_currency.upper(),
         sovereign_names=canonical.sovereign_issuer_names,
+        domestic_country=canonical.domestic_country,
     )
 
 

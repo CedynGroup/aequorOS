@@ -101,6 +101,7 @@ def _canonical(*rows: _PositionRow, base_currency: str = "GHS") -> _Canonical:
         gl_accounts=[],
         refs={},
         sovereign_issuer_names=GHS_NAMES,
+        domestic_country="GH",
     )
 
 

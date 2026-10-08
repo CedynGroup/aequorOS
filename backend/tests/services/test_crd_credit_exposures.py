@@ -252,7 +252,7 @@ def test_foreign_pse_has_twenty_point_addon() -> None:
             currency="USD",
             balance="1000",
             balance_ghs="1000",
-            attributes={"issuer_class": "public_institution"},
+            attributes={"issuer_class": "public_institution", "instrument": "cocoa_bill"},
         )
     ) == Decimal("700")
 
@@ -359,7 +359,11 @@ def test_pse_hqla_determination_does_not_confer_sovereign_capital_weight() -> No
         "PSE/1",
         "SECURITY_HOLDING",
         balance="1000",
-        attributes={"issuer_class": "public_institution", "hqla_level": "L2A"},
+        attributes={
+            "issuer_class": "public_institution",
+            "instrument": "cocoa_bill",
+            "hqla_level": "L2A",
+        },
     )
     split, other = _split_securities(_canonical(row), [])
     assert split.level2a == Decimal("1000")
@@ -494,8 +498,8 @@ def _stress_row(row: _PositionRow) -> ExposureRow:
         ifrs9_stage=row.ifrs9_stage,
         attributes=row.attributes,
         counterparty_type=row.counterparty_type,
-        counterparty_resident=True,
-        counterparty_country=None,
+        counterparty_resident=row.counterparty_resident,
+        counterparty_country=row.counterparty_country,
         group_key=row.source_reference,
         regulatory_category=row.regulatory_category,
         product_risk_weight_code="RW75",
@@ -534,7 +538,7 @@ def test_sme_fx_stress_uses_corrected_credit_weights() -> None:
             "LOAN",
             "CORPORATE_UNRATED",
             "GOVERNMENT_ENTITY",
-            {"issuer_class": "public_institution"},
+            {"borrower_class": "public_institution"},
             "700",
         ),
         (
@@ -563,9 +567,10 @@ def test_bottom_up_rwa_matches_net_capital_without_netting_expected_loss(
         counterparty_type=counterparty,
         attributes=attributes,
     )
-    book = enterprise_stress._build_credit_exposures(
+    row = replace(row, counterparty_resident=True)
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(row)], bog_capital_params(), capital_facts=()
-    )  # pyright: ignore[reportPrivateUsage]
+    )
     result = compute_bottom_up_credit(
         book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
     )
@@ -585,9 +590,9 @@ def test_projection_overlay_does_not_revalue_constant_residual_assets() -> None:
             "SME/FX", "LOAN", currency="USD", balance_ghs="1000", regulatory_category="SME_RETAIL"
         ),
     ]
-    book = enterprise_stress._build_credit_exposures(
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(row) for row in rows], bog_capital_params(), capital_facts=()
-    )  # pyright: ignore[reportPrivateUsage]
+    )
     paths = [
         MacroPathPoint(
             point.variable,

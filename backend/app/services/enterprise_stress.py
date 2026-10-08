@@ -876,6 +876,7 @@ def _build_credit_exposures(
     capital_params: CapitalParams,
     *,
     sovereign_names: tuple[str, ...] = (),
+    domestic_country: str | None = None,
     capital_facts: Sequence[CapitalFact],
 ) -> list[CreditExposure]:
     """The exposure book for the bottom-up credit stress — or a refusal.
@@ -897,6 +898,7 @@ def _build_credit_exposures(
                 row,
                 foreign=row.is_foreign_currency,
                 sovereign_names=sovereign_names,
+                domestic_country=domestic_country,
             )
             risk_weight_pct = resolve_risk_weight(capital_params, code, row.source_reference)
         except RiskWeightUnavailable as exc:
@@ -1691,6 +1693,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
         credit_rows,
         capital_params,
         sovereign_names=sovereign_names,
+        domestic_country=bank.jurisdiction_code,
         capital_facts=capital_facts,
     )
     exposure_class_losses: dict[int, dict[str, Decimal]] | None = None
