@@ -89,7 +89,7 @@ with sqlite3.connect(sys.argv[1]) as db:
       "analyst",
       `${root}/regulatory-runs/${first.run_id}`,
     );
-    expect(first.engine_version).toBe("enterprise-stress-v2.0.0");
+    expect(first.engine_version).toBe("enterprise-stress-v4.2.0");
     expect(first.outcome.engine_version).toBe(first.engine_version);
     expect(firstStored.input_schema_version).toBe("enterprise-stress-input-v3");
     const regulatoryResponse = await page.request.post(
