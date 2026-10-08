@@ -28,7 +28,7 @@ Paths below describe the existing layered tree; new feature code follows
 New code is strict; legacy code may only get stricter.
 
 - `mise run risk-service:typecheck` runs `backend/scripts/typing_ratchet.py check`. It type-checks
-  the backend once and counts each module's errors per rule against
+  the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/typing_baseline.json`.
 - **A module without a baseline entry is strict**: any error fails. That covers every new module,
   every module that passed when the baseline was recorded, and the script's `STRICT_MODULES` (the
@@ -43,7 +43,7 @@ New code is strict; legacy code may only get stricter.
   (`backend/scripts/feature_module_moves.json`), so a codemod move to a non-strict location keeps
   its entries and stays a pure rename (§5). A module whose new location is a `STRICT_MODULES` path
   is counted where it is and never inherits an allowance: fix its errors in the move PR, and
-  `update` then removes its old entry. Code written in a feature package is strict.
+  `update` then removes its old entry. New modules in feature packages are strict.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
