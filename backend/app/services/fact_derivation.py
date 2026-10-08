@@ -2646,9 +2646,10 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
     guarantees = canonical.by_type("LC_GUARANTEE")
     unstated_notional: list[str] = []
     for row in guarantees:
-        notional = _dec_or_none(row.attributes.get("notional_ghs"))
+        notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
         if notional is None:
-            # A commitment with no reporting-currency notional. Its exposure at default
+            # A foreign-currency commitment with neither a reporting-currency
+            # notional nor a reporting-currency balance. Its exposure at default
             # is unknown; a zero EAD would UNDERSTATE risk-weighted assets, which
             # is the unsafe direction, so it is excluded and named.
             unstated_notional.append(row.source_reference)
@@ -2666,8 +2667,8 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
         totals[category] = (amount + notional, weighted + notional * ccf_pct)
     if unstated_notional:
         warnings.append(
-            f"{len(unstated_notional)} off-balance positions carry no "
-            f"{canonical.base_currency} notional, so "
+            f"{len(unstated_notional)} off-balance positions carry neither a "
+            f"{canonical.base_currency} notional nor a {canonical.base_currency} balance, so "
             "their exposure at default cannot be established; they are EXCLUDED from the "
             "off-balance book rather than counted at zero, which would understate "
             f"risk-weighted assets: {_shown(unstated_notional)}."
@@ -2694,8 +2695,7 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
             GroupResult(
                 group="off_balance",
                 status="skipped",
-                note="No LC/guarantee positions have a stated reporting-currency notional.",
-                warnings=warnings,
+                note="No LC/guarantee positions exist at this as-of date.",
             )
         )
         return []

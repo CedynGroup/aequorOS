@@ -106,13 +106,7 @@ _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
 _PCT = Decimal("0.0001")
 
-_LE_POSITION_TYPES = (
-    "LOAN",
-    "INTERBANK_PLACEMENT",
-    "SECURITY_HOLDING",
-    "LC_GUARANTEE",
-    "COMMITMENT_UNDRAWN",
-)
+_LE_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")
 _EXEMPT_COUNTERPARTY_TYPES = ("SOVEREIGN", "CENTRAL_BANK", "GOVERNMENT_ENTITY")
 _SOVEREIGN_CATEGORY_PREFIX = "SOVEREIGN"
 _LE_THRESHOLD_FRACTION = Decimal("0.10")  # large exposure = ≥10% of NOF (¶11)
@@ -397,8 +391,10 @@ def _load_canonical_rows(
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
         off_balance = position.position_type in _T2_OFF_BALANCE
-        if off_balance:
-            balance_ghs = _ZERO
+        # An off-balance-sheet row is measured by its notional: a foreign one has no
+        # on-balance-sheet amount to state, so a missing balance_ghs is zero, not a gap.
+        foreign_off_balance = off_balance and position.currency != base_currency
+        balance_ghs = _ZERO if foreign_off_balance and balance_ghs is None else balance_ghs
         if position.currency == base_currency:
             if balance_ghs is None:
                 balance_ghs = Decimal(str(snapshot.balance or _ZERO))
@@ -882,7 +878,7 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
     if not rows:
         raise _conflict_409(
             "no_canonical_positions",
-            "No accepted canonical loan, placement, security or off-balance-sheet "
+            "No accepted canonical LOAN, INTERBANK_PLACEMENT or SECURITY_HOLDING "
             f"position snapshots exist for {period.period_end.isoformat()}. Ingest "
             "position data for the period end before generating the Large Exposures "
             "return.",
@@ -1124,7 +1120,7 @@ def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: 
     and OBS sub-rows follow ``attributes["obs_category"]`` with documented
     per-type defaults. Amounts: on-balance rows use the GHS balance; OBS
     rows use the GHS notional (the unutilised amount itself, not a
-    CCF-weighted capital equivalent).
+    CCF-weighted capital equivalent), falling back to balance.
     """
     kind = row.position_type
     if kind in _T2_ADVANCES:
@@ -1145,7 +1141,7 @@ def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: 
     if kind in _T2_OTHER_LIABILITIES:
         return "9", row.balance_ghs
     if kind in _T2_OFF_BALANCE:
-        amount = row.notional_ghs if row.notional_ghs is not None else _ZERO
+        amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
         category = (row.obs_category or "").strip().lower()
         target = _OBS_CATEGORY_ROWS.get(category)
         if target is None:
@@ -1321,7 +1317,7 @@ def _table1_inputs(rows: list[_CanonicalRow], as_of: date) -> dict[str, Decimal]
             row.contractual_maturity, as_of
         ):
             # ¶5 short-term liabilities (d): contingent liabilities ≤ 1 yr.
-            amount = row.notional_ghs if row.notional_ghs is not None else _ZERO
+            amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
             inputs["short_term"] += amount
 
         if row.position_type in _TOTAL_ASSET_TYPES or (

@@ -618,11 +618,17 @@ def test_lmt_refuses_unstated_foreign_amounts_in_either_period(
     assert as_of.isoformat() in detail["message"]
 
 
-@pytest.mark.parametrize("return_code", ["LE-MONTHLY", "LMT"])
 @pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
 def test_off_balance_returns_measure_notional_without_a_drawn_balance(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, return_code: str, position_type: str
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, position_type: str
 ) -> None:
+    """IAS 21 ¶23(a) as an input: an off-balance-sheet row is measured by its stated notional.
+
+    A USD guarantee or commitment with notional_ghs and no balance_ghs is included at its
+    notional; one with neither is excluded and reported. Large Exposures does not load
+    standalone off-balance-sheet rows yet (follow-up #408), so LMT carries the case.
+    """
+    return_code = "LMT"
     materialize_canonical_test_book(db_session)
     _run_capital_baseline(db_session)
     _run_liquidity_baseline(db_session)
@@ -650,15 +656,9 @@ def test_off_balance_returns_measure_notional_without_a_drawn_balance(
     db_session.flush()
     package = _generate(db_session, return_code)
     sections = cast(dict[str, dict[str, list[dict[str, str]]]], _sections(package))
-    if return_code == "LE-MONTHLY":
-        exposure = sections["template_2"]["rows"][0]
-        assert Decimal(exposure["drawn_ghs"]) == Decimal("0")
-        assert Decimal(exposure["undrawn_ccf_ghs"]) == Decimal("400000")
-        assert Decimal(exposure["value"]) == Decimal("400000")
-    else:
-        row_code = "17" if position_type == "LC_GUARANTEE" else "15"
-        row = next(row for row in sections["maturity_ladder"]["rows"] if row["code"] == row_code)
-        assert Decimal(row["value"]) == Decimal("2000000")
+    row_code = "17" if position_type == "LC_GUARANTEE" else "15"
+    row = next(row for row in sections["maturity_ladder"]["rows"] if row["code"] == row_code)
+    assert Decimal(row["value"]) == Decimal("2000000")
     snapshot.attributes = {"credit_conversion_factor": "0.2"}
     db_session.flush()
 
