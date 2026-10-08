@@ -10,8 +10,9 @@ tenant isolation — against the deterministic canonical seeded book.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -26,8 +27,15 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, RegulatoryRun, User
+from app.models import (
+    AuthorizationBinding,
+    BankFinancialFact,
+    ParamEclAssumption,
+    RegulatoryRun,
+    User,
+)
 from app.services import authorization, default_macro_scenarios
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
@@ -153,6 +161,7 @@ def _approve_scenario(client: TestClient, scenario_id: str, checker: UUID) -> No
 
 
 def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestClient) -> None:
+    """Basis: Prudential enterprise stress; annual incremental loss is conservatively gross."""
     bank_id = seed_bank(db_client)
     period_id = _period_id(db_client, bank_id)
     checker = _seed_checker(db_client)
@@ -171,7 +180,7 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     assert response.status_code == 201, response.text
     run = response.json()
     assert len(run["input_hash"]) == 64
-    assert run["engine_version"] == "enterprise-stress-v4.1.0"
+    assert run["engine_version"] == "enterprise-stress-v4.2.0"
     assert run["scenario_code"] == "adverse_2027"
 
     # The outcome couples solvency and liquidity, both baseline vs stressed.
@@ -190,6 +199,13 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     projection = run["projection"]
     assert len(projection["base"]) == 3
     assert len(projection["stress"]) == 3
+    assert cast(dict[str, object], projection)["credit_loss_basis"] == {
+        "basis": "prudential_stress_plan_cost_of_risk_proxy",
+        "incremental_scope": "stages_1_2_when_staged",
+        "tax_treatment": (
+            "conservative: no tax shield applied pending a governed tax-rate parameter"
+        ),
+    }
 
     # Appendix II carries all six tables and honours the RWA tie.
     appendix = run["appendix_ii"]
@@ -716,3 +732,78 @@ def test_system_run_requires_confidential_irrbb_authority(
     assert response.status_code == 403, response.text
     with get_sessionmaker()() as session:
         assert list(session.scalars(select(RegulatoryRun.id))) == before
+
+
+def test_stage3_only_book_has_no_incremental_charge_in_either_projection(
+    db_client: TestClient,
+) -> None:
+    """Basis: Prudential stress; staged specific provisions never supply an extra CET1 charge."""
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client)
+    _approve_scenario(db_client, scenario_id, checker)
+    with get_sessionmaker()() as session:
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == bank_id,
+                BankFinancialFact.reporting_period_id == UUID(period_id),
+                BankFinancialFact.fact_group == "ecl_exposure",
+            )
+        )
+        loans = list(
+            session.scalars(
+                select(BankFinancialFact).where(
+                    BankFinancialFact.bank_id == bank_id,
+                    BankFinancialFact.reporting_period_id == UUID(period_id),
+                    BankFinancialFact.fact_group == "loan_exposure",
+                )
+            )
+        )
+        assert loans
+        for loan in loans:
+            session.add(
+                BankFinancialFact(
+                    organization_id=loan.organization_id,
+                    bank_id=bank_id,
+                    reporting_period_id=UUID(period_id),
+                    fact_group="ecl_exposure",
+                    category=f"{loan.category}:stage3",
+                    amount=loan.amount,
+                    currency=loan.currency,
+                    attributes={"ecl_coverage_complete": True},
+                )
+            )
+        session.add(
+            ParamEclAssumption(
+                organization_id=loans[0].organization_id,
+                jurisdiction_code="GH",
+                effective_from=date(2026, 1, 1),
+                approved_by="Model committee",
+                approval_timestamp=utc_now(),
+                segment="ALL",
+                stage=3,
+                pd_pct=Decimal("0"),
+                lgd_pct=Decimal("40"),
+            )
+        )
+        session.commit()
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Verify specific provisions never enter incremental stress losses.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    run = cast(dict[str, object], response.json())
+    outcome = cast(dict[str, object], run["outcome"])
+    quarterly = cast(dict[str, object], outcome["capital"])
+    assert quarterly["ecl_source"] == "ecl_engine"
+    assert Decimal(str(quarterly["annual_incremental_credit_loss"])) == Decimal("0")
+    projection = cast(dict[str, object], run["projection"])
+    for year in cast(list[dict[str, object]], projection["stress"]):
+        assert Decimal(str(year["pd_multiplier"])) > Decimal("1")
+        assert Decimal(str(year["incremental_credit_losses"])) == Decimal("0")

@@ -1214,7 +1214,19 @@ governed tax-rate parameter and supported deferred-tax recognition. Plan tax
 defaults and overrides only tax positive operating income; they do not
 authorize an ECL tax shield. Enterprise stress puts only the increase in
 stage 1+2 ECL through CET1 via the quarterly credit-loss key, excluding stage 3
-specific provisions; its fallback scales booked general provisions.
+specific provisions; its fallback scales booked general provisions. The annual
+projection preserves baseline plan losses on the whole loan book and conditions
+only stage 1+2 EAD for the incremental macro charge. Staged EAD rolls forward
+with loan growth; without staging the annual plan cost-of-risk proxy covers the
+loan book. Annual tax is computed before the incremental charge, which reaches
+net income and retained earnings gross, including when profit crosses zero.
+The same annual outputs feed management actions and Appendix II.
+
+Enterprise stress v4.2 changes annual impairment losses, tax, pre-tax and net
+profit, dividends, retained earnings, CET1/total capital, funding balances,
+RWA and capital/liquidity ratios and minima wherever these corrections affect
+the projection. Baseline plan arithmetic is preserved; historical runs retain
+their recorded figures.
 
 The ECL registry entries are `advisory_only`, so reporting provenance identifies
 them as what-if estimates. Capital run metrics carry per-figure `basis` metadata

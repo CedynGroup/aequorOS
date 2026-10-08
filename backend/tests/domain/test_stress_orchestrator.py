@@ -676,7 +676,7 @@ def test_enterprise_stress_prices_a_fully_staged_book() -> None:
     assert result.capital.composition.ecl_source == "ecl_engine"
     assert result.capital.composition.ecl_base == Decimal("12600000.0000")
     assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
-    assert result.engine_version == "enterprise-stress-v4.1.0"
+    assert result.engine_version == "enterprise-stress-v4.2.0"
 
 
 def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:

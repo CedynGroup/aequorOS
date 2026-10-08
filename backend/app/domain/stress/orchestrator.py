@@ -135,7 +135,7 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-ENGINE_VERSION = "enterprise-stress-v4.1.0"
+ENGINE_VERSION = "enterprise-stress-v4.2.0"
 
 # --- Capital-path composition coefficients -----------------------------------
 # Documented, defensible linear elasticities that turn the macro scenario into
@@ -627,7 +627,7 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         overrides=inputs.overrides,
     )
     # Tier 2 keeps the booked general provisions on both legs: the stress's
-    # incremental credit loss already reaches CET1 through the quarterly
+    # incremental stage 1+2 credit loss already reaches CET1 through the quarterly
     # credit-loss key, and a modelled ECL never stands in for the booked figure.
     baseline_capital = run_capital_stress(
         f"{inputs.scenario_code}:baseline",

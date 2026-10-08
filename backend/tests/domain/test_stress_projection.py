@@ -7,11 +7,14 @@ directionally and through its hand-derived per-year ECL multipliers.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 
-from app.domain.forecasting.engine import project
+from app.domain.forecasting.engine import ForecastFact, project
+from app.domain.stress.appendix_ii import build_appendix_ii
+from app.domain.stress.management_actions import RecognitionCaps
 from app.domain.stress.projection import (
     EnterpriseProjectionInputs,
     ProjectionInputError,
@@ -181,3 +184,173 @@ def test_unit_credit_rwa_uplift_is_a_no_op() -> None:
     for base_year, unit_year in zip(baseline.stress, unit.stress, strict=True):
         assert unit_year.rwa.total_rwa == base_year.rwa.total_rwa
         assert unit_year.ratios.car_pct == base_year.ratios.car_pct
+
+
+def _staged_loss_inputs(
+    stages: tuple[tuple[int, Decimal], ...],
+    paths: tuple[MacroPathPoint, ...],
+    *,
+    tax_pct: Decimal = Decimal("0"),
+    nim_pct: Decimal = Decimal("0"),
+) -> EnterpriseProjectionInputs:
+    """Isolate credit loss using a prescribed operational-RWA share for zero-income plans."""
+    loans = sum((amount for _, amount in stages), Decimal("0"))
+    facts: list[ForecastFact] = []
+    for fact in sample_bank_latest_facts():
+        if fact.fact_group == "loan_exposure":
+            continue
+        if (
+            fact.fact_group == "balance_sheet" and fact.category.startswith("securities_")
+        ) or (fact.fact_group == "securities" and not fact.cash_derived):
+            fact = replace(fact, amount=Decimal("0"))
+        elif fact.category == "loans_gross":
+            fact = replace(fact, amount=loans)
+        facts.append(fact)
+    params = bog_forecast_params()
+    return replace(
+        _inputs(paths),
+        params=replace(
+            params,
+            capital=replace(params.capital, rwa_pct_of_credit_rwa={"operational": Decimal("10")}),
+        ),
+        facts=(
+            *facts,
+            ForecastFact("loan_exposure", "corporate_unrated", loans, risk_weight_code="RW100"),
+            *(
+                ForecastFact("ecl_exposure", f"corporate_unrated:stage{stage}", amount)
+                for stage, amount in stages
+            ),
+        ),
+        plan=replace(
+            BASE_ASSUMPTIONS,
+            loan_growth_pct=Decimal("0"),
+            deposit_growth_pct=Decimal("0"),
+            nim_pct=nim_pct,
+            cost_to_income_pct=Decimal("0"),
+            credit_loss_rate_pct=Decimal("1"),
+            fx_depreciation_pct=Decimal("0"),
+            dividend_payout_pct=Decimal("0"),
+            fee_income_pct_assets=Decimal("0"),
+            tax_rate_pct=tax_pct,
+            securities_shift_pp=Decimal("0"),
+        ),
+    )
+
+
+def test_annual_stage3_only_book_has_no_incremental_charge() -> None:
+    """Basis: Prudential stress; stage 3 retains plan losses without an incremental charge."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0"))
+        if point.variable == "gdp_growth" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    result = project_enterprise(_staged_loss_inputs(((3, Decimal("10000000")),), paths))
+    expected_losses = (Decimal("95000"), Decimal("90250"), Decimal("85737.5"))
+    initial_cet1 = result.current.ratios.cet1_capital
+    total_loss = Decimal("0")
+    for row, expected in zip(result.stress, expected_losses, strict=True):
+        total_loss += expected
+        assert row.pd_multiplier == Decimal("1.15")
+        assert row.lgd_multiplier == Decimal("1.075")
+        assert row.pnl.incremental_credit_losses == Decimal("0")
+        assert row.pnl.credit_losses == expected
+        assert row.pnl.net_income == -expected
+        assert row.ratios.cet1_capital == initial_cet1 - total_loss
+
+
+def test_annual_mixed_stage_charge_grows_with_general_ead_only() -> None:
+    """Basis: Prudential stress; growing stage 1+2 EAD alone drives the macro increment."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    inputs = _staged_loss_inputs(
+        ((1, Decimal("4000000")), (2, Decimal("2000000")), (3, Decimal("4000000"))), paths
+    )
+    inputs = replace(inputs, plan=replace(inputs.plan, loan_growth_pct=Decimal("10")))
+    result = project_enterprise(inputs)
+    for base, stress, expected in zip(
+        result.base, result.stress,
+        (Decimal("3960"), Decimal("4356"), Decimal("4791.6")), strict=True,
+    ):
+        assert stress.pnl.incremental_credit_losses == expected
+        assert stress.pnl.credit_losses - base.pnl.credit_losses == expected
+        assert base.pnl.incremental_credit_losses == Decimal("0")
+
+
+@pytest.mark.parametrize(
+    ("tax_pct", "nim_pct", "expected_tax"),
+    (
+        (Decimal("25"), Decimal("10"), Decimal("225000")),
+        (Decimal("25"), Decimal("1"), Decimal("0")),
+        (Decimal("25"), Decimal("0"), Decimal("0")),
+        (Decimal("0"), Decimal("10"), Decimal("0")),
+        (Decimal("100"), Decimal("10"), Decimal("900000")),
+    ),
+)
+def test_annual_incremental_loss_reaches_cet1_without_a_plan_tax_shield(
+    tax_pct: Decimal, nim_pct: Decimal, expected_tax: Decimal,
+) -> None:
+    """Basis: Conservative prudential stress; ungoverned plan tax cannot shield extra loss."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    result = project_enterprise(
+        _staged_loss_inputs(((1, Decimal("10000000")),), paths, tax_pct=tax_pct, nim_pct=nim_pct)
+    )
+    for base, stress in zip(result.base, result.stress, strict=True):
+        assert base.pnl.credit_losses == Decimal("100000")
+        assert stress.pnl.credit_losses == Decimal("106000")
+        assert stress.pnl.incremental_credit_losses == Decimal("6000")
+        assert stress.pnl.tax == base.pnl.tax == expected_tax
+        assert base.pnl.net_income - stress.pnl.net_income == Decimal("6000")
+        assert base.ratios.cet1_capital - stress.ratios.cet1_capital == (
+            Decimal("6000") * stress.year
+        )
+
+
+def test_annual_tax_and_gross_loss_reach_appendix_ii() -> None:
+    """Basis: Prudential Appendix II; a 6,000 incremental loss carries no 1,500 tax relief."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    result = project_enterprise(
+        _staged_loss_inputs(
+            ((1, Decimal("10000000")),), paths, tax_pct=Decimal("25"), nim_pct=Decimal("10")
+        )
+    )
+    appendix = build_appendix_ii(
+        result, paths, currency="GHS", car_target_pct=Decimal("13"),
+        recognition_caps=RecognitionCaps(Decimal("1.5"), Decimal("2")),
+    )
+    row = next(row for row in appendix.table3_profit_and_loss.rows if row.label == "stress_y1")
+    assert row.impairment_losses == Decimal("106.000")
+    assert row.profit_before_tax == Decimal("894.000")
+    assert row.tax == Decimal("225.000")
+    assert row.profit_after_tax == Decimal("669.000")
+    assert row.adjusted_retained_earnings_for_car == Decimal("669.000")
+
+
+def test_annual_benign_macro_never_credits_lower_ecl_to_capital() -> None:
+    """Basis: Conservative prudential stress; a lower modelled cost of risk gives no credit."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.03"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    result = project_enterprise(_staged_loss_inputs(((2, Decimal("10000000")),), paths))
+    for base, stress in zip(result.base, result.stress, strict=True):
+        assert stress.pd_multiplier == Decimal("1")
+        assert stress.pnl.incremental_credit_losses == Decimal("0")
+        assert stress.pnl == base.pnl
+        assert stress.ratios.cet1_capital == base.ratios.cet1_capital

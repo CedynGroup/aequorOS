@@ -28,7 +28,11 @@ everywhere) leaves the two legs identical — a zero stress impact, which is
 correct.
 
 **IFRS 9 ECL under stress (¶48–49, AppI¶5–6).** The per-year impairment is the
-plan cost of risk scaled by that year's macro PD/LGD multipliers. This wires the
+plan cost of risk plus that year's incremental macro PD/LGD charge. On staged
+books, only stage 1+2 EAD contributes to the increment; stage 3 keeps the plan
+loss rate. Without staging, the plan cost-of-risk proxy covers the loan book.
+The incremental charge is gross: no tax shield applied pending a governed
+tax-rate parameter and supported deferred-tax recognition. This wires the
 two directive modes into the projection: **Perfect Foresight** — each of the ≥3
 projected years knows its own macro from day one (the multipliers are computed
 per year off the full authored path); **Single Scenario** — the stress path
@@ -175,6 +179,7 @@ class Pnl:
     net_income: Decimal
     dividends: Decimal
     retained: Decimal
+    incremental_credit_losses: Decimal = _ZERO
 
 
 @dataclass(frozen=True)
@@ -392,15 +397,12 @@ def _stress_assumptions_for_year(
     )
     nim = plan.nim_pct + NIM_PER_RATE * rate_delta
     cost_to_income = plan.cost_to_income_pct + CTI_PER_INFLATION * infl_delta
-    # ECL under stress drives the cost of risk multiplicatively (¶48).
-    credit_loss_rate = plan.credit_loss_rate_pct * pd_mult * lgd_mult
     assumptions = replace(
         plan,
         loan_growth_pct=loan_growth,
         deposit_growth_pct=deposit_growth,
         nim_pct=nim,
         cost_to_income_pct=cost_to_income,
-        credit_loss_rate_pct=credit_loss_rate,
     )
     return assumptions, pd_mult, lgd_mult
 
@@ -576,12 +578,18 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     equity_prev: Decimal,
     credit_rwa_factor: Decimal = _ONE,
 ) -> tuple[Decimal, Decimal, Decimal, ProjectedYear]:
+    """Roll forward the book, charging only general EAD for incremental macro losses.
+
+    Conservative: tax applies to income after baseline plan losses, before the
+    incremental charge; a request or platform tax rate cannot shield that charge.
+    """
     loan_factor = _ONE + assumptions.loan_growth_pct / _HUNDRED
     deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
     securities_factor = (
         _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
     )
     _scale_in_place(state.loans, loan_factor)
+    _scale_in_place(state.ecl_exposures, loan_factor)
     _scale_in_place(state.off_balance, loan_factor)
     _scale_in_place(state.inflows, loan_factor)
     _scale_in_place(state.deposits, deposit_factor)
@@ -616,9 +624,32 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     )
     total_income = nii + fees
     opex = money(assumptions.cost_to_income_pct / _HUNDRED * total_income)
-    credit_losses = money(assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total())
+    baseline_credit_losses = money(
+        assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total()
+    )
+    general_ead = (
+        sum(
+            (
+                amount
+                for category, amount in state.ecl_exposures.items()
+                if category.endswith((":stage1", ":stage2"))
+            ),
+            _ZERO,
+        )
+        if state.ecl_exposures
+        else state.loans_total()
+    )
+    incremental_credit_losses = money(
+        assumptions.credit_loss_rate_pct
+        / _HUNDRED
+        * general_ead
+        * max(pd_mult * lgd_mult - _ONE, _ZERO)
+    )
+    credit_losses = baseline_credit_losses + incremental_credit_losses
     pre_tax = total_income - opex - credit_losses
-    tax = money(assumptions.tax_rate_pct / _HUNDRED * max(pre_tax, _ZERO))
+    tax = money(
+        assumptions.tax_rate_pct / _HUNDRED * max(pre_tax + incremental_credit_losses, _ZERO)
+    )
     net_income = pre_tax - tax
     dividends = money(assumptions.dividend_payout_pct / _HUNDRED * max(net_income, _ZERO))
     retained = net_income - dividends
@@ -647,6 +678,7 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         net_income=net_income,
         dividends=dividends,
         retained=retained,
+        incremental_credit_losses=incremental_credit_losses,
     )
     row = _snapshot_year(
         inputs, state, meta, year, leg, pd_mult, lgd_mult, pnl=pnl,
