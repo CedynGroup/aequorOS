@@ -1012,13 +1012,21 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
         json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
     )
     assert approver.status_code == 201, approver.text
+    approver_id = UUID(approver.json()["binding"]["id"])
     before = binding_count()
 
+    # Each finding names the person and the exact existing grant it fired on,
+    # in plain words the composer shows verbatim.
     warned = preview(_payload())
     assert warned.sod_decision.outcome == "warn"
-    assert [finding.code for finding in warned.sod_decision.findings] == [
-        "maker_checker_runtime_condition_required"
-    ]
+    [warning] = warned.sod_decision.findings
+    assert warning.code == "maker_checker_runtime_condition_required"
+    assert warning.conflicting_binding_ids == [approver_id]
+    assert warning.message == (
+        "Amma Owusu already has the Approver grant (Liquidity Monitoring, Aequor Bank Ghana). "
+        "Making Amma Owusu an Analyst lets one person both prepare and check work here. "
+        "Nobody can approve work they prepared, so each item still needs a second person."
+    )
 
     # The sentence is still composed for a block, so the screen can show
     # exactly what policy refuses.
@@ -1028,13 +1036,44 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     assert [finding.code for finding in blocked.sod_decision.findings] == [
         "approval_and_transmission_separation_required"
     ]
-    assert "must remain separated" in blocked.sod_decision.findings[0].message
+    [refusal] = blocked.sod_decision.findings
+    assert refusal.conflicting_binding_ids == [approver_id]
+    assert refusal.message == (
+        "Amma Owusu already has the Approver grant (Liquidity Monitoring, Aequor Bank Ghana). "
+        "Making Amma Owusu a Validator would let one person both approve a return and file "
+        "it with the regulator. Remove the Approver grant first, or choose someone else."
+    )
+
+    # The reverse direction names the operational grant, never account
+    # administration the member does not hold.
+    reverse = preview(
+        {
+            **_payload(role="account_admin", module="account", sensitivity="all"),
+            "institution_scope": "organization",
+            "institution_id": None,
+        }
+    )
+    assert reverse.sod_decision.outcome == "block"
+    [reverse_refusal] = reverse.sod_decision.findings
+    assert reverse_refusal.code == "c9_account_administration_operational_conflict"
+    assert reverse_refusal.conflicting_binding_ids == [approver_id]
+    assert reverse_refusal.message == (
+        "Amma Owusu already has the Approver grant (Liquidity Monitoring, Aequor Bank Ghana). "
+        "Making Amma Owusu an Organization Administrator would let one person both do "
+        "operational work and decide who has access to it. Remove the Approver grant first, "
+        "or choose someone else."
+    )
 
     owner_exception = preview(_payload(principal_user_id=USER_1))
     assert owner_exception.sod_decision.outcome == "warn"
-    assert [finding.code for finding in owner_exception.sod_decision.findings] == [
-        "c9_owner_operational_exception"
-    ]
+    [exception] = owner_exception.sod_decision.findings
+    assert exception.code == "c9_owner_operational_exception"
+    assert exception.conflicting_binding_ids
+    assert exception.message == (
+        "Demo User One owns the organization. Making Demo User One an Analyst means the "
+        "owner also does operational work. This is allowed for the owner and recorded as "
+        "an accepted exception."
+    )
 
     assert binding_count() == before
 

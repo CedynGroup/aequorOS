@@ -367,14 +367,14 @@ test.describe("separation-of-duties at Define", () => {
     await composer.getByLabel("Reason category").selectOption("other");
     await composer.getByLabel("Detail").fill("Separation-of-duties check");
 
-    // Approving and transmitting returns on one identity is a hard block.
+    // Approving and transmitting returns on one identity is a hard block. The
+    // notice names the grant they already hold and what to change.
     await composer.getByLabel("Role bundle").selectOption("validator");
     const refusal = composer.getByRole("alert");
-    await expect(refusal).toContainText(
-      "Separation-of-duties policy refuses this grant.",
-    );
-    await expect(refusal).toContainText(
-      "Approving a return and transmitting it to the regulator must remain separated for one identity.",
+    await expect(refusal).toHaveText(
+      "E2E Approver already has the Approver grant (all modules, every institution). " +
+        "Making E2E Approver a Validator would let one person both approve a return " +
+        "and file it with the regulator. Remove the Approver grant first, or choose someone else.",
     );
     await expect(
       composer.getByRole("button", { name: "Cannot be granted" }),
@@ -394,7 +394,9 @@ test.describe("separation-of-duties at Define", () => {
     await composer.getByLabel("Role bundle").selectOption("analyst");
     await expect(composer.getByRole("alert")).toHaveCount(0);
     const warning = composer.getByRole("status").filter({
-      hasText: "overlapping maker and checker grants",
+      hasText:
+        "E2E Approver already has the Approver grant (all modules, every institution). " +
+        "Making E2E Approver an Analyst lets one person both prepare and check work here.",
     });
     await expect(warning).toBeVisible();
     if (evidenceDir) {

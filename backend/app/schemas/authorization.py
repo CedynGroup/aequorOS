@@ -213,7 +213,11 @@ class BindingPreviewRequest(ScopedGrantInput):
 
 class SodPolicyFindingRead(ClosedModel):
     code: str
+    #: Plain-language finding that names the person, the existing grant it
+    #: conflicts with and, for a block, what to change. Shown verbatim.
     message: str
+    #: The member's existing bindings this finding fired on.
+    conflicting_binding_ids: list[UUID]
 
 
 class SodDecisionRead(ClosedModel):

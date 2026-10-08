@@ -58,7 +58,7 @@ import {
   grantShortfall,
   overlappingGrantNotice,
 } from "@/lib/api/grantRequirements";
-import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
+import { sodFindings, type SodFinding } from "@/lib/api/sodDecision";
 import BookCoverageControl from "./BookCoverageControl";
 import {
   GrantReasonFields,
@@ -1052,18 +1052,13 @@ function GrantComposer({
               role="alert"
               className="rounded-md bg-critical-light px-4 py-3 text-caption text-critical"
             >
-              <p>{error}</p>
-              {sodBlocks.length > 0 && (
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  {sodBlocks.map((finding) => (
-                    <li key={finding.code || finding.message}>
-                      {finding.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {sodRemedy(sodBlocks) && (
-                <p className="mt-2 leading-relaxed">{sodRemedy(sodBlocks)}</p>
+              {/* A policy refusal speaks in the server's plain findings, which
+                  name the conflicting grant and what to change; the generic
+                  headline is only for refusals that carry none. */}
+              {sodBlocks.length > 0 ? (
+                <SodFindingMessages findings={sodBlocks} />
+              ) : (
+                <p>{error}</p>
               )}
             </div>
           )}
@@ -1199,35 +1194,43 @@ function GrantSelect({
 
 /**
  * The server's assignment-time separation-of-duties decision for the draft,
- * from the preview. `allow` shows nothing; `warn` explains what the person will
- * hold; `block` is the refusal the create call would return, shown before
- * anyone reaches it.
+ * from the preview. `allow` shows nothing; `warn` and `block` show the server's
+ * plain-language findings verbatim — each names the member's conflicting grant
+ * and, for a block, what to change — so nothing here can contradict the rule
+ * that fired.
  */
 function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
   if (!decision || decision.outcome === "allow") return null;
   if (decision.outcome === "warn") {
     return (
-      <p
+      <div
         role="status"
-        className="rounded-md border border-warning/25 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy"
+        className="rounded-md border-l-4 border-warning bg-warning-light/50 px-4 py-3 text-body leading-relaxed text-navy"
       >
-        {decision.findings.map((finding) => finding.message).join(" ")}
-      </p>
+        <SodFindingMessages findings={decision.findings} />
+      </div>
     );
   }
   return (
     <div
       role="alert"
-      className="rounded-md bg-critical-light px-4 py-3 text-caption leading-relaxed text-critical"
+      className="rounded-md border-l-4 border-critical bg-critical-light px-4 py-3 text-body leading-relaxed text-navy"
     >
-      <p className="font-medium">
-        Separation-of-duties policy refuses this grant.
-      </p>
-      <ul className="mt-2 list-disc space-y-1 pl-4">
-        {decision.findings.map((finding) => (
-          <li key={finding.code || finding.message}>{finding.message}</li>
-        ))}
-      </ul>
+      <SodFindingMessages findings={decision.findings} />
+    </div>
+  );
+}
+
+function SodFindingMessages({
+  findings,
+}: {
+  findings: readonly { code: string; message: string }[];
+}) {
+  return (
+    <div className="space-y-2">
+      {findings.map((finding) => (
+        <p key={finding.code || finding.message}>{finding.message}</p>
+      ))}
     </div>
   );
 }

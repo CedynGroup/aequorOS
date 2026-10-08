@@ -7,7 +7,9 @@ import { E2E_USERS, mintBackendToken } from "./support/mint";
 const API = `${E2E_API_ORIGIN}/api/v1`;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const filingMessage =
-  "Approving a return and transmitting it to the regulator must remain separated for one identity.";
+  "E2E Fx Member already has the Approver grant (Regulatory Reporting, Sample Bank Ltd). " +
+  "Making E2E Fx Member a Validator would let one person both approve a return and " +
+  "file it with the regulator. Remove the Approver grant first, or choose someone else.";
 
 test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
@@ -149,8 +151,13 @@ test("reverse account administration conflict shows the server finding at Define
   await composer
     .getByLabel("Detail")
     .fill("Exercise reverse account administration conflict");
-  await expect(composer.getByRole("alert")).toContainText(
-    "Account administration and operational maker/checker authority must remain separated for one identity.",
+  // The reverse direction names the operational grant the member holds,
+  // never account administration they do not have.
+  await expect(composer.getByRole("alert")).toHaveText(
+    "E2E Approver already has the Approver grant (all modules, every institution). " +
+      "Making E2E Approver an Organization Administrator would let one person both do " +
+      "operational work and decide who has access to it. Remove the Approver grant first, " +
+      "or choose someone else.",
   );
   await expect(
     composer.getByRole("button", { name: "Cannot be granted" }),
@@ -223,7 +230,7 @@ test("a conflicting grant added after Review is refused with the server's findin
     await composer.getByRole("button", { name: "Grant access" }).click();
     const response = await refused;
     expect(response.status()).toBe(409);
-    await expect(composer.getByRole("alert")).toContainText(filingMessage);
+    await expect(composer.getByRole("alert")).toHaveText(filingMessage);
     await expect(
       composer.getByText("Grant created", { exact: true }),
     ).toHaveCount(0);
