@@ -218,7 +218,7 @@ def no_spot(monkeypatch: pytest.MonkeyPatch) -> None:
     def missing_spot(*_args: object, **_kwargs: object) -> None:
         return None
 
-    monkeypatch.setattr("app.services.market_data_sources.preferred_fx_spot", missing_spot)
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", missing_spot)
 
 
 @pytest.mark.parametrize(
@@ -360,7 +360,7 @@ def test_shared_conversion_preserves_stated_amounts_and_uses_governed_quotes(
     def quoted_spot(*_args: object, **_kwargs: object) -> FxRateView:
         return quote
 
-    monkeypatch.setattr("app.services.market_data_sources.preferred_fx_spot", quoted_spot)
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", quoted_spot)
     ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
     rc = ResolveContext(db=book.db, ctx=ctx, bank=book.bank, period=book.period, column="total")
     expected = (

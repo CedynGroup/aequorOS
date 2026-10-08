@@ -30,6 +30,7 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.engine import assert_capital_register_usable
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.market_data import public as market_data_sources
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
@@ -39,7 +40,7 @@ from app.models.canonical import (
     CanonicalReferenceRow,
 )
 from app.models.regulatory import BankFinancialFact
-from app.services import jurisdictions, market_data_sources
+from app.policy.public import base_currency
 
 type Column = str  # domestic | foreign | total | <sheet-specific>
 
@@ -176,7 +177,7 @@ def reporting_currency_value(
     native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
     if native is None:
         native = snapshot.balance
-    base = jurisdictions.base_currency(rc.bank)
+    base = base_currency(rc.bank)
     if position.currency == base:
         return native
     key = f"reporting:spot:{position.currency}"
