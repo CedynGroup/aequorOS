@@ -498,15 +498,20 @@ function DialogFrame({
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
+  // The latest close handler, read at key time. Depending on `onClose` itself
+  // re-ran the focus below on every render that passed a fresh function,
+  // pulling focus out of the field being typed in after one keystroke.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (hidden) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
     headingRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [hidden, onClose]);
+  }, [hidden]);
   return (
     <div
       role="dialog"

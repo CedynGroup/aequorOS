@@ -365,7 +365,14 @@ test.describe("separation-of-duties at Define", () => {
       name: "Add grant for E2E Approver",
     });
     await composer.getByLabel("Reason category").selectOption("other");
-    await composer.getByLabel("Detail").fill("Separation-of-duties check");
+    // Typed key by key, as a person would: every keystroke must stay in the
+    // field rather than being lost to the dialog taking focus back.
+    await composer
+      .getByLabel("Detail")
+      .pressSequentially("Separation-of-duties check");
+    await expect(composer.getByLabel("Detail")).toHaveValue(
+      "Separation-of-duties check",
+    );
 
     // Approving and transmitting returns on one identity is a hard block. One
     // notice names the grant they already hold and what to change; the scope
