@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.capital.engine import CapitalRegisterRefused, assert_capital_register_usable
 from app.domain.rating.engine import (
     ComponentDefinition,
     RatingInputs,
@@ -1120,6 +1121,13 @@ def _apply_conservative_basis(
 def _rating_inputs(
     sources: _RatingSources,
 ) -> tuple[RatingInputs, dict[str, str], Decimal, Decimal, Decimal, dict[str, Any]]:
+    try:
+        assert_capital_register_usable(sources.facts)
+    except CapitalRegisterRefused as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_code": exc.code, "message": str(exc)},
+        ) from exc
     values = _fact_values(sources.facts)
     total_assets = _sum_group(values, "balance_sheet", _ASSET_CATEGORIES)
     loans = values.get(("balance_sheet", "loans_gross"), _ZERO)

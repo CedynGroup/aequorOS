@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
 from app.domain.rating.engine import ComponentScore, grade_for_score, score_components
 from app.domain.rating.sdi_scorecard import (
     CANDIDATE_COMPONENTS,
@@ -203,12 +204,13 @@ def _capital_evidence(
     from app.services import sdi_capital  # noqa: PLC0415 - breaks an import cycle
 
     try:
+        components = _capital_components(db, ctx, bank, as_of)
         summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
     except Exception as exc:  # noqa: BLE001 - an unresolved capital policy is evidence, not a crash
         return [
-            RatioEvidence("car_headroom_pp", None, "sdi_capital", str(exc)[:200]),
-            RatioEvidence("paid_up_coverage_x", None, "sdi_capital", "capital summary unavailable"),
-            RatioEvidence("reserve_fund_pct", None, "sdi_capital", "capital summary unavailable"),
+            RatioEvidence("car_headroom_pp", None, "sdi_capital", str(exc)),
+            RatioEvidence("paid_up_coverage_x", None, "sdi_capital", str(exc)),
+            RatioEvidence("reserve_fund_pct", None, "sdi_capital", str(exc)),
         ]
     car = _dec(getattr(summary, "car_pct", None))
     floor = _dec(getattr(summary, "car_min_pct", None))
@@ -219,7 +221,6 @@ def _capital_evidence(
     # — GHS 15m for savings-&-loans, 2m for a microfinance bank). They were
     # written off as "unbuilt" on 2026-08-23 without anyone checking, which
     # blocked the whole capital component behind evidence that already existed.
-    components = _capital_components(db, ctx, bank, as_of)
     paid_up = components.get("paid_up_capital")
     statutory = components.get("statutory_reserves")
     floor = _paid_up_floor(db, bank, as_of)
@@ -316,10 +317,13 @@ def _capital_components(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> dict[str, Decimal]:
     """Derived ``capital_component`` facts at ``as_of``, by category."""
-    return {
+    components = {
         category: amount
         for _, category, amount in _facts(db, ctx, bank, as_of, ("capital_component",))
     }
+    if CAPITAL_REGISTER_REFUSED_CATEGORY in components:
+        raise CapitalRegisterRefused()
+    return components
 
 
 def _paid_up_floor(db: Session, bank: Bank, as_of: date) -> Decimal | None:

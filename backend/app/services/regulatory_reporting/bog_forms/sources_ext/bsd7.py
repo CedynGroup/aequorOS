@@ -60,7 +60,7 @@ from app.models import BankReportingPeriod
 from app.models.canonical import CanonicalGlAccount
 from app.models.regulatory import BankFinancialFact
 
-from ..sources import ResolveContext, reference_rows, resolver
+from ..sources import ResolveContext, reference_rows, require_usable_capital_register, resolver
 
 # The pure rules — windows, the CoA → item mapping, the YTD / period-movement
 # arithmetic — live in ``app/domain/gl/pl_mapping.py`` (D-021) so the BI plane's
@@ -247,6 +247,8 @@ def _average_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None
     """
     start_month = int(params.get("fiscal_year_start_month", 1))
     lower = window_start(rc.period, _window_of(rc.column), start_month)
+    if params["group"] == "capital_component":
+        require_usable_capital_register(rc, window_start=lower)
     stmt = (
         select(
             BankFinancialFact.reporting_period_id,

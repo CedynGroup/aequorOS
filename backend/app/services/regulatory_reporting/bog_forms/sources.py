@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -111,18 +112,25 @@ def _constant(_rc: ResolveContext, params: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def require_usable_capital_register(rc: ResolveContext) -> None:
+def require_usable_capital_register(
+    rc: ResolveContext, *, window_start: date | None = None
+) -> None:
     """Check register status before filtering individual capital components."""
-    assert_capital_register_usable(
-        rc.db.scalars(
-            select(BankFinancialFact).where(
-                BankFinancialFact.organization_id == rc.ctx.organization_id,
-                BankFinancialFact.bank_id == rc.bank.id,
-                BankFinancialFact.reporting_period_id == rc.period.id,
-                BankFinancialFact.fact_group == "capital_component",
-            )
-        )
+    stmt = select(BankFinancialFact).where(
+        BankFinancialFact.organization_id == rc.ctx.organization_id,
+        BankFinancialFact.bank_id == rc.bank.id,
+        BankFinancialFact.fact_group == "capital_component",
     )
+    if window_start is None:
+        stmt = stmt.where(BankFinancialFact.reporting_period_id == rc.period.id)
+    else:
+        stmt = stmt.join(
+            BankReportingPeriod, BankReportingPeriod.id == BankFinancialFact.reporting_period_id
+        ).where(
+            BankReportingPeriod.period_end >= window_start,
+            BankReportingPeriod.period_end <= rc.period.period_end,
+        )
+    assert_capital_register_usable(rc.db.scalars(stmt))
 
 
 @resolver("facts.sum")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import cast
 
@@ -27,6 +28,7 @@ from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalReferenceRow,
+    CurrentFinancialFact,
     RegulatoryRun,
 )
 from app.models.stress import MacroScenario, MacroScenarioPath
@@ -52,6 +54,7 @@ from app.services import (
     regulatory_irr,
     regulatory_irr_sf,
     reverse_stress,
+    sdi_rating,
 )
 from app.services.fact_derivation import derive_current_facts, derive_facts
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
@@ -108,6 +111,143 @@ def _assert_named_refusal(code: str | None, message: str | None) -> None:
     assert message is not None
     assert "capital_structure" in message
     assert "re-ingest" in message and "re-derive" in message
+
+
+@pytest.mark.parametrize("column", ["quarter", "ptd"])
+@pytest.mark.parametrize("refused_month", [1, 2, 3])
+def test_bsd7_capital_averages_refuse_every_period_before_filtering(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    column: str,
+    refused_month: int,
+) -> None:
+    """BoG CRD 2018 ¶32: a refused observation cannot disappear from a capital average."""
+    bank, period = refused_book
+    periods = list(
+        db_session.scalars(
+            select(BankReportingPeriod)
+            .where(
+                BankReportingPeriod.bank_id == bank.id,
+                BankReportingPeriod.period_end >= date(2026, 1, 1),
+                BankReportingPeriod.period_end <= period.period_end,
+            )
+            .order_by(BankReportingPeriod.period_end)
+        )
+    )
+    assert len(periods) == 3
+    marker = db_session.scalar(
+        select(BankFinancialFact).where(
+            BankFinancialFact.bank_id == bank.id,
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.category == CAPITAL_REGISTER_REFUSED_CATEGORY,
+        )
+    )
+    assert marker is not None
+    for observation, amount in zip(periods, ("100000000", "80000000", "60000000"), strict=True):
+        db_session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.reporting_period_id == observation.id,
+                BankFinancialFact.fact_group == "capital_component",
+                BankFinancialFact.category != CAPITAL_REGISTER_REFUSED_CATEGORY,
+            )
+        )
+        if observation.period_end.month == refused_month:
+            marker.reporting_period_id = observation.id
+        else:
+            db_session.add(
+                BankFinancialFact(
+                    organization_id=bank.organization_id,
+                    bank_id=bank.id,
+                    reporting_period_id=observation.id,
+                    fact_group="capital_component",
+                    category="paid_up_capital",
+                    amount=Decimal(amount),
+                    currency=bank.currency,
+                    capital_tier="CET1",
+                    is_deduction=False,
+                    attributes={"source": "test"},
+                )
+            )
+    db_session.flush()
+    rc = ResolveContext(db_session, MAKER, bank, period, column)
+    with pytest.raises(CapitalRegisterRefused) as refused:
+        get_resolver("bsd7.average_facts")(
+            rc,
+            {
+                "group": "capital_component",
+                "categories": ["paid_up_capital"],
+                "capital_tiers": ["CET1"],
+                "exclude_deductions": True,
+                "attribute_eq": {"source": "test"},
+            },
+        )
+    _assert_named_refusal(refused.value.code, str(refused.value))
+
+    previous_year = db_session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end == date(2025, 12, 31),
+        )
+    )
+    assert previous_year is not None
+    marker.reporting_period_id = previous_year.id
+    db_session.add(
+        BankFinancialFact(
+            organization_id=bank.organization_id,
+            bank_id=bank.id,
+            reporting_period_id=periods[refused_month - 1].id,
+            fact_group="capital_component",
+            category="paid_up_capital",
+            amount=Decimal(("100000000", "80000000", "60000000")[refused_month - 1]),
+            currency=bank.currency,
+            capital_tier="CET1",
+            is_deduction=False,
+            attributes={"source": "test"},
+        )
+    )
+    db_session.flush()
+    assert get_resolver("bsd7.average_facts")(
+        rc,
+        {
+            "group": "capital_component",
+            "capital_tiers": ["CET1"],
+            "exclude_deductions": True,
+        },
+    ) == Decimal("80000000")
+
+
+@pytest.mark.parametrize("plane", ["live", "official"])
+def test_sdi_rating_reports_refused_capital_evidence_on_both_planes(
+    db_session: Session,
+    refused_book: tuple[Bank, BankReportingPeriod],
+    plane: str,
+) -> None:
+    """BoG CRD 2018 ¶32: SDI ratings retain corrective guidance for refused derived capital."""
+    bank, period = refused_book
+    bank.institution_type = "savings_and_loans"
+    if plane == "official":
+        db_session.execute(
+            delete(CurrentFinancialFact).where(
+                CurrentFinancialFact.bank_id == bank.id,
+                CurrentFinancialFact.fact_group == "capital_component",
+            )
+        )
+    evidence = sdi_rating.collect_evidence(db_session, MAKER, bank, period.period_end)
+    capital = [
+        row
+        for row in evidence
+        if row.code
+        in {
+            "car_headroom_pp",
+            "paid_up_coverage_x",
+            "reserve_fund_pct",
+        }
+    ]
+    assert len(capital) == 3
+    for row in capital:
+        assert row.value is None
+        assert row.note is not None and "capital_structure" in row.note
+        assert "re-ingest" in row.note and "re-derive" in row.note
 
 
 @pytest.mark.parametrize("module", ["irr", "fx"])
