@@ -20,7 +20,7 @@ from __future__ import annotations
 import io
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -524,8 +524,100 @@ def test_le_foreign_position_without_cedi_amount_refuses_the_return(db_session: 
         _generate(db_session, "LE-MONTHLY")
 
     assert refused.value.status_code == 409
-    assert "foreign_amount_not_stated" in str(refused.value.detail)
-    assert "1 foreign-currency position(s) in USD" in str(refused.value.detail)
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "1 foreign-currency position(s) in USD" in detail["message"]
+    assert "LOAN/USD (balance_ghs)" in detail["message"]
+
+
+@pytest.mark.parametrize(
+    ("native_notional", "ccf"),
+    [(Decimal("200000"), "0.5"), (None, "0.5"), (Decimal("200000"), None)],
+)
+def test_le_refuses_unstated_foreign_notional_then_preserves_stated_exposure(
+    db_session: Session, native_notional: Decimal | None, ccf: str | None
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    counterparty = seeder.counterparty("CP/USD", "Dollar Borrower", "CORPORATE")
+    seeder.position(
+        "LOAN/USD",
+        "LOAN",
+        Decimal("1000000"),
+        counterparty=counterparty,
+        currency="USD",
+        extra_attributes={"credit_conversion_factor": ccf},
+    )
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "LOAN/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.balance = Decimal("80000")
+    snapshot.notional = native_notional
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LE-MONTHLY")
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "LOAN/USD (notional_ghs)" in detail["message"]
+
+    snapshot.attributes = {
+        "balance_ghs": "1000000",
+        "notional_ghs": "2400000",
+        "credit_conversion_factor": ccf,
+    }
+    db_session.flush()
+    package = _generate(db_session, "LE-MONTHLY")
+    sections = cast(dict[str, dict[str, list[dict[str, str]]]], _sections(package))
+    exposure = sections["template_2"]["rows"][0]
+    undrawn = Decimal("1200000") if ccf is not None else Decimal("0")
+    assert Decimal(exposure["drawn_ghs"]) == Decimal("1000000")
+    assert Decimal(exposure["undrawn_ccf_ghs"]) == undrawn
+    assert Decimal(exposure["value"]) == Decimal("1000000") + undrawn
+
+
+@pytest.mark.parametrize("previous_month", [False, True])
+@pytest.mark.parametrize(
+    "position_spec",
+    [
+        ("DEPOSIT", None, None, "balance_ghs"),
+        ("LOAN", "1000000", "0.5", "notional_ghs"),
+        ("COMMITMENT_UNDRAWN", "0", None, "notional_ghs"),
+        ("LC_GUARANTEE", "0", None, "notional_ghs"),
+    ],
+)
+def test_lmt_refuses_unstated_foreign_amounts_in_either_period(
+    db_session: Session,
+    previous_month: bool,
+    position_spec: tuple[str, str | None, str | None, str],
+) -> None:
+    position_type, balance_ghs, ccf, missing = position_spec
+    materialize_canonical_test_book(db_session)
+    _run_liquidity_baseline(db_session)
+    _CanonicalSeeder(db_session).position("DEP/GHS", "DEPOSIT", Decimal("1000000"))
+    as_of = date(2026, 2, 28) if previous_month else REPORTING_DATE
+    _CanonicalSeeder(db_session, as_of).position(
+        "POSITION/USD",
+        position_type,
+        Decimal("80000"),
+        currency="USD",
+        extra_attributes={"balance_ghs": balance_ghs, "credit_conversion_factor": ccf},
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LMT")
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert f"POSITION/USD ({missing})" in detail["message"]
+    assert as_of.isoformat() in detail["message"]
 
 
 def test_le_validates_and_exports_round_trip(

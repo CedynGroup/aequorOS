@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -218,6 +219,8 @@ def compute_form(  # noqa: PLR0912, PLR0913, PLR0915
                 )
                 try:
                     raw = get_resolver(line.source)(rc, dict(line.params))
+                except HTTPException:
+                    raise
                 except Exception as exc:  # noqa: BLE001 — one bad line must not sink the form
                     errors.append(f"{spec.code}/{sheet_spec.name}!{ref} ({line.code}): {exc}")
                     raw = None

@@ -253,7 +253,6 @@ class _CanonicalRow:
     position_type: str
     currency: str
     balance_ghs: Decimal
-    has_ghs_value: bool
     contractual_maturity: date | None
     ifrs9_stage: int | None
     undrawn_ccf_ghs: Decimal
@@ -362,22 +361,33 @@ def _load_canonical_rows(
 
     base_currency = jurisdictions.base_currency(bank)
     rows: list[_CanonicalRow] = []
+    unstated: list[str] = []
+    unstated_currencies: set[str] = set()
     for snapshot, position, counterparty, product in records:
         attributes = snapshot.attributes or {}
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
-        has_ghs_value = True
-        if balance_ghs is None:
-            if position.currency == base_currency:
-                balance_ghs = Decimal(str(snapshot.balance or _ZERO))
-            else:
-                # Never a made-up converted amount: generation refuses the
-                # return while any foreign-currency row is unstated.
-                balance_ghs = _ZERO
-                has_ghs_value = False
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
-        if notional_ghs is None and position.currency == base_currency:
-            notional_ghs = _dec_or_none(snapshot.notional)
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
+        if position.currency == base_currency:
+            if balance_ghs is None:
+                balance_ghs = Decimal(str(snapshot.balance or _ZERO))
+            if notional_ghs is None:
+                notional_ghs = _dec_or_none(snapshot.notional)
+        else:
+            missing: list[str] = []
+            if balance_ghs is None:
+                missing.append("balance_ghs")
+            if notional_ghs is None and (
+                snapshot.notional is not None
+                or ccf is not None
+                or position.position_type in _T2_OFF_BALANCE
+            ):
+                missing.append("notional_ghs")
+            if missing:
+                unstated.append(f"{snapshot.source_reference} ({', '.join(missing)})")
+                unstated_currencies.add(position.currency)
+                continue
+        assert balance_ghs is not None
         undrawn = notional_ghs * ccf if notional_ghs is not None and ccf is not None else _ZERO
         issuer = attributes.get("issuer")
         obs_category = attributes.get("obs_category")
@@ -386,7 +396,6 @@ def _load_canonical_rows(
                 position_type=position.position_type,
                 currency=position.currency,
                 balance_ghs=balance_ghs,
-                has_ghs_value=has_ghs_value,
                 contractual_maturity=snapshot.contractual_maturity,
                 ifrs9_stage=snapshot.ifrs9_stage,
                 undrawn_ccf_ghs=undrawn,
@@ -424,6 +433,14 @@ def _load_canonical_rows(
                 collateral=_collateral_attributes(attributes),
                 product_name=product.name if product is not None else None,
             )
+        )
+    if unstated:
+        currencies = ", ".join(sorted(unstated_currencies))
+        raise _conflict_409(
+            "foreign_amount_not_stated",
+            f"{len(unstated)} foreign-currency position(s) in {currencies} at "
+            f"{as_of.isoformat()} lack required reporting-currency amounts: "
+            f"{'; '.join(unstated)}. Ingest the stated amounts before generating the return.",
         )
     return rows
 
@@ -833,20 +850,6 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
             "position data for the period end before generating the Large Exposures "
             "return.",
         )
-    unstated = [row for row in rows if not row.has_ghs_value]
-    if unstated:
-        # IAS 21 ¶23(a) as an input: an exposure the bank has not stated in the
-        # reporting currency cannot be measured against Net Own Funds, and
-        # filing without it could hide a large exposure.
-        currencies = ", ".join(sorted({row.currency for row in unstated}))
-        raise _conflict_409(
-            "foreign_amount_not_stated",
-            f"{len(unstated)} foreign-currency position(s) in {currencies} carry no "
-            "balance_ghs, so their exposure cannot be stated in the reporting currency "
-            "and nothing is converted at a made-up rate. Ingest balance_ghs for every "
-            "foreign-currency position before generating the Large Exposures return.",
-        )
-
     entities, unattributed_ghs, unattributed_count = _aggregate_entities(rows)
     threshold = nof * _LE_THRESHOLD_FRACTION
     non_exempt = [entity for entity in entities if not entity.exempt]
