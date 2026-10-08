@@ -169,9 +169,10 @@ test.describe("Settings link for a scoped Account administrator", () => {
     await expect(accessLink).toBeVisible();
     await page.goto("/settings");
     await expect(accessLink).toBeVisible();
-    const keysResponse = page.waitForResponse((response) =>
-      response.url().endsWith("/integration-keys") &&
-      response.request().method() === "GET",
+    const keysResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/integration-keys") &&
+        response.request().method() === "GET",
     );
     await accessLink.click();
     await expect(page).toHaveURL(/\/access\/integration-keys$/);
@@ -179,7 +180,10 @@ test.describe("Settings link for a scoped Account administrator", () => {
     expect(response.status()).toBe(200);
     if (evidenceDir) {
       writeFileSync(
-        path.join(evidenceDir, "settings-shell-scoped-admin-integration-keys-response.json"),
+        path.join(
+          evidenceDir,
+          "settings-shell-scoped-admin-integration-keys-response.json",
+        ),
         JSON.stringify(
           { status: response.status(), body: await response.json() },
           null,
@@ -187,7 +191,10 @@ test.describe("Settings link for a scoped Account administrator", () => {
         ),
       );
       await page.screenshot({
-        path: path.join(evidenceDir, "settings-shell-scoped-admin-integration-keys.png"),
+        path: path.join(
+          evidenceDir,
+          "settings-shell-scoped-admin-integration-keys.png",
+        ),
         fullPage: true,
       });
     }
