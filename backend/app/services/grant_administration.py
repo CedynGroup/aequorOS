@@ -239,7 +239,8 @@ def check_sod_policy(
         # per-object condition can catch this at action time
         # (docs/filing_workflow_redesign.md §3.3 layer 3).
         owner_only = held_account_admin == {RoleBundle.ORG_OWNER}
-        held = [row for row in active if RoleBundle(row.role_bundle) in _ACCOUNT_ADMIN_BUNDLES]
+        held_bundle = RoleBundle.ORG_OWNER if owner_only else RoleBundle.ACCOUNT_ADMIN
+        held = [row for row in active if row.role_bundle == held_bundle.value]
         if owner_only:
             findings.append(
                 _sod_finding(

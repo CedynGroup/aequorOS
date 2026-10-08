@@ -39,8 +39,8 @@ test("live previews are read-only and match allowed, warned and refused creates"
   };
   const before = await list();
   const cases = [
-    { principal: "viewer", role: "analyst", outcome: "allow" },
-    { principal: "approver", role: "analyst", outcome: "warn" },
+    { principal: "sod_member", role: "analyst", outcome: "allow" },
+    { principal: "sod_approver", role: "analyst", outcome: "warn" },
     { principal: "approver", role: "validator", outcome: "block" },
     { principal: "validator", role: "approver", outcome: "block" },
     { principal: "account_admin", role: "analyst", outcome: "block" },
@@ -102,6 +102,14 @@ test("live previews are read-only and match allowed, warned and refused creates"
       );
       expect(revoke.ok()).toBeTruthy();
     }
+  }
+  for (const principal of ["viewer", "approver"]) {
+    const session = await request.get(`${API}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${await mintBackendToken(principal)}`,
+      },
+    });
+    expect(session.status()).toBe(200);
   }
   const unauthorized = await request.post(
     `${API}/authorization/bindings/preview`,

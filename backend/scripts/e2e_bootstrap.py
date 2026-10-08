@@ -116,6 +116,8 @@ E2E_USERS = {
     "access_request_member": UUID("eeeeeeee-1010-4eee-8eee-eeeeeeee1010"),
     "access_extra_member": UUID("eeeeeeee-1011-4eee-8eee-eeeeeeee1011"),
     "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
+    "sod_member": UUID("eeeeeeee-1012-4eee-8eee-eeeeeeee1012"),
+    "sod_approver": UUID("eeeeeeee-1013-4eee-8eee-eeeeeeee1013"),
     "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
     "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
@@ -238,6 +240,8 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "sod_member",
+                            "sod_approver",
                             "fx_member",
                             "forecast_member",
                             "access_request_member",
@@ -329,6 +333,7 @@ def main() -> None:
         for role, bundle in (
             ("admin", RoleBundle.ANALYST),
             ("approver", RoleBundle.APPROVER),
+            ("sod_approver", RoleBundle.APPROVER),
             ("analyst", RoleBundle.ANALYST),
             ("sso_analyst", RoleBundle.ANALYST),
         ):

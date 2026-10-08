@@ -83,6 +83,16 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 2,
   },
+  sod_member: {
+    id: identities.bootstrap.sod_member,
+    roles: ["viewer"],
+    authv: 2,
+  },
+  sod_approver: {
+    id: identities.bootstrap.sod_approver,
+    roles: ["viewer"],
+    authv: 3,
+  },
   forecast_member: {
     id: identities.bootstrap.forecast_member,
     roles: ["viewer"],
