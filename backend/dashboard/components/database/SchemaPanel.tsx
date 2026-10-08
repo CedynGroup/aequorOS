@@ -18,7 +18,7 @@ export default function SchemaPanel({
 
   if (tables.length === 0) {
     return (
-      <div className="rounded border border-border p-4 bg-surface-alt">
+      <div className="rounded-sm border border-border p-4 bg-surface-alt">
         <p className="text-body text-slate">
           The introspection returned no tables. Check the scoped schemas on this
           connection.
@@ -33,7 +33,7 @@ export default function SchemaPanel({
   );
 
   return (
-    <div className="rounded border border-border bg-surface-alt p-4 space-y-3">
+    <div className="rounded-sm border border-border bg-surface-alt p-4 space-y-3">
       <p className="text-body text-navy">
         <span className="font-mono font-medium">{tables.length}</span> table
         {tables.length === 1 ? '' : 's'} ·{' '}
@@ -44,7 +44,7 @@ export default function SchemaPanel({
         {tables.map((table) => (
           <details
             key={table.name}
-            className="rounded border border-border-light bg-surface"
+            className="rounded-sm border border-border-light bg-surface"
           >
             <summary className="cursor-pointer select-none px-4 py-2.5 flex flex-wrap items-center gap-3">
               <span className="font-mono text-body text-navy">{table.name}</span>

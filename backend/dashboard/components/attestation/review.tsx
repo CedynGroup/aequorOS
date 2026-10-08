@@ -232,7 +232,7 @@ export function PreviewError({ error }: { error: unknown }) {
   const help = attestationErrorHelp(code);
   if (!help) return <ErrorPanel error={error} title="Could not load the certification preview" />;
   return (
-    <div role="alert" className="rounded border border-critical/30 bg-critical-light/50 px-3.5 py-3">
+    <div role="alert" className="rounded-sm border border-critical/30 bg-critical-light/50 px-3.5 py-3">
       <p className="text-body font-medium text-navy">{help.title}</p>
       <p className="mt-1 text-caption text-navy/85 leading-relaxed">
         {error instanceof Error ? error.message : String(error)}
@@ -383,7 +383,7 @@ export function StatementSection({ statement }: { statement: string }) {
         </p>
         <StatusPill tone="action">Covered by your signature</StatusPill>
       </div>
-      <blockquote className="mt-1.5 rounded border-l-4 border-l-action border border-border-light bg-surface px-4 py-3 text-body text-navy leading-relaxed whitespace-pre-wrap">
+      <blockquote className="mt-1.5 rounded-sm border-l-4 border-l-action border border-border-light bg-surface px-4 py-3 text-body text-navy leading-relaxed whitespace-pre-wrap">
         {statement}
       </blockquote>
     </div>
@@ -460,7 +460,7 @@ export function StepUpSection({
             required
             value={password}
             onChange={(event) => onPasswordChange(event.target.value)}
-            className="w-full rounded border border-border bg-surface px-3 py-2 text-body text-navy"
+            className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
           />
         </label>
       )}

@@ -135,7 +135,7 @@ export default function ChecksPanel({
       </div>
 
       {findings.length > 0 ? (
-        <div className="rounded border border-border-light overflow-hidden">
+        <div className="rounded-sm border border-border-light overflow-hidden">
           <DataTable
             columns={columns}
             rows={findings}

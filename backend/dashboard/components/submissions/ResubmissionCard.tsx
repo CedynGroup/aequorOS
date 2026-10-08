@@ -94,7 +94,7 @@ export default function ResubmissionCard({
                 onChange={(event) => setReason(event.target.value)}
                 rows={2}
                 placeholder="e.g. Corrected a liquid-asset misclassification found after filing."
-                className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+                className="w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
               />
               <div className="flex items-center gap-2">
                 <button
@@ -141,7 +141,7 @@ export default function ResubmissionCard({
       ) : null}
 
       {grantedPending && (
-        <p className="rounded border border-success/25 bg-success-light/50 px-3 py-2 text-caption leading-relaxed text-navy/85">
+        <p className="rounded-sm border border-success/25 bg-success-light/50 px-3 py-2 text-caption leading-relaxed text-navy/85">
           Granted. Generating the corrected version is the preparer&apos;s act;
           the next filing carries the next revision number.
         </p>
@@ -152,7 +152,7 @@ export default function ResubmissionCard({
           {requests.map((entry) => (
             <li
               key={entry.id}
-              className="space-y-1.5 rounded border border-border-light bg-surface px-3 py-2"
+              className="space-y-1.5 rounded-sm border border-border-light bg-surface px-3 py-2"
             >
               <div className="flex items-center gap-2 flex-wrap">
                 <ResubmissionStatusPill status={entry.status} />
@@ -175,7 +175,7 @@ export default function ResubmissionCard({
                     onChange={(event) => setNote(event.target.value)}
                     placeholder="Note on the decision (optional)"
                     aria-label="Note on the decision"
-                    className="w-full rounded border border-border bg-surface-raised px-2.5 py-1.5 text-caption text-navy placeholder:text-slate-light"
+                    className="w-full rounded-sm border border-border bg-surface-raised px-2.5 py-1.5 text-caption text-navy placeholder:text-slate-light"
                   />
                   <div className="flex items-center gap-2">
                     <button

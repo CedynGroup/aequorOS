@@ -108,7 +108,7 @@ export default function AppetiteScale({
           There are not enough levels set to draw a scale yet.
         </p>
       ) : (
-        <div className="relative h-10 rounded bg-gradient-to-r from-critical-light via-warning-light to-success-light">
+        <div className="relative h-10 rounded-sm bg-linear-to-r from-critical-light via-warning-light to-success-light">
           {markers
             .filter((marker) => marker.value !== null)
             .map((marker) => (

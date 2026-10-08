@@ -109,7 +109,7 @@ export default function Navigation() {
           </a>
           <Link
             href="/contact"
-            className={`inline-flex h-[42px] items-center rounded px-5 text-[14.5px] font-semibold transition-colors ${cta}`}
+            className={`inline-flex h-[42px] items-center rounded-sm px-5 text-[14.5px] font-semibold transition-colors ${cta}`}
           >
             Request a demo
           </Link>

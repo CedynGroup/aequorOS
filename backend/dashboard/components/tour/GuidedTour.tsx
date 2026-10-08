@@ -220,7 +220,7 @@ export default function GuidedTour() {
   if (!active) {
     if (!showPill) return null;
     return (
-      <div className="no-print fixed bottom-5 right-5 z-[60] flex items-center gap-1 rounded-full bg-nav text-white shadow-pop pl-4 pr-1.5 py-1.5">
+      <div className="no-print fixed bottom-5 right-5 z-60 flex items-center gap-1 rounded-full bg-nav text-white shadow-pop pl-4 pr-1.5 py-1.5">
         <Compass size={14} className="text-action shrink-0" aria-hidden />
         <button
           type="button"
@@ -245,7 +245,7 @@ export default function GuidedTour() {
   const isLast = stepIndex === TOUR_STEPS.length - 1;
 
   return (
-    <div className="no-print fixed inset-0 z-[70]" role="presentation">
+    <div className="no-print fixed inset-0 z-70" role="presentation">
       {/* Spotlight cutout — the box-shadow dims everything around it. */}
       {rect ? (
         <div
@@ -288,7 +288,7 @@ export default function GuidedTour() {
             type="button"
             onClick={finish}
             aria-label="Exit tour"
-            className="w-6 h-6 -mt-1 -mr-1 inline-flex items-center justify-center rounded text-slate hover:text-navy hover:bg-surface transition-colors"
+            className="w-6 h-6 -mt-1 -mr-1 inline-flex items-center justify-center rounded-sm text-slate hover:text-navy hover:bg-surface transition-colors"
           >
             <X size={13} aria-hidden />
           </button>

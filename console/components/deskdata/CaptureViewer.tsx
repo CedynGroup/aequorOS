@@ -132,13 +132,13 @@ export function CaptureViewer({
           )}
 
           {content.content_omitted && (
-            <p className="rounded border border-warning/40 bg-warning-light/40 p-2.5 text-caption text-warning">
+            <p className="rounded-sm border border-warning/40 bg-warning-light/40 p-2.5 text-caption text-warning">
               {content.content_omitted}
             </p>
           )}
 
           {content.content_deferred_to && (
-            <p className="rounded border border-slate/30 bg-slate/5 p-2.5 text-caption text-slate">
+            <p className="rounded-sm border border-slate/30 bg-slate/5 p-2.5 text-caption text-slate">
               These bytes were already captured for this source and are stored once, on
               capture <MonoId id={content.content_deferred_to} />. The content shown below
               is that record, read back unchanged.
@@ -153,7 +153,7 @@ export function CaptureViewer({
               void runSearch();
             }}
           >
-            <Field label="Find value (field-level snippet)" className="min-w-[12rem] flex-1">
+            <Field label="Find value (field-level snippet)" className="min-w-48 flex-1">
               <Input
                 value={needle}
                 onChange={(e) => setNeedle(e.target.value)}
@@ -173,7 +173,7 @@ export function CaptureViewer({
                 Snippet around <span className="font-mono">{snippet.needle}</span>
               </h3>
               {snippet.snippet ? (
-                <pre className="whitespace-pre-wrap rounded border border-action/30 bg-action-light/30 p-3 font-mono text-caption text-ink">
+                <pre className="whitespace-pre-wrap rounded-sm border border-action/30 bg-action-light/30 p-3 font-mono text-caption text-ink">
                   {snippet.snippet}
                 </pre>
               ) : (
@@ -188,7 +188,7 @@ export function CaptureViewer({
           {content.text != null && (
             <div>
               <h3 className="mb-1 text-body font-medium text-navy">Full text</h3>
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro text-ink">
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-sm border border-border-light bg-surface p-3 font-mono text-micro text-ink">
                 {content.text}
               </pre>
             </div>

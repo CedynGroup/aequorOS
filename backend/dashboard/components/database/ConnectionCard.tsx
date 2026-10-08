@@ -258,7 +258,7 @@ export default function ConnectionCard({
       </div>
 
       {connection.validationError && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
           <p className="text-body text-navy">{connection.validationError}</p>
         </div>
       )}
@@ -423,7 +423,7 @@ export default function ConnectionCard({
       )}
 
       {panel === 'edit' && (
-        <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
+        <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <ConnectionForm
             form={editForm}
             onChange={(patch) => setEditForm((current) => ({ ...current, ...patch }))}
@@ -435,7 +435,7 @@ export default function ConnectionCard({
             type="button"
             onClick={() => void submitEdit()}
             disabled={busy || !editForm.displayName.trim()}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
               <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -448,7 +448,7 @@ export default function ConnectionCard({
       )}
 
       {actionError && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}

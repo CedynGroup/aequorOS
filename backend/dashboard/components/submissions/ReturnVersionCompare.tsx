@@ -242,7 +242,7 @@ function Selector({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
+        className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
       >
         {children}
       </select>

@@ -61,7 +61,7 @@ const columns: Column<TenantFinding>[] = [
     header: 'Message',
     render: (f) => (
       <div className="min-w-0">
-        <span className="break-words text-body text-navy/90">{f.message || DASH}</span>
+        <span className="wrap-break-word text-body text-navy/90">{f.message || DASH}</span>
         {f.metric && (
           <div className="font-mono text-micro text-slate">metric: {f.metric}</div>
         )}

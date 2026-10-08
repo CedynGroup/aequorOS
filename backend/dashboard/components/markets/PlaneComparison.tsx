@@ -253,7 +253,7 @@ export default function PlaneComparison({
                 return (
                   <span
                     key={`${deltaLabel(entry)}-${index}`}
-                    className="inline-flex items-center gap-1.5 rounded border border-action/30 bg-action-light px-2 py-0.5 text-micro text-action"
+                    className="inline-flex items-center gap-1.5 rounded-sm border border-action/30 bg-action-light px-2 py-0.5 text-micro text-action"
                   >
                     <span className="font-mono">{deltaLabel(entry)}</span>
                     {text && <span className="tnum">{text}</span>}

@@ -16,7 +16,7 @@ export default function PageHeader({
   return (
     <div className={`pt-16 md:pt-20 pb-10 md:pb-14 flex flex-col gap-5 ${maxWidth}`}>
       <Kicker>{kicker}</Kicker>
-      <h1 className="font-serif font-medium text-4xl md:text-5xl lg:text-[56px] leading-[1.08] tracking-tight text-ink">
+      <h1 className="font-serif font-medium text-4xl md:text-5xl lg:text-[56px] leading-[1.08] md:leading-none tracking-tight text-ink">
         {title}
       </h1>
       {lede ? (

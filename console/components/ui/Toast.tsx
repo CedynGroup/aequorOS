@@ -102,7 +102,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {mounted &&
         createPortal(
           <div
-            className="pointer-events-none fixed right-4 top-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+            className="pointer-events-none fixed right-4 top-4 z-60 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
             role="region"
             aria-label="Notifications"
           >
@@ -117,14 +117,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-medium text-navy">{t.title}</p>
                   {t.description && (
-                    <p className="mt-0.5 break-words text-caption text-slate">{t.description}</p>
+                    <p className="mt-0.5 wrap-break-word text-caption text-slate">{t.description}</p>
                   )}
                 </div>
                 <button
                   type="button"
                   onClick={() => dismiss(t.id)}
                   aria-label="Dismiss notification"
-                  className="-mr-1 shrink-0 rounded p-0.5 text-slate hover:bg-surface hover:text-ink"
+                  className="-mr-1 shrink-0 rounded-sm p-0.5 text-slate hover:bg-surface hover:text-ink"
                 >
                   <X size={14} aria-hidden />
                 </button>

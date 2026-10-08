@@ -283,7 +283,7 @@ function EclEditor({
           {drafts.map((draft) => (
             <div
               key={draft.key}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-border-light px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border-light px-3 py-2"
             >
               <div className="min-w-0">
                 <p className="text-body font-medium text-navy font-mono">
@@ -330,9 +330,9 @@ function EclEditor({
           {newRows.map((row, index) => (
             <div
               key={index}
-              className="flex flex-wrap items-end gap-3 rounded border border-border-light px-3 py-2"
+              className="flex flex-wrap items-end gap-3 rounded-sm border border-border-light px-3 py-2"
             >
-              <div className="min-w-[10rem]">
+              <div className="min-w-40">
                 <label
                   htmlFor={`ecl-new-${index}-segment`}
                   className="block text-caption font-medium text-navy mb-1"
@@ -398,7 +398,7 @@ function EclEditor({
               <button
                 type="button"
                 onClick={() => setNewRows((prev) => prev.filter((_, i) => i !== index))}
-                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
               >
                 <Trash2 size={11} aria-hidden />
                 Remove
@@ -411,7 +411,7 @@ function EclEditor({
       <button
         type="button"
         onClick={() => setNewRows((prev) => [...prev, { ...BLANK_NEW_ROW }])}
-        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+        className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
       >
         <Plus size={11} aria-hidden />
         Add segment/stage assumption

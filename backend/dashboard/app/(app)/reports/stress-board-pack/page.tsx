@@ -130,7 +130,9 @@ export default function StressBoardPack() {
         error={registry.error ?? approved.error}
         onRetry={() => registry.refetch()}
       >
-        <PageContainer className="py-6 space-y-6">
+        {/* `print:pt-12` keeps the printed report where it sat before Tailwind 4,
+            whose `space-y` no longer leaves a gap after the print-hidden controls. */}
+        <PageContainer className="py-6 space-y-6 print:pt-12">
           {/* Composer controls (hidden on print) */}
           <div className="print:hidden">
             <SectionCard

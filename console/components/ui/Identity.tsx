@@ -17,7 +17,7 @@ export function CopyButton({ value, label }: { value: string; label?: string }) 
           window.setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className="inline-flex items-center rounded p-1 text-slate hover:bg-surface hover:text-ink"
+      className="inline-flex items-center rounded-sm p-1 text-slate hover:bg-surface hover:text-ink"
     >
       {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
     </button>

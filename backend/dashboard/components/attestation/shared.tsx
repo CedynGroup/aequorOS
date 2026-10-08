@@ -190,7 +190,7 @@ export function DigestChip({
       <code
         title={digest}
         aria-label={`${label} ${digest}`}
-        className="font-mono text-caption text-navy tnum rounded border border-border-light bg-surface px-1.5 py-0.5"
+        className="font-mono text-caption text-navy tnum rounded-sm border border-border-light bg-surface px-1.5 py-0.5"
       >
         {truncateDigest(digest)}
       </code>
@@ -254,7 +254,7 @@ export function SignatureBlock({
 
   return (
     <div
-      className={`rounded border border-border-light bg-surface px-3.5 py-3 ${className}`}
+      className={`rounded-sm border border-border-light bg-surface px-3.5 py-3 ${className}`}
     >
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
         {roleAttribution(signature.signingRole)}

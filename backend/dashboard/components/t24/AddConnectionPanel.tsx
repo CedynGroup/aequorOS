@@ -235,7 +235,7 @@ export default function AddConnectionPanel({
                 type="text"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                className="w-full px-3 py-1.5 rounded border border-border text-body text-navy"
+                className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy"
               />
               {nameTaken && (
                 <p className="mt-1 text-caption text-critical">
@@ -254,7 +254,7 @@ export default function AddConnectionPanel({
                 id="t24-core-system"
                 value={coreSystem}
                 onChange={(event) => setCoreSystem(event.target.value as CoreSystemKey)}
-                className="w-full px-3 py-1.5 rounded border border-border text-body text-navy bg-surface-raised"
+                className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy bg-surface-raised"
               >
                 {CORE_SYSTEMS.map((system) => (
                   <option key={system.key} value={system.key}>
@@ -282,7 +282,7 @@ export default function AddConnectionPanel({
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}
               placeholder={MODES.find((option) => option.key === mode)?.endpointHint}
-              className="w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+              className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             <p className="mt-1 text-caption text-slate">
               The core banking host AequorOS signs on to. Reachable only from within your
@@ -303,7 +303,7 @@ export default function AddConnectionPanel({
                 value={companies}
                 onChange={(event) => setCompanies(event.target.value)}
                 placeholder="GH0010001, GH0010002"
-                className="w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+                className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
               />
               <p className="mt-1 text-caption text-slate">
                 Comma-separated T24 company codes. The first is the default.
@@ -322,7 +322,7 @@ export default function AddConnectionPanel({
                 value={defaultCurrency}
                 onChange={(event) => setDefaultCurrency(event.target.value.toUpperCase())}
                 maxLength={3}
-                className="w-28 px-3 py-1.5 rounded border border-border text-body text-navy font-mono uppercase"
+                className="w-28 px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono uppercase"
               />
             </div>
           </div>
@@ -356,7 +356,7 @@ export default function AddConnectionPanel({
               type="date"
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
-              className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+              className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             <p className="mt-1 text-caption text-slate">
               AequorOS warns 30 days before expiry and guides you through rotation.
@@ -375,7 +375,7 @@ export default function AddConnectionPanel({
             <p className="text-body text-slate">Loading the domain catalog…</p>
           )}
           {[...byCategory.entries()].map(([category, domains]) => (
-            <fieldset key={category} className="rounded border border-border p-4">
+            <fieldset key={category} className="rounded-sm border border-border p-4">
               <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
                 {DOMAIN_CATEGORY_LABELS[category] ?? category}
               </legend>
@@ -389,7 +389,7 @@ export default function AddConnectionPanel({
                       type="checkbox"
                       checked={effectiveSelected.has(domain.domain)}
                       onChange={() => toggleDomain(domain.domain)}
-                      className="rounded border-border"
+                      className="rounded-sm border-border"
                     />
                     <span>{domainShortLabel(domain.domain, domain.category)}</span>
                   </label>
@@ -417,7 +417,7 @@ export default function AddConnectionPanel({
                 type="button"
                 onClick={() => void createAndTest()}
                 disabled={running || !mode || !endpoint.trim() || credentialsIncomplete}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
                   <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -440,7 +440,7 @@ export default function AddConnectionPanel({
                 </p>
               </div>
               {created.validationError && (
-                <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+                <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
                   <p className="text-body text-navy">{created.validationError}</p>
                 </div>
               )}
@@ -480,7 +480,7 @@ export default function AddConnectionPanel({
               <button
                 type="button"
                 onClick={onDone}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover"
               >
                 Done
               </button>
@@ -490,7 +490,7 @@ export default function AddConnectionPanel({
       )}
 
       {error && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{error}</p>
         </div>
       )}
@@ -501,7 +501,7 @@ export default function AddConnectionPanel({
             type="button"
             onClick={() => setStepIndex((index) => Math.max(0, index - 1))}
             disabled={stepIndex === 0 || running}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-border text-caption font-medium text-navy hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-border text-caption font-medium text-navy hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowLeft size={13} aria-hidden />
             Back
@@ -516,7 +516,7 @@ export default function AddConnectionPanel({
                 (step === 'connection' && !endpoint.trim()) ||
                 (step === 'credentials' && credentialsIncomplete)
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Continue
               <ArrowRight size={13} aria-hidden />

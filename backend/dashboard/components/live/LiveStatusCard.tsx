@@ -70,7 +70,7 @@ export default function LiveStatusCard() {
             derives and computes every module automatically.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-light rounded overflow-hidden border border-border-light">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-light rounded-sm overflow-hidden border border-border-light">
             {MODULE_ORDER.map((module) => {
               const view = byModule.get(module);
               const primary = view

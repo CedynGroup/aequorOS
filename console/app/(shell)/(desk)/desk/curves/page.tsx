@@ -421,7 +421,7 @@ export default function CurveDefinitionsPage() {
             />
           </Field>
           {approveMut.error && approveDualControl && (
-            <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+            <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-warning" />
               <div className="min-w-0">
                 <p className="text-body font-medium text-navy">

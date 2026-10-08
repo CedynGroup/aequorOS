@@ -77,7 +77,7 @@ export default function Header() {
       >
         <Search size={13} aria-hidden className="shrink-0" />
         <span className="flex-1 truncate text-left">Search screens and tenants…</span>
-        <kbd className="shrink-0 rounded border border-border-light bg-surface-raised px-1.5 py-0.5 font-mono text-[10px]">
+        <kbd className="shrink-0 rounded-sm border border-border-light bg-surface-raised px-1.5 py-0.5 font-mono text-[10px]">
           ⌘K
         </kbd>
       </button>
@@ -85,14 +85,14 @@ export default function Header() {
       <div className="flex items-center gap-2">
         {apiHost && (
           <span
-            className="hidden rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate md:inline"
+            className="hidden rounded-sm border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate md:inline"
             title={`Operator API base (via the console's /api/op proxy): ${apiHost}`}
           >
             API · {apiHost}
           </span>
         )}
         {identity?.mode === 'dev' && (
-          <span className="rounded bg-warning-light px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-warning">
+          <span className="rounded-sm bg-warning-light px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-warning">
             dev session
           </span>
         )}
@@ -162,13 +162,13 @@ function UserMenu({ identity }: { identity: Identity }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded px-1.5 py-1 hover:bg-surface"
+        className="inline-flex items-center gap-2 rounded-sm px-1.5 py-1 hover:bg-surface"
       >
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-action-light text-caption font-semibold text-action">
           {initials}
         </span>
         <span className="hidden text-left lg:block">
-          <span className="block max-w-[14rem] truncate text-caption font-medium leading-tight text-navy">
+          <span className="block max-w-56 truncate text-caption font-medium leading-tight text-navy">
             {email}
           </span>
           {modeLabel && (

@@ -126,7 +126,7 @@ function LoginForm() {
   const oidc = config?.oidc_configured === true;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.1fr,minmax(0,520px)]">
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_minmax(0,520px)]">
       {/* Brand panel — editorial statement, one accent, one line of geometry
           (the client login's composition, in console tokens). */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-nav p-12 text-white lg:flex">
@@ -228,7 +228,7 @@ function LoginForm() {
                 autoFocus
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 text-body text-ink focus:border-focus focus:outline-none"
+                className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 text-body text-ink focus:border-focus focus:outline-hidden"
               />
             </label>
 
@@ -240,7 +240,7 @@ function LoginForm() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 text-body text-ink focus:border-focus focus:outline-none"
+                className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 text-body text-ink focus:border-focus focus:outline-hidden"
               />
             </label>
 
@@ -305,7 +305,7 @@ function LoginForm() {
                     value={devToken}
                     onChange={(e) => setDevToken(e.target.value)}
                     placeholder="Paste OPERATOR_DEV_TOKEN"
-                    className="w-full bg-transparent font-mono text-body text-ink placeholder:text-slate-light focus:outline-none"
+                    className="w-full bg-transparent font-mono text-body text-ink placeholder:text-slate-light focus:outline-hidden"
                   />
                 </div>
                 {devError && (

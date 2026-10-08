@@ -40,7 +40,7 @@ function Count({ value, tone }: { value: number; tone?: 'warn' | 'crit' }) {
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
+    <pre className="max-h-72 overflow-auto rounded-sm border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
       {formatJson(value)}
     </pre>
   );
@@ -60,7 +60,7 @@ function TranslationFailureCard({ f }: { f: TenantTranslationFailure }) {
           {relTime(f.created_at)}
         </span>
       </div>
-      <p className="mt-2 break-words text-caption text-navy/90">{f.error_message}</p>
+      <p className="mt-2 wrap-break-word text-caption text-navy/90">{f.error_message}</p>
       <p className="mt-1 font-mono text-micro text-slate">at {f.source_locator}</p>
       <details className="mt-2">
         <summary className="cursor-pointer text-micro font-medium uppercase tracking-wider text-slate hover:text-navy">
@@ -152,7 +152,7 @@ function BatchDetailDrawer({
                 </span>
               )}
               {d.batch.error_message && (
-                <p className="mt-1 break-words text-caption text-critical">{d.batch.error_message}</p>
+                <p className="mt-1 wrap-break-word text-caption text-critical">{d.batch.error_message}</p>
               )}
             </div>
           )}
@@ -205,7 +205,7 @@ function RecordStat({
   tone?: 'warn' | 'crit';
 }) {
   return (
-    <div className="rounded border border-border-light px-2 py-1.5">
+    <div className="rounded-sm border border-border-light px-2 py-1.5">
       <div className="text-micro uppercase tracking-wider text-slate">{label}</div>
       <div className="text-body">
         <Count value={value} tone={tone} />

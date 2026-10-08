@@ -197,7 +197,7 @@ function CheckRow({ check }: { check: VerificationCheckRead }) {
   const evidence = Object.entries(check.evidence ?? {});
 
   return (
-    <li className="rounded border border-border-light bg-surface px-3.5 py-2.5">
+    <li className="rounded-sm border border-border-light bg-surface px-3.5 py-2.5">
       <div className="flex items-start gap-2.5">
         <Icon
           size={15}

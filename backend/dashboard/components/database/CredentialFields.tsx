@@ -43,7 +43,7 @@ export default function CredentialFields({
               onChange={(event) => onChange(field.key, event.target.value)}
               placeholder={field.placeholder}
               autoComplete="off"
-              className="w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+              className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             {extraInvalid ? (
               <p className="mt-1 text-caption text-critical">

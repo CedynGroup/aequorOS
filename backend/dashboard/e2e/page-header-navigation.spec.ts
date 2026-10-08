@@ -24,6 +24,21 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
+/**
+ * A CSS colour resolved to its sRGB pixel. Tailwind renders opacity modifiers
+ * through `color-mix(in oklab, …)`, so the computed value serialises as
+ * `oklab(…)`; painting both sides through the same canvas compares the colour
+ * itself rather than its notation.
+ */
+async function srgbPixel(page: Page, color: string): Promise<number[]> {
+  return page.evaluate((value) => {
+    const context = document.createElement("canvas").getContext("2d")!;
+    context.fillStyle = value;
+    context.fillRect(0, 0, 1, 1);
+    return Array.from(context.getImageData(0, 0, 1, 1).data);
+  }, color);
+}
+
 async function expectAlignedHeaderAndCards(page: Page) {
   const heading = page.getByRole("heading", { level: 1 });
   const header = heading.locator("../../../..");
@@ -97,7 +112,17 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
     });
     if (await themeSwitch.count()) await themeSwitch.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(topBarGround).toHaveCSS("background-color", background);
+    const expected = await srgbPixel(page, background);
+    await expect
+      .poll(async () =>
+        srgbPixel(
+          page,
+          await topBarGround.evaluate(
+            (element) => getComputedStyle(element).backgroundColor,
+          ),
+        ),
+      )
+      .toEqual(expected);
     if (evidenceDir) {
       mkdirSync(evidenceDir, { recursive: true });
       await page.screenshot({

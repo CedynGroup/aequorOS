@@ -83,7 +83,7 @@ export default function CapitalPlanProposalDialog({
             {(result.addons ?? []).map((conversion) => (
               <li
                 key={conversion.itemKey}
-                className="rounded border border-border-light p-3"
+                className="rounded-sm border border-border-light p-3"
               >
                 <p className="font-medium text-navy">{conversion.riskType}</p>
                 <p className="tnum text-body text-navy/80">

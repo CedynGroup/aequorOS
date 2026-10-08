@@ -337,7 +337,7 @@ export default function AuditView() {
             <div>
               <p className="mb-1.5 text-caption font-medium text-slate">Detail</p>
               {selected.detail ? (
-                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-light bg-surface p-3 font-mono text-caption text-ink">
+                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border-light bg-surface p-3 font-mono text-caption text-ink">
                   {prettyDetail(selected.detail)}
                 </pre>
               ) : (

@@ -94,7 +94,7 @@ export function CurveDefinitionStatusPill({ status }: { status: string }) {
  */
 export function CeremonyBanner({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+    <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
       <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
       <div className="min-w-0 text-caption text-slate">{children}</div>
     </div>
@@ -409,7 +409,7 @@ export function DefinitionForm({
         </Field>
       </div>
 
-      <details className="rounded border border-border-light bg-surface">
+      <details className="rounded-sm border border-border-light bg-surface">
         <summary className="cursor-pointer px-3 py-2 text-caption font-medium text-slate">
           Advanced params (JSON — QA tolerances, grid overrides)
         </summary>

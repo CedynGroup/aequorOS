@@ -40,7 +40,7 @@ export default function FxForwardsBoard({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface-raised">
-      <table className="w-full min-w-[42rem] text-body">
+      <table className="w-full min-w-2xl text-body">
         <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
           <tr>
             <th className="px-4 py-2.5 text-left">Pair</th>

@@ -41,7 +41,7 @@ export default function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-caption font-medium uppercase tracking-wider border ${toneStyles[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-caption font-medium uppercase tracking-wider border ${toneStyles[tone]} ${className}`}
     >
       <span
         aria-hidden

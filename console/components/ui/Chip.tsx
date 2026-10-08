@@ -34,8 +34,8 @@ export function Chip({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide whitespace-nowrap ${
-        mono ? 'font-mono normal-case tracking-normal' : ''
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-medium tracking-wide whitespace-nowrap ${
+        mono ? 'font-mono' : 'uppercase'
       } ${TONE_CLASSES[tone]}`}
     >
       {children}

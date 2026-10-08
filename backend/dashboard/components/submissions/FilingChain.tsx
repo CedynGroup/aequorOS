@@ -91,7 +91,7 @@ function EntryRow({
   const returned = entry.outcome === 'returned' || entry.outcome === 'rejected';
   const declined = entry.outcome === 'declined';
   return (
-    <li className="rounded border border-border-light bg-surface px-3 py-2">
+    <li className="rounded-sm border border-border-light bg-surface px-3 py-2">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-mono text-micro text-slate tnum whitespace-nowrap">
           {entry.at ? fmtTimestamp(entry.at) : 'Time not recorded'}
@@ -232,7 +232,7 @@ export default function FilingChainPanel({
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-caption font-medium text-navy hover:bg-surface"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-caption font-medium text-navy hover:bg-surface"
           >
             {open ? 'Hide history' : 'Show history'}
             <ChevronDown
@@ -267,7 +267,7 @@ export default function FilingChainPanel({
             </ul>
           )}
           {chain.next && (
-            <p className="rounded border border-border-light bg-surface px-3 py-2 text-caption text-navy/85 leading-relaxed">
+            <p className="rounded-sm border border-border-light bg-surface px-3 py-2 text-caption text-navy/85 leading-relaxed">
               <span className="font-medium text-navy">What happens next.</span>{' '}
               {chain.next}
             </p>

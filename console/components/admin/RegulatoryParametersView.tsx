@@ -155,7 +155,7 @@ function StructuredValuePreview({ body }: { body: Record<string, unknown> }) {
   }
 
   return (
-    <pre className="max-h-80 overflow-auto rounded bg-surface p-3 font-mono text-caption text-ink">
+    <pre className="max-h-80 overflow-auto rounded-sm bg-surface p-3 font-mono text-caption text-ink">
       {JSON.stringify(body, null, 2)}
     </pre>
   );
@@ -1048,7 +1048,7 @@ export default function RegulatoryParametersView() {
             {approveEligibility.state === 'blocked_own_proposal' ? (
               /* Four-eyes, stated up front — the approve control above is disabled.
                  The server refuses this independently on every call. */
-              <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+              <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
                 <ShieldCheck size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
                 <div className="min-w-0 text-caption text-slate">
                   <p className="text-body font-medium text-navy">
@@ -1075,7 +1075,7 @@ export default function RegulatoryParametersView() {
               </CeremonyBanner>
             )}
 
-            <div className="rounded border border-border-light bg-surface p-3">
+            <div className="rounded-sm border border-border-light bg-surface p-3">
               <div className="grid gap-x-10 sm:grid-cols-2">
                 <FieldRow label="Value">
                   <ValueCell row={approveFor} />
@@ -1119,7 +1119,7 @@ export default function RegulatoryParametersView() {
             )}
 
             {approveM.error && (
-              <div className="flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
+              <div className="flex items-start gap-2 rounded-sm border border-critical/40 bg-critical-light p-3">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0 text-critical" aria-hidden />
                 <FormError>{approveM.error.message}</FormError>
               </div>
@@ -1150,7 +1150,7 @@ export default function RegulatoryParametersView() {
               change is a new dated generation that supersedes the one before it.
             </p>
             {!historyFor.inForce && (
-              <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+              <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden />
                 <p className="text-caption text-slate">
                   No approved generation covers today, so the calculations have no value to

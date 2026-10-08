@@ -307,7 +307,7 @@ function ScenarioDesigner({
           <p className="text-micro font-medium uppercase tracking-wider text-slate">
             Start from preset
           </p>
-          <div className="inline-flex gap-1 bg-surface p-1 rounded">
+          <div className="inline-flex gap-1 bg-surface p-1 rounded-sm">
             {scenarios.scenarios.map((s) => (
               <button
                 key={s.code}
@@ -318,7 +318,7 @@ function ScenarioDesigner({
                 }}
                 className={`px-3 py-1.5 rounded text-caption font-medium ${
                   preset === s.code && !isCustom
-                    ? "bg-surface-raised text-navy shadow-sm"
+                    ? "bg-surface-raised text-navy shadow-xs"
                     : "text-slate hover:text-navy"
                 }`}
               >
@@ -489,7 +489,7 @@ function AssumptionSlider({
               onChange(Math.min(field.max, Math.max(field.min, parsed)));
             }
           }}
-          className="w-20 shrink-0 px-2 py-1 text-caption font-mono text-navy border border-border rounded bg-surface-raised tnum"
+          className="w-20 shrink-0 px-2 py-1 text-caption font-mono text-navy border border-border rounded-sm bg-surface-raised tnum"
           aria-label={`${field.label} value`}
         />
       </div>

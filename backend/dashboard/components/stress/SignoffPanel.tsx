@@ -42,7 +42,7 @@ const STATUS_LABEL: Record<StressSignoffStatus, string> = {
 };
 
 const inputCls =
-  'w-full rounded-md border border-border-light bg-transparent px-3 py-2 text-caption text-navy placeholder:text-slate-light focus:border-action focus:outline-none';
+  'w-full rounded-md border border-border-light bg-transparent px-3 py-2 text-caption text-navy placeholder:text-slate-light focus:border-action focus:outline-hidden';
 const btnCls =
   'inline-flex items-center gap-1.5 rounded-md bg-action px-3 py-1.5 text-caption font-medium text-white hover:bg-action/90 disabled:opacity-50';
 const btnGhost =

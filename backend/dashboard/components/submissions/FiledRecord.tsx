@@ -188,7 +188,7 @@ export default function FiledRecord({
                 </li>
               ))}
             </ol>
-            <p className="mt-2 rounded border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
+            <p className="mt-2 rounded-sm border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
               {/* No background poller exists. A timeline that advanced on its
                   own would be fiction, so the screen says who has to ask. */}
               {pollStatus === 'acknowledged'

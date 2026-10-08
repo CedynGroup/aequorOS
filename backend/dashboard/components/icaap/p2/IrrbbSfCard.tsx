@@ -96,7 +96,7 @@ export default function IrrbbSfCard({
     >
       <p className="text-body leading-relaxed text-navy/80">{lead}</p>
 
-      <div className="mt-3 rounded border border-border-light bg-surface/60 p-3">
+      <div className="mt-3 rounded-sm border border-border-light bg-surface/60 p-3">
         <p className="text-caption font-medium text-navy">
           Whether the standardised framework is required
         </p>
@@ -113,7 +113,7 @@ export default function IrrbbSfCard({
       </div>
 
       {inUse === null ? null : (
-        <div className="mt-3 rounded border border-border-light p-3">
+        <div className="mt-3 rounded-sm border border-border-light p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="font-medium text-navy">{inUse.title}</p>

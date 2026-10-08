@@ -143,7 +143,7 @@ export default function WindowAnalysis({
                 setStart(monthsAgoIso(preset.months));
                 setEnd(toIso(new Date()));
               }}
-              className="px-2.5 py-1 rounded text-micro font-medium text-slate hover:text-navy"
+              className="px-2.5 py-1 rounded-sm text-micro font-medium text-slate hover:text-navy"
             >
               {preset.label}
             </button>

@@ -250,7 +250,7 @@ export default function SourcesPage() {
               {family.sources.map((s) => {
                 const latest = latestBySource.get(s.key) ?? null;
                 return (
-                  <li key={s.key} className="rounded border border-border-light bg-surface p-2.5">
+                  <li key={s.key} className="rounded-sm border border-border-light bg-surface p-2.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="min-w-0 flex-1 text-caption text-ink">{s.name}</span>
                       <Chip mono title={`fetch method: ${s.method}`}>

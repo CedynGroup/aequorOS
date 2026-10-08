@@ -118,7 +118,7 @@ export default function LimitBar({
 
       {/* Zoned track */}
       <div
-        className="relative h-3 rounded-sm overflow-hidden"
+        className="relative h-3 rounded-xs overflow-hidden"
         style={{ background: 'rgb(var(--surface-hover))' }}
         role="img"
         aria-label={`${format(value)}${unit} of ${format(limit)}${unit} ${limitLabel.toLowerCase()}`}

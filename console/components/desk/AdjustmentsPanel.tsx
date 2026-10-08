@@ -137,7 +137,7 @@ export function AdjustmentsPanel({
       subtitle="Track-1 weekly judgment only — does not rewrite the methodology register. Override and additive bps require a numeric value and rationale. Saving recomputes the package digest."
     >
       {rows.length > 0 && (
-        <div className="mb-4 overflow-hidden rounded border border-border-light">
+        <div className="mb-4 overflow-hidden rounded-sm border border-border-light">
           <DataTable columns={stagedColumns} rows={rows} density="compact" />
         </div>
       )}
@@ -157,7 +157,7 @@ export function AdjustmentsPanel({
             <Input className="font-mono" value={value} onChange={(e) => setValue(e.target.value)} />
           </Field>
         )}
-        <Field label="Rationale" className="min-w-[14rem] flex-1">
+        <Field label="Rationale" className="min-w-56 flex-1">
           <Input value={rationale} onChange={(e) => setRationale(e.target.value)} />
         </Field>
         <Button onClick={addRow}>Add</Button>

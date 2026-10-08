@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
  * AequorOS Treasury Workbench — semantic design tokens.
@@ -11,7 +9,7 @@
  * SVG as `var(--chart-N)` strings.
  *
  * Dark is the DEFAULT theme; `:root[data-theme='light']` maps to the original
- * Figma palette. tailwind.config.ts re-points the legacy color names
+ * Figma palette. The `@theme` block below re-points the legacy color names
  * (navy/action/success/warning/critical/slate/surface/border/teal) at these
  * variables, so legacy pages adapt without edits.
  * ------------------------------------------------------------------------- */
@@ -132,23 +130,158 @@
   --color-border-light: rgb(var(--line));
 }
 
-html,
-body {
-  background: rgb(var(--bg));
-  color: rgb(var(--text));
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/*
+ * Tailwind theme. Every value points at a runtime token above, so the theme is
+ * `inline` (utilities read the token directly, keeping the dark/light switch
+ * live) and `reference` (Tailwind emits no `--color-*`/`--shadow-*` variables
+ * of its own, which would otherwise shadow tokens such as `--shadow-subtle`).
+ */
+@theme inline reference {
+  --color-navy-700: rgb(var(--btn-primary-hover));
+  --color-navy-800: rgb(var(--heading));
+  --color-navy-900: rgb(var(--nav-bg));
+  --color-navy: rgb(var(--heading));
+
+  --color-nav: rgb(var(--nav-bg));
+
+  --color-teal: rgb(var(--btn-primary));
+  --color-teal-dark: rgb(var(--nav-bg));
+
+  --color-action: rgb(var(--accent));
+  --color-action-hover: rgb(var(--accent-hover));
+  --color-action-light: rgb(var(--accent-soft));
+
+  --color-success: rgb(var(--ok));
+  --color-success-light: rgb(var(--ok-soft));
+
+  --color-warning: rgb(var(--warn));
+  --color-warning-light: rgb(var(--warn-soft));
+
+  --color-critical: rgb(var(--crit));
+  --color-critical-light: rgb(var(--crit-soft));
+
+  --color-slate: rgb(var(--text-muted));
+  --color-slate-light: rgb(var(--text-faint));
+
+  --color-ink: rgb(var(--text));
+
+  --color-surface: rgb(var(--surface-hover));
+  --color-surface-alt: rgb(var(--bg));
+  --color-surface-raised: rgb(var(--surface-raised));
+  --color-surface-base: rgb(var(--surface));
+
+  --color-border: rgb(var(--line-strong));
+  --color-border-light: rgb(var(--line));
+
+  --color-focus: rgb(var(--focus));
+
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --text-display: 32px;
+  --text-display--line-height: 40px;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.01em;
+  --text-h1: 24px;
+  --text-h1--line-height: 32px;
+  --text-h1--font-weight: 600;
+  --text-h2: 20px;
+  --text-h2--line-height: 28px;
+  --text-h2--font-weight: 600;
+  --text-h3: 16px;
+  --text-h3--line-height: 24px;
+  --text-h3--font-weight: 500;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-micro--letter-spacing: 0.04em;
+  --text-kpi: 28px;
+  --text-kpi--line-height: 34px;
+  --text-kpi--font-weight: 600;
+  --text-kpi--letter-spacing: -0.01em;
+  --text-kpi-lg: 36px;
+  --text-kpi-lg--line-height: 42px;
+  --text-kpi-lg--font-weight: 600;
+  --text-kpi-lg--letter-spacing: -0.01em;
+
+  --shadow-subtle: var(--shadow-subtle);
+  --shadow-pop: var(--shadow-pop);
 }
 
-/* Tabular numerals wherever numbers appear */
-table {
-  font-variant-numeric: tabular-nums lining-nums;
+/*
+ * Tailwind v4 changed a few preflight defaults; these restore the v3 ones the
+ * UI was designed against: gray-200 default borders, gray-400 placeholders and
+ * a pointer cursor on buttons.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
-.font-mono {
-  font-feature-settings:
-    "tnum" 1,
-    "lnum" 1;
+/* Global element styles sit in the base layer so utilities still override them. */
+@layer base {
+  html,
+  body {
+    background: rgb(var(--bg));
+    color: rgb(var(--text));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numerals wherever numbers appear */
+  table {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  .font-mono {
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
+  }
+
+  /* Scrollbars — subtle, theme-aware */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--line-strong));
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--text-faint));
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
 }
 
 @layer components {
@@ -190,37 +323,6 @@ table {
   }
 }
 
-/* Focus ring */
-*:focus-visible {
-  outline: 2px solid rgb(var(--focus));
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-/* Scrollbars — subtle, theme-aware */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--line-strong)) transparent;
-}
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: rgb(var(--line-strong));
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--text-faint));
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
 /* Print base — white page, black text, no chrome. Full print styles land in
    the reporting workstream; this keeps ad-hoc prints legible. */
 @media print {
@@ -250,5 +352,19 @@ table {
 
   body > div header {
     display: none !important;
+  }
+}
+
+/*
+ * Focus ring. In the utilities layer, after the generated utilities, so it
+ * keeps its v3 standing: it overrides bare utilities of equal specificity
+ * (`outline-hidden`, `rounded-md`) on a focused element, while variant
+ * utilities such as `focus:outline-hidden` still opt an element out.
+ */
+@layer utilities {
+  *:focus-visible {
+    outline: 2px solid rgb(var(--focus));
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 }

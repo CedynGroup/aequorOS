@@ -98,7 +98,7 @@ function RequirementRow({
           {reasonOpen && (
             <div className="mt-2 space-y-2">
               <textarea
-                className="w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-body text-ink focus:border-action focus:outline-none"
+                className="w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-body text-ink focus:border-action focus:outline-hidden"
                 rows={2}
                 value={reason}
                 maxLength={2000}
@@ -175,7 +175,7 @@ export default function RequirementChecklist({
           <p className="mt-1 text-caption text-warning">{pendingNote}</p>
         )}
       </div>
-      <ul className="max-h-[32rem] overflow-y-auto">
+      <ul className="max-h-128 overflow-y-auto">
         {section.requirements.map((requirement) => (
           <RequirementRow
             key={requirement.item.id}

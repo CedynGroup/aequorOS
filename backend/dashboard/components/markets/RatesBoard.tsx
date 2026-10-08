@@ -120,7 +120,7 @@ export default function RatesBoard({
             <h3 className="text-body font-semibold text-navy">{group.title}</h3>
             <p className="text-caption text-slate mt-0.5">{group.subtitle}</p>
           </div>
-          <table className="w-full min-w-[37rem] text-body">
+          <table className="w-full min-w-148 text-body">
             <thead className="text-micro font-medium uppercase tracking-wider text-slate">
               <tr>
                 <th className="px-4 py-2.5 text-left">Instrument</th>

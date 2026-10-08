@@ -316,7 +316,7 @@ export default function EntitlementsPage() {
             <Field label="Effective from" required>
               <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
             </Field>
-            <Field label="Notes (optional)" className="min-w-[12rem] flex-1">
+            <Field label="Notes (optional)" className="min-w-48 flex-1">
               <Input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

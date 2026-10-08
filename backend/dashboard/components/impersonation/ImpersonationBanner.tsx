@@ -75,7 +75,7 @@ export default function ImpersonationBanner() {
     <div
       role="alert"
       aria-live="assertive"
-      className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-3 px-4 text-caption font-semibold text-white shadow-md"
+      className="fixed inset-x-0 top-0 z-100 flex items-center justify-center gap-3 px-4 text-caption font-semibold text-white shadow-md"
       style={{ height: BANNER_HEIGHT, backgroundColor: ended ? '#b91c1c' : '#b45309' }}
     >
       <AlertTriangle size={14} aria-hidden className="shrink-0" />
@@ -99,7 +99,7 @@ export default function ImpersonationBanner() {
         type="button"
         onClick={onLeave}
         disabled={leaving}
-        className="shrink-0 inline-flex items-center gap-1.5 rounded bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25 disabled:opacity-60"
+        className="shrink-0 inline-flex items-center gap-1.5 rounded-sm bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25 disabled:opacity-60"
       >
         {leaving ? (
           <Loader2 size={12} className="animate-spin" aria-hidden />

@@ -17,7 +17,7 @@ const roles = [
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
 const inputClasses =
-  'w-full rounded border border-[#C9CDD8] bg-white px-4 py-3 text-ink placeholder:text-text-muted focus:border-action focus:outline-none focus:ring-2 focus:ring-action/30 transition disabled:opacity-60 disabled:cursor-not-allowed';
+  'w-full rounded-sm border border-[#C9CDD8] bg-white px-4 py-3 text-ink placeholder:text-text-muted focus:border-action focus:outline-hidden focus:ring-2 focus:ring-action/30 transition disabled:opacity-60 disabled:cursor-not-allowed';
 
 export default function ContactForm() {
   const [status, setStatus] = useState<Status>('idle');
@@ -99,7 +99,7 @@ export default function ContactForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="bg-white border border-border-light rounded-xl p-8 space-y-5 shadow-sm"
+      className="bg-white border border-border-light rounded-xl p-8 pt-13 space-y-5 shadow-xs"
     >
       <input
         type="text"

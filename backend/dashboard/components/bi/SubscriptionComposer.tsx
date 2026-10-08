@@ -500,7 +500,7 @@ function pad(value: number | null): string {
 }
 
 const inputClass =
-  "rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none";
+  "rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden";
 
 function Field({
   label,

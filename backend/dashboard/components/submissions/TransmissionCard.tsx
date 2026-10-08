@@ -96,7 +96,7 @@ export function TransmissionNotice({
   return (
     <p
       data-testid="transmission-notice"
-      className="mb-2.5 rounded border border-warning/25 bg-warning-light/40 px-3 py-2 text-caption leading-relaxed text-navy/85"
+      className="mb-2.5 rounded-sm border border-warning/25 bg-warning-light/40 px-3 py-2 text-caption leading-relaxed text-navy/85"
     >
       <span className="font-medium text-navy">
         This sends the return to {regulatorName}.
@@ -146,7 +146,7 @@ export default function TransmissionCard({
         <select
           value={channel}
           onChange={(event) => onChannelChange(event.target.value as ChannelCode)}
-          className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+          className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
         >
           {CHANNEL_OPTIONS.map((option) => (
             <option key={option} value={option}>
@@ -161,14 +161,14 @@ export default function TransmissionCard({
       </label>
 
       {channel === 'orass_sandbox' && (
-        <p className="inline-flex items-center gap-1.5 rounded border border-warning/25 bg-warning-light px-2 py-1 text-micro font-medium uppercase tracking-wider text-warning">
+        <p className="inline-flex items-center gap-1.5 rounded-sm border border-warning/25 bg-warning-light px-2 py-1 text-micro font-medium uppercase tracking-wider text-warning">
           <FlaskConical size={11} aria-hidden />
           Sandbox — a simulated {portalName()}, not the real portal
         </p>
       )}
 
       {pendingReupload && (
-        <div className="flex items-start gap-2.5 rounded border border-warning/30 bg-warning-light/40 px-3.5 py-2.5">
+        <div className="flex items-start gap-2.5 rounded-sm border border-warning/30 bg-warning-light/40 px-3.5 py-2.5">
           <RadioTower size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <p className="text-caption leading-relaxed text-navy/85">
             <span className="font-medium text-navy">
@@ -182,7 +182,7 @@ export default function TransmissionCard({
       )}
 
       {refusal && (
-        <div className="space-y-2.5 rounded border border-warning/30 bg-warning-light/50 px-3.5 py-3">
+        <div className="space-y-2.5 rounded-sm border border-warning/30 bg-warning-light/50 px-3.5 py-3">
           <p className="inline-flex items-center gap-1.5 text-body font-medium text-navy">
             <Mail size={13} className="text-warning" aria-hidden />
             {portalName()} downtime — email fallback available
@@ -214,7 +214,7 @@ export default function TransmissionCard({
               <summary className="cursor-pointer font-medium text-navy">
                 Read the send-ready instructions
               </summary>
-              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-sm border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
                 {instructions}
               </pre>
             </details>

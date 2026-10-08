@@ -123,7 +123,7 @@ export default function RoleLensTabs({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(key)}
-            className={`px-3 py-1.5 rounded text-caption font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+            className={`px-3 py-1.5 rounded text-caption font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus ${
               active
                 ? 'bg-surface-raised text-navy shadow-subtle'
                 : 'text-slate hover:text-navy'

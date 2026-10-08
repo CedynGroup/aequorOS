@@ -206,9 +206,9 @@ function FieldBox({
       onPointerUp={end}
       onPointerCancel={end}
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
-      className={`absolute rounded-sm border-2 border-dashed ${tone} ${
+      className={`absolute rounded-xs border-2 border-dashed ${tone} ${
         editable ? 'cursor-move touch-none' : 'cursor-default'
-      } ${dragging ? 'opacity-90' : ''} outline-none focus-visible:ring-2 focus-visible:ring-focus`}
+      } ${dragging ? 'opacity-90' : ''} outline-hidden focus-visible:ring-2 focus-visible:ring-focus`}
     >
       <span className="absolute -top-5 left-0 whitespace-nowrap rounded-t px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider bg-surface-raised border border-border-light text-navy">
         {FIELD_TYPE_LABELS[fieldType]} · {slot.ownerLabel}
@@ -226,7 +226,7 @@ function FieldBox({
       {slot.violation && (
         <span
           role="alert"
-          className="absolute -bottom-5 left-0 inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-micro font-medium bg-critical-light text-critical border border-critical/30"
+          className="absolute -bottom-5 left-0 inline-flex items-center gap-1 whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro font-medium bg-critical-light text-critical border border-critical/30"
         >
           <AlertTriangle size={10} aria-hidden />
           {slot.violation}
@@ -250,7 +250,7 @@ function FieldBox({
             onPointerUp={end}
             onPointerCancel={end}
             aria-hidden
-            className="absolute -right-1 -bottom-1 w-4 h-4 rounded-sm bg-surface-raised border border-border text-slate flex items-center justify-center cursor-se-resize touch-none"
+            className="absolute -right-1 -bottom-1 w-4 h-4 rounded-xs bg-surface-raised border border-border text-slate flex items-center justify-center cursor-se-resize touch-none"
           >
             <GripVertical size={9} className="rotate-45" />
           </span>

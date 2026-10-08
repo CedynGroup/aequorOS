@@ -25,7 +25,7 @@ export function ErrorPanel({
           <p className="text-body font-medium text-navy">
             {context ? `${context} failed` : 'Request failed'}
           </p>
-          <p className="mt-1 break-words text-body text-slate">
+          <p className="mt-1 wrap-break-word text-body text-slate">
             <span className="font-mono text-caption text-critical">{error.code}</span>
             {' · '}
             {error.message}
@@ -43,7 +43,7 @@ export function ErrorPanel({
             {unauthorized && (
               <a
                 href="/login"
-                className="inline-flex items-center rounded border border-border px-3 py-1.5 text-caption font-medium text-ink hover:bg-surface"
+                className="inline-flex items-center rounded-sm border border-border px-3 py-1.5 text-caption font-medium text-ink hover:bg-surface"
               >
                 Sign in again
               </a>

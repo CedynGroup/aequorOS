@@ -118,7 +118,7 @@ export default function ProductPage() {
         </h2>
         <Link
           href="/contact"
-          className="inline-flex h-12 items-center rounded bg-navy-deep px-6 text-[15px] font-semibold text-white hover:bg-navy transition-colors shrink-0"
+          className="inline-flex h-12 items-center rounded-sm bg-navy-deep px-6 text-[15px] font-semibold text-white hover:bg-navy transition-colors shrink-0"
         >
           Request a demo
         </Link>

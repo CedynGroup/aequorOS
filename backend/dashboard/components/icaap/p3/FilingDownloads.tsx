@@ -117,7 +117,7 @@ export default function FilingDownloads({
               {files.map((artifact) => (
                 <li
                   key={artifact.id}
-                  className="flex flex-wrap items-start justify-between gap-2 rounded border border-border-light p-3"
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-sm border border-border-light p-3"
                 >
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 font-medium text-navy">
@@ -163,7 +163,7 @@ export default function FilingDownloads({
                 {signed.map((version) => (
                   <li
                     key={version.id}
-                    className="flex flex-wrap items-start justify-between gap-2 rounded border border-border-light p-3"
+                    className="flex flex-wrap items-start justify-between gap-2 rounded-sm border border-border-light p-3"
                   >
                     <div className="min-w-0">
                       <p className="font-medium text-navy">

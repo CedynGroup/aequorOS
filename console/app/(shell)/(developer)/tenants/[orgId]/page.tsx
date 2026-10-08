@@ -165,7 +165,7 @@ export default function TenantDetailPage() {
     {
       key: 'summary',
       header: 'Summary',
-      render: (i) => <span className="break-words text-body text-navy/90">{i.summary || DASH}</span>,
+      render: (i) => <span className="wrap-break-word text-body text-navy/90">{i.summary || DASH}</span>,
     },
     {
       key: 'status',

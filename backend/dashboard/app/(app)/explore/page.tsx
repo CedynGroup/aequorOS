@@ -177,7 +177,7 @@ function MeasureOption({
           <span className="block text-caption text-slate">{reason}</span>
         )}
         {designation && (
-          <span className="mt-0.5 inline-block rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
+          <span className="mt-0.5 inline-block rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
             {designation}
           </span>
         )}

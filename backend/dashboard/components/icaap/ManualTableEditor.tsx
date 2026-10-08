@@ -132,7 +132,7 @@ export default function ManualTableEditor({
                       <input
                         className={`w-32 rounded border px-2 py-1 text-body tnum ${
                           errors[key] ? "border-critical" : "border-border"
-                        } bg-surface-raised text-ink focus:border-action focus:outline-none`}
+                        } bg-surface-raised text-ink focus:border-action focus:outline-hidden`}
                         value={row.cells?.[column.key] ?? ""}
                         disabled={readOnly}
                         aria-label={`${row.label} ${column.label}`}

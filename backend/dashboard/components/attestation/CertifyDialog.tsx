@@ -165,12 +165,12 @@ export default function CertifyDialog({
         type="button"
         aria-label="Cancel certification"
         onClick={onClose}
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs"
       />
       <section className="relative w-full max-w-3xl rounded-lg bg-surface-raised border border-border shadow-pop">
         <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border-light">
           <div className="min-w-0">
-            <h2 ref={headingRef} tabIndex={-1} className="text-h3 text-navy outline-none">
+            <h2 ref={headingRef} tabIndex={-1} className="text-h3 text-navy outline-hidden">
               {SIGNING_ROLE_ACTIONS[signingRole] ?? 'Certify'} — {returnLabel}
             </h2>
             <p className="mt-0.5 text-caption text-slate">
@@ -182,7 +182,7 @@ export default function CertifyDialog({
             type="button"
             aria-label="Cancel certification"
             onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded text-slate hover:bg-surface inline-flex items-center justify-center"
+            className="shrink-0 w-9 h-9 rounded-sm text-slate hover:bg-surface inline-flex items-center justify-center"
           >
             <X size={16} aria-hidden />
           </button>

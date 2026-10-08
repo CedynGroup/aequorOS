@@ -18,7 +18,7 @@ export default function IllustrativeBadge({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-caption font-medium uppercase tracking-wider border bg-warning-light text-warning border-warning/30 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-caption font-medium uppercase tracking-wider border bg-warning-light text-warning border-warning/30 ${className}`}
     >
       <PenLine size={11} aria-hidden />
       {label}

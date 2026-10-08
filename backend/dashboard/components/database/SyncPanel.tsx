@@ -58,7 +58,7 @@ export default function SyncPanel({
   };
 
   return (
-    <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
+    <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label
@@ -72,14 +72,14 @@ export default function SyncPanel({
             type="date"
             value={asOfDate}
             onChange={(event) => setAsOfDate(event.target.value)}
-            className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+            className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
           />
         </div>
         <button
           type="button"
           onClick={() => void runSync()}
           disabled={sync.isPending || disabled}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {sync.isPending ? (
             <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -96,7 +96,7 @@ export default function SyncPanel({
       </p>
 
       {error && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{error}</p>
         </div>
       )}
@@ -122,7 +122,7 @@ export default function SyncPanel({
           </div>
 
           {result.asOfNote && (
-            <p className="flex items-start gap-2 rounded border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption text-navy">
+            <p className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption text-navy">
               <Info size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden />
               <span>{result.asOfNote}</span>
             </p>

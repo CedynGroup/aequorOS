@@ -31,13 +31,13 @@ export default function ProductFrame({
   if (variant === 'chrome-dark') {
     return (
       <figure className={className}>
-        <div className="rounded-t-lg overflow-hidden border border-white/[0.18] border-b-0 shadow-[0_-18px_60px_rgba(0,0,0,0.35)]">
+        <div className="rounded-t-lg overflow-hidden border border-white/18 border-b-0 shadow-[0_-18px_60px_rgba(0,0,0,0.35)]">
           <div
-            className="flex items-center gap-2 h-[34px] px-3.5 bg-[#17202F] border-b border-white/[0.08]"
+            className="flex items-center gap-2 h-[34px] px-3.5 bg-[#17202F] border-b border-white/8"
             aria-hidden
           >
-            <span className="h-[9px] w-[9px] rounded-full bg-white/[0.18]" />
-            <span className="h-[9px] w-[9px] rounded-full bg-white/[0.18]" />
+            <span className="h-[9px] w-[9px] rounded-full bg-white/18" />
+            <span className="h-[9px] w-[9px] rounded-full bg-white/18" />
             <span className="ml-2 truncate text-[11.5px] text-white/45">
               bank.aequoros.com · {screen.label}
             </span>

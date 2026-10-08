@@ -328,7 +328,7 @@ function ReturnsWorkspace() {
               <select
                 value={code ?? ''}
                 onChange={(e) => setParams(e.target.value, date)}
-                className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy max-w-[280px]"
+                className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy max-w-[280px]"
               >
                 {templates.map((tpl) => (
                   <option key={tpl.code} value={tpl.code}>
@@ -343,7 +343,7 @@ function ReturnsWorkspace() {
                 value={date ?? ''}
                 onChange={(e) => code && setParams(code, e.target.value)}
                 disabled={anchorsQuery.isLoading || anchorDates.length === 0}
-                className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
+                className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
               >
                 {dateOptions.map((option) => (
                   <option key={option.date} value={option.date}>
@@ -1345,7 +1345,7 @@ function ReturnCommandBarBlock({
             {submissionRevision && (
               <span
                 title="Revision — a correction carries the next one"
-                className="rounded border border-border px-1.5 py-0.5 font-mono text-caption text-slate tnum"
+                className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-caption text-slate tnum"
               >
                 Rev {submissionRevision}
               </span>
@@ -1443,7 +1443,7 @@ function SentBackNotice({
   return (
     <div
       data-testid="sent-back-notice"
-      className="flex items-start gap-2.5 rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5"
+      className="flex items-start gap-2.5 rounded-sm border border-warning/25 bg-warning-light/50 px-3.5 py-2.5"
     >
       <CornerUpLeft size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
       <div className="min-w-0 text-body">

@@ -13,7 +13,7 @@ function fmtIndexValue(value: string): string {
 export default function IndicesStrip({ indices }: { indices: IndexViewRead[] }) {
   return (
     <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
-      <table className="w-full min-w-[34rem] text-body">
+      <table className="w-full min-w-136 text-body">
         <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
           <tr>
             <th className="px-4 py-2.5 text-left">Indicator</th>

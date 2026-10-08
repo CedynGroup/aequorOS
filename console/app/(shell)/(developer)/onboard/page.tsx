@@ -448,7 +448,7 @@ export default function OnboardPage() {
                       {s.step}
                     </span>
                     {s.detail && (
-                      <p className="mt-0.5 break-words text-caption text-slate">
+                      <p className="mt-0.5 wrap-break-word text-caption text-slate">
                         {s.detail}
                       </p>
                     )}
@@ -476,7 +476,7 @@ export default function OnboardPage() {
                   </p>
                   <ul className="mt-1 list-disc space-y-0.5 pl-5 text-caption text-slate">
                     {result.warnings.map((w, i) => (
-                      <li key={i} className="break-words">
+                      <li key={i} className="wrap-break-word">
                         {w}
                       </li>
                     ))}
@@ -531,7 +531,7 @@ export default function OnboardPage() {
                           The API returned no one-time password for this run.
                         </p>
                       ) : otpRevealed ? (
-                        <div className="flex items-center gap-2 rounded border border-border bg-surface-base px-3 py-2">
+                        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-base px-3 py-2">
                           <code className="min-w-0 flex-1 break-all font-mono text-body text-ink">
                             {result.admin_one_time_password}
                           </code>

@@ -39,7 +39,7 @@ function fileToText(file: File): Promise<string> {
 }
 
 const inputClass =
-  'w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono';
+  'w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono';
 const labelClass = 'block text-caption font-medium text-slate mb-1';
 
 export default function SnowflakeFields({
@@ -98,7 +98,7 @@ export default function SnowflakeFields({
   };
 
   return (
-    <fieldset className="rounded border border-border p-4 space-y-4">
+    <fieldset className="rounded-sm border border-border p-4 space-y-4">
       <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
         Snowflake warehouse
       </legend>
@@ -183,7 +183,7 @@ export default function SnowflakeFields({
           type="checkbox"
           checked={config.useStreams}
           onChange={(event) => onConfigChange({ useStreams: event.target.checked })}
-          className="mt-1 rounded border-border"
+          className="mt-1 rounded-sm border-border"
         />
         <span>
           Use change streams
@@ -235,7 +235,7 @@ export default function SnowflakeFields({
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full px-3 py-1.5 rounded border border-border text-caption text-navy font-mono"
+                className="w-full px-3 py-1.5 rounded-sm border border-border text-caption text-navy font-mono"
               />
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <input
@@ -244,7 +244,7 @@ export default function SnowflakeFields({
                   type="file"
                   accept=".p8,.pem,.key"
                   onChange={(event) => void handleFile(event.target.files?.[0])}
-                  className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
+                  className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded-sm file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
                 />
                 {reading && (
                   <span className="inline-flex items-center gap-1.5 text-caption text-slate">

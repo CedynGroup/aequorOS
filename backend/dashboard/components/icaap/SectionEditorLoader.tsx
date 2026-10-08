@@ -23,7 +23,7 @@ const SectionEditorLoader = dynamic(() => import("./editor/SectionEditor"), {
     <div className="card overflow-hidden">
       <div className="h-11 border-b border-border-light bg-surface/60" />
       <div
-        className="min-h-[24rem] animate-pulse bg-surface"
+        className="min-h-96 animate-pulse bg-surface"
         aria-busy="true"
         aria-label="Loading the editor"
       />

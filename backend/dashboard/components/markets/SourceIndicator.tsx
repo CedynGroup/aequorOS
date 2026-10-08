@@ -39,7 +39,7 @@ export default function SourceIndicator({
         </span>
       </span>
       {preference?.overlay && (
-        <span className="inline-flex items-center rounded border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium text-action">
+        <span className="inline-flex items-center rounded-sm border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium text-action">
           Overlay on
         </span>
       )}

@@ -102,7 +102,7 @@ export default function OperationalFeed({
       actions={
         <Link
           href="/data-engine"
-          className="text-caption font-medium text-action hover:text-action-hover inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded"
+          className="text-caption font-medium text-action hover:text-action-hover inline-flex items-center gap-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus rounded-sm"
         >
           Data Engine <ArrowRight size={12} aria-hidden />
         </Link>

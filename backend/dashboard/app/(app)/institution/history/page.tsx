@@ -135,7 +135,7 @@ export default function NameHistoryPage() {
                           setAdding(false);
                           setEditingId(entry.id);
                         }}
-                        className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                        className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                       >
                         <Pencil size={11} aria-hidden />
                         Edit

@@ -130,7 +130,7 @@ export function PublicationResults({ publication }: { publication: DeskPublicati
           No per-bank results recorded — there were no banks to publish to.
         </p>
       ) : (
-        <div className="mt-2 overflow-hidden rounded border border-border-light">
+        <div className="mt-2 overflow-hidden rounded-sm border border-border-light">
           <DataTable
             columns={columns}
             rows={results}

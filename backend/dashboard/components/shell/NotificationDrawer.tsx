@@ -98,7 +98,7 @@ export default function NotificationDrawer({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs"
       />
       <aside className="relative w-full max-w-md bg-surface-raised border-l border-border h-full flex flex-col shadow-pop">
         <div className="h-16 px-5 border-b border-border-light flex items-center justify-between">
@@ -114,7 +114,7 @@ export default function NotificationDrawer({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="w-9 h-9 rounded text-slate hover:bg-surface inline-flex items-center justify-center"
+            className="w-9 h-9 rounded-sm text-slate hover:bg-surface inline-flex items-center justify-center"
           >
             <X size={16} aria-hidden />
           </button>

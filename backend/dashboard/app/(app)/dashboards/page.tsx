@@ -152,7 +152,7 @@ export default function DashboardsPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <h3 className="text-h3 text-navy">{dashboard.title}</h3>
-                        <span className="shrink-0 rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+                        <span className="shrink-0 rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
                           {CERTIFICATION_LABELS[dashboard.certification]}
                         </span>
                       </div>
@@ -247,7 +247,7 @@ export default function DashboardsPage() {
                           <h3 className="text-h3 text-navy">
                             {dashboard.title}
                           </h3>
-                          <span className="shrink-0 rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+                          <span className="shrink-0 rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
                             {CERTIFICATION_LABELS[dashboard.certification]}
                           </span>
                         </div>

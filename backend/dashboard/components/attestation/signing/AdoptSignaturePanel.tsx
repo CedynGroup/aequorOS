@@ -229,7 +229,7 @@ function DrawPad({
         onPointerMove={extend}
         onPointerUp={stop}
         onPointerCancel={stop}
-        className="w-full h-auto rounded border border-border bg-white touch-none cursor-crosshair"
+        className="w-full h-auto rounded-sm border border-border bg-white touch-none cursor-crosshair"
       />
       <div className="flex items-center gap-2">
         <button
@@ -287,7 +287,7 @@ function TypeIt({
           value={name}
           maxLength={120}
           onChange={(event) => setName(event.target.value)}
-          className="w-full rounded border border-border bg-surface px-3 py-2 text-body text-navy"
+          className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
         />
       </label>
 

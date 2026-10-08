@@ -127,7 +127,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center px-4 py-[10vh]">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs"
         onClick={dismissOnBackdrop ? onClose : undefined}
         aria-hidden
       />
@@ -158,7 +158,7 @@ export function Modal({
               type="button"
               onClick={onClose}
               aria-label="Close dialog"
-              className="-mr-1 shrink-0 rounded p-1 text-slate hover:bg-surface hover:text-ink"
+              className="-mr-1 shrink-0 rounded-sm p-1 text-slate hover:bg-surface hover:text-ink"
             >
               <X size={16} aria-hidden />
             </button>
@@ -219,7 +219,7 @@ export function Drawer({
   return createPortal(
     <div className="fixed inset-0 z-50">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs"
         onClick={dismissOnBackdrop ? onClose : undefined}
         aria-hidden
       />
@@ -252,7 +252,7 @@ export function Drawer({
               type="button"
               onClick={onClose}
               aria-label="Close panel"
-              className="-mr-1 shrink-0 rounded p-1 text-slate hover:bg-surface hover:text-ink"
+              className="-mr-1 shrink-0 rounded-sm p-1 text-slate hover:bg-surface hover:text-ink"
             >
               <X size={16} aria-hidden />
             </button>

@@ -121,7 +121,7 @@ function PulseCard({ card }: { card: PulseCardModel }) {
   return (
     <Link
       href={href}
-      className="card block px-4 py-3.5 min-w-0 transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      className="card block px-4 py-3.5 min-w-0 transition-colors hover:bg-surface focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
       style={edge}
       aria-label={`${label} — open module`}
     >

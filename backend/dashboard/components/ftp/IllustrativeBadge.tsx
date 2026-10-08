@@ -21,7 +21,7 @@ export default function IllustrativeBadge({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-warning/30 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider ${className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-warning/30 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider ${className}`}
     >
       <TriangleAlert size={10} aria-hidden />
       {label}

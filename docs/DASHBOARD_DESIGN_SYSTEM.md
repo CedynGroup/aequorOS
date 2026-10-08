@@ -32,7 +32,7 @@ For the separate Access and Settings areas, see
 Placement rules: market data **management** (connect/rotate/upload) lives in the Data Engine;
 market data **consumption** (curves, rates, ratings analysis) lives in Markets.
 
-## 2. Token system (`app/globals.css` + `tailwind.config.ts`)
+## 2. Token system (`app/globals.css`)
 
 Semantic CSS variables under `:root[data-theme='dark']` (default) and `[data-theme='light']`,
 stored as RGB channel triplets so Tailwind opacity modifiers work (`text-navy/85`).

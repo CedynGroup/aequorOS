@@ -34,7 +34,7 @@ function GapRow({ label, detail }: { label: string; detail: string }) {
         <p className="text-caption text-navy">{label}</p>
         <p className="text-micro text-slate">{detail}</p>
       </div>
-      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded border border-border-light bg-surface text-micro font-medium uppercase tracking-wider text-slate whitespace-nowrap">
+      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border-light bg-surface text-micro font-medium uppercase tracking-wider text-slate whitespace-nowrap">
         Not in payload
       </span>
     </li>
@@ -70,7 +70,7 @@ export default function MethodologyDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1.5 rounded text-slate hover:text-navy hover:bg-surface"
+            className="p-1.5 rounded-sm text-slate hover:text-navy hover:bg-surface"
           >
             <X size={16} aria-hidden />
           </button>

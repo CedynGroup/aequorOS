@@ -606,7 +606,7 @@ export default function OperatingEnvironmentPage() {
 
                 {/* The judgment + sovereign sub-factor leads the industry pillar. */}
                 {pillar.code === 'industry' && (
-                  <div className="mb-4 rounded border border-border-light bg-surface/50 p-3">
+                  <div className="mb-4 rounded-sm border border-border-light bg-surface/50 p-3">
                     <div className="mb-2 text-micro uppercase tracking-wide text-slate-light">
                       Institutional framework
                     </div>
@@ -732,7 +732,7 @@ export default function OperatingEnvironmentPage() {
       {preview && breakdown && (
         <>
           {stale && (
-            <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+            <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
               <Info size={15} className="mt-0.5 shrink-0 text-warning" />
               <p className="text-caption text-slate">
                 Inputs changed since this score was computed. Re-compute before staging — the figures
@@ -1192,7 +1192,7 @@ function ProvenancePanel({ provenance }: { provenance: OperatingEnvironmentProve
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {rows.map((row) => (
-          <div key={row.label} className="rounded border border-border-light bg-surface/40 p-3">
+          <div key={row.label} className="rounded-sm border border-border-light bg-surface/40 p-3">
             <div className="mb-1 text-caption font-medium text-navy">{row.label}</div>
             {row.data ? (
               <dl className="space-y-0.5">

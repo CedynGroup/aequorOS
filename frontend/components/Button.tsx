@@ -8,7 +8,7 @@ type Variant =
   | 'secondary-on-light';
 
 const base =
-  'inline-flex items-center justify-center rounded px-6 h-12 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2';
+  'inline-flex items-center justify-center rounded-sm px-6 h-12 text-[15px] font-semibold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2';
 
 const variants: Record<Variant, string> = {
   primary:

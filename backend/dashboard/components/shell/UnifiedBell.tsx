@@ -88,7 +88,7 @@ export default function UnifiedBell() {
           setOpen((v) => !v);
           setTab(breachTotal > 0 ? 'breaches' : 'inbox');
         }}
-        className="relative w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
+        className="relative w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface"
       >
         <Bell size={16} aria-hidden />
         {badge > 0 && (
@@ -137,7 +137,7 @@ export default function UnifiedBell() {
 
           {tab === 'breaches' ? (
             <>
-              <div className="max-h-[22rem] overflow-y-auto">
+              <div className="max-h-88 overflow-y-auto">
                 {breaches.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-body text-slate">No active breaches</p>
@@ -184,7 +184,7 @@ export default function UnifiedBell() {
             </>
           ) : (
             <>
-              <div className="max-h-[22rem] overflow-y-auto">
+              <div className="max-h-88 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-body text-slate">Nothing in the inbox</p>

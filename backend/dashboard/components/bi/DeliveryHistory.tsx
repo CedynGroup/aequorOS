@@ -86,7 +86,7 @@ export default function DeliveryHistory({
           <li key={delivery.id} className="flex flex-col gap-1 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <span
-                className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-micro font-medium ${TONE_CLASS[tone]}`}
+                className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-micro font-medium ${TONE_CLASS[tone]}`}
               >
                 <Icon delivery={delivery} />
                 {delivery.status === "sent" && delivery.deliveryMode === "link"

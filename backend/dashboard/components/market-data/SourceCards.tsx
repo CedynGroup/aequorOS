@@ -195,13 +195,13 @@ export default function SourceCard({
       )}
 
       {connection.validationError && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
           <p className="text-body text-navy">{connection.validationError}</p>
         </div>
       )}
 
       {isVendor && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
           <p className="text-body font-medium text-navy">Live vendor transport unavailable</p>
           <p className="mt-1 text-caption text-slate">
             Credentials and scopes are retained for onboarding, but this deployment does not send
@@ -288,7 +288,7 @@ export default function SourceCard({
       )}
 
       {rotating && isVendor && !isRevoked && (
-        <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
+        <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
             Enter replacement credentials from {vendorName(connection.vendor)}. They are checked
             for configuration validity before the stored set is swapped; no vendor request is sent
@@ -306,7 +306,7 @@ export default function SourceCard({
             type="button"
             onClick={() => void submitRotation()}
             disabled={busy || Object.values(rotateValues).every((value) => !value.trim())}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
               <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -319,7 +319,7 @@ export default function SourceCard({
       )}
 
       {actionError && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}

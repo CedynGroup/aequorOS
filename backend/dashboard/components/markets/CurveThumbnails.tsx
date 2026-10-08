@@ -64,7 +64,7 @@ export default function CurveThumbnails({
   const sorted = [...curves].sort((a, b) => a.curveName.localeCompare(b.curveName));
   return (
     <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
-      <div className="min-w-[48rem]">
+      <div className="min-w-3xl">
         <div className="grid grid-cols-[minmax(11rem,1.25fr)_5rem_6rem_6rem_6rem_minmax(10rem,1fr)] gap-3 px-4 py-2.5 bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
           <span>Curve</span>
           <span>CCY</span>

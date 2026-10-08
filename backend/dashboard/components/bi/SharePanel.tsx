@@ -236,7 +236,7 @@ export default function SharePanel({
                 value={adding}
                 onChange={(event) => setAdding(event.target.value)}
                 aria-label="Name someone else"
-                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
               >
                 <option value="">Choose a colleague</option>
                 {addable.map((person) => (

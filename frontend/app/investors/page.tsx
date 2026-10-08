@@ -56,7 +56,7 @@ export default function InvestorsPage() {
             <h2 className="font-serif font-medium text-[26px] md:text-[30px] tracking-tight text-white">
               Raising our seed round.
             </h2>
-            <p className="text-[15.5px] leading-relaxed text-white/[0.72]">
+            <p className="text-[15.5px] leading-relaxed text-white/72">
               The deck and the financial model are available on request, and
               the best diligence is the product itself.
             </p>
@@ -67,7 +67,7 @@ export default function InvestorsPage() {
                 href={pitchDeckUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-12 items-center rounded bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
+                className="inline-flex h-12 items-center rounded-sm bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
               >
                 Pitch deck
               </a>
@@ -77,14 +77,14 @@ export default function InvestorsPage() {
                 href={financialModelUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+                className="inline-flex h-12 items-center rounded-sm border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
               >
                 Financial model
               </a>
             ) : null}
             <a
               href="mailto:eric@aequoros.com"
-              className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+              className="inline-flex h-12 items-center rounded-sm border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
             >
               Request the materials
             </a>

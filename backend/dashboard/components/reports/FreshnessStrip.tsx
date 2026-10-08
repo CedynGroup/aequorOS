@@ -52,7 +52,7 @@ export default function FreshnessStrip({
         staleCount > 0 ? (
           <Link
             href="/data-engine"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
           >
             Mint official run
             <ArrowRight size={12} aria-hidden />

@@ -138,7 +138,7 @@ export default function MaterialityMatrix({
                       return (
                         <td
                           key={impact.score}
-                          className="rounded border border-dashed border-border bg-surface/50 p-2 text-center text-caption text-slate"
+                          className="rounded-sm border border-dashed border-border bg-surface/50 p-2 text-center text-caption text-slate"
                           style={{ minWidth: MATRIX_CELL_MIN_PX }}
                         >
                           {NOT_ASSESSED}

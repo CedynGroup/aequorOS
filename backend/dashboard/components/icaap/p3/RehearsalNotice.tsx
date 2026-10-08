@@ -37,7 +37,7 @@ export default function RehearsalNotice({
   if (compact) {
     return (
       <p
-        className="mt-3 flex items-start gap-2 rounded border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption text-navy/80"
+        className="mt-3 flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption text-navy/80"
         data-testid="rehearsal-notice"
       >
         <FlaskConical size={ICON_SM} className="mt-0.5 shrink-0" aria-hidden />

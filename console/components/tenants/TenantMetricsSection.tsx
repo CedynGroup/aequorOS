@@ -42,7 +42,7 @@ const liveColumns: Column<TenantLiveMetric>[] = [
     header: 'Outputs',
     render: (m) => (
       <span
-        className="break-words font-mono text-caption text-navy/90"
+        className="wrap-break-word font-mono text-caption text-navy/90"
         title={formatJson(m.metrics)}
       >
         {summarizeObject(m.metrics)}

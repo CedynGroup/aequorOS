@@ -184,7 +184,7 @@ export default function IrrGapsPage() {
                     />
                   </dl>
                   {selectedLineItem ? (
-                    <div className="mt-3 rounded border border-border-light bg-surface-raised px-4 py-3">
+                    <div className="mt-3 rounded-sm border border-border-light bg-surface-raised px-4 py-3">
                       <p className="text-caption text-slate">
                         Stored run line item{' '}
                         <span className="font-mono text-navy">

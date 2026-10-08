@@ -446,7 +446,7 @@ function ObservationsInner() {
                   type="button"
                   onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
                   disabled={!hasPrev || loading}
-                  className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
                 >
                   <ChevronLeft size={13} aria-hidden /> Prev
                 </button>
@@ -454,7 +454,7 @@ function ObservationsInner() {
                   type="button"
                   onClick={() => setOffset((o) => o + PAGE_SIZE)}
                   disabled={!hasNext || loading}
-                  className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
                 >
                   Next <ChevronRight size={13} aria-hidden />
                 </button>

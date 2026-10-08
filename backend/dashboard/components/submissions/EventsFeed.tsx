@@ -76,13 +76,13 @@ export default function EventsFeed({ events }: { events: SubmissionEventRead[] }
                 via {CHANNEL_LABELS[event.channel] ?? event.channel}
               </span>
               {sandbox && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
                   <FlaskConical size={10} aria-hidden />
                   Sandbox
                 </span>
               )}
               {pendingReupload && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
                   Pending ORASS re-upload
                 </span>
               )}

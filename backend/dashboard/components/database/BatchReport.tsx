@@ -59,7 +59,7 @@ function scalarText(value: unknown): string {
 /** Compact stat chip for a scalar entry (count, flag, boolean). */
 function StatChip({ label, value }: { label: string; value: unknown }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded border border-border px-2.5 py-1 text-caption font-mono text-navy">
+    <span className="inline-flex items-center gap-2 rounded-sm border border-border px-2.5 py-1 text-caption font-mono text-navy">
       {humanize(label)}
       <span className="text-slate tabular-nums">{scalarText(value)}</span>
     </span>
@@ -89,7 +89,7 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
                   {value.map((item, index) => (
                     <span
                       key={index}
-                      className="rounded bg-surface border border-border-light px-2 py-0.5 text-caption font-mono text-navy"
+                      className="rounded-sm bg-surface border border-border-light px-2 py-0.5 text-caption font-mono text-navy"
                     >
                       {scalarText(item)}
                     </span>
@@ -136,7 +136,7 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded border border-border p-4 bg-surface space-y-2">
+      <section className="rounded-sm border border-border p-4 bg-surface space-y-2">
         <h4 className="text-body font-medium text-navy">ETL preprocess</h4>
         {etl && isPlainObject(etl) ? (
           <ReportSection data={etl} />
@@ -147,7 +147,7 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
         )}
       </section>
 
-      <section className="rounded border border-border p-4 bg-surface space-y-3">
+      <section className="rounded-sm border border-border p-4 bg-surface space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h4 className="text-body font-medium text-navy">Validation report</h4>
           {report.status && (

@@ -126,7 +126,7 @@ export default function SdiFinancialStrengthCard({
               <span className="w-48 shrink-0 text-caption text-navy/85">
                 {COMPONENT_LABELS[component.code] ?? component.code}
               </span>
-              <span className="flex-1 h-2 rounded bg-surface overflow-hidden">
+              <span className="flex-1 h-2 rounded-sm bg-surface overflow-hidden">
                 <span
                   className={`block h-full ${barTone(score)}`}
                   style={{ width: `${Math.round(score * 100)}%` }}

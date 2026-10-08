@@ -95,7 +95,7 @@ export function LimitBar({
       )}
 
       <div
-        className="relative h-3 overflow-hidden rounded-sm"
+        className="relative h-3 overflow-hidden rounded-xs"
         style={{ background: 'rgb(var(--surface-hover))' }}
         role="img"
         aria-label={`${format(value)}${unit} of ${format(limit)}${unit} ${limitLabel.toLowerCase()}`}

@@ -112,7 +112,7 @@ function SignatureLine({ signature }: { signature: PackageVersionSignatureRead }
           {signature.signerId}
         </span>
         {signature.withdrawn && (
-          <span className="ml-1.5 inline-flex items-center rounded border border-border px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+          <span className="ml-1.5 inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
             Withdrawn · cycle {signature.attestationCycle}
           </span>
         )}
@@ -137,7 +137,7 @@ function VersionFileRow({
   ariaLabel: string;
 }) {
   return (
-    <li className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2">
+    <li className="flex items-center gap-2 rounded-sm border border-border-light bg-surface px-3 py-2">
       <span className="font-mono text-caption font-medium text-navy uppercase whitespace-nowrap">
         {label}
       </span>
@@ -155,7 +155,7 @@ function VersionFileRow({
         type="button"
         onClick={onDownload}
         aria-label={ariaLabel}
-        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+        className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
       >
         <Download size={11} aria-hidden />
         Download
@@ -177,7 +177,7 @@ function ComparisonTable({
   section: SnapshotSectionDiffRead;
 }) {
   return (
-    <div className="rounded border border-border-light overflow-hidden">
+    <div className="rounded-sm border border-border-light overflow-hidden">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-surface border-b border-border-light">
         <span className="text-caption font-medium text-navy">
           {section.title || section.code}
@@ -432,7 +432,7 @@ function PriorVersionRow({
                   type="button"
                   onClick={() => setComparing(true)}
                   disabled={comparing}
-                  className="ml-auto inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-micro font-medium text-navy hover:bg-surface disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-micro font-medium text-navy hover:bg-surface disabled:opacity-60"
                 >
                   {comparison.isFetching ? (
                     <Loader2 size={11} className="animate-spin" aria-hidden />

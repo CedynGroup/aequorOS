@@ -102,7 +102,7 @@ export default function DowntimeFallback({
           </button>
         }
       >
-        <div className="rounded border border-warning/30 bg-warning-light/40 px-3.5 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/40 px-3.5 py-3">
           <p className="text-body font-medium text-navy">
             {portal} could not be reached
           </p>
@@ -113,7 +113,7 @@ export default function DowntimeFallback({
             Nothing was transmitted and this return is unchanged.
             {attemptsLabel ? ` ${attemptsLabel}` : ''}
           </p>
-          <p className="mt-2 rounded border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
+          <p className="mt-2 rounded-sm border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
             {message}
           </p>
           <p className="mt-2 text-caption leading-relaxed text-navy/85">
@@ -164,7 +164,7 @@ export default function DowntimeFallback({
             </ul>
           )}
 
-          <p className="mt-3 rounded border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
+          <p className="mt-3 rounded-sm border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
             A person at {regShort()} opens these. The note in the email body says
             which file is the signed record and that the formula copy
             recalculates when opened.
@@ -175,7 +175,7 @@ export default function DowntimeFallback({
               <summary className="cursor-pointer font-medium text-navy">
                 Read the send-ready instructions
               </summary>
-              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-sm border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
                 {instructions}
               </pre>
             </details>

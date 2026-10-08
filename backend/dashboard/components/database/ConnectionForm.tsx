@@ -232,7 +232,7 @@ export function buildUpdatePayload(form: DbFormState): DatabaseConnectionUpdate 
 }
 
 const inputClass =
-  'w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono';
+  'w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono';
 const labelClass = 'block text-caption font-medium text-slate mb-1';
 
 export default function ConnectionForm({
@@ -311,7 +311,7 @@ export default function ConnectionForm({
             type="text"
             value={form.displayName}
             onChange={(event) => onChange({ displayName: event.target.value })}
-            className="w-full px-3 py-1.5 rounded border border-border text-body text-navy"
+            className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy"
           />
         </div>
         <div>
@@ -325,7 +325,7 @@ export default function ConnectionForm({
             value={form.queryTimeoutSeconds}
             onChange={(event) => onChange({ queryTimeoutSeconds: event.target.value })}
             placeholder="default"
-            className="w-40 px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+            className="w-40 px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
           />
         </div>
       </div>
@@ -411,7 +411,7 @@ export default function ConnectionForm({
         </p>
       </div>
 
-      <fieldset className="rounded border border-border p-4 space-y-3 max-w-3xl">
+      <fieldset className="rounded-sm border border-border p-4 space-y-3 max-w-3xl">
         <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
           Transport &amp; routing
         </legend>
@@ -420,7 +420,7 @@ export default function ConnectionForm({
             type="checkbox"
             checked={form.tlsEnabled}
             onChange={(event) => onChange({ tlsEnabled: event.target.checked })}
-            className="mt-1 rounded border-border"
+            className="mt-1 rounded-sm border-border"
           />
           <span>
             TLS enabled
@@ -437,7 +437,7 @@ export default function ConnectionForm({
             onChange={(event) =>
               onChange({ tlsVerifyServerCertificate: event.target.checked })
             }
-            className="mt-1 rounded border-border disabled:opacity-40"
+            className="mt-1 rounded-sm border-border disabled:opacity-40"
           />
           <span>
             Verify server certificate
@@ -451,7 +451,7 @@ export default function ConnectionForm({
             type="checkbox"
             checked={form.preferReadReplica}
             onChange={(event) => onChange({ preferReadReplica: event.target.checked })}
-            className="mt-1 rounded border-border"
+            className="mt-1 rounded-sm border-border"
           />
           <span>
             Prefer a read replica

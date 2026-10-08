@@ -62,7 +62,7 @@ export default function ImpersonationBanner() {
         type="button"
         onClick={() => void end()}
         disabled={ending}
-        className="ml-auto inline-flex items-center gap-1.5 rounded border border-current px-2.5 py-1 font-medium hover:bg-black/10 disabled:opacity-60"
+        className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-current px-2.5 py-1 font-medium hover:bg-black/10 disabled:opacity-60"
       >
         {ending && <Loader2 size={12} className="animate-spin" aria-hidden />}
         End session

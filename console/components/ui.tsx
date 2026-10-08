@@ -6,7 +6,7 @@
  * `import { … } from '@/components/ui'` call sites keep working unchanged
  * (module resolution picks this file over the `ui/` directory).
  *
- * Dark-only, tokens from app/globals.css + tailwind.config.ts (a verbatim
+ * Dark-only, tokens and Tailwind theme from app/globals.css (a verbatim
  * duplicate of the bank dashboard's token layer). Add new primitives as files
  * under `ui/` and surface them here.
  */

@@ -187,12 +187,12 @@ export default function ConnectionCard({
       )}
 
       {connection.validationError && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
           <p className="text-body text-navy">{connection.validationError}</p>
         </div>
       )}
 
-      <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+      <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
         <p className="text-body font-medium text-navy">Live transport unavailable</p>
         <p className="mt-1 text-caption text-slate">
           This deployment stores the T24 configuration but does not dispatch OFS, IRIS, or
@@ -286,7 +286,7 @@ export default function ConnectionCard({
       )}
 
       {rotating && !isRevoked && (
-        <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
+        <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
             Enter the new service credentials. They are validated first; only on success is
             the stored set swapped — on failure nothing changes.
@@ -303,7 +303,7 @@ export default function ConnectionCard({
             type="button"
             onClick={() => void submitRotation()}
             disabled={busy || Object.values(rotateValues).every((value) => !value.trim())}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
               <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -317,7 +317,7 @@ export default function ConnectionCard({
 
       {testResult && (
         <div
-          className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3 space-y-2"
+          className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3 space-y-2"
         >
           <div className="flex items-center gap-2">
             <ShieldAlert size={15} className="text-warning" aria-hidden />
@@ -347,7 +347,7 @@ export default function ConnectionCard({
       )}
 
       {actionError && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}

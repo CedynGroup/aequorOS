@@ -73,7 +73,7 @@ export default function TransmitConfirmDialog({
         type="button"
         aria-label="Cancel"
         onClick={onCancel}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs"
       />
 
       <div className="card relative w-full max-w-4xl overflow-hidden">
@@ -117,7 +117,7 @@ export default function TransmitConfirmDialog({
         {preview.isSimulated && (
           <p
             data-testid="transmit-simulated"
-            className="mx-6 mt-3 inline-flex items-center gap-1.5 rounded border border-warning/25 bg-warning-light px-2.5 py-1.5 text-caption font-medium text-warning"
+            className="mx-6 mt-3 inline-flex items-center gap-1.5 rounded-sm border border-warning/25 bg-warning-light px-2.5 py-1.5 text-caption font-medium text-warning"
           >
             <FlaskConical size={12} aria-hidden />
             Simulated — nothing is sent to {regulatorName}.
@@ -237,7 +237,7 @@ export default function TransmitConfirmDialog({
           </section>
         </div>
 
-        <div className="mx-6 mt-5 flex items-start gap-2.5 rounded border border-warning/30 bg-warning-light/50 px-3.5 py-2.5">
+        <div className="mx-6 mt-5 flex items-start gap-2.5 rounded-sm border border-warning/30 bg-warning-light/50 px-3.5 py-2.5">
           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <p className="text-caption leading-relaxed text-navy/85">
             <span className="font-medium text-navy">
@@ -305,7 +305,7 @@ function Fact({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded border border-border-light bg-surface px-3.5 py-2.5">
+    <div className="rounded-sm border border-border-light bg-surface px-3.5 py-2.5">
       <p className="text-micro text-slate">{label}</p>
       <p className={`mt-1 text-body text-navy ${mono ? 'font-mono' : ''}`}>{value}</p>
       <p className="mt-0.5 text-micro text-slate">{note}</p>

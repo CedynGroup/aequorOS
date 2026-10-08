@@ -128,7 +128,7 @@ export default function AddConnectionPanel({
               type="button"
               onClick={() => void createAndTest()}
               disabled={!canSubmit}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {running ? (
                 <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -158,7 +158,7 @@ export default function AddConnectionPanel({
           </div>
 
           {created.validationError && (
-            <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+            <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
               <p className="text-body text-navy">{created.validationError}</p>
             </div>
           )}
@@ -210,7 +210,7 @@ export default function AddConnectionPanel({
           <button
             type="button"
             onClick={onDone}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover"
           >
             Done
           </button>
@@ -218,7 +218,7 @@ export default function AddConnectionPanel({
       )}
 
       {error && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{error}</p>
         </div>
       )}

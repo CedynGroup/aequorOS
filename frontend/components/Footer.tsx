@@ -39,7 +39,7 @@ export default function Footer() {
                 alt=""
                 width={22}
                 height={22}
-                className="rounded"
+                className="rounded-sm"
               />
               <span className="font-serif font-semibold text-lg">AequorOS</span>
             </div>

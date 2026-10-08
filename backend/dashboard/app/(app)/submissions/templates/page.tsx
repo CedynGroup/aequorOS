@@ -97,7 +97,7 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
         title={
           <span className="inline-flex items-center gap-2">
             <span className="font-mono">{template.code}</span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded border border-border bg-surface text-caption font-normal text-slate normal-case tracking-normal">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-sm border border-border bg-surface text-caption font-normal text-slate normal-case tracking-normal">
               {FAMILY_LABELS[template.family] ?? template.family}
             </span>
           </span>
@@ -126,7 +126,7 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
             {sections.map((section) => (
               <span
                 key={section}
-                className="inline-flex items-center px-2 py-0.5 rounded border border-border-light bg-surface text-caption text-navy/85"
+                className="inline-flex items-center px-2 py-0.5 rounded-sm border border-border-light bg-surface text-caption text-navy/85"
               >
                 {section}
               </span>

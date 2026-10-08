@@ -142,7 +142,7 @@ export default function CurveBoard({
           <PermissionAction
             reason={editOverlaysReason}
             onClick={() => onEditOverlays(curves[0].curveName)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded-sm hover:bg-action-light whitespace-nowrap"
           >
             <SlidersHorizontal size={13} aria-hidden />
             Edit spreads

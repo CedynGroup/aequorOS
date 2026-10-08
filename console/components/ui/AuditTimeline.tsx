@@ -55,7 +55,7 @@ export function AuditTimeline({
             )}
             <span
               aria-hidden
-              className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-[color:rgb(var(--surface-raised))] ${DOT_TONE[tone]}`}
+              className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-[rgb(var(--surface-raised))] ${DOT_TONE[tone]}`}
             />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -70,7 +70,7 @@ export function AuditTimeline({
                   </span>
                 )}
               </div>
-              {e.detail && <p className="mt-0.5 break-words text-caption text-slate">{e.detail}</p>}
+              {e.detail && <p className="mt-0.5 wrap-break-word text-caption text-slate">{e.detail}</p>}
               {e.status && (
                 <span className="mt-1 inline-block text-micro font-medium uppercase tracking-wide text-slate">
                   {e.status.replace(/_/g, ' ')}

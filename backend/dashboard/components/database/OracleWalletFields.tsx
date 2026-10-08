@@ -99,7 +99,7 @@ export default function OracleWalletFields({
   };
 
   return (
-    <fieldset className="rounded border border-border p-4 space-y-3">
+    <fieldset className="rounded-sm border border-border p-4 space-y-3">
       <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
         Client wallet (mTLS)
       </legend>
@@ -122,7 +122,7 @@ export default function OracleWalletFields({
           type="file"
           accept=".zip,.pem"
           onChange={(event) => void handleFile(event.target.files?.[0])}
-          className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
+          className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded-sm file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
         />
         {reading ? (
           <p className="mt-1 inline-flex items-center gap-1.5 text-caption text-slate">
@@ -166,7 +166,7 @@ export default function OracleWalletFields({
           onChange={(event) => onChange('wallet_password', event.target.value)}
           placeholder="The password set when the wallet was downloaded"
           autoComplete="off"
-          className="w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+          className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
         />
       </div>
     </fieldset>

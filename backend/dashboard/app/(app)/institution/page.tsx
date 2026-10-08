@@ -146,7 +146,7 @@ function ProfileView({
     >
       <div className="space-y-5">
         {profile.warnings.length > 0 && (
-          <div className="rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
+          <div className="rounded-sm border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
             {profile.warnings.map((warning) => (
               <p
                 key={warning}

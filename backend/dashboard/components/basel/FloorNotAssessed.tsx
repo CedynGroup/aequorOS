@@ -37,7 +37,7 @@ export default function FloorNotAssessed({
         </span>
       </div>
       <div
-        className="relative h-3 rounded-sm border border-dashed border-border"
+        className="relative h-3 rounded-xs border border-dashed border-border"
         style={{ background: 'rgb(var(--surface-hover))' }}
         role="img"
         aria-label={`${label} not assessed — ${reason}`}

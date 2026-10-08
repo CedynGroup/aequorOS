@@ -187,7 +187,7 @@ export default function KpiStat({
             onClick={explain}
             aria-label={KPI_EXPLAIN_LABEL}
             title={KPI_EXPLAIN_LABEL}
-            className="-mr-1 -mt-0.5 shrink-0 rounded p-0.5 text-slate hover:bg-surface hover:text-navy"
+            className="-mr-1 -mt-0.5 shrink-0 rounded-sm p-0.5 text-slate hover:bg-surface hover:text-navy"
           >
             <Info size={12} aria-hidden />
           </button>

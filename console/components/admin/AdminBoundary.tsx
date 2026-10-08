@@ -32,7 +32,7 @@ export function AccessDeniedPanel({
             admin to elevate your role, then reload.
           </p>
           {error && (
-            <p className="mt-3 break-words text-micro text-slate">
+            <p className="mt-3 wrap-break-word text-micro text-slate">
               <span className="font-mono text-caption text-warning">{error.code}</span>
               {' · '}
               {error.message}

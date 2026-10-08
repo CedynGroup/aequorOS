@@ -41,7 +41,7 @@ export function ChartFrame({
       <div className="px-3 pb-4" aria-busy={loading || undefined}>
         {loading ? (
           <div className="flex flex-col justify-end gap-3 px-2" style={{ height }} aria-label="Loading chart">
-            <div className="flex-1 animate-pulse rounded bg-surface" />
+            <div className="flex-1 animate-pulse rounded-sm bg-surface" />
             <div className="flex items-center gap-4 px-2">
               <SkeletonLine width="18%" height={8} />
               <SkeletonLine width="14%" height={8} />

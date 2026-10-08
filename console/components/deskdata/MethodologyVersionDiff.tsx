@@ -34,7 +34,7 @@ export function MethodologyVersionDiff({ versions }: { versions: DeskMethodology
   const right = ordered.find((v) => v.version === rightV) ?? ordered[ordered.length - 1];
 
   const selectClass =
-    'rounded-md border border-border bg-surface-base px-2.5 py-1 font-mono text-caption text-ink focus:border-focus focus:outline-none';
+    'rounded-md border border-border bg-surface-base px-2.5 py-1 font-mono text-caption text-ink focus:border-focus focus:outline-hidden';
 
   return (
     <div className="space-y-3">

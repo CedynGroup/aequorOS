@@ -34,7 +34,7 @@ export default function CopyButton({
           window.setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-micro font-medium transition-colors ${tone} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-micro font-medium transition-colors ${tone} ${className}`}
     >
       {copied ? <Check size={11} aria-hidden /> : <Copy size={11} aria-hidden />}
       {copied ? 'Copied' : 'Copy'}

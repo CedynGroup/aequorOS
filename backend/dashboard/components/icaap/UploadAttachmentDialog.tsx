@@ -110,11 +110,11 @@ export default function UploadAttachmentDialog({
                 report upload progress, and a second transport purely for a
                 percentage would re-implement auth outside the contract. */}
             <div
-              className="h-1.5 w-full overflow-hidden rounded bg-surface"
+              className="h-1.5 w-full overflow-hidden rounded-sm bg-surface"
               role="progressbar"
               aria-label="Uploading"
             >
-              <div className="h-full w-1/3 animate-pulse rounded bg-action" />
+              <div className="h-full w-1/3 animate-pulse rounded-sm bg-action" />
             </div>
             <p className="mt-1 text-caption text-slate">
               Uploading. Large documents can take a moment.

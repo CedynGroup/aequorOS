@@ -98,7 +98,7 @@ export default function TemplatesPanel() {
                   type="button"
                   disabled={!bank || activate.isPending}
                   onClick={() => activate.mutate(starter)}
-                  className="inline-flex items-center px-2 py-1 rounded bg-action text-white font-medium hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center px-2 py-1 rounded-sm bg-action text-white font-medium hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {activate.isPending ? 'Activating…' : 'Activate it'}
                 </button>
@@ -122,7 +122,7 @@ export default function TemplatesPanel() {
               {template.columns.map((column) => (
                 <span
                   key={column}
-                  className="px-1.5 py-0.5 rounded bg-surface text-micro font-mono text-slate"
+                  className="px-1.5 py-0.5 rounded-sm bg-surface text-micro font-mono text-slate"
                 >
                   {column}
                 </span>
@@ -137,7 +137,7 @@ export default function TemplatesPanel() {
                   'text/csv;charset=utf-8',
                 )
               }
-              className="mt-3 self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-caption font-medium bg-action text-white hover:bg-action-hover"
+              className="mt-3 self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover"
             >
               <Download size={13} aria-hidden /> Download CSV
             </button>

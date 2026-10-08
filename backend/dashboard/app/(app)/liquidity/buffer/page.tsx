@@ -199,7 +199,7 @@ export default function LiquidityBuffer() {
                   {stackData.map((h) => (
                     <li key={h.level} className="flex items-center gap-3">
                       <span
-                        className="w-2 h-2 rounded-sm shrink-0"
+                        className="w-2 h-2 rounded-xs shrink-0"
                         style={{ background: cssSeriesColor(h.colorIndex) }}
                         aria-hidden
                       />

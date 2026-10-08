@@ -192,7 +192,7 @@ export default function InsightsPage() {
                   {pairs.map((pair) => (
                     <li
                       key={`${pair.module}/${pair.sensitivity}`}
-                      className="rounded border border-border bg-surface px-2 py-0.5 text-caption text-slate"
+                      className="rounded-sm border border-border bg-surface px-2 py-0.5 text-caption text-slate"
                     >
                       {moduleLabel(pair.module)} ·{" "}
                       {sensitivityLabel(pair.sensitivity)}

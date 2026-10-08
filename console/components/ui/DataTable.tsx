@@ -140,7 +140,7 @@ export function DataTable<T>({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={filterPlaceholder}
-            className="w-full bg-transparent text-body text-navy placeholder:text-slate outline-none"
+            className="w-full bg-transparent text-body text-navy placeholder:text-slate outline-hidden"
           />
           {query && (
             <span className="shrink-0 text-caption text-slate tnum">
@@ -270,7 +270,7 @@ export function DataTable<T>({
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
             >
               <ChevronLeft size={13} aria-hidden /> Prev
             </button>
@@ -281,7 +281,7 @@ export function DataTable<T>({
               type="button"
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
               disabled={page >= pageCount - 1}
-              className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
             >
               Next <ChevronRight size={13} aria-hidden />
             </button>

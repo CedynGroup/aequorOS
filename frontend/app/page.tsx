@@ -95,7 +95,7 @@ export default function HomePage() {
                 {statusChips.map((chip) => (
                   <span
                     key={chip.label}
-                    className="inline-flex items-center gap-2 h-[30px] px-3.5 rounded-full border border-white/[0.22] text-[12.5px] font-medium text-white/85"
+                    className="inline-flex items-center gap-2 h-[30px] px-3.5 rounded-full border border-white/22 text-[12.5px] font-medium text-white/85"
                   >
                     <span className={`h-[7px] w-[7px] rounded-full ${chip.dot}`} />
                     {chip.label}
@@ -105,7 +105,7 @@ export default function HomePage() {
               <h1 className="font-serif font-medium text-[42px] md:text-[56px] lg:text-[64px] leading-[1.06] tracking-tight">
                 Treasury and ALM infrastructure for African banks.
               </h1>
-              <p className="text-lg leading-relaxed text-white/[0.78] max-w-[560px]">
+              <p className="text-lg leading-relaxed text-white/78 max-w-[560px]">
                 AequorOS turns core banking data into risk numbers, board
                 answers, and central-bank returns. Feed it a file, a push API,
                 or a read-only view of the core you already run. Every figure
@@ -256,7 +256,7 @@ export default function HomePage() {
                 <Link
                   key={engine.name}
                   href={engine.href}
-                  className="inline-flex h-9 items-center justify-center rounded border border-hairline text-[13.5px] font-medium transition-colors hover:border-navy-deep"
+                  className="inline-flex h-9 items-center justify-center rounded-sm border border-hairline text-[13.5px] font-medium transition-colors hover:border-navy-deep"
                 >
                   {engine.name}
                 </Link>

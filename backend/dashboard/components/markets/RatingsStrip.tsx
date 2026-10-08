@@ -22,7 +22,7 @@ function watchTone(watchStatus: string | null | undefined): StatusTone {
 export default function RatingsStrip({ ratings }: { ratings: RatingViewRead[] }) {
   return (
     <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
-      <table className="w-full min-w-[31rem] text-body">
+      <table className="w-full min-w-124 text-body">
         <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
           <tr>
             <th className="px-4 py-2.5 text-left">Issuer</th>

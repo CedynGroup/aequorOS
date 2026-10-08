@@ -74,7 +74,7 @@ export default function ActivatePanel() {
       </div>
 
       {/* Live status line */}
-      <div className="rounded border border-border-light bg-surface/60 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="rounded-sm border border-border-light bg-surface/60 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         {running ? (
           <StatusPill tone="action">
             <Loader2 size={11} className="animate-spin" aria-hidden />
@@ -128,7 +128,7 @@ export default function ActivatePanel() {
                 type="date"
                 value={effectiveAsOf}
                 onChange={(event) => setAsOfDate(event.target.value)}
-                className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+                className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
               />
               <p className="mt-1 text-micro text-slate">
                 Defaults to the latest accepted upload. Both actions run for this
@@ -138,7 +138,7 @@ export default function ActivatePanel() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Recompute now → /refresh */}
-              <div className="rounded border border-border-light p-4 space-y-2">
+              <div className="rounded-sm border border-border-light p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <RefreshCw size={15} className="text-action" aria-hidden />
                   <h3 className="text-body font-medium text-navy">Recompute now</h3>
@@ -156,7 +156,7 @@ export default function ActivatePanel() {
                       reason: 'Recompute now from the Data Engine console.',
                     })
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {refresh.isPending && (
                     <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -178,7 +178,7 @@ export default function ActivatePanel() {
               </div>
 
               {/* Mint official run → /official-runs */}
-              <div className="rounded border border-border-light p-4 space-y-2">
+              <div className="rounded-sm border border-border-light p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <Stamp size={15} className="text-navy" aria-hidden />
                   <h3 className="text-body font-medium text-navy">
@@ -198,7 +198,7 @@ export default function ActivatePanel() {
                       reason: 'Minted official run for filing from the Data Engine console.',
                     })
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {mint.isPending && (
                     <Loader2 size={14} className="animate-spin" aria-hidden />

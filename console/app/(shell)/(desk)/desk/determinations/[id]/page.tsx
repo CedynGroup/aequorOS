@@ -263,7 +263,7 @@ export default function DeterminationDetailPage() {
             </div>
 
             {d.status === 'rejected' && d.review_note && (
-              <div className="mt-4 flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
+              <div className="mt-4 flex items-start gap-2 rounded-sm border border-critical/40 bg-critical-light p-3">
                 <XCircle size={14} className="mt-0.5 shrink-0 text-critical" />
                 <p className="text-caption text-critical">
                   Rejected by <span className="font-mono">{d.reviewed_by}</span>: {d.review_note}
@@ -288,7 +288,7 @@ export default function DeterminationDetailPage() {
             )}
 
             {actionError && fourEyes && (
-              <div className="mt-3 flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+              <div className="mt-3 flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
                 <Users size={14} className="mt-0.5 shrink-0 text-warning" />
                 <p className="text-body font-medium text-navy">
                   Four-eyes: preparer cannot approve — sign in as Supervisor (second operator).
@@ -296,7 +296,7 @@ export default function DeterminationDetailPage() {
               </div>
             )}
             {actionError && qaGateRefused && (
-              <div className="mt-3 flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
+              <div className="mt-3 flex items-start gap-2 rounded-sm border border-critical/40 bg-critical-light p-3">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0 text-critical" />
                 <p className="text-body font-medium text-navy">
                   Rates package QA not ready — recompute after fixing inputs.
@@ -504,7 +504,7 @@ export default function DeterminationDetailPage() {
                 </div>
 
                 {(d.research_adjustments?.length ?? 0) > 0 && (
-                  <div className="mt-4 rounded border border-warning/40 bg-warning-light/40 p-3">
+                  <div className="mt-4 rounded-sm border border-warning/40 bg-warning-light/40 p-3">
                     <h3 className="text-body font-medium text-navy">
                       Research adjustments requiring sign-off
                     </h3>
@@ -542,7 +542,7 @@ export default function DeterminationDetailPage() {
                 )}
 
                 {rejectOpen && status === 'pending_review' && (
-                  <div className="mt-3 rounded border border-border-light bg-surface p-3">
+                  <div className="mt-3 rounded-sm border border-border-light bg-surface p-3">
                     <Field label="Rejection reason">
                       <Textarea
                         value={rejectReason}

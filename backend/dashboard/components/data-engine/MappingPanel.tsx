@@ -109,7 +109,7 @@ export default function MappingPanel() {
                   type="button"
                   disabled={isActive || activate.isPending || !bank}
                   onClick={() => activate.mutate(template)}
-                  className="mt-3 inline-flex items-center px-3 py-1.5 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="mt-3 inline-flex items-center px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isActive ? 'Currently active' : 'Activate mapping'}
                 </button>

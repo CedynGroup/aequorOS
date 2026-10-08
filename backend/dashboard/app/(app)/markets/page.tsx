@@ -118,7 +118,7 @@ function AsOfControl({
             const value = event.target.value;
             onChange(!value || value >= todayIso ? null : value);
           }}
-          className="px-2 py-1 text-caption font-mono bg-surface border border-border rounded text-navy"
+          className="px-2 py-1 text-caption font-mono bg-surface border border-border rounded-sm text-navy"
         />
       </label>
       {asOf !== null && (

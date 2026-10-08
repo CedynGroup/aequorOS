@@ -134,7 +134,7 @@ export default function DataBlockCard({
         </p>
       )}
       {refreshOutcome === "bound" && (changedFacts?.length ?? 0) > 0 && (
-        <div className="mt-2 ml-6 rounded border border-border-light bg-surface/60 p-2">
+        <div className="mt-2 ml-6 rounded-sm border border-border-light bg-surface/60 p-2">
           <p className="text-caption font-medium text-navy">
             Updated figures
           </p>

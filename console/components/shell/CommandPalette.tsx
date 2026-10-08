@@ -158,13 +158,13 @@ export default function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-24"
+      className="fixed inset-0 z-60 flex items-start justify-center px-4 pt-24"
     >
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs"
       />
       <div className="relative w-full max-w-xl overflow-hidden rounded-lg border border-border bg-surface-raised shadow-pop">
         <div className="flex items-center gap-3 border-b border-border-light px-4 py-3">
@@ -175,9 +175,9 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search screens and tenants (name / BK- / OR-)…"
-            className="flex-1 bg-transparent text-body text-navy outline-none placeholder:text-slate"
+            className="flex-1 bg-transparent text-body text-navy outline-hidden placeholder:text-slate"
           />
-          <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px] text-slate">
+          <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px] text-slate">
             ESC
           </kbd>
         </div>
@@ -239,13 +239,13 @@ export default function CommandPalette({
 
         <div className="flex items-center gap-4 border-t border-border-light px-4 py-2 text-caption text-slate">
           <span className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
+            <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
               ↑↓
             </kbd>
             navigate
           </span>
           <span className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
+            <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
               ↵
             </kbd>
             select

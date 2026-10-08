@@ -159,7 +159,7 @@ function Selector({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-50 min-w-[12rem]"
+        className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-50 min-w-48"
       >
         {children}
       </select>
@@ -247,7 +247,7 @@ function DeltaLineRow({ line }: { line: ComparisonLine }) {
       </td>
       <td className="py-1.5 px-4 align-middle text-right num">
         {line.isNew ? (
-          <span className="inline-flex items-center rounded border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-action">
+          <span className="inline-flex items-center rounded-sm border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-action">
             new
           </span>
         ) : line.deltaPct === null ? (
@@ -302,10 +302,10 @@ function DeltaTable({
                   <th className="py-1.5 px-4 text-left text-micro font-medium uppercase tracking-wider text-slate">
                     Line
                   </th>
-                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-[10rem] truncate">
+                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-40 truncate">
                     {leftLabel}
                   </th>
-                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-[10rem] truncate">
+                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-40 truncate">
                     {rightLabel}
                   </th>
                   <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate">

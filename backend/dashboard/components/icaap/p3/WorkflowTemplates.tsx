@@ -82,7 +82,7 @@ function StageList({ stages }: { stages: readonly IcaapStageInput[] }) {
   return (
     <ol className="space-y-2">
       {(stages ?? []).map((stage) => (
-        <li key={stage.seq} className="rounded border border-border-light p-3">
+        <li key={stage.seq} className="rounded-sm border border-border-light p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="font-medium text-navy">{stage.title}</p>
@@ -219,7 +219,7 @@ export default function WorkflowTemplates({ bankId }: { bankId: string }) {
                   return (
                     <li
                       key={template.id}
-                      className="rounded border border-border-light p-3"
+                      className="rounded-sm border border-border-light p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">

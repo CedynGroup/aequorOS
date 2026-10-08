@@ -86,7 +86,7 @@ export default function Sidebar() {
                     {collapsed && (
                       <span
                         role="tooltip"
-                        className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded border border-white/15 bg-nav px-2.5 py-1.5 text-caption text-white opacity-0 shadow-pop transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                        className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-sm border border-white/15 bg-nav px-2.5 py-1.5 text-caption text-white opacity-0 shadow-pop transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                       >
                         {item.label}
                       </span>

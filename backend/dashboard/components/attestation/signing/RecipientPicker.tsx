@@ -90,7 +90,7 @@ export default function RecipientPicker({
                   }));
                   onChange(next.filter((entry) => entry.userId.length > 0));
                 }}
-                className="w-full rounded border border-border bg-surface px-3 py-2 text-body text-navy"
+                className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
               >
                 <option value="">Select an officer…</option>
                 {roster.map((user) => (

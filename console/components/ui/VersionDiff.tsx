@@ -88,7 +88,7 @@ export function VersionDiff({
             type="checkbox"
             checked={showUnchanged}
             onChange={(e) => setShowUnchanged(e.target.checked)}
-            className="accent-[color:rgb(var(--accent))]"
+            className="accent-[rgb(var(--accent))]"
           />
           Show unchanged
         </label>

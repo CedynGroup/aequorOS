@@ -91,7 +91,7 @@ export function roleLabel(role: RelatedPartyRoleCode): string {
 // ---------------------------------------------------------------------------
 
 export const inputCls =
-  'w-full rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light';
+  'w-full rounded-sm border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light';
 
 export function Field({
   label,

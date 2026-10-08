@@ -196,7 +196,7 @@ export default function MeasureReview({
             You are being asked to certify this exact text for the institution.
             Read it against what its author says it is for.
           </p>
-          <p className="rounded border border-border bg-white px-2 py-1 font-mono text-micro text-navy">
+          <p className="rounded-sm border border-border bg-white px-2 py-1 font-mono text-micro text-navy">
             {measure.expression}
           </p>
           <p className="text-caption text-slate">

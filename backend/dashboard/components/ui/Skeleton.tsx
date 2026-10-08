@@ -14,7 +14,7 @@ export function SkeletonLine({
 }) {
   return (
     <div
-      className={`bg-surface rounded animate-pulse ${className}`}
+      className={`bg-surface rounded-sm animate-pulse ${className}`}
       style={{ width, height }}
       aria-hidden
     />
@@ -62,7 +62,7 @@ export function SkeletonChart({ height = 240 }: { height?: number }) {
       aria-busy="true"
     >
       <SkeletonLine width="30%" height={14} />
-      <div className="flex-1 bg-surface rounded animate-pulse" />
+      <div className="flex-1 bg-surface rounded-sm animate-pulse" />
     </div>
   );
 }

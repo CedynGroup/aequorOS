@@ -10,7 +10,7 @@ import type {
  * string that was copy-pasted across desk pages resolves to one definition.
  */
 export const inputClass =
-  'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
  * Labeled field wrapper: a caption label, the control, and optional hint /

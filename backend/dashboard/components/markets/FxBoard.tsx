@@ -20,7 +20,7 @@ function sparkColor(first: number, last: number): string {
 export default function FxBoard({ fxRates }: { fxRates: FxRateViewRead[] }) {
   return (
     <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
-      <table className="w-full min-w-[36rem] text-body">
+      <table className="w-full min-w-xl text-body">
         <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
           <tr>
             <th className="px-4 py-2.5 text-left">Pair</th>

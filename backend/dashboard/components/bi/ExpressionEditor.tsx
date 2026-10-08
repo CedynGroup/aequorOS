@@ -225,7 +225,7 @@ export default function ExpressionEditor({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search"
-              className="w-full bg-transparent text-caption text-navy outline-none"
+              className="w-full bg-transparent text-caption text-navy outline-hidden"
             />
           </label>
           {figures.length === 0 ? (
@@ -241,7 +241,7 @@ export default function ExpressionEditor({
                     type="button"
                     disabled={disabled}
                     onClick={() => insert(figure.id)}
-                    className="w-full rounded px-1 py-1 text-left hover:bg-surface disabled:opacity-60"
+                    className="w-full rounded-sm px-1 py-1 text-left hover:bg-surface disabled:opacity-60"
                   >
                     <span className="block text-caption text-navy">
                       {figure.label}

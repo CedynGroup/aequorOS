@@ -181,7 +181,7 @@ export default function RelatedPartiesPage() {
             {party.roles.slice(0, 3).map((role) => (
               <span
                 key={role.id}
-                className="inline-flex items-center rounded border border-border px-1.5 py-0.5 text-micro text-navy/85"
+                className="inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 text-micro text-navy/85"
               >
                 {roleLabel(role.role)}
               </span>
@@ -391,7 +391,7 @@ function PartyDetail({
               {party.roles.map((role) => (
                 <li
                   key={role.id}
-                  className="rounded border border-border-light bg-surface px-3 py-2 space-y-1"
+                  className="rounded-sm border border-border-light bg-surface px-3 py-2 space-y-1"
                 >
                   <p className="text-body font-medium text-navy">
                     {roleLabel(role.role)}
@@ -459,7 +459,7 @@ function PartyDetail({
               {party.shareholdings.map((holding) => (
                 <li
                   key={holding.id}
-                  className="rounded border border-border-light bg-surface px-3 py-2"
+                  className="rounded-sm border border-border-light bg-surface px-3 py-2"
                 >
                   <div className="flex items-center gap-2 flex-wrap text-caption">
                     <span className="font-medium text-navy">
@@ -474,7 +474,7 @@ function PartyDetail({
                     <button
                       type="button"
                       onClick={() => setHoldingFormFor({ holding })}
-                      className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                      className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                     >
                       <Pencil size={11} aria-hidden />
                       Edit
@@ -691,7 +691,7 @@ function PartyForm({
             <button
               type="button"
               onClick={() => setRoles((prev) => [...prev, emptyRole()])}
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+              className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
             >
               <Plus size={11} aria-hidden />
               Add role
@@ -706,7 +706,7 @@ function PartyForm({
               {roles.map((draft, index) => (
                 <li
                   key={index}
-                  className="rounded border border-border-light bg-surface px-3 py-3"
+                  className="rounded-sm border border-border-light bg-surface px-3 py-3"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Field label="Role" htmlFor={`rp-role-${index}`}>
@@ -825,7 +825,7 @@ function PartyForm({
                     onClick={() =>
                       setRoles((prev) => prev.filter((_, i) => i !== index))
                     }
-                    className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
+                    className="mt-2 inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
                   >
                     <X size={11} aria-hidden />
                     Remove role

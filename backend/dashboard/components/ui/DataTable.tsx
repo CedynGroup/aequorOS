@@ -82,7 +82,7 @@ export default function DataTable<T>({
   const clickable = Boolean(onRowClick);
   const pinned = (index: number, isTotal = false): string =>
     stickyFirstColumn && index === 0
-      ? `sticky left-0 z-[5] ${isTotal ? 'bg-surface' : 'bg-surface-raised'}`
+      ? `sticky left-0 z-5 ${isTotal ? 'bg-surface' : 'bg-surface-raised'}`
       : '';
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,7 +160,7 @@ export default function DataTable<T>({
                     stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
                   } ${
                     stickyFirstColumn && columnIndex === 0
-                      ? 'sticky left-0 z-[11] bg-surface'
+                      ? 'sticky left-0 z-11 bg-surface'
                       : ''
                   } ${
                     c.align === 'right' || c.numeric

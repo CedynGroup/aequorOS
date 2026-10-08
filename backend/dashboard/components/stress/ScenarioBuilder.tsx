@@ -374,7 +374,7 @@ export default function ScenarioBuilder({
                                 inputMode="decimal"
                                 value={cell.base}
                                 onChange={(e) => setCell(variable, y, 'base', e.target.value)}
-                                className="w-16 rounded border border-border-light bg-transparent px-1.5 py-1 text-right tnum text-navy"
+                                className="w-16 rounded-sm border border-border-light bg-transparent px-1.5 py-1 text-right tnum text-navy"
                                 aria-label={`${variable} year ${y} base`}
                               />
                             </td>
@@ -383,7 +383,7 @@ export default function ScenarioBuilder({
                                 inputMode="decimal"
                                 value={cell.stress}
                                 onChange={(e) => setCell(variable, y, 'stress', e.target.value)}
-                                className="w-16 rounded border border-border-light bg-transparent px-1.5 py-1 text-right tnum text-critical"
+                                className="w-16 rounded-sm border border-border-light bg-transparent px-1.5 py-1 text-right tnum text-critical"
                                 aria-label={`${variable} year ${y} stress`}
                               />
                             </td>

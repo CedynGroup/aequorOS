@@ -54,7 +54,7 @@ export default function ChartFrame({
             style={{ height }}
             aria-label="Loading chart"
           >
-            <div className="flex-1 bg-surface rounded animate-pulse" />
+            <div className="flex-1 bg-surface rounded-sm animate-pulse" />
             <div className="flex items-center gap-4 px-2">
               <SkeletonLine width="18%" height={8} />
               <SkeletonLine width="14%" height={8} />

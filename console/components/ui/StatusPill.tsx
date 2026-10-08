@@ -42,7 +42,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-caption font-medium uppercase tracking-wider ${toneStyles[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-caption font-medium uppercase tracking-wider ${toneStyles[tone]} ${className}`}
     >
       <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
       {children ?? toneLabels[tone] ?? tone}

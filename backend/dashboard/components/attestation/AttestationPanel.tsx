@@ -259,7 +259,7 @@ export default function AttestationPanel({
               />
             </>
           ) : (
-            <p className="rounded border border-border-light bg-surface px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed">
+            <p className="rounded-sm border border-border-light bg-surface px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed">
               {/*
                 Which of the three reasons applies is not cosmetic. Two of them
                 are deployment switches that no policy can overrule, and sending
@@ -368,7 +368,7 @@ function StateSummary({ status }: { status: AttestationStatusRead }) {
       </p>
 
       {status.certificationDigest && (
-        <div className="flex items-start gap-2.5 rounded border border-action/20 bg-action-light/40 px-3.5 py-2.5">
+        <div className="flex items-start gap-2.5 rounded-sm border border-action/20 bg-action-light/40 px-3.5 py-2.5">
           <Snowflake size={15} className="text-action shrink-0 mt-0.5" aria-hidden />
           <div className="min-w-0">
             <p className="text-body font-medium text-navy">Frozen figures digest</p>
@@ -406,7 +406,7 @@ function StateSummary({ status }: { status: AttestationStatusRead }) {
       </dl>
 
       {status.voidReason && (
-        <p className="rounded border border-warning/25 bg-warning-light/40 px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed">
+        <p className="rounded-sm border border-warning/25 bg-warning-light/40 px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed">
           <span className="font-medium text-navy">Last void reason: </span>
           {status.voidReason}
           {status.attestationState === 'unsigned' && (
@@ -662,7 +662,7 @@ function VoidForm({
 }) {
   const help = attestationErrorHelp(isApiError(error) ? error.errorCode : null);
   return (
-    <div className="rounded border border-critical/30 bg-critical-light/30 px-3.5 py-3 space-y-2">
+    <div className="rounded-sm border border-critical/30 bg-critical-light/30 px-3.5 py-3 space-y-2">
       <p className="text-body font-medium text-navy">Void this attestation</p>
       <p className="text-caption text-navy/85 leading-relaxed">
         Every signature is retained as history and marked superseded with this
@@ -680,7 +680,7 @@ function VoidForm({
           onChange={(event) => onReasonChange(event.target.value)}
           rows={2}
           placeholder="e.g. HQLA misclassification found after certification; re-certifying corrected figures."
-          className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+          className="w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
         />
       </label>
       <div className="flex items-center gap-2">
