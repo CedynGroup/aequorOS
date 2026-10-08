@@ -5,7 +5,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -38,7 +37,7 @@ from app.models import (
     RefreshToken,
     User,
 )
-from app.schemas.authorization import AccessRequestReject
+from app.schemas.authorization import AccessRequestReject, BindingPreviewRead
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -984,14 +983,14 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     with its findings, or block — beside the sentence, and writes nothing.
     """
 
-    def preview(**overrides: Any) -> dict[str, Any]:
+    def preview(payload: dict[str, object]) -> BindingPreviewRead:
         response = grant_client.post(
             "/api/v1/authorization/bindings/preview",
             headers=_owner_headers(),
-            json=_payload(**overrides),
+            json=payload,
         )
         assert response.status_code == 200, response.text
-        return response.json()
+        return BindingPreviewRead.model_validate_json(response.text)
 
     def binding_count() -> int:
         with _session() as db:
@@ -1003,7 +1002,9 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
                 ).all()
             )
 
-    assert preview()["sod_decision"] == {"outcome": "allow", "findings": []}
+    allowed = preview(_payload())
+    assert allowed.sod_decision.outcome == "allow"
+    assert allowed.sod_decision.findings == []
 
     approver = grant_client.post(
         "/api/v1/authorization/bindings",
@@ -1013,25 +1014,25 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     assert approver.status_code == 201, approver.text
     before = binding_count()
 
-    warned = preview()
-    assert warned["sod_decision"]["outcome"] == "warn"
-    assert [finding["code"] for finding in warned["sod_decision"]["findings"]] == [
+    warned = preview(_payload())
+    assert warned.sod_decision.outcome == "warn"
+    assert [finding.code for finding in warned.sod_decision.findings] == [
         "maker_checker_runtime_condition_required"
     ]
 
     # The sentence is still composed for a block, so the screen can show
     # exactly what policy refuses.
-    blocked = preview(role="validator", module="reg", sensitivity="restricted")
-    assert "Validator" in blocked["authority_sentence"]
-    assert blocked["sod_decision"]["outcome"] == "block"
-    assert [finding["code"] for finding in blocked["sod_decision"]["findings"]] == [
+    blocked = preview(_payload(role="validator", module="reg", sensitivity="restricted"))
+    assert "Validator" in blocked.authority_sentence
+    assert blocked.sod_decision.outcome == "block"
+    assert [finding.code for finding in blocked.sod_decision.findings] == [
         "approval_and_transmission_separation_required"
     ]
-    assert "must remain separated" in blocked["sod_decision"]["findings"][0]["message"]
+    assert "must remain separated" in blocked.sod_decision.findings[0].message
 
-    owner_exception = preview(principal_user_id=USER_1)
-    assert owner_exception["sod_decision"]["outcome"] == "warn"
-    assert [finding["code"] for finding in owner_exception["sod_decision"]["findings"]] == [
+    owner_exception = preview(_payload(principal_user_id=USER_1))
+    assert owner_exception.sod_decision.outcome == "warn"
+    assert [finding.code for finding in owner_exception.sod_decision.findings] == [
         "c9_owner_operational_exception"
     ]
 
