@@ -4,11 +4,10 @@
  * The signed-in account and its permanent signer identity.
  *
  * Personal, not organizational: every active user must reach it, whatever
- * they administer. It renders on Profile & preferences (the personal page any
- * session can open) and on the organization Settings hub for owners. It used
- * to live on the hub alone, so once the hub required Account administration
- * (2026-09-08) an analyst could no longer see their own signer ID — the very
- * string stamped on every document they certify.
+ * they administer, so it renders on Settings · Profile & preferences — the
+ * personal tab any session can open — and nowhere else. An analyst must be able
+ * to read their own signer ID: it is the string stamped on every document they
+ * certify.
  */
 
 import { useSession } from "next-auth/react";

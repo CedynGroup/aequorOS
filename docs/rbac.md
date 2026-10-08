@@ -739,8 +739,13 @@ Grant preview/create and access requests share the reason picker defined by the
 
 ### 10.3 App settings (`/settings`, every active member)
 
-Settings contains Appearance, Current account/profile, Data & compute, and
-About. Access-control panels do not render there.
+Settings is one shell with two tabs (`app/(app)/settings/layout.tsx`), both
+open to every session, and each setting lives on exactly one of them:
+**General** (`/settings`: Data & compute, About) and **Profile & preferences**
+(`/settings/profile`: Your account, personal details, Appearance). The sidebar's
+Settings opens General; the avatar menu opens Profile & preferences.
+Access-control panels do not render there; account administrators get a
+"Manage members and access" link to the Access area.
 
 ### 10.4 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
 
