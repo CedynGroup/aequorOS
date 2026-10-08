@@ -12,7 +12,8 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any, Protocol, cast
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -44,7 +45,6 @@ from app.services.regulatory_reporting.bog_forms.sources import (
     reporting_currency_value,
 )
 from app.services.regulatory_reporting.bog_forms.sources_ext.bsd8 import load_loans
-from app.services.regulatory_reporting.le_generation import _load_canonical_rows
 from app.services.sdi_views import get_liquidity_monitoring
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -63,6 +63,14 @@ _BSD1_DAILY: dict[str, object] = {
 }
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
+
+
+class _ExposureRow(Protocol):
+    currency: str
+    notional_ghs: Decimal | None
+    undrawn_ccf_ghs: Decimal
+    balance_ghs: Decimal
+    counterparty_id: UUID | None
 
 
 class _Book:
@@ -278,9 +286,12 @@ def test_reporting_currency_conversion_caches_quotes_by_valuation_date(
         (prior_day, Decimal("1200000")),
     )
     for valuation_date, expected in expected_by_date:
-        assert reporting_currency_value(
-            rc, snapshot, position, ghs_attr=ghs_attr, valuation_date=valuation_date
-        ) == expected
+        assert (
+            reporting_currency_value(
+                rc, snapshot, position, ghs_attr=ghs_attr, valuation_date=valuation_date
+            )
+            == expected
+        )
 
 
 @pytest.mark.parametrize(
@@ -683,10 +694,16 @@ def test_canonical_loader_looks_up_each_foreign_notional_quote_once(
 
     monkeypatch.setattr("app.market_data.public.preferred_fx_spot", quoted_spot)
     ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    rc = ResolveContext(db=book.db, ctx=ctx, bank=book.bank, period=book.period, column="total")
+    resolve = get_resolver("bsd3.rank")
+    params: dict[str, object] = {"kind": "non_monetary_exposure", "rank": 1, "field": "total"}
     if available:
-        rows = _load_canonical_rows(
-            book.db, ctx, book.bank, book.period.period_end, ("LC_GUARANTEE", "COMMITMENT_UNDRAWN")
-        )
+        resolve(rc, params)
+        rows = [
+            row
+            for row in cast(list[_ExposureRow], rc.cache["bsd3:rows"])
+            if row.counterparty_id == book.counterparty_id
+        ]
         assert [(row.currency, row.notional_ghs, row.undrawn_ccf_ghs) for row in rows] == [
             (
                 currency,
@@ -699,13 +716,7 @@ def test_canonical_loader_looks_up_each_foreign_notional_quote_once(
         assert all(row.balance_ghs == 0 for row in rows)
     else:
         with pytest.raises(HTTPException) as refused:
-            _load_canonical_rows(
-                book.db,
-                ctx,
-                book.bank,
-                book.period.period_end,
-                ("LC_GUARANTEE", "COMMITMENT_UNDRAWN"),
-            )
+            resolve(rc, params)
         assert refused.value.status_code == 409
         detail = cast(dict[str, str], refused.value.detail)
         assert detail["error_code"] == "foreign_amount_not_stated"
@@ -786,15 +797,18 @@ def test_domestic_sums_and_buckets_preserve_their_requested_measures(
     )
     assert book.resolver("bsd1.daily", "total")({**params, "days_before": 0}) == Decimal("600000")
     for measure, expected in (("balance", Decimal("600000")), ("notional", native_notional)):
-        assert book.resolver("bsd6.bucket", "total")(
-            {
-                "bsd2_column": "domestic",
-                "side": "liability",
-                "components": [
-                    {"source": "positions.sum", "params": {**params, "measure": measure}}
-                ],
-            }
-        ) == expected
+        assert (
+            book.resolver("bsd6.bucket", "total")(
+                {
+                    "bsd2_column": "domestic",
+                    "side": "liability",
+                    "components": [
+                        {"source": "positions.sum", "params": {**params, "measure": measure}}
+                    ],
+                }
+            )
+            == expected
+        )
 
 
 @pytest.mark.parametrize("position_type", ["CASH", "INTERBANK_PLACEMENT"])
