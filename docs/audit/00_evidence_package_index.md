@@ -53,7 +53,7 @@ execution pass)**
 >
 > [`.gitignore`](../../.gitignore) owns the publication allow-list. This index and
 > selected evidence documents are tracked; the remaining private attachments
-> must be requested from AQS. A repository clone is not the complete package.
+> must be requested from aequorOS. A repository clone is not the complete package.
 
 ---
 
