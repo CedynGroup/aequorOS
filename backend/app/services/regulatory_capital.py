@@ -49,6 +49,7 @@ from app.domain.capital.engine import (
     UnsupportedShockError,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
     money,
     ratio_pct,
     run_capital_stress,
@@ -294,7 +295,9 @@ def _execute_scenario_compute(
     unstaged_ead = unstaged_loan_ead(engine_facts) if ecl is not None else None
     # A modeled figure over part of the book would replace provisions the bank
     # booked against ALL of it, so partial staging keeps the booked figure.
-    gp_override = ecl.general_ecl if ecl is not None and not unstaged_ead else None
+    gp_override = (
+        ecl.general_ecl if ecl is not None and has_complete_ecl_coverage(engine_facts) else None
+    )
     if not stress_shocks:
         rwa = compute_rwa(engine_facts, engine_params)
         ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
@@ -1890,6 +1893,11 @@ def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -2141,6 +2149,7 @@ def _build_snapshot(  # noqa: PLR0913
                     "capital_tier": fact.capital_tier,
                     "is_deduction": fact.is_deduction,
                     "side": fact.attributes.get("side"),
+                    "ecl_coverage_complete": _to_engine_fact(fact).ecl_coverage_complete,
                 }
                 for fact in facts
             ),

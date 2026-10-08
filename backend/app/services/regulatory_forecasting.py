@@ -1020,6 +1020,11 @@ def _to_engine_fact(fact: FinancialFactRow) -> ForecastFact:
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
         cash_derived=fact.attributes.get("source") == "cash",
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -1245,6 +1250,7 @@ def _build_snapshot(  # noqa: PLR0913
                     "is_deduction": fact.is_deduction,
                     "side": fact.attributes.get("side"),
                     "cash_derived": fact.attributes.get("source") == "cash",
+                    "ecl_coverage_complete": _to_engine_fact(fact).ecl_coverage_complete,
                 }
                 for fact in facts
             ),

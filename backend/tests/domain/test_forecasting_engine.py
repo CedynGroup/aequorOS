@@ -656,3 +656,115 @@ def test_fully_staged_forecast_applies_modelled_provisions() -> None:
     booked = project(facts + staged, bog_forecast_params(), BASE_ASSUMPTIONS)
     modelled = project(facts + staged, params, BASE_ASSUMPTIONS)
     assert modelled.years[0].car_pct < booked.years[0].car_pct
+
+
+def test_incomplete_source_coverage_keeps_booked_provisions_despite_matching_ead() -> None:
+    """IFRS 9 ¶5.5.17: matching converted EAD cannot hide an omitted unstaged loan."""
+    facts = sample_bank_latest_facts()
+    staged = tuple(
+        ForecastFact(
+            "ecl_exposure",
+            f"{fact.category}:stage1",
+            fact.amount,
+            ecl_coverage_complete=False,
+        )
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
+    )
+    booked = project(facts + staged, bog_forecast_params(), BASE_ASSUMPTIONS)
+    modelled = project(facts + staged, params, BASE_ASSUMPTIONS)
+    assert modelled.years == booked.years
+    assert modelled.summary == booked.summary
+
+
+def _rounding_book() -> tuple[ForecastFact, ...]:
+    return (
+        ForecastFact("balance_sheet", "cash_vault", Decimal("20000000"), side="asset"),
+        ForecastFact("balance_sheet", "loans_gross", Decimal("100000000.02"), side="asset"),
+        ForecastFact(
+            "balance_sheet", "retail_deposits_stable", Decimal("100000000.02"), side="liability"
+        ),
+        ForecastFact("balance_sheet", "capital_total", Decimal("20000000"), side="equity"),
+        ForecastFact("loan_exposure", "corporate_unrated", Decimal("100000000.02"), "RW100"),
+        ForecastFact("ecl_exposure", "corporate_unrated:stage1", Decimal("50000000.01")),
+        ForecastFact("ecl_exposure", "corporate_unrated:stage2", Decimal("50000000.01")),
+        ForecastFact(
+            "securities", "cash_vault_hqla", Decimal("20000000"), hqla_level="L1", cash_derived=True
+        ),
+        ForecastFact(
+            "capital_component", "paid_up_capital", Decimal("20000000"), capital_tier="CET1"
+        ),
+        ForecastFact(
+            "capital_component", "general_provisions", Decimal("1000000"), capital_tier="T2"
+        ),
+    ) + tuple(
+        ForecastFact(
+            "operational_income", f"gross_income_{year}", Decimal("10000000"), income_year=year
+        )
+        for year in (2023, 2024, 2025)
+    )
+
+
+@pytest.mark.parametrize("path", ["projection", "whatif"])
+@pytest.mark.parametrize(
+    "growth, loans, allowance",
+    [
+        ("0.4", "100400000.0201", "903600.0002"),
+        ("-0.4", "99600000.0199", "896400.0002"),
+    ],
+)
+def test_forecast_rounding_preserves_full_staging(
+    path: str, growth: str, loans: str, allowance: str
+) -> None:
+    """IFRS 9 ¶5.5.17: growth rounding cannot change the source book's staging coverage."""
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(
+            EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),
+            EclAssumption("ALL", 2, Decimal("2"), Decimal("45")),
+        ),
+    )
+    assumptions = replace(BASE_ASSUMPTIONS, loan_growth_pct=Decimal(growth))
+    if path == "projection":
+        projections = (project(_rounding_book(), params, assumptions),)
+    else:
+        result = run_whatif(WHATIF_SHOCK_CODES[0], _rounding_book(), params, assumptions)
+        projections = (result.base, result.shocked)
+    for projection in projections:
+        year = projection.years[1]
+        assert year.loans == Decimal(loans)
+        retained = year.net_income - year.dividends
+        capital = Decimal("20000000") + retained + Decimal(allowance)
+        operational_charge = (
+            (Decimal("20000000") + year.total_income) * Decimal("0.15") / 3
+        ).quantize(MONEY, rounding=ROUND_HALF_UP)
+        operational_rwa = (operational_charge * Decimal("12.5")).quantize(
+            MONEY, rounding=ROUND_HALF_UP
+        )
+        expected_car = (capital / (Decimal(loans) + operational_rwa) * 100).quantize(
+            RATIO, rounding=ROUND_HALF_UP
+        )
+        assert year.car_pct == expected_car
+
+
+def test_optimizer_infers_the_same_complete_coverage_as_source_metadata() -> None:
+    """IFRS 9 ¶5.5.17: optimizer candidates retain completeness through rounded growth."""
+    inferred = _rounding_book()
+    explicit = tuple(
+        replace(fact, ecl_coverage_complete=True) if fact.fact_group == "ecl_exposure" else fact
+        for fact in inferred
+    )
+    params = replace(
+        bog_forecast_params(),
+        ecl_assumptions=(
+            EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),
+            EclAssumption("ALL", 2, Decimal("2"), Decimal("45")),
+        ),
+    )
+    assert run_optimizer(inferred, params, BASE_ASSUMPTIONS, BASE_CONSTRAINTS) == run_optimizer(
+        explicit, params, BASE_ASSUMPTIONS, BASE_CONSTRAINTS
+    )

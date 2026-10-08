@@ -50,7 +50,6 @@ from app.domain.capital.ecl import (
     compute_ecl,
 )
 from app.domain.capital.engine import (
-    FACT_GROUP_LOAN_EXPOSURE,
     SHOCK_FX_RWA_MULTIPLIER,
     SHOCK_QUARTERLY_CREDIT_LOSS_M,
     SHOCK_QUARTERLY_INCOME_M,
@@ -58,6 +57,7 @@ from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
     CapitalStressResult,
+    has_complete_ecl_coverage,
     run_capital_stress,
 )
 from app.domain.fx.engine import (
@@ -602,12 +602,14 @@ class EnterpriseStressOutcome:
 
 def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOutcome:
     """Drive every engine from one macro scenario into a single enterprise outcome."""
-    loan_ead = sum(
-        (fact.amount for fact in inputs.capital_facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
-        _ZERO,
-    )
-    staged_ead = sum((exposure.ead for exposure in inputs.ecl_exposures), _ZERO)
-    if inputs.ecl_exposures and inputs.ecl_assumptions and loan_ead > staged_ead:
+    if (
+        inputs.ecl_exposures
+        and inputs.ecl_assumptions
+        and not has_complete_ecl_coverage(
+            inputs.capital_facts,
+            staged_ead=sum((exposure.ead for exposure in inputs.ecl_exposures), _ZERO),
+        )
+    ):
         raise EclComputationError("The modelled ECL does not cover unstaged loan exposure.")
     composition = compose_capital_shocks(
         scenario_paths=inputs.scenario_paths,

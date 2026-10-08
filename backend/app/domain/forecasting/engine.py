@@ -112,7 +112,7 @@ from app.domain.capital.engine import (
     CapitalParams,
     compute_capital_ratios,
     compute_rwa,
-    unstaged_loan_ead,
+    has_complete_ecl_coverage,
 )
 from app.domain.liquidity.engine import (
     LiquidityFact,
@@ -252,6 +252,7 @@ class ForecastFact:
     is_deduction: bool = False
     side: str | None = None
     cash_derived: bool = False
+    ecl_coverage_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -491,6 +492,7 @@ class _Meta:
     #: year appends exactly one gross-income year, so the count of
     #: gross-income years carried never decreases.
     gi_window: int = 1
+    ecl_coverage_complete: bool = False
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -967,6 +969,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         # give the roll-forward a year to append onto so it fails loudly there.
         state.gi_history = [(0, "gross_income_0", _ZERO)]
     meta = _Meta(
+        ecl_coverage_complete=has_complete_ecl_coverage(_to_capital_facts(facts)),
         gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
         off_balance_ccf=off_balance_ccf,
@@ -1036,7 +1039,12 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
         )
     for category, amount in sorted(state.ecl_exposures.items()):
         rows.append(
-            ForecastFact(fact_group=FACT_GROUP_ECL_EXPOSURE, category=category, amount=amount)
+            ForecastFact(
+                fact_group=FACT_GROUP_ECL_EXPOSURE,
+                category=category,
+                amount=amount,
+                ecl_coverage_complete=meta.ecl_coverage_complete,
+            )
         )
     for category, amount in sorted(state.crm_collateral.items()):
         rows.append(
@@ -1117,6 +1125,7 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
+            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in rows
         if row.fact_group in relevant
@@ -1159,7 +1168,7 @@ def _general_provisions_override(
         return None
     result = compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,))
     result.require_coverage()
-    if unstaged_loan_ead(capital_facts):
+    if not has_complete_ecl_coverage(capital_facts):
         return None
     return result.general_ecl
 

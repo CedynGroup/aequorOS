@@ -8,6 +8,7 @@ engine-self-referential.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from collections.abc import Sequence
 from decimal import Decimal
 
@@ -466,9 +467,11 @@ def test_a_long_book_that_gains_as_the_cedi_falls_carries_no_fx_addon() -> None:
     """
     outcome = _fx_run(_fx_positions())
     assert outcome.fx is not None
-    retired_formula = _FX_TIER1 * (
-        outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1
-    ) / Decimal("100")
+    retired_formula = (
+        _FX_TIER1
+        * (outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1)
+        / Decimal("100")
+    )
     assert retired_formula == Decimal("8000001.000000")
     assert outcome.fx.revaluation_loss == Decimal("0.0000")
     assert outcome.fx.pillar2_addon == Decimal("0.0000")
@@ -583,7 +586,6 @@ def test_enterprise_stress_prices_a_fully_staged_book() -> None:
     assert result.engine_version == "enterprise-stress-v3.0.0"
 
 
-
 def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:
     """IFRS 9 ¶5.5.17: a full staged book still requires assumptions for every funded bucket."""
     exposures = tuple(
@@ -599,5 +601,34 @@ def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:
                 ecl_assumptions=(
                     EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
                 ),
+            )
+        )
+
+
+def test_enterprise_stress_refuses_omitted_loans_despite_matching_converted_ead() -> None:
+    """IFRS 9 ¶5.5.17: an unconverted omitted loan is uncovered even when converted EAD ties."""
+    facts = capital_facts()
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    facts += tuple(
+        replace(
+            fact,
+            fact_group="ecl_exposure",
+            category=f"{fact.category}:stage1",
+            ecl_coverage_complete=False,
+        )
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    with pytest.raises(EclComputationError, match="unstaged loan exposure"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                capital_facts=facts,
+                ecl_exposures=exposures,
+                ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
             )
         )

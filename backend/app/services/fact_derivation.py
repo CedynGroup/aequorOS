@@ -1098,9 +1098,7 @@ def _resolve_gl_chart(
     if chart_as_of is None:
         chart = {account.account_code for account, _ in rows}
     else:
-        chart = {
-            account.account_code for account, _ in rows if account.as_of_date >= chart_as_of
-        }
+        chart = {account.account_code for account, _ in rows if account.as_of_date >= chart_as_of}
     # Deterministic scan: (organization, bank, code, as_of) is unique among
     # current rows, so the max by as_of_date is unambiguous; sorting keeps the
     # walk reproducible regardless of the database's row order.
@@ -1231,9 +1229,7 @@ def _ensure_period(
     )
     if period is not None:
         return period, False
-    period = new_snapshot_period(
-        organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
-    )
+    period = new_snapshot_period(organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of)
     db.add(period)
     db.flush()
     return period, True
@@ -2366,12 +2362,16 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
             continue
         key = f"{loan.category}:stage{stage}"
         totals[key] = totals.get(key, _ZERO) + balance
+    coverage_complete = all(
+        loan.row.ifrs9_stage is not None and loan.row.balance_ghs is not None for loan in loan_rows
+    )
     specs = [
         _FactSpec(
             fact_group="ecl_exposure",
             category=category,
             amount=amount,
             derived_from="LOAN positions by family and ingested IFRS 9 stage",
+            attributes={"ecl_coverage_complete": coverage_complete},
         )
         for category, amount in sorted(totals.items())
     ]
@@ -2393,9 +2393,7 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
             )
     if specs:
         groups.append(
-            GroupResult(
-                group="ecl_exposure", status="derived", rows=len(specs), warnings=warnings
-            )
+            GroupResult(group="ecl_exposure", status="derived", rows=len(specs), warnings=warnings)
         )
     else:
         # Audit §3 / P0-10 companion: the empty case used to append NO group at
@@ -2449,11 +2447,7 @@ def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult])
         if provision is not None:
             any_provision = True
             grade = normalise_bog_classification(attributes.get("bog_classification"))
-            non_performing = (
-                grade in NPL_GRADES
-                if grade is not None
-                else loan.row.ifrs9_stage == 3
-            )
+            non_performing = grade in NPL_GRADES if grade is not None else loan.row.ifrs9_stage == 3
             if non_performing:
                 specific += provision
             else:
@@ -2498,9 +2492,7 @@ def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult])
     return specs
 
 
-def _derive_crm_collateral(
-    loan_rows: list[_LoanRow], groups: list[GroupResult]
-) -> list[_FactSpec]:
+def _derive_crm_collateral(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
     """CRM collateral/guarantee values per loan family + class (item 9).
 
     Reads the documented ``crm_collateral_ghs``/``crm_collateral_class`` and

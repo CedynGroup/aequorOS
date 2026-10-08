@@ -342,6 +342,11 @@ def _capital_fact(fact: FinancialFactRow) -> CapitalFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -368,6 +373,11 @@ def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
         cash_derived=fact.attributes.get("source") == "cash",
     )
 

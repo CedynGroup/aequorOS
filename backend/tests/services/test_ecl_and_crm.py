@@ -35,10 +35,21 @@ from app.domain.capital.engine import (
     compute_capital_ratios,
     compute_rwa,
 )
-from app.models import BankFinancialFact, BankReportingPeriod, ParamStressShock, RegulatoryRun
+from app.models import (
+    BankFinancialFact,
+    BankReportingPeriod,
+    CanonicalReferenceRow,
+    ParamStressShock,
+    RegulatoryRun,
+)
 from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import credit_params, regulatory_capital
+from app.services import (
+    credit_params,
+    enterprise_stress,
+    regulatory_capital,
+    regulatory_forecasting,
+)
 from app.services.fact_derivation import derive_facts
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -256,7 +267,9 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
     # silently dropped from the modelled book.
     ecl_group = next(group for group in result.groups if group.group == "ecl_exposure")
     assert len(ecl_group.warnings) == 1
-    assert ecl_group.warnings[0].startswith("1 LOAN position(s) with known balances totalling 7,000,000.00")
+    assert ecl_group.warnings[0].startswith(
+        "1 LOAN position(s) with known balances totalling 7,000,000.00"
+    )
     assert "ECL/L4" in ecl_group.warnings[0]
 
 
@@ -570,7 +583,6 @@ def test_new_capital_version_preserves_historical_runs(db_session: Session) -> N
     assert current.id != historical.id
 
 
-
 def test_capital_run_accepts_an_unpriced_zero_ead_bucket(db_session: Session) -> None:
     """IFRS 9 ¶5.5.17: a closed zero-EAD mortgage cannot block funded covered loans."""
     materialize_canonical_test_book(db_session)
@@ -589,10 +601,111 @@ def test_capital_run_accepts_an_unpriced_zero_ead_bucket(db_session: Session) ->
     for fact in db_session.scalars(
         select(BankFinancialFact).where(
             BankFinancialFact.reporting_period_id == period.id,
-            BankFinancialFact.category.in_(["commercial_loans:stage2", "past_due_unsecured:stage3"]),
+            BankFinancialFact.category.in_(
+                ["commercial_loans:stage2", "past_due_unsecured:stage3"]
+            ),
         )
     ):
         db_session.delete(fact)
     _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "1.5", "45"))
     run = _run_capital(db_session, period.id, "baseline")
     assert run.status == "succeeded", run
+
+
+@pytest.mark.parametrize("scenario", ["baseline", "severe"])
+def test_unconverted_unstaged_loan_keeps_booked_provisions(
+    db_session: Session, scenario: str
+) -> None:
+    """IFRS 9 ¶5.5.17: excluded unconverted loans still make model coverage partial."""
+    materialize_canonical_test_book(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
+    seeder.position("COVERED/GHS", "LOAN", Decimal("100000000"), product=product, ifrs9_stage=1)
+    seeder.position(
+        "UNCOVERED/USD",
+        "LOAN",
+        Decimal("1000000"),
+        product=product,
+        currency="USD",
+        extra_attributes={"balance_ghs": None},
+    )
+    seeder.position("FUNDING/GHS", "DEPOSIT", Decimal("79000000"))
+    seeder.position(
+        "FUNDING/USD",
+        "DEPOSIT",
+        Decimal("1000000"),
+        currency="USD",
+        extra_attributes={"balance_ghs": None},
+    )
+    references: list[tuple[str, dict[str, str]]] = [
+        (
+            "capital_structure",
+            {
+                "capital_component": "paid_up_capital",
+                "amount_ghs": "20000000",
+                "tier": "CET1",
+            },
+        ),
+        (
+            "capital_structure",
+            {
+                "capital_component": "general_provisions",
+                "amount_ghs": "1000000",
+                "tier": "T2",
+            },
+        ),
+    ]
+    references.extend(
+        (
+            "historical_financials",
+            {
+                "period_end": date(2025, month, 28).isoformat(),
+                "net_interest_income_ghs": "1000000",
+            },
+        )
+        for month in range(1, 13)
+    )
+    for index, (kind, payload) in enumerate(references):
+        db_session.add(
+            CanonicalReferenceRow(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                ingestion_batch_id=seeder.common["ingestion_batch_id"],
+                lineage_id=seeder.common["lineage_id"],
+                as_of_date=REPORTING_DATE,
+                dataset_kind=kind,
+                row_index=index,
+                source_reference=f"ECL-COVERAGE/{index}",
+                payload=payload,
+            )
+        )
+    db_session.flush()
+    derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    assert derived.reconciliation is not None and derived.reconciliation.within_tolerance
+    group = next(group for group in derived.groups if group.group == "ecl_exposure")
+    assert group.warnings[0].startswith("1 LOAN position(s)")
+    assert "UNCOVERED/USD" in group.warnings[0]
+    assert group.warnings[1].startswith("1 unstaged LOAN position(s) lack")
+    fact = db_session.scalar(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == derived.reporting_period_id,
+            BankFinancialFact.fact_group == "ecl_exposure",
+        )
+    )
+    assert fact is not None and fact.amount == Decimal("100000000")
+    assert fact.attributes["ecl_coverage_complete"] is False
+    assert regulatory_capital._to_engine_fact(fact).ecl_coverage_complete is False
+    assert regulatory_forecasting._to_engine_fact(fact).ecl_coverage_complete is False
+    assert enterprise_stress._capital_fact(fact).ecl_coverage_complete is False
+    assert enterprise_stress._forecast_fact(fact).ecl_coverage_complete is False
+    booked = _run_capital(db_session, derived.reporting_period_id, scenario)
+    assert booked.status == "succeeded", booked
+    _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "2", "45"))
+    modelled = _run_capital(db_session, derived.reporting_period_id, scenario)
+    assert modelled.status == "succeeded", modelled
+    stored = db_session.get(RegulatoryRun, modelled.id)
+    stored_booked = db_session.get(RegulatoryRun, booked.id)
+    assert stored is not None and stored_booked is not None
+    assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
+    ecl_input = next(row for row in stored.inputs["facts"] if row["fact_group"] == "ecl_exposure")
+    assert ecl_input["ecl_coverage_complete"] is False
