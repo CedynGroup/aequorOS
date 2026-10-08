@@ -332,6 +332,7 @@ def test_an_exposure_with_no_risk_weight_code_refuses_the_run() -> None:
         svc._build_credit_exposures(  # noqa: SLF001
             [replace(_exposure_row("LOAN/NOCODE", code=None), regulatory_category="UNMAPPED")],
             _capital_params(RW100="100"),
+            capital_facts=(),
         )
 
     detail = _detail(exc.value)
@@ -347,7 +348,9 @@ def test_a_code_with_no_governed_row_refuses_and_names_the_code() -> None:
     """Coverage the parameter register does not carry is a policy gap, not a 100%."""
     with pytest.raises(svc.EnterpriseStressError) as exc:
         svc._build_credit_exposures(  # noqa: SLF001
-            [_exposure_row("LOAN/UNGOVERNED", code="RW250")], _capital_params(RW50="50")
+            [_exposure_row("LOAN/UNGOVERNED", code="RW250")],
+            _capital_params(RW50="50"),
+            capital_facts=(),
         )
 
     detail = _detail(exc.value)
@@ -366,7 +369,7 @@ def test_the_refusal_names_every_offending_exposure_not_just_the_first() -> None
         for index in range(3)
     ]
     with pytest.raises(svc.EnterpriseStressError) as exc:
-        svc._build_credit_exposures(rows, _capital_params(RW100="100"))  # noqa: SLF001
+        svc._build_credit_exposures(rows, _capital_params(RW100="100"), capital_facts=())  # noqa: SLF001
 
     detail = _detail(exc.value)
     assert detail["details"]["exposure_count"] == 3
@@ -385,6 +388,7 @@ def test_crd_classification_overrides_snapshot_and_product_weights() -> None:
             _exposure_row("LOAN/PRODUCT", code=None, product_code="RW50"),
         ],
         _capital_params(RW100="100", RW50="50"),
+        capital_facts=(),
     )
 
     assert [(item.exposure_id, item.risk_weight_pct) for item in exposures] == [

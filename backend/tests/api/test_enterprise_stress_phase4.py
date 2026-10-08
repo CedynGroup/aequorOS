@@ -15,9 +15,13 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
 from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -25,6 +29,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
+from app.services.fact_derivation import _derive_specs, _load_canonical
 from tests.api.test_enterprise_stress import (
     RUNS_URL,
     _approve_scenario,
@@ -33,6 +38,7 @@ from tests.api.test_enterprise_stress import (
     _seed_checker,
 )
 from tests.api.test_ingestion import seed_bank
+from tests.fixtures.capital_structure import MAKER
 from tests.support.helpers import ORG_1, headers
 
 pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
@@ -216,6 +222,31 @@ def _seed_canonical_positions(bank_id: str) -> None:
             balance="0",
             notional="50000000",
             extra={"notional_ghs": "50000000"},
+        )
+        bank = session.get(Bank, bank_id)
+        period = session.scalar(
+            select(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == bank_id, BankReportingPeriod.period_end == _AS_OF
+            )
+        )
+        assert bank is not None and period is not None
+        specs, _, _ = _derive_specs(_load_canonical(session, MAKER, bank, _AS_OF), live=True)
+        session.add_all(
+            [
+                BankFinancialFact(
+                    organization_id=ORG_1,
+                    bank_id=bank_id,
+                    reporting_period_id=period.id,
+                    fact_group=spec.fact_group,
+                    category=spec.category,
+                    amount=spec.amount,
+                    currency=bank.currency,
+                    risk_weight_code=spec.risk_weight_code,
+                    attributes={},
+                )
+                for spec in specs
+                if spec.fact_group == "credit_exposure"
+            ]
         )
         session.commit()
     finally:

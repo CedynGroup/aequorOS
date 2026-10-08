@@ -54,6 +54,7 @@ from tests.domain.stress_fixtures import (
     bog_forecast_params,
     bog_liquidity_params,
     capital_facts,
+    credit_basis_facts,
     liquidity_facts,
     sample_bank_latest_facts,
     severe_paths,
@@ -73,9 +74,7 @@ def _without(variable: str, *, year: int | None = None) -> tuple[MacroPathPoint,
     return tuple(
         point
         for point in severe_paths()
-        if not (
-            point.variable == variable and (year is None or point.year_index == year)
-        )
+        if not (point.variable == variable and (year is None or point.year_index == year))
     )
 
 
@@ -204,19 +203,36 @@ def test_the_stress_leg_refuses_a_year_with_no_fx_path() -> None:
     assert "macro:fx_usd_ghs" in exc.value.details[0].items
 
 
-def test_a_partial_credit_rwa_uplift_refuses_instead_of_unstressing_the_tail() -> None:
-    """Old behaviour: year 3 fell back to a 1.0 factor while years 1-2 carried the uplift."""
-    with pytest.raises(NotComputable) as exc:
-        _projection(credit_rwa_uplift={1: Decimal("1.10"), 2: Decimal("1.12")})
-    assert exc.value.state is OutcomeState.MISSING_REQUIRED_INPUT
-    assert exc.value.details[0].items == ("input:credit_rwa_uplift@y3",)
-
-
-def test_a_complete_credit_rwa_uplift_still_applies() -> None:
-    projection = _projection(
-        credit_rwa_uplift={1: Decimal("1.10"), 2: Decimal("1.12"), 3: Decimal("1.15")}
+def test_an_unmatched_credit_bucket_refuses_instead_of_unstressing_the_book() -> None:
+    """BoG CRD (June 2018) ¶98: stress must match the projected capital bucket."""
+    exposure = CreditExposure(
+        "missing",
+        "corporates",
+        M,
+        Decimal("2"),
+        Decimal("45"),
+        Decimal("100"),
+        credit_category="missing",
     )
-    unlifted = _projection()
+    with pytest.raises(NotComputable) as exc:
+        _projection(credit_exposures=(exposure,))
+    assert exc.value.state is OutcomeState.MISSING_REQUIRED_INPUT
+    assert exc.value.details[0].items == ("fact:credit_exposure:missing",)
+
+
+def test_a_matched_credit_bucket_still_applies() -> None:
+    """BoG CRD (June 2018) ¶98: matched migration changes the affected bucket."""
+    exposure = CreditExposure(
+        "corporate",
+        "corporates",
+        Decimal("560") * M,
+        Decimal("2"),
+        Decimal("45"),
+        Decimal("100"),
+        credit_category="corporate_unrated:RW100",
+    )
+    projection = _projection(credit_exposures=(exposure,), facts=credit_basis_facts())
+    unlifted = _projection(facts=credit_basis_facts())
     assert projection.stress[2].rwa.credit_rwa > unlifted.stress[2].rwa.credit_rwa
 
 
@@ -240,15 +256,23 @@ def test_a_zero_base_refuses_rather_than_dropping_the_year_from_the_peak() -> No
 
 def _fc_book() -> tuple[CreditExposure, ...]:
     return (
-        CreditExposure("E1", "corporates", Decimal("100") * M, Decimal("2"), Decimal("45"),
-                       Decimal("100"), is_foreign_currency=True),
+        CreditExposure(
+            "E1",
+            "corporates",
+            Decimal("100") * M,
+            Decimal("2"),
+            Decimal("45"),
+            Decimal("100"),
+            is_foreign_currency=True,
+        ),
     )
 
 
 def _domestic_book() -> tuple[CreditExposure, ...]:
     return (
-        CreditExposure("E1", "corporates", Decimal("100") * M, Decimal("2"), Decimal("45"),
-                       Decimal("100")),
+        CreditExposure(
+            "E1", "corporates", Decimal("100") * M, Decimal("2"), Decimal("45"), Decimal("100")
+        ),
     )
 
 
@@ -379,9 +403,7 @@ def test_a_missing_leverage_exposure_refuses_instead_of_a_zero_percent_ratio() -
             ContingentLeverageInputs(
                 base_leverage_exposure=Decimal("0"),
                 tier1=Decimal("100") * M,
-                derivatives=(
-                    DerivativePosition("D1", Decimal("400") * M, Decimal("20") * M),
-                ),
+                derivatives=(DerivativePosition("D1", Decimal("400") * M, Decimal("20") * M),),
             )
         )
     assert exc.value.state is OutcomeState.NOT_COMPUTABLE

@@ -281,7 +281,6 @@ from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
 from app.domain.positions.credit import (
     capital_credit_class,
     public_debt_evidence,
-    sovereign_evidence,
     specific_deductions,
 )
 from app.domain.positions.families import LOAN_CATEGORY_MAP as _LOAN_CATEGORY_MAP
@@ -667,7 +666,7 @@ class _Canonical:
     source_overlap: reconciliation.SourceOverlapOutcome | None = None
     # Lower-cased sovereign / central-bank issuer names for this bank's
     # jurisdiction (registry-driven, never a country literal) — the last of the
-    # sovereign-paper signals in ``_is_sovereign_security``.
+    # sovereign-paper signals in ``public_debt_evidence``.
     sovereign_issuer_names: tuple[str, ...] = ()
     # How this bank's OWN central bank is named in its chart of accounts
     # (registry-driven, never a country literal) — the GL cash classifier's
@@ -1680,6 +1679,23 @@ def _is_loan_loss_allowance_gl(code: str, name: str) -> bool:
     )
 
 
+def _is_covered_credit_contra_gl(
+    code: str, name: str, *, loans: bool, securities: bool, placements: bool
+) -> bool:
+    if not _is_asset_contra_gl(name):
+        return False
+    if any(
+        token in name
+        for token in ("suspended interest", "interest in suspense", "interest suspense")
+    ):
+        return loans or securities or placements
+    return (
+        (loans and _is_loan_loss_allowance_gl(code, name))
+        or (securities and _is_securities_gl(code, name))
+        or (placements and _is_interbank_placement_gl(code, name))
+    )
+
+
 def _is_securities_gl(code: str, name: str) -> bool:
     if _in_block(code, 1200, 1299):
         return True
@@ -2077,23 +2093,6 @@ def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-
     return specs, loan_rows, cash, securities, identity
 
 
-def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
-    """Positive evidence that this holding is sovereign / central-bank paper.
-
-    Basis: BoG CRD (June 2018), in force.
-    Implements: ¶106–118: a public/private issuer class is never the sovereign.
-    This identifies issuance only; HQLA eligibility and capital risk weight are
-    established independently. Each positive signal below is ingested data:
-
-    * the typed ``counterparty_type`` (SOVEREIGN / CENTRAL_BANK / …);
-    * ``attributes.instrument`` from the documented BoG instrument vocabulary;
-    * a product code naming sovereign paper (TBILL / GOG / TREASURY / …);
-    * an ``attributes.issuer`` naming the jurisdiction's sovereign or central
-      bank, resolved from the jurisdictions registry — never a literal country.
-    """
-    return sovereign_evidence(row, sovereign_names)
-
-
 def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
     """The securities balance-sheet bucket, independently of capital weight.
 
@@ -2328,7 +2327,7 @@ def _derive_credit_exposure(
     Implements: ¶98, ¶106–107, ¶117–119, ¶123–124 and ¶139.
     Capital exposures replace gross balance-sheet summaries exactly once.
     Gross loans, staged IFRS 9 EAD and HQLA remain separate measurement bases.
-    Loan-loss GL contra accounts are removed from residual assets: specific
+    Covered credit GL contra accounts are removed from residual assets: specific
     provisions are deducted per exposure, and general allowances are not RWA.
     """
     totals: dict[tuple[str, str | None], Decimal] = {}
@@ -2383,8 +2382,13 @@ def _derive_credit_exposure(
             for account in canonical.gl_accounts
             if account.account_class == "ASSET"
             and account.balance is not None
-            and bool(loans)
-            and _is_loan_loss_allowance_gl(account.account_code.strip(), account.name.lower())
+            and _is_covered_credit_contra_gl(
+                account.account_code.strip(),
+                account.name.lower(),
+                loans=bool(loans),
+                securities=bool(securities),
+                placements=bool(placements),
+            )
         ),
         _ZERO,
     )

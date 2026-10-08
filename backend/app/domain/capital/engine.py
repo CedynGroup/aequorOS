@@ -220,8 +220,6 @@ class CapitalRegisterRefused(CapitalComputationError, NotComputable):
 class CreditExposureBasisUnavailable(CapitalComputationError, NotComputable):
     """BoG CRD (June 2018) ¶98, ¶107, ¶139: stale facts cannot supply fresh capital."""
 
-    code: str = "credit_exposure_basis_missing"
-
     def __init__(self) -> None:
         NotComputable.__init__(
             self,
@@ -235,6 +233,10 @@ class CreditExposureBasisUnavailable(CapitalComputationError, NotComputable):
                 items=("fact_group:credit_exposure",),
             ),
         )
+
+    @property
+    def code(self) -> str:
+        return "credit_exposure_basis_missing"
 
 
 class _CapitalRegisterFact(Protocol):
@@ -914,6 +916,23 @@ def _crm_recognized_by_category(
     return recognized
 
 
+def credit_collateral_by_category(
+    facts: Sequence[CapitalFact], params: CapitalParams
+) -> dict[str, Decimal]:
+    """BoG CRD (June 2018) ¶98, Part 2: allocate governed CRM once per net bucket."""
+    recognized = _crm_recognized_by_category(facts, params)
+    credit = [fact for fact in facts if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE]
+    exposures = credit or [fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE]
+    allocated: dict[str, Decimal] = {}
+    for fact in sorted(exposures, key=lambda fact: fact.category):
+        family = fact.category.rsplit(":", 1)[0] if credit else fact.category
+        available = recognized.get(family, _ZERO)
+        collateral = min(available, max(money(fact.amount), _ZERO))
+        recognized[family] = available - collateral
+        allocated[fact.category] = collateral
+    return allocated
+
+
 def _credit_line_items(
     facts: Sequence[CapitalFact], params: CapitalParams
 ) -> tuple[CapitalLineItem, ...]:
@@ -923,7 +942,7 @@ def _credit_line_items(
     Older immutable snapshots retain their original summary-based measurement.
     """
     items: list[CapitalLineItem] = []
-    crm_recognized = _crm_recognized_by_category(facts, params)
+    crm_allocated = credit_collateral_by_category(facts, params)
     credit = [fact for fact in facts if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE]
     loans = sorted(
         (credit or [fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE]),
@@ -932,9 +951,7 @@ def _credit_line_items(
     for fact in loans:
         weight = _risk_weight(params, fact.risk_weight_code, fact.category)
         category = fact.category.rsplit(":", 1)[0] if credit else fact.category
-        available_crm = crm_recognized.get(category, _ZERO)
-        crm = min(available_crm, max(money(fact.amount), _ZERO))
-        crm_recognized[category] = available_crm - crm
+        crm = crm_allocated[fact.category]
         net_exposure = money(fact.amount - crm)
         description = _describe(category)
         if crm > _ZERO:

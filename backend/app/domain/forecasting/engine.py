@@ -519,7 +519,7 @@ def project(  # noqa: PLR0913, PLR0915
     equity_prev = state.equity
 
     for year in range(1, years + 1):
-        _scale_credit_exposures(
+        scale_credit_exposures(
             state,
             loan_factor,
             deposit_factor,
@@ -856,7 +856,7 @@ def _apply_funding_plug(state: _State) -> None:
         )
 
 
-def _scale_credit_exposures(
+def scale_credit_exposures(
     state: _State,
     loan_factor: Decimal,
     cash_factor: Decimal,

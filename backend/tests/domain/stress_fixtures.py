@@ -8,9 +8,11 @@ modules consume. Not a ``test_*`` module, so pytest does not collect it.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 from app.domain.capital.engine import CapitalFact
+from app.domain.forecasting.engine import ForecastFact
 from app.domain.liquidity.engine import LiquidityFact
 from app.domain.stress.translation import MacroPathPoint
 from tests.domain.test_forecasting_engine import (
@@ -29,6 +31,7 @@ __all__ = [
     "bog_forecast_params",
     "bog_liquidity_params",
     "capital_facts",
+    "credit_basis_facts",
     "liquidity_facts",
     "sample_bank_latest_facts",
     "severe_paths",
@@ -83,6 +86,25 @@ def liquidity_facts() -> tuple[LiquidityFact, ...]:
         )
         for fact in sample_bank_latest_facts()
         if fact.fact_group in _LIQUIDITY_GROUPS
+    )
+
+
+def credit_basis_facts() -> tuple[ForecastFact, ...]:
+    """BoG CRD (June 2018) ¶98: explicit basis for the unchanged pure projection fixture."""
+    facts = sample_bank_latest_facts()
+    credit = tuple(
+        replace(
+            fact, fact_group="credit_exposure", category=f"{fact.category}:{fact.risk_weight_code}"
+        )
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    return (
+        *facts,
+        *credit,
+        ForecastFact(
+            "credit_exposure", "other_assets:RW100", Decimal("90") * M, risk_weight_code="RW100"
+        ),
     )
 
 

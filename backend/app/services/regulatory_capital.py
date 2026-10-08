@@ -49,17 +49,17 @@ from app.domain.capital.engine import (
     CapitalParams,
     CapitalRatiosResult,
     CapitalRegisterRefused,
-    CreditExposureBasisUnavailable,
     CapitalStressResult,
+    CreditExposureBasisUnavailable,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
     assert_capital_register_usable,
-    require_credit_exposure_basis,
     compute_capital_ratios,
     compute_rwa,
     money,
     ratio_pct,
+    require_credit_exposure_basis,
     run_capital_stress,
     unstaged_loan_ead,
 )
@@ -2391,11 +2391,11 @@ def capital_breach_multiplier(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = _fresh_engine_facts(facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
     try:
+        engine_facts = _fresh_engine_facts(facts)
         assert_capital_register_usable(engine_facts)
-    except CapitalRegisterRefused as exc:
+    except (CapitalRegisterRefused, CreditExposureBasisUnavailable) as exc:
         raise CapitalRunError(exc.code, str(exc)) from exc
     if not shocks:
         raise CapitalRunError(

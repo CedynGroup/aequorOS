@@ -47,12 +47,13 @@ from app.domain.capital.engine import (
     CreditExposureBasisUnavailable,
     RiskWeightUnavailable,
     assert_capital_register_usable,
-    require_credit_exposure_basis,
     compute_capital_ratios,
     compute_rwa,
+    require_credit_exposure_basis,
     resolve_risk_weight,
     tier1_capital,
 )
+from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.domain.fx.engine import FxPosition
 from app.domain.liquidity.engine import (
@@ -61,6 +62,7 @@ from app.domain.liquidity.engine import (
     LiquidityParams,
     consumed_hqla_levels,
 )
+from app.domain.positions.credit import capital_credit_class, specific_deductions
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -75,6 +77,7 @@ from app.domain.stress.contingent_leverage import (
 from app.domain.stress.credit_bottom_up import (
     BottomUpCreditInputs,
     CreditExposure,
+    apply_credit_collateral,
     result_for_year,
 )
 from app.domain.stress.management_actions import (
@@ -104,8 +107,6 @@ from app.domain.stress.translation import (
     missing_variables,
     required_variables,
 )
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
-from app.domain.positions.credit import capital_credit_class, specific_deductions
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -875,6 +876,7 @@ def _build_credit_exposures(
     capital_params: CapitalParams,
     *,
     sovereign_names: tuple[str, ...] = (),
+    capital_facts: Sequence[CapitalFact],
 ) -> list[CreditExposure]:
     """The exposure book for the bottom-up credit stress — or a refusal.
 
@@ -918,6 +920,7 @@ def _build_credit_exposures(
                 crd_class=crd_class,
                 ead=_reported(row.balance_rep),
                 credit_amount=max(_reported(row.balance_rep) - deduction, _ZERO),
+                credit_category=f"{credit_category}:{code}",
                 pd_pct=pd_pct,
                 lgd_pct=lgd_pct,
                 risk_weight_pct=risk_weight_pct,
@@ -928,7 +931,7 @@ def _build_credit_exposures(
         raise _unresolved_risk_weight_error(
             unresolved_exposures, sorted(unresolved_codes), missing_code_only
         )
-    return exposures
+    return list(apply_credit_collateral(exposures, capital_facts, capital_params))
 
 
 def _unresolved_risk_weight_error(
@@ -1064,22 +1067,25 @@ def _credit_overlays(
     paths: list[MacroPathPoint],
     horizon_years: int,
     *,
-    base_credit_rwa: Decimal | None = None,
+    base_credit_rwa: Decimal,
 ) -> tuple[dict[int, Decimal], dict[int, dict[str, Decimal]]]:
     """Per-stress-year credit-RWA uplift factor + real exposure-class decomposition.
 
     Perfect-foresight: each year is conditioned by its own macro (¶48). The
-    uplift feeds the projection's stress-leg credit RWA (rating migration + FX
-    revaluation); the decomposition feeds Table 1's "Impact of Adverse".
+    uplift summarizes the as-of total capital credit RWA; the decomposition
+    feeds Table 1's "Impact of Adverse". Projection RWA uses the exposure book.
     """
     uplift: dict[int, Decimal] = {}
     decomposition: dict[int, dict[str, Decimal]] = {}
     for year in range(1, horizon_years + 1):
         result = result_for_year(exposures, paths, year)
+        if base_credit_rwa <= _ZERO:
+            raise EnterpriseStressError(
+                "credit_rwa_denominator_missing",
+                "Capital credit RWA must be positive for the overlay.",
+            )
         uplift[year] = (
             Decimal("1") + (result.stressed_credit_rwa - result.base_credit_rwa) / base_credit_rwa
-            if base_credit_rwa is not None and base_credit_rwa > _ZERO
-            else result.credit_rwa_uplift_factor
         )
         decomposition[year] = result.incremental_loss_by_class()
     return uplift, decomposition
@@ -1141,6 +1147,8 @@ def _credit_exposure_snapshot(exposures: list[CreditExposure]) -> list[dict[str,
             "crd_class": exposure.crd_class,
             "ead": str(exposure.ead),
             "credit_amount": str(exposure.credit_amount),
+            "credit_category": exposure.credit_category,
+            "collateral_amount": str(exposure.collateral_amount),
             "pd_pct": str(exposure.pd_pct),
             "lgd_pct": str(exposure.lgd_pct),
             "risk_weight_pct": str(exposure.risk_weight_pct),
@@ -1683,12 +1691,12 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
         credit_rows,
         capital_params,
         sovereign_names=sovereign_names,
+        capital_facts=capital_facts,
     )
-    credit_rwa_uplift: dict[int, Decimal] | None = None
     exposure_class_losses: dict[int, dict[str, Decimal]] | None = None
     bottom_up_inputs: BottomUpCreditInputs | None = None
     if credit_exposures:
-        credit_rwa_uplift, exposure_class_losses = _credit_overlays(
+        _, exposure_class_losses = _credit_overlays(
             credit_exposures,
             paths,
             payload.horizon_years,
@@ -1713,8 +1721,8 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     paid_up_min = _resolve_paid_up_min(db, ctx, bank, as_of, payload)
 
     # 3-year projection (base + stress) → Appendix II tables. The stress leg's
-    # credit RWA rises with the bottom-up rating-migration + FX-revaluation
-    # uplift (Phase 4), so the stressed capital ratios erode from RWA, not just
+    # credit RWA rises with the grown bottom-up rating-migration + FX-revaluation
+    # exposures (Phase 4), so the stressed capital ratios erode from RWA, not just
     # P&L (closing the Phase-2 limitation).
     try:
         projection = project_enterprise(
@@ -1727,7 +1735,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
                 plan=plan,
                 horizon_years=payload.horizon_years,
                 paid_up_min=paid_up_min,
-                credit_rwa_uplift=credit_rwa_uplift,
+                credit_exposures=tuple(credit_exposures),
                 # SDI: exclude Basel LCR/NSFR from the projection (docs/sdi.md §4.6);
                 # the SDI liquidity stress is the standalone LMTD Table-1 + ladder.
                 basel_liquidity=capital_params.basel_applicable,
