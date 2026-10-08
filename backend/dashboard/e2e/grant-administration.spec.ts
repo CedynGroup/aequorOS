@@ -376,8 +376,8 @@ test.describe("separation-of-duties at Define", () => {
     await expect(refusal).toContainText("This grant can't be given");
     await expect(refusal).toContainText(
       "E2E Approver already has the Approver grant (all modules, every institution). " +
-        "Making E2E Approver a Validator would let one person both approve a return " +
-        "and file it with the regulator. Remove the Approver grant first, or choose someone else.",
+        "Approver and Validator roles must stay with different people, whatever the scope. " +
+        "Remove the Approver grant first, or choose someone else.",
     );
     await expect(refusal).not.toContainText("won't let them");
     await expect(

@@ -1056,8 +1056,8 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     assert refusal.conflicting_binding_ids == [approver_id]
     assert refusal.message == (
         "Amma Owusu already has the Approver grant (Liquidity Monitoring, Aequor Bank Ghana). "
-        "Making Amma Owusu a Validator would let one person both approve a return and file "
-        "it with the regulator. Remove the Approver grant first, or choose someone else."
+        "Approver and Validator roles must stay with different people, whatever the scope. "
+        "Remove the Approver grant first, or choose someone else."
     )
 
     # The reverse direction names the operational grant, never account
@@ -1242,6 +1242,11 @@ def test_multiple_conflicting_bindings_must_all_be_removed(
         assert decision.outcome == "block"
         [finding] = decision.findings
         assert set(finding.conflicting_binding_ids) == set(remaining)
+        if requested_role in {"approver", "validator"} and held_roles[0] != "account_admin":
+            assert (
+                "Approver and Validator roles must stay with different people, whatever the scope."
+                in finding.message
+            )
         remedy = (
             f"Remove all these {labels} grants first, or choose someone else."
             if len(remaining) > 1

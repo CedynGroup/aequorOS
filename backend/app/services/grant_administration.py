@@ -298,8 +298,8 @@ def check_sod_policy(
                 "approval_and_transmission_separation_required",
                 held,
                 f"{conflict.name} already has {conflict.held(held)}. "
-                f"Making {conflict.name} {conflict.requested} would let one person both "
-                f"approve a return and file it with the regulator. {conflict.remedy(held)}",
+                "Approver and Validator roles must stay with different people, "
+                f"whatever the scope. {conflict.remedy(held)}",
             )
         )
 

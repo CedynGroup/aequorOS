@@ -648,10 +648,9 @@ function GrantComposer({
   const [previewResult, setPreviewResult] = useState<{
     key: string;
     sentence: string;
-    sodDecision: SodDecisionRead;
+    sodDecision: NoticeDecision;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sodBlocks, setSodBlocks] = useState<readonly SodFinding[]>([]);
   const previewKeyRef = useRef("");
   const name = memberName(member);
   const isPendingApproval = member.accessRequestState === "approval_needed";
@@ -692,12 +691,6 @@ function GrantComposer({
     grantShortfall(draft) ??
     dataScopeShortfall(draft) ??
     overlappingGrantNotice(draft, member.grants);
-  // A refused create replaces the preview's decision with the server's own.
-  const reviewDecision: NoticeDecision | null =
-    sodBlocks.length > 0
-      ? { outcome: "block", findings: [...sodBlocks] }
-      : previewDecision;
-
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
       authorizationApi.previewAuthorizationBinding({
@@ -737,6 +730,7 @@ function GrantComposer({
   }, [previewAuthority, previewKey, scopeRefusal, step]);
 
   const submit = useMutation({
+    onMutate: () => previewResult,
     mutationFn: async () => {
       if (accessRequest) {
         return authorizationApi.approveAuthorizationAccessRequest({
@@ -766,14 +760,22 @@ function GrantComposer({
       setStep("done");
       onSaved();
     },
-    onError: async (failure) => {
+    onError: async (failure, _variables, submittedPreview) => {
       const normalized = await normalizeApiError(failure);
-      setError(normalized.message);
-      // The refusal already names the rule that fired; only the generic
-      // sentence was ever shown. Without the finding an Org Owner re-composes
-      // the same grant with different scopes, which cannot help when the
-      // conflict is about the identity rather than the scope.
-      setSodBlocks(sodFindings(normalized.details));
+      if (!submittedPreview || submittedPreview.key !== previewKeyRef.current)
+        return;
+      const findings = sodFindings(normalized.details);
+      setError(findings.length > 0 ? null : normalized.message);
+      if (findings.length > 0) {
+        setPreviewResult((current) =>
+          current === submittedPreview
+            ? {
+                ...submittedPreview,
+                sodDecision: { outcome: "block", findings },
+              }
+            : current,
+        );
+      }
     },
   });
 
@@ -992,7 +994,7 @@ function GrantComposer({
           <p className="text-body text-slate">
             Review the exact authority before granting it.
           </p>
-          <GrantNotice decision={reviewDecision} scopeNote={scopeNote} />
+          <GrantNotice decision={previewDecision} scopeNote={scopeNote} />
           <SentencePreview sentence={previewSentence} />
           {/* The sentence above is the server's and is the authority. This is
               the coverage chosen, shown as a field rather than prose so it is
@@ -1021,7 +1023,7 @@ function GrantComposer({
           </div>
           {/* A policy refusal is shown in the notice above, in the server's
               own findings; this is only for refusals that carry none. */}
-          {error && sodBlocks.length === 0 && (
+          {error && (
             <p
               role="alert"
               className="rounded-md bg-critical-light px-4 py-3 text-caption text-critical"
