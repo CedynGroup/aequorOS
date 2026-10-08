@@ -1,0 +1,38 @@
+name: Set up CI PostgreSQL
+description: Start native PostgreSQL 17 with the lock capacity required by aequorOS tests.
+runs:
+  using: composite
+  steps:
+    - name: Set up native PostgreSQL 17
+      uses: ikalnytskyi/action-setup-postgres@c4dda34aae1c821e3a771b68b73b13af3198a7ee # v8
+      with:
+        postgres-version: "17"
+        username: postgres
+        password: postgres
+        database: risk_service
+        port: "5432"
+    # Full-schema DDL and parallel worker cleanup exceed the default 64 slots.
+    # ALTER SYSTEM needs a restart; reload alone leaves the old limit in effect.
+    - name: Configure and verify native PostgreSQL
+      shell: bash
+      env:
+        PGSERVICE: postgres
+      run: |
+        set -euo pipefail
+        pg_data=$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command 'SHOW data_directory')
+        psql --set ON_ERROR_STOP=1 --command 'ALTER SYSTEM SET max_locks_per_transaction = 256'
+        pg_ctl --pgdata "$pg_data" --log "$RUNNER_TEMP/postgres.log" --wait restart
+        psql --set ON_ERROR_STOP=1 <<'SQL'
+        DO $$
+        BEGIN
+          IF current_setting('server_version_num')::int / 10000 <> 17 THEN
+            RAISE EXCEPTION 'CI requires PostgreSQL 17';
+          END IF;
+          IF current_setting('max_locks_per_transaction')::int <> 256 THEN
+            RAISE EXCEPTION 'CI requires max_locks_per_transaction = 256';
+          END IF;
+          -- Migration UUID generation is built in; no extension is required.
+          PERFORM pg_catalog.gen_random_uuid();
+        END
+        $$;
+        SQL

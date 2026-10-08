@@ -237,7 +237,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh backend
-          '^(backend/|mise\.toml$|\.github/workflows/risk-service\.yml$|\.github/scripts/)'
+          '^(backend/|mise\.toml$|\.github/workflows/risk-service\.yml$|\.github/scripts/|\.github/actions/setup-postgres/)'
       - name: Detect whether this pull request touches what the CI guards read
         id: guards
         env:
@@ -355,24 +355,10 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
     timeout-minutes: 60
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
-        env:
-          # Full-schema DDL needs more shared lock slots than the default 64.
-          POSTGRES_INITDB_ARGS: --set=max_locks_per_transaction=256
-          POSTGRES_DB: risk_service
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d risk_service"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - name: Set up PostgreSQL
+        uses: ./.github/actions/setup-postgres
       - uses: jdx/mise-action@v4
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
@@ -460,21 +446,6 @@ jobs:
     if: needs.preflight.outputs.backend == 'true'
     timeout-minutes: 120
     services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
-        env:
-          # Parallel worker cleanup holds locks for multiple complete schemas.
-          POSTGRES_INITDB_ARGS: --set=max_locks_per_transaction=256
-          POSTGRES_DB: risk_service
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d risk_service"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
       # The attestation signing backend. Without a real server the OpenBao tests
       # skip themselves, and "written but never executed" is exactly the state
       # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
@@ -502,6 +473,8 @@ jobs:
       OPENBAO_TEST_TOKEN: aequoros-ci-root
     steps:
       - uses: actions/checkout@v4
+      - name: Set up PostgreSQL
+        uses: ./.github/actions/setup-postgres
       - uses: jdx/mise-action@v4
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
