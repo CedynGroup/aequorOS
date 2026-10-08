@@ -294,7 +294,9 @@ export default function StressBoardPack() {
                             ? "Not computed"
                             : `GHS'000 ${gap.toLocaleString()}`
                         }
-                        status={gap === null ? undefined : gap > 0 ? "warn" : "ok"}
+                        status={
+                          gap === null ? undefined : gap > 0 ? "warn" : "ok"
+                        }
                         hint={
                           gap === null
                             ? "This run reported no capital gap figure. Nothing is shown in its place — an uncomputed figure is not a zero."

@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, CopyPlus, PenLine } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight, CopyPlus, PenLine } from "lucide-react";
 import {
   createDeskObservation,
   listDeskObservations,
   type DeskObservation,
   type DeskObservationUnit,
-} from '@/lib/api';
-import { useApi, useMutation } from '@/lib/use-api';
-import { fmtDate, fmtTs, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { useApi, useMutation } from "@/lib/use-api";
+import { fmtDate, fmtTs, DASH } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -24,7 +24,7 @@ import {
   SectionCard,
   Select,
   SkeletonRows,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * /desk/observations — the desk's raw-material ledger and the MANUAL-ENTRY
@@ -41,7 +41,7 @@ import {
  * pre-fills the filter and the entry form; &entry=1 opens the form.
  */
 
-const UNITS: DeskObservationUnit[] = ['pct', 'rate', 'ghs', 'index'];
+const UNITS: DeskObservationUnit[] = ["pct", "rate", "ghs", "index"];
 
 /** One server page. Backend default is 100, hard cap 500. */
 const PAGE_SIZE = 100;
@@ -49,7 +49,9 @@ const PAGE_SIZE = 100;
 const PREFIX_DEBOUNCE_MS = 300;
 
 function coerceUnit(unit: string): DeskObservationUnit {
-  return (UNITS as string[]).includes(unit) ? (unit as DeskObservationUnit) : 'pct';
+  return (UNITS as string[]).includes(unit)
+    ? (unit as DeskObservationUnit)
+    : "pct";
 }
 
 function ProvenanceCell({ row }: { row: DeskObservation }) {
@@ -57,7 +59,9 @@ function ProvenanceCell({ row }: { row: DeskObservation }) {
     return (
       <span className="inline-flex items-center gap-1.5">
         <Chip tone="accent">manual</Chip>
-        <span className="font-mono text-micro text-slate">{row.entered_by}</span>
+        <span className="font-mono text-micro text-slate">
+          {row.entered_by}
+        </span>
       </span>
     );
   }
@@ -73,8 +77,8 @@ function ProvenanceCell({ row }: { row: DeskObservation }) {
 
 function ObservationsInner() {
   const search = useSearchParams();
-  const initialSeries = search.get('series') ?? '';
-  const openEntry = search.get('entry') === '1';
+  const initialSeries = search.get("series") ?? "";
+  const openEntry = search.get("entry") === "1";
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -83,8 +87,8 @@ function ObservationsInner() {
   // resets paging to offset 0. --------------------------------------------
   const [prefix, setPrefix] = useState(initialSeries);
   const [debouncedPrefix, setDebouncedPrefix] = useState(initialSeries);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [includeSuperseded, setIncludeSuperseded] = useState(false);
   const [offset, setOffset] = useState(0);
 
@@ -122,21 +126,25 @@ function ObservationsInner() {
   // ---- manual entry form --------------------------------------------------
   const [entryOpen, setEntryOpen] = useState(openEntry);
   const [seriesCode, setSeriesCode] = useState(initialSeries);
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [value, setValue] = useState('');
-  const [unit, setUnit] = useState<DeskObservationUnit>('pct');
-  const [note, setNote] = useState('');
+  const [asOfDate, setAsOfDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [value, setValue] = useState("");
+  const [unit, setUnit] = useState<DeskObservationUnit>("pct");
+  const [note, setNote] = useState("");
   const [supersedes, setSupersedes] = useState<DeskObservation | null>(null);
 
-  const valueValid = value.trim() !== '' && !Number.isNaN(Number(value.trim()));
-  const entryComplete = seriesCode.trim() !== '' && asOfDate !== '' && valueValid;
+  const valueValid = value.trim() !== "" && !Number.isNaN(Number(value.trim()));
+  const entryComplete =
+    seriesCode.trim() !== "" && asOfDate !== "" && valueValid;
 
   const createObs = useMutation(createDeskObservation, {
-    successMessage: (row) => `Recorded ${row.series_code} = ${row.value} (${row.unit})`,
-    errorContext: 'Record observation',
+    successMessage: (row) =>
+      `Recorded ${row.series_code} = ${row.value} (${row.unit})`,
+    errorContext: "Record observation",
     onSuccess: () => {
-      setValue('');
-      setNote('');
+      setValue("");
+      setNote("");
       setSupersedes(null);
       // Jump to page 1 (newest as-of first) so the new row is visible; if already
       // there, setOffset is a no-op so reload() forces the refetch.
@@ -162,44 +170,56 @@ function ObservationsInner() {
     setSeriesCode(row.series_code);
     setUnit(coerceUnit(row.unit));
     setAsOfDate(row.as_of_date.slice(0, 10));
-    setValue('');
-    setNote('');
+    setValue("");
+    setNote("");
     setSupersedes(row);
     setEntryOpen(true);
     createObs.reset();
     window.requestAnimationFrame(() =>
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
   }
 
   const columns = useMemo<Column<DeskObservation>[]>(() => {
     const cols: Column<DeskObservation>[] = [
       {
-        key: 'series',
-        header: 'Series',
+        key: "series",
+        header: "Series",
         sortable: true,
         sortAccessor: (o) => o.series_code,
-        render: (o) => <span className="font-mono text-caption text-ink">{o.series_code}</span>,
+        render: (o) => (
+          <span className="font-mono text-caption text-ink">
+            {o.series_code}
+          </span>
+        ),
       },
       {
-        key: 'as_of',
-        header: 'As of',
+        key: "as_of",
+        header: "As of",
         sortable: true,
         sortAccessor: (o) => o.as_of_date,
-        render: (o) => <span className="text-caption text-ink">{fmtDate(o.as_of_date)}</span>,
+        render: (o) => (
+          <span className="text-caption text-ink">{fmtDate(o.as_of_date)}</span>
+        ),
       },
       {
-        key: 'value',
-        header: 'Value',
+        key: "value",
+        header: "Value",
         numeric: true,
         sortable: true,
         sortAccessor: (o) => Number(o.value),
         render: (o) => o.value,
       },
-      { key: 'unit', header: 'Unit', render: (o) => <span className="text-caption text-slate">{o.unit}</span> },
       {
-        key: 'quality',
-        header: 'Quality flags',
+        key: "unit",
+        header: "Unit",
+        render: (o) => (
+          <span className="text-caption text-slate">{o.unit}</span>
+        ),
+      },
+      {
+        key: "quality",
+        header: "Quality flags",
         render: (o) =>
           o.quality_flags.length === 0 ? (
             <span className="text-slate-light">{DASH}</span>
@@ -207,16 +227,20 @@ function ObservationsInner() {
             <span className="flex flex-wrap gap-1">
               {o.quality_flags.map((f, i) => (
                 <Chip key={i} tone="warn">
-                  {String(f).replace(/_/g, ' ')}
+                  {String(f).replace(/_/g, " ")}
                 </Chip>
               ))}
             </span>
           ),
       },
-      { key: 'provenance', header: 'Provenance', render: (o) => <ProvenanceCell row={o} /> },
       {
-        key: 'recorded',
-        header: 'Recorded',
+        key: "provenance",
+        header: "Provenance",
+        render: (o) => <ProvenanceCell row={o} />,
+      },
+      {
+        key: "recorded",
+        header: "Recorded",
         sortable: true,
         sortAccessor: (o) => o.created_at,
         render: (o) => (
@@ -228,8 +252,8 @@ function ObservationsInner() {
     ];
     if (includeSuperseded) {
       cols.push({
-        key: 'generation',
-        header: 'Generation',
+        key: "generation",
+        header: "Generation",
         render: (o) =>
           o.superseded_by ? (
             <Chip tone="warn" title={`superseded by ${o.superseded_by}`}>
@@ -241,9 +265,9 @@ function ObservationsInner() {
       });
     }
     cols.push({
-      key: 'actions',
-      header: '',
-      align: 'right',
+      key: "actions",
+      header: "",
+      align: "right",
       render: (o) => (
         <Button
           size="sm"
@@ -268,7 +292,7 @@ function ObservationsInner() {
         action={
           <Button
             icon={<PenLine size={15} />}
-            variant={entryOpen ? 'secondary' : 'primary'}
+            variant={entryOpen ? "secondary" : "primary"}
             onClick={() => setEntryOpen((v) => !v)}
           >
             Manual entry
@@ -280,15 +304,19 @@ function ObservationsInner() {
       {entryOpen && (
         <div ref={formRef}>
           <SectionCard
-            title={supersedes ? 'Supersede observation' : 'Manual entry'}
+            title={supersedes ? "Supersede observation" : "Manual entry"}
             subtitle={
               supersedes
                 ? `Recording a correction for ${supersedes.series_code} as of ${fmtDate(supersedes.as_of_date)} — the prior row is kept, never edited.`
-                : 'The human-assisted fallback for every source: a first-class observation with your operator identity as provenance.'
+                : "The human-assisted fallback for every source: a first-class observation with your operator identity as provenance."
             }
             actions={
               supersedes ? (
-                <Button size="sm" variant="ghost" onClick={() => setSupersedes(null)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSupersedes(null)}
+                >
                   Clear
                 </Button>
               ) : undefined
@@ -306,7 +334,9 @@ function ObservationsInner() {
                   <Input
                     className="font-mono"
                     value={seriesCode}
-                    onChange={(e) => setSeriesCode(e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      setSeriesCode(e.target.value.toUpperCase())
+                    }
                     placeholder="e.g. GHS.TBILL.91.DISCOUNT"
                     required
                   />
@@ -322,7 +352,7 @@ function ObservationsInner() {
                 <Field label="Value" required>
                   <Input
                     className="font-mono"
-                    invalid={value !== '' && !valueValid}
+                    invalid={value !== "" && !valueValid}
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder="e.g. 24.5000"
@@ -331,7 +361,12 @@ function ObservationsInner() {
                   />
                 </Field>
                 <Field label="Unit">
-                  <Select value={unit} onChange={(e) => setUnit(e.target.value as DeskObservationUnit)}>
+                  <Select
+                    value={unit}
+                    onChange={(e) =>
+                      setUnit(e.target.value as DeskObservationUnit)
+                    }
+                  >
                     {UNITS.map((u) => (
                       <option key={u} value={u}>
                         {u}
@@ -351,11 +386,16 @@ function ObservationsInner() {
                 </Field>
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <Button type="submit" loading={createObs.loading} disabled={!entryComplete}>
-                  {supersedes ? 'Record correction' : 'Record observation'}
+                <Button
+                  type="submit"
+                  loading={createObs.loading}
+                  disabled={!entryComplete}
+                >
+                  {supersedes ? "Record correction" : "Record observation"}
                 </Button>
                 <span className="text-caption text-slate">
-                  Re-entering an existing (series, as-of) pair supersedes the current row.
+                  Re-entering an existing (series, as-of) pair supersedes the
+                  current row.
                 </span>
               </div>
             </form>
@@ -407,7 +447,8 @@ function ObservationsInner() {
           </label>
           {data && (
             <span className="mb-2 ml-auto text-caption text-slate tnum">
-              {total.toLocaleString()} matching {total === 1 ? 'observation' : 'observations'}
+              {total.toLocaleString()} matching{" "}
+              {total === 1 ? "observation" : "observations"}
             </span>
           )}
         </div>
@@ -417,7 +458,11 @@ function ObservationsInner() {
       <SectionCard title="Observation ledger" noPadding>
         {error && (
           <div className="p-4">
-            <ErrorPanel error={error} onRetry={reload} context="Loading observations" />
+            <ErrorPanel
+              error={error}
+              onRetry={reload}
+              context="Loading observations"
+            />
           </div>
         )}
         {!error && loading && !data && <SkeletonRows rows={8} />}
@@ -433,13 +478,15 @@ function ObservationsInner() {
               columns={columns}
               rows={rows}
               density="compact"
-              rowClassName={(o) => (o.superseded_by ? 'opacity-60' : '')}
+              rowClassName={(o) => (o.superseded_by ? "opacity-60" : "")}
             />
             <div className="flex items-center justify-between gap-3 border-t border-border-light px-4 py-2.5 text-caption text-slate">
               <span className="tnum">
-                Showing {rangeFrom.toLocaleString()}–{rangeTo.toLocaleString()} of{' '}
-                {total.toLocaleString()}
-                {loading && <span className="ml-2 text-slate-light">loading…</span>}
+                Showing {rangeFrom.toLocaleString()}–{rangeTo.toLocaleString()}{" "}
+                of {total.toLocaleString()}
+                {loading && (
+                  <span className="ml-2 text-slate-light">loading…</span>
+                )}
               </span>
               <div className="flex items-center gap-1">
                 <button

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   useCallback,
@@ -7,10 +7,10 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
-} from 'react';
-import { ChevronRight, MoveHorizontal } from 'lucide-react';
+} from "react";
+import { ChevronRight, MoveHorizontal } from "lucide-react";
 
-type Align = 'left' | 'right' | 'center';
+type Align = "left" | "right" | "center";
 
 export type Column<T> = {
   key: string;
@@ -44,20 +44,20 @@ export type Column<T> = {
 export default function DataTable<T>({
   columns,
   rows,
-  density = 'comfortable',
+  density = "comfortable",
   emphasizeTotals = true,
   totalsRowMatcher,
-  className = '',
+  className = "",
   stickyHeader = false,
   maxHeight,
   onRowClick,
   rowClassName,
-  scrollLabel = 'Table',
+  scrollLabel = "Table",
   stickyFirstColumn = false,
 }: {
   columns: Column<T>[];
   rows: T[];
-  density?: 'compact' | 'comfortable';
+  density?: "compact" | "comfortable";
   emphasizeTotals?: boolean;
   totalsRowMatcher?: (row: T) => boolean;
   className?: string;
@@ -78,12 +78,12 @@ export default function DataTable<T>({
    */
   stickyFirstColumn?: boolean;
 }) {
-  const padY = density === 'compact' ? 'py-1.5' : 'py-2.5';
+  const padY = density === "compact" ? "py-1.5" : "py-2.5";
   const clickable = Boolean(onRowClick);
   const pinned = (index: number, isTotal = false): string =>
     stickyFirstColumn && index === 0
-      ? `sticky left-0 z-5 ${isTotal ? 'bg-surface' : 'bg-surface-raised'}`
-      : '';
+      ? `sticky left-0 z-5 ${isTotal ? "bg-surface" : "bg-surface-raised"}`
+      : "";
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
@@ -107,7 +107,7 @@ export default function DataTable<T>({
     const el = scrollRef.current;
     if (!el) return undefined;
     measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
+    if (typeof ResizeObserver === "undefined") return undefined;
     // Watch the container AND the table: the container changes with the
     // viewport, the table with the data.
     const observer = new ResizeObserver(measure);
@@ -119,19 +119,23 @@ export default function DataTable<T>({
 
   const overflows = edges.start || edges.end;
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, row: T, i: number) => {
+  const handleKeyDown = (
+    e: KeyboardEvent<HTMLTableRowElement>,
+    row: T,
+    i: number,
+  ) => {
     if (!onRowClick) return;
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onRowClick(row, i);
     }
   };
 
-  const fade = (side: 'left' | 'right') => (
+  const fade = (side: "left" | "right") => (
     <div
       className={`pointer-events-none absolute inset-y-0 ${side}-0 w-10 z-20`}
       style={{
-        background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgb(var(--surface-raised)), rgb(var(--surface-raised) / 0))`,
+        background: `linear-gradient(to ${side === "left" ? "right" : "left"}, rgb(var(--surface-raised)), rgb(var(--surface-raised) / 0))`,
       }}
       aria-hidden
     />
@@ -142,10 +146,12 @@ export default function DataTable<T>({
       <div
         ref={scrollRef}
         onScroll={measure}
-        role={overflows ? 'region' : undefined}
-        aria-label={overflows ? `${scrollLabel}, scrollable horizontally` : undefined}
+        role={overflows ? "region" : undefined}
+        aria-label={
+          overflows ? `${scrollLabel}, scrollable horizontally` : undefined
+        }
         tabIndex={overflows ? 0 : undefined}
-        className={`overflow-x-auto ${maxHeight !== undefined ? 'overflow-y-auto' : ''} ${className}`}
+        className={`overflow-x-auto ${maxHeight !== undefined ? "overflow-y-auto" : ""} ${className}`}
         style={maxHeight !== undefined ? { maxHeight } : undefined}
       >
         <table className="w-full text-body border-collapse tnum">
@@ -157,17 +163,17 @@ export default function DataTable<T>({
                   scope="col"
                   style={{ width: c.width }}
                   className={`${padY} px-4 text-micro font-medium uppercase tracking-wider text-slate ${
-                    stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
+                    stickyHeader ? "sticky top-0 z-10 bg-surface" : ""
                   } ${
                     stickyFirstColumn && columnIndex === 0
-                      ? 'sticky left-0 z-11 bg-surface'
-                      : ''
+                      ? "sticky left-0 z-11 bg-surface"
+                      : ""
                   } ${
-                    c.align === 'right' || c.numeric
-                      ? 'text-right'
-                      : c.align === 'center'
-                      ? 'text-center'
-                      : 'text-left'
+                    c.align === "right" || c.numeric
+                      ? "text-right"
+                      : c.align === "center"
+                        ? "text-center"
+                        : "text-left"
                   }`}
                 >
                   {c.header}
@@ -178,7 +184,7 @@ export default function DataTable<T>({
                   scope="col"
                   aria-label="Open"
                   className={`${padY} px-2 w-8 ${
-                    stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
+                    stickyHeader ? "sticky top-0 z-10 bg-surface" : ""
                   }`}
                 />
               )}
@@ -187,7 +193,9 @@ export default function DataTable<T>({
           <tbody>
             {rows.map((row, i) => {
               const isTotal =
-                emphasizeTotals && totalsRowMatcher ? totalsRowMatcher(row) : false;
+                emphasizeTotals && totalsRowMatcher
+                  ? totalsRowMatcher(row)
+                  : false;
               return (
                 <tr
                   key={i}
@@ -197,23 +205,23 @@ export default function DataTable<T>({
                   }
                   tabIndex={clickable ? 0 : undefined}
                   className={`border-b border-border-light last:border-b-0 group ${
-                    isTotal ? 'bg-surface font-medium' : 'hover:bg-surface'
-                  } ${clickable ? 'cursor-pointer' : ''} ${
-                    rowClassName ? rowClassName(row, i) : ''
+                    isTotal ? "bg-surface font-medium" : "hover:bg-surface"
+                  } ${clickable ? "cursor-pointer" : ""} ${
+                    rowClassName ? rowClassName(row, i) : ""
                   }`}
                 >
                   {columns.map((c, columnIndex) => (
                     <td
                       key={c.key}
                       className={`${padY} px-4 align-middle ${
-                        c.numeric ? 'num' : ''
+                        c.numeric ? "num" : ""
                       } ${pinned(columnIndex, isTotal)} ${
-                        c.align === 'right' && !c.numeric
-                          ? 'text-right'
-                          : c.align === 'center'
-                          ? 'text-center'
-                          : ''
-                      } ${isTotal ? 'text-navy' : 'text-navy/90'}`}
+                        c.align === "right" && !c.numeric
+                          ? "text-right"
+                          : c.align === "center"
+                            ? "text-center"
+                            : ""
+                      } ${isTotal ? "text-navy" : "text-navy/90"}`}
                     >
                       {c.render(row, i)}
                     </td>
@@ -233,13 +241,13 @@ export default function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {edges.start && fade('left')}
-      {edges.end && fade('right')}
+      {edges.start && fade("left")}
+      {edges.end && fade("right")}
       {overflows && (
         <p className="flex items-center gap-1.5 px-4 pt-2 text-caption text-slate">
           <MoveHorizontal size={13} className="shrink-0" aria-hidden />
-          More columns to the {edges.end ? 'right' : 'left'} — scroll sideways to
-          read them.
+          More columns to the {edges.end ? "right" : "left"} — scroll sideways
+          to read them.
         </p>
       )}
     </div>

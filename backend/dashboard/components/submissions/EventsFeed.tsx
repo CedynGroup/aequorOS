@@ -5,38 +5,42 @@
  * workspace (it carries the action); this feed just renders the trail.
  */
 
-import { FlaskConical, Radio } from 'lucide-react';
-import type { SubmissionEventRead } from '@aequoros/risk-service-api';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import CopyButton from '@/components/ui/CopyButton';
-import { fmtTimestamp, shortId } from '@/lib/api/values';
-import { CHANNEL_LABELS } from './shared';
+import { FlaskConical, Radio } from "lucide-react";
+import type { SubmissionEventRead } from "@aequoros/risk-service-api";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import CopyButton from "@/components/ui/CopyButton";
+import { fmtTimestamp, shortId } from "@/lib/api/values";
+import { CHANNEL_LABELS } from "./shared";
 
 const EVENT_TONES: Record<string, StatusTone> = {
-  submitted: 'action',
-  status_poll: 'slate',
-  acknowledged: 'success',
-  rejected: 'critical',
-  declined: 'critical',
+  submitted: "action",
+  status_poll: "slate",
+  acknowledged: "success",
+  rejected: "critical",
+  declined: "critical",
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  submitted: 'Submitted',
-  status_poll: 'Status poll',
-  acknowledged: 'Acknowledged',
-  rejected: 'Rejected',
-  declined: 'Declined',
+  submitted: "Submitted",
+  status_poll: "Status poll",
+  acknowledged: "Acknowledged",
+  rejected: "Rejected",
+  declined: "Declined",
 };
 
 function detailMessage(detail: Record<string, unknown>): string | null {
   const message = detail.message ?? detail.note ?? detail.response;
-  return typeof message === 'string' ? message : null;
+  return typeof message === "string" ? message : null;
 }
 
-export default function EventsFeed({ events }: { events: SubmissionEventRead[] }) {
+export default function EventsFeed({
+  events,
+}: {
+  events: SubmissionEventRead[];
+}) {
   // API order is newest-first; the feed reads chronologically.
   const chronological = [...events].sort(
-    (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime()
+    (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
   );
 
   if (chronological.length === 0) {
@@ -69,7 +73,7 @@ export default function EventsFeed({ events }: { events: SubmissionEventRead[] }
               <Radio size={8} />
             </span>
             <div className="flex items-center gap-2 flex-wrap">
-              <StatusPill tone={EVENT_TONES[event.event] ?? 'slate'}>
+              <StatusPill tone={EVENT_TONES[event.event] ?? "slate"}>
                 {EVENT_LABELS[event.event] ?? event.event}
               </StatusPill>
               <span className="text-caption text-slate">
@@ -93,7 +97,10 @@ export default function EventsFeed({ events }: { events: SubmissionEventRead[] }
             {event.externalRef && (
               <p className="mt-1 flex items-center gap-1.5 font-mono text-caption text-slate">
                 ref {shortId(event.externalRef, 34)}
-                <CopyButton text={event.externalRef} label="external reference" />
+                <CopyButton
+                  text={event.externalRef}
+                  label="external reference"
+                />
               </p>
             )}
             {message && (

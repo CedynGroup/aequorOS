@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The placed fields, on the page, where they will actually print.
@@ -22,24 +22,28 @@
  * pointing device.
  */
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { AlertTriangle, GripVertical, X } from 'lucide-react';
+import {
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { AlertTriangle, GripVertical, X } from "lucide-react";
 import type {
   AdoptedSignatureRead,
   SignatureFieldPlacementRead,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 import {
   clampRect,
   fieldTypeOf,
   type PageSpace,
   type ViewerRect,
-} from '@/lib/attestation/geometry';
+} from "@/lib/attestation/geometry";
 import {
   FIELD_TYPE_LABELS,
   derivedPreview,
   type SignerPreview,
-} from '@/lib/attestation/fields';
-import { DEFAULT_TYPED_FONT, TYPED_FONT_STYLES } from './fonts';
+} from "@/lib/attestation/fields";
+import { DEFAULT_TYPED_FONT, TYPED_FONT_STYLES } from "./fonts";
 
 export interface FieldSlot {
   /** Index into the workspace's placement list — the box's identity. */
@@ -99,8 +103,8 @@ export default function PlacementLayer({
 }
 
 type Drag =
-  | { mode: 'move'; pointerX: number; pointerY: number; origin: ViewerRect }
-  | { mode: 'resize'; pointerX: number; pointerY: number; origin: ViewerRect };
+  | { mode: "move"; pointerX: number; pointerY: number; origin: ViewerRect }
+  | { mode: "resize"; pointerX: number; pointerY: number; origin: ViewerRect };
 
 function FieldBox({
   slot,
@@ -123,14 +127,20 @@ function FieldBox({
   const [dragging, setDragging] = useState(false);
   const fieldType = fieldTypeOf(slot.placement);
 
-  const begin = (mode: Drag['mode']) => (event: ReactPointerEvent<HTMLElement>) => {
-    if (!editable) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { mode, pointerX: event.clientX, pointerY: event.clientY, origin: rect };
-    setDragging(true);
-  };
+  const begin =
+    (mode: Drag["mode"]) => (event: ReactPointerEvent<HTMLElement>) => {
+      if (!editable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current = {
+        mode,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        origin: rect,
+      };
+      setDragging(true);
+    };
 
   const move = (event: ReactPointerEvent<HTMLElement>) => {
     const state = drag.current;
@@ -138,8 +148,12 @@ function FieldBox({
     const dx = event.clientX - state.pointerX;
     const dy = event.clientY - state.pointerY;
     const next: ViewerRect =
-      state.mode === 'move'
-        ? { ...state.origin, left: state.origin.left + dx, top: state.origin.top + dy }
+      state.mode === "move"
+        ? {
+            ...state.origin,
+            left: state.origin.left + dx,
+            top: state.origin.top + dy,
+          }
         : {
             ...state.origin,
             width: state.origin.width + dx,
@@ -157,25 +171,30 @@ function FieldBox({
 
   const onKey = (event: React.KeyboardEvent<HTMLElement>) => {
     if (!editable) return;
-    if (event.key === 'Delete' || event.key === 'Backspace') {
+    if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       onRemove();
       return;
     }
     const step = (event.shiftKey ? 10 : 1) * (space.cssHeight / space.heightPt);
     const shift =
-      event.key === 'ArrowLeft'
+      event.key === "ArrowLeft"
         ? { x: -step, y: 0 }
-        : event.key === 'ArrowRight'
+        : event.key === "ArrowRight"
           ? { x: step, y: 0 }
-          : event.key === 'ArrowUp'
+          : event.key === "ArrowUp"
             ? { x: 0, y: -step }
-            : event.key === 'ArrowDown'
+            : event.key === "ArrowDown"
               ? { x: 0, y: step }
               : null;
     if (!shift) return;
     event.preventDefault();
-    onMove(clampRect({ ...rect, left: rect.left + shift.x, top: rect.top + shift.y }, space));
+    onMove(
+      clampRect(
+        { ...rect, left: rect.left + shift.x, top: rect.top + shift.y },
+        space,
+      ),
+    );
   };
 
   // Tints, not fills: the box sits ON the return, and a signer who cannot read
@@ -183,10 +202,10 @@ function FieldBox({
   // colours are the raw tokens rather than the `-light` surfaces, which are
   // opaque plates meant for the app chrome, not for overlaying paper.
   const tone = slot.violation
-    ? 'border-critical bg-critical/10'
+    ? "border-critical bg-critical/10"
     : slot.mine
-      ? 'border-action bg-action/10'
-      : 'border-slate bg-slate/5';
+      ? "border-action bg-action/10"
+      : "border-slate bg-slate/5";
 
   return (
     <div
@@ -201,20 +220,25 @@ function FieldBox({
       data-pdf-box={`${slot.placement.x1},${slot.placement.y1},${slot.placement.x2},${slot.placement.y2}`}
       tabIndex={editable ? 0 : -1}
       onKeyDown={onKey}
-      onPointerDown={begin('move')}
+      onPointerDown={begin("move")}
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
-      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+      style={{
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      }}
       className={`absolute rounded-xs border-2 border-dashed ${tone} ${
-        editable ? 'cursor-move touch-none' : 'cursor-default'
-      } ${dragging ? 'opacity-90' : ''} outline-hidden focus-visible:ring-2 focus-visible:ring-focus`}
+        editable ? "cursor-move touch-none" : "cursor-default"
+      } ${dragging ? "opacity-90" : ""} outline-hidden focus-visible:ring-2 focus-visible:ring-focus`}
     >
       <span className="absolute -top-5 left-0 whitespace-nowrap rounded-t px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider bg-surface-raised border border-border-light text-navy">
         {FIELD_TYPE_LABELS[fieldType]} · {slot.ownerLabel}
       </span>
 
-      {slot.signed ? null : fieldType === 'signature' ? (
+      {slot.signed ? null : fieldType === "signature" ? (
         <MarkPreview mark={mark} height={rect.height} />
       ) : (
         <ValuePreview
@@ -245,7 +269,7 @@ function FieldBox({
             <X size={9} aria-hidden />
           </button>
           <span
-            onPointerDown={begin('resize')}
+            onPointerDown={begin("resize")}
             onPointerMove={move}
             onPointerUp={end}
             onPointerCancel={end}
@@ -279,7 +303,7 @@ function MarkPreview({
       </span>
     );
   }
-  if (mark.kind === 'drawn' && mark.imagePngBase64) {
+  if (mark.kind === "drawn" && mark.imagePngBase64) {
     return (
       // A data: URI of the signer's own adopted mark, already in memory —
       // next/image would only add an optimizer hop for bytes we hold.
@@ -311,15 +335,21 @@ function MarkPreview({
  * as a plausible placeholder, because a placeholder that looks like a value is a
  * preview of something that will not appear.
  */
-function ValuePreview({ value, height }: { value: string | null; height: number }) {
+function ValuePreview({
+  value,
+  height,
+}: {
+  value: string | null;
+  height: number;
+}) {
   return (
     <span
       className={`absolute left-1 right-1 top-1/2 -translate-y-1/2 truncate font-mono tnum ${
-        value ? 'text-navy' : 'text-slate italic'
+        value ? "text-navy" : "text-slate italic"
       }`}
       style={{ fontSize: Math.max(height * 0.55, 8) }}
     >
-      {value ?? 'filled when signed'}
+      {value ?? "filled when signed"}
     </span>
   );
 }

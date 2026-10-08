@@ -6,9 +6,9 @@
  * the exported artifacts render amounts in GHS '000 per the BoG convention.
  */
 
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { labelize } from '@/lib/api/values';
-import { regShort } from '@/lib/format';
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { labelize } from "@/lib/api/values";
+import { regShort } from "@/lib/format";
 
 /**
  * The key a changed line is marked by: the section's code and the line's code.
@@ -44,27 +44,27 @@ type SnapshotSection = {
 // Both are mapped here; a unit this map does not know is shown verbatim rather
 // than dropped.
 const UNIT_LABELS: Record<string, string> = {
-  millions: 'GHS millions',
+  millions: "GHS millions",
   thousands: "GHS '000",
-  units: 'GHS',
+  units: "GHS",
   // The generic generators' own spelling for whole currency units
   // (`snapshot_row(..., unit="ghs")` in dbk/le/lrt_generation). Unmapped it fell
   // through to the verbatim branch and a preparer read "in ghs" under a
   // regulatory figure — a lower-cased raw payload value, not a currency code.
-  ghs: 'GHS',
-  percent: '%',
-  pct: '%',
-  count: 'count',
+  ghs: "GHS",
+  percent: "%",
+  pct: "%",
+  count: "count",
 };
 
 function unitLabel(unit: unknown): string | null {
-  if (typeof unit !== 'string' || unit === '' || unit === 'text') return null;
+  if (typeof unit !== "string" || unit === "" || unit === "text") return null;
   return UNIT_LABELS[unit] ?? unit;
 }
 
 /** True for the percent flavours — the only unit rendered as a value suffix. */
 function isPercentUnit(unit: unknown): boolean {
-  return unit === 'pct' || unit === 'percent';
+  return unit === "pct" || unit === "percent";
 }
 
 type Snapshot = Record<string, unknown> & {
@@ -82,18 +82,18 @@ type Snapshot = Record<string, unknown> & {
 // Genuine data dimensions (e.g. `previous_month_ghs`) are NOT listed, so they
 // still render as columns.
 const NON_DATA_KEYS = new Set([
-  'code',
-  'description',
-  'value',
-  'unit',
-  'equals_sum_of_rows',
-  'cell',
-  'column',
-  'unscaled',
-  'status',
-  'source',
-  'notes',
-  '__isTotal',
+  "code",
+  "description",
+  "value",
+  "unit",
+  "equals_sum_of_rows",
+  "cell",
+  "column",
+  "unscaled",
+  "status",
+  "source",
+  "notes",
+  "__isTotal",
 ]);
 
 /** Format a snapshot cell: numbers with separators + parenthesised negatives
@@ -103,11 +103,11 @@ const NON_DATA_KEYS = new Set([
  * a figure that reads one way in the preview and another in the diff would put
  * the operator in the position of deciding which rendering to believe. */
 export function fmtSnapshotCell(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   const parsed = Number(value);
-  if (typeof value !== 'object' && value !== '' && Number.isFinite(parsed)) {
-    const formatted = Math.abs(parsed).toLocaleString('en-GB', {
+  if (typeof value !== "object" && value !== "" && Number.isFinite(parsed)) {
+    const formatted = Math.abs(parsed).toLocaleString("en-GB", {
       maximumFractionDigits: 2,
     });
     return parsed < 0 ? `(${formatted})` : formatted;
@@ -130,16 +130,17 @@ function extraKeys(rows: SnapshotRow[]): string[] {
 function sectionColumns(
   rows: SnapshotRow[],
   sectionCode: string,
-  changedLineKeys: ReadonlySet<string> | undefined
+  changedLineKeys: ReadonlySet<string> | undefined,
 ): Column<SnapshotRow>[] {
   const columns: Column<SnapshotRow>[] = [
     {
-      key: 'code',
-      header: 'Row',
+      key: "code",
+      header: "Row",
       render: (row) => {
         const changed =
-          changedLineKeys?.has(snapshotLineKey(sectionCode, String(row.code ?? ''))) ??
-          false;
+          changedLineKeys?.has(
+            snapshotLineKey(sectionCode, String(row.code ?? "")),
+          ) ?? false;
         return (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             {changed && (
@@ -150,35 +151,33 @@ function sectionColumns(
               />
             )}
             <span className="font-mono text-caption text-slate">
-              {String(row.code ?? '')}
+              {String(row.code ?? "")}
             </span>
           </span>
         );
       },
     },
     {
-      key: 'description',
-      header: 'Item',
+      key: "description",
+      header: "Item",
       render: (row) => (
-        <span className="text-navy/90">{String(row.description ?? '')}</span>
+        <span className="text-navy/90">{String(row.description ?? "")}</span>
       ),
     },
-    ...extraKeys(rows).map(
-      (key): Column<SnapshotRow> => ({
-        key,
-        header: labelize(key),
-        numeric: true,
-        render: (row) => fmtSnapshotCell(row[key]),
-      })
-    ),
+    ...extraKeys(rows).map((key): Column<SnapshotRow> => ({
+      key,
+      header: labelize(key),
+      numeric: true,
+      render: (row) => fmtSnapshotCell(row[key]),
+    })),
     {
-      key: 'value',
-      header: 'Value',
+      key: "value",
+      header: "Value",
       numeric: true,
       // A row that declares itself a percentage says so on the figure. Without
       // this a ratio row rendered as a bare "14.2" beside currency rows.
       render: (row) =>
-        `${fmtSnapshotCell(row.value)}${isPercentUnit(row.unit) && row.value !== null && row.value !== undefined && row.value !== '' ? '%' : ''}`,
+        `${fmtSnapshotCell(row.value)}${isPercentUnit(row.unit) && row.value !== null && row.value !== undefined && row.value !== "" ? "%" : ""}`,
     },
   ];
   return columns;
@@ -228,7 +227,10 @@ export default function SnapshotPreview({
 
       {marking && changedNote && (
         <p className="flex items-center gap-2 rounded-sm border border-action/25 bg-action-light/40 px-3 py-2 text-caption text-navy/85">
-          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-action" aria-hidden />
+          <span
+            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-action"
+            aria-hidden
+          />
           {changedNote}
         </p>
       )}
@@ -248,16 +250,16 @@ export default function SnapshotPreview({
             >
               <p
                 className="text-micro font-medium text-slate uppercase tracking-wider leading-snug"
-                title={String(total.description ?? total.code ?? 'Total')}
+                title={String(total.description ?? total.code ?? "Total")}
               >
-                {String(total.description ?? total.code ?? 'Total')}
+                {String(total.description ?? total.code ?? "Total")}
               </p>
               <p className="mt-1 font-mono text-h3 text-navy tnum wrap-break-word">
                 {fmtSnapshotCell(total.value)}
                 {/* Accepts BOTH unit vocabularies: the check used to test only
                     'pct' while the section map keyed on 'percent', so a headline
                     ratio lost its % under either spelling. */}
-                {isPercentUnit(total.unit) ? '%' : ''}
+                {isPercentUnit(total.unit) ? "%" : ""}
               </p>
               {unitLabel(total.unit) && !isPercentUnit(total.unit) && (
                 <p className="mt-0.5 text-micro text-slate">
@@ -291,19 +293,19 @@ export default function SnapshotPreview({
                 )}
               </div>
               <span className="font-mono text-micro text-slate uppercase tracking-wider">
-                {String(section.code ?? '')}
+                {String(section.code ?? "")}
               </span>
             </div>
             <DataTable
               columns={sectionColumns(
                 rows,
-                String(section.code ?? ''),
-                changedLineKeys
+                String(section.code ?? ""),
+                changedLineKeys,
               )}
               rows={withTotal}
               density="compact"
               stickyFirstColumn
-              scrollLabel={String(section.title ?? section.code ?? 'Section')}
+              scrollLabel={String(section.title ?? section.code ?? "Section")}
               totalsRowMatcher={(row) => Boolean(row.__isTotal)}
             />
           </div>

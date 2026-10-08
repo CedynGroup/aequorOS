@@ -527,8 +527,7 @@ function AddItemDialog({
                     scenario.trim() === ""
                       ? null
                       : { description: scenario.trim() },
-                  rationale:
-                    rationale.trim() === "" ? null : rationale.trim(),
+                  rationale: rationale.trim() === "" ? null : rationale.trim(),
                   reason: reason.trim(),
                 },
                 { onSuccess: onClose },
@@ -608,7 +607,10 @@ function AddItemDialog({
             className="mt-1 w-full rounded-md border border-border px-2 py-2 text-body"
           />
         </FieldLabel>
-        <FieldLabel label="Reason for adding it" hint="Recorded in the audit trail.">
+        <FieldLabel
+          label="Reason for adding it"
+          hint="Recorded in the audit trail."
+        >
           <input
             value={reason}
             maxLength={REASON_MAX}

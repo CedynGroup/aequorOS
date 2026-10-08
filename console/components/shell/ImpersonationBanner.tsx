@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Eye, Loader2, ShieldAlert } from 'lucide-react';
-import { endInspectorSession } from '@/lib/api';
-import { useInspector } from '@/lib/inspector';
-import { relTime } from '@/lib/format';
+import { useState } from "react";
+import { Eye, Loader2, ShieldAlert } from "lucide-react";
+import { endInspectorSession } from "@/lib/api";
+import { useInspector } from "@/lib/inspector";
+import { relTime } from "@/lib/format";
 
 /**
  * Un-dismissable strip shown while a Tenant Inspector session is active. The
@@ -19,7 +19,7 @@ export default function ImpersonationBanner() {
 
   // Both modes are read-only this wave; break-glass (emergency, no tenant
   // consent) gets the alarming red treatment, routine consent gets amber.
-  const breakGlass = active.mode === 'break_glass';
+  const breakGlass = active.mode === "break_glass";
 
   async function end() {
     if (!active) return;
@@ -41,8 +41,8 @@ export default function ImpersonationBanner() {
       role="status"
       className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-2 text-caption ${
         breakGlass
-          ? 'border-critical/30 bg-critical-light text-critical'
-          : 'border-warning/30 bg-warning-light text-warning'
+          ? "border-critical/30 bg-critical-light text-critical"
+          : "border-warning/30 bg-warning-light text-warning"
       }`}
     >
       {breakGlass ? (
@@ -51,12 +51,12 @@ export default function ImpersonationBanner() {
         <Eye size={14} className="shrink-0" aria-hidden />
       )}
       <span className="font-medium">
-        Inspecting{' '}
-        <span className="font-mono">{active.organization_id}</span> · read-only ·{' '}
-        {breakGlass ? 'break-glass' : 'consent'}
+        Inspecting <span className="font-mono">{active.organization_id}</span> ·
+        read-only · {breakGlass ? "break-glass" : "consent"}
       </span>
       <span className="text-slate">
-        {active.reason ? `“${active.reason}” · ` : ''}ends {relTime(active.expires_at)}
+        {active.reason ? `“${active.reason}” · ` : ""}ends{" "}
+        {relTime(active.expires_at)}
       </span>
       <button
         type="button"

@@ -1,5 +1,5 @@
-import { GitCommitHorizontal } from 'lucide-react';
-import { fmtTimestamp, shortId } from '@/lib/api/values';
+import { GitCommitHorizontal } from "lucide-react";
+import { fmtTimestamp, shortId } from "@/lib/api/values";
 
 /** The audit fields shared by regulatory and forecast run payloads. */
 export type RunBadgeRun = {

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting — the Returns workspace.
@@ -40,7 +40,7 @@
  * so the officer meets one decision, in one place.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import {
   Suspense,
   useCallback,
@@ -48,9 +48,9 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+} from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BadgeCheck,
   CornerUpLeft,
@@ -64,7 +64,7 @@ import {
   Send,
   ShieldCheck,
   UploadCloud,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   ArtifactKind,
   AttestationStatusRead,
@@ -76,16 +76,16 @@ import type {
   ReturnAnchorRead,
   ReturnTemplateRead,
   SigningRole,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import SectionCard from '@/components/ui/SectionCard';
-import CopyButton from '@/components/ui/CopyButton';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useUserProfile } from '@/components/profile/ProfileProvider';
-import { useImpersonation } from '@/components/impersonation/useImpersonation';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import SectionCard from "@/components/ui/SectionCard";
+import CopyButton from "@/components/ui/CopyButton";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { useImpersonation } from "@/components/impersonation/useImpersonation";
 import {
   useDecideResubmission,
   useEmailFallbackInstructions,
@@ -107,14 +107,14 @@ import {
   useSubmissionEvents,
   useSubmitRegulatoryPackage,
   useValidateRegulatoryPackage,
-} from '@/lib/api/hooks';
-import { hasAccountDirectoryAuthority } from '@/lib/api/accountAdministration';
-import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
+import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from "@/lib/api/values";
 import {
   defaultReportingDate,
   reportingDateOptionLabel,
   toReportingDateOptions,
-} from '@/lib/api/returnAnchors';
+} from "@/lib/api/returnAnchors";
 import {
   FIDELITY_INFO,
   FidelityPill,
@@ -125,42 +125,42 @@ import {
   downloadArtifactVersion,
   downloadEmailFallbackEml,
   fmtBytes,
-} from '@/components/submissions/shared';
-import FilingChainPanel from '@/components/submissions/FilingChain';
+} from "@/components/submissions/shared";
+import FilingChainPanel from "@/components/submissions/FilingChain";
 import {
   ArtifactGroup,
   PrimaryActionButton,
   ReturnCommandBar,
-} from '@/components/submissions/ReturnCommandBar';
-import DisclosureRow from '@/components/submissions/DisclosureRow';
-import PriorVersionsCard from '@/components/submissions/PriorVersionsCard';
+} from "@/components/submissions/ReturnCommandBar";
+import DisclosureRow from "@/components/submissions/DisclosureRow";
+import PriorVersionsCard from "@/components/submissions/PriorVersionsCard";
 import SnapshotPreview, {
   snapshotLineKey,
-} from '@/components/submissions/SnapshotPreview';
+} from "@/components/submissions/SnapshotPreview";
 import ChecksPanel, {
   checkCountSummary,
-} from '@/components/submissions/ChecksPanel';
-import EventsFeed from '@/components/submissions/EventsFeed';
+} from "@/components/submissions/ChecksPanel";
+import EventsFeed from "@/components/submissions/EventsFeed";
 import TransmissionCard, {
   REUPLOAD_CHANNEL,
   TransmissionNotice,
   filingRefusalMessage,
   transmissionSummary,
-} from '@/components/submissions/TransmissionCard';
-import ResubmissionCard from '@/components/submissions/ResubmissionCard';
-import AttestationPanel from '@/components/attestation/AttestationPanel';
+} from "@/components/submissions/TransmissionCard";
+import ResubmissionCard from "@/components/submissions/ResubmissionCard";
+import AttestationPanel from "@/components/attestation/AttestationPanel";
 import {
   AttestationStatePill,
   SubmissionClearancePill,
   outstandingSummary,
   roleNoun,
-} from '@/components/attestation/shared';
-import { certificationSummary } from '@/lib/submissions/certificationSummary';
-import { centralBankName, regShort } from '@/lib/format';
+} from "@/components/attestation/shared";
+import { certificationSummary } from "@/lib/submissions/certificationSummary";
+import { centralBankName, regShort } from "@/lib/format";
 import {
   filingAuthorityFor,
   type FilingAuthority,
-} from '@/lib/submissions/filingAuthority';
+} from "@/lib/submissions/filingAuthority";
 import {
   heldStages,
   noActionExplanation,
@@ -168,7 +168,7 @@ import {
   stageForStatus,
   surfaceSections,
   type SurfaceInput,
-} from '@/lib/submissions/returnsSurface';
+} from "@/lib/submissions/returnsSurface";
 
 export default function ReturnsWorkspacePage() {
   // useSearchParams requires a Suspense boundary in the app router.
@@ -180,20 +180,20 @@ export default function ReturnsWorkspacePage() {
 }
 
 /** Export order: the submission document first, then the workbooks, then CSV. */
-const EXPORT_KINDS: ArtifactKind[] = ['pdf', 'xlsx', 'csv'];
+const EXPORT_KINDS: ArtifactKind[] = ["pdf", "xlsx", "csv"];
 const EXPORT_KINDS_WITH_FORMULAS: ArtifactKind[] = [
-  'pdf',
-  'xlsx',
-  'xlsx_working',
-  'csv',
+  "pdf",
+  "xlsx",
+  "xlsx_working",
+  "csv",
 ];
 
 /** The official regulator form family, where the live workbook is also filed. */
-const BOG_FORM_FAMILY = 'bsd';
+const BOG_FORM_FAMILY = "bsd";
 
 const BASIS_LABELS: Record<string, string> = {
-  solo: 'Bank only',
-  consolidated: 'Group',
+  solo: "Bank only",
+  consolidated: "Group",
 };
 
 function ReturnsWorkspace() {
@@ -204,7 +204,7 @@ function ReturnsWorkspace() {
   const { effectiveAuthority, isLoading: profileLoading } = useUserProfile();
   const inspection = useImpersonation();
   const bankId = bank?.id;
-  const isSdi = moduleScope.institutionClass === 'sdi';
+  const isSdi = moduleScope.institutionClass === "sdi";
 
   // Who this officer is on this institution's returns. Everything the screen
   // offers hangs off this, and until it resolves it offers nothing.
@@ -217,13 +217,13 @@ function ReturnsWorkspace() {
   const templates = useMemo(
     () =>
       (templatesQuery.data?.templates ?? []).filter((template) =>
-        isSdi ? template.family === 'sdi' : template.family !== 'sdi'
+        isSdi ? template.family === "sdi" : template.family !== "sdi",
       ),
-    [isSdi, templatesQuery.data]
+    [isSdi, templatesQuery.data],
   );
 
-  const codeParam = searchParams.get('code');
-  const dateParam = searchParams.get('date');
+  const codeParam = searchParams.get("code");
+  const dateParam = searchParams.get("date");
   const code =
     codeParam && templates.some((tpl) => tpl.code === codeParam)
       ? codeParam
@@ -239,34 +239,36 @@ function ReturnsWorkspace() {
   const anchorsQuery = useReturnAnchors(bankId, code);
   const anchors = useMemo<ReturnAnchorRead[]>(
     () => anchorsQuery.data?.anchors ?? [],
-    [anchorsQuery.data]
+    [anchorsQuery.data],
   );
   const dateOptions = useMemo(() => toReportingDateOptions(anchors), [anchors]);
   const snapshotDated =
-    anchorsQuery.data?.reportingDateSource === 'computed_snapshot';
+    anchorsQuery.data?.reportingDateSource === "computed_snapshot";
   const anchorDates = useMemo(
     () => dateOptions.map((option) => option.date),
-    [dateOptions]
+    [dateOptions],
   );
   const defaultDate = useMemo(
     () =>
       defaultReportingDate(
         dateOptions,
-        anchorsQuery.data?.asOf ? isoDate(anchorsQuery.data.asOf) : undefined
+        anchorsQuery.data?.asOf ? isoDate(anchorsQuery.data.asOf) : undefined,
       ),
-    [dateOptions, anchorsQuery.data]
+    [dateOptions, anchorsQuery.data],
   );
   const date =
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : defaultDate;
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+      ? dateParam
+      : defaultDate;
   const selectedAnchor = anchors.find(
-    (anchor) => isoDate(anchor.reportingDate) === date
+    (anchor) => isoDate(anchor.reportingDate) === date,
   );
-  const awaitingData = selectedAnchor?.dataStatus === 'awaiting_data';
+  const awaitingData = selectedAnchor?.dataStatus === "awaiting_data";
 
   const setParams = (nextCode: string, nextDate: string | undefined) => {
     const params = new URLSearchParams();
-    params.set('code', nextCode);
-    if (nextDate) params.set('date', nextDate);
+    params.set("code", nextCode);
+    if (nextDate) params.set("date", nextDate);
     router.replace(`${pathname}?${params.toString()}`);
   };
 
@@ -282,8 +284,8 @@ function ReturnsWorkspace() {
     const rows = packagesQuery.data?.packages ?? [];
     return [...rows].sort((a, b) => b.version - a.version);
   }, [packagesQuery.data]);
-  const current = versions.find((pkg) => pkg.status !== 'superseded') ?? null;
-  const priorVersions = versions.filter((pkg) => pkg.status === 'superseded');
+  const current = versions.find((pkg) => pkg.status !== "superseded") ?? null;
+  const priorVersions = versions.filter((pkg) => pkg.status === "superseded");
 
   const packageQuery = useRegulatoryPackage(bankId, current?.id);
   const pkg = packageQuery.data;
@@ -303,7 +305,7 @@ function ReturnsWorkspace() {
         onSuccess: (created) => {
           if (authority.mayRunChecks) runChecks.mutate(created.id);
         },
-      }
+      },
     );
 
   // An ICAAP return is NOT generated from this workspace. It is minted by
@@ -312,7 +314,7 @@ function ReturnsWorkspace() {
   // and letting the server refuse it would teach a preparer that the platform is
   // broken, rather than where the act lives.
   const isIcaapReturn =
-    templates.find((entry) => entry.code === code)?.family === 'icaap';
+    templates.find((entry) => entry.code === code)?.family === "icaap";
 
   const ready = Boolean(code && date);
 
@@ -326,7 +328,7 @@ function ReturnsWorkspace() {
             <label className="flex items-center gap-2 text-caption text-slate">
               Return
               <select
-                value={code ?? ''}
+                value={code ?? ""}
                 onChange={(e) => setParams(e.target.value, date)}
                 className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy max-w-[280px]"
               >
@@ -340,7 +342,7 @@ function ReturnsWorkspace() {
             <label className="flex items-center gap-2 text-caption text-slate">
               Reporting date
               <select
-                value={date ?? ''}
+                value={date ?? ""}
                 onChange={(e) => code && setParams(code, e.target.value)}
                 disabled={anchorsQuery.isLoading || anchorDates.length === 0}
                 className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
@@ -360,9 +362,9 @@ function ReturnsWorkspace() {
                 data-testid="reporting-date-source"
                 className="basis-full text-caption text-slate"
               >
-                Event-driven pack — the regulator sets no reporting date for
-                it. The dates offered are your computed position dates; the
-                pack reports your institution as of the one you choose.
+                Event-driven pack — the regulator sets no reporting date for it.
+                The dates offered are your computed position dates; the pack
+                reports your institution as of the one you choose.
               </p>
             )}
           </div>
@@ -428,7 +430,7 @@ function ReturnsWorkspace() {
                 book as of that date. Nothing has been computed for it yet.
                 {selectedAnchor?.nearestComputedBefore
                   ? ` Your most recent computed position is ${selectedAnchor.nearestComputedBefore} — an earlier book is not this date's position, so it is not used in its place.`
-                  : ''}
+                  : ""}
               </p>
               {/* The remedy belongs to whoever can carry it out. This card used
                   to tell EVERY role to ingest a book and generate the return —
@@ -530,8 +532,8 @@ function FirstVersionCard({
       title={`${code} · ${date}`}
       subtitle={
         isIcaapReturn
-          ? 'This return is produced by sealing an ICAAP cycle'
-          : 'No version of this return exists for this reporting date yet'
+          ? "This return is produced by sealing an ICAAP cycle"
+          : "No version of this return exists for this reporting date yet"
       }
     >
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -574,8 +576,8 @@ function FirstVersionCard({
               </button>
             ) : (
               <p className="text-caption text-slate leading-relaxed max-w-sm">
-                Generating this return is the preparer&apos;s act. It will appear
-                here once they have built it.
+                Generating this return is the preparer&apos;s act. It will
+                appear here once they have built it.
               </p>
             )}
           </>
@@ -670,12 +672,12 @@ function PackageWorkspace({
   // roster, so this is asked for only when the projection says it is readable —
   // an unresolved actor reads as "not named", never as a raw identifier.
   const usersQuery = useOrganizationUsers(
-    hasAccountDirectoryAuthority(effectiveAuthority)
+    hasAccountDirectoryAuthority(effectiveAuthority),
   );
   const resolveOfficer = useCallback(
     (actorUserId: string) => {
       const user = usersQuery.data?.users.find(
-        (entry) => entry.id === actorUserId
+        (entry) => entry.id === actorUserId,
       );
       if (!user) return null;
       return {
@@ -683,10 +685,10 @@ function PackageWorkspace({
         title: user.jobTitle ?? null,
       };
     },
-    [usersQuery.data]
+    [usersQuery.data],
   );
 
-  const defaultChannel = template?.defaultChannel ?? 'manual';
+  const defaultChannel = template?.defaultChannel ?? "manual";
   const [channel, setChannel] = useState<ChannelCode>(defaultChannel);
   useEffect(() => setChannel(defaultChannel), [defaultChannel, summary.id]);
   const [takingKind, setTakingKind] = useState<ArtifactKind | null>(null);
@@ -706,7 +708,7 @@ function PackageWorkspace({
   // panel, which consumes and strips the parameters itself.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('sign') ?? params.get('certify')) setCertificationOpen(true);
+    if (params.get("sign") ?? params.get("certify")) setCertificationOpen(true);
   }, []);
 
   const status = pkg?.status ?? summary.status;
@@ -714,17 +716,18 @@ function PackageWorkspace({
   const checkErrors = report?.errorCount ?? 0;
   const checksClean = report !== null && report.passed && checkErrors === 0;
   const canRunChecks =
-    authority.mayRunChecks && (status === 'generated' || status === 'validated');
+    authority.mayRunChecks &&
+    (status === "generated" || status === "validated");
 
   const events = eventsQuery.data?.events ?? [];
-  const latestSubmitted = events.find((event) => event.event === 'submitted');
+  const latestSubmitted = events.find((event) => event.event === "submitted");
   const pendingReupload =
-    status === 'submitted' &&
+    status === "submitted" &&
     latestSubmitted?.detail?.pending_orass_reupload === true;
   const canPoll =
-    status === 'submitted' &&
+    status === "submitted" &&
     latestSubmitted != null &&
-    latestSubmitted.channel !== 'manual' &&
+    latestSubmitted.channel !== "manual" &&
     latestSubmitted.externalRef != null;
 
   // The portal's structured refusal, read through the filing surface's own
@@ -733,7 +736,7 @@ function PackageWorkspace({
   const instructionsQuery = useEmailFallbackInstructions(
     bankId,
     summary.id,
-    authority.mayTransmit && (Boolean(filingRefusal) || channel === 'email')
+    authority.mayTransmit && (Boolean(filingRefusal) || channel === "email"),
   );
 
   const attestation = attestationQuery.data ?? null;
@@ -745,11 +748,11 @@ function PackageWorkspace({
 
   const artifacts = useMemo(
     () => artifactsQuery.data?.artifacts ?? [],
-    [artifactsQuery.data]
+    [artifactsQuery.data],
   );
   const availableKinds = useMemo(
     () => new Set(artifacts.map((artifact) => artifact.kind as string)),
-    [artifacts]
+    [artifacts],
   );
   // At most one, and only once an officer has certified: the revision the last
   // signature pinned. It is what a filing sends, so it is what Download hands over.
@@ -798,16 +801,16 @@ function PackageWorkspace({
   // banner rather than a line inside a collapsed history: §4b.5's "what has
   // been sent back to them, with the comment that sent it".
   const sentBack = useMemo(() => {
-    if (atStage !== 'prepare') return null;
+    if (atStage !== "prepare") return null;
     const returned = (pkg?.approvals ?? [])
-      .filter((approval) => approval.action === 'rejected')
+      .filter((approval) => approval.action === "rejected")
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
       .at(-1);
     return returned ?? null;
   }, [atStage, pkg?.approvals]);
   const heldByViewer =
-    atStage !== 'closed' &&
-    atStage !== 'regulator' &&
+    atStage !== "closed" &&
+    atStage !== "regulator" &&
     heldStages(authority).includes(atStage);
 
   // An approver re-reading a return after they sent it back should see what
@@ -818,13 +821,13 @@ function PackageWorkspace({
     bankId,
     summary.id,
     previousVersion?.id,
-    authority.mayApprove && previousVersion != null
+    authority.mayApprove && previousVersion != null,
   );
   const changedLineKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const section of comparison.data?.sections ?? []) {
       for (const line of section.lines) {
-        if (line.change === 'changed' || line.change === 'added') {
+        if (line.change === "changed" || line.change === "added") {
           keys.add(snapshotLineKey(section.code, line.code));
         }
       }
@@ -836,9 +839,9 @@ function PackageWorkspace({
     setDownloadError(null);
     const fail = (error: unknown) =>
       setDownloadError(
-        error instanceof Error ? error.message : 'The download did not finish.'
+        error instanceof Error ? error.message : "The download did not finish.",
       );
-    if (kind === 'pdf' && filedVersion) {
+    if (kind === "pdf" && filedVersion) {
       downloadArtifactVersion(bankId, filedVersion).catch(fail);
       return;
     }
@@ -855,7 +858,7 @@ function PackageWorkspace({
           downloadArtifact(bankId, artifact).catch(fail);
         },
         onSettled: () => setTakingKind(null),
-      }
+      },
     );
   };
 
@@ -863,37 +866,37 @@ function PackageWorkspace({
     setEmlError(null);
     downloadEmailFallbackEml(bankId, summary.id).catch((error: unknown) =>
       setEmlError(
-        error instanceof Error ? error.message : 'The download did not finish.'
-      )
+        error instanceof Error ? error.message : "The download did not finish.",
+      ),
     );
   };
 
   const runAction = () => {
     if (!action) return;
     switch (action.kind) {
-      case 'generate':
-      case 'regenerate':
+      case "generate":
+      case "regenerate":
         onRegenerate();
         return;
-      case 'certify':
+      case "certify":
         if (signingRequired) {
           setCertificationOpen(true);
-          setCeremonyRole('preparer');
+          setCeremonyRole("preparer");
         } else {
           requestApproval.mutate({ packageId: summary.id });
         }
         return;
-      case 'review':
+      case "review":
         setCertificationOpen(true);
-        setCeremonyRole('approver');
+        setCeremonyRole("approver");
         return;
-      case 'transmit':
+      case "transmit":
         submit.mutate({ packageId: summary.id, channel });
         return;
-      case 'reupload':
+      case "reupload":
         submit.mutate({ packageId: summary.id, channel: REUPLOAD_CHANNEL });
         return;
-      case 'poll':
+      case "poll":
         poll.mutate(summary.id);
         return;
       default:
@@ -919,10 +922,10 @@ function PackageWorkspace({
   };
 
   const artifactSentence = formulaCopyIsFiled
-    ? 'Four documents go with it: the signed submission document, the protected workbook, the workbook with live formulas, and the comma-separated copy. The formula workbook recalculates when a cell is edited and is never the signed record.'
+    ? "Four documents go with it: the signed submission document, the protected workbook, the workbook with live formulas, and the comma-separated copy. The formula workbook recalculates when a cell is edited and is never the signed record."
     : supportsWorkingCopy
-      ? 'The signed submission document, the protected workbook and the comma-separated copy go with it. The formula workbook is for internal review and is never filed.'
-      : 'The signed submission document, the workbook and the comma-separated copy go with it.';
+      ? "The signed submission document, the protected workbook and the comma-separated copy go with it. The formula workbook is for internal review and is never filed."
+      : "The signed submission document, the workbook and the comma-separated copy go with it.";
 
   return (
     <div className="space-y-4">
@@ -945,7 +948,7 @@ function PackageWorkspace({
         notice={
           authority.mayTransmit &&
           action !== null &&
-          (action.kind === 'transmit' || action.kind === 'reupload') ? (
+          (action.kind === "transmit" || action.kind === "reupload") ? (
             <TransmissionNotice
               regulatorName={regulatorFullName}
               artifactSentence={artifactSentence}
@@ -1003,26 +1006,26 @@ function PackageWorkspace({
         heldByViewer={heldByViewer}
         showRegulatorStage={authority.mayTransmit}
         defaultOpen={
-          status === 'rejected' ||
+          status === "rejected" ||
           sentBack !== null ||
-          (heldByViewer && atStage === 'transmit')
+          (heldByViewer && atStage === "transmit")
         }
       />
 
-      {showSection('checks') && (
+      {showSection("checks") && (
         <DisclosureRow
           title="Checks"
           testId="checks-row"
-          tone={checkErrors > 0 ? 'attention' : 'default'}
+          tone={checkErrors > 0 ? "attention" : "default"}
           defaultOpen={checkErrors > 0}
           summary={
             validate.error
-              ? 'The checks could not be run — see inside.'
+              ? "The checks could not be run — see inside."
               : report
                 ? checkErrors > 0
                   ? `${checkErrors} to clear before these figures can be certified · ${checkCountSummary(report)}`
                   : `Every check passed · ${checkCountSummary(report)}`
-                : 'Not run against this version yet.'
+                : "Not run against this version yet."
           }
         >
           {validate.error ? (
@@ -1070,7 +1073,7 @@ function PackageWorkspace({
         </div>
       </SectionCard>
 
-      {showSection('certification') && (
+      {showSection("certification") && (
         <DisclosureRow
           title="Certification"
           testId="certification-row"
@@ -1087,7 +1090,7 @@ function PackageWorkspace({
                   ),
                   outstandingLabel: outstandingSummary(attestation.outstanding),
                 })
-              : 'Reading who has signed…'
+              : "Reading who has signed…"
           }
         >
           <AttestationPanel
@@ -1104,11 +1107,11 @@ function PackageWorkspace({
         </DisclosureRow>
       )}
 
-      {showSection('transmission') && (
+      {showSection("transmission") && (
         <DisclosureRow
           title="Filing"
           testId="transmission-row"
-          defaultOpen={atStage === 'transmit' || pendingReupload}
+          defaultOpen={atStage === "transmit" || pendingReupload}
           summary={transmissionSummary({
             pendingReupload,
             refusal: filingRefusal,
@@ -1124,7 +1127,7 @@ function PackageWorkspace({
             refusal={filingRefusal}
             instructions={instructionsQuery.data?.instructions ?? null}
             onUseEmailFallback={() =>
-              submit.mutate({ packageId: summary.id, channel: 'email' })
+              submit.mutate({ packageId: summary.id, channel: "email" })
             }
             onDownloadEml={handleEmlDownload}
             emlError={emlError}
@@ -1136,14 +1139,14 @@ function PackageWorkspace({
         </DisclosureRow>
       )}
 
-      {showSection('events') && (
+      {showSection("events") && (
         <DisclosureRow
           title="Trail"
           testId="events-row"
           summary={
             events.length === 0
-              ? 'Nothing has gone to the regulator yet.'
-              : `${events.length} ${events.length === 1 ? 'entry' : 'entries'}, most recent first.`
+              ? "Nothing has gone to the regulator yet."
+              : `${events.length} ${events.length === 1 ? "entry" : "entries"}, most recent first.`
           }
         >
           <QueryBoundary
@@ -1158,14 +1161,14 @@ function PackageWorkspace({
         </DisclosureRow>
       )}
 
-      {showSection('resubmission') && (
+      {showSection("resubmission") && (
         <DisclosureRow
           title="Corrections"
           testId="resubmission-row"
           summary={
             resubmissions.length === 0
-              ? 'No correction has been asked for.'
-              : `${resubmissions.length} ${resubmissions.length === 1 ? 'request' : 'requests'} on record.`
+              ? "No correction has been asked for."
+              : `${resubmissions.length} ${resubmissions.length === 1 ? "request" : "requests"} on record.`
           }
         >
           <ResubmissionCard
@@ -1173,7 +1176,7 @@ function PackageWorkspace({
             requests={resubmissions}
             requestsError={resubmissionsQuery.error}
             latestSubmittedChannel={latestSubmitted?.channel ?? null}
-            canRequest={status === 'submitted' || status === 'acknowledged'}
+            canRequest={status === "submitted" || status === "acknowledged"}
             onRequest={(reason) =>
               requestResubmission.mutate({ packageId: summary.id, reason })
             }
@@ -1196,13 +1199,13 @@ function PackageWorkspace({
 
       {/* Only when there IS history. A row that opens onto nothing has cost the
           officer a click to learn what its own summary already said. */}
-      {showSection('versions') && priorVersions.length > 0 && (
+      {showSection("versions") && priorVersions.length > 0 && (
         <DisclosureRow
           title="Earlier versions"
           testId="versions-row"
           flush
           summary={`${priorVersions.length} superseded ${
-            priorVersions.length === 1 ? 'version' : 'versions'
+            priorVersions.length === 1 ? "version" : "versions"
           }, kept unchanged as history.`}
         >
           <PriorVersionsCard bankId={bankId} packageId={summary.id} />
@@ -1329,8 +1332,8 @@ function ReturnCommandBarBlock({
         }
         meta={
           <>
-            {fmtDateUTC(summary.reportingDate)} · Version {summary.version} ·{' '}
-            {BASIS_LABELS[summary.basis] ?? summary.basis} · generated{' '}
+            {fmtDateUTC(summary.reportingDate)} · Version {summary.version} ·{" "}
+            {BASIS_LABELS[summary.basis] ?? summary.basis} · generated{" "}
             {fmtTimestamp(summary.generatedAt)}
           </>
         }
@@ -1361,7 +1364,7 @@ function ReturnCommandBarBlock({
               canExport={canExport}
               onTake={onTake}
               signedLabelFor={(kind) =>
-                kind === 'pdf' && filedVersion ? 'Signed PDF' : null
+                kind === "pdf" && filedVersion ? "Signed PDF" : null
               }
               unavailableReason="This document has not been produced yet, and producing it is the preparer's act."
             />
@@ -1410,13 +1413,13 @@ function SignedReturnLine({
       <span className="inline-flex items-center gap-1.5">
         <ShieldCheck size={11} className="text-success shrink-0" aria-hidden />
         {signer
-          ? `Signed by ${signer.signerDisplayName ?? 'an officer'}${
-              signer.officerTitle ? ` — ${signer.officerTitle}` : ''
+          ? `Signed by ${signer.signerDisplayName ?? "an officer"}${
+              signer.officerTitle ? ` — ${signer.officerTitle}` : ""
             }, ${fmtTimestamp(signer.signedAt)}`
-          : 'Signed'}
+          : "Signed"}
       </span>
       <span className="font-mono tnum whitespace-nowrap">
-        · {fmtBytes(version.sizeBytes)} · sha256{' '}
+        · {fmtBytes(version.sizeBytes)} · sha256{" "}
         {shortId(version.checksumSha256, 8)}
       </span>
       <CopyButton text={version.checksumSha256} label="checksum" />
@@ -1445,17 +1448,21 @@ function SentBackNotice({
       data-testid="sent-back-notice"
       className="flex items-start gap-2.5 rounded-sm border border-warning/25 bg-warning-light/50 px-3.5 py-2.5"
     >
-      <CornerUpLeft size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+      <CornerUpLeft
+        size={15}
+        className="mt-0.5 shrink-0 text-warning"
+        aria-hidden
+      />
       <div className="min-w-0 text-body">
         <p className="font-medium text-navy">
-          Sent back for corrections by{' '}
+          Sent back for corrections by{" "}
           {officer
-            ? `${officer.name}${officer.title ? ` — ${officer.title}` : ''}`
-            : 'the approver'}
+            ? `${officer.name}${officer.title ? ` — ${officer.title}` : ""}`
+            : "the approver"}
           , {fmtTimestamp(at)}
         </p>
         <p className="mt-0.5 text-caption text-navy/85 leading-relaxed whitespace-pre-wrap">
-          {comment ?? 'No comment was recorded with the decision.'}
+          {comment ?? "No comment was recorded with the decision."}
         </p>
         <p className="mt-1 text-caption text-slate leading-relaxed">
           The certification that froze these figures has been withdrawn. Correct
@@ -1477,18 +1484,18 @@ function SupervisorCommentsPanel({
   status: PackageStatus;
   comments: string;
 }) {
-  const critical = status === 'declined';
+  const critical = status === "declined";
   return (
     <div
       className={`flex items-start gap-2.5 rounded border px-3.5 py-2.5 ${
         critical
-          ? 'border-critical/25 bg-critical-light/50'
-          : 'border-warning/25 bg-warning-light/50'
+          ? "border-critical/25 bg-critical-light/50"
+          : "border-warning/25 bg-warning-light/50"
       }`}
     >
       <MessageSquareWarning
         size={15}
-        className={`${critical ? 'text-critical' : 'text-warning'} shrink-0 mt-0.5`}
+        className={`${critical ? "text-critical" : "text-warning"} shrink-0 mt-0.5`}
         aria-hidden
       />
       <div className="min-w-0 text-body">

@@ -74,9 +74,9 @@
 
 /*
  * Tailwind theme. Every value points at a runtime token above, so the theme is
- * `inline` (utilities read the token directly, keeping the dark/light switch
- * live) and `reference` (Tailwind emits no `--color-*`/`--shadow-*` variables
- * of its own, which would otherwise shadow tokens such as `--shadow-subtle`).
+ * `inline` (utilities read the runtime token directly) and `reference`
+ * (Tailwind emits no `--color-*`/`--shadow-*` variables of its own, which would
+ * otherwise shadow tokens such as `--shadow-subtle`).
  */
 @theme inline reference {
   --color-navy-700: rgb(var(--btn-primary-hover));

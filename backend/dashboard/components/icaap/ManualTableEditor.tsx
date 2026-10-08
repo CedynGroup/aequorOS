@@ -32,7 +32,9 @@ function cellError(kind: string, value: string): string | null {
   const trimmed = value.trim();
   if (trimmed === "") return null;
   if (!NUMERIC_KINDS.has(kind)) return null;
-  return Number.isFinite(Number(trimmed)) ? null : "Enter a number, or leave it blank.";
+  return Number.isFinite(Number(trimmed))
+    ? null
+    : "Enter a number, or leave it blank.";
 }
 
 type TableState = {
@@ -75,10 +77,7 @@ export default function ManualTableEditor({
     const found: Record<string, string> = {};
     for (const row of table.rows) {
       for (const column of table.columns) {
-        const message = cellError(
-          column.kind,
-          row.cells?.[column.key] ?? "",
-        );
+        const message = cellError(column.kind, row.cells?.[column.key] ?? "");
         if (message) found[`${row.key}:${column.key}`] = message;
       }
     }
@@ -123,7 +122,10 @@ export default function ManualTableEditor({
           </thead>
           <tbody>
             {table.rows.map((row) => (
-              <tr key={row.key} className="border-b border-border-light last:border-0">
+              <tr
+                key={row.key}
+                className="border-b border-border-light last:border-0"
+              >
                 <td className="py-1.5 pr-3 text-ink">{row.label}</td>
                 {table.columns.map((column) => {
                   const key = `${row.key}:${column.key}`;
@@ -229,7 +231,9 @@ export default function ManualTableEditor({
       )}
       {save.error != null && (
         <p className="text-body text-critical">
-          {isApiError(save.error) ? save.error.message : "Could not save the table."}
+          {isApiError(save.error)
+            ? save.error.message
+            : "Could not save the table."}
         </p>
       )}
     </div>

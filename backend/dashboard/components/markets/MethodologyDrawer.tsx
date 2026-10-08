@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Methodology transparency drawer (FC-5 deliverable §4 — the bank's model-risk
@@ -11,18 +11,26 @@
  * field the payload does not carry is shown as an explicit gap, not a guess.
  */
 
-import { X } from 'lucide-react';
-import type { YieldCurveViewRead } from '@aequoros/risk-service-api';
-import { fmtDateUTC, fmtTimestamp, shortId } from '@/lib/api/values';
-import { ANCHOR_BASIS, BASIS_LABELS } from '@/lib/markets/curveGrid';
-import AttributionChip from './AttributionChip';
-import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from './chips';
+import { X } from "lucide-react";
+import type { YieldCurveViewRead } from "@aequoros/risk-service-api";
+import { fmtDateUTC, fmtTimestamp, shortId } from "@/lib/api/values";
+import { ANCHOR_BASIS, BASIS_LABELS } from "@/lib/markets/curveGrid";
+import AttributionChip from "./AttributionChip";
+import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
       <span className="text-caption text-slate whitespace-nowrap">{label}</span>
-      <span className="text-caption text-navy text-right min-w-0">{children}</span>
+      <span className="text-caption text-navy text-right min-w-0">
+        {children}
+      </span>
     </div>
   );
 }
@@ -50,7 +58,11 @@ export default function MethodologyDrawer({
 }) {
   return (
     <>
-      <div className="fixed inset-0 bg-navy/30 z-40" onClick={onClose} aria-hidden />
+      <div
+        className="fixed inset-0 bg-navy/30 z-40"
+        onClick={onClose}
+        aria-hidden
+      />
       <aside
         className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-surface-raised border-l border-border shadow-xl overflow-y-auto"
         role="dialog"
@@ -63,7 +75,7 @@ export default function MethodologyDrawer({
               <span className="font-medium text-navy">{curve.currency}</span>
               <MonoChip>{curve.curveName}</MonoChip>
               <CurveTypeBadge curveType={curve.curveType} />
-              {curve.curveType === 'discount' && <SyntheticProxyBadge />}
+              {curve.curveType === "discount" && <SyntheticProxyBadge />}
             </div>
           </div>
           <button
@@ -79,7 +91,9 @@ export default function MethodologyDrawer({
         <div className="px-5 py-4 space-y-6">
           {/* What the payload carries. */}
           <section className="space-y-1">
-            <h3 className="text-body font-semibold text-navy">Published &amp; attributed</h3>
+            <h3 className="text-body font-semibold text-navy">
+              Published &amp; attributed
+            </h3>
             <p className="text-caption text-slate">
               Carried by the bank-facing views payload for this curve.
             </p>
@@ -106,7 +120,9 @@ export default function MethodologyDrawer({
                 </span>
               </Field>
               <Field label="Ingested at">
-                <span className="font-mono">{fmtTimestamp(curve.attribution.ingestedAt)}</span>
+                <span className="font-mono">
+                  {fmtTimestamp(curve.attribution.ingestedAt)}
+                </span>
               </Field>
               <Field label="Tenor points">{curve.points.length}</Field>
             </div>
@@ -114,42 +130,50 @@ export default function MethodologyDrawer({
 
           {/* Conventions THIS view applies to derive the grid. */}
           <section className="space-y-1">
-            <h3 className="text-body font-semibold text-navy">Display conventions applied here</h3>
+            <h3 className="text-body font-semibold text-navy">
+              Display conventions applied here
+            </h3>
             <p className="text-caption text-slate">
-              How this view derives the forward grid from the published points — plainly, so the
-              numbers are reproducible.
+              How this view derives the forward grid from the published points —
+              plainly, so the numbers are reproducible.
             </p>
             <ul className="mt-2 space-y-2 text-caption text-navy">
               <li>
-                <span className="font-medium">Discount factor.</span> Simple money-market form
-                DF = 1 / (1 + rate·τ), computed on the {BASIS_LABELS[ANCHOR_BASIS]} anchor and held
-                invariant across the &ldquo;Convert to&rdquo; switch.
+                <span className="font-medium">Discount factor.</span> Simple
+                money-market form DF = 1 / (1 + rate·τ), computed on the{" "}
+                {BASIS_LABELS[ANCHOR_BASIS]} anchor and held invariant across
+                the &ldquo;Convert to&rdquo; switch.
               </li>
               <li>
-                <span className="font-medium">Day-count.</span> {BASIS_LABELS.act360} by default;{' '}
-                {BASIS_LABELS.act365} and {BASIS_LABELS.actact} (ISDA) offered as output bases —
-                these re-express the displayed yield only, never the DF.
+                <span className="font-medium">Day-count.</span>{" "}
+                {BASIS_LABELS.act360} by default; {BASIS_LABELS.act365} and{" "}
+                {BASIS_LABELS.actact} (ISDA) offered as output bases — these
+                re-express the displayed yield only, never the DF.
               </li>
               <li>
-                <span className="font-medium">Period dates.</span> Start/End rolled from the
-                published as-of anchor by whole months (day clamped to month-end). These are
-                derived, not the desk&rsquo;s exact schedule dates.
+                <span className="font-medium">Period dates.</span> Start/End
+                rolled from the published as-of anchor by whole months (day
+                clamped to month-end). These are derived, not the desk&rsquo;s
+                exact schedule dates.
               </li>
               <li>
-                <span className="font-medium">Interpolation.</span> None applied — the published
-                tenor points are rendered as-is; no intermediate tenors are interpolated
-                client-side.
+                <span className="font-medium">Interpolation.</span> None applied
+                — the published tenor points are rendered as-is; no intermediate
+                tenors are interpolated client-side.
               </li>
             </ul>
           </section>
 
           {/* The model-risk fields not yet on this surface — honest gaps. */}
           <section className="space-y-1">
-            <h3 className="text-body font-semibold text-navy">Not carried on this surface yet</h3>
+            <h3 className="text-body font-semibold text-navy">
+              Not carried on this surface yet
+            </h3>
             <p className="text-caption text-slate">
-              The desk&rsquo;s full model-risk record. These are not in the bank-facing views
-              payload; a dedicated methodology read endpoint would be needed to expose them
-              verbatim rather than derive or assume.
+              The desk&rsquo;s full model-risk record. These are not in the
+              bank-facing views payload; a dedicated methodology read endpoint
+              would be needed to expose them verbatim rather than derive or
+              assume.
             </p>
             <ul className="mt-2 divide-y divide-border-light">
               <GapRow
@@ -176,9 +200,9 @@ export default function MethodologyDrawer({
           </section>
 
           <p className="text-caption text-slate border-t border-border-light pt-3">
-            The published golden copy is never modified here. Every figure above is either carried
-            verbatim in the attributed payload or derived by the plainly-stated conventions in this
-            view.
+            The published golden copy is never modified here. Every figure above
+            is either carried verbatim in the attributed payload or derived by
+            the plainly-stated conventions in this view.
           </p>
         </div>
       </aside>

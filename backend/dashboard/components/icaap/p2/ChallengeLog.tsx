@@ -106,11 +106,14 @@ export default function ChallengeLog({
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-medium text-navy">
-                        {forumLabel(challenge.forum)} · {challenge.raisedOn ?? ""}
+                        {forumLabel(challenge.forum)} ·{" "}
+                        {challenge.raisedOn ?? ""}
                       </p>
                       <p className="text-caption text-slate">
                         Raised by {challenge.raisedByName}
-                        {challenge.targetRef ? ` · on ${challenge.targetRef}` : ""}
+                        {challenge.targetRef
+                          ? ` · on ${challenge.targetRef}`
+                          : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -262,7 +265,10 @@ function RaiseChallengeDialog({
             className="mt-1 w-full rounded-md border border-border px-2 py-2 text-body"
           />
         </FieldLabel>
-        <FieldLabel label="Who raised it" hint="The person or committee named in the minutes.">
+        <FieldLabel
+          label="Who raised it"
+          hint="The person or committee named in the minutes."
+        >
           <input
             value={reason}
             maxLength={REASON_MAX}
@@ -337,7 +343,10 @@ function RespondDialog({
             className="mt-1 w-full rounded-md border border-border px-2 py-2 text-body"
           />
         </FieldLabel>
-        <FieldLabel label="Who raised it" hint="The person or committee named in the minutes.">
+        <FieldLabel
+          label="Who raised it"
+          hint="The person or committee named in the minutes."
+        >
           <input
             value={reason}
             maxLength={REASON_MAX}

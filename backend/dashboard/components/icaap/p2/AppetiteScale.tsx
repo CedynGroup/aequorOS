@@ -26,7 +26,12 @@ import {
 } from "@/lib/icaap/appetite";
 import { numOrNull } from "@/lib/api/values";
 import { PERCENT_BASE } from "./display";
-import { NO_REGULATORY_FLOOR, NOT_ASSESSED, fmtInUnit, orderingSentence } from "./labels";
+import {
+  NO_REGULATORY_FLOOR,
+  NOT_ASSESSED,
+  fmtInUnit,
+  orderingSentence,
+} from "./labels";
 
 type Marker = {
   key: string;
@@ -97,9 +102,10 @@ export default function AppetiteScale({
     },
   ];
 
-  const domain = scaleDomain(
-    [...markers.map((marker) => marker.value), values.current],
-  );
+  const domain = scaleDomain([
+    ...markers.map((marker) => marker.value),
+    values.current,
+  ]);
 
   return (
     <div className="space-y-2">

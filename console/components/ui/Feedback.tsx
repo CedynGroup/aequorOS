@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { AlertTriangle, Inbox, RotateCw } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import type { ReactNode } from "react";
+import { AlertTriangle, Inbox, RotateCw } from "lucide-react";
+import { ApiError } from "@/lib/api";
 
 /**
  * Error panel bound to the console's `ApiError` envelope (code + message +
@@ -23,11 +23,13 @@ export function ErrorPanel({
         <AlertTriangle size={18} className="mt-0.5 shrink-0 text-critical" />
         <div className="min-w-0 flex-1">
           <p className="text-body font-medium text-navy">
-            {context ? `${context} failed` : 'Request failed'}
+            {context ? `${context} failed` : "Request failed"}
           </p>
           <p className="mt-1 wrap-break-word text-body text-slate">
-            <span className="font-mono text-caption text-critical">{error.code}</span>
-            {' · '}
+            <span className="font-mono text-caption text-critical">
+              {error.code}
+            </span>
+            {" · "}
             {error.message}
           </p>
           <div className="mt-3 flex items-center gap-2">

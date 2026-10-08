@@ -255,33 +255,36 @@ export default function ImpliedRatingCard({
   const methodologyTip = (
     <span className="block space-y-1.5">
       <span className="block">
-        Built only from your reported financials, using a documented method modeled
-        on the S&amp;P, Moody’s and Fitch frameworks:
+        Built only from your reported financials, using a documented method
+        modeled on the S&amp;P, Moody’s and Fitch frameworks:
       </span>
       <span className="block space-y-1">
         <span className="block">
-          <span className="font-semibold text-white">Scorecard</span> — capital, asset
-          quality, earnings, funding &amp; liquidity are scored on the agency factor
-          framework to place a through-the-cycle (TTC) grade.
+          <span className="font-semibold text-white">Scorecard</span> — capital,
+          asset quality, earnings, funding &amp; liquidity are scored on the
+          agency factor framework to place a through-the-cycle (TTC) grade.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Master scale</span> — each grade maps
-          to an idealised one-year default rate (agency-aligned): the TTC anchor PD.
+          <span className="font-semibold text-white">Master scale</span> — each
+          grade maps to an idealised one-year default rate (agency-aligned): the
+          TTC anchor PD.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Point-in-time</span> — the anchor is
-          conditioned on the live operating-environment factor (Z) through a Vasicek
-          single-factor model, so a weaker environment lifts PIT above TTC.
+          <span className="font-semibold text-white">Point-in-time</span> — the
+          anchor is conditioned on the live operating-environment factor (Z)
+          through a Vasicek single-factor model, so a weaker environment lifts
+          PIT above TTC.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Range, not a point</span> — a Bayesian
-          posterior band reflects thin local default history; a margin of conservatism sets
-          the upper figure used for capital decisions.
+          <span className="font-semibold text-white">Range, not a point</span> —
+          a Bayesian posterior band reflects thin local default history; a
+          margin of conservatism sets the upper figure used for capital
+          decisions.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Floor &amp; ceiling</span> — no PD
-          falls below the Basel 0.03% floor, and the grade is capped near the sovereign
-          (a real risk shown by the DDEP).
+          <span className="font-semibold text-white">Floor &amp; ceiling</span>{" "}
+          — no PD falls below the Basel 0.03% floor, and the grade is capped
+          near the sovereign (a real risk shown by the DDEP).
         </span>
       </span>
       {present(metrics.methodology_version) && (

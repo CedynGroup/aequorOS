@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { GitCompare } from 'lucide-react';
-import type { DeskMethodology } from '@/lib/api';
-import { VersionDiff } from '@/components/ui';
+import { useMemo, useState } from "react";
+import { GitCompare } from "lucide-react";
+import type { DeskMethodology } from "@/lib/api";
+import { VersionDiff } from "@/components/ui";
 
 /**
  * Side-by-side parameter diff between any two versions of one methodology code
@@ -12,8 +12,15 @@ import { VersionDiff } from '@/components/ui';
  * two parameter trees. Defaults to the two most recent versions (older on the
  * left) and lets either side be re-pointed.
  */
-export function MethodologyVersionDiff({ versions }: { versions: DeskMethodology[] }) {
-  const ordered = useMemo(() => [...versions].sort((a, b) => a.version - b.version), [versions]);
+export function MethodologyVersionDiff({
+  versions,
+}: {
+  versions: DeskMethodology[];
+}) {
+  const ordered = useMemo(
+    () => [...versions].sort((a, b) => a.version - b.version),
+    [versions],
+  );
 
   const defaultRight = ordered[ordered.length - 1]?.version ?? 0;
   const defaultLeft = ordered[ordered.length - 2]?.version ?? defaultRight;
@@ -24,17 +31,19 @@ export function MethodologyVersionDiff({ versions }: { versions: DeskMethodology
   if (ordered.length < 2) {
     return (
       <p className="text-caption text-slate">
-        Only one version registered — nothing to compare yet. A diff appears once a Track-2 change
-        drafts a second version.
+        Only one version registered — nothing to compare yet. A diff appears
+        once a Track-2 change drafts a second version.
       </p>
     );
   }
 
-  const left = ordered.find((v) => v.version === leftV) ?? ordered[ordered.length - 2];
-  const right = ordered.find((v) => v.version === rightV) ?? ordered[ordered.length - 1];
+  const left =
+    ordered.find((v) => v.version === leftV) ?? ordered[ordered.length - 2];
+  const right =
+    ordered.find((v) => v.version === rightV) ?? ordered[ordered.length - 1];
 
   const selectClass =
-    'rounded-md border border-border bg-surface-base px-2.5 py-1 font-mono text-caption text-ink focus:border-focus focus:outline-hidden';
+    "rounded-md border border-border bg-surface-base px-2.5 py-1 font-mono text-caption text-ink focus:border-focus focus:outline-hidden";
 
   return (
     <div className="space-y-3">

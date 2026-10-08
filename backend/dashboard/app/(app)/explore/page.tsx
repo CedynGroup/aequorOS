@@ -61,7 +61,10 @@
 
 import { useMemo, useState } from "react";
 import { Table2 } from "lucide-react";
-import type { BiCatalogueMeasureRead, BiFilter } from "@aequoros/risk-service-api";
+import type {
+  BiCatalogueMeasureRead,
+  BiFilter,
+} from "@aequoros/risk-service-api";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -311,10 +314,7 @@ export default function ExplorePage() {
     shape.measures,
   ]);
 
-  const summaryAnswer = useBiQuery(
-    bank?.id,
-    view === "summary" ? query : null,
-  );
+  const summaryAnswer = useBiQuery(bank?.id, view === "summary" ? query : null);
 
   const spec: BiWidgetSpec | null = useMemo(() => {
     if (!query || view !== "summary") return null;

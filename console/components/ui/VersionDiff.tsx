@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from "react";
 
-type DiffStatus = 'added' | 'removed' | 'changed' | 'unchanged';
+type DiffStatus = "added" | "removed" | "changed" | "unchanged";
 
 type DiffRow = {
   path: string;
@@ -12,31 +12,37 @@ type DiffRow = {
 };
 
 /** Flatten a JSON-ish value into dot-path → stringified-leaf pairs. */
-function flatten(value: unknown, prefix = '', out: Map<string, string> = new Map()): Map<string, string> {
+function flatten(
+  value: unknown,
+  prefix = "",
+  out: Map<string, string> = new Map(),
+): Map<string, string> {
   if (value === null || value === undefined) {
-    if (prefix) out.set(prefix, value === null ? 'null' : 'undefined');
+    if (prefix) out.set(prefix, value === null ? "null" : "undefined");
     return out;
   }
-  if (typeof value !== 'object') {
-    out.set(prefix || '(value)', String(value));
+  if (typeof value !== "object") {
+    out.set(prefix || "(value)", String(value));
     return out;
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) out.set(prefix, '[]');
-    value.forEach((v, i) => flatten(v, prefix ? `${prefix}[${i}]` : `[${i}]`, out));
+    if (value.length === 0) out.set(prefix, "[]");
+    value.forEach((v, i) =>
+      flatten(v, prefix ? `${prefix}[${i}]` : `[${i}]`, out),
+    );
     return out;
   }
   const entries = Object.entries(value as Record<string, unknown>);
-  if (entries.length === 0) out.set(prefix, '{}');
+  if (entries.length === 0) out.set(prefix, "{}");
   for (const [k, v] of entries) flatten(v, prefix ? `${prefix}.${k}` : k, out);
   return out;
 }
 
 const STATUS_STYLE: Record<DiffStatus, string> = {
-  added: 'bg-success-light/40',
-  removed: 'bg-critical-light/40',
-  changed: 'bg-warning-light/40',
-  unchanged: '',
+  added: "bg-success-light/40",
+  removed: "bg-critical-light/40",
+  changed: "bg-warning-light/40",
+  unchanged: "",
 };
 
 /**
@@ -47,7 +53,7 @@ const STATUS_STYLE: Record<DiffStatus, string> = {
 export function VersionDiff({
   left,
   right,
-  className = '',
+  className = "",
   defaultShowUnchanged = false,
 }: {
   left: { label: ReactNode; value: unknown };
@@ -65,23 +71,30 @@ export function VersionDiff({
       const lv = l.has(path) ? l.get(path)! : null;
       const rv = r.has(path) ? r.get(path)! : null;
       let status: DiffStatus;
-      if (lv === null && rv !== null) status = 'added';
-      else if (lv !== null && rv === null) status = 'removed';
-      else if (lv !== rv) status = 'changed';
-      else status = 'unchanged';
+      if (lv === null && rv !== null) status = "added";
+      else if (lv !== null && rv === null) status = "removed";
+      else if (lv !== rv) status = "changed";
+      else status = "unchanged";
       return { path, left: lv, right: rv, status };
     });
-    return { rows: all, changeCount: all.filter((x) => x.status !== 'unchanged').length };
+    return {
+      rows: all,
+      changeCount: all.filter((x) => x.status !== "unchanged").length,
+    };
   }, [left.value, right.value]);
 
-  const visible = showUnchanged ? rows : rows.filter((r) => r.status !== 'unchanged');
+  const visible = showUnchanged
+    ? rows
+    : rows.filter((r) => r.status !== "unchanged");
 
   return (
-    <div className={`overflow-hidden rounded-md border border-border-light ${className}`}>
+    <div
+      className={`overflow-hidden rounded-md border border-border-light ${className}`}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border-light bg-surface px-4 py-2 text-caption">
         <span className="text-slate">
-          <span className="font-medium text-navy tnum">{changeCount}</span>{' '}
-          {changeCount === 1 ? 'change' : 'changes'}
+          <span className="font-medium text-navy tnum">{changeCount}</span>{" "}
+          {changeCount === 1 ? "change" : "changes"}
         </span>
         <label className="inline-flex cursor-pointer items-center gap-1.5 text-slate">
           <input
@@ -104,7 +117,10 @@ export function VersionDiff({
         <tbody>
           {visible.length === 0 ? (
             <tr>
-              <td colSpan={3} className="px-4 py-8 text-center text-caption text-slate">
+              <td
+                colSpan={3}
+                className="px-4 py-8 text-center text-caption text-slate"
+              >
                 No differences.
               </td>
             </tr>
@@ -114,7 +130,9 @@ export function VersionDiff({
                 key={row.path}
                 className={`border-b border-border-light last:border-b-0 ${STATUS_STYLE[row.status]}`}
               >
-                <td className="px-4 py-1.5 font-mono text-caption text-slate">{row.path}</td>
+                <td className="px-4 py-1.5 font-mono text-caption text-slate">
+                  {row.path}
+                </td>
                 <td className="px-4 py-1.5 font-mono text-caption text-navy/90">
                   {row.left ?? <span className="text-slate-light">—</span>}
                 </td>

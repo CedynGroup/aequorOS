@@ -133,7 +133,8 @@ export default function MaterialityMatrix({
                   {impactLevels.map((impact) => {
                     const cell = cellAt(likelihood.score, impact.score);
                     const here =
-                      occupants.get(`${likelihood.score}:${impact.score}`) ?? [];
+                      occupants.get(`${likelihood.score}:${impact.score}`) ??
+                      [];
                     if (!cell) {
                       return (
                         <td
@@ -201,14 +202,18 @@ export default function MaterialityMatrix({
  * When the server sends no threshold, the caption says the matrix is not the
  * deciding rule rather than inventing one.
  */
-function captionFor(
-  matrix: IcaapMaterialityMatrix | null | undefined,
-): string {
+function captionFor(matrix: IcaapMaterialityMatrix | null | undefined): string {
   const parts: string[] = [];
-  if (matrix?.materialMinScore !== null && matrix?.materialMinScore !== undefined) {
+  if (
+    matrix?.materialMinScore !== null &&
+    matrix?.materialMinScore !== undefined
+  ) {
     parts.push(`a score of ${matrix.materialMinScore} or more`);
   }
-  if (matrix?.materialMinImpact !== null && matrix?.materialMinImpact !== undefined) {
+  if (
+    matrix?.materialMinImpact !== null &&
+    matrix?.materialMinImpact !== undefined
+  ) {
     parts.push(`an impact of ${matrix.materialMinImpact} or more`);
   }
   if (parts.length === 0) {

@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from "lucide-react";
 
 /**
  * Shared chip primitives for the Markets tab: the mono code chip used for
@@ -10,7 +10,7 @@ import { TriangleAlert } from 'lucide-react';
 /** Small monospace code chip — source systems, curve tickers, index codes. */
 export function MonoChip({
   children,
-  className = '',
+  className = "",
   title,
 }: {
   children: React.ReactNode;
@@ -28,19 +28,19 @@ export function MonoChip({
 }
 
 const CURVE_TYPE_LABELS: Record<string, string> = {
-  zero: 'Zero',
-  forward: 'Forward',
-  discount: 'Discounting',
-  sovereign: 'Sovereign',
-  interbank: 'Interbank',
-  swap: 'Swap',
-  credit_spread: 'Credit spread',
+  zero: "Zero",
+  forward: "Forward",
+  discount: "Discounting",
+  sovereign: "Sovereign",
+  interbank: "Interbank",
+  swap: "Swap",
+  credit_spread: "Credit spread",
 };
 
 /** Curve-family badge: zero / forward / discounting / sovereign / ... */
 export function CurveTypeBadge({
   curveType,
-  className = '',
+  className = "",
 }: {
   curveType: string;
   className?: string;
@@ -49,7 +49,7 @@ export function CurveTypeBadge({
     <span
       className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border bg-surface text-[10px] font-medium uppercase tracking-wider text-navy whitespace-nowrap ${className}`}
     >
-      {CURVE_TYPE_LABELS[curveType] ?? curveType.replace(/_/g, ' ')}
+      {CURVE_TYPE_LABELS[curveType] ?? curveType.replace(/_/g, " ")}
     </span>
   );
 }
@@ -58,7 +58,11 @@ export function CurveTypeBadge({
  * Truthful-naming marker for the synthetic discounting proxy: it is a
  * modelled curve with a disclosed methodology, not a traded OIS.
  */
-export function SyntheticProxyBadge({ className = '' }: { className?: string }) {
+export function SyntheticProxyBadge({
+  className = "",
+}: {
+  className?: string;
+}) {
   return (
     <span
       title="Modelled discounting proxy — not a traded curve. Methodology is disclosed and versioned."

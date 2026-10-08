@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Asking the regulator to accept a correction to a return that has already been
@@ -11,12 +11,15 @@
  * transmission capability and nowhere else.
  */
 
-import { useState } from 'react';
-import { CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
-import type { ChannelCode, ResubmissionRequestRead } from '@aequoros/risk-service-api';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { fmtTimestamp } from '@/lib/api/values';
-import { ResubmissionStatusPill } from './shared';
+import { useState } from "react";
+import { CheckCircle2, Loader2, RotateCcw, XCircle } from "lucide-react";
+import type {
+  ChannelCode,
+  ResubmissionRequestRead,
+} from "@aequoros/risk-service-api";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { fmtTimestamp } from "@/lib/api/values";
+import { ResubmissionStatusPill } from "./shared";
 
 export default function ResubmissionCard({
   status,
@@ -42,28 +45,28 @@ export default function ResubmissionCard({
   requestError: unknown;
   onDecide: (
     requestId: string,
-    decision: 'granted' | 'denied',
-    note: string | undefined
+    decision: "granted" | "denied",
+    note: string | undefined,
   ) => void;
   decidePending: boolean;
   decideError: unknown;
   regulatorName: string;
 }) {
   const [formOpen, setFormOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [note, setNote] = useState('');
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
 
   const manualDecide =
-    latestSubmittedChannel === 'email' || latestSubmittedChannel === 'manual';
-  const hasOpenRequest = requests.some((entry) => entry.status === 'requested');
+    latestSubmittedChannel === "email" || latestSubmittedChannel === "manual";
+  const hasOpenRequest = requests.some((entry) => entry.status === "requested");
   const grantedPending = requests.some(
-    (entry) => entry.status === 'granted' && entry.consumedByPackageId == null
+    (entry) => entry.status === "granted" && entry.consumedByPackageId == null,
   );
 
   return (
     <div className="space-y-3">
       <p className="text-caption text-slate leading-relaxed">
-        A return that has already been filed can only be corrected with{' '}
+        A return that has already been filed can only be corrected with{" "}
         {regulatorName}&apos;s go-ahead. Ask for it here, then generate the
         corrected version once it is granted.
       </p>
@@ -85,7 +88,7 @@ export default function ResubmissionCard({
                 className="block text-caption font-medium text-navy"
                 htmlFor="resubmission-reason"
               >
-                Why the filed return has to change{' '}
+                Why the filed return has to change{" "}
                 <span className="font-normal text-slate">(required)</span>
               </label>
               <textarea
@@ -103,7 +106,7 @@ export default function ResubmissionCard({
                   onClick={() => {
                     onRequest(reason.trim());
                     setFormOpen(false);
-                    setReason('');
+                    setReason("");
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
                 >
@@ -118,7 +121,7 @@ export default function ResubmissionCard({
                   type="button"
                   onClick={() => {
                     setFormOpen(false);
-                    setReason('');
+                    setReason("");
                   }}
                   className="inline-flex items-center rounded-md border border-border px-3 py-2 text-caption font-medium text-slate hover:bg-surface"
                 >
@@ -168,7 +171,7 @@ export default function ResubmissionCard({
                   decided {fmtTimestamp(new Date(entry.decidedAt))}
                 </p>
               )}
-              {entry.status === 'requested' && manualDecide && (
+              {entry.status === "requested" && manualDecide && (
                 <div className="space-y-1.5 pt-1">
                   <input
                     value={note}
@@ -182,8 +185,8 @@ export default function ResubmissionCard({
                       type="button"
                       disabled={decidePending}
                       onClick={() => {
-                        onDecide(entry.id, 'granted', note.trim() || undefined);
-                        setNote('');
+                        onDecide(entry.id, "granted", note.trim() || undefined);
+                        setNote("");
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-success/30 bg-success-light/40 px-3 py-1.5 text-caption font-medium text-success hover:bg-success-light disabled:opacity-60"
                     >
@@ -194,8 +197,8 @@ export default function ResubmissionCard({
                       type="button"
                       disabled={decidePending}
                       onClick={() => {
-                        onDecide(entry.id, 'denied', note.trim() || undefined);
-                        setNote('');
+                        onDecide(entry.id, "denied", note.trim() || undefined);
+                        setNote("");
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-critical/30 bg-critical-light/40 px-3 py-1.5 text-caption font-medium text-critical hover:bg-critical-light disabled:opacity-60"
                     >
@@ -204,7 +207,7 @@ export default function ResubmissionCard({
                     </button>
                   </div>
                   <p className="text-micro leading-relaxed text-slate">
-                    This return was filed outside the portal, so record{' '}
+                    This return was filed outside the portal, so record{" "}
                     {regulatorName}&apos;s answer here when it arrives. A filing
                     made through the portal is answered by the portal itself.
                   </p>
@@ -217,7 +220,7 @@ export default function ResubmissionCard({
       {decideError ? (
         <ErrorPanel error={decideError} title="The decision was not recorded" />
       ) : null}
-      {status === 'superseded' && (
+      {status === "superseded" && (
         <p className="text-caption text-slate">
           This version has been superseded; corrections belong to the version
           that replaced it.

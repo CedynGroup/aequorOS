@@ -4,9 +4,9 @@
  */
 
 export function SkeletonLine({
-  width = '100%',
+  width = "100%",
   height = 12,
-  className = '',
+  className = "",
 }: {
   width?: string | number;
   height?: number;

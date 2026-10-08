@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from "lucide-react";
 
 /**
  * Amber marker for figures shown as stand-ins rather than measured
@@ -9,9 +9,9 @@ import { TriangleAlert } from 'lucide-react';
  * the defaults keep the original single-word marker.
  */
 export default function IllustrativeBadge({
-  label = 'Illustrative',
+  label = "Illustrative",
   title,
-  className = '',
+  className = "",
 }: {
   label?: string;
   /** Tooltip explaining exactly what is derived and from which fields. */

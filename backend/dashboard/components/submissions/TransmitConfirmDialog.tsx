@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The last thing an officer sees before a return leaves the bank.
@@ -25,11 +25,11 @@
  * are no country literals in this file.
  */
 
-import { useState } from 'react';
-import { AlertTriangle, Check, FlaskConical, Loader2 } from 'lucide-react';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { submissionPortal } from '@/lib/format';
-import { fmtBytes } from './shared';
+import { useState } from "react";
+import { AlertTriangle, Check, FlaskConical, Loader2 } from "lucide-react";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { submissionPortal } from "@/lib/format";
+import { fmtBytes } from "./shared";
 import {
   ROLE_COPY,
   TONE_CLASS,
@@ -37,10 +37,10 @@ import {
   signedCell,
   sizeCell,
   type TransmitPreview,
-} from './transmitPreview';
+} from "./transmitPreview";
 
 function portalName(): string {
-  return submissionPortal() ?? 'the regulator\u2019s portal';
+  return submissionPortal() ?? "the regulator\u2019s portal";
 }
 
 export default function TransmitConfirmDialog({
@@ -86,7 +86,7 @@ export default function TransmitConfirmDialog({
           </h2>
           <p className="mt-1 text-caption text-slate">
             Reporting date {preview.reportingDate} · {preview.institutionName}
-            {preview.deadline ? ` · filing deadline ${preview.deadline}` : ''}
+            {preview.deadline ? ` · filing deadline ${preview.deadline}` : ""}
           </p>
         </div>
 
@@ -94,11 +94,11 @@ export default function TransmitConfirmDialog({
           <Fact label="Channel" value={preview.channelLabel} note={portal} />
           <Fact
             label="Reporting institution"
-            value={preview.institutionCode ?? 'Not recorded'}
+            value={preview.institutionCode ?? "Not recorded"}
             note={
               preview.institutionCode
-                ? 'From the institution profile'
-                : 'Add it in the institution profile'
+                ? "From the institution profile"
+                : "Add it in the institution profile"
             }
             mono={preview.institutionCode !== null}
           />
@@ -107,8 +107,8 @@ export default function TransmitConfirmDialog({
             value={preview.submissionRevision}
             note={
               preview.isFirstFiling
-                ? 'First filing of this return'
-                : 'A superseding filing'
+                ? "First filing of this return"
+                : "A superseding filing"
             }
             mono
           />
@@ -138,10 +138,16 @@ export default function TransmitConfirmDialog({
           <table className="mt-2.5 w-full text-caption">
             <thead>
               <tr className="border-b border-border">
-                <th scope="col" className="py-1.5 text-left font-medium text-slate">
+                <th
+                  scope="col"
+                  className="py-1.5 text-left font-medium text-slate"
+                >
                   File
                 </th>
-                <th scope="col" className="py-1.5 text-left font-medium text-slate">
+                <th
+                  scope="col"
+                  className="py-1.5 text-left font-medium text-slate"
+                >
                   What it is
                 </th>
                 <th
@@ -163,7 +169,10 @@ export default function TransmitConfirmDialog({
                 const signed = signedCell(entry);
                 const role = ROLE_COPY[entry.role];
                 return (
-                  <tr key={entry.filename} className="border-b border-border-light">
+                  <tr
+                    key={entry.filename}
+                    className="border-b border-border-light"
+                  >
                     <td className="py-2 pr-3 font-mono text-micro text-navy">
                       {entry.filename}
                     </td>
@@ -196,19 +205,32 @@ export default function TransmitConfirmDialog({
 
         <div className="grid grid-cols-2 gap-6 px-6 pt-5">
           <section>
-            <h3 className="text-body font-medium text-navy">Already satisfied</h3>
+            <h3 className="text-body font-medium text-navy">
+              Already satisfied
+            </h3>
             <ul className="mt-2 space-y-1.5">
               {preview.satisfied.map((item) => (
-                <li key={item} className="flex items-baseline gap-2 text-caption text-navy/85">
-                  <Check size={12} className="shrink-0 text-positive" aria-hidden />
+                <li
+                  key={item}
+                  className="flex items-baseline gap-2 text-caption text-navy/85"
+                >
+                  <Check
+                    size={12}
+                    className="shrink-0 text-positive"
+                    aria-hidden
+                  />
                   <span>{item}</span>
                 </li>
               ))}
               {preview.contentDigest && (
                 <li className="flex items-baseline gap-2 text-caption text-navy/85">
-                  <Check size={12} className="shrink-0 text-positive" aria-hidden />
+                  <Check
+                    size={12}
+                    className="shrink-0 text-positive"
+                    aria-hidden
+                  />
                   <span>
-                    Content unchanged since approval{' '}
+                    Content unchanged since approval{" "}
                     <span className="font-mono text-micro text-slate">
                       {preview.contentDigest}
                     </span>
@@ -229,7 +251,7 @@ export default function TransmitConfirmDialog({
               </li>
               <li>The files above are delivered to {portal}.</li>
               <li>
-                {regulatorName} returns a reference and this return becomes{' '}
+                {regulatorName} returns a reference and this return becomes{" "}
                 <span className="font-medium text-navy">Submitted</span>.
               </li>
               <li>The decision comes later — you check for it.</li>
@@ -238,13 +260,18 @@ export default function TransmitConfirmDialog({
         </div>
 
         <div className="mx-6 mt-5 flex items-start gap-2.5 rounded-sm border border-warning/30 bg-warning-light/50 px-3.5 py-2.5">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+          <AlertTriangle
+            size={15}
+            className="mt-0.5 shrink-0 text-warning"
+            aria-hidden
+          />
           <p className="text-caption leading-relaxed text-navy/85">
             <span className="font-medium text-navy">
-              Once {regulatorName} accepts the transmission it cannot be recalled.
-            </span>{' '}
-            A mistake after this point is corrected by requesting a resubmission,
-            which is recorded against your institution.
+              Once {regulatorName} accepts the transmission it cannot be
+              recalled.
+            </span>{" "}
+            A mistake after this point is corrected by requesting a
+            resubmission, which is recorded against your institution.
           </p>
         </div>
 
@@ -263,7 +290,7 @@ export default function TransmitConfirmDialog({
               className="h-4 w-4 accent-teal"
             />
             <span>
-              I am filing this return with {regulatorName} on behalf of{' '}
+              I am filing this return with {regulatorName} on behalf of{" "}
               {preview.institutionName}.
             </span>
           </label>
@@ -283,8 +310,12 @@ export default function TransmitConfirmDialog({
               onClick={onConfirm}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-50"
             >
-              {pending && <Loader2 size={13} className="animate-spin" aria-hidden />}
-              {preview.isSimulated ? 'Transmit (simulated)' : `Transmit to ${portal}`}
+              {pending && (
+                <Loader2 size={13} className="animate-spin" aria-hidden />
+              )}
+              {preview.isSimulated
+                ? "Transmit (simulated)"
+                : `Transmit to ${portal}`}
             </button>
           </div>
         </div>
@@ -307,7 +338,9 @@ function Fact({
   return (
     <div className="rounded-sm border border-border-light bg-surface px-3.5 py-2.5">
       <p className="text-micro text-slate">{label}</p>
-      <p className={`mt-1 text-body text-navy ${mono ? 'font-mono' : ''}`}>{value}</p>
+      <p className={`mt-1 text-body text-navy ${mono ? "font-mono" : ""}`}>
+        {value}
+      </p>
       <p className="mt-0.5 text-micro text-slate">{note}</p>
     </div>
   );

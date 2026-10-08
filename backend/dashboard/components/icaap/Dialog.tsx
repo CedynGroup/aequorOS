@@ -34,9 +34,9 @@ export default function Dialog({
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    panelRef.current?.querySelector<HTMLElement>(
-      "input, select, textarea, button",
-    )?.focus();
+    panelRef.current
+      ?.querySelector<HTMLElement>("input, select, textarea, button")
+      ?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Notification drawer — the real in-app feed (plan W3).
@@ -10,42 +10,45 @@
  * relevant surface when the notification carries a package/bank entity.
  */
 
-import { X, AlertCircle, AlertTriangle, Info } from 'lucide-react';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import type { NotificationRead } from '@aequoros/risk-service-api';
+import { X, AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import type { NotificationRead } from "@aequoros/risk-service-api";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
-} from '@/lib/api/hooks';
-import { fmtRelative } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtRelative } from "@/lib/api/values";
 
 const SEVERITY_STYLES: Record<
   string,
   { Icon: typeof Info; color: string; unreadBg: string }
 > = {
-  info: { Icon: Info, color: 'text-action', unreadBg: 'bg-action-light/30' },
+  info: { Icon: Info, color: "text-action", unreadBg: "bg-action-light/30" },
   warning: {
     Icon: AlertTriangle,
-    color: 'text-warning',
-    unreadBg: 'bg-warning-light/30',
+    color: "text-warning",
+    unreadBg: "bg-warning-light/30",
   },
   critical: {
     Icon: AlertCircle,
-    color: 'text-critical',
-    unreadBg: 'bg-critical-light/30',
+    color: "text-critical",
+    unreadBg: "bg-critical-light/30",
   },
 };
 
 /** Deep-link target for a notification, when its entity supports one. */
-export function notificationHref(notification: NotificationRead): string | null {
+export function notificationHref(
+  notification: NotificationRead,
+): string | null {
   // The calendar, explicitly: /submissions now redirects to the Returns
   // workspace, and a deadline notification is asking the reader to look at
   // the deadline board.
-  if (notification.type.startsWith('reporting.deadline.')) return '/submissions/calendar';
-  if (notification.entityType === 'regulatory_package') {
-    return '/submissions/history';
+  if (notification.type.startsWith("reporting.deadline."))
+    return "/submissions/calendar";
+  if (notification.entityType === "regulatory_package") {
+    return "/submissions/history";
   }
   return null;
 }
@@ -65,10 +68,10 @@ export default function NotificationDrawer({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -106,7 +109,7 @@ export default function NotificationDrawer({
             <h2 className="text-h3 text-navy">Notifications</h2>
             <p className="text-caption text-slate">
               {feed.isLoading
-                ? 'Loading…'
+                ? "Loading…"
                 : `${notifications.length} recent · ${unread} unread`}
             </p>
           </div>
@@ -133,7 +136,8 @@ export default function NotificationDrawer({
             <ul className="divide-y divide-border-light">
               {notifications.map((notification) => {
                 const style =
-                  SEVERITY_STYLES[notification.severity] ?? SEVERITY_STYLES.info;
+                  SEVERITY_STYLES[notification.severity] ??
+                  SEVERITY_STYLES.info;
                 const isUnread = notification.readAt == null;
                 return (
                   <li key={notification.id}>
@@ -141,7 +145,7 @@ export default function NotificationDrawer({
                       type="button"
                       onClick={() => openNotification(notification)}
                       className={`w-full text-left px-5 py-4 hover:bg-surface-alt ${
-                        isUnread ? style.unreadBg : ''
+                        isUnread ? style.unreadBg : ""
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -153,7 +157,7 @@ export default function NotificationDrawer({
                         <div className="flex-1 min-w-0">
                           <p
                             className={`text-body text-navy ${
-                              isUnread ? 'font-semibold' : 'font-medium'
+                              isUnread ? "font-semibold" : "font-medium"
                             }`}
                           >
                             {notification.title}
@@ -186,7 +190,7 @@ export default function NotificationDrawer({
             disabled={markAll.isPending || unread === 0}
             className="text-caption font-medium text-action hover:text-action-hover disabled:text-slate disabled:cursor-default"
           >
-            {markAll.isPending ? 'Marking…' : 'Mark all as read'}
+            {markAll.isPending ? "Marking…" : "Mark all as read"}
           </button>
           <span className="text-caption text-slate">
             Approvals · regulator decisions · deadlines

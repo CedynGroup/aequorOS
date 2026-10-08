@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting — Templates. The return-template registry: one card
@@ -8,14 +8,14 @@
  * invented is passed off as official.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { BookOpenCheck, CalendarDays, Send } from 'lucide-react';
-import type { ReturnTemplateRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import PageContainer from "@/components/ui/PageContainer";
+import { BookOpenCheck, CalendarDays, Send } from "lucide-react";
+import type { ReturnTemplateRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import {
   CHANNEL_LABELS,
   DEADLINE_RULE_TEXT,
@@ -23,9 +23,9 @@ import {
   FIDELITY_INFO,
   FidelityPill,
   TEMPLATE_SECTIONS,
-} from '@/components/submissions/shared';
-import { useReturnTemplates } from '@/lib/api/hooks';
-import { centralBankName } from '@/lib/format';
+} from "@/components/submissions/shared";
+import { useReturnTemplates } from "@/lib/api/hooks";
+import { centralBankName } from "@/lib/format";
 
 export default function TemplatesPage() {
   const query = useReturnTemplates();
@@ -33,22 +33,28 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Regulatory Reporting"
-        title="Return templates"
-      />
+      <PageHeader eyebrow="Regulatory Reporting" title="Return templates" />
 
       <PageContainer className="py-6 space-y-6">
         <div className="card px-5 py-4 flex items-start gap-3">
-          <BookOpenCheck size={16} className="text-action shrink-0 mt-0.5" aria-hidden />
+          <BookOpenCheck
+            size={16}
+            className="text-action shrink-0 mt-0.5"
+            aria-hidden
+          />
           <p className="text-caption text-navy/80 leading-relaxed">
-            Template structures, citations, deadlines and fidelity grades
-            follow the {centralBankName()} research dossiers
-            (<span className="font-mono">docs/research/bog_returns_and_templates.md</span>,{' '}
-            <span className="font-mono">docs/research/bog_orass_submission_channels.md</span>).
-            Grades are honest: <strong>CONFIRMED</strong> structures are
-            transcribed from published appendices, <strong>PARTIAL</strong>{' '}
-            returns are directive-described with non-public appendices, and{' '}
+            Template structures, citations, deadlines and fidelity grades follow
+            the {centralBankName()} research dossiers (
+            <span className="font-mono">
+              docs/research/bog_returns_and_templates.md
+            </span>
+            ,{" "}
+            <span className="font-mono">
+              docs/research/bog_orass_submission_channels.md
+            </span>
+            ). Grades are honest: <strong>CONFIRMED</strong> structures are
+            transcribed from published appendices, <strong>PARTIAL</strong>{" "}
+            returns are directive-described with non-public appendices, and{" "}
             <strong>REPRESENTATIVE</strong> layouts are professional
             reconstructions awaiting the official forms.
           </p>
@@ -111,10 +117,14 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
         </p>
 
         <div className="flex items-start gap-2 text-caption text-navy/85">
-          <CalendarDays size={13} className="text-slate shrink-0 mt-0.5" aria-hidden />
+          <CalendarDays
+            size={13}
+            className="text-slate shrink-0 mt-0.5"
+            aria-hidden
+          />
           <span className="leading-relaxed">
             <span className="capitalize font-medium">{template.frequency}</span>
-            {deadline ? ` — ${deadline}` : ''}
+            {deadline ? ` — ${deadline}` : ""}
           </span>
         </div>
 
@@ -147,7 +157,7 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
           </span>
         </div>
         <p className="font-mono text-micro text-slate">
-          {template.templateId} · regulator {template.regulator} · generator{' '}
+          {template.templateId} · regulator {template.regulator} · generator{" "}
           {template.generator}
         </p>
       </CardBody>

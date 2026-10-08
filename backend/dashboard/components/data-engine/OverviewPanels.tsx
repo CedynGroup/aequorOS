@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Data Engine overview: per-integration status cards fed by the ingestion
@@ -6,23 +6,23 @@
  * cross-source console; everything integration-specific lives in the tabs.
  */
 
-import Link from 'next/link';
-import { ArrowRight, FileSpreadsheet, Server, Webhook } from 'lucide-react';
+import Link from "next/link";
+import { ArrowRight, FileSpreadsheet, Server, Webhook } from "lucide-react";
 import type {
   IngestionSourceSummaryRead,
   IngestionSummaryRead,
-} from '@aequoros/risk-service-api';
-import StatusPill from '@/components/ui/StatusPill';
-import { useBankContext } from '@/components/shell/BankContext';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useIngestionSummary } from '@/lib/api/ingestion';
-import { INTEGRATIONS, type Integration } from './content';
-import { BatchStatusPill, formatDateTime } from './shared';
-import { fmtLocale } from '@/lib/format';
+} from "@aequoros/risk-service-api";
+import StatusPill from "@/components/ui/StatusPill";
+import { useBankContext } from "@/components/shell/BankContext";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useIngestionSummary } from "@/lib/api/ingestion";
+import { INTEGRATIONS, type Integration } from "./content";
+import { BatchStatusPill, formatDateTime } from "./shared";
+import { fmtLocale } from "@/lib/format";
 
 const INTEGRATION_ICONS: Record<string, typeof Server> = {
-  'excel-csv': FileSpreadsheet,
+  "excel-csv": FileSpreadsheet,
   api: Webhook,
   t24: Server,
   adapters: Server,
@@ -53,17 +53,29 @@ function combineSources(
   }
   return {
     batches: sources.reduce((sum, source) => sum + source.batches, 0),
-    accepted: sources.reduce((sum, source) => sum + source.recordsAcceptedTotal, 0),
-    warnings: sources.reduce((sum, source) => sum + source.recordsWarningTotal, 0),
+    accepted: sources.reduce(
+      (sum, source) => sum + source.recordsAcceptedTotal,
+      0,
+    ),
+    warnings: sources.reduce(
+      (sum, source) => sum + source.recordsWarningTotal,
+      0,
+    ),
     lastBatchAt: latest?.lastBatchAt ?? null,
     lastStatus: latest?.lastStatus ?? null,
   };
 }
 
-function StatusBadge({ status, label }: { status: Integration['status']; label: string }) {
+function StatusBadge({
+  status,
+  label,
+}: {
+  status: Integration["status"];
+  label: string;
+}) {
   return (
     <StatusPill
-      tone={status === 'connected' ? 'success' : 'slate'}
+      tone={status === "connected" ? "success" : "slate"}
       className="ml-auto shrink-0"
     >
       {label}
@@ -80,24 +92,39 @@ function IntegrationCard({
 }) {
   const Icon = INTEGRATION_ICONS[integration.key] ?? Server;
   const stats = combineSources(summary, integration);
-  const connected = integration.status === 'connected';
+  const connected = integration.status === "connected";
 
   return (
-    <div className={`card p-5 flex flex-col ${connected ? 'border-l-4 border-l-success' : ''}`}>
+    <div
+      className={`card p-5 flex flex-col ${connected ? "border-l-4 border-l-success" : ""}`}
+    >
       <div className="flex items-center gap-2">
-        <Icon size={18} className={connected ? 'text-success' : 'text-slate'} aria-hidden />
+        <Icon
+          size={18}
+          className={connected ? "text-success" : "text-slate"}
+          aria-hidden
+        />
         <h3 className="text-h3 text-navy">{integration.name}</h3>
-        <StatusBadge status={integration.status} label={integration.statusLabel} />
+        <StatusBadge
+          status={integration.status}
+          label={integration.statusLabel}
+        />
       </div>
-      <p className="mt-2 text-body text-slate leading-relaxed">{integration.description}</p>
+      <p className="mt-2 text-body text-slate leading-relaxed">
+        {integration.description}
+      </p>
 
       <div className="mt-3 pt-3 border-t border-border-light grid grid-cols-3 gap-3">
         <div>
-          <p className="text-micro uppercase tracking-wider text-slate">Batches</p>
+          <p className="text-micro uppercase tracking-wider text-slate">
+            Batches
+          </p>
           <p className="mt-0.5 font-mono text-h3 text-navy">{stats.batches}</p>
         </div>
         <div>
-          <p className="text-micro uppercase tracking-wider text-slate">Accepted</p>
+          <p className="text-micro uppercase tracking-wider text-slate">
+            Accepted
+          </p>
           <p className="mt-0.5 font-mono text-h3 text-success">
             {stats.accepted.toLocaleString(fmtLocale())}
           </p>
@@ -110,7 +137,7 @@ function IntegrationCard({
             Flagged
           </p>
           <p
-            className={`mt-0.5 font-mono text-h3 ${stats.warnings > 0 ? 'text-warning' : 'text-slate'}`}
+            className={`mt-0.5 font-mono text-h3 ${stats.warnings > 0 ? "text-warning" : "text-slate"}`}
           >
             {stats.warnings.toLocaleString(fmtLocale())}
           </p>
@@ -121,14 +148,18 @@ function IntegrationCard({
         {stats.lastBatchAt ? (
           <>
             <span className="text-caption text-slate">
-              Last ingestion{' '}
-              <span className="font-mono text-navy">{formatDateTime(stats.lastBatchAt)}</span>
+              Last ingestion{" "}
+              <span className="font-mono text-navy">
+                {formatDateTime(stats.lastBatchAt)}
+              </span>
             </span>
             {stats.lastStatus && <BatchStatusPill status={stats.lastStatus} />}
           </>
         ) : (
           <span className="text-caption text-slate">
-            {connected ? 'No batches yet' : 'No ingestion until the adapter ships'}
+            {connected
+              ? "No batches yet"
+              : "No ingestion until the adapter ships"}
           </span>
         )}
         <Link
@@ -151,8 +182,8 @@ export function IntegrationCards() {
       <div className="flex items-baseline justify-between">
         <h2 className="text-h2 text-navy">Integrations</h2>
         <p className="text-caption text-slate">
-          Adapters translate each source into the canonical model — downstream modules
-          never see source-system formats.
+          Adapters translate each source into the canonical model — downstream
+          modules never see source-system formats.
         </p>
       </div>
       {summaryQuery.isError && (
@@ -194,28 +225,45 @@ export function CanonicalSummaryStrip() {
     counts.products +
     counts.referenceRows;
 
-  const tiles: { label: string; value: string; tone?: string; title?: string }[] = [
+  const tiles: {
+    label: string;
+    value: string;
+    tone?: string;
+    title?: string;
+  }[] = [
     {
-      label: 'Canonical records',
+      label: "Canonical records",
       value: totalRecords.toLocaleString(fmtLocale()),
       title:
-        'Current-generation positions, counterparties, GL accounts, and products, plus the reference rows the modules consume.',
+        "Current-generation positions, counterparties, GL accounts, and products, plus the reference rows the modules consume.",
     },
-    { label: 'Positions (current gen)', value: counts.positions.toLocaleString(fmtLocale()) },
-    { label: 'Counterparties', value: counts.counterparties.toLocaleString(fmtLocale()) },
-    { label: 'GL accounts', value: counts.glAccounts.toLocaleString(fmtLocale()) },
-    { label: 'Products', value: counts.products.toLocaleString(fmtLocale()) },
-    { label: 'Reference rows', value: counts.referenceRows.toLocaleString(fmtLocale()) },
     {
-      label: 'Activations',
+      label: "Positions (current gen)",
+      value: counts.positions.toLocaleString(fmtLocale()),
+    },
+    {
+      label: "Counterparties",
+      value: counts.counterparties.toLocaleString(fmtLocale()),
+    },
+    {
+      label: "GL accounts",
+      value: counts.glAccounts.toLocaleString(fmtLocale()),
+    },
+    { label: "Products", value: counts.products.toLocaleString(fmtLocale()) },
+    {
+      label: "Reference rows",
+      value: counts.referenceRows.toLocaleString(fmtLocale()),
+    },
+    {
+      label: "Activations",
       value: String(summaryQuery.data.activationsCount),
-      title: 'Fact derivations + module recomputes run from this console.',
+      title: "Fact derivations + module recomputes run from this console.",
     },
     {
-      label: 'Last activation',
+      label: "Last activation",
       value: summaryQuery.data.lastActivationAt
         ? formatDateTime(summaryQuery.data.lastActivationAt)
-        : '—',
+        : "—",
     },
   ];
 
@@ -224,9 +272,17 @@ export function CanonicalSummaryStrip() {
       <h2 className="text-h2 text-navy">Canonical model</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-border-light rounded-sm overflow-hidden border border-border-light">
         {tiles.map((tile) => (
-          <div key={tile.label} className="bg-surface-raised px-3 py-2.5" title={tile.title}>
-            <p className="text-micro uppercase tracking-wider text-slate">{tile.label}</p>
-            <p className={`mt-1 font-mono text-h3 ${tile.tone ?? 'text-navy'} truncate`}>
+          <div
+            key={tile.label}
+            className="bg-surface-raised px-3 py-2.5"
+            title={tile.title}
+          >
+            <p className="text-micro uppercase tracking-wider text-slate">
+              {tile.label}
+            </p>
+            <p
+              className={`mt-1 font-mono text-h3 ${tile.tone ?? "text-navy"} truncate`}
+            >
               {tile.value}
             </p>
           </div>

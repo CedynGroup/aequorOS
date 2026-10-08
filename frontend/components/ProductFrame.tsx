@@ -1,7 +1,7 @@
-import Image from 'next/image';
-import type { ProductScreen } from '@/lib/product-screens';
+import Image from "next/image";
+import type { ProductScreen } from "@/lib/product-screens";
 
-type Variant = 'chrome-dark' | 'plain';
+type Variant = "chrome-dark" | "plain";
 
 type Props = {
   screen: ProductScreen;
@@ -24,11 +24,11 @@ type Props = {
 export default function ProductFrame({
   screen,
   priority = false,
-  variant = 'plain',
-  className = '',
+  variant = "plain",
+  className = "",
   sizes,
 }: Props) {
-  if (variant === 'chrome-dark') {
+  if (variant === "chrome-dark") {
     return (
       <figure className={className}>
         <div className="rounded-t-lg overflow-hidden border border-white/18 border-b-0 shadow-[0_-18px_60px_rgba(0,0,0,0.35)]">

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Window analysis — engine-computed start/end-date analytics. The backend
@@ -9,25 +9,25 @@
  * ladder per module over the same window.
  */
 
-import { useState } from 'react';
-import type { LiveModule, WindowRatio } from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import DeltaBadge from '@/components/ui/DeltaBadge';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonLine } from '@/components/ui/Skeleton';
+import { useState } from "react";
+import type { LiveModule, WindowRatio } from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import DeltaBadge from "@/components/ui/DeltaBadge";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonLine } from "@/components/ui/Skeleton";
 import {
   LIVE_MODULE_LABELS,
   livePrimaryMetricIsAdvisory,
-} from '@/components/live/moduleDisplay';
-import { useWindowAnalytics } from '@/lib/api/hooks';
-import { labelize, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+} from "@/components/live/moduleDisplay";
+import { useWindowAnalytics } from "@/lib/api/hooks";
+import { labelize, num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
 
 const RATIO_LABELS: Record<WindowRatio, string> = {
-  lcr_pct: 'LCR',
-  nsfr_pct: 'NSFR',
-  car_pct: 'CAR',
-  cet1_ratio_pct: 'CET1 ratio',
+  lcr_pct: "LCR",
+  nsfr_pct: "NSFR",
+  car_pct: "CAR",
+  cet1_ratio_pct: "CET1 ratio",
 };
 
 /**
@@ -36,24 +36,24 @@ const RATIO_LABELS: Record<WindowRatio, string> = {
  * `moduleDisplay.test.ts` reads this map and fails when they drift.
  */
 const METRIC_LABELS: Record<string, string> = {
-  lcr_pct: 'LCR',
-  car_pct: 'CAR',
-  npl_ratio_pct: 'NPL ratio',
-  worst_eve_change_pct_tier1: 'ΔEVE / Tier 1',
-  nop_pct_tier1: 'NOP / Tier 1',
-  portfolio_nim_pct: 'Portfolio NIM',
-  pit_pd_upper_pct: 'PIT PD upper band',
-  year5_car_pct: 'Year-5 CAR',
+  lcr_pct: "LCR",
+  car_pct: "CAR",
+  npl_ratio_pct: "NPL ratio",
+  worst_eve_change_pct_tier1: "ΔEVE / Tier 1",
+  nop_pct_tier1: "NOP / Tier 1",
+  portfolio_nim_pct: "Portfolio NIM",
+  pit_pd_upper_pct: "PIT PD upper band",
+  year5_car_pct: "Year-5 CAR",
 };
 
 const PRESETS: { label: string; months: number }[] = [
-  { label: 'Last quarter', months: 3 },
-  { label: '6M', months: 6 },
-  { label: '1Y', months: 12 },
+  { label: "Last quarter", months: 3 },
+  { label: "6M", months: 6 },
+  { label: "1Y", months: 12 },
 ];
 
 const DATE_INPUT_CLASSES =
-  'border border-border bg-surface-raised rounded-md text-body font-mono px-2.5 py-1.5 text-navy';
+  "border border-border bg-surface-raised rounded-md text-body font-mono px-2.5 py-1.5 text-navy";
 
 function toIso(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -84,22 +84,22 @@ export default function WindowAnalysis({
 }: {
   bankId: string | undefined;
 }) {
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [applied, setApplied] = useState<{ start: string; end: string } | null>(
-    null
+    null,
   );
   const query = useWindowAnalytics(
     bankId,
     applied?.start,
     applied?.end,
-    Boolean(applied)
+    Boolean(applied),
   );
 
   const data = query.data;
   const storedPoints = (data?.ratios ?? []).reduce(
     (count, stat) => count + stat.points.filter((p) => p.stored).length,
-    0
+    0,
   );
 
   return (
@@ -193,10 +193,14 @@ export default function WindowAnalysis({
                       {RATIO_LABELS[stat.ratio]}
                     </span>
                     <span className="text-body font-mono tnum text-navy whitespace-nowrap">
-                      {fmtPct(num(stat.startValue))} →{' '}
+                      {fmtPct(num(stat.startValue))} →{" "}
                       {fmtPct(num(stat.endValue))}
                     </span>
-                    <DeltaBadge value={num(stat.change)} suffix=" pp" decimals={2} />
+                    <DeltaBadge
+                      value={num(stat.change)}
+                      suffix=" pp"
+                      decimals={2}
+                    />
                   </div>
                   <span className="text-caption text-slate font-mono tnum whitespace-nowrap">
                     avg {fmtPct(num(stat.avg))} · min {fmtPct(num(stat.min))} ·
@@ -209,17 +213,17 @@ export default function WindowAnalysis({
               <div className="mt-3 pt-3 border-t border-border-light space-y-1">
                 {data.daily.map((row) => (
                   <p key={row.module} className="text-caption text-slate">
-                    {moduleLabel(row.module)}: {row.dayCount} daily{' '}
-                    {row.dayCount === 1 ? 'close' : 'closes'} ·{' '}
+                    {moduleLabel(row.module)}: {row.dayCount} daily{" "}
+                    {row.dayCount === 1 ? "close" : "closes"} ·{" "}
                     {METRIC_LABELS[row.metricKey] ?? labelize(row.metricKey)}
                     {isAdvisory(row.module) ? (
                       <span className="text-warning"> (advisory)</span>
-                    ) : null}{' '}
-                    avg{' '}
+                    ) : null}{" "}
+                    avg{" "}
                     <span className="font-mono tnum">
                       {fmtPct(num(row.avg), 1)}
-                    </span>{' '}
-                    · min{' '}
+                    </span>{" "}
+                    · min{" "}
                     <span className="font-mono tnum">
                       {fmtPct(num(row.min), 1)}
                     </span>

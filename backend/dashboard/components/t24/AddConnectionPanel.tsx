@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * "Connect a Temenos core" — the onboarding flow as a stepper: choose the
@@ -8,7 +8,7 @@
  * the only stored representation shown is the fingerprint on the connection card.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,19 +16,19 @@ import {
   Loader2,
   Plug,
   XCircle,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   TemenosConnectionRead,
   TemenosDomainInfoRead,
   TemenosTestPullRead,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useCreateTemenosConnection,
   useTemenosDomains,
   useTestTemenosConnection,
-} from '@/lib/api/hooks';
-import CredentialFields from './CredentialFields';
+} from "@/lib/api/hooks";
+import CredentialFields from "./CredentialFields";
 import {
   CORE_SYSTEMS,
   ConnectionStatusPill,
@@ -38,10 +38,16 @@ import {
   type ModeKey,
   domainShortLabel,
   modeName,
-} from './shared';
+} from "./shared";
 
-type Step = 'mode' | 'connection' | 'credentials' | 'domains' | 'activate';
-const STEPS: Step[] = ['mode', 'connection', 'credentials', 'domains', 'activate'];
+type Step = "mode" | "connection" | "credentials" | "domains" | "activate";
+const STEPS: Step[] = [
+  "mode",
+  "connection",
+  "credentials",
+  "domains",
+  "activate",
+];
 
 export default function AddConnectionPanel({
   bankId,
@@ -53,28 +59,31 @@ export default function AddConnectionPanel({
   onDone: () => void;
 }) {
   const [mode, setMode] = useState<ModeKey | null>(null);
-  const [coreSystem, setCoreSystem] = useState<CoreSystemKey>('T24');
-  const [displayName, setDisplayName] = useState('');
-  const [endpoint, setEndpoint] = useState('');
-  const [companies, setCompanies] = useState('');
-  const [defaultCurrency, setDefaultCurrency] = useState('GHS');
+  const [coreSystem, setCoreSystem] = useState<CoreSystemKey>("T24");
+  const [displayName, setDisplayName] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [companies, setCompanies] = useState("");
+  const [defaultCurrency, setDefaultCurrency] = useState("GHS");
   const [credValues, setCredValues] = useState<Record<string, string>>({});
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [touchedDomains, setTouchedDomains] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [created, setCreated] = useState<TemenosConnectionRead | null>(null);
-  const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(null);
+  const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
   const create = useCreateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
-  const domainsQuery = useTemenosDomains(bankId, mode ?? 'OFS');
+  const domainsQuery = useTemenosDomains(bankId, mode ?? "OFS");
 
   const supported = useMemo(
-    () => (domainsQuery.data?.domains ?? []).filter((domain) => domain.supported),
-    [domainsQuery.data]
+    () =>
+      (domainsQuery.data?.domains ?? []).filter((domain) => domain.supported),
+    [domainsQuery.data],
   );
   const byCategory = useMemo(() => {
     const groups = new Map<string, TemenosDomainInfoRead[]>();
@@ -102,7 +111,9 @@ export default function AddConnectionPanel({
       setDisplayName(`Core ${modeName(key)}`);
     }
     if (!endpoint) {
-      setEndpoint(MODES.find((option) => option.key === key)?.endpointHint ?? '');
+      setEndpoint(
+        MODES.find((option) => option.key === key)?.endpointHint ?? "",
+      );
     }
   };
 
@@ -124,7 +135,7 @@ export default function AddConnectionPanel({
     setError(null);
     try {
       const companyList = companies
-        .split(',')
+        .split(",")
         .map((value) => value.trim())
         .filter(Boolean);
       const allSelected = effectiveSelected.size === supported.length;
@@ -134,7 +145,7 @@ export default function AddConnectionPanel({
         displayName: displayName.trim() || `Core ${modeName(mode)}`,
         endpoint: endpoint.trim(),
         companies: companyList,
-        defaultCurrency: defaultCurrency.trim() || 'GHS',
+        defaultCurrency: defaultCurrency.trim() || "GHS",
         // Empty domains means "every supported domain" on the backend.
         domains: allSelected ? [] : [...effectiveSelected].sort(),
         credentials: credValues,
@@ -151,7 +162,7 @@ export default function AddConnectionPanel({
           ? caught.message
           : caught instanceof Error
             ? caught.message
-            : 'Could not create the connection.'
+            : "Could not create the connection.",
       );
     } finally {
       setRunning(false);
@@ -169,8 +180,9 @@ export default function AddConnectionPanel({
         <div>
           <h2 className="text-h2 text-navy">Configure a Temenos core</h2>
           <p className="mt-1 text-body text-slate">
-            Save the endpoint, credentials, and domain mapping for onboarding. Live OFS, IRIS,
-            and Open API transport is not enabled in this deployment.
+            Save the endpoint, credentials, and domain mapping for onboarding.
+            Live OFS, IRIS, and Open API transport is not enabled in this
+            deployment.
           </p>
         </div>
         <button
@@ -188,10 +200,10 @@ export default function AddConnectionPanel({
             key={name}
             className={`px-2.5 py-1 rounded border font-medium uppercase tracking-wider ${
               index === stepIndex
-                ? 'border-action text-action bg-action-light'
+                ? "border-action text-action bg-action-light"
                 : index < stepIndex
-                  ? 'border-success/30 text-success bg-success-light'
-                  : 'border-border text-slate'
+                  ? "border-success/30 text-success bg-success-light"
+                  : "border-border text-slate"
             }`}
           >
             {index + 1}. {name}
@@ -199,7 +211,7 @@ export default function AddConnectionPanel({
         ))}
       </ol>
 
-      {step === 'mode' && (
+      {step === "mode" && (
         <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
             {MODES.map((option) => {
@@ -211,12 +223,14 @@ export default function AddConnectionPanel({
                   onClick={() => chooseMode(option.key)}
                   className={`text-left rounded border p-4 space-y-1 ${
                     active
-                      ? 'border-action bg-action-light/60'
-                      : 'border-border hover:border-action/50'
+                      ? "border-action bg-action-light/60"
+                      : "border-border hover:border-action/50"
                   }`}
                 >
                   <p className="text-h3 text-navy">{option.name}</p>
-                  <p className="text-caption font-medium text-slate">{option.channel}</p>
+                  <p className="text-caption font-medium text-slate">
+                    {option.channel}
+                  </p>
                   <p className="text-body text-slate">{option.description}</p>
                 </button>
               );
@@ -253,7 +267,9 @@ export default function AddConnectionPanel({
               <select
                 id="t24-core-system"
                 value={coreSystem}
-                onChange={(event) => setCoreSystem(event.target.value as CoreSystemKey)}
+                onChange={(event) =>
+                  setCoreSystem(event.target.value as CoreSystemKey)
+                }
                 className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy bg-surface-raised"
               >
                 {CORE_SYSTEMS.map((system) => (
@@ -267,7 +283,7 @@ export default function AddConnectionPanel({
         </div>
       )}
 
-      {step === 'connection' && (
+      {step === "connection" && (
         <div className="space-y-4 max-w-2xl">
           <div>
             <label
@@ -281,12 +297,15 @@ export default function AddConnectionPanel({
               type="text"
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}
-              placeholder={MODES.find((option) => option.key === mode)?.endpointHint}
+              placeholder={
+                MODES.find((option) => option.key === mode)?.endpointHint
+              }
               className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             <p className="mt-1 text-caption text-slate">
-              The core banking host AequorOS signs on to. Reachable only from within your
-              network — AequorOS connects from the deployment, never the browser.
+              The core banking host AequorOS signs on to. Reachable only from
+              within your network — AequorOS connects from the deployment, never
+              the browser.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -320,7 +339,9 @@ export default function AddConnectionPanel({
                 id="t24-currency"
                 type="text"
                 value={defaultCurrency}
-                onChange={(event) => setDefaultCurrency(event.target.value.toUpperCase())}
+                onChange={(event) =>
+                  setDefaultCurrency(event.target.value.toUpperCase())
+                }
                 maxLength={3}
                 className="w-28 px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono uppercase"
               />
@@ -329,12 +350,12 @@ export default function AddConnectionPanel({
         </div>
       )}
 
-      {step === 'credentials' && mode && (
+      {step === "credentials" && mode && (
         <div className="space-y-4">
           <p className="text-body text-slate">
-            Enter the credentials for the AequorOS service user on your{' '}
-            {modeName(mode)} channel. They are validated on submission and stored
-            encrypted; only the fingerprint is shown afterwards.
+            Enter the credentials for the AequorOS service user on your{" "}
+            {modeName(mode)} channel. They are validated on submission and
+            stored encrypted; only the fingerprint is shown afterwards.
           </p>
           <CredentialFields
             mode={mode}
@@ -359,23 +380,28 @@ export default function AddConnectionPanel({
               className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             <p className="mt-1 text-caption text-slate">
-              AequorOS warns 30 days before expiry and guides you through rotation.
+              AequorOS warns 30 days before expiry and guides you through
+              rotation.
             </p>
           </div>
         </div>
       )}
 
-      {step === 'domains' && (
+      {step === "domains" && (
         <div className="space-y-4">
           <p className="text-body text-slate">
-            Which parts of the core book should AequorOS pull? Everything supported by the{' '}
-            {mode ? modeName(mode) : ''} catalog is enabled by default.
+            Which parts of the core book should AequorOS pull? Everything
+            supported by the {mode ? modeName(mode) : ""} catalog is enabled by
+            default.
           </p>
           {domainsQuery.isPending && (
             <p className="text-body text-slate">Loading the domain catalog…</p>
           )}
           {[...byCategory.entries()].map(([category, domains]) => (
-            <fieldset key={category} className="rounded-sm border border-border p-4">
+            <fieldset
+              key={category}
+              className="rounded-sm border border-border p-4"
+            >
               <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
                 {DOMAIN_CATEGORY_LABELS[category] ?? category}
               </legend>
@@ -391,32 +417,39 @@ export default function AddConnectionPanel({
                       onChange={() => toggleDomain(domain.domain)}
                       className="rounded-sm border-border"
                     />
-                    <span>{domainShortLabel(domain.domain, domain.category)}</span>
+                    <span>
+                      {domainShortLabel(domain.domain, domain.category)}
+                    </span>
                   </label>
                 ))}
               </div>
             </fieldset>
           ))}
           <p className="text-body text-navy">
-            <span className="font-mono font-medium">{effectiveSelected.size}</span> of{' '}
-            <span className="font-mono font-medium">{supported.length}</span> supported
-            domains enabled.
+            <span className="font-mono font-medium">
+              {effectiveSelected.size}
+            </span>{" "}
+            of <span className="font-mono font-medium">{supported.length}</span>{" "}
+            supported domains enabled.
           </p>
         </div>
       )}
 
-      {step === 'activate' && (
+      {step === "activate" && (
         <div className="space-y-4">
           {!created && (
             <>
               <p className="text-body text-slate">
-                AequorOS will store the configuration and check its credential structure. This
-                deployment does not make a network request to T24, and live pulls stay blocked.
+                AequorOS will store the configuration and check its credential
+                structure. This deployment does not make a network request to
+                T24, and live pulls stay blocked.
               </p>
               <button
                 type="button"
                 onClick={() => void createAndTest()}
-                disabled={running || !mode || !endpoint.trim() || credentialsIncomplete}
+                disabled={
+                  running || !mode || !endpoint.trim() || credentialsIncomplete
+                }
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
@@ -434,43 +467,58 @@ export default function AddConnectionPanel({
               <div className="flex items-center gap-2">
                 <ConnectionStatusPill status={created.status} />
                 <p className="text-body text-navy">
-                  {created.status === 'TESTING'
-                    ? 'Connection stored, but credential validation failed — fix it from the connection card (Rotate credentials).'
+                  {created.status === "TESTING"
+                    ? "Connection stored, but credential validation failed — fix it from the connection card (Rotate credentials)."
                     : `${modeName(created.connectionMode)} configuration saved. Live transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
                 <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
-                  <p className="text-body text-navy">{created.validationError}</p>
+                  <p className="text-body text-navy">
+                    {created.validationError}
+                  </p>
                 </div>
               )}
               {testResult && (
                 <div
                   className={`rounded border px-4 py-3 space-y-2 ${
                     testResult.success
-                      ? 'border-success/30 bg-success-light/50'
-                      : 'border-critical/30 bg-critical-light/40'
+                      ? "border-success/30 bg-success-light/50"
+                      : "border-critical/30 bg-critical-light/40"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {testResult.success ? (
-                      <CheckCircle2 size={15} className="text-success" aria-hidden />
+                      <CheckCircle2
+                        size={15}
+                        className="text-success"
+                        aria-hidden
+                      />
                     ) : (
-                      <XCircle size={15} className="text-critical" aria-hidden />
+                      <XCircle
+                        size={15}
+                        className="text-critical"
+                        aria-hidden
+                      />
                     )}
                     <p className="text-body font-medium text-navy">
                       {testResult.success
-                        ? 'Configuration check complete.'
-                        : 'Live transport unavailable'}
+                        ? "Configuration check complete."
+                        : "Live transport unavailable"}
                     </p>
                   </div>
                   {testResult.success ? (
                     <ul className="space-y-1">
-                      {Object.entries(testResult.sampleValues).map(([label, value]) => (
-                        <li key={label} className="text-body text-navy font-mono">
-                          {label}: {value}
-                        </li>
-                      ))}
+                      {Object.entries(testResult.sampleValues).map(
+                        ([label, value]) => (
+                          <li
+                            key={label}
+                            className="text-body text-navy font-mono"
+                          >
+                            {label}: {value}
+                          </li>
+                        ),
+                      )}
                     </ul>
                   ) : (
                     <p className="text-body text-navy">{testResult.error}</p>
@@ -506,15 +554,15 @@ export default function AddConnectionPanel({
             <ArrowLeft size={13} aria-hidden />
             Back
           </button>
-          {step !== 'activate' && (
+          {step !== "activate" && (
             <button
               type="button"
               onClick={() => setStepIndex((index) => index + 1)}
               disabled={
                 running ||
-                (step === 'mode' && (!mode || nameTaken)) ||
-                (step === 'connection' && !endpoint.trim()) ||
-                (step === 'credentials' && credentialsIncomplete)
+                (step === "mode" && (!mode || nameTaken)) ||
+                (step === "connection" && !endpoint.trim()) ||
+                (step === "credentials" && credentialsIncomplete)
               }
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Per-mode credential form fields (OFS service user, IRIS/Open API client
@@ -7,7 +7,7 @@
  * representation shown anywhere is the SHA-256 fingerprint.
  */
 
-import { CREDENTIAL_FIELDS, type ModeKey } from './shared';
+import { CREDENTIAL_FIELDS, type ModeKey } from "./shared";
 
 export default function CredentialFields({
   mode,
@@ -34,8 +34,8 @@ export default function CredentialFields({
             </label>
             <input
               id={id}
-              type={field.secret ? 'password' : 'text'}
-              value={values[field.key] ?? ''}
+              type={field.secret ? "password" : "text"}
+              value={values[field.key] ?? ""}
               onChange={(event) => onChange(field.key, event.target.value)}
               placeholder={field.placeholder}
               autoComplete="off"

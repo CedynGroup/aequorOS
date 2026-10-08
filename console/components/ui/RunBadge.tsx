@@ -1,5 +1,5 @@
-import { GitCommitHorizontal } from 'lucide-react';
-import { fmtTimestamp, shortId } from '@/lib/format';
+import { GitCommitHorizontal } from "lucide-react";
+import { fmtTimestamp, shortId } from "@/lib/format";
 
 /** The audit fields shared by run / determination / digest payloads. */
 export type RunBadgeRun = {
@@ -17,7 +17,7 @@ export function RunBadge({ run }: { run: RunBadgeRun }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-sm border border-border-light bg-surface px-2 py-1 font-mono text-[10px] tabular-nums text-slate"
-      title={`Run ${run.id}${run.hash ? ` · hash ${run.hash}` : ''}`}
+      title={`Run ${run.id}${run.hash ? ` · hash ${run.hash}` : ""}`}
     >
       <GitCommitHorizontal size={11} aria-hidden />
       {run.version && <>{run.version}</>}

@@ -1,4 +1,4 @@
-import StatusPill from '@/components/ui/StatusPill';
+import StatusPill from "@/components/ui/StatusPill";
 
 /**
  * The honest render of a limit row whose regulatory floor did not resolve.
@@ -14,7 +14,7 @@ import StatusPill from '@/components/ui/StatusPill';
 export default function FloorNotAssessed({
   label,
   value,
-  unit = '%',
+  unit = "%",
   reason,
   format = (v: number) => v.toFixed(1),
 }: {
@@ -33,12 +33,12 @@ export default function FloorNotAssessed({
           {label}
         </span>
         <span className="font-mono text-caption font-semibold tnum whitespace-nowrap text-navy">
-          {value === null ? 'Not computed' : `${format(value)}${unit}`}
+          {value === null ? "Not computed" : `${format(value)}${unit}`}
         </span>
       </div>
       <div
         className="relative h-3 rounded-xs border border-dashed border-border"
-        style={{ background: 'rgb(var(--surface-hover))' }}
+        style={{ background: "rgb(var(--surface-hover))" }}
         role="img"
         aria-label={`${label} not assessed — ${reason}`}
       />

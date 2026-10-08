@@ -1,26 +1,26 @@
-import Link from 'next/link';
-import Image from 'next/image';
+import Link from "next/link";
+import Image from "next/image";
 
 const dashboardLoginUrl =
   process.env.NEXT_PUBLIC_LOGIN_URL ??
-  `${(process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/login`;
-const employeeLoginUrl = `${(process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'http://localhost:3002').replace(/\/$/, '')}/login`;
+  `${(process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3001").replace(/\/$/, "")}/login`;
+const employeeLoginUrl = `${(process.env.NEXT_PUBLIC_CONSOLE_URL ?? "http://localhost:3002").replace(/\/$/, "")}/login`;
 
 const columns = [
   {
-    title: 'Product',
+    title: "Product",
     links: [
-      { href: '/product', label: 'Platform' },
-      { href: '/security', label: 'Security' },
-      { href: '/product', label: 'Browse the UI' },
+      { href: "/product", label: "Platform" },
+      { href: "/security", label: "Security" },
+      { href: "/product", label: "Browse the UI" },
     ],
   },
   {
-    title: 'Company',
+    title: "Company",
     links: [
-      { href: '/company', label: 'About' },
-      { href: '/contact', label: 'Contact' },
-      { href: '/investors', label: 'Investors' },
+      { href: "/company", label: "About" },
+      { href: "/contact", label: "Contact" },
+      { href: "/investors", label: "Investors" },
     ],
   },
 ];

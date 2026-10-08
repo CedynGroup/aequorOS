@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * CRM collateral-haircut register editor (Basel II ¶151 supervisory
@@ -9,21 +9,28 @@
  * server-side; the capital engine reads this register on every run.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import type {
   CrmHaircutRead,
   CrmHaircutRegisterRead,
   CrmHaircutUpdate,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useCrmHaircutRegister, useUpdateCrmHaircutRegister } from '@/lib/api/hooks';
-import { fmtDateUTC, labelize, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
-import { FormActions, ReasonField, textOrNull } from '@/components/institution/shared';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import {
+  useCrmHaircutRegister,
+  useUpdateCrmHaircutRegister,
+} from "@/lib/api/hooks";
+import { fmtDateUTC, labelize, num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
+import {
+  FormActions,
+  ReasonField,
+  textOrNull,
+} from "@/components/institution/shared";
 import {
   EditRegisterAction,
   EvidenceFields,
@@ -31,26 +38,26 @@ import {
   parseDecimalInput,
   sameDecimal,
   useApproverGate,
-} from './common';
+} from "./common";
 
 const viewColumns: Column<CrmHaircutRead>[] = [
   {
-    key: 'class',
-    header: 'Collateral class',
-    width: '34%',
+    key: "class",
+    header: "Collateral class",
+    width: "34%",
     render: (r) => (
       <span className="font-mono text-body text-navy">{r.collateralClass}</span>
     ),
   },
   {
-    key: 'haircut',
-    header: 'Haircut',
+    key: "haircut",
+    header: "Haircut",
     numeric: true,
     render: (r) => fmtPct(num(r.haircutPct), 2),
   },
   {
-    key: 'source',
-    header: 'Source',
+    key: "source",
+    header: "Source",
     render: (r) =>
       r.isDefault ? (
         <StatusPill tone="slate">Basel ¶151 default</StatusPill>
@@ -59,15 +66,17 @@ const viewColumns: Column<CrmHaircutRead>[] = [
       ),
   },
   {
-    key: 'evidence',
-    header: 'Approval evidence',
+    key: "evidence",
+    header: "Approval evidence",
     render: (r) =>
       r.approvedBy ? (
         <div>
           <p className="text-body text-navy">{String(r.approvedBy)}</p>
           <p className="text-caption text-slate">
-            Effective{' '}
-            {r.effectiveFrom ? fmtDateUTC(new Date(String(r.effectiveFrom))) : '—'}
+            Effective{" "}
+            {r.effectiveFrom
+              ? fmtDateUTC(new Date(String(r.effectiveFrom)))
+              : "—"}
           </p>
         </div>
       ) : (
@@ -124,7 +133,11 @@ export default function CrmHaircutCard({ bankId }: { bankId: string }) {
             onClose={() => setEditing(false)}
           />
         ) : (
-          <DataTable columns={viewColumns} rows={query.data.haircuts} density="compact" />
+          <DataTable
+            columns={viewColumns}
+            rows={query.data.haircuts}
+            density="compact"
+          />
         )
       ) : null}
     </SectionCard>
@@ -149,15 +162,20 @@ function CrmEditor({
     }
     return initial;
   });
-  const [effectiveFrom, setEffectiveFrom] = useState('');
-  const [approvedBy, setApprovedBy] = useState('');
-  const [notes, setNotes] = useState('');
-  const [reason, setReason] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState("");
 
   const currentByClass = useMemo(
     () =>
-      new Map(register.haircuts.map((row) => [row.collateralClass, String(row.haircutPct)])),
-    [register]
+      new Map(
+        register.haircuts.map((row) => [
+          row.collateralClass,
+          String(row.haircutPct),
+        ]),
+      ),
+    [register],
   );
 
   const { changed, invalid } = useMemo(() => {
@@ -216,7 +234,7 @@ function CrmEditor({
                 {labelize(row.collateralClass.toLowerCase())}
               </label>
               <p className="text-caption text-slate">
-                <span className="font-mono">{row.collateralClass}</span> ·{' '}
+                <span className="font-mono">{row.collateralClass}</span> ·{" "}
                 {row.isDefault
                   ? `Basel ¶151 default ${fmtPct(num(row.haircutPct), 2)}`
                   : `Board level ${fmtPct(num(row.haircutPct), 2)}`}
@@ -226,7 +244,7 @@ function CrmEditor({
               <input
                 id={`crm-${row.collateralClass}`}
                 inputMode="decimal"
-                value={values[row.collateralClass] ?? ''}
+                value={values[row.collateralClass] ?? ""}
                 onChange={(e) =>
                   setValues((prev) => ({
                     ...prev,
@@ -234,7 +252,7 @@ function CrmEditor({
                   }))
                 }
                 className={`${numericInputCls} w-28 ${
-                  invalid.includes(row.collateralClass) ? 'border-critical' : ''
+                  invalid.includes(row.collateralClass) ? "border-critical" : ""
                 }`}
                 aria-invalid={invalid.includes(row.collateralClass)}
               />
@@ -260,12 +278,15 @@ function CrmEditor({
 
       <p className="text-caption text-slate">
         {changedCount === 0
-          ? 'No haircuts changed yet — only changed collateral classes are recorded.'
-          : `${changedCount} collateral class${changedCount === 1 ? '' : 'es'} will be recorded in this generation.`}
+          ? "No haircuts changed yet — only changed collateral classes are recorded."
+          : `${changedCount} collateral class${changedCount === 1 ? "" : "es"} will be recorded in this generation.`}
       </p>
 
       {update.error && (
-        <ErrorPanel error={update.error} title="Could not record the haircut generation" />
+        <ErrorPanel
+          error={update.error}
+          title="Could not record the haircut generation"
+        />
       )}
 
       <FormActions

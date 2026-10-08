@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
-import { ChevronDown, RefreshCw } from 'lucide-react';
+import { useState } from "react";
+import { useParams } from "next/navigation";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import {
   getTenant,
   getTenantActivity,
@@ -14,10 +14,10 @@ import {
   getTenantStorage,
   getTenantUsers,
   listDataEngines,
-} from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { useInspector } from '@/lib/inspector';
-import { fmtDate, fmtTs, relTime, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { useInspector } from "@/lib/inspector";
+import { fmtDate, fmtTs, relTime, DASH } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -35,18 +35,25 @@ import {
   StatusChip,
   toneFor,
   type Column,
-} from '@/components/ui';
-import { ConnectionsTable } from '@/components/tenants/ConnectionsTable';
-import { InspectTenantButton } from '@/components/tenants/InspectTenantButton';
-import { OpenBankDashboardButton } from '@/components/tenants/OpenBankDashboardButton';
-import { DeepSectionBody, GatedTenantData } from '@/components/tenants/DeepSectionBody';
-import { TenantMetricsSection } from '@/components/tenants/TenantMetricsSection';
-import { TenantFindingsSection } from '@/components/tenants/TenantFindingsSection';
-import { TenantIngestionSection } from '@/components/tenants/TenantIngestionSection';
-import { TenantConfigSection } from '@/components/tenants/TenantConfigSection';
-import { RemediationPanel } from '@/components/tenants/RemediationPanel';
-import { formatBytes } from '@/components/tenants/util';
-import type { DeskEntitlement, TenantActivityItem, TenantUser } from '@/lib/api';
+} from "@/components/ui";
+import { ConnectionsTable } from "@/components/tenants/ConnectionsTable";
+import { InspectTenantButton } from "@/components/tenants/InspectTenantButton";
+import { OpenBankDashboardButton } from "@/components/tenants/OpenBankDashboardButton";
+import {
+  DeepSectionBody,
+  GatedTenantData,
+} from "@/components/tenants/DeepSectionBody";
+import { TenantMetricsSection } from "@/components/tenants/TenantMetricsSection";
+import { TenantFindingsSection } from "@/components/tenants/TenantFindingsSection";
+import { TenantIngestionSection } from "@/components/tenants/TenantIngestionSection";
+import { TenantConfigSection } from "@/components/tenants/TenantConfigSection";
+import { RemediationPanel } from "@/components/tenants/RemediationPanel";
+import { formatBytes } from "@/components/tenants/util";
+import type {
+  DeskEntitlement,
+  TenantActivityItem,
+  TenantUser,
+} from "@/lib/api";
 
 /**
  * /tenants/[orgId] — the Tenant Inspector cockpit.
@@ -63,9 +70,11 @@ import type { DeskEntitlement, TenantActivityItem, TenantUser } from '@/lib/api'
  */
 
 /** Map an API status string onto the KpiStat edge-glow vocabulary. */
-function kpiStatusFor(value: string | null | undefined): 'ok' | 'warn' | 'crit' | undefined {
+function kpiStatusFor(
+  value: string | null | undefined,
+): "ok" | "warn" | "crit" | undefined {
   const tone = toneFor(value);
-  return tone === 'ok' || tone === 'warn' || tone === 'crit' ? tone : undefined;
+  return tone === "ok" || tone === "warn" || tone === "crit" ? tone : undefined;
 }
 
 export default function TenantDetailPage() {
@@ -85,7 +94,10 @@ export default function TenantDetailPage() {
   // so we never fire a guaranteed 403; the `sessionActive` dep re-runs each read
   // the moment a session starts, so the sections populate immediately.
   const activity = useApi(
-    () => (sessionActive ? getTenantActivity(orgId, activityLimit) : Promise.resolve(null)),
+    () =>
+      sessionActive
+        ? getTenantActivity(orgId, activityLimit)
+        : Promise.resolve(null),
     [orgId, activityLimit, sessionActive],
   );
   const metrics = useApi(
@@ -93,11 +105,13 @@ export default function TenantDetailPage() {
     [orgId, sessionActive],
   );
   const findings = useApi(
-    () => (sessionActive ? getTenantFindings(orgId, 100) : Promise.resolve(null)),
+    () =>
+      sessionActive ? getTenantFindings(orgId, 100) : Promise.resolve(null),
     [orgId, sessionActive],
   );
   const ingestion = useApi(
-    () => (sessionActive ? getTenantIngestion(orgId, 100) : Promise.resolve(null)),
+    () =>
+      sessionActive ? getTenantIngestion(orgId, 100) : Promise.resolve(null),
     [orgId, sessionActive],
   );
   const users = useApi(
@@ -105,7 +119,8 @@ export default function TenantDetailPage() {
     [orgId, sessionActive],
   );
   const entitlements = useApi(
-    () => (sessionActive ? getTenantEntitlements(orgId) : Promise.resolve(null)),
+    () =>
+      sessionActive ? getTenantEntitlements(orgId) : Promise.resolve(null),
     [orgId, sessionActive],
   );
   const storage = useApi(
@@ -123,7 +138,9 @@ export default function TenantDetailPage() {
 
   const t = tenant.data;
   const orgLabel = t?.bank_name ?? t?.organization_name ?? undefined;
-  const connections = (engines.data?.connections ?? []).filter((c) => c.organization_id === orgId);
+  const connections = (engines.data?.connections ?? []).filter(
+    (c) => c.organization_id === orgId,
+  );
 
   function reloadAll() {
     tenant.reload();
@@ -143,34 +160,45 @@ export default function TenantDetailPage() {
   const activityHasMore = activityItems.length >= activityLimit;
   const activityColumns: Column<TenantActivityItem>[] = [
     {
-      key: 'ts',
-      header: 'When',
-      width: '120px',
+      key: "ts",
+      header: "When",
+      width: "120px",
       sortable: true,
       sortAccessor: (i) => i.ts,
       render: (i) => (
-        <span className="whitespace-nowrap text-caption text-slate" title={fmtTs(i.ts)}>
+        <span
+          className="whitespace-nowrap text-caption text-slate"
+          title={fmtTs(i.ts)}
+        >
           {relTime(i.ts)}
         </span>
       ),
     },
     {
-      key: 'kind',
-      header: 'Kind',
+      key: "kind",
+      header: "Kind",
       sortable: true,
       sortAccessor: (i) => i.kind,
       render: (i) =>
-        i.kind ? <Chip mono>{i.kind}</Chip> : <span className="text-slate-light">{DASH}</span>,
+        i.kind ? (
+          <Chip mono>{i.kind}</Chip>
+        ) : (
+          <span className="text-slate-light">{DASH}</span>
+        ),
     },
     {
-      key: 'summary',
-      header: 'Summary',
-      render: (i) => <span className="wrap-break-word text-body text-navy/90">{i.summary || DASH}</span>,
+      key: "summary",
+      header: "Summary",
+      render: (i) => (
+        <span className="wrap-break-word text-body text-navy/90">
+          {i.summary || DASH}
+        </span>
+      ),
     },
     {
-      key: 'status',
-      header: 'Status',
-      align: 'right',
+      key: "status",
+      header: "Status",
+      align: "right",
       sortable: true,
       sortAccessor: (i) => i.status,
       render: (i) => <StatusChip value={i.status} />,
@@ -181,47 +209,56 @@ export default function TenantDetailPage() {
   const userRows = users.data?.users ?? [];
   const userColumns: Column<TenantUser>[] = [
     {
-      key: 'email',
-      header: 'User',
+      key: "email",
+      header: "User",
       sortable: true,
       sortAccessor: (u) => u.email,
       render: (u) => (
         <div className="min-w-0">
           <div className="font-mono text-caption text-navy">{u.email}</div>
-          {u.full_name && <div className="text-caption text-slate">{u.full_name}</div>}
+          {u.full_name && (
+            <div className="text-caption text-slate">{u.full_name}</div>
+          )}
         </div>
       ),
     },
     {
-      key: 'role',
-      header: 'Role',
+      key: "role",
+      header: "Role",
       sortable: true,
       sortAccessor: (u) => u.role,
-      render: (u) => <Chip tone="neutral">{u.role.replace(/_/g, ' ')}</Chip>,
+      render: (u) => <Chip tone="neutral">{u.role.replace(/_/g, " ")}</Chip>,
     },
     {
-      key: 'auth',
-      header: 'Auth',
+      key: "auth",
+      header: "Auth",
       sortable: true,
       sortAccessor: (u) => u.auth_provider,
-      render: (u) => <span className="font-mono text-caption text-slate">{u.auth_provider}</span>,
+      render: (u) => (
+        <span className="font-mono text-caption text-slate">
+          {u.auth_provider}
+        </span>
+      ),
     },
     {
-      key: 'active',
-      header: 'Status',
+      key: "active",
+      header: "Status",
       sortable: true,
       sortAccessor: (u) => (u.is_active ? 1 : 0),
-      render: (u) => <StatusChip value={u.is_active ? 'active' : 'inactive'} />,
+      render: (u) => <StatusChip value={u.is_active ? "active" : "inactive"} />,
     },
     {
-      key: 'last_login',
-      header: 'Last login',
-      align: 'right',
+      key: "last_login",
+      header: "Last login",
+      align: "right",
       sortable: true,
-      sortAccessor: (u) => u.last_login_at ?? '',
+      sortAccessor: (u) => u.last_login_at ?? "",
       render: (u) =>
         u.last_login_at ? (
-          <span className="text-caption text-slate" title={fmtTs(u.last_login_at)}>
+          <span
+            className="text-caption text-slate"
+            title={fmtTs(u.last_login_at)}
+          >
             {relTime(u.last_login_at)}
           </span>
         ) : (
@@ -235,40 +272,55 @@ export default function TenantDetailPage() {
   const catalog = entitlements.data?.catalog;
   const entColumns: Column<DeskEntitlement>[] = [
     {
-      key: 'dataset',
-      header: 'Dataset',
+      key: "dataset",
+      header: "Dataset",
       sortable: true,
       sortAccessor: (e) => e.dataset_code,
-      render: (e) => <span className="font-mono text-caption text-navy">{e.dataset_code}</span>,
+      render: (e) => (
+        <span className="font-mono text-caption text-navy">
+          {e.dataset_code}
+        </span>
+      ),
     },
     {
-      key: 'tier',
-      header: 'Tier',
+      key: "tier",
+      header: "Tier",
       sortable: true,
-      sortAccessor: (e) => e.tier ?? '',
-      render: (e) => <span className="text-caption text-ink">{e.tier ?? DASH}</span>,
+      sortAccessor: (e) => e.tier ?? "",
+      render: (e) => (
+        <span className="text-caption text-ink">{e.tier ?? DASH}</span>
+      ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       sortable: true,
       sortAccessor: (e) => e.status,
       render: (e) => <StatusChip value={e.status} />,
     },
     {
-      key: 'from',
-      header: 'From',
-      align: 'right',
+      key: "from",
+      header: "From",
+      align: "right",
       sortable: true,
       sortAccessor: (e) => e.effective_from,
-      render: (e) => <span className="text-caption text-slate">{fmtDate(e.effective_from)}</span>,
+      render: (e) => (
+        <span className="text-caption text-slate">
+          {fmtDate(e.effective_from)}
+        </span>
+      ),
     },
   ];
 
   // ---- storage -----------------------------------------------------------
   const s = storage.data;
   const storageHasMetrics = Boolean(
-    s && (s.provider || s.bucket || s.object_count != null || s.bytes != null || s.kms_key_state),
+    s &&
+    (s.provider ||
+      s.bucket ||
+      s.object_count != null ||
+      s.bytes != null ||
+      s.kms_key_state),
   );
 
   // ---- KPI row (all fields come from the OPEN tenant endpoint) ------------
@@ -278,10 +330,10 @@ export default function TenantDetailPage() {
     <div>
       <PageHeader
         breadcrumbs={[
-          { label: 'Tenants', href: '/tenants' },
+          { label: "Tenants", href: "/tenants" },
           { label: orgLabel ?? orgId },
         ]}
-        title={orgLabel ?? 'Tenant'}
+        title={orgLabel ?? "Tenant"}
         subtitle={t?.organization_name}
         action={
           <div className="flex items-center gap-2">
@@ -327,13 +379,18 @@ export default function TenantDetailPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <FreshnessChip summary={t.freshness} />
-                  <SsoChip configured={t.sso_configured} enabled={t.sso_enabled} />
+                  <SsoChip
+                    configured={t.sso_configured}
+                    enabled={t.sso_enabled}
+                  />
                   {t.storage_provider && <Chip mono>{t.storage_provider}</Chip>}
                 </div>
               </div>
 
               <div className="mt-4 grid gap-x-10 border-t border-border-light pt-3 sm:grid-cols-2 lg:grid-cols-3">
-                <FieldRow label="Jurisdiction">{t.jurisdiction_code ?? DASH}</FieldRow>
+                <FieldRow label="Jurisdiction">
+                  {t.jurisdiction_code ?? DASH}
+                </FieldRow>
                 <FieldRow label="Currency">
                   <span className="font-mono">{t.currency ?? DASH}</span>
                 </FieldRow>
@@ -344,13 +401,17 @@ export default function TenantDetailPage() {
                   </span>
                 </FieldRow>
                 <FieldRow label="Bank created">
-                  <span title={fmtTs(t.bank_created_at)}>{fmtDate(t.bank_created_at)}</span>
+                  <span title={fmtTs(t.bank_created_at)}>
+                    {fmtDate(t.bank_created_at)}
+                  </span>
                 </FieldRow>
                 <FieldRow label="Last ingestion source">
                   {t.last_ingestion ? (
                     <>
-                      <span className="font-mono">{t.last_ingestion.source_system}</span>
-                      {' · '}
+                      <span className="font-mono">
+                        {t.last_ingestion.source_system}
+                      </span>
+                      {" · "}
                       {fmtDate(t.last_ingestion.as_of_date)}
                     </>
                   ) : (
@@ -365,33 +426,60 @@ export default function TenantDetailPage() {
               <KpiStat
                 label="Reporting periods"
                 value={t.period_count}
-                hint={t.latest_period_end ? `latest ${fmtDate(t.latest_period_end)}` : undefined}
+                hint={
+                  t.latest_period_end
+                    ? `latest ${fmtDate(t.latest_period_end)}`
+                    : undefined
+                }
               />
-              <KpiStat label="Latest period" value={fmtDate(t.latest_period_end)} />
+              <KpiStat
+                label="Latest period"
+                value={fmtDate(t.latest_period_end)}
+              />
               <KpiStat
                 label="Last ingestion"
-                value={t.last_ingestion ? t.last_ingestion.status.replace(/_/g, ' ') : 'none'}
+                value={
+                  t.last_ingestion
+                    ? t.last_ingestion.status.replace(/_/g, " ")
+                    : "none"
+                }
                 status={kpiStatusFor(t.last_ingestion?.status)}
-                hint={t.last_ingestion ? `as of ${fmtDate(t.last_ingestion.as_of_date)}` : undefined}
+                hint={
+                  t.last_ingestion
+                    ? `as of ${fmtDate(t.last_ingestion.as_of_date)}`
+                    : undefined
+                }
               />
               <KpiStat
                 label="Live modules"
                 value={fresh ? fresh.modules_reported : DASH}
                 status={
-                  fresh?.is_stale ? 'warn' : fresh && fresh.modules_reported > 0 ? 'ok' : undefined
+                  fresh?.is_stale
+                    ? "warn"
+                    : fresh && fresh.modules_reported > 0
+                      ? "ok"
+                      : undefined
                 }
                 hint={
                   fresh?.is_stale
                     ? `${fresh.stale_modules.length} stale`
                     : fresh?.latest_computed_at
-                    ? `computed ${relTime(fresh.latest_computed_at)}`
-                    : undefined
+                      ? `computed ${relTime(fresh.latest_computed_at)}`
+                      : undefined
                 }
               />
               <KpiStat
                 label="SSO"
-                value={t.sso_enabled ? 'enabled' : t.sso_configured ? 'configured' : 'none'}
-                status={t.sso_enabled ? 'ok' : t.sso_configured ? 'warn' : undefined}
+                value={
+                  t.sso_enabled
+                    ? "enabled"
+                    : t.sso_configured
+                      ? "configured"
+                      : "none"
+                }
+                status={
+                  t.sso_enabled ? "ok" : t.sso_configured ? "warn" : undefined
+                }
               />
             </div>
           </>
@@ -440,8 +528,8 @@ export default function TenantDetailPage() {
                 columns={activityColumns}
                 rows={activityItems}
                 density="compact"
-                initialSort={{ key: 'ts', dir: 'desc' }}
-                getFilterText={(i) => [i.kind, i.summary, i.status].join(' ')}
+                initialSort={{ key: "ts", dir: "desc" }}
+                getFilterText={(i) => [i.kind, i.summary, i.status].join(" ")}
                 filterPlaceholder="Filter activity…"
                 emptyMessage="No activity matches this filter."
               />
@@ -480,7 +568,11 @@ export default function TenantDetailPage() {
 
           {/* ---------------------------------------- users + entitlements */}
           <div className="mb-5 grid items-start gap-5 lg:grid-cols-2">
-            <SectionCard title="Users" subtitle={`${userRows.length} account(s)`} noPadding>
+            <SectionCard
+              title="Users"
+              subtitle={`${userRows.length} account(s)`}
+              noPadding
+            >
               <DeepSectionBody
                 loading={users.loading && !users.data}
                 error={users.error}
@@ -500,9 +592,11 @@ export default function TenantDetailPage() {
                   columns={userColumns}
                   rows={userRows}
                   density="compact"
-                  initialSort={{ key: 'email', dir: 'asc' }}
+                  initialSort={{ key: "email", dir: "asc" }}
                   getFilterText={(u) =>
-                    [u.email, u.full_name ?? '', u.role, u.auth_provider].join(' ')
+                    [u.email, u.full_name ?? "", u.role, u.auth_provider].join(
+                      " ",
+                    )
                   }
                   filterPlaceholder="Filter users…"
                   pageSize={10}
@@ -518,16 +612,19 @@ export default function TenantDetailPage() {
               footer={
                 catalog ? (
                   <span className="text-caption text-slate">
-                    Catalog:{' '}
+                    Catalog:{" "}
                     {catalog.default_tier && (
                       <>
-                        default <span className="font-medium text-navy">{catalog.default_tier}</span>
-                        {catalog.datasets?.length ? ' · ' : ''}
+                        default{" "}
+                        <span className="font-medium text-navy">
+                          {catalog.default_tier}
+                        </span>
+                        {catalog.datasets?.length ? " · " : ""}
                       </>
                     )}
                     {catalog.datasets?.length
                       ? `${catalog.datasets.length} dataset(s)`
-                      : 'no catalog datasets reported'}
+                      : "no catalog datasets reported"}
                   </span>
                 ) : undefined
               }
@@ -551,8 +648,10 @@ export default function TenantDetailPage() {
                   columns={entColumns}
                   rows={entRows}
                   density="compact"
-                  initialSort={{ key: 'dataset', dir: 'asc' }}
-                  getFilterText={(e) => [e.dataset_code, e.tier ?? '', e.status].join(' ')}
+                  initialSort={{ key: "dataset", dir: "asc" }}
+                  getFilterText={(e) =>
+                    [e.dataset_code, e.tier ?? "", e.status].join(" ")
+                  }
                   filterPlaceholder="Filter datasets…"
                   pageSize={10}
                   emptyMessage="No datasets match this filter."
@@ -587,7 +686,10 @@ export default function TenantDetailPage() {
               </DeepSectionBody>
             </SectionCard>
 
-            <SectionCard title="Storage" subtitle="Object-store footprint and KMS state (best-effort).">
+            <SectionCard
+              title="Storage"
+              subtitle="Object-store footprint and KMS state (best-effort)."
+            >
               <DeepSectionBody
                 loading={storage.loading && !storage.data}
                 error={storage.error}
@@ -602,25 +704,34 @@ export default function TenantDetailPage() {
                   <div className="grid gap-x-10 sm:grid-cols-2">
                     <FieldRow label="Provider">{s.provider ?? DASH}</FieldRow>
                     <FieldRow label="Bucket">
-                      <span className="font-mono text-caption">{s.bucket ?? DASH}</span>
+                      <span className="font-mono text-caption">
+                        {s.bucket ?? DASH}
+                      </span>
                     </FieldRow>
                     <FieldRow label="Objects">
                       <span className="font-mono">
-                        {s.object_count != null ? s.object_count.toLocaleString() : DASH}
+                        {s.object_count != null
+                          ? s.object_count.toLocaleString()
+                          : DASH}
                       </span>
                     </FieldRow>
                     <FieldRow label="Size">
                       <span className="font-mono">{formatBytes(s.bytes)}</span>
                     </FieldRow>
                     <FieldRow label="KMS key state">
-                      {s.kms_key_state ? <StatusChip value={s.kms_key_state} /> : DASH}
+                      {s.kms_key_state ? (
+                        <StatusChip value={s.kms_key_state} />
+                      ) : (
+                        DASH
+                      )}
                     </FieldRow>
                   </div>
                 ) : (
                   <EmptyState
                     title="No storage metrics"
                     description={
-                      s?.note ?? 'The operator API returned no object-store metrics for this tenant.'
+                      s?.note ??
+                      "The operator API returned no object-store metrics for this tenant."
                     }
                   />
                 )}

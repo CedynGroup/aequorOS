@@ -1,7 +1,14 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { AlertTriangle, History, Pencil, Plus, ScrollText, ShieldCheck } from 'lucide-react';
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  History,
+  Pencil,
+  Plus,
+  ScrollText,
+  ShieldCheck,
+} from "lucide-react";
 import {
   approveRegulatoryParameter,
   getWorkforceSession,
@@ -9,9 +16,9 @@ import {
   proposeRegulatoryParameter,
   shapeErrorOf,
   type RegulatoryParameter,
-} from '@/lib/api';
-import { useApi, useMutation } from '@/lib/use-api';
-import { fmtDate, fmtTs, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { useApi, useMutation } from "@/lib/use-api";
+import { fmtDate, fmtTs, DASH } from "@/lib/format";
 import {
   approvalEligibility,
   buildChains,
@@ -29,7 +36,7 @@ import {
   type ProposeForm,
   type ProposeFormErrors,
   type ValueMode,
-} from '@/lib/regulatory-parameters';
+} from "@/lib/regulatory-parameters";
 import {
   Button,
   Chip,
@@ -49,9 +56,9 @@ import {
   Select,
   SkeletonRows,
   Textarea,
-} from '@/components/ui';
-import { CeremonyBanner } from '@/components/curves';
-import { AdminBoundary } from './AdminBoundary';
+} from "@/components/ui";
+import { CeremonyBanner } from "@/components/curves";
+import { AdminBoundary } from "./AdminBoundary";
 
 /**
  * /admin/regulatory-parameters — the regulatory-parameter control plane.
@@ -80,8 +87,8 @@ import { AdminBoundary } from './AdminBoundary';
  * risk. Absent values fail closed as "Not set" — never as 0.
  */
 
-type ScopeType = RegulatoryParameter['scope_type'];
-type ConfirmationStatus = RegulatoryParameter['confirmation_status'];
+type ScopeType = RegulatoryParameter["scope_type"];
+type ConfirmationStatus = RegulatoryParameter["confirmation_status"];
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -95,17 +102,17 @@ function today(): string {
  */
 function blankForm(): ProposeForm {
   return {
-    scope_type: 'institution_class',
-    scope_key: '',
-    param_code: '',
-    jurisdiction_code: '',
-    value_numeric: '',
-    value_json: '',
-    unit: '',
-    source_citation: '',
-    confirmation_status: 'pending',
+    scope_type: "institution_class",
+    scope_key: "",
+    param_code: "",
+    jurisdiction_code: "",
+    value_numeric: "",
+    value_json: "",
+    unit: "",
+    source_citation: "",
+    confirmation_status: "pending",
     effective_from: today(),
-    change_rationale: '',
+    change_rationale: "",
   };
 }
 
@@ -120,9 +127,15 @@ function blankForm(): ProposeForm {
  * only plainer.
  */
 function StructuredValuePreview({ body }: { body: Record<string, unknown> }) {
-  const bands = Array.isArray(body.bands) ? (body.bands as Record<string, unknown>[]) : null;
+  const bands = Array.isArray(body.bands)
+    ? (body.bands as Record<string, unknown>[])
+    : null;
 
-  if (bands && bands.length > 0 && bands.every((b) => b && typeof b === 'object')) {
+  if (
+    bands &&
+    bands.length > 0 &&
+    bands.every((b) => b && typeof b === "object")
+  ) {
     const columns = [...new Set(bands.flatMap((band) => Object.keys(band)))];
     return (
       <div className="overflow-x-auto">
@@ -172,7 +185,13 @@ function ConfirmationBadge({ status }: { status: ConfirmationStatus }) {
 }
 
 /** Where one generation sits on its chain (in force / scheduled / superseded). */
-function LifecycleBadge({ row, asOf }: { row: RegulatoryParameter; asOf: string }) {
+function LifecycleBadge({
+  row,
+  asOf,
+}: {
+  row: RegulatoryParameter;
+  asOf: string;
+}) {
   const life = lifecycleOf(row, asOf);
   return (
     <Chip tone={life.tone} title={life.detail}>
@@ -186,7 +205,10 @@ function ValueCell({ row }: { row: RegulatoryParameter }) {
   const shown = displayValue(row);
   if (!shown.isSet) {
     return (
-      <Chip tone="warn" title="This record carries no value. Nothing is being applied.">
+      <Chip
+        tone="warn"
+        title="This record carries no value. Nothing is being applied."
+      >
         Not set
       </Chip>
     );
@@ -196,7 +218,7 @@ function ValueCell({ row }: { row: RegulatoryParameter }) {
     // form's own name is more useful than a truncated table.
     return (
       <Chip tone="neutral" title={JSON.stringify(row.value_json)}>
-        {shapeName(row.param_code) ?? 'Structured value'}
+        {shapeName(row.param_code) ?? "Structured value"}
       </Chip>
     );
   }
@@ -212,11 +234,11 @@ export default function RegulatoryParametersView() {
   const asOf = today();
 
   // --- filters (server-side where the API supports them) -------------------
-  const [scopeType, setScopeType] = useState<'' | ScopeType>('');
-  const [paramCode, setParamCode] = useState('');
-  const [confirmation, setConfirmation] = useState<'' | ConfirmationStatus>('');
+  const [scopeType, setScopeType] = useState<"" | ScopeType>("");
+  const [paramCode, setParamCode] = useState("");
+  const [confirmation, setConfirmation] = useState<"" | ConfirmationStatus>("");
   const [includeDrafts, setIncludeDrafts] = useState(true);
-  const [jurisdiction, setJurisdiction] = useState('');
+  const [jurisdiction, setJurisdiction] = useState("");
 
   const { data, error, loading, reload } = useApi(
     () =>
@@ -247,17 +269,20 @@ export default function RegulatoryParametersView() {
    * declared shape, so the operator chooses; the default stays the number
    * field the console has always shown.
    */
-  const [valueArm, setValueArm] = useState<ValueMode>('scalar');
+  const [valueArm, setValueArm] = useState<ValueMode>("scalar");
   const mode = valueMode(form.param_code.trim(), valueArm);
   const declaredShape = shapeName(form.param_code.trim());
   const structuredPreview = parseStructuredValue(form.value_json);
-  const [approveFor, setApproveFor] = useState<RegulatoryParameter | null>(null);
-  const [approveNote, setApproveNote] = useState('');
+  const [approveFor, setApproveFor] = useState<RegulatoryParameter | null>(
+    null,
+  );
+  const [approveNote, setApproveNote] = useState("");
   const [historyFor, setHistoryFor] = useState<ParameterChain | null>(null);
 
   const proposeM = useMutation(proposeRegulatoryParameter, {
-    errorContext: 'Propose parameter',
-    successMessage: (r) => `Proposed ${r.param_code} for ${r.scope_key} — awaiting approval`,
+    errorContext: "Propose parameter",
+    successMessage: (r) =>
+      `Proposed ${r.param_code} for ${r.scope_key} — awaiting approval`,
     onSuccess: () => {
       setProposeOpen(false);
       setForm(blankForm());
@@ -279,11 +304,11 @@ export default function RegulatoryParametersView() {
     (id: string, change_rationale?: string) =>
       approveRegulatoryParameter(id, { change_rationale }),
     {
-      errorContext: 'Approve parameter',
+      errorContext: "Approve parameter",
       successMessage: (r) => `Approved ${r.param_code} for ${r.scope_key}`,
       onSuccess: () => {
         setApproveFor(null);
-        setApproveNote('');
+        setApproveNote("");
         reload();
       },
     },
@@ -292,7 +317,7 @@ export default function RegulatoryParametersView() {
   function openBlankPropose() {
     setForm(blankForm());
     setFormErr({});
-    setValueArm('scalar');
+    setValueArm("scalar");
     proposeM.reset();
     setProposeOpen(true);
   }
@@ -309,18 +334,18 @@ export default function RegulatoryParametersView() {
       scope_key: row.scope_key,
       param_code: row.param_code,
       jurisdiction_code: row.jurisdiction_code,
-      value_numeric: '',
+      value_numeric: "",
       // Blank, for the same reason the scalar is: re-approving the outgoing
       // table unchanged is exactly the mistake supersession exists to prevent.
-      value_json: '',
+      value_json: "",
       unit: row.unit,
-      source_citation: '',
-      confirmation_status: 'pending',
+      source_citation: "",
+      confirmation_status: "pending",
       effective_from: today(),
-      change_rationale: '',
+      change_rationale: "",
     });
     setFormErr({});
-    setValueArm(row.value_json !== null ? 'structural' : 'scalar');
+    setValueArm(row.value_json !== null ? "structural" : "scalar");
     proposeM.reset();
     setHistoryFor(null);
     setProposeOpen(true);
@@ -334,15 +359,16 @@ export default function RegulatoryParametersView() {
     // registered structural code refuses a number (and vice versa) at propose
     // AND at approve.
     const structuredArm =
-      mode === 'structural' ? parseStructuredValue(form.value_json) : null;
+      mode === "structural" ? parseStructuredValue(form.value_json) : null;
     void proposeM.mutate({
       scope_type: form.scope_type,
       scope_key: form.scope_key.trim(),
       param_code: form.param_code.trim(),
       jurisdiction_code: form.jurisdiction_code.trim(),
       // Sent as the STRING the operator typed — never through Number().
-      value_numeric: mode === 'scalar' ? form.value_numeric.trim() : null,
-      value_json: structuredArm && structuredArm.ok ? structuredArm.value : null,
+      value_numeric: mode === "scalar" ? form.value_numeric.trim() : null,
+      value_json:
+        structuredArm && structuredArm.ok ? structuredArm.value : null,
       unit: form.unit.trim(),
       source_citation: form.source_citation.trim(),
       confirmation_status: form.confirmation_status,
@@ -353,7 +379,7 @@ export default function RegulatoryParametersView() {
 
   function openApprove(row: RegulatoryParameter) {
     setApproveFor(row);
-    setApproveNote('');
+    setApproveNote("");
     approveM.reset();
   }
 
@@ -363,25 +389,31 @@ export default function RegulatoryParametersView() {
       jurisdiction.trim()
         ? rows.filter(
             (r) =>
-              r.jurisdiction_code.toLowerCase() === jurisdiction.trim().toLowerCase(),
+              r.jurisdiction_code.toLowerCase() ===
+              jurisdiction.trim().toLowerCase(),
           )
         : rows,
     [rows, jurisdiction],
   );
 
   const chains = useMemo(() => buildChains(visible, asOf), [visible, asOf]);
-  const queue = useMemo(() => visible.filter((r) => r.status === 'draft'), [visible]);
-  const unconfirmed = visible.filter((r) => r.confirmation_status === 'pending').length;
+  const queue = useMemo(
+    () => visible.filter((r) => r.status === "draft"),
+    [visible],
+  );
+  const unconfirmed = visible.filter(
+    (r) => r.confirmation_status === "pending",
+  ).length;
 
   // A filter hides generations, so what a chain shows is "in force AMONG THE
   // FILTERED SET" — which can read as "nothing governs this" when the governing
   // generation was simply filtered out. Say so rather than let the register be
   // misread.
   const filtered =
-    scopeType !== '' ||
-    paramCode.trim() !== '' ||
-    confirmation !== '' ||
-    jurisdiction.trim() !== '' ||
+    scopeType !== "" ||
+    paramCode.trim() !== "" ||
+    confirmation !== "" ||
+    jurisdiction.trim() !== "" ||
     !includeDrafts;
 
   const approveEligibility = approveFor
@@ -391,40 +423,53 @@ export default function RegulatoryParametersView() {
   // ------------------------------------------------------------------ queue
   const queueColumns: Column<RegulatoryParameter>[] = [
     {
-      key: 'param',
-      header: 'Parameter',
+      key: "param",
+      header: "Parameter",
       render: (r) => (
         <div className="min-w-0">
-          <div className="truncate font-mono text-caption text-navy">{r.param_code}</div>
+          <div className="truncate font-mono text-caption text-navy">
+            {r.param_code}
+          </div>
           <div className="text-micro text-slate">
-            {scopeTypeLabel(r.scope_type)} · {r.scope_key} · {r.jurisdiction_code}
+            {scopeTypeLabel(r.scope_type)} · {r.scope_key} ·{" "}
+            {r.jurisdiction_code}
           </div>
         </div>
       ),
     },
-    { key: 'value', header: 'Proposed value', render: (r) => <ValueCell row={r} /> },
     {
-      key: 'confirmation',
-      header: 'Confirmation',
+      key: "value",
+      header: "Proposed value",
+      render: (r) => <ValueCell row={r} />,
+    },
+    {
+      key: "confirmation",
+      header: "Confirmation",
       render: (r) => <ConfirmationBadge status={r.confirmation_status} />,
     },
     {
-      key: 'effective',
-      header: 'Takes effect',
-      render: (r) => <span className="text-caption text-ink">{fmtDate(r.effective_from)}</span>,
+      key: "effective",
+      header: "Takes effect",
+      render: (r) => (
+        <span className="text-caption text-ink">
+          {fmtDate(r.effective_from)}
+        </span>
+      ),
     },
     {
-      key: 'proposed_by',
-      header: 'Proposed by',
-      render: (r) => <span className="font-mono text-micro text-slate">{r.proposed_by}</span>,
+      key: "proposed_by",
+      header: "Proposed by",
+      render: (r) => (
+        <span className="font-mono text-micro text-slate">{r.proposed_by}</span>
+      ),
     },
     {
-      key: 'actions',
-      header: '',
-      align: 'right',
+      key: "actions",
+      header: "",
+      align: "right",
       render: (r) => {
         const el = approvalEligibility(r, viewerEmail);
-        if (el.state === 'blocked_own_proposal') {
+        if (el.state === "blocked_own_proposal") {
           // The four-eyes rule, visible on the row — not discovered on submit.
           return (
             <span
@@ -440,7 +485,9 @@ export default function RegulatoryParametersView() {
           <Button
             size="sm"
             variant="secondary"
-            icon={<ShieldCheck size={13} className="text-warning" aria-hidden />}
+            icon={
+              <ShieldCheck size={13} className="text-warning" aria-hidden />
+            }
             className="border-warning/60 bg-warning-light text-warning hover:bg-warning-light"
             onClick={() => openApprove(r)}
           >
@@ -454,25 +501,27 @@ export default function RegulatoryParametersView() {
   // --------------------------------------------------------------- register
   const chainColumns: Column<ParameterChain>[] = [
     {
-      key: 'param_code',
-      header: 'Parameter',
+      key: "param_code",
+      header: "Parameter",
       sortable: true,
       sortAccessor: (c) => c.param_code,
       render: (c) => (
         <div className="min-w-0">
-          <div className="truncate font-mono text-caption text-navy">{c.param_code}</div>
+          <div className="truncate font-mono text-caption text-navy">
+            {c.param_code}
+          </div>
           <div
             className="max-w-[24rem] truncate text-micro text-slate"
             title={c.inForce?.source_citation ?? undefined}
           >
-            {c.inForce ? c.inForce.source_citation : 'No value in force'}
+            {c.inForce ? c.inForce.source_citation : "No value in force"}
           </div>
         </div>
       ),
     },
     {
-      key: 'scope',
-      header: 'Applies to',
+      key: "scope",
+      header: "Applies to",
       sortable: true,
       sortAccessor: (c) => `${c.scope_key} ${c.scope_type}`,
       render: (c) => (
@@ -485,8 +534,8 @@ export default function RegulatoryParametersView() {
       ),
     },
     {
-      key: 'value',
-      header: 'Value in force',
+      key: "value",
+      header: "Value in force",
       render: (c) =>
         c.inForce ? (
           <ValueCell row={c.inForce} />
@@ -501,10 +550,10 @@ export default function RegulatoryParametersView() {
         ),
     },
     {
-      key: 'confirmation',
-      header: 'Confirmation',
+      key: "confirmation",
+      header: "Confirmation",
       sortable: true,
-      sortAccessor: (c) => c.inForce?.confirmation_status ?? 'zz',
+      sortAccessor: (c) => c.inForce?.confirmation_status ?? "zz",
       render: (c) =>
         c.inForce ? (
           <ConfirmationBadge status={c.inForce.confirmation_status} />
@@ -513,10 +562,10 @@ export default function RegulatoryParametersView() {
         ),
     },
     {
-      key: 'effective',
-      header: 'Effective',
+      key: "effective",
+      header: "Effective",
       sortable: true,
-      sortAccessor: (c) => c.inForce?.effective_from ?? '',
+      sortAccessor: (c) => c.inForce?.effective_from ?? "",
       render: (c) => (
         <div className="min-w-0">
           <span className="text-caption text-ink">
@@ -536,9 +585,9 @@ export default function RegulatoryParametersView() {
       ),
     },
     {
-      key: 'actions',
-      header: '',
-      align: 'right',
+      key: "actions",
+      header: "",
+      align: "right",
       render: (c) => (
         <div className="flex justify-end gap-1.5">
           <Button
@@ -567,11 +616,14 @@ export default function RegulatoryParametersView() {
   return (
     <div>
       <PageHeader
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Regulatory parameters' }]}
+        breadcrumbs={[{ label: "Admin" }, { label: "Regulatory parameters" }]}
         title="Regulatory parameters"
         subtitle="The regulatory numbers the calculation engines read, held as cited, dated data. Changes need two operators and never take effect retrospectively."
         action={
-          <Button icon={<Plus size={15} aria-hidden />} onClick={openBlankPropose}>
+          <Button
+            icon={<Plus size={15} aria-hidden />}
+            onClick={openBlankPropose}
+          >
             Propose parameter
           </Button>
         }
@@ -584,7 +636,7 @@ export default function RegulatoryParametersView() {
             <Select
               id="rp-f-scope"
               value={scopeType}
-              onChange={(e) => setScopeType(e.target.value as '' | ScopeType)}
+              onChange={(e) => setScopeType(e.target.value as "" | ScopeType)}
             >
               <option value="">Any</option>
               <option value="institution_class">Institution class</option>
@@ -604,7 +656,9 @@ export default function RegulatoryParametersView() {
             <Select
               id="rp-f-conf"
               value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value as '' | ConfirmationStatus)}
+              onChange={(e) =>
+                setConfirmation(e.target.value as "" | ConfirmationStatus)
+              }
             >
               <option value="">Any</option>
               <option value="confirmed">Confirmed</option>
@@ -624,8 +678,8 @@ export default function RegulatoryParametersView() {
           <Field label="Proposals" htmlFor="rp-f-drafts">
             <Select
               id="rp-f-drafts"
-              value={includeDrafts ? 'yes' : 'no'}
-              onChange={(e) => setIncludeDrafts(e.target.value === 'yes')}
+              value={includeDrafts ? "yes" : "no"}
+              onChange={(e) => setIncludeDrafts(e.target.value === "yes")}
             >
               <option value="yes">Include proposals awaiting approval</option>
               <option value="no">Approved values only</option>
@@ -651,10 +705,11 @@ export default function RegulatoryParametersView() {
           <span className="inline-flex items-center gap-1.5">
             Parameter register
             <InfoTip label="How this works" width="w-80">
-              Every regulatory number lives here as data, never as a figure written into
-              code. Proposing creates a new dated generation; a <strong>different</strong>{' '}
-              operator must approve it before any calculation reads it. Earlier generations
-              are never edited — the successor supersedes them from its effective date.
+              Every regulatory number lives here as data, never as a figure
+              written into code. Proposing creates a new dated generation; a{" "}
+              <strong>different</strong> operator must approve it before any
+              calculation reads it. Earlier generations are never edited — the
+              successor supersedes them from its effective date.
             </InfoTip>
           </span>
         }
@@ -662,17 +717,20 @@ export default function RegulatoryParametersView() {
           data ? (
             <span className="inline-flex flex-wrap items-center gap-2">
               <span>
-                {chains.length} parameter{chains.length === 1 ? '' : 's'} ·{' '}
-                {visible.length} generation{visible.length === 1 ? '' : 's'} · applies to
-                every tenant in scope
+                {chains.length} parameter{chains.length === 1 ? "" : "s"} ·{" "}
+                {visible.length} generation{visible.length === 1 ? "" : "s"} ·
+                applies to every tenant in scope
               </span>
               {unconfirmed > 0 && (
-                <Chip tone="warn">{unconfirmed} not confirmed against a source</Chip>
+                <Chip tone="warn">
+                  {unconfirmed} not confirmed against a source
+                </Chip>
               )}
               {filtered && (
                 <span className="text-micro text-slate">
-                  Filtered — generations outside the filter are hidden, so a parameter may
-                  show fewer generations, or none in force, than it actually has.
+                  Filtered — generations outside the filter are hidden, so a
+                  parameter may show fewer generations, or none in force, than
+                  it actually has.
                 </span>
               )}
             </span>
@@ -693,7 +751,10 @@ export default function RegulatoryParametersView() {
               title="Nothing matches"
               description="No regulatory parameter matches these filters. Clear them, or propose a parameter — it is recorded as a proposal that a second operator must approve before any calculation reads it."
               action={
-                <Button icon={<Plus size={15} aria-hidden />} onClick={openBlankPropose}>
+                <Button
+                  icon={<Plus size={15} aria-hidden />}
+                  onClick={openBlankPropose}
+                >
                   Propose parameter
                 </Button>
               }
@@ -704,11 +765,11 @@ export default function RegulatoryParametersView() {
               rows={chains}
               getFilterText={(c) =>
                 `${c.param_code} ${c.scope_key} ${c.jurisdiction_code} ${
-                  c.inForce?.unit ?? ''
-                } ${c.inForce?.source_citation ?? ''}`
+                  c.inForce?.unit ?? ""
+                } ${c.inForce?.source_citation ?? ""}`
               }
               filterPlaceholder="Filter by code, scope, unit, or citation…"
-              initialSort={{ key: 'param_code', dir: 'asc' }}
+              initialSort={{ key: "param_code", dir: "asc" }}
               pageSize={25}
             />
           )}
@@ -727,7 +788,11 @@ export default function RegulatoryParametersView() {
             <Button variant="secondary" onClick={() => setProposeOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" form="regparam-propose-form" loading={proposeM.loading}>
+            <Button
+              type="submit"
+              form="regparam-propose-form"
+              loading={proposeM.loading}
+            >
               Submit proposal
             </Button>
           </>
@@ -742,12 +807,14 @@ export default function RegulatoryParametersView() {
           }}
         >
           <CeremonyBanner>
-            <p className="font-medium text-navy">Two operators, and no retrospective change</p>
+            <p className="font-medium text-navy">
+              Two operators, and no retrospective change
+            </p>
             <p className="mt-1">
-              Enter the value exactly as the regulation states it. Nothing here is
-              pre-filled — a plausible wrong number would be applied to every institution in
-              scope. Earlier generations are never edited; this one supersedes them from its
-              effective date.
+              Enter the value exactly as the regulation states it. Nothing here
+              is pre-filled — a plausible wrong number would be applied to every
+              institution in scope. Earlier generations are never edited; this
+              one supersedes them from its effective date.
             </p>
           </CeremonyBanner>
 
@@ -757,7 +824,10 @@ export default function RegulatoryParametersView() {
                 id="rp-scope-type"
                 value={form.scope_type}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, scope_type: e.target.value as ScopeType }))
+                  setForm((f) => ({
+                    ...f,
+                    scope_type: e.target.value as ScopeType,
+                  }))
                 }
               >
                 <option value="institution_class">
@@ -769,7 +839,11 @@ export default function RegulatoryParametersView() {
               </Select>
             </Field>
             <Field
-              label={form.scope_type === 'institution_class' ? 'Class' : 'Licence code'}
+              label={
+                form.scope_type === "institution_class"
+                  ? "Class"
+                  : "Licence code"
+              }
               required
               error={formErr.scope_key}
               hint="The exact class or licence code the value binds to."
@@ -780,7 +854,9 @@ export default function RegulatoryParametersView() {
                 autoComplete="off"
                 value={form.scope_key}
                 invalid={Boolean(formErr.scope_key)}
-                onChange={(e) => setForm((f) => ({ ...f, scope_key: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, scope_key: e.target.value }))
+                }
               />
             </Field>
             <Field
@@ -796,7 +872,9 @@ export default function RegulatoryParametersView() {
                 className="font-mono"
                 value={form.param_code}
                 invalid={Boolean(formErr.param_code)}
-                onChange={(e) => setForm((f) => ({ ...f, param_code: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, param_code: e.target.value }))
+                }
               />
             </Field>
             <Field
@@ -814,11 +892,14 @@ export default function RegulatoryParametersView() {
                 value={form.jurisdiction_code}
                 invalid={Boolean(formErr.jurisdiction_code)}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, jurisdiction_code: e.target.value.toUpperCase() }))
+                  setForm((f) => ({
+                    ...f,
+                    jurisdiction_code: e.target.value.toUpperCase(),
+                  }))
                 }
               />
             </Field>
-            {mode === 'scalar' ? (
+            {mode === "scalar" ? (
               <Field
                 label="Value"
                 required
@@ -833,7 +914,9 @@ export default function RegulatoryParametersView() {
                   className="font-mono"
                   value={form.value_numeric}
                   invalid={Boolean(formErr.value_numeric)}
-                  onChange={(e) => setForm((f) => ({ ...f, value_numeric: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, value_numeric: e.target.value }))
+                  }
                 />
               </Field>
             ) : (
@@ -844,7 +927,7 @@ export default function RegulatoryParametersView() {
                 <p className="text-caption text-slate">
                   {declaredShape
                     ? `Declared form: ${declaredShape}.`
-                    : 'Structured value.'}
+                    : "Structured value."}
                 </p>
               </Field>
             )}
@@ -860,7 +943,9 @@ export default function RegulatoryParametersView() {
                 autoComplete="off"
                 value={form.unit}
                 invalid={Boolean(formErr.unit)}
-                onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, unit: e.target.value }))
+                }
               />
             </Field>
             <Field
@@ -876,7 +961,9 @@ export default function RegulatoryParametersView() {
                 min={today()}
                 value={form.effective_from}
                 invalid={Boolean(formErr.effective_from)}
-                onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, effective_from: e.target.value }))
+                }
               />
             </Field>
             <Field label="Confirmation" required htmlFor="rp-confirmation">
@@ -918,7 +1005,7 @@ export default function RegulatoryParametersView() {
             </Field>
           )}
 
-          {mode === 'structural' && (
+          {mode === "structural" && (
             <Field
               label="Structured value"
               required
@@ -926,7 +1013,7 @@ export default function RegulatoryParametersView() {
               hint={
                 declaredShape
                   ? `Checked against the declared ${declaredShape} form before it is sent, and again by the server at proposal and at approval.`
-                  : 'A JSON object. The server checks it against the code\'s declared form, when it has one.'
+                  : "A JSON object. The server checks it against the code's declared form, when it has one."
               }
               htmlFor="rp-value-json"
             >
@@ -937,13 +1024,18 @@ export default function RegulatoryParametersView() {
                 className="font-mono text-caption"
                 value={form.value_json}
                 invalid={Boolean(formErr.value_json)}
-                onChange={(e) => setForm((f) => ({ ...f, value_json: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, value_json: e.target.value }))
+                }
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button
                   variant="secondary"
                   onClick={() =>
-                    setForm((f) => ({ ...f, value_json: formatStructuredValue(f.value_json) }))
+                    setForm((f) => ({
+                      ...f,
+                      value_json: formatStructuredValue(f.value_json),
+                    }))
                   }
                 >
                   Tidy the JSON
@@ -953,7 +1045,7 @@ export default function RegulatoryParametersView() {
                     Parsed. The preview below is what will be sent.
                   </span>
                 ) : (
-                  form.value_json.trim() !== '' && (
+                  form.value_json.trim() !== "" && (
                     <span className="text-caption text-danger">
                       {structuredPreview.message}
                     </span>
@@ -970,8 +1062,8 @@ export default function RegulatoryParametersView() {
 
           {serverShapeError && (
             <FormError>
-              The server refused this value:{' '}
-              <span className="font-mono">{serverShapeError.path}</span> —{' '}
+              The server refused this value:{" "}
+              <span className="font-mono">{serverShapeError.path}</span> —{" "}
               {serverShapeError.message}
             </FormError>
           )}
@@ -988,7 +1080,9 @@ export default function RegulatoryParametersView() {
               autoComplete="off"
               value={form.source_citation}
               invalid={Boolean(formErr.source_citation)}
-              onChange={(e) => setForm((f) => ({ ...f, source_citation: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, source_citation: e.target.value }))
+              }
             />
           </Field>
           <Field
@@ -1001,12 +1095,17 @@ export default function RegulatoryParametersView() {
               rows={3}
               value={form.change_rationale}
               invalid={Boolean(formErr.change_rationale)}
-              onChange={(e) => setForm((f) => ({ ...f, change_rationale: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, change_rationale: e.target.value }))
+              }
             />
           </Field>
 
           {proposeM.error && (
-            <ErrorPanel error={proposeM.error} context="Proposing the parameter" />
+            <ErrorPanel
+              error={proposeM.error}
+              context="Proposing the parameter"
+            />
           )}
         </form>
       </Modal>
@@ -1020,8 +1119,9 @@ export default function RegulatoryParametersView() {
         description={
           approveFor ? (
             <span>
-              <span className="font-mono">{approveFor.param_code}</span> ·{' '}
-              {approveFor.scope_key} · takes effect {fmtDate(approveFor.effective_from)}
+              <span className="font-mono">{approveFor.param_code}</span> ·{" "}
+              {approveFor.scope_key} · takes effect{" "}
+              {fmtDate(approveFor.effective_from)}
             </span>
           ) : undefined
         }
@@ -1032,10 +1132,15 @@ export default function RegulatoryParametersView() {
             </Button>
             <Button
               loading={approveM.loading}
-              disabled={approveEligibility ? !approveEligibility.canAttempt : true}
+              disabled={
+                approveEligibility ? !approveEligibility.canAttempt : true
+              }
               onClick={() => {
                 if (!approveFor) return;
-                void approveM.mutate(approveFor.id, approveNote.trim() || undefined);
+                void approveM.mutate(
+                  approveFor.id,
+                  approveNote.trim() || undefined,
+                );
               }}
             >
               Approve
@@ -1045,18 +1150,23 @@ export default function RegulatoryParametersView() {
       >
         {approveFor && approveEligibility && (
           <div className="space-y-4">
-            {approveEligibility.state === 'blocked_own_proposal' ? (
+            {approveEligibility.state === "blocked_own_proposal" ? (
               /* Four-eyes, stated up front — the approve control above is disabled.
                  The server refuses this independently on every call. */
               <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
-                <ShieldCheck size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+                <ShieldCheck
+                  size={15}
+                  className="mt-0.5 shrink-0 text-warning"
+                  aria-hidden
+                />
                 <div className="min-w-0 text-caption text-slate">
                   <p className="text-body font-medium text-navy">
                     You proposed this value, so you cannot approve it
                   </p>
                   <p className="mt-1">
-                    Two different operators are required: one to propose a regulatory value
-                    and another to approve it. Ask a second operator to review this.
+                    Two different operators are required: one to propose a
+                    regulatory value and another to approve it. Ask a second
+                    operator to review this.
                   </p>
                 </div>
               </div>
@@ -1066,10 +1176,11 @@ export default function RegulatoryParametersView() {
                   Approving makes this the governing value
                 </p>
                 <p className="mt-1">
-                  From its effective date the calculations read this value for every
-                  institution in scope, and the previous generation is superseded.{' '}
-                  {approveEligibility.state === 'viewer_unknown'
-                    ? 'Approval is refused if you are the operator who proposed it.'
+                  From its effective date the calculations read this value for
+                  every institution in scope, and the previous generation is
+                  superseded.{" "}
+                  {approveEligibility.state === "viewer_unknown"
+                    ? "Approval is refused if you are the operator who proposed it."
                     : `Proposed by ${approveFor.proposed_by}.`}
                 </p>
               </CeremonyBanner>
@@ -1085,21 +1196,24 @@ export default function RegulatoryParametersView() {
                 </FieldRow>
                 <FieldRow label="Applies to">
                   <span className="text-caption">
-                    {approveFor.scope_key} · {scopeTypeLabel(approveFor.scope_type)} ·{' '}
+                    {approveFor.scope_key} ·{" "}
+                    {scopeTypeLabel(approveFor.scope_type)} ·{" "}
                     {approveFor.jurisdiction_code}
                   </span>
                 </FieldRow>
                 <FieldRow label="Proposed by">
-                  <span className="font-mono text-caption">{approveFor.proposed_by}</span>
+                  <span className="font-mono text-caption">
+                    {approveFor.proposed_by}
+                  </span>
                 </FieldRow>
               </div>
               <p className="mt-2 border-t border-border-light pt-2 text-caption text-slate">
-                <span className="font-medium text-ink">Source:</span>{' '}
+                <span className="font-medium text-ink">Source:</span>{" "}
                 {approveFor.source_citation}
               </p>
               {approveFor.change_rationale && (
                 <p className="mt-1 text-caption text-slate">
-                  <span className="font-medium text-ink">Reason:</span>{' '}
+                  <span className="font-medium text-ink">Reason:</span>{" "}
                   {approveFor.change_rationale}
                 </p>
               )}
@@ -1120,7 +1234,11 @@ export default function RegulatoryParametersView() {
 
             {approveM.error && (
               <div className="flex items-start gap-2 rounded-sm border border-critical/40 bg-critical-light p-3">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-critical" aria-hidden />
+                <AlertTriangle
+                  size={14}
+                  className="mt-0.5 shrink-0 text-critical"
+                  aria-hidden
+                />
                 <FormError>{approveM.error.message}</FormError>
               </div>
             )}
@@ -1137,7 +1255,7 @@ export default function RegulatoryParametersView() {
         description={
           historyFor ? (
             <span>
-              {historyFor.scope_key} · {scopeTypeLabel(historyFor.scope_type)} ·{' '}
+              {historyFor.scope_key} · {scopeTypeLabel(historyFor.scope_type)} ·{" "}
               {historyFor.jurisdiction_code}
             </span>
           ) : undefined
@@ -1146,15 +1264,20 @@ export default function RegulatoryParametersView() {
         {historyFor && (
           <div className="space-y-3">
             <p className="text-caption text-slate">
-              Every generation of this value, newest first. Values are never edited — each
-              change is a new dated generation that supersedes the one before it.
+              Every generation of this value, newest first. Values are never
+              edited — each change is a new dated generation that supersedes the
+              one before it.
             </p>
             {!historyFor.inForce && (
               <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+                <AlertTriangle
+                  size={14}
+                  className="mt-0.5 shrink-0 text-warning"
+                  aria-hidden
+                />
                 <p className="text-caption text-slate">
-                  No approved generation covers today, so the calculations have no value to
-                  read for this scope.
+                  No approved generation covers today, so the calculations have
+                  no value to read for this scope.
                 </p>
               </div>
             )}
@@ -1164,9 +1287,9 @@ export default function RegulatoryParametersView() {
                 <div
                   key={g.id}
                   className={`rounded border p-3 ${
-                    life.key === 'in_force'
-                      ? 'border-success/50 bg-success-light/20'
-                      : 'border-border-light bg-surface'
+                    life.key === "in_force"
+                      ? "border-success/50 bg-success-light/20"
+                      : "border-border-light bg-surface"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1177,15 +1300,16 @@ export default function RegulatoryParametersView() {
                     </div>
                   </div>
                   <p className="mt-2 text-caption text-slate">
-                    {fmtDate(g.effective_from)} →{' '}
-                    {g.effective_to ? fmtDate(g.effective_to) : 'open-ended'}
+                    {fmtDate(g.effective_from)} →{" "}
+                    {g.effective_to ? fmtDate(g.effective_to) : "open-ended"}
                   </p>
                   <p className="mt-1 text-caption text-slate">
-                    <span className="font-medium text-ink">Source:</span> {g.source_citation}
+                    <span className="font-medium text-ink">Source:</span>{" "}
+                    {g.source_citation}
                   </p>
                   {g.change_rationale && (
                     <p className="mt-1 text-caption text-slate">
-                      <span className="font-medium text-ink">Reason:</span>{' '}
+                      <span className="font-medium text-ink">Reason:</span>{" "}
                       {g.change_rationale}
                     </p>
                   )}
@@ -1193,9 +1317,9 @@ export default function RegulatoryParametersView() {
                     Proposed by {g.proposed_by}
                     {g.approved_by
                       ? ` · approved by ${g.approved_by}${
-                          g.approved_at ? ` on ${fmtTs(g.approved_at)}` : ''
+                          g.approved_at ? ` on ${fmtTs(g.approved_at)}` : ""
                         }`
-                      : ' · not yet approved'}
+                      : " · not yet approved"}
                   </p>
                 </div>
               );

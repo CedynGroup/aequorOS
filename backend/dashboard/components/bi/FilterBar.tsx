@@ -29,8 +29,6 @@ import type {
 import { narrowingFieldsFor } from "./query";
 import type { ReactNode } from "react";
 
-
-
 function valueLabel(
   dimension: BiCatalogueDimensionRead | undefined,
   code: unknown,

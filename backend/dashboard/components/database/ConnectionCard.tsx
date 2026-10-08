@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * One configured direct-database connection: status chip, backend, endpoint,
@@ -8,7 +8,7 @@
  * identifies what is on file.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   CheckCircle2,
   Database,
@@ -20,13 +20,13 @@ import {
   Table2,
   XCircle,
   Zap,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   DatabaseConnectionDiscoverResult,
   DatabaseConnectionRead,
   DatabaseConnectionTestResult,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useDisableDatabaseConnection,
   useDiscoverDatabaseSchema,
@@ -34,21 +34,21 @@ import {
   useRevokeDatabaseConnection,
   useTestDatabaseConnection,
   useUpdateDatabaseConnection,
-} from '@/lib/api/database-direct';
+} from "@/lib/api/database-direct";
 import ConnectionForm, {
   type DbFormState,
   buildUpdatePayload,
   formStateFromConnection,
-} from './ConnectionForm';
-import SchemaPanel from './SchemaPanel';
-import SyncPanel from './SyncPanel';
-import { ConnectionStatusPill, backendName, fmtWhen } from './shared';
-import { fmtLocale } from '@/lib/format';
+} from "./ConnectionForm";
+import SchemaPanel from "./SchemaPanel";
+import SyncPanel from "./SyncPanel";
+import { ConnectionStatusPill, backendName, fmtWhen } from "./shared";
+import { fmtLocale } from "@/lib/format";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   if (error instanceof Error) return error.message;
-  return 'The request failed.';
+  return "The request failed.";
 }
 
 function ActionButton({
@@ -57,14 +57,14 @@ function ActionButton({
   active,
   icon,
   children,
-  tone = 'default',
+  tone = "default",
 }: {
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
   icon: React.ReactNode;
   children: React.ReactNode;
-  tone?: 'default' | 'danger';
+  tone?: "default" | "danger";
 }) {
   return (
     <button
@@ -72,11 +72,11 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
-        tone === 'danger'
-          ? 'border-critical/30 text-critical hover:bg-critical-light/40'
+        tone === "danger"
+          ? "border-critical/30 text-critical hover:bg-critical-light/40"
           : active
-            ? 'border-action bg-action-light/60 text-action'
-            : 'border-border text-navy hover:bg-surface'
+            ? "border-action bg-action-light/60 text-action"
+            : "border-border text-navy hover:bg-surface"
       }`}
     >
       {icon}
@@ -85,7 +85,7 @@ function ActionButton({
   );
 }
 
-type OpenPanel = 'sync' | 'schema' | 'edit' | null;
+type OpenPanel = "sync" | "schema" | "edit" | null;
 
 export default function ConnectionCard({
   bankId,
@@ -102,16 +102,19 @@ export default function ConnectionCard({
   const revoke = useRevokeDatabaseConnection(bankId);
 
   const [panel, setPanel] = useState<OpenPanel>(null);
-  const [testResult, setTestResult] = useState<DatabaseConnectionTestResult | null>(null);
-  const [schema, setSchema] = useState<DatabaseConnectionDiscoverResult | null>(null);
+  const [testResult, setTestResult] =
+    useState<DatabaseConnectionTestResult | null>(null);
+  const [schema, setSchema] = useState<DatabaseConnectionDiscoverResult | null>(
+    null,
+  );
   const [editForm, setEditForm] = useState<DbFormState>(() =>
     formStateFromConnection(connection),
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const isRevoked = connection.status === 'REVOKED';
-  const isDisabled = connection.status === 'DISABLED';
+  const isRevoked = connection.status === "REVOKED";
+  const isDisabled = connection.status === "DISABLED";
   const busy =
     test.isPending ||
     discover.isPending ||
@@ -136,14 +139,14 @@ export default function ConnectionCard({
     setNotice(null);
     setPanel((current) => {
       const opening = current === next ? null : next;
-      if (opening === 'edit') setEditForm(formStateFromConnection(connection));
+      if (opening === "edit") setEditForm(formStateFromConnection(connection));
       return opening;
     });
   };
 
   const runDiscover = () =>
     run(async () => {
-      setPanel('schema');
+      setPanel("schema");
       setSchema(await discover.mutateAsync(connection.id));
     });
 
@@ -154,14 +157,16 @@ export default function ConnectionCard({
         payload: buildUpdatePayload(editForm),
       });
       setPanel(null);
-    }, 'Connection updated. New credentials, if any, were validated before the swap.');
+    }, "Connection updated. New credentials, if any, were validated before the swap.");
 
   return (
     <section className="card p-5 space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Database size={16} className="text-slate" aria-hidden />
         <h3 className="text-h3 text-navy">{connection.displayName}</h3>
-        <span className="text-caption text-slate">{backendName(connection.backend)}</span>
+        <span className="text-caption text-slate">
+          {backendName(connection.backend)}
+        </span>
         <ConnectionStatusPill status={connection.status} />
       </div>
 
@@ -170,9 +175,9 @@ export default function ConnectionCard({
           <dt className="text-caption text-slate">Endpoint</dt>
           <dd
             className="font-mono text-navy truncate"
-            title={`${connection.host ?? ''}${connection.port != null ? `:${connection.port}` : ''}`}
+            title={`${connection.host ?? ""}${connection.port != null ? `:${connection.port}` : ""}`}
           >
-            {connection.host ?? '—'}
+            {connection.host ?? "—"}
             {connection.port != null && (
               <span className="text-slate">:{connection.port}</span>
             )}
@@ -180,16 +185,18 @@ export default function ConnectionCard({
         </div>
         <div className="min-w-0">
           <dt className="text-caption text-slate">
-            {connection.serviceName ? 'Service name' : 'Database'}
+            {connection.serviceName ? "Service name" : "Database"}
           </dt>
           <dd className="font-mono text-navy truncate">
-            {connection.serviceName || connection.database || '—'}
+            {connection.serviceName || connection.database || "—"}
           </dd>
         </div>
         <div>
           <dt className="text-caption text-slate">Schemas</dt>
           <dd className="font-mono text-navy">
-            {connection.schemas.length > 0 ? connection.schemas.join(', ') : 'default'}
+            {connection.schemas.length > 0
+              ? connection.schemas.join(", ")
+              : "default"}
           </dd>
         </div>
         <div>
@@ -200,13 +207,13 @@ export default function ConnectionCard({
               <span
                 className={
                   /reject|fail/i.test(connection.lastSyncStatus)
-                    ? 'text-critical ml-1.5'
+                    ? "text-critical ml-1.5"
                     : /warn/i.test(connection.lastSyncStatus)
-                      ? 'text-warning ml-1.5'
-                      : 'text-success ml-1.5'
+                      ? "text-warning ml-1.5"
+                      : "text-success ml-1.5"
                 }
               >
-                ({connection.lastSyncStatus.replaceAll('_', ' ').toLowerCase()})
+                ({connection.lastSyncStatus.replaceAll("_", " ").toLowerCase()})
               </span>
             )}
           </dd>
@@ -215,41 +222,46 @@ export default function ConnectionCard({
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-caption text-slate">
         <span>
-          TLS{' '}
+          TLS{" "}
           <span className="text-navy">
             {connection.tlsEnabled
               ? connection.tlsVerifyServerCertificate
-                ? 'on · cert verified'
-                : 'on · cert not verified'
-              : 'off'}
+                ? "on · cert verified"
+                : "on · cert not verified"
+              : "off"}
           </span>
         </span>
         {connection.preferReadReplica && (
           <span>
-            Read replica{' '}
+            Read replica{" "}
             <span className="text-navy">
-              preferred{connection.readReplicas.length > 0 ? ` (${connection.readReplicas.length})` : ''}
+              preferred
+              {connection.readReplicas.length > 0
+                ? ` (${connection.readReplicas.length})`
+                : ""}
             </span>
           </span>
         )}
         <span>
-          Query timeout{' '}
-          <span className="font-mono text-navy">{connection.queryTimeoutSeconds}s</span>
+          Query timeout{" "}
+          <span className="font-mono text-navy">
+            {connection.queryTimeoutSeconds}s
+          </span>
         </span>
         <span>
-          Credential{' '}
+          Credential{" "}
           <span
             className="font-mono text-navy"
             title={connection.credentialFingerprint ?? undefined}
           >
             {connection.credentialFingerprint
               ? `${connection.credentialFingerprint.slice(0, 12)}…`
-              : 'none stored'}
+              : "none stored"}
           </span>
         </span>
         {connection.credentialExpiresAt && (
           <span>
-            Expires{' '}
+            Expires{" "}
             <span className="font-mono text-navy">
               {fmtWhen(connection.credentialExpiresAt)}
             </span>
@@ -284,14 +296,14 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() => {
-              if (panel === 'schema') {
+              if (panel === "schema") {
                 setPanel(null);
               } else {
                 void runDiscover();
               }
             }}
             disabled={busy || isDisabled}
-            active={panel === 'schema'}
+            active={panel === "schema"}
             icon={
               discover.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -303,27 +315,27 @@ export default function ConnectionCard({
             Discover schema
           </ActionButton>
           <ActionButton
-            onClick={() => togglePanel('sync')}
+            onClick={() => togglePanel("sync")}
             disabled={busy || isDisabled}
-            active={panel === 'sync'}
+            active={panel === "sync"}
             icon={<Database size={13} aria-hidden />}
           >
-            {panel === 'sync' ? 'Close sync' : 'Sync'}
+            {panel === "sync" ? "Close sync" : "Sync"}
           </ActionButton>
           <ActionButton
-            onClick={() => togglePanel('edit')}
+            onClick={() => togglePanel("edit")}
             disabled={busy}
-            active={panel === 'edit'}
+            active={panel === "edit"}
             icon={<KeyRound size={13} aria-hidden />}
           >
-            {panel === 'edit' ? 'Cancel edit' : 'Edit'}
+            {panel === "edit" ? "Cancel edit" : "Edit"}
           </ActionButton>
           {isDisabled ? (
             <ActionButton
               onClick={() =>
                 run(
                   () => enable.mutateAsync(connection.id),
-                  'Connection re-validated and enabled.',
+                  "Connection re-validated and enabled.",
                 )
               }
               disabled={busy}
@@ -336,7 +348,7 @@ export default function ConnectionCard({
               onClick={() =>
                 run(
                   () => disable.mutateAsync(connection.id),
-                  'Connection disabled. Scheduled syncs are paused; credentials stay stored.',
+                  "Connection disabled. Scheduled syncs are paused; credentials stay stored.",
                 )
               }
               disabled={busy}
@@ -350,8 +362,8 @@ export default function ConnectionCard({
               if (
                 window.confirm(
                   `Revoke the connection "${connection.displayName}"? ` +
-                    'Stored credentials are cryptographically wiped and scheduled syncs stop. ' +
-                    'Data already synced remains valid.',
+                    "Stored credentials are cryptographically wiped and scheduled syncs stop. " +
+                    "Data already synced remains valid.",
                 )
               ) {
                 void run(() => revoke.mutateAsync(connection.id));
@@ -370,8 +382,8 @@ export default function ConnectionCard({
         <div
           className={`rounded border px-4 py-3 space-y-2 ${
             testResult.reachable
-              ? 'border-success/30 bg-success-light/50'
-              : 'border-critical/30 bg-critical-light/40'
+              ? "border-success/30 bg-success-light/50"
+              : "border-critical/30 bg-critical-light/40"
           }`}
         >
           <div className="flex items-center gap-2">
@@ -381,7 +393,7 @@ export default function ConnectionCard({
               <XCircle size={15} className="text-critical" aria-hidden />
             )}
             <p className="text-body font-medium text-navy">
-              {testResult.reachable ? 'Reachable' : 'Not reachable'}
+              {testResult.reachable ? "Reachable" : "Not reachable"}
             </p>
             <button
               type="button"
@@ -394,7 +406,10 @@ export default function ConnectionCard({
           {testResult.reachable ? (
             <ul className="space-y-0.5 text-body text-navy font-mono">
               {testResult.latencyMs != null && (
-                <li>latency: {Number(testResult.latencyMs).toLocaleString(fmtLocale())} ms</li>
+                <li>
+                  latency:{" "}
+                  {Number(testResult.latencyMs).toLocaleString(fmtLocale())} ms
+                </li>
               )}
               {testResult.tablesPulled != null && (
                 <li>tables reached: {testResult.tablesPulled}</li>
@@ -406,27 +421,35 @@ export default function ConnectionCard({
           ) : (
             <>
               <p className="text-body text-navy">
-                {testResult.error ?? 'The connection could not be established.'}
+                {testResult.error ?? "The connection could not be established."}
               </p>
               {testResult.errorCode && (
-                <p className="text-caption font-mono text-slate">{testResult.errorCode}</p>
+                <p className="text-caption font-mono text-slate">
+                  {testResult.errorCode}
+                </p>
               )}
             </>
           )}
         </div>
       )}
 
-      {panel === 'schema' && schema && <SchemaPanel result={schema} />}
+      {panel === "schema" && schema && <SchemaPanel result={schema} />}
 
-      {panel === 'sync' && (
-        <SyncPanel bankId={bankId} connectionId={connection.id} disabled={isDisabled} />
+      {panel === "sync" && (
+        <SyncPanel
+          bankId={bankId}
+          connectionId={connection.id}
+          disabled={isDisabled}
+        />
       )}
 
-      {panel === 'edit' && (
+      {panel === "edit" && (
         <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <ConnectionForm
             form={editForm}
-            onChange={(patch) => setEditForm((current) => ({ ...current, ...patch }))}
+            onChange={(patch) =>
+              setEditForm((current) => ({ ...current, ...patch }))
+            }
             idPrefix={`edit-${connection.id}`}
             credentialsMode="rotate"
             lockBackend
@@ -452,7 +475,9 @@ export default function ConnectionCard({
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}
-      {notice && !actionError && <p className="text-caption text-slate">{notice}</p>}
+      {notice && !actionError && (
+        <p className="text-caption text-slate">{notice}</p>
+      )}
     </section>
   );
 }

@@ -1,39 +1,39 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 export type StatusTone =
-  | 'compliant'
-  | 'approaching'
-  | 'breach'
-  | 'pending'
-  | 'success'
-  | 'amber'
-  | 'critical'
-  | 'slate'
-  | 'action';
+  | "compliant"
+  | "approaching"
+  | "breach"
+  | "pending"
+  | "success"
+  | "amber"
+  | "critical"
+  | "slate"
+  | "action";
 
 const toneStyles: Record<StatusTone, string> = {
-  compliant: 'bg-success-light text-success border-success/20',
-  success: 'bg-success-light text-success border-success/20',
-  approaching: 'bg-warning-light text-warning border-warning/20',
-  amber: 'bg-warning-light text-warning border-warning/20',
-  breach: 'bg-critical-light text-critical border-critical/20',
-  critical: 'bg-critical-light text-critical border-critical/20',
-  pending: 'bg-surface text-slate border-border',
-  slate: 'bg-surface text-slate border-border',
-  action: 'bg-action-light text-action border-action/20',
+  compliant: "bg-success-light text-success border-success/20",
+  success: "bg-success-light text-success border-success/20",
+  approaching: "bg-warning-light text-warning border-warning/20",
+  amber: "bg-warning-light text-warning border-warning/20",
+  breach: "bg-critical-light text-critical border-critical/20",
+  critical: "bg-critical-light text-critical border-critical/20",
+  pending: "bg-surface text-slate border-border",
+  slate: "bg-surface text-slate border-border",
+  action: "bg-action-light text-action border-action/20",
 };
 
 const toneLabels: Partial<Record<StatusTone, string>> = {
-  compliant: 'Compliant',
-  approaching: 'Approaching',
-  breach: 'Breach',
-  pending: 'Pending',
+  compliant: "Compliant",
+  approaching: "Approaching",
+  breach: "Breach",
+  pending: "Pending",
 };
 
 export default function StatusPill({
   tone,
   children,
-  className = '',
+  className = "",
 }: {
   tone: StatusTone;
   children?: ReactNode;

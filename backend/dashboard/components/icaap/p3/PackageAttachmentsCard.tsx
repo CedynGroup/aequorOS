@@ -110,12 +110,17 @@ export default function PackageAttachmentsCard({
 }) {
   const query = usePackageAttachments(bankId, packageId);
   const [uploadKind, setUploadKind] = useState<string | null>(null);
-  const [withdrawing, setWithdrawing] = useState<PackageAttachment | null>(null);
+  const [withdrawing, setWithdrawing] = useState<PackageAttachment | null>(
+    null,
+  );
 
   const unavailable = p2UnavailableNotice(query.error);
   if (unavailable) {
     return (
-      <P2Unavailable title="Documents filed with this report" message={unavailable} />
+      <P2Unavailable
+        title="Documents filed with this report"
+        message={unavailable}
+      />
     );
   }
 
@@ -196,7 +201,9 @@ export default function PackageAttachmentsCard({
                     className="flex flex-wrap items-start justify-between gap-2 rounded-sm border border-border-light p-3"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-navy">{attachment.title}</p>
+                      <p className="font-medium text-navy">
+                        {attachment.title}
+                      </p>
                       <p className="text-caption text-slate">
                         {attachment.originalFilename}
                         {attachment.byteSize !== null
@@ -405,9 +412,7 @@ function UploadDialog({
               <input
                 value={resolutionReference}
                 maxLength={REFERENCE_MAX}
-                onChange={(event) =>
-                  setResolutionReference(event.target.value)
-                }
+                onChange={(event) => setResolutionReference(event.target.value)}
                 className={INPUT_CLASS}
               />
             </FieldLabel>
@@ -441,9 +446,7 @@ function WithdrawDialog({
         <>
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
           <PrimaryButton
-            disabled={
-              mutation.isPending || reason.trim().length < REASON_MIN
-            }
+            disabled={mutation.isPending || reason.trim().length < REASON_MIN}
             onClick={() =>
               mutation.mutate(
                 {

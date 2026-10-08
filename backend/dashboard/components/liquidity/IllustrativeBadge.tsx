@@ -1,4 +1,4 @@
-import { PenLine } from 'lucide-react';
+import { PenLine } from "lucide-react";
 
 /**
  * Amber marker for framework / playbook content that is NOT computed from
@@ -7,9 +7,9 @@ import { PenLine } from 'lucide-react';
  * this badge so reviewers can tell engine output from illustration.
  */
 export default function IllustrativeBadge({
-  label = 'Illustrative',
-  title = 'Framework content for illustration — not computed from bank data.',
-  className = '',
+  label = "Illustrative",
+  title = "Framework content for illustration — not computed from bank data.",
+  className = "",
 }: {
   label?: string;
   title?: string;

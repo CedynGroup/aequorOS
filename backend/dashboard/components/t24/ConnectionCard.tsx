@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * One configured Temenos connection: the credential-lifecycle status chip,
@@ -8,7 +8,7 @@
  * are never displayed; only the fingerprint identifies what is on file.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   CheckCircle2,
   KeyRound,
@@ -18,12 +18,12 @@ import {
   ShieldAlert,
   XCircle,
   Zap,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   TemenosConnectionRead,
   TemenosTestPullRead,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useDisableTemenosConnection,
   useEnableTemenosConnection,
@@ -31,19 +31,19 @@ import {
   useTestTemenosConnection,
   useUpdateTemenosConnection,
   useValidateTemenosConnection,
-} from '@/lib/api/hooks';
-import CredentialFields from './CredentialFields';
+} from "@/lib/api/hooks";
+import CredentialFields from "./CredentialFields";
 import {
   ConnectionStatusPill,
   fmtWhen,
   modeName,
   type ModeKey,
-} from './shared';
+} from "./shared";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   if (error instanceof Error) return error.message;
-  return 'The request failed.';
+  return "The request failed.";
 }
 
 function ActionButton({
@@ -51,13 +51,13 @@ function ActionButton({
   disabled,
   icon,
   children,
-  tone = 'default',
+  tone = "default",
 }: {
   onClick: () => void;
   disabled?: boolean;
   icon: React.ReactNode;
   children: React.ReactNode;
-  tone?: 'default' | 'danger';
+  tone?: "default" | "danger";
 }) {
   return (
     <button
@@ -65,9 +65,9 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
-        tone === 'danger'
-          ? 'border-critical/30 text-critical hover:bg-critical-light/40'
-          : 'border-border text-navy hover:bg-surface'
+        tone === "danger"
+          ? "border-critical/30 text-critical hover:bg-critical-light/40"
+          : "border-border text-navy hover:bg-surface"
       }`}
     >
       {icon}
@@ -90,14 +90,16 @@ export default function ConnectionCard({
   const enable = useEnableTemenosConnection(bankId);
   const revoke = useRevokeTemenosConnection(bankId);
 
-  const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(null);
+  const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(
+    null,
+  );
   const [rotating, setRotating] = useState(false);
   const [rotateValues, setRotateValues] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const isRevoked = connection.status === 'REVOKED';
-  const isDisabled = connection.status === 'DISABLED';
+  const isRevoked = connection.status === "REVOKED";
+  const isDisabled = connection.status === "DISABLED";
   const busy =
     validate.isPending ||
     test.isPending ||
@@ -125,13 +127,15 @@ export default function ConnectionCard({
       });
       setRotating(false);
       setRotateValues({});
-    }, 'Credentials rotated. The stored set was swapped atomically after validation.');
+    }, "Credentials rotated. The stored set was swapped atomically after validation.");
 
   return (
     <section className="card p-5 space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="text-h3 text-navy">{connection.displayName}</h3>
-        <span className="text-caption text-slate">{modeName(connection.connectionMode)}</span>
+        <span className="text-caption text-slate">
+          {modeName(connection.connectionMode)}
+        </span>
         <ConnectionStatusPill status={connection.status} />
       </div>
 
@@ -143,9 +147,9 @@ export default function ConnectionCard({
             {connection.lastPullStatus && (
               <span
                 className={
-                  connection.lastPullStatus === 'succeeded'
-                    ? 'text-success ml-1.5'
-                    : 'text-critical ml-1.5'
+                  connection.lastPullStatus === "succeeded"
+                    ? "text-success ml-1.5"
+                    : "text-critical ml-1.5"
                 }
               >
                 ({connection.lastPullStatus})
@@ -155,14 +159,19 @@ export default function ConnectionCard({
         </div>
         <div className="min-w-0">
           <dt className="text-caption text-slate">Endpoint</dt>
-          <dd className="font-mono text-navy truncate" title={connection.endpoint}>
+          <dd
+            className="font-mono text-navy truncate"
+            title={connection.endpoint}
+          >
             {connection.endpoint}
           </dd>
         </div>
         <div>
           <dt className="text-caption text-slate">Enabled domains</dt>
           <dd className="font-mono text-navy">
-            {connection.domains.length > 0 ? connection.domains.length : 'all supported'}
+            {connection.domains.length > 0
+              ? connection.domains.length
+              : "all supported"}
           </dd>
         </div>
         <div>
@@ -173,16 +182,21 @@ export default function ConnectionCard({
           >
             {connection.credentialFingerprint
               ? `${connection.credentialFingerprint.slice(0, 12)}…`
-              : 'none stored'}
+              : "none stored"}
           </dd>
         </div>
       </dl>
 
       {connection.credentialExpiresAt && (
         <p className="text-caption text-slate">
-          Credential expires{' '}
-          <span className="font-mono">{fmtWhen(connection.credentialExpiresAt)}</span> · last
-          validated <span className="font-mono">{fmtWhen(connection.lastValidatedAt)}</span>
+          Credential expires{" "}
+          <span className="font-mono">
+            {fmtWhen(connection.credentialExpiresAt)}
+          </span>{" "}
+          · last validated{" "}
+          <span className="font-mono">
+            {fmtWhen(connection.lastValidatedAt)}
+          </span>
         </p>
       )}
 
@@ -193,11 +207,13 @@ export default function ConnectionCard({
       )}
 
       <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
-        <p className="text-body font-medium text-navy">Live transport unavailable</p>
+        <p className="text-body font-medium text-navy">
+          Live transport unavailable
+        </p>
         <p className="mt-1 text-caption text-slate">
-          This deployment stores the T24 configuration but does not dispatch OFS, IRIS, or
-          Open API requests. Pulls and backfills are blocked until a bank-approved transport
-          is installed.
+          This deployment stores the T24 configuration but does not dispatch
+          OFS, IRIS, or Open API requests. Pulls and backfills are blocked until
+          a bank-approved transport is installed.
         </p>
       </div>
 
@@ -222,7 +238,10 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() =>
-              run(() => validate.mutateAsync(connection.id), 'Credential health check completed.')
+              run(
+                () => validate.mutateAsync(connection.id),
+                "Credential health check completed.",
+              )
             }
             disabled={busy || isDisabled}
             icon={<CheckCircle2 size={13} aria-hidden />}
@@ -238,12 +257,15 @@ export default function ConnectionCard({
             disabled={busy}
             icon={<KeyRound size={13} aria-hidden />}
           >
-            {rotating ? 'Cancel rotation' : 'Rotate credentials'}
+            {rotating ? "Cancel rotation" : "Rotate credentials"}
           </ActionButton>
           {isDisabled ? (
             <ActionButton
               onClick={() =>
-                run(() => enable.mutateAsync(connection.id), 'Connection re-validated and enabled.')
+                run(
+                  () => enable.mutateAsync(connection.id),
+                  "Connection re-validated and enabled.",
+                )
               }
               disabled={busy}
               icon={<PlayCircle size={13} aria-hidden />}
@@ -255,7 +277,7 @@ export default function ConnectionCard({
               onClick={() =>
                 run(
                   () => disable.mutateAsync(connection.id),
-                  'Connection disabled. Scheduled pulls are paused; credentials stay stored.'
+                  "Connection disabled. Scheduled pulls are paused; credentials stay stored.",
                 )
               }
               disabled={busy}
@@ -269,8 +291,8 @@ export default function ConnectionCard({
               if (
                 window.confirm(
                   `Revoke the connection "${connection.displayName}"? ` +
-                    'Stored credentials are cryptographically wiped and scheduled pulls stop. ' +
-                    'Data already pulled remains valid.'
+                    "Stored credentials are cryptographically wiped and scheduled pulls stop. " +
+                    "Data already pulled remains valid.",
                 )
               ) {
                 void run(() => revoke.mutateAsync(connection.id));
@@ -288,8 +310,8 @@ export default function ConnectionCard({
       {rotating && !isRevoked && (
         <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
-            Enter the new service credentials. They are validated first; only on success is
-            the stored set swapped — on failure nothing changes.
+            Enter the new service credentials. They are validated first; only on
+            success is the stored set swapped — on failure nothing changes.
           </p>
           <CredentialFields
             mode={connection.connectionMode as ModeKey}
@@ -302,7 +324,10 @@ export default function ConnectionCard({
           <button
             type="button"
             onClick={() => void submitRotation()}
-            disabled={busy || Object.values(rotateValues).every((value) => !value.trim())}
+            disabled={
+              busy ||
+              Object.values(rotateValues).every((value) => !value.trim())
+            }
             className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
@@ -316,13 +341,13 @@ export default function ConnectionCard({
       )}
 
       {testResult && (
-        <div
-          className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3 space-y-2"
-        >
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3 space-y-2">
           <div className="flex items-center gap-2">
             <ShieldAlert size={15} className="text-warning" aria-hidden />
             <p className="text-body font-medium text-navy">
-              {testResult.success ? 'Configuration check complete' : 'Live transport unavailable'}
+              {testResult.success
+                ? "Configuration check complete"
+                : "Live transport unavailable"}
             </p>
             <button
               type="button"
@@ -351,7 +376,9 @@ export default function ConnectionCard({
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}
-      {notice && !actionError && <p className="text-caption text-slate">{notice}</p>}
+      {notice && !actionError && (
+        <p className="text-caption text-slate">{notice}</p>
+      )}
     </section>
   );
 }

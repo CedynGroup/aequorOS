@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Role lens — a client-side view permutation for the Command Center.
@@ -11,76 +11,76 @@
  * choice persists in localStorage.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import type { LiveModule } from '@aequoros/risk-service-api';
+import { useCallback, useEffect, useState } from "react";
+import type { LiveModule } from "@aequoros/risk-service-api";
 
-export type RoleLens = 'treasurer' | 'alm' | 'risk' | 'cfo';
+export type RoleLens = "treasurer" | "alm" | "risk" | "cfo";
 
-export type PanelKey = 'pulse' | 'window' | 'balance' | 'band';
+export type PanelKey = "pulse" | "window" | "balance" | "band";
 
 /** 'severity' sorts pulse cards red → amber → green instead of a fixed order. */
-export type ModuleOrder = LiveModule[] | 'severity';
+export type ModuleOrder = LiveModule[] | "severity";
 
 export const ROLE_CONFIG: Record<
   RoleLens,
   { label: string; panels: PanelKey[]; moduleOrder: ModuleOrder }
 > = {
   treasurer: {
-    label: 'Treasurer',
-    panels: ['pulse', 'window', 'balance', 'band'],
+    label: "Treasurer",
+    panels: ["pulse", "window", "balance", "band"],
     moduleOrder: [
-      'liquidity',
-      'fx',
-      'irr',
-      'capital',
-      'credit',
-      'ftp',
-      'rating',
-      'forecast',
+      "liquidity",
+      "fx",
+      "irr",
+      "capital",
+      "credit",
+      "ftp",
+      "rating",
+      "forecast",
     ],
   },
   alm: {
-    label: 'ALM',
-    panels: ['pulse', 'window', 'band', 'balance'],
+    label: "ALM",
+    panels: ["pulse", "window", "band", "balance"],
     moduleOrder: [
-      'irr',
-      'liquidity',
-      'ftp',
-      'fx',
-      'capital',
-      'credit',
-      'rating',
-      'forecast',
+      "irr",
+      "liquidity",
+      "ftp",
+      "fx",
+      "capital",
+      "credit",
+      "rating",
+      "forecast",
     ],
   },
   risk: {
-    label: 'Risk',
-    panels: ['pulse', 'window', 'band', 'balance'],
-    moduleOrder: 'severity',
+    label: "Risk",
+    panels: ["pulse", "window", "band", "balance"],
+    moduleOrder: "severity",
   },
   cfo: {
-    label: 'CFO',
-    panels: ['balance', 'pulse', 'window', 'band'],
+    label: "CFO",
+    panels: ["balance", "pulse", "window", "band"],
     moduleOrder: [
-      'capital',
-      'credit',
-      'ftp',
-      'rating',
-      'forecast',
-      'liquidity',
-      'irr',
-      'fx',
+      "capital",
+      "credit",
+      "ftp",
+      "rating",
+      "forecast",
+      "liquidity",
+      "irr",
+      "fx",
     ],
   },
 };
 
-const ROLES: RoleLens[] = ['treasurer', 'alm', 'risk', 'cfo'];
+const ROLES: RoleLens[] = ["treasurer", "alm", "risk", "cfo"];
 
-const STORAGE_KEY = 'aequoros.home.role-lens';
+const STORAGE_KEY = "aequoros.home.role-lens";
 
 /** Persisted role lens. Reads localStorage after mount to stay SSR-safe. */
 export function useRoleLens(): [RoleLens, (role: RoleLens) => void] {
-  const [role, setRole] = useState<RoleLens>('treasurer');
+  const [role, setRole] = useState<RoleLens>("treasurer");
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -125,8 +125,8 @@ export default function RoleLensTabs({
             onClick={() => onChange(key)}
             className={`px-3 py-1.5 rounded text-caption font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus ${
               active
-                ? 'bg-surface-raised text-navy shadow-subtle'
-                : 'text-slate hover:text-navy'
+                ? "bg-surface-raised text-navy shadow-subtle"
+                : "text-slate hover:text-navy"
             }`}
           >
             {ROLE_CONFIG[key].label}

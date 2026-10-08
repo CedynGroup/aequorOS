@@ -68,7 +68,11 @@ export default function BlockerList({
             <div className="flex flex-wrap items-start justify-between gap-2">
               <p className="flex items-start gap-2 text-body font-medium text-navy">
                 {item.severity === "info" ? (
-                  <Info size={ICON_SM} className="mt-0.5 shrink-0" aria-hidden />
+                  <Info
+                    size={ICON_SM}
+                    className="mt-0.5 shrink-0"
+                    aria-hidden
+                  />
                 ) : (
                   <AlertTriangle
                     size={ICON_SM}

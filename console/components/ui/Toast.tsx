@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -9,11 +9,11 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+} from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 
-export type ToastTone = 'ok' | 'warn' | 'crit' | 'info';
+export type ToastTone = "ok" | "warn" | "crit" | "info";
 
 export type ToastInput = {
   title: ReactNode;
@@ -27,19 +27,37 @@ type Toast = ToastInput & { id: number; tone: ToastTone };
 
 type ToastApi = {
   toast: (input: ToastInput) => number;
-  success: (title: ReactNode, opts?: Omit<ToastInput, 'title' | 'tone'>) => number;
-  error: (title: ReactNode, opts?: Omit<ToastInput, 'title' | 'tone'>) => number;
-  info: (title: ReactNode, opts?: Omit<ToastInput, 'title' | 'tone'>) => number;
+  success: (
+    title: ReactNode,
+    opts?: Omit<ToastInput, "title" | "tone">,
+  ) => number;
+  error: (
+    title: ReactNode,
+    opts?: Omit<ToastInput, "title" | "tone">,
+  ) => number;
+  info: (title: ReactNode, opts?: Omit<ToastInput, "title" | "tone">) => number;
   dismiss: (id: number) => void;
 };
 
 const ToastContext = createContext<ToastApi | null>(null);
 
 const TONE_STYLE: Record<ToastTone, { border: string; icon: ReactNode }> = {
-  ok: { border: 'border-l-success', icon: <CheckCircle2 size={16} className="text-success" /> },
-  warn: { border: 'border-l-warning', icon: <AlertTriangle size={16} className="text-warning" /> },
-  crit: { border: 'border-l-critical', icon: <XCircle size={16} className="text-critical" /> },
-  info: { border: 'border-l-action', icon: <Info size={16} className="text-action" /> },
+  ok: {
+    border: "border-l-success",
+    icon: <CheckCircle2 size={16} className="text-success" />,
+  },
+  warn: {
+    border: "border-l-warning",
+    icon: <AlertTriangle size={16} className="text-warning" />,
+  },
+  crit: {
+    border: "border-l-critical",
+    icon: <XCircle size={16} className="text-critical" />,
+  },
+  info: {
+    border: "border-l-action",
+    icon: <Info size={16} className="text-action" />,
+  },
 };
 
 /** Wrap the app once (AppShell does this). Exposes `useToast()` to descendants. */
@@ -63,8 +81,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (input: ToastInput): number => {
       const id = ++seq.current;
-      const tone = input.tone ?? 'info';
-      const duration = input.duration ?? (tone === 'crit' ? 7000 : 4500);
+      const tone = input.tone ?? "info";
+      const duration = input.duration ?? (tone === "crit" ? 7000 : 4500);
       setToasts((prev) => [...prev, { ...input, id, tone }]);
       if (duration > 0) {
         timers.current.set(
@@ -88,9 +106,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ToastApi>(
     () => ({
       toast: push,
-      success: (title, opts) => push({ ...opts, title, tone: 'ok' }),
-      error: (title, opts) => push({ ...opts, title, tone: 'crit' }),
-      info: (title, opts) => push({ ...opts, title, tone: 'info' }),
+      success: (title, opts) => push({ ...opts, title, tone: "ok" }),
+      error: (title, opts) => push({ ...opts, title, tone: "crit" }),
+      info: (title, opts) => push({ ...opts, title, tone: "info" }),
       dismiss,
     }),
     [push, dismiss],
@@ -110,14 +128,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <div
                 key={t.id}
                 role="status"
-                aria-live={t.tone === 'crit' ? 'assertive' : 'polite'}
+                aria-live={t.tone === "crit" ? "assertive" : "polite"}
                 className={`card pointer-events-auto flex items-start gap-2.5 border-l-4 px-3.5 py-3 shadow-pop ${TONE_STYLE[t.tone].border}`}
               >
-                <span className="mt-0.5 shrink-0">{TONE_STYLE[t.tone].icon}</span>
+                <span className="mt-0.5 shrink-0">
+                  {TONE_STYLE[t.tone].icon}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-medium text-navy">{t.title}</p>
                   {t.description && (
-                    <p className="mt-0.5 wrap-break-word text-caption text-slate">{t.description}</p>
+                    <p className="mt-0.5 wrap-break-word text-caption text-slate">
+                      {t.description}
+                    </p>
                   )}
                 </div>
                 <button
@@ -145,5 +167,11 @@ export function useToast(): ToastApi {
   const ctx = useContext(ToastContext);
   if (ctx) return ctx;
   const noop = () => -1;
-  return { toast: noop, success: noop, error: noop, info: noop, dismiss: () => {} };
+  return {
+    toast: noop,
+    success: noop,
+    error: noop,
+    info: noop,
+    dismiss: () => {},
+  };
 }

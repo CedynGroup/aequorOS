@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Side-by-side plane comparison (spec §4 `/planes`, §5 Sources tab). The same
@@ -9,10 +9,10 @@
  * summarised beneath. `available:false` planes render as a greyed, empty column.
  */
 
-import { AlertTriangle, Layers } from 'lucide-react';
-import StatusPill from '@/components/ui/StatusPill';
-import { num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+import { AlertTriangle, Layers } from "lucide-react";
+import StatusPill from "@/components/ui/StatusPill";
+import { num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
 import {
   MARKET_DATA_SOURCES,
   SOURCE_LABELS,
@@ -21,17 +21,22 @@ import {
   type MarketDataPlanesResponse,
   type OverlayDeltaEntry,
   type PlaneItemWire,
-} from '@/lib/api/marketDataSources';
-import { fmtAge } from './AttributionChip';
-import { MonoChip } from './chips';
-import { tenorLabel } from './CurveBoard';
+} from "@/lib/api/marketDataSources";
+import { fmtAge } from "./AttributionChip";
+import { MonoChip } from "./chips";
+import { tenorLabel } from "./CurveBoard";
 
-type NormalizedItem = { key: string; label: string; sublabel?: string; value: string };
+type NormalizedItem = {
+  key: string;
+  label: string;
+  sublabel?: string;
+  value: string;
+};
 
 /** Pick the curve point nearest 12 months as the row's headline value. */
 function headlineCurvePoint(item: PlaneItemWire): string {
   const points = Array.isArray(item.points) ? item.points : [];
-  if (points.length === 0) return '—';
+  if (points.length === 0) return "—";
   const target = 12;
   let best = points[0];
   for (const point of points) {
@@ -44,26 +49,30 @@ function headlineCurvePoint(item: PlaneItemWire): string {
 }
 
 /** Category-specific item → { key, label, value } for the comparison pivot. */
-function normalizeItem(category: MarketDataCategory, item: PlaneItemWire): NormalizedItem | null {
-  if (category === 'rates') {
+function normalizeItem(
+  category: MarketDataCategory,
+  item: PlaneItemWire,
+): NormalizedItem | null {
+  if (category === "rates") {
     const code = item.index_code;
     if (!code) return null;
-    const scenario = item.scenario && item.scenario !== 'base' ? item.scenario : undefined;
+    const scenario =
+      item.scenario && item.scenario !== "base" ? item.scenario : undefined;
     return {
-      key: `${code}::${item.scenario ?? 'base'}`,
+      key: `${code}::${item.scenario ?? "base"}`,
       label: code,
       sublabel: scenario,
       // Reference-rate index values are percent-valued — render as-is (spec §4).
       value: fmtPct(num(item.value)),
     };
   }
-  if (category === 'fx') {
+  if (category === "fx") {
     if (!item.base || !item.quote) return null;
     return {
-      key: `${item.base}/${item.quote}::${item.rate_type ?? ''}`,
+      key: `${item.base}/${item.quote}::${item.rate_type ?? ""}`,
       label: `${item.base}/${item.quote}`,
       sublabel: item.rate_type ?? undefined,
-      value: num(item.rate).toLocaleString('en-US', {
+      value: num(item.rate).toLocaleString("en-US", {
         minimumFractionDigits: 4,
         maximumFractionDigits: 4,
       }),
@@ -75,16 +84,18 @@ function normalizeItem(category: MarketDataCategory, item: PlaneItemWire): Norma
   return {
     key: item.curve_name,
     label: item.curve_name,
-    sublabel: item.currency ? `${item.currency} · ${points} pts` : `${points} pts`,
+    sublabel: item.currency
+      ? `${item.currency} · ${points} pts`
+      : `${points} pts`,
     value: headlineCurvePoint(item),
   };
 }
 
 /** Value label for the headline column (curves show a 12M anchor point). */
 function valueColumnLabel(category: MarketDataCategory): string {
-  if (category === 'rates') return 'Rate';
-  if (category === 'fx') return 'Spot';
-  return '~12M point';
+  if (category === "rates") return "Rate";
+  if (category === "fx") return "Spot";
+  return "~12M point";
 }
 
 function PlaneColumnHeader({ plane }: { plane: MarketDataPlane }) {
@@ -92,27 +103,31 @@ function PlaneColumnHeader({ plane }: { plane: MarketDataPlane }) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
       <div className="flex items-center gap-2">
-        <span className="text-body font-semibold text-navy">{SOURCE_LABELS[plane.source]}</span>
+        <span className="text-body font-semibold text-navy">
+          {SOURCE_LABELS[plane.source]}
+        </span>
         {plane.isSelected && <StatusPill tone="compliant">Selected</StatusPill>}
         {!plane.available && <StatusPill tone="slate">No data</StatusPill>}
       </div>
       {attribution && plane.available && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          <MonoChip>{attribution.sourceSystem || '—'}</MonoChip>
+          <MonoChip>{attribution.sourceSystem || "—"}</MonoChip>
           {attribution.stale ? (
-            <StatusPill tone="amber">Stale · {fmtAge(attribution.ageSeconds)}</StatusPill>
+            <StatusPill tone="amber">
+              Stale · {fmtAge(attribution.ageSeconds)}
+            </StatusPill>
           ) : (
             <span className="text-micro text-slate whitespace-nowrap">
-              {fmtAge(attribution.ageSeconds) === 'now'
-                ? 'just pulled'
+              {fmtAge(attribution.ageSeconds) === "now"
+                ? "just pulled"
                 : `${fmtAge(attribution.ageSeconds)} old`}
             </span>
           )}
           {attribution.fellBack && (
             <span
               className="inline-flex items-center gap-1 text-micro text-warning whitespace-nowrap"
-              title={`Requested ${attribution.requestedSource ?? '—'}, served ${
-                attribution.servedSource ?? '—'
+              title={`Requested ${attribution.requestedSource ?? "—"}, served ${
+                attribution.servedSource ?? "—"
               }`}
             >
               <AlertTriangle size={11} aria-hidden />
@@ -126,19 +141,21 @@ function PlaneColumnHeader({ plane }: { plane: MarketDataPlane }) {
 }
 
 function deltaText(entry: OverlayDeltaEntry): string {
-  if (entry.delta_bps !== undefined) return `${num(entry.delta_bps).toFixed(1)} bps`;
-  if (entry.delta !== undefined) return `${num(entry.delta) >= 0 ? '+' : ''}${num(entry.delta)}`;
+  if (entry.delta_bps !== undefined)
+    return `${num(entry.delta_bps).toFixed(1)} bps`;
+  if (entry.delta !== undefined)
+    return `${num(entry.delta) >= 0 ? "+" : ""}${num(entry.delta)}`;
   if (entry.adjusted !== undefined && entry.base !== undefined) {
     return `${num(entry.base)} → ${num(entry.adjusted)}`;
   }
-  return '';
+  return "";
 }
 
 function deltaLabel(entry: OverlayDeltaEntry): string {
   if (entry.label) return entry.label;
   if (entry.scope) return entry.scope;
   if (entry.tenor_months !== undefined) return tenorLabel(entry.tenor_months);
-  return 'adjustment';
+  return "adjustment";
 }
 
 export default function PlaneComparison({
@@ -150,16 +167,16 @@ export default function PlaneComparison({
 }) {
   // Preserve the AequorOS → Bank → Vendor order; keep only planes present.
   const bySource = new Map(data.planes.map((plane) => [plane.source, plane]));
-  const planes = MARKET_DATA_SOURCES.map((source) => bySource.get(source)).filter(
-    (plane): plane is MarketDataPlane => plane !== undefined
-  );
+  const planes = MARKET_DATA_SOURCES.map((source) =>
+    bySource.get(source),
+  ).filter((plane): plane is MarketDataPlane => plane !== undefined);
 
   // Pivot: union of row keys across planes, seeded from the selected plane so
   // the most relevant rows lead.
   const rowOrder: NormalizedItem[] = [];
   const seen = new Set<string>();
   const orderedPlanes = [...planes].sort(
-    (a, b) => Number(b.isSelected) - Number(a.isSelected)
+    (a, b) => Number(b.isSelected) - Number(a.isSelected),
   );
   const perPlane = new Map<string, Map<string, NormalizedItem>>();
   for (const plane of orderedPlanes) {
@@ -192,7 +209,7 @@ export default function PlaneComparison({
                 <th
                   key={plane.source}
                   className={`text-left px-4 py-3 align-top ${
-                    plane.isSelected ? 'bg-action-light/40' : ''
+                    plane.isSelected ? "bg-action-light/40" : ""
                   }`}
                 >
                   <PlaneColumnHeader plane={plane} />
@@ -214,9 +231,13 @@ export default function PlaneComparison({
             {rowOrder.map((row) => (
               <tr key={row.key} className="border-b border-border-light">
                 <td className="px-4 py-2.5 align-top">
-                  <span className="font-mono text-caption text-navy">{row.label}</span>
+                  <span className="font-mono text-caption text-navy">
+                    {row.label}
+                  </span>
                   {row.sublabel && (
-                    <span className="block text-micro text-slate normal-case">{row.sublabel}</span>
+                    <span className="block text-micro text-slate normal-case">
+                      {row.sublabel}
+                    </span>
                   )}
                 </td>
                 {planes.map((plane) => {
@@ -225,10 +246,16 @@ export default function PlaneComparison({
                     <td
                       key={plane.source}
                       className={`px-4 py-2.5 font-mono text-caption ${
-                        plane.isSelected ? 'bg-action-light/30 text-navy font-medium' : 'text-navy/90'
+                        plane.isSelected
+                          ? "bg-action-light/30 text-navy font-medium"
+                          : "text-navy/90"
                       }`}
                     >
-                      {cell ? cell.value : <span className="text-slate-light">—</span>}
+                      {cell ? (
+                        cell.value
+                      ) : (
+                        <span className="text-slate-light">—</span>
+                      )}
                     </td>
                   );
                 })}
@@ -263,7 +290,8 @@ export default function PlaneComparison({
             </div>
           ) : (
             <p className="text-micro text-slate">
-              Your private spread is applied at read time on top of the selected plane.
+              Your private spread is applied at read time on top of the selected
+              plane.
             </p>
           )}
         </div>

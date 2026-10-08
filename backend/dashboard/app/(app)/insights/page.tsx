@@ -46,11 +46,7 @@ import { useBankContext } from "@/components/shell/BankContext";
 import FilterBar from "@/components/bi/FilterBar";
 import InsightStrip from "@/components/bi/InsightStrip";
 import { moduleLabel, sensitivityLabel } from "@/components/bi/labels";
-import {
-  isBiUnavailable,
-  useBiCatalogue,
-  useBiInsights,
-} from "@/lib/api/bi";
+import { isBiUnavailable, useBiCatalogue, useBiInsights } from "@/lib/api/bi";
 import { isoDay } from "@/lib/api/biKeys";
 import { coverageFromCapabilities } from "@/lib/api/dataScope";
 import { fmtInt } from "@/lib/format";

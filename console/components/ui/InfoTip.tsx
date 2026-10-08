@@ -1,15 +1,16 @@
-'use client';
+"use client";
 
-import { useId, type ReactNode } from 'react';
-import { Info } from 'lucide-react';
+import { useId, type ReactNode } from "react";
+import { Info } from "lucide-react";
 
-export type InfoTipPlacement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
+export type InfoTipPlacement =
+  "bottom-start" | "bottom-end" | "top-start" | "top-end";
 
 const PLACEMENT: Record<InfoTipPlacement, string> = {
-  'bottom-start': 'top-full left-0 mt-2',
-  'bottom-end': 'top-full right-0 mt-2',
-  'top-start': 'bottom-full left-0 mb-2',
-  'top-end': 'bottom-full right-0 mb-2',
+  "bottom-start": "top-full left-0 mt-2",
+  "bottom-end": "top-full right-0 mt-2",
+  "top-start": "bottom-full left-0 mb-2",
+  "top-end": "bottom-full right-0 mb-2",
 };
 
 /**
@@ -20,8 +21,8 @@ const PLACEMENT: Record<InfoTipPlacement, string> = {
  */
 export function InfoTip({
   label,
-  placement = 'bottom-start',
-  width = 'w-72',
+  placement = "bottom-start",
+  width = "w-72",
   children,
 }: {
   label: string;

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Sync panel for one connection: run an on-demand extraction for an as-of date,
@@ -7,21 +7,21 @@
  * The demo bank's deliberate GL drift lands as ACCEPTED_WITH_WARNINGS.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, DownloadCloud, Info, Loader2 } from 'lucide-react';
-import type { DatabaseConnectionSyncResult } from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
-import { useIngestionBatch } from '@/lib/api/ingestion';
-import { useSyncDatabaseConnection } from '@/lib/api/database-direct';
-import BatchReport from './BatchReport';
-import { SyncStatusPill } from './shared';
-import { fmtLocale } from '@/lib/format';
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowRight, DownloadCloud, Info, Loader2 } from "lucide-react";
+import type { DatabaseConnectionSyncResult } from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
+import { useIngestionBatch } from "@/lib/api/ingestion";
+import { useSyncDatabaseConnection } from "@/lib/api/database-direct";
+import BatchReport from "./BatchReport";
+import { SyncStatusPill } from "./shared";
+import { fmtLocale } from "@/lib/format";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   if (error instanceof Error) return error.message;
-  return 'The sync failed.';
+  return "The sync failed.";
 }
 
 export default function SyncPanel({
@@ -34,8 +34,10 @@ export default function SyncPanel({
   disabled?: boolean;
 }) {
   const sync = useSyncDatabaseConnection(bankId);
-  const [asOfDate, setAsOfDate] = useState('');
-  const [result, setResult] = useState<DatabaseConnectionSyncResult | null>(null);
+  const [asOfDate, setAsOfDate] = useState("");
+  const [result, setResult] = useState<DatabaseConnectionSyncResult | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   // Once a sync returns a batch id, load the immutable batch to surface its
@@ -49,7 +51,7 @@ export default function SyncPanel({
       const outcome = await sync.mutateAsync({
         connectionId,
         asOfDate: asOfDate || undefined,
-        reason: 'On-demand sync from the Data Engine console.',
+        reason: "On-demand sync from the Data Engine console.",
       });
       setResult(outcome);
     } catch (caught) {
@@ -86,13 +88,13 @@ export default function SyncPanel({
           ) : (
             <DownloadCloud size={13} aria-hidden />
           )}
-          Sync {asOfDate || 'today'}
+          Sync {asOfDate || "today"}
         </button>
       </div>
       <p className="text-caption text-slate">
-        Extracts through the adapter, runs the ETL preprocess + dedup pass, validates,
-        and persists an immutable batch. Re-syncing a date supersedes rather than
-        duplicates.
+        Extracts through the adapter, runs the ETL preprocess + dedup pass,
+        validates, and persists an immutable batch. Re-syncing a date supersedes
+        rather than duplicates.
       </p>
 
       {error && (
@@ -123,7 +125,11 @@ export default function SyncPanel({
 
           {result.asOfNote && (
             <p className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption text-navy">
-              <Info size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+              <Info
+                size={13}
+                className="mt-0.5 shrink-0 text-warning"
+                aria-hidden
+              />
               <span>{result.asOfNote}</span>
             </p>
           )}

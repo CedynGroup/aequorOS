@@ -1,7 +1,11 @@
-'use client';
+"use client";
 
-import type { ApiError, TenantFinding, TenantFindingsResponse } from '@/lib/api';
-import { fmtTs, relTime, DASH } from '@/lib/format';
+import type {
+  ApiError,
+  TenantFinding,
+  TenantFindingsResponse,
+} from "@/lib/api";
+import { fmtTs, relTime, DASH } from "@/lib/format";
 import {
   Chip,
   DataTable,
@@ -10,8 +14,8 @@ import {
   StatusChip,
   toneFor,
   type Column,
-} from '@/components/ui';
-import { DeepSectionBody } from './DeepSectionBody';
+} from "@/components/ui";
+import { DeepSectionBody } from "./DeepSectionBody";
 
 /**
  * The tenant's live findings/alerts: active first, then recently cleared, each
@@ -36,15 +40,17 @@ function severityRank(f: TenantFinding): number {
 
 const columns: Column<TenantFinding>[] = [
   {
-    key: 'severity',
-    header: 'Severity',
+    key: "severity",
+    header: "Severity",
     sortable: true,
     sortAccessor: severityRank,
-    render: (f) => <Chip tone={toneFor(f.severity)}>{f.severity.replace(/_/g, ' ')}</Chip>,
+    render: (f) => (
+      <Chip tone={toneFor(f.severity)}>{f.severity.replace(/_/g, " ")}</Chip>
+    ),
   },
   {
-    key: 'module',
-    header: 'Module',
+    key: "module",
+    header: "Module",
     sortable: true,
     sortAccessor: (f) => f.module,
     render: (f) => (
@@ -57,32 +63,39 @@ const columns: Column<TenantFinding>[] = [
     ),
   },
   {
-    key: 'message',
-    header: 'Message',
+    key: "message",
+    header: "Message",
     render: (f) => (
       <div className="min-w-0">
-        <span className="wrap-break-word text-body text-navy/90">{f.message || DASH}</span>
+        <span className="wrap-break-word text-body text-navy/90">
+          {f.message || DASH}
+        </span>
         {f.metric && (
-          <div className="font-mono text-micro text-slate">metric: {f.metric}</div>
+          <div className="font-mono text-micro text-slate">
+            metric: {f.metric}
+          </div>
         )}
       </div>
     ),
   },
   {
-    key: 'status',
-    header: 'Status',
+    key: "status",
+    header: "Status",
     sortable: true,
     sortAccessor: (f) => f.status,
     render: (f) => <StatusChip value={f.status} />,
   },
   {
-    key: 'updated',
-    header: 'Updated',
-    align: 'right',
+    key: "updated",
+    header: "Updated",
+    align: "right",
     sortable: true,
     sortAccessor: (f) => f.updated_at,
     render: (f) => (
-      <span className="whitespace-nowrap text-caption text-slate" title={fmtTs(f.updated_at)}>
+      <span
+        className="whitespace-nowrap text-caption text-slate"
+        title={fmtTs(f.updated_at)}
+      >
         {relTime(f.updated_at)}
       </span>
     ),
@@ -114,7 +127,9 @@ export function TenantFindingsSection({
       noPadding
       actions={
         openCount > 0 ? (
-          <Chip tone={openCount > 0 ? 'warn' : 'neutral'}>{openCount} open</Chip>
+          <Chip tone={openCount > 0 ? "warn" : "neutral"}>
+            {openCount} open
+          </Chip>
         ) : undefined
       }
     >
@@ -137,9 +152,16 @@ export function TenantFindingsSection({
           columns={columns}
           rows={findings}
           density="compact"
-          initialSort={{ key: 'severity', dir: 'asc' }}
+          initialSort={{ key: "severity", dir: "asc" }}
           getFilterText={(f) =>
-            [f.severity, f.module, f.rule_id, f.message, f.metric ?? '', f.status].join(' ')
+            [
+              f.severity,
+              f.module,
+              f.rule_id,
+              f.message,
+              f.metric ?? "",
+              f.status,
+            ].join(" ")
           }
           filterPlaceholder="Filter findings…"
           pageSize={12}

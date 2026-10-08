@@ -29,7 +29,11 @@ import { X } from "lucide-react";
 import type { BiQuery } from "@aequoros/risk-service-api";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { biRefusalSentence, isBiAccessDenied, useBiExplain } from "@/lib/api/bi";
+import {
+  biRefusalSentence,
+  isBiAccessDenied,
+  useBiExplain,
+} from "@/lib/api/bi";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import {
@@ -134,13 +138,15 @@ export default function ExplainDrawer({
 
           {refusal !== null && <RefusedWidget sentence={refusal} />}
 
-          {explain.error && !isBiAccessDenied(explain.error) && refusal === null && (
-            <ErrorPanel
-              error={explain.error}
-              onRetry={() => void explain.refetch()}
-              title="Could not load this figure's provenance"
-            />
-          )}
+          {explain.error &&
+            !isBiAccessDenied(explain.error) &&
+            refusal === null && (
+              <ErrorPanel
+                error={explain.error}
+                onRetry={() => void explain.refetch()}
+                title="Could not load this figure's provenance"
+              />
+            )}
 
           {data && (
             <>

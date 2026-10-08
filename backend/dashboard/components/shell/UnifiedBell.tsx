@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The ONE header bell: limit breaches and workflow notifications in a single
@@ -8,36 +8,36 @@
  * the full inbox drawer remains reachable from the Inbox tab footer.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Bell } from 'lucide-react';
-import type { AlertItemRead, AlertSeverity } from '@aequoros/risk-service-api';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Bell } from "lucide-react";
+import type { AlertItemRead, AlertSeverity } from "@aequoros/risk-service-api";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { useBankContext } from "@/components/shell/BankContext";
 import NotificationDrawer, {
   notificationHref,
-} from '@/components/shell/NotificationDrawer';
+} from "@/components/shell/NotificationDrawer";
 import {
   useBankAlerts,
   useMarkNotificationRead,
   useNotifications,
-} from '@/lib/api/hooks';
-import { fmtRelative, labelize } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtRelative, labelize } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
-} from '@/components/live/moduleDisplay';
+} from "@/components/live/moduleDisplay";
 
 function severityTone(severity: AlertSeverity): StatusTone {
   switch (severity) {
-    case 'critical':
-    case 'high':
-      return 'breach';
-    case 'medium':
-      return 'amber';
+    case "critical":
+    case "high":
+      return "breach";
+    case "medium":
+      return "amber";
     default:
-      return 'slate';
+      return "slate";
   }
 }
 
@@ -49,7 +49,7 @@ export default function UnifiedBell() {
   const markRead = useMarkNotificationRead();
 
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'breaches' | 'inbox'>('breaches');
+  const [tab, setTab] = useState<"breaches" | "inbox">("breaches");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -61,13 +61,13 @@ export default function UnifiedBell() {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
@@ -81,12 +81,12 @@ export default function UnifiedBell() {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        aria-label={`Notifications${badge > 0 ? ` (${badge})` : ''}`}
+        aria-label={`Notifications${badge > 0 ? ` (${badge})` : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => {
           setOpen((v) => !v);
-          setTab(breachTotal > 0 ? 'breaches' : 'inbox');
+          setTab(breachTotal > 0 ? "breaches" : "inbox");
         }}
         className="relative w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface"
       >
@@ -94,10 +94,10 @@ export default function UnifiedBell() {
         {badge > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full text-white text-[10px] font-semibold leading-none ring-2 ring-surface-raised ${
-              breachTotal > 0 ? 'bg-critical' : 'bg-action'
+              breachTotal > 0 ? "bg-critical" : "bg-action"
             }`}
           >
-            {badge > 99 ? '99+' : badge}
+            {badge > 99 ? "99+" : badge}
           </span>
         )}
       </button>
@@ -111,23 +111,25 @@ export default function UnifiedBell() {
           <div className="flex border-b border-border-light">
             <button
               type="button"
-              onClick={() => setTab('breaches')}
+              onClick={() => setTab("breaches")}
               className={`flex-1 px-4 py-2.5 text-caption font-medium inline-flex items-center justify-center gap-2 border-b-2 ${
-                tab === 'breaches'
-                  ? 'border-action text-navy'
-                  : 'border-transparent text-slate hover:text-navy'
+                tab === "breaches"
+                  ? "border-action text-navy"
+                  : "border-transparent text-slate hover:text-navy"
               }`}
             >
               Breaches
-              {breachTotal > 0 && <StatusPill tone="breach">{breachTotal}</StatusPill>}
+              {breachTotal > 0 && (
+                <StatusPill tone="breach">{breachTotal}</StatusPill>
+              )}
             </button>
             <button
               type="button"
-              onClick={() => setTab('inbox')}
+              onClick={() => setTab("inbox")}
               className={`flex-1 px-4 py-2.5 text-caption font-medium inline-flex items-center justify-center gap-2 border-b-2 ${
-                tab === 'inbox'
-                  ? 'border-action text-navy'
-                  : 'border-transparent text-slate hover:text-navy'
+                tab === "inbox"
+                  ? "border-action text-navy"
+                  : "border-transparent text-slate hover:text-navy"
               }`}
             >
               Inbox
@@ -135,14 +137,15 @@ export default function UnifiedBell() {
             </button>
           </div>
 
-          {tab === 'breaches' ? (
+          {tab === "breaches" ? (
             <>
               <div className="max-h-88 overflow-y-auto">
                 {breaches.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-body text-slate">No active breaches</p>
                     <p className="mt-1 text-caption text-slate">
-                      Live limits are within tolerance for {bank?.name ?? 'this bank'}.
+                      Live limits are within tolerance for{" "}
+                      {bank?.name ?? "this bank"}.
                     </p>
                   </div>
                 ) : (
@@ -150,7 +153,7 @@ export default function UnifiedBell() {
                     {breaches.map((alert: AlertItemRead) => (
                       <li key={alert.findingId}>
                         <Link
-                          href={LIVE_MODULE_HREFS[alert.module] ?? '/'}
+                          href={LIVE_MODULE_HREFS[alert.module] ?? "/"}
                           onClick={() => setOpen(false)}
                           className="block px-4 py-3 hover:bg-surface"
                         >
@@ -159,7 +162,8 @@ export default function UnifiedBell() {
                               {alert.severity}
                             </StatusPill>
                             <span className="text-caption font-medium text-navy">
-                              {LIVE_MODULE_LABELS[alert.module] ?? labelize(alert.module)}
+                              {LIVE_MODULE_LABELS[alert.module] ??
+                                labelize(alert.module)}
                             </span>
                             <span className="ml-auto text-caption text-slate whitespace-nowrap">
                               {fmtRelative(alert.createdAt)}
@@ -205,7 +209,7 @@ export default function UnifiedBell() {
                             if (href) router.push(href);
                           }}
                           className={`w-full text-left px-4 py-3 hover:bg-surface ${
-                            n.readAt ? '' : 'bg-action-light/20'
+                            n.readAt ? "" : "bg-action-light/20"
                           }`}
                         >
                           <div className="flex items-center gap-2">
@@ -245,7 +249,10 @@ export default function UnifiedBell() {
         </div>
       )}
 
-      <NotificationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <NotificationDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      />
     </div>
   );
 }

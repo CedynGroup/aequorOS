@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Vendor credential form fields (§6.1 Bloomberg, §7.1 Refinitiv). Values are
@@ -7,7 +7,7 @@
  * SHA-256 fingerprint.
  */
 
-import { CREDENTIAL_FIELDS, type VendorKey } from './shared';
+import { CREDENTIAL_FIELDS, type VendorKey } from "./shared";
 
 export default function CredentialFields({
   vendor,
@@ -15,7 +15,7 @@ export default function CredentialFields({
   onChange,
   idPrefix,
 }: {
-  vendor: Exclude<VendorKey, 'manual_upload'>;
+  vendor: Exclude<VendorKey, "manual_upload">;
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
   idPrefix: string;
@@ -27,7 +27,7 @@ export default function CredentialFields({
         return (
           <div
             key={field.key}
-            className={field.multiline ? 'sm:col-span-2' : undefined}
+            className={field.multiline ? "sm:col-span-2" : undefined}
           >
             <label
               htmlFor={id}
@@ -39,7 +39,7 @@ export default function CredentialFields({
               <textarea
                 id={id}
                 rows={4}
-                value={values[field.key] ?? ''}
+                value={values[field.key] ?? ""}
                 onChange={(event) => onChange(field.key, event.target.value)}
                 placeholder={field.placeholder}
                 autoComplete="off"
@@ -49,8 +49,8 @@ export default function CredentialFields({
             ) : (
               <input
                 id={id}
-                type={field.secret ? 'password' : 'text'}
-                value={values[field.key] ?? ''}
+                type={field.secret ? "password" : "text"}
+                value={values[field.key] ?? ""}
                 onChange={(event) => onChange(field.key, event.target.value)}
                 placeholder={field.placeholder}
                 autoComplete="off"

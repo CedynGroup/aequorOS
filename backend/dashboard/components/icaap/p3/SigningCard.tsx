@@ -70,8 +70,8 @@ export default function SigningCard({
         <div className="space-y-3">
           {slots.length === 0 ? (
             <p className="text-body text-navy/80">
-              No signature is required on this report under the institution&apos;s
-              current signing policy.
+              No signature is required on this report under the
+              institution&apos;s current signing policy.
             </p>
           ) : (
             <ol className="space-y-2" data-testid="signature-slots">

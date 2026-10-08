@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
-import { useModuleScope } from '@/components/shell/BankContext';
-import { isPathVisible } from '@/lib/modules';
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { useModuleScope } from "@/components/shell/BankContext";
+import { isPathVisible } from "@/lib/modules";
 
 export type Feed = { label: string; href: string; sdiLabel?: string };
 
@@ -12,7 +12,10 @@ export type Feed = { label: string; href: string; sdiLabel?: string };
 export default function FeedsChip({ feed }: { feed: Feed }) {
   const scope = useModuleScope();
   if (!isPathVisible(feed.href, scope)) return null;
-  const label = scope.institutionClass === 'sdi' ? feed.sdiLabel ?? feed.label : feed.label;
+  const label =
+    scope.institutionClass === "sdi"
+      ? (feed.sdiLabel ?? feed.label)
+      : feed.label;
 
   return (
     <Link

@@ -51,7 +51,9 @@ export default function CapitalPlanProposalDialog({
 
   // Only an item whose approval is CURRENT may be carried: an approval on an
   // earlier revision is not an approval of the amount this would copy.
-  const approved = (register.items ?? []).filter((item) => item.approvalCurrent);
+  const approved = (register.items ?? []).filter(
+    (item) => item.approvalCurrent,
+  );
 
   const draftExists =
     mutation.isError &&
@@ -102,9 +104,9 @@ export default function CapitalPlanProposalDialog({
           ))}
           {(result.excludedItemKeys ?? []).length > 0 && (
             <p className="text-caption text-warning">
-              Not carried:{" "}
-              {(result.excludedItemKeys ?? []).join(", ")}. A plan add-on cannot
-              be negative, so a diversification benefit is left behind.
+              Not carried: {(result.excludedItemKeys ?? []).join(", ")}. A plan
+              add-on cannot be negative, so a diversification benefit is left
+              behind.
             </p>
           )}
           <p className="text-caption text-slate">

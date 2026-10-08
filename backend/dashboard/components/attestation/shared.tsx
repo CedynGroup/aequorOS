@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared vocabulary for attestation & e-signature (docs/attestation_esignature.md).
@@ -17,17 +17,17 @@
  *    they cannot know is which UI affordance resolves them.
  */
 
-import type { ReactNode } from 'react';
-import { Fingerprint } from 'lucide-react';
+import type { ReactNode } from "react";
+import { Fingerprint } from "lucide-react";
 import type {
   AttestationState,
   AttestationStatusRead,
   OutstandingSlotRead,
   SignatureRead,
   SigningRole,
-} from '@aequoros/risk-service-api';
-import CopyButton from '@/components/ui/CopyButton';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+} from "@aequoros/risk-service-api";
+import CopyButton from "@/components/ui/CopyButton";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 
 // ---------------------------------------------------------------------------
 // Roles
@@ -35,10 +35,10 @@ import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 
 /** Noun form — for policy tables, routing lists, and outstanding-slot copy. */
 export const SIGNING_ROLE_LABELS: Record<SigningRole, string> = {
-  preparer: 'Preparer',
-  approver: 'Approver',
-  board: 'Board',
-  witness: 'Witness',
+  preparer: "Preparer",
+  approver: "Approver",
+  board: "Board",
+  witness: "Witness",
 };
 
 /**
@@ -46,10 +46,10 @@ export const SIGNING_ROLE_LABELS: Record<SigningRole, string> = {
  * tense and passive, because the line attributes a completed act.
  */
 export const SIGNING_ROLE_ATTRIBUTIONS: Record<SigningRole, string> = {
-  preparer: 'Prepared by',
-  approver: 'Approved by',
-  board: 'Attested by the Board',
-  witness: 'Witnessed by',
+  preparer: "Prepared by",
+  approver: "Approved by",
+  board: "Attested by the Board",
+  witness: "Witnessed by",
 };
 
 /**
@@ -61,14 +61,16 @@ export const SIGNING_ROLE_ATTRIBUTIONS: Record<SigningRole, string> = {
  * afterwards, and the label should not imply there is.
  */
 export const SIGNING_ROLE_ACTIONS: Record<SigningRole, string> = {
-  preparer: 'Certify and freeze',
-  approver: 'Approve and sign',
-  board: 'Attest and sign',
-  witness: 'Witness and sign',
+  preparer: "Certify and freeze",
+  approver: "Approve and sign",
+  board: "Attest and sign",
+  witness: "Witness and sign",
 };
 
 export function roleAttribution(role: SigningRole | string): string {
-  return SIGNING_ROLE_ATTRIBUTIONS[role as SigningRole] ?? `Signed by (${role})`;
+  return (
+    SIGNING_ROLE_ATTRIBUTIONS[role as SigningRole] ?? `Signed by (${role})`
+  );
 }
 
 export function roleNoun(role: SigningRole | string): string {
@@ -80,39 +82,38 @@ export function roleNoun(role: SigningRole | string): string {
 // ---------------------------------------------------------------------------
 
 export const ATTESTATION_STATE_LABELS: Record<AttestationState, string> = {
-  unsigned: 'Unsigned',
-  preparer_certified: 'Preparer certified',
-  fully_certified: 'Fully certified',
-  void: 'Voided',
+  unsigned: "Unsigned",
+  preparer_certified: "Preparer certified",
+  fully_certified: "Fully certified",
+  void: "Voided",
 };
 
 const ATTESTATION_STATE_TONES: Record<AttestationState, StatusTone> = {
-  unsigned: 'slate',
+  unsigned: "slate",
   // Amber, not neutral: the figures are frozen and a second signature is owed.
-  preparer_certified: 'amber',
-  fully_certified: 'success',
+  preparer_certified: "amber",
+  fully_certified: "success",
   // Critical, because a void blocks submission until the return is re-certified.
-  void: 'critical',
+  void: "critical",
 };
 
 /** One-liner shown under the state pill so the state reads as a consequence. */
 export const ATTESTATION_STATE_BLURBS: Record<AttestationState, string> = {
   unsigned:
-    'Not certified. The figures are still free to change and the return cannot be submitted.',
+    "Not certified. The figures are still free to change and the return cannot be submitted.",
   preparer_certified:
-    'The preparer has certified. Figures are frozen and regeneration is refused until the remaining signatures are recorded or the attestation is voided.',
+    "The preparer has certified. Figures are frozen and regeneration is refused until the remaining signatures are recorded or the attestation is voided.",
   fully_certified:
-    'Every signature the policy in force requires is present. The return is cleared for submission.',
+    "Every signature the policy in force requires is present. The return is cleared for submission.",
   // The service resets to `unsigned` on a void rather than persisting this
   // state, so it is defensive rather than routine — but it must still read
   // correctly if a package ever reports it.
-  void:
-    'The attestation was withdrawn. Signatures are retained as history, never deleted; the return must be re-certified before it can be submitted.',
+  void: "The attestation was withdrawn. Signatures are retained as history, never deleted; the return must be re-certified before it can be submitted.",
 };
 
 export function AttestationStatePill({ state }: { state: AttestationState }) {
   return (
-    <StatusPill tone={ATTESTATION_STATE_TONES[state] ?? 'slate'}>
+    <StatusPill tone={ATTESTATION_STATE_TONES[state] ?? "slate"}>
       {ATTESTATION_STATE_LABELS[state] ?? state}
     </StatusPill>
   );
@@ -120,10 +121,10 @@ export function AttestationStatePill({ state }: { state: AttestationState }) {
 
 /** "1 preparer · 1 approver" — the outstanding slots, in policy order. */
 export function outstandingSummary(outstanding: OutstandingSlotRead[]): string {
-  if (outstanding.length === 0) return 'None';
+  if (outstanding.length === 0) return "None";
   return outstanding
     .map((slot) => `${slot.count} ${roleNoun(slot.role).toLowerCase()}`)
-    .join(' · ');
+    .join(" · ");
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +155,8 @@ export function SubmissionClearancePill({
         <StatusPill tone="success">Cleared to submit</StatusPill>
       ) : (
         <StatusPill tone="amber">
-          Not cleared to submit — {outstandingSummary(status.outstanding)} outstanding
+          Not cleared to submit — {outstandingSummary(status.outstanding)}{" "}
+          outstanding
         </StatusPill>
       )}
     </span>
@@ -179,7 +181,7 @@ export function truncateDigest(digest: string): string {
 export function DigestChip({
   digest,
   label,
-  className = '',
+  className = "",
 }: {
   digest: string;
   label: string;
@@ -204,7 +206,7 @@ export function DigestChip({
 // ---------------------------------------------------------------------------
 
 function pad(value: number): string {
-  return String(value).padStart(2, '0');
+  return String(value).padStart(2, "0");
 }
 
 /**
@@ -212,8 +214,8 @@ function pad(value: number): string {
  * signature appearance byte for byte (§2.5). Deliberately NOT locale-formatted.
  */
 export function fmtSignatureTimestamp(value: Date | string): string {
-  const at = typeof value === 'string' ? new Date(value) : value;
-  if (Number.isNaN(at.getTime())) return '—';
+  const at = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(at.getTime())) return "—";
   return (
     `${at.getUTCFullYear()}-${pad(at.getUTCMonth() + 1)}-${pad(at.getUTCDate())} ` +
     `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}:${pad(at.getUTCSeconds())} GMT`
@@ -242,15 +244,17 @@ export function fmtSignatureTimestamp(value: Date | string): string {
  */
 export function SignatureBlock({
   signature,
-  className = '',
+  className = "",
 }: {
   signature: SignatureRead;
   className?: string;
 }) {
   const trusted = signature.tsaTime != null;
-  const timestamp = fmtSignatureTimestamp(signature.tsaTime ?? signature.declaredAt);
+  const timestamp = fmtSignatureTimestamp(
+    signature.tsaTime ?? signature.declaredAt,
+  );
   // A redacted name (§6.3) must not silently read as an unsigned block.
-  const name = signature.signerDisplayName ?? 'Name withheld';
+  const name = signature.signerDisplayName ?? "Name withheld";
 
   return (
     <div
@@ -269,14 +273,20 @@ export function SignatureBlock({
         <span className="font-mono text-caption text-navy tnum">
           Signer ID: {signature.signerId}
         </span>
-        <CopyButton text={signature.signerId} label="signer ID" className="shrink-0" />
+        <CopyButton
+          text={signature.signerId}
+          label="signer ID"
+          className="shrink-0"
+        />
       </p>
       <p className="mt-1 font-mono text-caption text-slate tnum">
         {timestamp}
         {trusted ? (
           <span className="ml-2 text-success">(RFC 3161 timestamped)</span>
         ) : (
-          <span className="ml-2 text-warning">(server clock — no trusted timestamp)</span>
+          <span className="ml-2 text-warning">
+            (server clock — no trusted timestamp)
+          </span>
         )}
       </p>
     </div>
@@ -292,7 +302,10 @@ export function SignatureEvidence({ signature }: { signature: SignatureRead }) {
   return (
     <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-caption">
       <EvidenceRow label="Figures digest signed">
-        <DigestChip digest={signature.certificationDigest} label="certification digest" />
+        <DigestChip
+          digest={signature.certificationDigest}
+          label="certification digest"
+        />
       </EvidenceRow>
       <EvidenceRow label="Signature method">
         <code className="font-mono text-caption text-navy">
@@ -303,7 +316,10 @@ export function SignatureEvidence({ signature }: { signature: SignatureRead }) {
         <DigestChip digest={signature.contentDigest} label="content digest" />
       </EvidenceRow>
       <EvidenceRow label="Signing certificate">
-        <DigestChip digest={signature.certificateSha256} label="certificate sha256" />
+        <DigestChip
+          digest={signature.certificateSha256}
+          label="certificate sha256"
+        />
       </EvidenceRow>
       {signature.registerStateDigest && (
         <EvidenceRow label="Register-state digest">
@@ -326,7 +342,13 @@ export function SignatureEvidence({ signature }: { signature: SignatureRead }) {
   );
 }
 
-function EvidenceRow({ label, children }: { label: string; children: ReactNode }) {
+function EvidenceRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="min-w-0">
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
@@ -341,29 +363,44 @@ function EvidenceRow({ label, children }: { label: string; children: ReactNode }
  * `[{module, run_id, input_hash}]` as signed. Typed as an untyped record by the
  * contract, so every field is read defensively rather than asserted.
  */
-export function SourceRunList({ runs }: { runs: Array<{ [key: string]: unknown }> }) {
+export function SourceRunList({
+  runs,
+}: {
+  runs: Array<{ [key: string]: unknown }>;
+}) {
   return (
     <ul className="space-y-1">
       {runs.map((run, index) => {
         // `moduleName`, not `module` — Next forbids assigning that identifier.
         const moduleName =
-          typeof run.module === 'string' ? run.module : 'unknown module';
-        const runId = typeof run.run_id === 'string' ? run.run_id : null;
-        const inputHash = typeof run.input_hash === 'string' ? run.input_hash : null;
+          typeof run.module === "string" ? run.module : "unknown module";
+        const runId = typeof run.run_id === "string" ? run.run_id : null;
+        const inputHash =
+          typeof run.input_hash === "string" ? run.input_hash : null;
         return (
           <li
             key={runId ?? `${moduleName}-${index}`}
             className="flex items-center gap-2 flex-wrap"
           >
-            <Fingerprint size={11} className="text-slate shrink-0" aria-hidden />
+            <Fingerprint
+              size={11}
+              className="text-slate shrink-0"
+              aria-hidden
+            />
             <span className="font-medium text-navy">{moduleName}</span>
             {runId && (
-              <span className="font-mono text-micro text-slate tnum" title={runId}>
+              <span
+                className="font-mono text-micro text-slate tnum"
+                title={runId}
+              >
                 run {truncateDigest(runId)}
               </span>
             )}
             {inputHash && (
-              <DigestChip digest={inputHash} label={`${moduleName} input hash`} />
+              <DigestChip
+                digest={inputHash}
+                label={`${moduleName} input hash`}
+              />
             )}
           </li>
         );
@@ -388,7 +425,7 @@ export function SourceRunList({ runs }: { runs: Array<{ [key: string]: unknown }
  */
 export function AttestationSummary({
   status,
-  className = '',
+  className = "",
 }: {
   status: AttestationStatusRead;
   className?: string;
@@ -461,119 +498,119 @@ export interface AttestationErrorHelp {
  */
 export const ATTESTATION_ERROR_HELP: Record<string, AttestationErrorHelp> = {
   step_up_required: {
-    title: 'Re-authentication required',
+    title: "Re-authentication required",
     guidance:
-      'Signing is deliberately harder than browsing: confirm your identity now, against these exact figures. The authorisation is single-use and expires in minutes.',
+      "Signing is deliberately harder than browsing: confirm your identity now, against these exact figures. The authorisation is single-use and expires in minutes.",
   },
   step_up_failed: {
-    title: 'Re-authentication failed',
+    title: "Re-authentication failed",
     guidance:
-      'The proof was not accepted. Password re-entry only works for password accounts; if your institution signs in through its identity provider, re-authenticate there instead.',
+      "The proof was not accepted. Password re-entry only works for password accounts; if your institution signs in through its identity provider, re-authenticate there instead.",
   },
   step_up_locked: {
-    title: 'Account locked after repeated failures',
+    title: "Account locked after repeated failures",
     guidance:
-      'Password re-entry is throttled, so signing is closed until the lock expires — the same lock applies at sign-in. Wait it out, or ask an administrator to reset your password. Nothing was signed.',
+      "Password re-entry is throttled, so signing is closed until the lock expires — the same lock applies at sign-in. Wait it out, or ask an administrator to reset your password. Nothing was signed.",
   },
   maker_checker: {
-    title: 'Segregation of duties blocks this signature',
+    title: "Segregation of duties blocks this signature",
     guidance:
-      'Each required signature must come from a different person, and the officer who generated the return cannot approve it. Ask a second officer with the approver role to certify.',
+      "Each required signature must come from a different person, and the officer who generated the return cannot approve it. Ask a second officer with the approver role to certify.",
   },
   figures_changed_since_certification: {
-    title: 'The figures no longer match what the preparer certified',
+    title: "The figures no longer match what the preparer certified",
     guidance:
-      'This return cannot be approved as it stands. Void the current attestation — which keeps every signature as history — then re-certify the corrected figures from the preparer onwards. It is never resolved by signing anyway.',
+      "This return cannot be approved as it stands. Void the current attestation — which keeps every signature as history — then re-certify the corrected figures from the preparer onwards. It is never resolved by signing anyway.",
   },
   figures_changed_since_preview: {
-    title: 'The figures changed while this screen was open',
+    title: "The figures changed while this screen was open",
     guidance:
-      'You would be certifying something you have not read. Close this dialog, reload the return, review it again, and start the ceremony from the top.',
+      "You would be certifying something you have not read. Close this dialog, reload the return, review it again, and start the ceremony from the top.",
   },
   already_certified: {
-    title: 'Already certified by a preparer',
+    title: "Already certified by a preparer",
     guidance:
-      'A preparer certification is already on record for this cycle. Void the current attestation to start again, or continue as an approver.',
+      "A preparer certification is already on record for this cycle. Void the current attestation to start again, or continue as an approver.",
   },
   already_fully_certified: {
-    title: 'Already fully certified',
+    title: "Already fully certified",
     guidance:
-      'Every signature the policy requires is present. Nothing further is needed before submission.',
+      "Every signature the policy requires is present. Nothing further is needed before submission.",
   },
   validation_not_clean: {
-    title: 'Validation has not passed cleanly',
+    title: "Validation has not passed cleanly",
     guidance:
-      'Figures with outstanding ERROR findings cannot be attested to. Resolve the findings, re-validate, then certify.',
+      "Figures with outstanding ERROR findings cannot be attested to. Resolve the findings, re-validate, then certify.",
   },
   not_validated: {
-    title: 'Not validated yet',
+    title: "Not validated yet",
     guidance:
-      'Run validation from the Validation card and clear every ERROR finding before certifying.',
+      "Run validation from the Validation card and clear every ERROR finding before certifying.",
   },
   role_not_in_policy: {
-    title: 'This role is not in the policy in force',
+    title: "This role is not in the policy in force",
     guidance:
-      'Signing requirements are configuration, resolved as at the reporting date. Adjust the signing policy under Regulatory Reporting → Settings if the requirement is wrong.',
+      "Signing requirements are configuration, resolved as at the reporting date. Adjust the signing policy under Regulatory Reporting → Settings if the requirement is wrong.",
   },
   officer_title_mismatch: {
-    title: 'Officer title does not satisfy the policy slot',
+    title: "Officer title does not satisfy the policy slot",
     guidance:
-      'The policy names which officers may sign this return and matches them against your recorded job title. Correct your job title in Settings → Profile, or have an administrator amend the policy.',
+      "The policy names which officers may sign this return and matches them against your recorded job title. Correct your job title in Settings → Profile, or have an administrator amend the policy.",
   },
   no_signing_key: {
-    title: 'No signing key enrolled',
+    title: "No signing key enrolled",
     guidance:
-      'An administrator must enrol an active signing key for this signer before they can certify. Certification is refused rather than recorded unsigned.',
+      "An administrator must enrol an active signing key for this signer before they can certify. Certification is refused rather than recorded unsigned.",
   },
   signing_disabled: {
-    title: 'Attestation signing is not enabled',
+    title: "Attestation signing is not enabled",
     guidance:
-      'This deployment has signing turned off (ATTESTATION_SIGNING_ENABLED). Identity provisioning and the evidential trail stay on; producing signatures does not.',
+      "This deployment has signing turned off (ATTESTATION_SIGNING_ENABLED). Identity provisioning and the evidential trail stay on; producing signatures does not.",
   },
   attestation_incomplete: {
-    title: 'Attestation incomplete',
+    title: "Attestation incomplete",
     guidance:
-      'Submission is gated on a complete attestation. Record the outstanding signatures listed above first.',
+      "Submission is gated on a complete attestation. Record the outstanding signatures listed above first.",
   },
   signature_not_required: {
-    title: 'No signature is required for this return',
+    title: "No signature is required for this return",
     guidance:
-      'The policy in force exempts this return family from signing. Configure a policy under Regulatory Reporting → Settings if that is wrong.',
+      "The policy in force exempts this return family from signing. Configure a policy under Regulatory Reporting → Settings if that is wrong.",
   },
   preparer_certification_missing: {
-    title: 'The preparer has not certified yet',
+    title: "The preparer has not certified yet",
     guidance:
-      'An approver certifies the figures the preparer already committed to. Wait for the preparer certification, which is what freezes them.',
+      "An approver certifies the figures the preparer already committed to. Wait for the preparer certification, which is what freezes them.",
   },
   register_state_missing: {
-    title: 'Master-data provenance is missing',
+    title: "Master-data provenance is missing",
     guidance:
-      'This return binds no engine run, so it needs a register-state digest. Regenerate the package so its master-data provenance is recorded, then certify.',
+      "This return binds no engine run, so it needs a register-state digest. Regenerate the package so its master-data provenance is recorded, then certify.",
   },
   no_signer_identity: {
-    title: 'No signer identity exists for this account',
+    title: "No signer identity exists for this account",
     guidance:
-      'Permanent signee IDs are derived from a deployment secret (SIGNER_ID_PEPPER) that is not configured, so no account on this platform can sign yet. An administrator must set it and provision identities.',
+      "Permanent signee IDs are derived from a deployment secret (SIGNER_ID_PEPPER) that is not configured, so no account on this platform can sign yet. An administrator must set it and provision identities.",
   },
   signing_not_configured: {
-    title: 'This deployment cannot produce signatures',
+    title: "This deployment cannot produce signatures",
     guidance:
-      'Every return requires signatures, so nothing can be filed until an administrator configures the signing key. Alternatively, relax the signing policy for this return under Regulatory Reporting → Settings.',
+      "Every return requires signatures, so nothing can be filed until an administrator configures the signing key. Alternatively, relax the signing policy for this return under Regulatory Reporting → Settings.",
   },
   signing_backend_unavailable: {
-    title: 'No signing backend is configured',
+    title: "No signing backend is configured",
     guidance:
-      'The key backend (software, PKCS#11 or KMS) could not be reached, so no signature could be produced. Certification is refused rather than recorded without one.',
+      "The key backend (software, PKCS#11 or KMS) could not be reached, so no signature could be produced. Certification is refused rather than recorded without one.",
   },
   signed_pdf_signer_unavailable: {
-    title: 'The signed PDF could not be produced',
+    title: "The signed PDF could not be produced",
     guidance:
-      'This return requires the signature to be placed on the document, and the configured key backend cannot do that. An administrator must configure a backend that can, or relax require_signed_pdf for this return.',
+      "This return requires the signature to be placed on the document, and the configured key backend cannot do that. An administrator must configure a backend that can, or relax require_signed_pdf for this return.",
   },
 };
 
 export function attestationErrorHelp(
-  errorCode: string | null | undefined
+  errorCode: string | null | undefined,
 ): AttestationErrorHelp | null {
   if (!errorCode) return null;
   return ATTESTATION_ERROR_HELP[errorCode] ?? null;
