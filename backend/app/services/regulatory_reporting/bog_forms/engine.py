@@ -226,7 +226,7 @@ def compute_form(  # noqa: PLR0912, PLR0913, PLR0915
                     ) from exc
                 except HTTPException:
                     raise
-                except Exception as exc:  # noqa: BLE001 — one bad line must not sink the form
+                except Exception as exc:  # noqa: BLE001 — non-blocking input gaps remain blank
                     errors.append(f"{spec.code}/{sheet_spec.name}!{ref} ({line.code}): {exc}")
                     raw = None
                 value = _to_number(raw)

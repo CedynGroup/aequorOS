@@ -242,7 +242,7 @@ def _book(rc: ResolveContext, position_type: str) -> tuple[_Row, ...]:
         )
     )
     rows: list[_Row] = []
-    for snapshot, position, cp_attrs in rc.db.execute(stmt):
+    for snapshot, position, cp_attrs in rc.db.execute(stmt).tuples():
         attributes = dict(snapshot.attributes or {})
         cp_attributes = dict(cp_attrs or {})
         raw_sector = attributes.get("sector", cp_attributes.get("sector"))

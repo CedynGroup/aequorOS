@@ -54,7 +54,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -219,7 +219,7 @@ def load_loans(rc: ResolveContext, as_of: str = "current") -> list[Loan]:
         .order_by(snap.source_reference)
     )
     loans: list[Loan] = []
-    for row in rc.db.execute(stmt).all():
+    for row in rc.db.execute(stmt).tuples().all():
         snapshot, position, counterparty, product = row[0], row[1], row[2], row[3]
         attrs = _merged_attrs(snapshot, counterparty)
         loans.append(
@@ -275,9 +275,9 @@ def _load_obs_by_customer(rc: ResolveContext) -> dict[UUID, Decimal]:
         )
     )
     totals: dict[UUID, Decimal] = {}
-    for row in rc.db.execute(stmt).all():
+    for row in rc.db.execute(stmt).tuples().all():
         snapshot, position = row[0], row[1]
-        attrs = snapshot.attributes if isinstance(snapshot.attributes, dict) else {}
+        attrs = snapshot.attributes if isinstance(cast(object, snapshot.attributes), dict) else {}
         amount = reporting_currency_value(
             rc, snapshot, position, attributes=attrs, ghs_attr="notional_ghs"
         )

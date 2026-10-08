@@ -60,6 +60,7 @@ from app.models.canonical import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
 )
+
 from ..sources import ResolveContext, reporting_currency_value, resolver
 
 # ---------------------------------------------------------------------------

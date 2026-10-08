@@ -508,9 +508,7 @@ def test_le_foreign_position_without_cedi_amount_refuses_the_return(db_session: 
     seeder = _CanonicalSeeder(db_session)
     counterparty = seeder.counterparty("CP/USD", "Dollar Borrower", "CORPORATE")
     seeder.position("LOAN/GHS", "LOAN", Decimal("1000000"), counterparty=counterparty)
-    seeder.position(
-        "LOAN/USD", "LOAN", Decimal("80000"), counterparty=counterparty, currency="USD"
-    )
+    seeder.position("LOAN/USD", "LOAN", Decimal("80000"), counterparty=counterparty, currency="USD")
     snapshot = db_session.scalar(
         select(CanonicalPositionSnapshot).where(
             CanonicalPositionSnapshot.source_reference == "LOAN/USD"

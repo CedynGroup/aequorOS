@@ -44,10 +44,11 @@ Documented derivation decisions (kept honest — nothing absent is fabricated):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -337,33 +338,53 @@ def _unvalidated_disclosure(
 def _load_canonical_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date, position_types: tuple[str, ...]
 ) -> list[_CanonicalRow]:
-    records = db.execute(
-        select(
-            CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
+    records = (
+        db.execute(
+            select(
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty,
+                CanonicalProduct,
+            )
+            .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
+            )
+            .outerjoin(
+                CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.as_of_date == as_of,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                CanonicalPosition.position_type.in_(position_types),
+            )
+            .order_by(CanonicalPositionSnapshot.source_reference)
         )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .outerjoin(CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id)
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.position_type.in_(position_types),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
+        .tuples()
+        .all()
+    )
 
     base_currency = jurisdictions.base_currency(bank)
     rows: list[_CanonicalRow] = []
     unstated: list[str] = []
     unstated_currencies: set[str] = set()
-    for snapshot, position, counterparty, product in records:
+    # SQLAlchemy's inferred tuple omits the nullable sides of the outer joins.
+    for snapshot, position, counterparty, product in cast(
+        Sequence[
+            tuple[
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty | None,
+                CanonicalProduct | None,
+            ]
+        ],
+        records,
+    ):
         attributes = snapshot.attributes or {}
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))

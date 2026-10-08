@@ -309,7 +309,9 @@ def test_bsd3_refuses_unstated_foreign_amounts(
     assert response.status_code == 409, response.text
     detail = cast(dict[str, dict[str, dict[str, str]]], response.json())["error"]["details"]
     assert detail["error_code"] == "foreign_amount_not_stated"
-    assert f"{reference} ({missing})" in detail["message"]
+    assert reference in detail["message"]
+    assert missing in detail["message"]
+    assert "Ingest" in detail["message"]
 
 
 def _declared_cells(code: str) -> dict[str, set[str]]:

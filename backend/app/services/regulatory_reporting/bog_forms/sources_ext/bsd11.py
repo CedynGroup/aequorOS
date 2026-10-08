@@ -43,6 +43,7 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
+
 from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: Roles that make a related party a *director* for Sheets 1/2/4 (Guide BSD11:
@@ -254,33 +255,42 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
     )
-    records = rc.db.execute(
-        select(
-            CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
+    records = (
+        rc.db.execute(
+            select(
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty,
+                CanonicalProduct,
+            )
+            .join(
+                latest,
+                (latest.c.pid == CanonicalPositionSnapshot.position_id)
+                & (latest.c.as_of == CanonicalPositionSnapshot.as_of_date),
+            )
+            .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalCounterparty.id == CanonicalPositionSnapshot.counterparty_id,
+            )
+            .outerjoin(
+                CanonicalProduct, CanonicalProduct.id == CanonicalPositionSnapshot.product_id
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == rc.bank.id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                CanonicalPosition.superseded_by.is_(None),
+                CanonicalPosition.withdrawn_at.is_(None),
+                CanonicalPosition.position_type.in_(list(position_types)),
+            )
+            .order_by(CanonicalPositionSnapshot.source_reference)
         )
-        .join(
-            latest,
-            (latest.c.pid == CanonicalPositionSnapshot.position_id)
-            & (latest.c.as_of == CanonicalPositionSnapshot.as_of_date),
-        )
-        .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalCounterparty.id == CanonicalPositionSnapshot.counterparty_id,
-        )
-        .outerjoin(CanonicalProduct, CanonicalProduct.id == CanonicalPositionSnapshot.product_id)
-        .where(
-            CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == rc.bank.id,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.superseded_by.is_(None),
-            CanonicalPosition.withdrawn_at.is_(None),
-            CanonicalPosition.position_type.in_(list(position_types)),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
+        .tuples()
+        .all()
+    )
     facilities = [
         _Facility(
             position=position,
