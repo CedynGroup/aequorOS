@@ -1554,11 +1554,10 @@ def _snapshot_parameters(
 ) -> dict[str, Any]:
     """Governed inputs recorded in the hashed snapshot.
 
-    Mirrors ``regulatory_capital._snapshot_parameters``: the CRM and ECL blocks
-    join only when a register actually changes the arithmetic, so a book that has
-    configured neither hashes exactly as it did before they became forecast
-    inputs (value-based discipline — the hash tracks what was consumed, not what
-    the loader happened to query).
+    Like ``regulatory_capital._snapshot_parameters``, records optional CRM
+    haircuts only when they differ from the code defaults. Forecasts do not
+    consume ECL assumptions (see ``ARCHITECTURE.md``'s ECL assumption and coverage
+    contract). The hash tracks consumed values, not registers the loader queried.
     """
     parameters: dict[str, Any] = {
         "outflow_runoff_rates_pct": _stringified(active.outflow_rates),

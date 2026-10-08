@@ -281,9 +281,7 @@ class EnterpriseProjection:
     binding_minima: tuple[str, ...]
 
 
-def _paths_at_year(
-    paths: Sequence[MacroPathPoint], year_index: int
-) -> list[MacroPathPoint]:
+def _paths_at_year(paths: Sequence[MacroPathPoint], year_index: int) -> list[MacroPathPoint]:
     return [point for point in paths if point.year_index == year_index]
 
 
@@ -439,9 +437,7 @@ def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjecti
     base_years = _run_leg(inputs, "base")
     stress_years = _run_leg(inputs, "stress")
 
-    first_breach = next(
-        (year.year for year in stress_years if not year.minima.all_ok), None
-    )
+    first_breach = next((year.year for year in stress_years if not year.minima.all_ok), None)
     binding: set[str] = set()
     for year in stress_years:
         binding.update(year.minima.binding)
@@ -679,9 +675,7 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     # shared forecasting ``_State`` carries so the operational-income facts it
     # emits are indistinguishable from the as-of ones.
     next_income_year = state.gi_history[-1][0] + 1
-    state.gi_history.append(
-        (next_income_year, f"gross_income_{next_income_year}", total_income)
-    )
+    state.gi_history.append((next_income_year, f"gross_income_{next_income_year}", total_income))
 
     pnl = Pnl(
         nii=nii,
@@ -697,7 +691,14 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         incremental_credit_losses=incremental_credit_losses,
     )
     row = _snapshot_year(
-        inputs, state, meta, year, leg, pd_mult, lgd_mult, pnl=pnl,
+        inputs,
+        state,
+        meta,
+        year,
+        leg,
+        pd_mult,
+        lgd_mult,
+        pnl=pnl,
         credit_rwa_factor=credit_rwa_factor,
     )
     return earning_assets, state.assets_total(), state.equity, row

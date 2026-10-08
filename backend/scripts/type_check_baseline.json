@@ -1374,7 +1374,7 @@
   "reportUnknownVariableType": 1
  },
  "app.services.enterprise_stress": {
-  "reportAny": 68,
+  "reportAny": 32,
   "reportPrivateUsage": 1,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 1,
