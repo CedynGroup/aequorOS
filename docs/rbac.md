@@ -744,8 +744,9 @@ open to every session, and each setting lives on exactly one of them:
 **General** (`/settings`: Data & compute, About) and **Profile & preferences**
 (`/settings/profile`: Your account, personal details, Appearance). The sidebar's
 Settings opens General; the avatar menu opens Profile & preferences.
-Access-control panels do not render there; account administrators get a
-"Manage members and access" link to the Access area.
+Access-control panels do not render there; members with organization-wide
+ACCOUNT/restricted/administer authority get a "Manage integration keys and
+access" link to `/access/integration-keys` on both tabs.
 
 ### 10.4 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
 
