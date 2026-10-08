@@ -189,7 +189,7 @@ def check_sod_policy(
 ) -> SodDecision:
     """Return the server-authoritative assignment-time SoD decision.
 
-    C9 is a hard block: an account administrator/owner cannot also receive an
+    C9 is a hard block: a delegated account administrator cannot also receive an
     operational maker or checker bundle, and an operational maker/checker
     cannot be turned into an account administrator.  An overlapping
     Analyst/Approver pair is allowed because the engine deliberately unions

@@ -397,6 +397,12 @@ test.describe("separation-of-duties at Define", () => {
       hasText: "overlapping maker and checker grants",
     });
     await expect(warning).toBeVisible();
+    if (evidenceDir) {
+      await warning.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-warn-define.png"),
+      });
+    }
     await composer.getByRole("button", { name: "Review grant" }).click();
     await expect(warning).toBeVisible();
     if (evidenceDir) {

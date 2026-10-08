@@ -391,17 +391,23 @@ Create has one scalar role bundle, one institution coverage, one module, one
 sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
 rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
 Preview returns the canonical authority sentence and the assignment-time
-separation-of-duties decision the create call would reach, read-only, so the
-composer refuses a block at Define; create requires that exact sentence and
-refuses if names or scope presentation changed before commit.
+separation-of-duties decision for the current bindings without writing. The
+composer displays the server's warning or blocking findings at Define and
+repeats warnings at Review. A block disables "Review grant" and labels the
+control "Cannot be granted". Create requires that exact sentence, refuses if
+names or scope presentation changed before commit, and re-evaluates the policy;
+the composer displays the server's findings if create is refused.
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
 The server runs assignment-time separation-of-duties policy and returns the
-authoritative `allow`, `warn`, or `block` decision. C9 account-administration
-versus operational maker/checker authority is blocked. An overlapping Analyst
+authoritative `allow`, `warn`, or `block` decision. C9 blocks delegated Account
+Admin authority combined with operational maker/checker authority in either
+assignment direction. An Org Owner without delegated Account Admin authority
+may receive an operational grant with a warning recording the accepted
+exception; the grant still requires a reason and is audited. An overlapping Analyst
 and Approver pair is warned because per-object maker-checker remains a runtime
 condition that no additional binding may bypass. An Approver and Validator pair
 is BLOCKED, scope-independently, because no such runtime condition exists yet
