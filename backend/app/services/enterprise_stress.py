@@ -139,7 +139,9 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: Stored v1 runs keep what they recorded.
 #: v3 enforces ECL coverage: corrected segment matching can change allowances,
 #: and an incomplete source book cannot supply a whole-book modelled allowance.
-ENGINE_VERSION = "enterprise-stress-v3.0.0"
+#: v4 keeps the booked general provisions in Tier 2 on both legs: modelled ECL,
+#: stage 3 included, no longer stands in for them.
+ENGINE_VERSION = "enterprise-stress-v4.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -375,11 +377,6 @@ def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
-        ecl_coverage_complete=(
-            fact.attributes.get("ecl_coverage_complete") is True
-            if "ecl_coverage_complete" in fact.attributes
-            else None
-        ),
         cash_derived=fact.attributes.get("source") == "cash",
     )
 

@@ -3752,13 +3752,13 @@
  },
  "tests.equivalence.test_forecast_capital_parity": {
   "reportMissingParameterType": 1,
-  "reportPrivateUsage": 9,
+  "reportPrivateUsage": 7,
   "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1
  },
  "tests.equivalence.test_forecast_run_parity": {
   "reportAny": 19,
-  "reportPrivateUsage": 8
+  "reportPrivateUsage": 7
  },
  "tests.equivalence.test_report_run_parity": {
   "reportAny": 30

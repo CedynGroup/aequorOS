@@ -11,9 +11,10 @@ Root cause, established by reading both loaders rather than the summary:
 ``regulatory_capital._CAPITAL_FACT_GROUPS``. It omitted BOTH capital fact
 groups that carry no balance-sheet amount of their own —
 
-* ``ecl_exposure`` — staged IFRS 9 EADs. The capital run turns these into the
-  modeled general ECL that replaces ingested general provisions in Tier 2
-  only with complete staging coverage, so omitting them can move the CAR numerator.
+* ``ecl_exposure`` — staged IFRS 9 EADs. The capital run then turned these
+  into the modeled general ECL that replaced ingested general provisions in
+  Tier 2, so omitting them moved the CAR numerator. Tier 2 now always carries
+  the booked general provisions, but the input set stays the capital run's.
 * ``crm_collateral`` — collateral recognized post-haircut against credit
   exposures, which nets down credit RWA, so omitting them moves the CAR
   denominator.
@@ -36,13 +37,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.capital.ecl import EclAssumption
-from app.domain.capital.engine import (
-    CapitalFact,
-    compute_capital_ratios,
-    compute_rwa,
-    has_complete_ecl_coverage,
-)
+from app.domain.capital.engine import CapitalFact, compute_capital_ratios, compute_rwa
 from app.domain.forecasting.engine import (
     ForecastFact,
     ForecastParams,
@@ -53,11 +48,7 @@ from app.domain.forecasting.engine import (
     project,
 )
 from app.domain.liquidity.engine import compute_lcr, compute_nsfr
-from app.services.regulatory_capital import (
-    _CAPITAL_FACT_GROUPS,
-    _ActiveCapitalParams,
-    _modeled_ecl,
-)
+from app.services.regulatory_capital import _CAPITAL_FACT_GROUPS
 from app.services.regulatory_forecasting import _FORECAST_FACT_GROUPS
 from app.services.regulatory_liquidity import _LIQUIDITY_FACT_GROUPS
 from tests.domain.test_forecasting_engine import (
@@ -85,11 +76,6 @@ CRM_COLLATERAL_FACTS = (
     ForecastFact("crm_collateral", "corporate_unrated:CASH", Decimal("120") * M),
     ForecastFact("crm_collateral", "sme_retail:CASH", Decimal("30") * M),
 )
-ECL_ASSUMPTIONS = (
-    EclAssumption(segment="ALL", stage=1, pd_pct=Decimal("1.2"), lgd_pct=Decimal("45")),
-    EclAssumption(segment="ALL", stage=2, pd_pct=Decimal("8"), lgd_pct=Decimal("45")),
-    EclAssumption(segment="ALL", stage=3, pd_pct=Decimal("100"), lgd_pct=Decimal("60")),
-)
 CRM_HAIRCUTS = {"CASH": Decimal("0")}
 
 
@@ -112,12 +98,10 @@ def _facts(*, ecl: bool, crm: bool, complete_staging: bool = False) -> tuple[For
     return tuple(rows)
 
 
-def _forecast_params(*, ecl: bool, crm: bool) -> ForecastParams:
+def _forecast_params(*, crm: bool) -> ForecastParams:
     params = bog_forecast_params()
     return replace(
-        params,
-        capital=replace(params.capital, crm_haircuts=CRM_HAIRCUTS if crm else {}),
-        ecl_assumptions=ECL_ASSUMPTIONS if ecl else (),
+        params, capital=replace(params.capital, crm_haircuts=CRM_HAIRCUTS if crm else {})
     )
 
 
@@ -133,7 +117,6 @@ def _capital_facts(facts: tuple[ForecastFact, ...], groups: set[str]) -> tuple[C
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
-            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in facts
         if row.fact_group in groups
@@ -143,24 +126,12 @@ def _capital_facts(facts: tuple[ForecastFact, ...], groups: set[str]) -> tuple[C
 def _capital_run_ratios(facts: tuple[ForecastFact, ...], params: ForecastParams):
     """Reproduce ``regulatory_capital`` for the baseline scenario, hermetically.
 
-    This deliberately calls the capital SERVICE's own ``_modeled_ecl`` rather
-    than re-deriving the segment/stage split: if the forecast engine's parse
-    ever drifts from the capital run's, this test is what convicts it.
+    The capital run's full fact scope, staged ECL EADs included: its Tier 2
+    carries the booked general provisions whatever ECL the platform models.
     """
     capital_facts = _capital_facts(facts, set(_CAPITAL_FACT_GROUPS))
-    active = _ActiveCapitalParams(
-        risk_weights=dict(params.capital.risk_weights),
-        thresholds={},
-        crm_haircuts=dict(params.capital.crm_haircuts),
-        ecl_assumptions=params.ecl_assumptions,
-    )
-    ecl = _modeled_ecl(capital_facts, active, {})
     rwa = compute_rwa(capital_facts, params.capital)
-    gp_override = (
-        ecl.general_ecl if ecl is not None and has_complete_ecl_coverage(capital_facts) else None
-    )
-    ratios = compute_capital_ratios(capital_facts, rwa, params.capital, gp_override)
-    return rwa, ratios
+    return rwa, compute_capital_ratios(capital_facts, rwa, params.capital)
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +172,7 @@ def test_any_capital_group_the_forecast_drops_is_provably_inert() -> None:
     capital engine and is still dropped here fails immediately.
     """
     facts = _facts(ecl=True, crm=True)
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     delivered = {row.fact_group for row in _to_capital_facts(facts)}
 
     full = _capital_facts(facts, set(_CAPITAL_FACT_GROUPS))
@@ -247,7 +218,7 @@ def test_year_zero_capital_ratios_equal_the_capital_run(
     latent and undetected on the live book.
     """
     facts = _facts(ecl=ecl, crm=crm, complete_staging=complete_staging)
-    params = _forecast_params(ecl=ecl, crm=crm)
+    params = _forecast_params(crm=crm)
     _, expected = _capital_run_ratios(facts, params)
     year0 = project(facts, params, BASE_ASSUMPTIONS).years[0]
 
@@ -265,7 +236,7 @@ def test_year_zero_is_scenario_independent(assumptions) -> None:  # noqa: ANN001
     """No assumption set may move year 0 — it is the observed book, not a
     projection. A scenario that changes it is projecting into the past."""
     facts = _facts(ecl=True, crm=True)
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     _, expected = _capital_run_ratios(facts, params)
     assert project(facts, params, assumptions).years[0].car_pct == expected.car_pct
 
@@ -278,7 +249,7 @@ def test_year_zero_liquidity_ratios_equal_the_liquidity_engine() -> None:
     make the two disagree.
     """
     facts = _facts(ecl=True, crm=True)
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     liquidity_facts = _to_liquidity_facts(facts)
     year0 = project(facts, params, BASE_ASSUMPTIONS).years[0]
     assert abs(year0.lcr_pct - compute_lcr(liquidity_facts, params.liquidity).lcr_pct) <= EXACT
@@ -290,9 +261,7 @@ def test_ecl_and_crm_facts_do_not_disturb_the_balance_sheet() -> None:
     carry, so adding them must not move a single balance-sheet figure — only
     the capital ratios computed over them."""
     plain = project(_facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS)
-    widened = project(
-        _facts(ecl=True, crm=True), _forecast_params(ecl=True, crm=True), BASE_ASSUMPTIONS
-    )
+    widened = project(_facts(ecl=True, crm=True), _forecast_params(crm=True), BASE_ASSUMPTIONS)
     for left, right in zip(plain.years, widened.years, strict=True):
         for field in (
             "total_assets",
@@ -318,9 +287,9 @@ def test_ecl_and_crm_facts_do_not_disturb_the_balance_sheet() -> None:
     "complete_staging", [False, True], ids=["partial_staging", "complete_staging"]
 )
 def test_the_registers_actually_move_the_projected_ratio(complete_staging: bool) -> None:
-    """IFRS 9 ¶5.5.17: only complete staging allows modelled provisions to move CAR.
+    """Basis: Prudential (BoG CRD 2018): staged ECL never moves CAR; collateral does.
 
-    If ``ecl_assumptions``/``crm_haircuts`` were dropped on the floor, every
+    If ``crm_haircuts`` were dropped on the floor, every
     equivalence assertion above would still pass — both sides would be the
     unconfigured number. These inequalities prove the inputs reach the engine,
     and they state the direction each one pushes CAR.
@@ -329,34 +298,29 @@ def test_the_registers_actually_move_the_projected_ratio(complete_staging: bool)
         0
     ]
 
-    # With complete staging, modelled ECL replaces general provisions in Tier 2.
-    # Partial staging keeps the booked allowance throughout the forecast. At year zero,
-    # ingested general provisions are 15m and the modeled stage-1/2 ECL is far
-    # smaller, so recognizing the model shrinks Tier 2 and CAR falls.
+    # Staged ECL EADs never move the ratio, complete staging or not: Tier 2
+    # carries the booked general provisions, and the modelled ECL is a what-if,
+    # never their substitute.
     facts = _facts(ecl=True, crm=False, complete_staging=complete_staging)
-    booked = project(facts, bog_forecast_params(), BASE_ASSUMPTIONS)
-    ecl_only = project(facts, _forecast_params(ecl=True, crm=False), BASE_ASSUMPTIONS)
-    if complete_staging:
-        assert ecl_only.years[0].car_pct < booked.years[0].car_pct
-    else:
-        assert ecl_only.years == booked.years
-        assert ecl_only.summary == booked.summary
+    booked = project(_facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS)
+    ecl_only = project(facts, _forecast_params(crm=False), BASE_ASSUMPTIONS)
+    assert [year.car_pct for year in ecl_only.years] == [year.car_pct for year in booked.years]
 
     # Recognized collateral nets down the credit exposure, so credit RWA falls
     # and CAR rises.
     crm_only = project(
-        _facts(ecl=False, crm=True), _forecast_params(ecl=False, crm=True), BASE_ASSUMPTIONS
+        _facts(ecl=False, crm=True), _forecast_params(crm=True), BASE_ASSUMPTIONS
     ).years[0]
     assert crm_only.car_pct > baseline.car_pct
 
 
 def test_the_registers_move_every_projected_year_not_just_year_zero() -> None:
-    """The parity fix is not a year-0 patch: ECL EADs and collateral track the
-    loan book, so the capital effect persists across the horizon."""
+    """The parity fix is not a year-0 patch: collateral tracks the loan book, so
+    the capital effect persists across the horizon."""
     plain = project(_facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS)
     widened = project(
         _facts(ecl=True, crm=True, complete_staging=True),
-        _forecast_params(ecl=True, crm=True),
+        _forecast_params(crm=True),
         BASE_ASSUMPTIONS,
     )
     assert all(
@@ -407,7 +371,7 @@ def test_year_zero_operational_rwa_uses_the_as_of_income_rows_verbatim() -> None
     year 0 renaming or dropping a row would still move the BIA base.
     """
     facts = _mixed_income_facts()
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     _, expected = _capital_run_ratios(facts, params)
     year0 = project(facts, params, BASE_ASSUMPTIONS).years[0]
     assert year0.car_pct == expected.car_pct
@@ -457,7 +421,7 @@ def test_every_projected_year_takes_the_bia_over_three_gross_income_years() -> N
     that argument, on the mixed five-series book where the two counts differ.
     """
     facts = _mixed_income_facts()
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     state, meta = _parse_facts(facts)
     as_of_years = {row.income_year for row in facts if row.category.startswith("gross_income")}
     assert len(as_of_years) == 3
@@ -489,7 +453,7 @@ def test_projected_years_never_admit_a_non_gross_income_series_to_the_bia() -> N
     them reached the BIA the whole projected CAR path would shift — which is
     exactly what happened before 2026-08-21.
     """
-    params = _forecast_params(ecl=True, crm=True)
+    params = _forecast_params(crm=True)
     plain = project(_facts(ecl=True, crm=True), params, BASE_ASSUMPTIONS)
     mixed = project(_mixed_income_facts(), params, BASE_ASSUMPTIONS)
 

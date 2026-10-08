@@ -1202,8 +1202,15 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
 #### ECL assumption and coverage contract
 
 The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
-`ecl_exposure` facts and an effective `ecl-assumptions` register both exist.
-Without either input, capital and forecasts retain ingested general provisions.
+`ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
+is a what-if and stress estimate: Tier 2 always carries the bank's booked
+general provisions, the figure of record, in capital runs, forecasts and
+enterprise stress. A capital scenario that conditions the ECL (`ecl_*` shock
+keys) takes the increase in modelled stage 1+2 ECL over the unconditioned
+baseline as a CET1 deduction (`modelled_ecl_stress_charge`,
+`ecl_stress_charge_ghs`), gross of tax because the capital run carries no
+governed tax rate; a fall is never credited. Enterprise stress puts its
+incremental credit loss through CET1 via the quarterly credit-loss key.
 
 Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
 loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
@@ -1213,22 +1220,18 @@ normalize them to upper case; a segment-specific row takes precedence over
 vocabulary is owned by the loan-family map, not a separate documentation list.
 
 Every non-zero staged EAD bucket needs a matching assumption or a stage-specific
-`ALL` fallback. Missing coverage fails capital with `ecl_segment_uncovered`,
-forecasts (including what-if and optimizer) with `calculation_error`;
+`ALL` fallback. Missing coverage fails capital with `ecl_segment_uncovered`;
 enterprise stress refuses the request with HTTP 409 and `ecl_coverage_incomplete`.
-Add the missing segment/stage
+Forecasts do not consume the register. Add the missing segment/stage
 rows or an `ALL` row for each affected stage; zero-EAD buckets need no assumption.
 
 Derivation warnings count all unstaged loans, including loans without a
 reporting-currency balance and books that emit no staged buckets. Known EAD is
 reported separately from the count of unconverted unstaged loans. Each emitted
 bucket carries `ecl_coverage_complete`, determined from the source loans before
-unconverted balances are omitted. Incomplete coverage keeps booked general
-provisions in capital and forecasts; enterprise stress refuses a partial model
-when staged exposures and assumptions exist. Complete coverage still permits
-the modelled general-ECL Tier 2 override in capital and forecasts. Forecasts
-retain the source completeness verdict through roll-forward rounding. For facts
-without coverage metadata, the shared capital helper uses aggregate EAD coverage.
+unconverted balances are omitted. Enterprise stress refuses a partial model
+when staged exposures and assumptions exist. For facts without coverage
+metadata, the shared capital helper uses aggregate EAD coverage.
 `ecl_unstaged_ead_ghs`, when present in capital metrics, measures only the known
 reporting-currency EAD gap; it is not a completeness verdict.
 
@@ -1236,8 +1239,7 @@ Current calculation versions are owned by the
 [authority registry](backend/app/domain/authority/registry.py) and the engines'
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
-`backend/tests/services/test_ecl_and_crm.py`,
-`backend/tests/domain/test_forecasting_engine.py` and
+`backend/tests/services/test_ecl_and_crm.py` and
 `backend/tests/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions

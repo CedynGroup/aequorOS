@@ -110,6 +110,19 @@ class EclComputationError(Exception):
     pass
 
 
+def stress_charge(baseline: EclResult, stressed: EclResult) -> Decimal:
+    """The CET1 charge for a stress scenario's increase in modelled general ECL.
+
+    Basis: Prudential stress, Accounting (IFRS 9) modelled input. Only stages 1+2
+    count: they are the general allowance, and stage 3 is specific. A fall in ECL
+    under the scenario is never credited back to capital.
+
+    Deviates from: an after-tax charge — the capital run carries no governed tax
+    rate, so the charge is taken gross (no tax shield), the conservative bound.
+    """
+    return _money(max(stressed.general_ecl - baseline.general_ecl, _ZERO))
+
+
 def _resolve(
     assumptions: Mapping[tuple[str, int], EclAssumption], segment: str, stage: int
 ) -> EclAssumption | None:

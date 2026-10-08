@@ -1088,7 +1088,7 @@ _PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
 # The declaring constants carry the reasoning and the versioning rule
 # (``app.services.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
 # these must track them, and a registry test asserts they do.
-_CAPITAL_VERSION = "regulatory-capital-v3.0.0"
+_CAPITAL_VERSION = "regulatory-capital-v4.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
 _IRR_VERSION = "regulatory-irr-v1.0.0"
 _IRR_SF_VERSION = "regulatory-irr-sf-v1.0.0"
@@ -1104,8 +1104,8 @@ _NO_VAR_AUTHORITY = (
     "(verified negative, full-text search). Internal market-risk management measure."
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
-_FORECAST_VERSION = "regulatory-forecasting-v2.0.0"
-_STRESS_VERSION = "enterprise-stress-v3.0.0"
+_FORECAST_VERSION = "regulatory-forecasting-v3.0.0"
+_STRESS_VERSION = "enterprise-stress-v4.0.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 
 #: The case-scoped ("legacy/advisory") plane. The forensic audit found its
@@ -2640,7 +2640,9 @@ REGISTRY.register_all(
             authority_reference="IFRS 9 paragraph 5.5.17 (unbiased probability-weighted amount)",
             notes=(
                 "Active ONLY when ecl_exposure facts AND the ecl-assumptions register both "
-                "exist; otherwise the ingested-provisions path is byte-identical. An exposure "
+                "exist. A what-if beside the booked general provisions, never a substitute "
+                "for them in Tier 2; a scenario that conditions it takes the stage 1+2 "
+                "increase as a CET1 charge. An exposure "
                 "whose (segment, stage) has no assumption is reported UNCOVERED, never priced "
                 "at zero, and the capital run fails on it."
             ),
