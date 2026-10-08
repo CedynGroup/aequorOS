@@ -2,7 +2,7 @@
 
 **Audience:** the bank's IT / identity administrator · **Time:** ~20 minutes ·
 **Protocol:** OpenID Connect (OIDC) · **No AequorOS software is installed on
-your side, and your users' passwords never leave your identity provider.**
+your side, and OIDC sign-ins keep IdP passwords at your identity provider.**
 
 AequorOS connects directly to the identity provider (IdP) your institution
 already runs — Google Workspace, Microsoft Entra ID, Okta, or any
@@ -96,8 +96,8 @@ separate AequorOS decision.
   it. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
   Org Owner is never assigned through this flow. This option cannot
   be enabled without at least one allowed domain, so it never opens requests to
-  the public. Offboarding still works at your IdP: disable the Google/Entra
-  account and sign-in stops.
+  the public. For offboarding, follow the pre-provisioning gate in
+  [Security notes](#security-notes-your-reviewers-will-ask-about).
 
 ## Testing
 

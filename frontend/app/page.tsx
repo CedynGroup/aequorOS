@@ -1,75 +1,75 @@
-import Link from 'next/link';
-import Kicker from '@/components/Kicker';
-import ProductFrame from '@/components/ProductFrame';
-import { LinkButton } from '@/components/Button';
-import { heroScreen, homepageFeatureScreens } from '@/lib/product-screens';
+import Link from "next/link";
+import Kicker from "@/components/Kicker";
+import ProductFrame from "@/components/ProductFrame";
+import { LinkButton } from "@/components/Button";
+import { heroScreen, homepageFeatureScreens } from "@/lib/product-screens";
 
 const statusChips = [
-  { dot: 'bg-live', label: 'Platform live' },
-  { dot: 'bg-accent', label: 'Bank of Ghana return formats' },
-  { dot: 'bg-watch', label: 'Pilot cohort forming' },
+  { dot: "bg-live", label: "Platform live" },
+  { dot: "bg-accent", label: "Bank of Ghana return formats" },
+  { dot: "bg-watch", label: "Pilot cohort forming" },
 ];
 
 const timeline = [
   {
-    date: 'SEPT 2025',
-    text: 'Credit concentration guidelines issued for banks, savings & loans, and finance houses.',
+    date: "SEPT 2025",
+    text: "Credit concentration guidelines issued for banks, savings & loans, and finance houses.",
     terminal: false,
   },
   {
-    date: 'FEB 2026',
-    text: 'ICAAP, stress-testing, and two liquidity directives published for exposure.',
+    date: "FEB 2026",
+    text: "ICAAP, stress-testing, and two liquidity directives published for exposure.",
     terminal: false,
   },
   {
-    date: 'DEC 2026',
-    text: 'NPL ratios must reach 10% or below. Board concentration frameworks due.',
+    date: "DEC 2026",
+    text: "NPL ratios must reach 10% or below. Board concentration frameworks due.",
     terminal: false,
   },
   {
-    date: '1 JAN 2027',
-    text: 'Stated effective date across the new directives. Tier 1 rigor, every institution.',
+    date: "1 JAN 2027",
+    text: "Stated effective date across the new directives. Tier 1 rigor, every institution.",
     terminal: true,
   },
 ];
 
 const engines = [
-  { name: 'Liquidity', href: '/product#module-liquidity' },
-  { name: 'Capital', href: '/product#module-capital' },
-  { name: 'Credit', href: '/product#module-credit' },
-  { name: 'Interest-rate risk', href: '/product#module-irr' },
-  { name: 'FX', href: '/product#module-fx' },
-  { name: 'FTP', href: '/product#module-ftp' },
-  { name: 'Forecasting', href: '/product#module-forecasting' },
+  { name: "Liquidity", href: "/product#module-liquidity" },
+  { name: "Capital", href: "/product#module-capital" },
+  { name: "Credit", href: "/product#module-credit" },
+  { name: "Interest-rate risk", href: "/product#module-irr" },
+  { name: "FX", href: "/product#module-fx" },
+  { name: "FTP", href: "/product#module-ftp" },
+  { name: "Forecasting", href: "/product#module-forecasting" },
 ];
 
 const ledger = [
   {
-    dot: 'bg-live',
-    title: 'LIVE TODAY',
+    dot: "bg-live",
+    title: "LIVE TODAY",
     rows: [
-      'Data Engine with file upload and secure API push',
-      'Seven calculation engines on one canonical book',
-      'Bank of Ghana BSD returns, generated and export-ready',
-      'Governed audit events, lineage, and reproducible runs',
+      "Data Engine with file upload and secure API push",
+      "Seven calculation engines on one canonical book",
+      "Bank of Ghana BSD returns, generated and export-ready",
+      "Governed audit events, lineage, and reproducible runs",
     ],
   },
   {
-    dot: 'bg-watch',
-    title: 'SET UP PER BANK',
+    dot: "bg-watch",
+    title: "SET UP PER BANK",
     rows: [
-      'Direct core-banking extracts, mapped to your chart of accounts during onboarding',
-      'Market-data vendor feeds, enabled after vendor onboarding checks',
+      "Direct core-banking extracts, mapped to your chart of accounts during onboarding",
+      "Market-data vendor feeds, enabled after vendor onboarding checks",
       "Behavioral models tuned to your institution's own history",
     ],
   },
   {
-    dot: 'bg-accent',
+    dot: "bg-accent",
     title: "WHAT'S NEXT",
     rows: [
-      'A first cohort of design-partner banks, onboarding now',
-      'Independent security audit ahead of production banking data',
-      'Nigeria (CBN) and South Africa (SARB) return formats on the same engine',
+      "A first cohort of design-partner banks, onboarding now",
+      "Independent security audit ahead of production banking data",
+      "Nigeria (CBN) and South Africa (SARB) return formats on the same engine",
     ],
   },
 ];
@@ -86,7 +86,10 @@ export default function HomePage() {
           aria-hidden
           className="pointer-events-none absolute -right-32 -top-40 opacity-[0.06]"
         >
-          <path d="M260 0 L520 520 H400 L260 220 L120 520 H0 Z" fill="#4FC3F7" />
+          <path
+            d="M260 0 L520 520 H400 L260 220 L120 520 H0 Z"
+            fill="#4FC3F7"
+          />
         </svg>
         <div className="relative max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-14 md:pt-20">
           <div className="grid lg:grid-cols-[minmax(0,10fr)_minmax(0,11fr)] gap-12 lg:gap-14 items-end">
@@ -97,7 +100,9 @@ export default function HomePage() {
                     key={chip.label}
                     className="inline-flex items-center gap-2 h-[30px] px-3.5 rounded-full border border-white/[0.22] text-[12.5px] font-medium text-white/85"
                   >
-                    <span className={`h-[7px] w-[7px] rounded-full ${chip.dot}`} />
+                    <span
+                      className={`h-[7px] w-[7px] rounded-full ${chip.dot}`}
+                    />
                     {chip.label}
                   </span>
                 ))}
@@ -124,10 +129,7 @@ export default function HomePage() {
                 form.
               </p>
             </div>
-            <Link
-              href="/product"
-              className="hidden lg:block -mb-px"
-            >
+            <Link href="/product" className="hidden lg:block -mb-px">
               <ProductFrame
                 screen={heroScreen}
                 variant="chrome-dark"
@@ -185,8 +187,8 @@ export default function HomePage() {
                   key={item.date}
                   className={
                     item.terminal
-                      ? 'h-[17px] w-[17px] rounded-full bg-kicker border-[3px] border-white'
-                      : 'mt-0.5 h-[13px] w-[13px] rounded-full bg-navy-deep'
+                      ? "h-[17px] w-[17px] rounded-full bg-kicker border-[3px] border-white"
+                      : "mt-0.5 h-[13px] w-[13px] rounded-full bg-navy-deep"
                   }
                 />
               ))}
@@ -197,7 +199,7 @@ export default function HomePage() {
               <div key={item.date} className="flex flex-col gap-2">
                 <p
                   className={`text-[13px] font-semibold tracking-[0.04em] ${
-                    item.terminal ? 'text-kicker' : 'text-navy-deep'
+                    item.terminal ? "text-kicker" : "text-navy-deep"
                   }`}
                 >
                   {item.date}
@@ -222,8 +224,8 @@ export default function HomePage() {
             One governed path from core to return.
           </h2>
           <p className="text-[17px] leading-relaxed text-ink-soft">
-            Data lands once. Everything downstream recomputes automatically,
-            and every number can be traced back to the load that produced it.
+            Data lands once. Everything downstream recomputes automatically, and
+            every number can be traced back to the load that produced it.
           </p>
         </div>
         <div className="flex flex-col xl:flex-row xl:items-stretch gap-4 xl:gap-0">
@@ -243,7 +245,9 @@ export default function HomePage() {
             <p className="text-[15px] font-medium text-white">
               Normalize and validate
             </p>
-            <p className="text-[15px] font-medium text-white">Canonical model</p>
+            <p className="text-[15px] font-medium text-white">
+              Canonical model
+            </p>
             <p className="text-[15px] font-medium text-white">Full lineage</p>
           </div>
           <FlowArrow />
@@ -289,8 +293,8 @@ export default function HomePage() {
                 The working product, in public.
               </h2>
               <p className="text-[17px] leading-relaxed text-ink-soft">
-                These screens are the live platform running a synthetic
-                Ghanaian bank. Browse all of it without an account.
+                These screens are the live platform running a synthetic Ghanaian
+                bank. Browse all of it without an account.
               </p>
             </div>
             <Link
@@ -304,7 +308,11 @@ export default function HomePage() {
             {homepageFeatureScreens.map((screen, i) => (
               <Link
                 key={screen.id}
-                href={screen.id === 'data-engine' ? '/product#data-engine' : '/product#governance'}
+                href={
+                  screen.id === "data-engine"
+                    ? "/product#data-engine"
+                    : "/product#governance"
+                }
                 className="flex flex-col gap-4 group"
               >
                 <ProductFrame
@@ -314,7 +322,7 @@ export default function HomePage() {
                   className="transition-transform group-hover:-translate-y-0.5"
                 />
                 <p className="text-sm leading-relaxed">
-                  <span className="font-semibold text-ink">{screen.title}</span>{' '}
+                  <span className="font-semibold text-ink">{screen.title}</span>{" "}
                   <span className="text-text-muted">{screen.caption}</span>
                 </p>
               </Link>
@@ -345,7 +353,10 @@ export default function HomePage() {
               </div>
               <div className="flex flex-col gap-2.5">
                 {col.rows.map((row) => (
-                  <p key={row} className="text-[15px] leading-normal text-ink-soft">
+                  <p
+                    key={row}
+                    className="text-[15px] leading-normal text-ink-soft"
+                  >
                     {row}
                   </p>
                 ))}

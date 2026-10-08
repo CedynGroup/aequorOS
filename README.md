@@ -175,4 +175,4 @@ but has never been restored, so filed-artifact recoverability is untested; there
 is no point-in-time recovery, and the timings come from a local cluster rather
 than production hardware. The full disclosure register lives in
 `docs/audit/15_known_limitations.md`, which is **not tracked in this repository**
-(`.gitignore:42`) — ask for it directly.
+([publication allow-list](.gitignore)) — ask for it directly.

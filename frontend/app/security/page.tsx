@@ -1,22 +1,22 @@
-import type { Metadata } from 'next';
-import { LinkButton } from '@/components/Button';
-import PageHeader from '@/components/PageHeader';
+import type { Metadata } from "next";
+import { LinkButton } from "@/components/Button";
+import PageHeader from "@/components/PageHeader";
 
 export const metadata: Metadata = {
-  title: 'Security — AequorOS',
+  title: "Security — AequorOS",
   description:
     "Tenant isolation enforced at the database, immutable lineage, reproducible regulatory returns, maker-checker e-signatures, and role-based access. The tour we give a bank's IT and audit teams.",
 };
 
 const facts = [
   {
-    title: 'Tenant isolation',
+    title: "Tenant isolation",
     body: (
       <>
         PostgreSQL row-level security isolates tenant sessions by organization.
         Queries also scope records to the bank. Background workers and staff
         tools have cross-organization access. Tighter staff access and
-        bank-visible auditing are{' '}
+        bank-visible auditing are{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/351"
@@ -42,8 +42,8 @@ const facts = [
     ),
   },
   {
-    title: 'Immutable lineage',
-    body: 'Each figure traces to the load, batch, and timestamp that produced it. Corrections supersede prior records; nothing is silently overwritten.',
+    title: "Immutable lineage",
+    body: "Each figure traces to the load, batch, and timestamp that produced it. Corrections supersede prior records; nothing is silently overwritten.",
     icon: (
       <svg
         width="24"
@@ -60,8 +60,8 @@ const facts = [
     ),
   },
   {
-    title: 'Reproducible returns',
-    body: 'Sealed calculation runs are hashed on their input values. A past return can be regenerated exactly, figure by figure, in front of an examiner.',
+    title: "Reproducible returns",
+    body: "Sealed calculation runs are hashed on their input values. A past return can be regenerated exactly, figure by figure, in front of an examiner.",
     icon: (
       <svg
         width="24"
@@ -78,8 +78,8 @@ const facts = [
     ),
   },
   {
-    title: 'Maker-checker signing',
-    body: 'Returns require a preparer and an approver, each signing under their own identity. Signed PDFs are certified so that any later change is detectable.',
+    title: "Maker-checker signing",
+    body: "Returns require a preparer and an approver, each signing under their own identity. Signed PDFs are certified so that any later change is detectable.",
     icon: (
       <svg
         width="24"
@@ -97,33 +97,33 @@ const facts = [
     ),
   },
   {
-    title: 'Encryption',
+    title: "Encryption",
     body: (
       <>
         Stored integration credentials use an encrypted vault. Object storage
         supports server-side encryption with a configured key. Planned work
-        covers bank-held keys for{' '}
+        covers bank-held keys for{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/352"
         >
           files
         </a>
-        ,{' '}
+        ,{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/353"
         >
           sensitive fields
         </a>
-        ,{' '}
+        ,{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/354"
         >
           key monitoring
         </a>
-        , and{' '}
+        , and{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/355"
@@ -150,25 +150,25 @@ const facts = [
     ),
   },
   {
-    title: 'Access control',
+    title: "Access control",
     body: (
       <>
         Scoped access controls and a read-only examiner view are built. Selected
         business actions write append-only audit events; staff actions use a
-        separate internal log. Complete bank-readable{' '}
+        separate internal log. Complete bank-readable{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/297"
         >
           login history
-        </a>{' '}
-        and{' '}
+        </a>{" "}
+        and{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/351"
         >
           staff-access auditing
-        </a>{' '}
+        </a>{" "}
         are planned.
       </>
     ),
