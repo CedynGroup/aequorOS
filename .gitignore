@@ -87,6 +87,7 @@ coverage/
 !/docs/bog_returns/CONTRIBUTING_real_db_tests.md
 
 # Methodology notes
+!/docs/c3_credit_pr_body.md
 !/docs/internal/credit_ratings_PD.md
 !/docs/internal/forward_curve_construction.md
 !/docs/research/*.md

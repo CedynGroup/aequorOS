@@ -49,11 +49,13 @@ from app.domain.capital.engine import (
     CapitalParams,
     CapitalRatiosResult,
     CapitalRegisterRefused,
+    CreditExposureBasisUnavailable,
     CapitalStressResult,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
     assert_capital_register_usable,
+    require_credit_exposure_basis,
     compute_capital_ratios,
     compute_rwa,
     money,
@@ -303,7 +305,7 @@ def _execute_scenario_compute(
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     engine_params = _engine_params(active)
     # ECL conditioning keys are the ECL engine's, never the stress engine's
     # (which rejects unknown shocks).
@@ -784,7 +786,9 @@ def _create_and_execute(
             ctx,
             run_id,
             CapitalRunError(
-                exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error",
+                exc.code
+                if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+                else "calculation_error",
                 str(exc),
                 None,
             ),
@@ -1566,7 +1570,7 @@ def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus o
         )
     active = active or _active_params_from_batch(db, ctx, bank, period.period_end, batch)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1584,7 +1588,7 @@ def _compute_inline(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1612,7 +1616,10 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
         raise ModuleDataUnavailable(
-            exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error", str(exc)
+            exc.code
+            if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+            else "calculation_error",
+            str(exc),
         ) from exc
 
 
@@ -1651,7 +1658,7 @@ def compute_live(
     if active.institution_class == "sdi":
         return _sdi_compute_live(db, ctx, bank, period, current, active, facts)
     params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, params)
     ratios = compute_capital_ratios(engine_facts, rwa, params)
     snapshot = current_snapshot(
@@ -1943,6 +1950,11 @@ def _load_facts(
             .order_by(BankFinancialFact.fact_group, BankFinancialFact.category)
         )
     )
+
+
+def _fresh_engine_facts(facts: Sequence[FinancialFactRow]) -> tuple[CapitalFact, ...]:
+    require_credit_exposure_basis(facts)
+    return tuple(_to_engine_fact(fact) for fact in facts)
 
 
 def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
@@ -2379,7 +2391,7 @@ def capital_breach_multiplier(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
     try:
         assert_capital_register_usable(engine_facts)

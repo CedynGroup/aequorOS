@@ -12,6 +12,11 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
 )
+from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.domain.stress.translation import MacroPathPoint
+from tests.domain.stress_fixtures import base_paths
+from app.services import enterprise_stress
+from app.services.credit_exposure_book import ExposureRow
 from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
 from app.models import CanonicalGlAccount
 from app.services.fact_derivation import (
@@ -413,3 +418,185 @@ def test_nonbank_placement_never_receives_bank_preference(counterparty: str) -> 
         _credit_rwa(
             _row("NONBANK/1", "INTERBANK_PLACEMENT", balance="1000", counterparty_type=counterparty)
         )
+
+
+@pytest.mark.parametrize("code", ["GL-1390", "GL-1700"])
+@pytest.mark.parametrize("name", ["Suspended interest", "Interest in suspense"])
+def test_suspended_interest_gl_is_deducted_once(code: str, name: str) -> None:
+    """BoG CRD (June 2018) ¶98: suspended interest has one capital deduction."""
+    row = _row(
+        "LOAN/SUSPENSE",
+        "LOAN",
+        balance="1000",
+        regulatory_category="CORPORATE_UNRATED",
+        attributes={"interest_in_suspense_ghs": "50"},
+    )
+    contra = CanonicalGlAccount(
+        account_code=code, name=name, account_class="ASSET", balance=Decimal("-50")
+    )
+    assert _credit_rwa(row, gl_accounts=[contra]) == Decimal("950")
+
+
+@pytest.mark.parametrize(
+    "contra_name",
+    [
+        "Equipment impairment",
+        "Equipment provision",
+        "Equipment allowance",
+        "Equipment contra",
+        "Equipment write-off",
+    ],
+)
+def test_unrelated_asset_impairment_remains_in_residual_rwa(contra_name: str) -> None:
+    """BoG CRD (June 2018) ¶98: a loan deduction cannot undo equipment impairment."""
+    loan = _row("LOAN/1", "LOAN", balance="1000", regulatory_category="CORPORATE_UNRATED")
+    accounts = [
+        CanonicalGlAccount(
+            account_code="GL-1700", name="Equipment", account_class="ASSET", balance=Decimal("1000")
+        ),
+        CanonicalGlAccount(
+            account_code="GL-1790",
+            name=contra_name,
+            account_class="ASSET",
+            balance=Decimal("-200"),
+        ),
+    ]
+    assert _credit_rwa(loan, gl_accounts=accounts) == Decimal("1800")
+
+
+def test_uncovered_loan_allowance_remains_with_its_gl_loan() -> None:
+    """BoG CRD (June 2018) ¶98: an uncovered GL loan retains its contra balance."""
+    security = _row(
+        "PAPER/1", "SECURITY_HOLDING", balance="1000", attributes={"instrument": "gog_bond"}
+    )
+    accounts = [
+        CanonicalGlAccount(
+            account_code="GL-1300", name="Loans", account_class="ASSET", balance=Decimal("1000")
+        ),
+        CanonicalGlAccount(
+            account_code="GL-1390",
+            name="Loan loss allowance",
+            account_class="ASSET",
+            balance=Decimal("-200"),
+        ),
+    ]
+    assert _credit_rwa(security, gl_accounts=accounts) == Decimal("800")
+
+
+def _stress_row(row: _PositionRow) -> ExposureRow:
+    return ExposureRow(
+        source_reference=row.source_reference,
+        position_type=row.position_type,
+        currency=row.currency,
+        balance_rep=row.balance_ghs,
+        is_foreign_currency=row.currency != "GHS",
+        notional_rep=None,
+        ifrs9_stage=row.ifrs9_stage,
+        attributes=row.attributes,
+        counterparty_type=row.counterparty_type,
+        counterparty_resident=True,
+        counterparty_country=None,
+        group_key=row.source_reference,
+        regulatory_category=row.regulatory_category,
+        product_risk_weight_code="RW75",
+        product_code=row.product_code,
+        contractual_maturity=row.contractual_maturity,
+    )
+
+
+def test_sme_fx_stress_uses_corrected_credit_weights() -> None:
+    """BoG CRD (June 2018) ¶139: FX shock adds 120 to 2,200, preserving gross EAD."""
+    rows = [
+        _row("SME/DOM", "LOAN", balance="1000", regulatory_category="SME_UNRATED"),
+        _row(
+            "SME/FX", "LOAN", currency="USD", balance_ghs="1000", regulatory_category="SME_RETAIL"
+        ),
+    ]
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
+        [_stress_row(row) for row in rows],
+        bog_capital_params(),
+    )
+    result = compute_bottom_up_credit(
+        book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
+    )
+    assert result.base_credit_rwa == _credit_rwa(*rows) == Decimal("2200")
+    assert result.stressed_credit_rwa == Decimal("2320")
+    assert result.credit_rwa_uplift_factor == Decimal("1.054545")
+    assert sum((exposure.ead for exposure in book), Decimal("0")) == Decimal("2000")
+
+
+@pytest.mark.parametrize(
+    ("position_type", "category", "counterparty", "attributes", "expected"),
+    [
+        ("LOAN", "CORPORATE_UNRATED", "CENTRAL_BANK", {"instrument": "bog_bill"}, "200"),
+        ("LOAN", "CORPORATE_UNRATED", "BANK_OECD", {}, "500"),
+        ("INTERBANK_PLACEMENT", None, "BANK_NON_OECD", {"external_rating_grade": "6"}, "1500"),
+        (
+            "LOAN",
+            "CORPORATE_UNRATED",
+            "GOVERNMENT_ENTITY",
+            {"issuer_class": "public_institution"},
+            "700",
+        ),
+        (
+            "LOAN",
+            "SME_UNRATED",
+            "SME",
+            {"specific_provision_ghs": "200", "interest_in_suspense_ghs": "50"},
+            "900",
+        ),
+    ],
+)
+def test_bottom_up_rwa_matches_net_capital_without_netting_expected_loss(
+    position_type: str,
+    category: str | None,
+    counterparty: str,
+    attributes: dict[str, str],
+    expected: str,
+) -> None:
+    """BoG CRD (June 2018) ¶98, ¶107, ¶117–124, ¶139: capital and stress share a basis."""
+    row = _row(
+        "CLAIM/FX",
+        position_type,
+        currency="USD",
+        balance_ghs="1000",
+        regulatory_category=category,
+        counterparty_type=counterparty,
+        attributes=attributes,
+    )
+    book = enterprise_stress._build_credit_exposures([_stress_row(row)], bog_capital_params())  # pyright: ignore[reportPrivateUsage]
+    result = compute_bottom_up_credit(
+        book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
+    )
+    assert result.base_credit_rwa == _credit_rwa(row) == Decimal(expected)
+    assert result.stressed_credit_rwa == Decimal(expected) * Decimal("1.1")
+    assert book[0].ead == Decimal("1000")
+    if counterparty == "SME":
+        assert result.base_expected_loss == Decimal("9")
+        assert result.stressed_expected_loss == Decimal("9.9")
+
+
+def test_projection_overlay_does_not_revalue_constant_residual_assets() -> None:
+    """BoG CRD (June 2018) ¶98, ¶139: only migrating claims contribute the RWA delta."""
+    rows = [
+        _row("SME/DOM", "LOAN", balance="1000", regulatory_category="SME_UNRATED"),
+        _row(
+            "SME/FX", "LOAN", currency="USD", balance_ghs="1000", regulatory_category="SME_RETAIL"
+        ),
+    ]
+    book = enterprise_stress._build_credit_exposures(
+        [_stress_row(row) for row in rows], bog_capital_params()
+    )  # pyright: ignore[reportPrivateUsage]
+    paths = [
+        MacroPathPoint(
+            point.variable,
+            point.year_index,
+            point.base_value,
+            point.base_value * Decimal("1.1")
+            if point.variable == "fx_usd_ghs" and point.year_index > 0
+            else point.base_value,
+        )
+        for point in base_paths()
+    ]
+    uplift, _ = enterprise_stress._credit_overlays(book, paths, 3, base_credit_rwa=Decimal("3200"))  # pyright: ignore[reportPrivateUsage]
+    assert {Decimal("3200") * factor for factor in uplift.values()} == {Decimal("3320")}

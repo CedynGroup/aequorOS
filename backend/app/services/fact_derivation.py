@@ -279,11 +279,9 @@ from app.domain.irr.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
 from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
 from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
 from app.domain.positions.credit import (
-    DOMESTIC_SOVEREIGN_INSTRUMENTS,
-    PSE_INSTRUMENT_CLASSES,
-    PSE_ISSUER_CLASSES,
-    attribute_text,
-    interbank_weight_code,
+    capital_credit_class,
+    public_debt_evidence,
+    sovereign_evidence,
     specific_deductions,
 )
 from app.domain.positions.families import LOAN_CATEGORY_MAP as _LOAN_CATEGORY_MAP
@@ -1534,7 +1532,7 @@ def _classify_gl_assets(
         ):
             cash["bog_excess_reserves"] += balance
             have_reserve_split = True
-        elif _is_loan_loss_allowance_gl(code, name):
+        elif _is_asset_contra_gl(name):
             # A credit-balance contra inside the asset side. No position line
             # carries it (the loan sub-ledger is gross), so it stays here: total
             # assets are stated net of impairment, as the ledger states them.
@@ -1662,9 +1660,24 @@ def _warn_carried_forward_gl(canonical: _Canonical, warnings: list[str]) -> None
 _ALLOWANCE_NAME_TOKENS = ("provision", "impairment", "allowance", "contra", "write-off")
 
 
+def _is_asset_contra_gl(name: str) -> bool:
+    return any(token in name for token in _ALLOWANCE_NAME_TOKENS) or any(
+        token in name
+        for token in ("suspended interest", "interest in suspense", "interest suspense")
+    )
+
+
 def _is_loan_loss_allowance_gl(code: str, name: str) -> bool:
-    del code  # named by convention, never by code block
-    return any(token in name for token in _ALLOWANCE_NAME_TOKENS)
+    loan_account = _in_block(code, 1300, 1399) or any(
+        token in name for token in ("loan", "mortgage", "advance")
+    )
+    suspended_interest = any(
+        token in name
+        for token in ("suspended interest", "interest in suspense", "interest suspense")
+    )
+    return suspended_interest or (
+        loan_account and any(token in name for token in _ALLOWANCE_NAME_TOKENS)
+    )
 
 
 def _is_securities_gl(code: str, name: str) -> bool:
@@ -2064,27 +2077,6 @@ def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-
     return specs, loan_rows, cash, securities, identity
 
 
-#: Typed sovereign / central-bank evidence for the securities balance-sheet
-#: split. HQLA eligibility and capital weights each have a separate classifier;
-#: neither follows from this signal alone.
-_SOVEREIGN_COUNTERPARTY_TYPES = frozenset({"SOVEREIGN", "CENTRAL_BANK"})
-#: Documented ``attributes.instrument`` values (docs/API_INTEGRATION.md §3.4)
-#: that name sovereign or central-bank paper.
-_SOVEREIGN_INSTRUMENTS = DOMESTIC_SOVEREIGN_INSTRUMENTS
-#: Product-code tokens that name sovereign / central-bank paper directly. The
-#: pre-audit ``_is_bill`` split already keyed on this vocabulary to decide
-#: ``securities_bog_bills`` vs ``securities_gog_bonds``.
-_SOVEREIGN_PRODUCT_TOKENS = (
-    "TBILL",
-    "T-BILL",
-    "GOG",
-    "GOVT",
-    "GOVERNMENT",
-    "TREASURY",
-    "SOVEREIGN",
-)
-
-
 def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
     """Positive evidence that this holding is sovereign / central-bank paper.
 
@@ -2099,24 +2091,7 @@ def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) 
     * an ``attributes.issuer`` naming the jurisdiction's sovereign or central
       bank, resolved from the jurisdictions registry — never a literal country.
     """
-    attributes: Mapping[str, object] = row.attributes
-    if (
-        bool(attribute_text(attributes, "issuer_class"))
-        or attribute_text(attributes, "instrument") in PSE_INSTRUMENT_CLASSES
-        or (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES
-    ):
-        return False
-    if (row.counterparty_type or "").upper() in _SOVEREIGN_COUNTERPARTY_TYPES:
-        return True
-    if str(attributes.get("instrument") or "").strip().lower() in _SOVEREIGN_INSTRUMENTS:
-        return True
-    code = f"{row.product_code or ''} {row.regulatory_category or ''}".upper()
-    if any(token in code for token in _SOVEREIGN_PRODUCT_TOKENS):
-        return True
-    issuer = str(attributes.get("issuer") or "").strip().lower()
-    if not issuer:
-        return False
-    return issuer in sovereign_names
+    return sovereign_evidence(row, sovereign_names)
 
 
 def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
@@ -2126,13 +2101,7 @@ def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]
     still subject to the separate HQLA classifier. A closed public issuer class
     cannot confer sovereign capital treatment.
     """
-    attributes: Mapping[str, object] = row.attributes
-    return (
-        _is_sovereign_security(row, sovereign_names)
-        or attribute_text(attributes, "issuer_class") in PSE_ISSUER_CLASSES
-        or attribute_text(attributes, "instrument") in PSE_INSTRUMENT_CLASSES
-        or (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES
-    )
+    return public_debt_evidence(row, sovereign_names)
 
 
 #: The Basel HQLA levels this derivation may emit. Mirrors
@@ -2340,82 +2309,12 @@ def _is_bill(row: _PositionRow, as_of: date) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _security_credit_class(row: _PositionRow, canonical: _Canonical) -> tuple[str, str | None]:
-    """Basis: BoG CRD (June 2018), in force.
-
-    Implements: ¶106–107 and ¶117–119, independently of HQLA eligibility.
-    Foreign sovereign/MDB preferential weights require evidence the book does
-    not currently establish; those claims carry no weight and capital refuses.
-    """
-    attributes: Mapping[str, object] = row.attributes
-    instrument = attribute_text(attributes, "instrument")
-    issuer_class = PSE_INSTRUMENT_CLASSES.get(instrument) or attribute_text(
-        attributes, "issuer_class"
+def _position_credit_class(row: _PositionRow, canonical: _Canonical) -> tuple[str, str | None]:
+    return capital_credit_class(
+        row,
+        foreign=row.currency.upper() != canonical.base_currency.upper(),
+        sovereign_names=canonical.sovereign_issuer_names,
     )
-    foreign = row.currency.upper() != canonical.base_currency.upper()
-    if issuer_class in PSE_ISSUER_CLASSES:
-        weight = 50 if issuer_class == "public_institution" else 100
-        return f"pse_{issuer_class}", f"RW{weight}+RW20" if foreign else f"RW{weight}"
-    if (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES:
-        return "unclassified_public_sector", None
-    issuer = attribute_text(attributes, "issuer")
-    domestic = (
-        instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS or issuer in canonical.sovereign_issuer_names
-    )
-    # These documented product tokens name the domestic issuance programme.
-    product = (row.product_code or "").upper().split(".")
-    domestic = domestic or bool({"TBILL", "GOG", "BOG"}.intersection(product))
-    domestic = domestic or (row.regulatory_category or "").upper() == "SOVEREIGN_LOCAL_CCY"
-    if domestic and issuer_class:
-        # Conflicting/unknown issuer evidence cannot establish a sovereign exemption.
-        return "unclassified_issuer", None
-    if domestic:
-        # Preserve the CRD issuer class consumed by Appendix II's loss allocation.
-        # The generic label is retained when the registry establishes domestic
-        # issuance but the source does not distinguish government from central bank.
-        counterparty = (row.counterparty_type or "").upper()
-        issuer_role = ""
-        if instrument.startswith("bog_") or "BOG" in product or counterparty == "CENTRAL_BANK":
-            issuer_role = "bog"
-        elif (
-            instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS
-            or {"TBILL", "GOG"}.intersection(product)
-            or counterparty == "SOVEREIGN"
-        ):
-            issuer_role = "gog"
-        category = f"domestic_sovereign:{issuer_role}" if issuer_role else "domestic_sovereign"
-        return category, "RW20" if foreign else "RW0"
-    if _is_sovereign_security(row, canonical.sovereign_issuer_names):
-        return "unclassified_sovereign", None
-    return "other_securities", "RW100"
-
-
-def _loan_credit_class(loan: _LoanRow, canonical: _Canonical) -> tuple[str, str | None]:
-    """BoG CRD (June 2018) ¶106–124, ¶139: counterparty treatment for loan claims.
-
-    Past-due classification keeps its existing precedence. A public-sector or
-    bank claim is not corporate merely because its source product says so.
-    """
-    row = loan.row
-    if loan.category == _PAST_DUE_CATEGORY[0]:
-        return loan.category, loan.risk_weight_code
-    if _is_public_debt_security(row, canonical.sovereign_issuer_names):
-        category, code = _security_credit_class(row, canonical)
-        return f"loans:{category}", code
-    if row.counterparty_type in ("BANK_OECD", "BANK_NON_OECD"):
-        return "loans:banks", interbank_weight_code(
-            row.attributes,
-            domestic=row.currency.upper() == canonical.base_currency.upper(),
-            origination=row.origination_date,
-            maturity=row.contractual_maturity,
-        )
-    if (
-        loan.category == "sme_retail"
-        and loan.risk_weight_code == "RW100"
-        and row.currency.upper() != canonical.base_currency.upper()
-    ):
-        return loan.category, "RW100+RW20"
-    return loan.category, loan.risk_weight_code
 
 
 def _derive_credit_exposure(
@@ -2460,29 +2359,13 @@ def _derive_credit_exposure(
             )
 
     for loan in loans:
-        category, code = _loan_credit_class(loan, canonical)
+        category, code = _position_credit_class(loan.row, canonical)
         add(loan.row, category, code)
     securities = canonical.by_type("SECURITY_HOLDING")
     placements = canonical.by_type("INTERBANK_PLACEMENT")
-    for row in securities:
-        category, code = _security_credit_class(row, canonical)
-        add(row, f"securities:{category}", code)
-    for row in placements:
-        if _is_public_debt_security(row, canonical.sovereign_issuer_names):
-            category, code = _security_credit_class(row, canonical)
-            add(row, f"interbank:{category}", code)
-        else:
-            code = (
-                interbank_weight_code(
-                    row.attributes,
-                    domestic=row.currency.upper() == canonical.base_currency.upper(),
-                    origination=row.origination_date,
-                    maturity=row.contractual_maturity,
-                )
-                if row.counterparty_type in (None, "BANK_OECD", "BANK_NON_OECD")
-                else None
-            )
-            add(row, "interbank", code)
+    for row in securities + placements:
+        category, code = _position_credit_class(row, canonical)
+        add(row, category, code)
     # Paper outside the public-debt bucket and interbank claims sit inside other_assets.
     # Subtract their GROSS balances before adding their net classified exposures.
     non_sovereign = sum(
@@ -2500,6 +2383,7 @@ def _derive_credit_exposure(
             for account in canonical.gl_accounts
             if account.account_class == "ASSET"
             and account.balance is not None
+            and bool(loans)
             and _is_loan_loss_allowance_gl(account.account_code.strip(), account.name.lower())
         ),
         _ZERO,
@@ -2719,7 +2603,7 @@ def _derive_crm_collateral(
     """
     totals: dict[str, Decimal] = {}
     for loan in loan_rows:
-        category, _ = _loan_credit_class(loan, canonical)
+        category, _ = _position_credit_class(loan.row, canonical)
         attributes = loan.row.attributes
         for value_key, class_key in (
             ("crm_collateral_ghs", "crm_collateral_class"),

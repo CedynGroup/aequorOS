@@ -114,6 +114,7 @@ class ExposureRow:
     #: maturity in years: converting one into the other is a day-count and an
     #: IRB definition, both of which belong to the engine that needs them.
     contractual_maturity: date | None = None
+    origination_date: date | None = None
 
     @property
     def unconverted(self) -> bool:
@@ -277,6 +278,7 @@ def load_exposure_rows(
                 ),
                 product_code=(product.product_code if product is not None else None),
                 contractual_maturity=snapshot.contractual_maturity,
+                origination_date=position.origination_date,
             )
         )
     return rows

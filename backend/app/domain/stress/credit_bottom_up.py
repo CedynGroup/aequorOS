@@ -118,6 +118,8 @@ class CreditExposure:
     ``crd_class`` is the CRD exposure class (validated to the registry).
     ``is_foreign_currency`` marks a non-base-currency exposure the FX path
     revalues. PD/LGD/risk-weight are through-the-cycle percentages.
+    ``ead`` is gross expected-loss EAD; ``credit_amount`` is the net CRD ¶98
+    amount for RWA. Domain callers without deductions use EAD for both.
     """
 
     exposure_id: str
@@ -127,6 +129,7 @@ class CreditExposure:
     lgd_pct: Decimal
     risk_weight_pct: Decimal
     is_foreign_currency: bool = False
+    credit_amount: Decimal | None = None
 
     def normalized_class(self) -> str:
         """The exposure's CRD class — refusing an unrecognised one.
@@ -288,11 +291,17 @@ def compute_bottom_up_credit(
         downgraded_rw = min(max(rw + params.downgrade_rw_step_pct, rw), params.rw_cap_pct)
         effective_rw = (_ONE - migration_fraction) * rw + migration_fraction * downgraded_rw
 
-        base_rwa = money(base_ead * rw / _HUNDRED)
-        stressed_rwa = money(stressed_ead * effective_rw / _HUNDRED)
+        credit_amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        stressed_credit = (
+            money(credit_amount * (_ONE + fx_uplift))
+            if exposure.is_foreign_currency
+            else credit_amount
+        )
+        base_rwa = money(credit_amount * rw / _HUNDRED)
+        stressed_rwa = money(stressed_credit * effective_rw / _HUNDRED)
         # Additive attribution: base + fx-revaluation + migration == stressed.
-        fx_reval_rwa += money((stressed_ead - base_ead) * rw / _HUNDRED)
-        migration_rwa += money(stressed_ead * (effective_rw - rw) / _HUNDRED)
+        fx_reval_rwa += money((stressed_credit - credit_amount) * rw / _HUNDRED)
+        migration_rwa += money(stressed_credit * (effective_rw - rw) / _HUNDRED)
 
         base_el = money(base_ead * exposure.pd_pct / _HUNDRED * exposure.lgd_pct / _HUNDRED)
         stressed_pd = _capped_pct(exposure.pd_pct * pd_multiplier)
@@ -437,9 +446,7 @@ def result_for_year(
     per year.
     """
     year_points = _year_points(scenario_paths, year_index)
-    _require_fx_path(
-        year_points, exposures, metric_id=f"bottom_up_credit_year:{year_index}"
-    )
+    _require_fx_path(year_points, exposures, metric_id=f"bottom_up_credit_year:{year_index}")
     pd_mult, lgd_mult, fx_frac = _macro_conditioning(year_points, overrides)
     return compute_bottom_up_credit(
         exposures,

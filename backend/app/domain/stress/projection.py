@@ -76,6 +76,7 @@ from app.domain.forecasting.engine import (
     _apply_funding_plug,
     _Meta,
     _parse_facts,
+    _scale_credit_exposures,
     _scale_in_place,
     _State,
     _state_facts,
@@ -599,6 +600,12 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
     securities_factor = (
         _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
+    )
+    _scale_credit_exposures(
+        state,
+        loan_factor,
+        deposit_factor,
+        securities_factor * ((_HUNDRED - mtm_pct) / _HUNDRED if year == 1 else _ONE),
     )
     _scale_in_place(state.loans, loan_factor)
     _scale_in_place(state.ecl_exposures, loan_factor)

@@ -14,6 +14,7 @@ engines meet the database:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -329,7 +330,8 @@ def test_an_exposure_with_no_risk_weight_code_refuses_the_run() -> None:
     """The old flat 100%. A risk weight is a determination about the exposure."""
     with pytest.raises(svc.EnterpriseStressError) as exc:
         svc._build_credit_exposures(  # noqa: SLF001
-            [_exposure_row("LOAN/NOCODE", code=None)], _capital_params(RW100="100")
+            [replace(_exposure_row("LOAN/NOCODE", code=None), regulatory_category="UNMAPPED")],
+            _capital_params(RW100="100"),
         )
 
     detail = _detail(exc.value)
@@ -345,21 +347,24 @@ def test_a_code_with_no_governed_row_refuses_and_names_the_code() -> None:
     """Coverage the parameter register does not carry is a policy gap, not a 100%."""
     with pytest.raises(svc.EnterpriseStressError) as exc:
         svc._build_credit_exposures(  # noqa: SLF001
-            [_exposure_row("LOAN/UNGOVERNED", code="RW250")], _capital_params(RW100="100")
+            [_exposure_row("LOAN/UNGOVERNED", code="RW250")], _capital_params(RW50="50")
         )
 
     detail = _detail(exc.value)
     assert detail["error_code"] == "risk_weight_unresolved"
     outcome = detail["details"]["outcome"]
     assert outcome["state"] == OutcomeState.POLICY_UNRESOLVED.value
-    assert outcome["items"] == ["param:risk_weight:RW250"]
-    assert detail["details"]["unresolved_codes"] == ["RW250"]
+    assert outcome["items"] == ["param:risk_weight:RW100"]
+    assert detail["details"]["unresolved_codes"] == ["RW100"]
 
 
 def test_the_refusal_names_every_offending_exposure_not_just_the_first() -> None:
     """A book with no governed coverage at all must not report one arbitrary row —
     an operator has to be able to act on the refusal without re-running anything."""
-    rows = [_exposure_row(f"LOAN/{index}", code=None) for index in range(3)]
+    rows = [
+        replace(_exposure_row(f"LOAN/{index}", code=None), regulatory_category="UNMAPPED")
+        for index in range(3)
+    ]
     with pytest.raises(svc.EnterpriseStressError) as exc:
         svc._build_credit_exposures(rows, _capital_params(RW100="100"))  # noqa: SLF001
 
@@ -372,8 +377,8 @@ def test_the_refusal_names_every_offending_exposure_not_just_the_first() -> None
     ]
 
 
-def test_a_governed_code_resolves_from_either_the_snapshot_or_the_product() -> None:
-    """Both ingestion paths reach the same authority and the same weight."""
+def test_crd_classification_overrides_snapshot_and_product_weights() -> None:
+    """BoG CRD (June 2018) Part 2: source weights cannot override exposure classes."""
     exposures = svc._build_credit_exposures(  # noqa: SLF001
         [
             _exposure_row("LOAN/ATTR", code="RW100"),
@@ -384,5 +389,5 @@ def test_a_governed_code_resolves_from_either_the_snapshot_or_the_product() -> N
 
     assert [(item.exposure_id, item.risk_weight_pct) for item in exposures] == [
         ("LOAN/ATTR", Decimal("100")),
-        ("LOAN/PRODUCT", Decimal("50")),
+        ("LOAN/PRODUCT", Decimal("100")),
     ]

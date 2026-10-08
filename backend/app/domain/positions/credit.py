@@ -11,6 +11,13 @@ from calendar import monthrange
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from typing import Protocol
+
+from app.domain.positions.families import (
+    LOAN_CATEGORY_MAP,
+    PAST_DUE_CATEGORY,
+    unclassified_category,
+)
 
 DOMESTIC_SOVEREIGN_INSTRUMENTS = frozenset(
     {
@@ -94,3 +101,142 @@ def interbank_weight_code(
         short = origination <= maturity <= three_months
     weight = (_SHORT_BANK_WEIGHTS if short else _BANK_WEIGHTS).get(grade)
     return None if weight is None else f"RW{weight}"
+
+
+class CreditPosition(Protocol):
+    @property
+    def attributes(self) -> Mapping[str, object]: ...
+
+    @property
+    def position_type(self) -> str: ...
+
+    @property
+    def counterparty_type(self) -> str | None: ...
+
+    @property
+    def product_code(self) -> str | None: ...
+
+    @property
+    def regulatory_category(self) -> str | None: ...
+
+    @property
+    def ifrs9_stage(self) -> int | None: ...
+
+    @property
+    def origination_date(self) -> date | None: ...
+
+    @property
+    def contractual_maturity(self) -> date | None: ...
+
+
+def sovereign_evidence(row: CreditPosition, sovereign_names: tuple[str, ...]) -> bool:
+    attributes = row.attributes
+    if (
+        attribute_text(attributes, "issuer_class")
+        or attribute_text(attributes, "instrument") in PSE_INSTRUMENT_CLASSES
+        or row.counterparty_type in ("GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK")
+    ):
+        return False
+    return (
+        row.counterparty_type in ("SOVEREIGN", "CENTRAL_BANK")
+        or attribute_text(attributes, "instrument") in DOMESTIC_SOVEREIGN_INSTRUMENTS
+        or any(
+            token in f"{row.product_code or ''} {row.regulatory_category or ''}".upper()
+            for token in ("TBILL", "T-BILL", "GOG", "GOVT", "GOVERNMENT", "TREASURY", "SOVEREIGN")
+        )
+        or attribute_text(attributes, "issuer") in sovereign_names
+    )
+
+
+def public_debt_evidence(row: CreditPosition, sovereign_names: tuple[str, ...]) -> bool:
+    return (
+        sovereign_evidence(row, sovereign_names)
+        or attribute_text(row.attributes, "issuer_class") in PSE_ISSUER_CLASSES
+        or attribute_text(row.attributes, "instrument") in PSE_INSTRUMENT_CLASSES
+        or row.counterparty_type in ("GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK")
+    )
+
+
+def security_credit_class(
+    row: CreditPosition, *, foreign: bool, sovereign_names: tuple[str, ...]
+) -> tuple[str, str | None]:
+    """BoG CRD (June 2018) ¶106–119: issuer evidence independent of liquidity."""
+    attributes = row.attributes
+    instrument = attribute_text(attributes, "instrument")
+    issuer_class = PSE_INSTRUMENT_CLASSES.get(instrument) or attribute_text(
+        attributes, "issuer_class"
+    )
+    if issuer_class in PSE_ISSUER_CLASSES:
+        weight = 50 if issuer_class == "public_institution" else 100
+        return f"pse_{issuer_class}", f"RW{weight}+RW20" if foreign else f"RW{weight}"
+    if row.counterparty_type in ("GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK"):
+        return "unclassified_public_sector", None
+    product = (row.product_code or "").upper().split(".")
+    domestic = (
+        instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS
+        or attribute_text(attributes, "issuer") in sovereign_names
+        or bool({"TBILL", "GOG", "BOG"}.intersection(product))
+        or (row.regulatory_category or "").upper() == "SOVEREIGN_LOCAL_CCY"
+    )
+    if domestic and issuer_class:
+        return "unclassified_issuer", None
+    if domestic:
+        issuer_role = ""
+        if (
+            instrument.startswith("bog_")
+            or "BOG" in product
+            or row.counterparty_type == "CENTRAL_BANK"
+        ):
+            issuer_role = "bog"
+        elif (
+            instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS
+            or {"TBILL", "GOG"}.intersection(product)
+            or row.counterparty_type == "SOVEREIGN"
+        ):
+            issuer_role = "gog"
+        category = f"domestic_sovereign:{issuer_role}" if issuer_role else "domestic_sovereign"
+        return category, "RW20" if foreign else "RW0"
+    if sovereign_evidence(row, sovereign_names):
+        return "unclassified_sovereign", None
+    return "other_securities", "RW100"
+
+
+def capital_credit_class(
+    row: CreditPosition, *, foreign: bool, sovereign_names: tuple[str, ...] = ()
+) -> tuple[str, str | None]:
+    """BoG CRD (June 2018) ¶106–124, ¶139: one classifier for capital and stress."""
+    if row.position_type == "SECURITY_HOLDING":
+        category, code = security_credit_class(
+            row, foreign=foreign, sovereign_names=sovereign_names
+        )
+        return f"securities:{category}", code
+    if row.position_type == "LOAN" and row.ifrs9_stage == 3:
+        return PAST_DUE_CATEGORY
+    if public_debt_evidence(row, sovereign_names):
+        category, code = security_credit_class(
+            row, foreign=foreign, sovereign_names=sovereign_names
+        )
+        prefix = "loans" if row.position_type == "LOAN" else "interbank"
+        return f"{prefix}:{category}", code
+    if (
+        row.counterparty_type in ("BANK_OECD", "BANK_NON_OECD")
+        or row.position_type == "INTERBANK_PLACEMENT"
+    ):
+        code = (
+            interbank_weight_code(
+                row.attributes,
+                domestic=not foreign,
+                origination=row.origination_date,
+                maturity=row.contractual_maturity,
+            )
+            if row.counterparty_type in (None, "BANK_OECD", "BANK_NON_OECD")
+            else None
+        )
+        return "loans:banks" if row.position_type == "LOAN" else "interbank", code
+    category, code = LOAN_CATEGORY_MAP.get(
+        (row.regulatory_category or "").upper(),
+        (unclassified_category(row.regulatory_category), None),
+    )
+    if category == "sme_retail" and foreign:
+        code = "RW100+RW20"
+    return category, code

@@ -35,7 +35,9 @@ from app.domain.capital.engine import (
     CapitalComputationError,
     CapitalParams,
     CapitalRegisterRefused,
+    CreditExposureBasisUnavailable,
     classify_capital_ratio,
+    require_credit_exposure_basis,
 )
 from app.domain.capital.engine import (
     MissingParameterError as CapitalMissingParameterError,
@@ -568,7 +570,7 @@ def _missing_assumptions_error() -> ForecastRunError:  # pragma: no cover - defe
 def _run_error(exc: Exception) -> ForecastRunError:  # noqa: PLR0911
     if isinstance(exc, ForecastRunError):
         return exc
-    if isinstance(exc, CapitalRegisterRefused):
+    if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable)):
         return ForecastRunError(exc.code, str(exc), None)
     if isinstance(exc, LiquidityMissingParameterError):
         return ForecastRunError(
@@ -1005,6 +1007,7 @@ def _engine_facts_or_error(
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
+    require_credit_exposure_basis(facts)
     return tuple(_to_engine_fact(fact) for fact in facts)
 
 

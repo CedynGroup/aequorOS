@@ -217,6 +217,26 @@ class CapitalRegisterRefused(CapitalComputationError, NotComputable):
         return CAPITAL_REGISTER_REFUSED_CATEGORY
 
 
+class CreditExposureBasisUnavailable(CapitalComputationError, NotComputable):
+    """BoG CRD (June 2018) ¶98, ¶107, ¶139: stale facts cannot supply fresh capital."""
+
+    code: str = "credit_exposure_basis_missing"
+
+    def __init__(self) -> None:
+        NotComputable.__init__(
+            self,
+            outcome(
+                OutcomeState.MISSING_REQUIRED_INPUT,
+                metric_id="credit_rwa",
+                reason=(
+                    "The net CRD credit exposure basis is missing. Re-derive financial "
+                    "facts before calculating capital, forecasts or stress."
+                ),
+                items=("fact_group:credit_exposure",),
+            ),
+        )
+
+
 class _CapitalRegisterFact(Protocol):
     """Equality-only attributes, compatible with ORM descriptors and pure facts."""
 
@@ -235,6 +255,12 @@ def assert_capital_register_usable(facts: Iterable[_CapitalRegisterFact]) -> Non
         for fact in facts
     ):
         raise CapitalRegisterRefused()
+
+
+def require_credit_exposure_basis(facts: Iterable[_CapitalRegisterFact]) -> None:
+    """BoG CRD (June 2018) ¶98: fresh consumers require the net exposure plane."""
+    if not any(fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE for fact in facts):
+        raise CreditExposureBasisUnavailable()
 
 
 class BiaGrossIncomeUnavailable(CapitalComputationError, NotComputable):

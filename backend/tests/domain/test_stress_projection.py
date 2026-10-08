@@ -528,3 +528,62 @@ def test_annual_benign_macro_never_credits_lower_ecl_to_capital() -> None:
         assert stress.pnl.incremental_credit_losses == Decimal("0")
         assert stress.pnl == base.pnl
         assert stress.ratios.cet1_capital == base.ratios.cet1_capital
+
+
+@pytest.mark.parametrize("rate_shock", [False, True])
+def test_net_credit_basis_tracks_growth_and_year_one_haircut_on_both_legs(rate_shock: bool) -> None:
+    """BoG CRD (June 2018) ¶98, ¶107: projected credit follows the matching asset book."""
+    facts = list(sample_bank_latest_facts())
+    for fact in tuple(facts):
+        if fact.fact_group == "loan_exposure":
+            code = "RW100" if fact.category == "sme_retail" else fact.risk_weight_code
+            amount = (
+                fact.amount - Decimal("60000000")
+                if fact.category == "corporate_unrated"
+                else fact.amount
+            )
+            facts.append(
+                ForecastFact(
+                    "credit_exposure", f"{fact.category}:{code}", amount, risk_weight_code=code
+                )
+            )
+    facts.append(
+        ForecastFact(
+            "credit_exposure", "other_assets:RW100", Decimal("90000000"), risk_weight_code="RW100"
+        )
+    )
+    facts.append(
+        ForecastFact(
+            "credit_exposure",
+            "securities:domestic_sovereign:gog:RW20",
+            Decimal("620000000"),
+            risk_weight_code="RW20",
+        )
+    )
+    plan = replace(
+        BASE_ASSUMPTIONS,
+        loan_growth_pct=Decimal("10"),
+        deposit_growth_pct=Decimal("20"),
+        securities_shift_pp=Decimal("0"),
+    )
+    paths = tuple(
+        replace(point, stress_value=point.base_value + Decimal("0.05"))
+        if rate_shock and point.variable == "interest_rate" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    projection = project_enterprise(_inputs(paths, facts=facts, plan=plan))
+    loan_rwa = Decimal("1172500000")
+    off_balance_rwa = Decimal("150000000")
+    for leg, haircut in (
+        (projection.base, Decimal("1")),
+        (projection.stress, Decimal("0.825") if rate_shock else Decimal("1")),
+    ):
+        for year in leg:
+            expected = (
+                (loan_rwa + off_balance_rwa) * Decimal("1.1") ** year.year
+                + Decimal("124000000") * Decimal("1.2") ** year.year * haircut
+                + Decimal("90000000")
+            )
+            assert year.rwa.credit_rwa == expected.quantize(Decimal("0.0001"))
+    assert projection.current.rwa.credit_rwa == loan_rwa + off_balance_rwa + Decimal("214000000")
