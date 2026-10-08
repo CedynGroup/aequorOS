@@ -8,9 +8,9 @@ cycle PD/LGD assumptions. Stage 3 exposures are credit-impaired — PD is 100%
 by definition regardless of the assumption row.
 
 Assumptions resolve per (segment, stage) with an ``ALL`` segment fallback;
-an exposure whose segment+stage has no assumption is reported as uncovered
-rather than silently priced at zero — the caller decides whether that blocks
-the run or falls back to ingested provisions. Segments compare under
+an exposure with non-zero EAD whose segment+stage has no assumption is reported
+as uncovered rather than silently priced at zero. Callers must invoke
+``EclResult.require_coverage`` before consuming the allowance. Segments compare under
 :func:`normalize_segment` on both sides, so the register's stored spelling
 and the exposure's fact category cannot drift apart by case.
 
@@ -34,10 +34,8 @@ _MONEY_Q = Decimal("0.0001")
 def normalize_segment(segment: str) -> str:
     """The one spelling an ECL segment is stored and matched under.
 
-    The assumptions register stores upper-case (``CORPORATE_UNRATED``) while
-    loan-family fact categories are lower-case (``corporate_unrated``). An exact
-    match between the two never succeeded, so every Board-adopted segment row was
-    silently replaced by the ``ALL`` fallback or left the exposure unpriced.
+    Register rows and loan-family categories use different case conventions;
+    both must pass through this boundary before a segment-specific lookup.
     """
     return segment.strip().upper()
 
@@ -132,9 +130,7 @@ def compute_ecl(
     """Probability-weighted PD x LGD x EAD across the conditioning scenarios."""
     weight_total = sum((scenario.weight_pct for scenario in scenarios), _ZERO)
     if weight_total != _HUNDRED:
-        raise EclComputationError(
-            f"Scenario weights must sum to 100% (got {weight_total}%)."
-        )
+        raise EclComputationError(f"Scenario weights must sum to 100% (got {weight_total}%).")
     lookup = {(normalize_segment(row.segment), row.stage): row for row in assumptions}
     items: list[EclItem] = []
     uncovered: list[tuple[str, int]] = []

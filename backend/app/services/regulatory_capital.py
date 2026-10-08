@@ -260,8 +260,8 @@ class CapitalScenarioAnalysis:
     stress: CapitalStressResult | None
     params: CapitalParams
     ecl: EclResult | None
-    #: Loan EAD the modeled ECL did not reach because those loans carry no
-    #: ingested IFRS 9 stage. ``None`` when no modeled ECL ran.
+    #: Known reporting-currency EAD beyond staged buckets, not a source-book
+    #: completeness verdict. ``None`` when no modeled ECL ran.
     ecl_unstaged_ead: Decimal | None = None
 
 
@@ -855,7 +855,7 @@ def _persist_success(  # noqa: PLR0913
     if ecl is not None:
         # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
         # general-provisions component in this run's Tier 2 (still capped)
-        # unless part of the loan book was unstaged.
+        # only when source-book ECL coverage was complete.
         metrics["ecl_total_ghs"] = str(ecl.total_ecl)
         metrics["ecl_general_ghs"] = str(ecl.general_ecl)
         metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)

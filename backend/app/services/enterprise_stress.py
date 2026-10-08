@@ -137,6 +137,8 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: through ``regulatory_irr.positions_from_facts``. v1 dropped every swap, so the
 #: same book now yields a different ΔEVE and Appendix II Pillar 2 IRRBB charge.
 #: Stored v1 runs keep what they recorded.
+#: v3 enforces ECL coverage: corrected segment matching can change allowances,
+#: and an incomplete source book cannot supply a whole-book modelled allowance.
 ENGINE_VERSION = "enterprise-stress-v3.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
@@ -1545,7 +1547,7 @@ def _require_complete_scenario(
         )
 
 
-def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of the run
+def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""

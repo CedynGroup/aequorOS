@@ -277,11 +277,8 @@ class ForecastParams:
 
     liquidity: LiquidityParams
     capital: CapitalParams
-    #: Board-approved IFRS 9 PD/LGD register. Supplied, it drives the SAME
-    #: general-provisions Tier 2 override the capital run applies (Phase 2
-    #: item 8). Empty — the default, and the state of every book with no
-    #: configured register — leaves the ingested-provisions path untouched and
-    #: every projected figure byte-identical.
+    #: Board-approved IFRS 9 PD/LGD register; provision handling follows
+    #: ``ARCHITECTURE.md``'s ECL assumption and coverage contract.
     ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
@@ -1153,13 +1150,11 @@ def _ecl_exposures(facts: Sequence[CapitalFact]) -> tuple[EclExposure, ...]:
 def _general_provisions_override(
     capital_facts: Sequence[CapitalFact], params: ForecastParams
 ) -> Decimal | None:
-    """The IFRS 9 modeled general ECL that replaces ingested general provisions.
+    """Modelled general ECL under the capital run's coverage gate.
 
-    The gate is the capital run's gate (Phase 2 item 8): active only when BOTH
-    staged exposures and a Board-approved assumption register exist, otherwise
-    ``None`` and the ingested-provisions path stands untouched. The baseline
-    projection is unshocked, so it uses the unconditioned base scenario — the
-    same one ``_modeled_ecl`` uses when no ECL conditioning shock is supplied.
+    See ``ARCHITECTURE.md``'s ECL assumption and coverage contract for refusals
+    and booked-provision fallback. The projection uses the unconditioned base
+    scenario, as ``_modeled_ecl`` does without an ECL conditioning shock.
     """
     if not params.ecl_assumptions:
         return None

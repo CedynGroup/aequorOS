@@ -2344,11 +2344,11 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
     """Staged EAD buckets for the IFRS 9 ECL engine (Phase 2 item 8).
 
     Emits ``"<family>:stage<n>"`` rows only for loans carrying an ingested
-    IFRS 9 stage — an unstaged book derives nothing, and the capital engine
-    then falls back to ingested provisions rather than modeling on air. A
-    partly staged book is counted in the group warnings: the capital engine
-    then keeps the booked provisions, because a modeled figure over part of the
-    book must not replace the allowance booked against all of it.
+    IFRS 9 stage and a reporting-currency balance. Completeness is determined
+    from source loans before unconverted balances are omitted, so matching
+    converted EAD totals cannot hide missing model coverage. Unstaged warnings
+    survive even when no buckets are emitted. Provision handling is owned by
+    ``ARCHITECTURE.md``'s ECL assumption and coverage contract.
     """
     totals: dict[str, Decimal] = {}
     unstaged: list[_LoanRow] = []

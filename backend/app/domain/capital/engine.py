@@ -256,6 +256,12 @@ def unstaged_loan_ead(facts: Sequence[CapitalFact]) -> Decimal:
 def has_complete_ecl_coverage(
     facts: Sequence[CapitalFact], *, staged_ead: Decimal | None = None
 ) -> bool:
+    """Prefer the source-book verdict to sums that may omit unconverted loans.
+
+    Explicit completeness also survives independent forecast rounding of loan
+    totals and staged buckets. Aggregate EAD is a fallback for older facts that
+    carry no verdict, not a reason to override an explicit incomplete source.
+    """
     coverage = [
         fact.ecl_coverage_complete for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE
     ]
