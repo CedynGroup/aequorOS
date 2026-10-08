@@ -20,6 +20,8 @@ from pydantic import TypeAdapter
 
 BACKEND = Path(__file__).resolve().parents[1]
 BASELINE = BACKEND / "scripts" / "typing_baseline.json"
+#: The feature-move ledger: ``[old, new]`` dotted module names in move order.
+LEDGER = BACKEND / "scripts" / "feature_module_moves.json"
 
 #: Strict from the start: the feature packages and kernel seams the feature-layout work
 #: created. The baseline may never cover them, even by a hand edit.
@@ -65,11 +67,12 @@ class _Report(TypedDict):
 
 _REPORT = TypeAdapter(_Report)
 _COUNTS = TypeAdapter(dict[str, dict[str, int]])
+_MOVES = TypeAdapter(list[tuple[str, str]])
 
 
 @dataclass(frozen=True)
 class Diagnostic:
-    """One basedpyright error, charged to its module's current name."""
+    """One basedpyright error, charged to the module's baseline name."""
 
     module: str
     rule: str
@@ -116,6 +119,21 @@ def is_strict_module(module: str) -> bool:
     return any(module == strict or module.startswith(f"{strict}.") for strict in STRICT_MODULES)
 
 
+def baseline_module(module: str, moves: Sequence[tuple[str, str]]) -> str:
+    """The name ``module``'s errors are counted under.
+
+    A module in a strict path is counted where it is, so it never inherits a legacy
+    allowance. Any other module takes the name it had before its recorded moves, so a
+    codemod move keeps its baseline entries and stays a pure rename.
+    """
+    if is_strict_module(module):
+        return module
+    for old, new in reversed(moves):
+        if module == new:
+            module = old
+    return module
+
+
 def run_basedpyright() -> list[Diagnostic]:
     """Type-check the backend and return its errors and warnings."""
     result = subprocess.run(
@@ -127,26 +145,26 @@ def run_basedpyright() -> list[Diagnostic]:
     )
     if result.returncode not in (0, 1):
         sys.exit(f"basedpyright failed (exit {result.returncode}):\n{result.stderr}{result.stdout}")
-    return parse_report(result.stdout)
+    return parse_report(result.stdout, _MOVES.validate_json(LEDGER.read_bytes()))
 
 
-def parse_report(output: str) -> list[Diagnostic]:
+def parse_report(output: str, moves: Sequence[tuple[str, str]]) -> list[Diagnostic]:
     """The errors and warnings in basedpyright's ``--outputjson`` report."""
     return [
-        _diagnostic(raw)
+        _diagnostic(raw, moves)
         for raw in _REPORT.validate_json(output)["generalDiagnostics"]
         if raw["severity"] in ("error", "warning")
     ]
 
 
-def _diagnostic(raw: _RawDiagnostic) -> Diagnostic:
+def _diagnostic(raw: _RawDiagnostic, moves: Sequence[tuple[str, str]]) -> Diagnostic:
     path = Path(raw["file"])
     location = path.relative_to(BACKEND).as_posix() if path.is_relative_to(BACKEND) else str(path)
     if "range" in raw:
         start = raw["range"]["start"]
         location = f"{location}:{start['line'] + 1}:{start['character'] + 1}"
     return Diagnostic(
-        module=module_of(path),
+        module=baseline_module(module_of(path), moves),
         rule=raw.get("rule", UNRULED),
         location=location,
         message=raw["message"].splitlines()[0],

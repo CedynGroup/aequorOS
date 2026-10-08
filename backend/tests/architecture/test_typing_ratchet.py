@@ -167,8 +167,8 @@ def test_the_report_parser_keeps_errors_and_warnings() -> None:
             ]
         }
     )
-    assert ratchet.parse_report(output) == [
-        Diagnostic("app.fx.service", "reportAny", "app/fx/service.py:5:3", "m"),
+    assert ratchet.parse_report(output, [("app.services.legacy_fx", "app.fx.service")]) == [
+        Diagnostic("app.services.legacy_fx", "reportAny", "app/fx/service.py:5:3", "m"),
         Diagnostic("app.live.public", "reportDeprecated", "app/live/public.py", "m"),
         Diagnostic("app.live.public", ratchet.UNRULED, "app/live/public.py", "m"),
     ]
@@ -207,40 +207,66 @@ def _report(monkeypatch: pytest.MonkeyPatch, *diagnostics: Diagnostic) -> None:
     monkeypatch.setattr(ratchet, "run_basedpyright", lambda: list(diagnostics))
 
 
-@pytest.mark.parametrize(
-    ("old", "current"),
-    [
-        ("tests.legacy.helpers", "tests.support.helpers"),
-        ("app.services.regulatory_forecasting", "app.forecasting.engine"),
-    ],
-)
-def test_moved_modules_cannot_inherit_legacy_allowances(
-    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch, old: str, current: str
-) -> None:
-    scratch_baseline.write_text(ratchet.render({old: {"reportAny": 1}}), encoding="utf-8")
-    before = scratch_baseline.read_bytes()
-    output = json.dumps(
-        {
-            "generalDiagnostics": [
-                {
-                    "file": str(BACKEND.joinpath(*current.split(".")).with_suffix(".py")),
-                    "severity": "error",
-                    "message": "m",
-                    "rule": "reportAny",
-                }
-            ]
-        }
-    )
+def test_only_modules_outside_strict_paths_keep_their_name_across_moves() -> None:
+    moves = [
+        ("app.services.legacy_fx", "app.fx.engine"),
+        ("app.fx.engine", "app.fx.service"),
+        ("app.services.legacy_forecasting", "app.forecasting.engine"),
+    ]
+    assert ratchet.baseline_module("app.fx.service", moves) == "app.services.legacy_fx"
+    assert ratchet.baseline_module("app.fx.public", moves) == "app.fx.public"
+    assert ratchet.baseline_module("app.forecasting.engine", moves) == "app.forecasting.engine"
 
+
+def _moved_module_report(module: str) -> str:
+    path = BACKEND.joinpath(*module.split(".")).with_suffix(".py")
+    diagnostic = {"file": str(path), "severity": "error", "message": "m", "rule": "reportAny"}
+    return json.dumps({"generalDiagnostics": [diagnostic]})
+
+
+@pytest.fixture
+def ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    path = tmp_path / "feature_module_moves.json"
+    monkeypatch.setattr(ratchet, "LEDGER", path)
+    return path
+
+
+def _checker_reports(monkeypatch: pytest.MonkeyPatch, output: str) -> None:
     def checker(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(["basedpyright", "--outputjson"], 1, output, "")
 
     monkeypatch.setattr(ratchet.subprocess, "run", checker)
+
+
+def test_a_move_outside_strict_paths_keeps_its_legacy_allowance(
+    scratch_baseline: Path, ledger: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A codemod move stays a pure rename (CODEBASE_CONVENTIONS.md §5)."""
+    old, current = "app.services.legacy_fx", "app.fx.service"
+    ledger.write_text(json.dumps([[old, current]]), encoding="utf-8")
+    scratch_baseline.write_text(ratchet.render({old: {"reportAny": 1}}), encoding="utf-8")
+    before = scratch_baseline.read_bytes()
+    _checker_reports(monkeypatch, _moved_module_report(current))
+
+    assert ratchet.main(["check"]) == 0
+    assert ratchet.main(["update"]) == 0
+    assert scratch_baseline.read_bytes() == before
+
+
+def test_a_move_into_a_strict_path_never_inherits_a_legacy_allowance(
+    scratch_baseline: Path, ledger: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, current = "app.services.legacy_forecasting", "app.forecasting.engine"
+    ledger.write_text(json.dumps([[old, current]]), encoding="utf-8")
+    scratch_baseline.write_text(ratchet.render({old: {"reportAny": 1}}), encoding="utf-8")
+    before = scratch_baseline.read_bytes()
+    _checker_reports(monkeypatch, _moved_module_report(current))
+
     assert ratchet.main(["check"]) == 1
     assert ratchet.main(["update"]) == 1
     assert scratch_baseline.read_bytes() == before
 
-    output = json.dumps({"generalDiagnostics": []})
+    _checker_reports(monkeypatch, json.dumps({"generalDiagnostics": []}))
     assert ratchet.main(["check"]) == 1
     assert ratchet.main(["update"]) == 0
     assert ratchet.load_baseline() == {}

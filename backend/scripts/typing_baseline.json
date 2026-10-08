@@ -2570,6 +2570,12 @@
  "tests.adapters.test_contract_inmemory": {
   "reportUnusedImport": 1
  },
+ "tests.api.helpers": {
+  "reportAny": 1,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 2
+ },
  "tests.api.test_account_administration_authorization": {
   "reportAny": 2,
   "reportUnknownArgumentType": 1,
@@ -3793,6 +3799,9 @@
   "reportAny": 1,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 1
+ },
+ "tests.factories.outbound": {
+  "reportPrivateUsage": 1
  },
  "tests.features.test_bulk_update_cases": {
   "reportAny": 4
@@ -5210,6 +5219,10 @@
  "tests.storage.contract": {
   "reportAny": 3
  },
+ "tests.storage.inmemory": {
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 4
+ },
  "tests.storage.test_access_log": {
   "reportAny": 1,
   "reportUnusedVariable": 1
@@ -5221,19 +5234,6 @@
   "reportUnknownMemberType": 14,
   "reportUnknownParameterType": 3,
   "reportUnknownVariableType": 6
- },
- "tests.support.factories.outbound": {
-  "reportPrivateUsage": 1
- },
- "tests.support.helpers": {
-  "reportAny": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
- },
- "tests.support.inmemory_storage": {
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 4
  },
  "tests.test_cors": {
   "reportMissingParameterType": 2,

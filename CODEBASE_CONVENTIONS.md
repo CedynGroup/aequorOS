@@ -39,9 +39,11 @@ New code is strict; legacy code may only get stricter.
   `uv run python scripts/typing_ratchet.py update`, run from `backend/`, writes the lower count.
   `update` refuses to run while any count is above its baseline, so it only lowers numbers and
   deletes entries; review that the diff does only that.
-- Baseline keys are current dotted module names. A moved module must pass strict checking at its
-  new location; it cannot inherit its old allowance through the feature-move ledger. Once it
-  passes, `update` removes the old entry. Code written in a feature package is strict.
+- **Moves.** Baseline keys are dotted module names taken back through the feature-move ledger
+  (`backend/scripts/feature_module_moves.json`), so a codemod move to a non-strict location keeps
+  its entries and stays a pure rename (§5). A module whose new location is a `STRICT_MODULES` path
+  is counted where it is and never inherits an allowance: fix its errors in the move PR, and
+  `update` then removes its old entry. Code written in a feature package is strict.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
