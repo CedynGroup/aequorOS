@@ -371,8 +371,9 @@ class _ConflictWording:
 
     def remedy(self, rows: Sequence[AuthorizationBinding]) -> str:
         roles = sorted({_ROLE_LABELS[RoleBundle(row.role_bundle)] for row in rows})
-        plural = "grants" if len(roles) > 1 else "grant"
-        return f"Remove the {_joined(roles)} {plural} first, or choose someone else."
+        if len(rows) > 1:
+            return f"Remove all these {_joined(roles)} grants first, or choose someone else."
+        return f"Remove the {_joined(roles)} grant first, or choose someone else."
 
     def _institution(self, row: AuthorizationBinding) -> str:
         if row.institution_id is None:
