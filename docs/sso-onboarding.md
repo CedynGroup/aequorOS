@@ -149,7 +149,8 @@ specific refusal reason.
   SSO support alone does not mean MFA is required for every user.
 - **Pre-provisioning gate:** a valid corporate identity alone is not enough;
   the user must also exist in AequorOS with a role. Offboard by disabling the
-  user in your IdP (blocks sign-in) and deactivating them in AequorOS.
+  user in your IdP (blocks OIDC sign-in) and deactivating them in AequorOS
+  (also blocks local password sign-in).
 - **Domain allow-list:** tokens from any email domain you have not listed are
   rejected before account matching.
 
