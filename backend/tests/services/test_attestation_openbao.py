@@ -250,8 +250,7 @@ def bao(tmp_path_factory: pytest.TempPathFactory) -> BaoServer:
     if not address:
         pytest.skip(
             "OPENBAO_TEST_ADDR is not set. These tests run against a real OpenBao "
-            "(`docker run -p 8200:8200 -e BAO_DEV_ROOT_TOKEN_ID=... openbao/openbao "
-            "server -dev`); CI runs one as a job service."
+            "server; see backend/README.md#run-tests for CI service setup."
         )
     token = os.getenv("OPENBAO_TEST_TOKEN", "root")
     try:
