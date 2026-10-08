@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
+import { writeFileSync } from "node:fs";
 import { E2E_TMP } from "../playwright.config";
 
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
@@ -59,7 +60,7 @@ test.describe("Settings shell for an account administrator", () => {
   }) => {
     await expectOneShell(page);
     const accessLink = page.getByRole("link", {
-      name: "Manage members and access",
+      name: "Manage integration keys and access",
     });
     await expect(accessLink).toBeVisible();
     if (evidenceDir) {
@@ -81,6 +82,11 @@ test.describe("Settings shell for an account administrator", () => {
       });
     }
     await accessLink.click();
+    await expect(page).toHaveURL(/\/access\/integration-keys$/);
+    await expect(
+      page.getByRole("heading", { name: "Integration keys", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Members", exact: true }).click();
     await expect(page).toHaveURL(/\/access\/members$/);
     await expect(
       page.getByRole("heading", { name: "Members", exact: true }),
@@ -94,11 +100,11 @@ test.describe("Settings shell for an operational user", () => {
   test("both tabs and no Access administration link", async ({ page }) => {
     await expectOneShell(page);
     await expect(
-      page.getByRole("link", { name: "Manage members and access" }),
+      page.getByRole("link", { name: "Manage integration keys and access" }),
     ).toHaveCount(0);
     await page.goto("/settings");
     await expect(
-      page.getByRole("link", { name: "Manage members and access" }),
+      page.getByRole("link", { name: "Manage integration keys and access" }),
     ).toHaveCount(0);
   });
 
@@ -150,6 +156,77 @@ test.describe("Settings shell for an operational user", () => {
   });
 });
 
+test.describe("Settings link for a scoped Account administrator", () => {
+  test.use({ storageState: path.join(E2E_TMP, "account_admin.json") });
+
+  test("an Account administration binding enables the Access link on both tabs", async ({
+    page,
+  }) => {
+    await expectOneShell(page);
+    const accessLink = page.getByRole("link", {
+      name: "Manage integration keys and access",
+    });
+    await expect(accessLink).toBeVisible();
+    await page.goto("/settings");
+    await expect(accessLink).toBeVisible();
+    const keysResponse = page.waitForResponse((response) =>
+      response.url().endsWith("/integration-keys") &&
+      response.request().method() === "GET",
+    );
+    await accessLink.click();
+    await expect(page).toHaveURL(/\/access\/integration-keys$/);
+    const response = await keysResponse;
+    expect(response.status()).toBe(200);
+    if (evidenceDir) {
+      writeFileSync(
+        path.join(evidenceDir, "settings-shell-scoped-admin-integration-keys-response.json"),
+        JSON.stringify(
+          { status: response.status(), body: await response.json() },
+          null,
+          2,
+        ),
+      );
+      await page.screenshot({
+        path: path.join(evidenceDir, "settings-shell-scoped-admin-integration-keys.png"),
+        fullPage: true,
+      });
+    }
+    await expect(
+      page.getByRole("heading", { name: "Integration keys", exact: true }),
+    ).toBeVisible();
+  });
+});
+
+test.describe("Settings link for a scalar Account administrator", () => {
+  test.use({ storageState: path.join(E2E_TMP, "legacy_account_admin.json") });
+
+  test("a scalar role without a binding cannot expose the Access administration link", async ({
+    page,
+  }) => {
+    await expectOneShell(page);
+    await expect(
+      page.getByRole("link", { name: "Manage integration keys and access" }),
+    ).toHaveCount(0);
+    await page.goto("/settings");
+    await expect(
+      page.getByRole("link", { name: "Manage integration keys and access" }),
+    ).toHaveCount(0);
+    await page.goto("/access/members");
+    await expect(
+      page.getByText(
+        "This section is available to organization owners and administrators.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "settings-shell-scalar-admin-refused.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
 test.describe("Settings shell for a member without institution grants", () => {
   test.use({ storageState: path.join(E2E_TMP, "invite_fresh.json") });
 
@@ -158,7 +235,7 @@ test.describe("Settings shell for a member without institution grants", () => {
   }) => {
     await expectOneShell(page);
     await expect(
-      page.getByRole("link", { name: "Manage members and access" }),
+      page.getByRole("link", { name: "Manage integration keys and access" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Your account", exact: true }),
