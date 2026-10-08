@@ -692,6 +692,29 @@ export function visibleGrantFragments(
   };
 }
 
+/**
+ * Bundles the Members surface never revokes: baseline membership and
+ * integration writers are system-managed, and ownership changes only through
+ * the operator plane.
+ */
+const NOT_REVOCABLE_FROM_MEMBERS: ReadonlySet<string> = new Set([
+  "member",
+  "org_owner",
+  "integration_writer",
+]);
+
+/** Whether Members offers Revoke for this grant. */
+export function canRevokeFromMembers(
+  grant: Pick<BindingRead, "roleBundle" | "effective">,
+): boolean {
+  return grant.effective && !NOT_REVOCABLE_FROM_MEMBERS.has(grant.roleBundle);
+}
+
+/** The display label for a role bundle code. */
+export function roleBundleLabel(roleBundle: string): string {
+  return optionLabel(ROLE_OPTIONS, roleBundle);
+}
+
 export function canAddGrantToMember(
   member: Pick<
     MemberRead,

@@ -333,3 +333,137 @@ test("a conflicting grant added after Review is refused with the server's findin
     expect(revoked.ok()).toBeTruthy();
   }
 });
+
+test("the notice links to the conflicting grant and the draft survives revoking it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("admin")}`,
+  };
+  const member = E2E_USERS.sod_member;
+  const approverPayload = {
+    principal_user_id: member.id,
+    role_bundle: "approver",
+    institution_scope: "institution",
+    institution_id: "BK-SAMP0001",
+    module_scope: "reg",
+    sensitivity_scope: "restricted",
+    reason_category: "other",
+    reason_detail: "Isolated conflicting-grant link journey",
+  };
+  const preview = await page.request.post(
+    `${API}/authorization/bindings/preview`,
+    { headers, data: approverPayload },
+  );
+  expect(preview.ok()).toBeTruthy();
+  const created = await page.request.post(`${API}/authorization/bindings`, {
+    headers,
+    data: {
+      ...approverPayload,
+      expected_authority_sentence: (await preview.json()).authority_sentence,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const approverId = (await created.json()).binding.id as string;
+  try {
+    await page.goto("/access/members");
+    await page
+      .locator("li")
+      .filter({ hasText: "E2E Sod Member" })
+      .first()
+      .getByRole("button", { name: "Add grant" })
+      .click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Sod Member",
+    });
+    await composer.getByLabel("Role bundle").selectOption("validator");
+    await composer.getByLabel("Module").selectOption("reg");
+    await composer.getByLabel("Sensitivity").selectOption("restricted");
+    await composer.getByLabel("Reason category").selectOption("other");
+    await composer.getByLabel("Detail").fill("Files this quarter's returns");
+
+    const notice = composer.getByRole("alert");
+    await expect(notice).toContainText("This grant can't be given");
+    const link = notice.getByRole("button", {
+      name: "View E2E Sod Member's Approver grant",
+    });
+    await expect(link).toBeVisible();
+    // No revoke inside the notice: it only opens the grant.
+    await expect(notice.getByRole("button", { name: /revoke/i })).toHaveCount(
+      0,
+    );
+    if (evidenceDir)
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-notice-link.png"),
+      });
+
+    // The link opens the existing grant in the member's detail, with its
+    // scope, grantor and date, and leaves the draft waiting.
+    await link.click();
+    const detail = page.getByRole("dialog", { name: "E2E Sod Member" });
+    await expect(composer).toBeHidden();
+    const focused = detail.getByTestId("focused-grant");
+    await expect(focused).toContainText(
+      "E2E Sod Member is an Approver in Regulatory Reporting for Sample Bank Ltd",
+    );
+    await expect(focused).toContainText("Granted by");
+    await expect(focused).toContainText("Granted");
+    if (evidenceDir)
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-notice-linked-grant.png"),
+      });
+
+    // Back without revoking: the unfinished grant is exactly as it was.
+    await detail
+      .getByRole("button", { name: "Back to your draft grant" })
+      .click();
+    await expect(composer.getByLabel("Role bundle")).toHaveValue("validator");
+    await expect(composer.getByLabel("Detail")).toHaveValue(
+      "Files this quarter's returns",
+    );
+    await expect(notice).toContainText("This grant can't be given");
+
+    // Revoke through the normal flow, then retry the same draft.
+    await link.click();
+    await detail
+      .getByTestId("focused-grant")
+      .getByRole("button", { name: "Revoke this access" })
+      .click();
+    const revoke = page.getByRole("dialog", { name: "Revoke access" });
+    await revoke
+      .getByLabel("Reason")
+      .fill("Moving this person from approving to filing");
+    await revoke.getByRole("button", { name: "Revoke access" }).click();
+    await expect(composer).toBeVisible();
+    await expect(composer.getByLabel("Role bundle")).toHaveValue("validator");
+    await expect(composer.getByLabel("Detail")).toHaveValue(
+      "Files this quarter's returns",
+    );
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    await expect(
+      composer.getByRole("button", { name: "Review grant" }),
+    ).toBeEnabled();
+    await composer.getByRole("button", { name: "Cancel" }).click();
+  } finally {
+    const listed = await page.request.get(
+      `${API}/authorization/bindings?principal_user_id=${member.id}`,
+      { headers },
+    );
+    const stillActive = (
+      (await listed.json()).bindings as {
+        id: string;
+        status: string;
+      }[]
+    ).some(
+      (binding) => binding.id === approverId && binding.status === "active",
+    );
+    if (stillActive) {
+      const cleanup = await page.request.post(
+        `${API}/authorization/bindings/${approverId}/revoke`,
+        { headers, data: { reason: "Clean up isolated link journey" } },
+      );
+      expect(cleanup.ok()).toBeTruthy();
+    }
+  }
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -38,6 +38,7 @@ import {
   accessRequestApprovalRequest,
   bookCoverageAvailability,
   canAddGrantToMember,
+  canRevokeFromMembers,
   draftScopeLabel,
   grantCreateRequest,
   grantPreviewFingerprint,
@@ -46,6 +47,7 @@ import {
   grantScopeRefusal,
   MODULE_OPTIONS,
   ROLE_OPTIONS,
+  roleBundleLabel,
   SENSITIVITY_OPTIONS,
   ssoApprovalRequest,
   visibleGrantFragments,
@@ -58,7 +60,11 @@ import {
   grantShortfall,
   overlappingGrantNotice,
 } from "@/lib/api/grantRequirements";
-import { sodFindings, type SodFinding } from "@/lib/api/sodDecision";
+import {
+  conflictGrantActions,
+  sodFindings,
+  type SodFinding,
+} from "@/lib/api/sodDecision";
 import BookCoverageControl from "./BookCoverageControl";
 import {
   GrantReasonFields,
@@ -130,7 +136,12 @@ export default function MembersPanel() {
   });
   const { profile } = useUserProfile();
   const [selected, setSelected] = useState<MemberRead | null>(null);
+  // The grant a composer's notice linked to, opened in the member's detail.
+  const [focusGrantId, setFocusGrantId] = useState<string | null>(null);
   const [granting, setGranting] = useState<MemberRead | null>(null);
+  // While the Owner reviews a conflicting grant, the composer stays mounted
+  // and hidden so the unfinished draft survives the trip.
+  const [draftParked, setDraftParked] = useState(false);
   const [revoking, setRevoking] = useState<BindingRead | null>(null);
   const [requestedGrant, setRequestedGrant] =
     useState<AccessRequestRead | null>(null);
@@ -140,6 +151,14 @@ export default function MembersPanel() {
   const currentSelected = selected
     ? (members.find((member) => member.userId === selected.userId) ?? selected)
     : null;
+  const currentGranting = granting
+    ? (members.find((member) => member.userId === granting.userId) ?? granting)
+    : null;
+  const backToDraft = () => {
+    setSelected(null);
+    setFocusGrantId(null);
+    setDraftParked(false);
+  };
 
   if (membersQuery.error) return null;
 
@@ -233,7 +252,9 @@ export default function MembersPanel() {
       {currentSelected && (
         <MemberDetail
           member={currentSelected}
-          onClose={() => setSelected(null)}
+          focusGrantId={focusGrantId}
+          onBackToDraft={draftParked ? backToDraft : undefined}
+          onClose={draftParked ? backToDraft : () => setSelected(null)}
           onGrant={() => {
             setSelected(null);
             setGranting(currentSelected);
@@ -244,14 +265,24 @@ export default function MembersPanel() {
           }}
         />
       )}
-      {granting && (
+      {currentGranting && (
         <GrantComposer
-          member={granting}
+          member={currentGranting}
           accessRequest={requestedGrant ?? undefined}
           banks={institutionsQuery.data?.institutions ?? []}
           selfUserId={profile?.userId}
+          hidden={draftParked}
+          // The members list and the revoke route share one server gate, so a
+          // loaded list proves this viewer may revoke what the notice names.
+          canAdministerGrants={membersQuery.isSuccess}
+          onViewGrant={(grant) => {
+            setDraftParked(true);
+            setFocusGrantId(grant.id);
+            setSelected(currentGranting);
+          }}
           onClose={() => {
             setGranting(null);
+            setDraftParked(false);
             setRequestedGrant(null);
           }}
           onSaved={() => {
@@ -266,10 +297,16 @@ export default function MembersPanel() {
       {revoking && (
         <RevokeDialog
           grant={revoking}
-          onClose={() => setRevoking(null)}
+          onClose={() => {
+            setRevoking(null);
+            // Cancelling from a parked draft returns to the grant under review.
+            if (draftParked && currentGranting) setSelected(currentGranting);
+          }}
           onRevoked={() => {
             setRevoking(null);
             void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
+            // The conflict is gone; the unfinished grant is next.
+            if (draftParked) backToDraft();
           }}
         />
       )}
@@ -370,34 +407,40 @@ function DialogFrame({
   children,
   onClose,
   wide = false,
+  hidden = false,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   wide?: boolean;
+  /** Kept mounted but out of sight and out of the keyboard's reach. */
+  hidden?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const titleId = useId();
   useEffect(() => {
+    if (hidden) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     headingRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [hidden, onClose]);
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="members-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy/45 p-4 backdrop-blur-sm"
+      aria-labelledby={titleId}
+      hidden={hidden}
+      className={`fixed inset-0 z-50 ${hidden ? "hidden" : "flex"} items-center justify-center bg-navy/45 p-4 backdrop-blur-sm`}
     >
       <div
         className={`max-h-[90vh] w-full overflow-y-auto rounded-lg border border-border bg-surface-raised shadow-overlay ${wide ? "max-w-3xl" : "max-w-xl"}`}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border-light bg-surface-raised px-5 py-4">
           <h2
-            id="members-dialog-title"
+            id={titleId}
             ref={headingRef}
             tabIndex={-1}
             className="text-h3 text-navy outline-none"
@@ -421,19 +464,39 @@ function DialogFrame({
 
 function MemberDetail({
   member,
+  focusGrantId,
+  onBackToDraft,
   onClose,
   onGrant,
   onRevoke,
 }: {
   member: MemberRead;
+  /** A grant opened from a composer's notice: scrolled to and outlined. */
+  focusGrantId?: string | null;
+  /** Present while an unfinished grant for this member is waiting. */
+  onBackToDraft?: () => void;
   onClose: () => void;
   onGrant: () => void;
   onRevoke: (grant: BindingRead) => void;
 }) {
   const name = memberName(member);
+  const focusedRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    focusedRef.current?.scrollIntoView({ block: "center" });
+  }, [focusGrantId]);
   return (
     <DialogFrame title={name} onClose={onClose} wide>
       <div className="space-y-5 p-5">
+        {onBackToDraft && (
+          <button
+            type="button"
+            onClick={onBackToDraft}
+            className="inline-flex items-center gap-1.5 text-body font-medium text-action hover:underline"
+          >
+            <ChevronRight size={15} className="rotate-180" aria-hidden /> Back
+            to your draft grant
+          </button>
+        )}
         <div className="grid grid-cols-2 gap-4 rounded-md border border-border-light bg-surface p-4 text-caption sm:grid-cols-4">
           <DetailFact label="Status" value={lifecycleLabel(member)} />
           <DetailFact
@@ -460,14 +523,18 @@ function MemberDetail({
         )}
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-body font-medium text-navy">Grant history</h3>
-          <button
-            type="button"
-            onClick={onGrant}
-            disabled={!canAddGrantToMember(member)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 btn-primary text-caption font-medium disabled:opacity-50"
-          >
-            <Plus size={14} aria-hidden /> Add grant
-          </button>
+          {/* One unfinished grant at a time: while a draft waits, the way back
+              to it is the button above. */}
+          {!onBackToDraft && (
+            <button
+              type="button"
+              onClick={onGrant}
+              disabled={!canAddGrantToMember(member)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 btn-primary text-caption font-medium disabled:opacity-50"
+            >
+              <Plus size={14} aria-hidden /> Add grant
+            </button>
+          )}
         </div>
         {member.grants.length === 0 ? (
           <p className="rounded-md border border-dashed border-border p-5 text-center text-body text-slate">
@@ -478,7 +545,15 @@ function MemberDetail({
             {member.grants.map((grant) => (
               <li
                 key={grant.id}
-                className="rounded-md border border-border-light p-4"
+                ref={grant.id === focusGrantId ? focusedRef : undefined}
+                data-testid={
+                  grant.id === focusGrantId ? "focused-grant" : undefined
+                }
+                className={`rounded-md border p-4 ${
+                  grant.id === focusGrantId
+                    ? "border-action ring-2 ring-action/30"
+                    : "border-border-light"
+                }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-body font-medium leading-relaxed text-navy">
@@ -553,18 +628,15 @@ function MemberDetail({
                     />
                   )}
                 </dl>
-                {grant.effective &&
-                  !["member", "org_owner", "integration_writer"].includes(
-                    grant.roleBundle,
-                  ) && (
-                    <button
-                      type="button"
-                      onClick={() => onRevoke(grant)}
-                      className="mt-4 text-caption font-medium text-danger hover:underline"
-                    >
-                      Revoke this access
-                    </button>
-                  )}
+                {canRevokeFromMembers(grant) && (
+                  <button
+                    type="button"
+                    onClick={() => onRevoke(grant)}
+                    className="mt-4 text-caption font-medium text-danger hover:underline"
+                  >
+                    Revoke this access
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -627,6 +699,9 @@ function GrantComposer({
   accessRequest: initialAccessRequest,
   banks,
   selfUserId,
+  canAdministerGrants,
+  onViewGrant,
+  hidden = false,
   onClose,
   onSaved,
 }: {
@@ -635,6 +710,11 @@ function GrantComposer({
   banks: readonly { id: string; name: string }[];
   /** The acting user's id: a grant to oneself ends the very session composing it. */
   selfUserId?: string;
+  /** Whether this viewer may open and revoke the grants a notice names. */
+  canAdministerGrants: boolean;
+  /** Open a conflicting grant; the composer is kept, hidden, meanwhile. */
+  onViewGrant: (grant: BindingRead) => void;
+  hidden?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -674,7 +754,12 @@ function GrantComposer({
   });
   const scopeRefusal = grantScopeRefusal(draft);
 
-  const previewKey = grantPreviewFingerprint(draft, member.userId);
+  // The member's live grants are part of the key: revoking a conflicting grant
+  // while the draft waits must produce a fresh decision, not the stale one.
+  const previewKey = `${grantPreviewFingerprint(draft, member.userId)}|${member.grants
+    .filter((grant) => grant.effective)
+    .map((grant) => grant.id)
+    .join(",")}`;
   previewKeyRef.current = previewKey;
   const previewSentence =
     previewResult?.key === previewKey ? previewResult.sentence : null;
@@ -779,6 +864,19 @@ function GrantComposer({
     },
   });
 
+  // A decision the member's grants have since overtaken is no longer Review's
+  // to show: back to Define, which asks the server again.
+  useEffect(() => {
+    if (step === "review" && !previewSentence) setStep("define");
+  }, [previewSentence, step]);
+
+  // The draft returns to Define: the revocation it may lead to changes the
+  // decision, and only Define re-asks the server.
+  const viewGrant = (grant: BindingRead) => {
+    setStep("define");
+    onViewGrant(grant);
+  };
+
   const updateRole = (roleBundle: GrantDraft["roleBundle"]) => {
     setError(null);
     if (roleBundle === "account_admin") {
@@ -817,6 +915,7 @@ function GrantComposer({
       }
       onClose={onClose}
       wide
+      hidden={hidden}
     >
       <div className="border-b border-border-light px-5 py-3">
         <ol
@@ -873,7 +972,14 @@ function GrantComposer({
             Member <strong className="font-medium text-navy">{name}</strong> is
             fixed for this grant.
           </p>
-          <GrantNotice decision={previewDecision} scopeNote={scopeNote} />
+          <GrantNotice
+            decision={previewDecision}
+            scopeNote={scopeNote}
+            memberName={name}
+            grants={member.grants}
+            canAdministerGrants={canAdministerGrants}
+            onViewGrant={viewGrant}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <GrantSelect
               label="Role bundle"
@@ -994,7 +1100,14 @@ function GrantComposer({
           <p className="text-body text-slate">
             Review the exact authority before granting it.
           </p>
-          <GrantNotice decision={previewDecision} scopeNote={scopeNote} />
+          <GrantNotice
+            decision={previewDecision}
+            scopeNote={scopeNote}
+            memberName={name}
+            grants={member.grants}
+            canAdministerGrants={canAdministerGrants}
+            onViewGrant={viewGrant}
+          />
           <SentencePreview sentence={previewSentence} />
           {/* The sentence above is the server's and is the authority. This is
               the coverage chosen, shown as a field rather than prose so it is
@@ -1179,14 +1292,27 @@ type NoticeDecision = Readonly<{
 function GrantNotice({
   decision,
   scopeNote,
+  memberName,
+  grants,
+  canAdministerGrants,
+  onViewGrant,
 }: {
   decision: NoticeDecision | null;
   scopeNote: string | null;
+  memberName: string;
+  grants: readonly BindingRead[];
+  canAdministerGrants: boolean;
+  onViewGrant: (grant: BindingRead) => void;
 }) {
   const blocked = decision?.outcome === "block";
   const findings =
     decision && decision.outcome !== "allow" ? decision.findings : [];
   const note = blocked ? null : scopeNote;
+  const { reviewable, askAdministrator } = conflictGrantActions(
+    findings,
+    grants,
+    canAdministerGrants,
+  );
   if (findings.length === 0 && !note) return null;
   return (
     <div
@@ -1207,6 +1333,22 @@ function GrantNotice({
         ))}
         {note && <p>{note}</p>}
       </div>
+      {/* Review, never revoke, from here: the grant opens in the member's
+          detail, where Revoke keeps its confirmation, reason and audit. */}
+      {reviewable.map((grant) => (
+        <button
+          key={grant.id}
+          type="button"
+          onClick={() => onViewGrant(grant)}
+          className="mt-2 inline-flex items-center gap-1 font-medium text-action hover:underline"
+        >
+          View {memberName}&apos;s {roleBundleLabel(grant.roleBundle)} grant
+          <ArrowRight size={15} aria-hidden />
+        </button>
+      ))}
+      {askAdministrator && (
+        <p className="mt-2 font-medium">Ask an account administrator.</p>
+      )}
     </div>
   );
 }

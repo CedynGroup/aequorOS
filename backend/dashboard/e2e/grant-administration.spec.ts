@@ -381,6 +381,11 @@ test.describe("separation-of-duties at Define", () => {
     );
     await expect(refusal).not.toContainText("won't let them");
     await expect(
+      refusal.getByRole("button", {
+        name: "View E2E Approver's Approver grant",
+      }),
+    ).toBeVisible();
+    await expect(
       composer.getByRole("button", { name: "Cannot be granted" }),
     ).toBeDisabled();
     await expect(
@@ -404,6 +409,12 @@ test.describe("separation-of-duties at Define", () => {
     });
     await expect(warning).toBeVisible();
     await expect(warning).toContainText("Check before granting");
+    // The warning links to the same grant as the block did.
+    await expect(
+      warning.getByRole("button", {
+        name: "View E2E Approver's Approver grant",
+      }),
+    ).toBeVisible();
     await expect(composer.getByTestId("grant-notice")).toHaveCount(1);
     if (evidenceDir) {
       await warning.scrollIntoViewIfNeeded();

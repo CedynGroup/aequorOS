@@ -16,10 +16,17 @@
  *
  * Untrusted shape on purpose: `details` is `unknown` on ApiError, and a
  * malformed payload must produce no findings rather than a crash or a blank
- * bullet. Pure — no app imports, so the node harness can reach it.
+ * bullet. Pure — only sibling pure modules, so the node harness can reach it.
  */
 
-export type SodFinding = Readonly<{ code: string; message: string }>;
+import { canRevokeFromMembers } from "./grants";
+
+export type SodFinding = Readonly<{
+  code: string;
+  message: string;
+  /** The member's existing grants this finding fired on. */
+  conflictingBindingIds?: readonly string[];
+}>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -39,7 +46,11 @@ export function sodFindings(details: unknown): SodFinding[] {
     const message = candidate.message;
     if (typeof message !== "string" || message.length === 0) continue;
     const code = typeof candidate.code === "string" ? candidate.code : "";
-    findings.push({ code, message });
+    const rawIds = candidate.conflicting_binding_ids;
+    const conflictingBindingIds = Array.isArray(rawIds)
+      ? rawIds.filter((id): id is string => typeof id === "string")
+      : [];
+    findings.push({ code, message, conflictingBindingIds });
   }
   return findings;
 }
@@ -61,4 +72,40 @@ export function sodRemedy(findings: readonly SodFinding[]): string | null {
     );
   }
   return null;
+}
+
+type ConflictGrant = Readonly<{
+  id: string;
+  roleBundle: string;
+  effective: boolean;
+}>;
+
+/**
+ * What a notice offers for the grants its findings fired on.
+ *
+ * `reviewable` are the conflicting grants this viewer may open and revoke
+ * through the normal Members flow, in finding order and without repeats.
+ * `askAdministrator` is true when a revocable conflict exists that this viewer
+ * cannot revoke. A grant Members never revokes (ownership, baseline
+ * membership) gets neither: nobody can change it from here.
+ */
+export function conflictGrantActions<G extends ConflictGrant>(
+  findings: readonly SodFinding[],
+  grants: readonly G[],
+  canAdministerGrants: boolean,
+): Readonly<{ reviewable: readonly G[]; askAdministrator: boolean }> {
+  const byId = new Map(grants.map((grant) => [grant.id, grant]));
+  const seen = new Set<string>();
+  const conflicting: G[] = [];
+  for (const finding of findings) {
+    for (const id of finding.conflictingBindingIds ?? []) {
+      const grant = byId.get(id);
+      if (!grant || seen.has(id) || !canRevokeFromMembers(grant)) continue;
+      seen.add(id);
+      conflicting.push(grant);
+    }
+  }
+  return canAdministerGrants
+    ? { reviewable: conflicting, askAdministrator: false }
+    : { reviewable: [], askAdministrator: conflicting.length > 0 };
 }
