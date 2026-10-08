@@ -40,6 +40,20 @@ _BANK_WEIGHTS = {"1": 20, "2": 50, "3": 50, "4": 100, "5": 100, "6": 150, "unrat
 _SHORT_BANK_WEIGHTS = {"1": 20, "2": 20, "3": 20, "4": 50, "5": 50, "6": 150, "unrated": 20}
 
 
+def credit_classification_attributes(
+    position: Mapping[str, object], counterparty: Mapping[str, object]
+) -> dict[str, object]:
+    """BoG CRD (June 2018) ¶117–122: position public classes override the counterparty."""
+    return {
+        **{
+            key: counterparty[key]
+            for key in ("borrower_class", "issuer_class")
+            if key in counterparty
+        },
+        **position,
+    }
+
+
 def attribute_text(attributes: Mapping[str, object], key: str) -> str:
     value = attributes.get(key)
     return value.strip().lower() if isinstance(value, str) else ""
@@ -238,7 +252,11 @@ def capital_credit_class(
         category, code = public_credit_class(
             row, foreign=foreign, sovereign_names=sovereign_names, domestic_country=domestic_country
         )
-        return f"securities:{category}", code
+        if category != "other_securities" or row.counterparty_type not in (
+            "BANK_OECD",
+            "BANK_NON_OECD",
+        ):
+            return f"securities:{category}", code
     if row.position_type == "LOAN" and row.ifrs9_stage == 3:
         return PAST_DUE_CATEGORY
     if public_debt_evidence(row, sovereign_names):
@@ -261,7 +279,10 @@ def capital_credit_class(
             if row.counterparty_type in (None, "BANK_OECD", "BANK_NON_OECD")
             else None
         )
-        return "loans:banks" if row.position_type == "LOAN" else "interbank", code
+        category = {"LOAN": "loans:banks", "SECURITY_HOLDING": "securities:banks"}.get(
+            row.position_type, "interbank"
+        )
+        return category, code
     category, code = LOAN_CATEGORY_MAP.get(
         (row.regulatory_category or "").upper(),
         (unclassified_category(row.regulatory_category), None),

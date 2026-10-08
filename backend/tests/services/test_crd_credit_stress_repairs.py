@@ -1,4 +1,8 @@
-"""BoG CRD (June 2018) ¶98, ¶139: stress and capital share net measurement."""
+"""BoG CRD (June 2018) ¶98, ¶139: stress and capital share net measurement.
+
+Primary authority:
+https://www.bog.gov.gh/wp-content/uploads/2022/05/Basel-II-BOG-CRD-Final-27-June-2018-Basel-Committee-BSD.pdf
+"""
 
 from __future__ import annotations
 
@@ -19,18 +23,29 @@ from app.domain.stress.projection import EnterpriseProjectionInputs, project_ent
 from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import enterprise_stress, reverse_stress
-from app.services.fact_derivation import _derive_specs, _PositionRow, derive_facts
+from app.services.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _PositionRow,  # pyright: ignore[reportPrivateUsage]
+    derive_facts,
+)
 from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     base_paths,
     bog_forecast_params,
     sample_bank_latest_facts,
+    severe_paths,
 )
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
-from tests.services.test_crd_credit_exposures import _credit_rwa, _stress_row
-from tests.services.test_derivation_fail_closed_defaults import _canonical, _row
+from tests.services.test_crd_credit_exposures import (
+    _credit_rwa,  # pyright: ignore[reportPrivateUsage]
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
+)
+from tests.services.test_derivation_fail_closed_defaults import (
+    _canonical,  # pyright: ignore[reportPrivateUsage]
+    _row,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.support.authority import grant_organization_analyst
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶139")
@@ -63,7 +78,7 @@ def test_collateral_and_specific_provision_share_capital_basis_under_migration_a
             "crm_collateral_class": "corporate_debt",
         },
     )
-    book = enterprise_stress._build_credit_exposures(
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(row)], params, capital_facts=_capital_facts([row])
     )
     result = compute_bottom_up_credit(
@@ -90,7 +105,7 @@ def test_partial_collateral_migration_increments_only_unsecured_rwa() -> None:
         regulatory_category="SME_UNRATED",
         attributes={"crm_collateral_ghs": "500", "crm_collateral_class": "corporate_debt"},
     )
-    book = enterprise_stress._build_credit_exposures(
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(row)], params, capital_facts=_capital_facts([row])
     )
     result = compute_bottom_up_credit(
@@ -124,7 +139,7 @@ def test_projection_stresses_each_grown_bucket_and_leaves_domestic_residual_line
     )
     params = replace(bog_capital_params(), crm_haircuts={"CORPORATE_DEBT": Decimal("0")})
     cap_facts = _capital_facts([dom, fx])
-    book = enterprise_stress._build_credit_exposures(
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(dom), _stress_row(fx)], params, capital_facts=cap_facts
     )
     facts = [
@@ -246,7 +261,7 @@ def test_fully_provided_claim_has_zero_rwa_increment_but_gross_expected_loss() -
         regulatory_category="SME_UNRATED",
         attributes={"specific_provision_ghs": "1000"},
     )
-    book = enterprise_stress._build_credit_exposures(
+    book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
         [_stress_row(row)], bog_capital_params(), capital_facts=()
     )
     result = compute_bottom_up_credit(
@@ -256,24 +271,29 @@ def test_fully_provided_claim_has_zero_rwa_increment_but_gross_expected_loss() -
     assert result.credit_rwa_uplift_factor == Decimal("1")
     assert result.base_expected_loss == Decimal("9")
     assert result.stressed_expected_loss == Decimal("18")
-    uplift, _ = enterprise_stress._credit_overlays(
-        book, list(base_paths()), 3, base_credit_rwa=Decimal("1000")
-    )
-    assert set(uplift.values()) == {Decimal("1")}
+    decomposition = enterprise_stress._credit_overlays(book, list(severe_paths()), 3)  # pyright: ignore[reportPrivateUsage]
+    assert set(decomposition) == {1, 2, 3}
+    assert all(sum(losses.values()) > 0 for losses in decomposition.values())
 
     facts = [
         fact
         for fact in sample_bank_latest_facts()
-        if fact.fact_group not in ("loan_exposure", "credit_exposure", "off_balance")
+        if fact.fact_group in ("capital_component", "operational_income")
     ]
     facts.extend(
         [
+            ForecastFact("balance_sheet", "cash_vault", Decimal("1000"), side="asset"),
+            ForecastFact(
+                "balance_sheet", "retail_deposits_stable", Decimal("1000"), side="liability"
+            ),
+            ForecastFact("balance_sheet", "bog_required_reserves", Decimal("1000"), side="asset"),
+            ForecastFact("balance_sheet", "bog_excess_reserves", Decimal("1000"), side="asset"),
             ForecastFact("loan_exposure", "sme_retail", Decimal("1000"), risk_weight_code="RW100"),
             ForecastFact(
                 "credit_exposure", "sme_retail:RW100", Decimal("0"), risk_weight_code="RW100"
             ),
             ForecastFact(
-                "credit_exposure", "other_assets:RW100", Decimal("1000"), risk_weight_code="RW100"
+                "credit_exposure", "other_assets:RW100", Decimal("0"), risk_weight_code="RW100"
             ),
         ]
     )
@@ -288,8 +308,9 @@ def test_fully_provided_claim_has_zero_rwa_increment_but_gross_expected_loss() -
         )
     )
     assert {year.rwa.credit_rwa for year in (*projection.base, *projection.stress)} == {
-        Decimal("1000")
+        Decimal("0")
     }
+    assert all(year.rwa.operational_rwa > 0 for year in (*projection.base, *projection.stress))
 
 
 def test_reverse_stress_stale_basis_is_actionable_and_creates_no_frontier(

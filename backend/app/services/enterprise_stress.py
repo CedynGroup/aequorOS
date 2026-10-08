@@ -845,7 +845,7 @@ def _crd_class_for(row: _ExposureRow, credit_category: str) -> str:  # noqa: PLR
         return "bog" if credit_category.endswith(":bog") else "gog"
     if "pse_" in credit_category:
         return "public_sector_entities"
-    if credit_category in ("interbank", "loans:banks"):
+    if credit_category in ("interbank", "loans:banks", "securities:banks"):
         return "banks"
     if credit_category in ("sme_retail", "retail_other", "residential_mortgage"):
         return "retail_sme"
@@ -1068,29 +1068,16 @@ def _credit_overlays(
     exposures: list[CreditExposure],
     paths: list[MacroPathPoint],
     horizon_years: int,
-    *,
-    base_credit_rwa: Decimal,
-) -> tuple[dict[int, Decimal], dict[int, dict[str, Decimal]]]:
-    """Per-stress-year credit-RWA uplift factor + real exposure-class decomposition.
+) -> dict[int, dict[str, Decimal]]:
+    """Per-stress-year gross expected-loss decomposition for Appendix II Table 1.
 
-    Perfect-foresight: each year is conditioned by its own macro (¶48). The
-    uplift summarizes the as-of total capital credit RWA; the decomposition
-    feeds Table 1's "Impact of Adverse". Projection RWA uses the exposure book.
+    BoG Stress Testing Guideline (Exposure Draft, February 2026) ¶48:
+    each year is conditioned by its own macro path. Projection RWA uses the exposure book.
     """
-    uplift: dict[int, Decimal] = {}
-    decomposition: dict[int, dict[str, Decimal]] = {}
-    for year in range(1, horizon_years + 1):
-        result = result_for_year(exposures, paths, year)
-        if base_credit_rwa <= _ZERO:
-            raise EnterpriseStressError(
-                "credit_rwa_denominator_missing",
-                "Capital credit RWA must be positive for the overlay.",
-            )
-        uplift[year] = (
-            Decimal("1") + (result.stressed_credit_rwa - result.base_credit_rwa) / base_credit_rwa
-        )
-        decomposition[year] = result.incremental_loss_by_class()
-    return uplift, decomposition
+    return {
+        year: result_for_year(exposures, paths, year).incremental_loss_by_class()
+        for year in range(1, horizon_years + 1)
+    }
 
 
 def _pillar2_overlay(
@@ -1699,11 +1686,10 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     exposure_class_losses: dict[int, dict[str, Decimal]] | None = None
     bottom_up_inputs: BottomUpCreditInputs | None = None
     if credit_exposures:
-        _, exposure_class_losses = _credit_overlays(
+        exposure_class_losses = _credit_overlays(
             credit_exposures,
             paths,
             payload.horizon_years,
-            base_credit_rwa=base_rwa.credit_rwa,
         )
         bottom_up_inputs = BottomUpCreditInputs(exposures=tuple(credit_exposures))
     concentration_inputs = _build_concentration_inputs(

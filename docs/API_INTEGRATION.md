@@ -757,7 +757,9 @@ The capital derivation uses an internal `credit_exposure` basis under BoG CRD
 establishes sovereign status. The documented `tor_bond` and `cocoa_bill`
 instruments identify PSE enterprise and institution paper respectively.
 Loan public-sector classification reads `borrower_class`; securities and placements
-read `issuer_class`. Domestic PSE treatment also requires counterparty domicile
+read `issuer_class`. These two fields may come from counterparty attributes;
+a position attribute takes precedence, including an explicit empty or invalid
+value. Domestic PSE treatment also requires counterparty domicile
 evidence: `country_code` matching the bank's jurisdiction, or `resident=true`
 when no country is supplied. The established Annex 2D instrument labels can
 establish domestic classification when no domicile is supplied. Explicit foreign
@@ -765,7 +767,8 @@ country or non-residency overrides instrument labels and class attributes.
 Foreign PSEs without an established sovereign assessment refuse credit risk
 measurement under BoG CRD (June 2018) ¶120–122.
 
-`external_rating_grade` on an `INTERBANK_PLACEMENT` or loan to a bank is the bank's ECAI
+`external_rating_grade` on an `INTERBANK_PLACEMENT`, loan to a bank, or bank-issued
+debt security is the bank's ECAI
 assessment mapped to CRD ERG `1`–`6`, or `unrated`; it is not a raw agency rating.
 An absent grade is unrated, and an unknown grade refuses capital. The 20%
 short-term unrated-bank weight requires domestic currency and an original term

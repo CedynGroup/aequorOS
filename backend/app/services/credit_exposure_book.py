@@ -40,12 +40,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.positions.credit import credit_classification_attributes
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -207,37 +208,53 @@ def load_exposure_rows(
     # default, so an unset value is a skipped decision at the creation site, not a
     # Ghanaian bank.
     base_currency = jurisdictions.base_currency(bank)
-    records = db.execute(
-        select(
-            CanonicalPositionSnapshot,
-            CanonicalPosition,
-            CanonicalCounterparty,
-            CanonicalProduct,
+    records = (
+        db.execute(
+            select(
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty,
+                CanonicalProduct,
+            )
+            .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
+            )
+            .outerjoin(
+                CanonicalProduct,
+                CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.as_of_date == as_of,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                CanonicalPosition.position_type.in_(position_types),
+            )
+            .order_by(CanonicalPositionSnapshot.source_reference)
         )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .outerjoin(
-            CanonicalProduct,
-            CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
-        )
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.position_type.in_(position_types),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
+        .tuples()
+        .all()
+    )
 
     rows: list[ExposureRow] = []
-    for snapshot, position, counterparty, product in records:
-        attributes = dict(snapshot.attributes or {})
+    for record in records:
+        snapshot, position, counterparty, product = cast(
+            tuple[
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty | None,
+                CanonicalProduct | None,
+            ],
+            record,
+        )
+        attributes: dict[str, Any] = credit_classification_attributes(
+            snapshot.attributes or {},
+            counterparty.attributes or {} if counterparty is not None else {},
+        )
         currency = str(position.currency).strip().upper()
         is_base_currency = currency == base_currency
         balance_rep = _reporting_balance(

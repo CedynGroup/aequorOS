@@ -280,6 +280,7 @@ from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
 from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
 from app.domain.positions.credit import (
     capital_credit_class,
+    credit_classification_attributes,
     public_debt_evidence,
     specific_deductions,
 )
@@ -1207,7 +1208,9 @@ def _position_row(
     counterparty: CanonicalCounterparty | None,
     base_currency: str,
 ) -> _PositionRow:
-    attributes = snapshot.attributes or {}
+    attributes: dict[str, Any] = credit_classification_attributes(
+        snapshot.attributes or {}, counterparty.attributes or {} if counterparty is not None else {}
+    )
     balance = _dec(snapshot.balance, _ZERO)
     balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
     if balance_ghs is None and position.currency == base_currency:

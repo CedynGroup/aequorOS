@@ -505,6 +505,7 @@ def _stress_row(row: _PositionRow) -> ExposureRow:
         product_risk_weight_code="RW75",
         product_code=row.product_code,
         contractual_maturity=row.contractual_maturity,
+        origination_date=row.origination_date,
     )
 
 
@@ -604,5 +605,9 @@ def test_projection_overlay_does_not_revalue_constant_residual_assets() -> None:
         )
         for point in base_paths()
     ]
-    uplift, _ = enterprise_stress._credit_overlays(book, paths, 3, base_credit_rwa=Decimal("3200"))  # pyright: ignore[reportPrivateUsage]
-    assert {Decimal("3200") * factor for factor in uplift.values()} == {Decimal("3320")}
+    decomposition = enterprise_stress._credit_overlays(book, paths, 3)  # pyright: ignore[reportPrivateUsage]
+    assert set(decomposition) == {1, 2, 3}
+    result = compute_bottom_up_credit(
+        book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
+    )
+    assert Decimal("3200") + result.stressed_credit_rwa - result.base_credit_rwa == Decimal("3320")
