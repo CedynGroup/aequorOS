@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
-import { writeFileSync } from "node:fs";
 import { E2E_TMP } from "../playwright.config";
 
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
@@ -60,7 +59,7 @@ test.describe("Settings shell for an account administrator", () => {
   }) => {
     await expectOneShell(page);
     const accessLink = page.getByRole("link", {
-      name: "Manage integration keys and access",
+      name: "Manage members and access",
     });
     await expect(accessLink).toBeVisible();
     if (evidenceDir) {
@@ -81,12 +80,10 @@ test.describe("Settings shell for an account administrator", () => {
         fullPage: true,
       });
     }
+    // The link defers to the Access area's own landing, which opens Members
+    // for an organization owner.
+    await expect(accessLink).toHaveAttribute("href", "/access");
     await accessLink.click();
-    await expect(page).toHaveURL(/\/access\/integration-keys$/);
-    await expect(
-      page.getByRole("heading", { name: "Integration keys", exact: true }),
-    ).toBeVisible();
-    await page.getByRole("link", { name: "Members", exact: true }).click();
     await expect(page).toHaveURL(/\/access\/members$/);
     await expect(
       page.getByRole("heading", { name: "Members", exact: true }),
@@ -100,11 +97,11 @@ test.describe("Settings shell for an operational user", () => {
   test("both tabs and no Access administration link", async ({ page }) => {
     await expectOneShell(page);
     await expect(
-      page.getByRole("link", { name: "Manage integration keys and access" }),
+      page.getByRole("link", { name: "Manage members and access" }),
     ).toHaveCount(0);
     await page.goto("/settings");
     await expect(
-      page.getByRole("link", { name: "Manage integration keys and access" }),
+      page.getByRole("link", { name: "Manage members and access" }),
     ).toHaveCount(0);
   });
 
@@ -164,43 +161,12 @@ test.describe("Settings link for a scoped Account administrator", () => {
   }) => {
     await expectOneShell(page);
     const accessLink = page.getByRole("link", {
-      name: "Manage integration keys and access",
+      name: "Manage members and access",
     });
     await expect(accessLink).toBeVisible();
     await page.goto("/settings");
     await expect(accessLink).toBeVisible();
-    const keysResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/integration-keys") &&
-        response.request().method() === "GET",
-    );
-    await accessLink.click();
-    await expect(page).toHaveURL(/\/access\/integration-keys$/);
-    const response = await keysResponse;
-    expect(response.status()).toBe(200);
-    if (evidenceDir) {
-      writeFileSync(
-        path.join(
-          evidenceDir,
-          "settings-shell-scoped-admin-integration-keys-response.json",
-        ),
-        JSON.stringify(
-          { status: response.status(), body: await response.json() },
-          null,
-          2,
-        ),
-      );
-      await page.screenshot({
-        path: path.join(
-          evidenceDir,
-          "settings-shell-scoped-admin-integration-keys.png",
-        ),
-        fullPage: true,
-      });
-    }
-    await expect(
-      page.getByRole("heading", { name: "Integration keys", exact: true }),
-    ).toBeVisible();
+    await expect(accessLink).toHaveAttribute("href", "/access");
   });
 });
 
@@ -212,11 +178,11 @@ test.describe("Settings link for a scalar Account administrator", () => {
   }) => {
     await expectOneShell(page);
     await expect(
-      page.getByRole("link", { name: "Manage integration keys and access" }),
+      page.getByRole("link", { name: "Manage members and access" }),
     ).toHaveCount(0);
     await page.goto("/settings");
     await expect(
-      page.getByRole("link", { name: "Manage integration keys and access" }),
+      page.getByRole("link", { name: "Manage members and access" }),
     ).toHaveCount(0);
     await page.goto("/access/members");
     await expect(
@@ -242,7 +208,7 @@ test.describe("Settings shell for a member without institution grants", () => {
   }) => {
     await expectOneShell(page);
     await expect(
-      page.getByRole("link", { name: "Manage integration keys and access" }),
+      page.getByRole("link", { name: "Manage members and access" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Your account", exact: true }),
