@@ -30,20 +30,23 @@ New code is strict; legacy code may only get stricter.
 - `mise run risk-service:typecheck` runs `backend/scripts/typing_ratchet.py check`. It type-checks
   the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/typing_baseline.json`.
-- **A module without a baseline entry is strict**: any error fails. That covers every new module,
-  every module that passed when the baseline was recorded, and the script's `STRICT_MODULES` (the
-  feature packages and kernel seams created by the feature-layout work), which the baseline may
-  never cover.
+- **Strict modules** may have no errors and never take a baseline entry: every new module, every
+  module that passed when the baseline was recorded, and the packages and modules listed in
+  `STRICT_MODULES` in the script.
 - **A legacy module may not add errors.** A rule's count above its baseline fails.
 - **Record every fix.** A count below its baseline also fails until
   `uv run python scripts/typing_ratchet.py update`, run from `backend/`, writes the lower count.
   `update` refuses to run while any count is above its baseline, so it only lowers numbers and
   deletes entries; review that the diff does only that.
-- **Moves.** Baseline keys are dotted module names taken back through the feature-move ledger
-  (`backend/scripts/feature_module_moves.json`), so a codemod move to a non-strict location keeps
-  its entries and stays a pure rename (§5). A module whose new location is a `STRICT_MODULES` path
-  is counted where it is and never inherits an allowance: fix its errors in the move PR, and
-  `update` then removes its old entry. New modules in feature packages are strict.
+- **Moves.** A module moved by a layout PR keeps its legacy allowance until its package is
+  promoted, so a move PR stays a pure rename (§5). The ratchet counts it under the name it had
+  before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
+  already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
+  removes its old entry.
+- **Promoting a package.** A package joins `STRICT_MODULES` once it is clean: fix its modules'
+  errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
+  their pre-move names), then add the package to `STRICT_MODULES`.
+  `tests/architecture/test_typing_ratchet.py` then rejects any baseline entry for it.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.

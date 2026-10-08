@@ -23,8 +23,9 @@ BASELINE = BACKEND / "scripts" / "typing_baseline.json"
 #: The feature-move ledger: ``[old, new]`` dotted module names in move order.
 LEDGER = BACKEND / "scripts" / "feature_module_moves.json"
 
-#: Strict from the start: the feature packages and kernel seams the feature-layout work
-#: created. The baseline may never cover them, even by a hand edit.
+#: Packages and modules held strict whatever the baseline says, even after a hand edit. It
+#: starts with the feature packages and kernel seams the feature-layout work created; a
+#: package joins once it is clean (CODEBASE_CONVENTIONS.md §1, "Promoting a package").
 STRICT_MODULES: tuple[str, ...] = (
     "app.core.tenancy",
     "app.db.base",
