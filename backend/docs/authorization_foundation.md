@@ -392,11 +392,14 @@ sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
 rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
 Preview returns the canonical authority sentence and the assignment-time
 separation-of-duties decision for the current bindings without writing. The
-composer displays the server's warning or blocking findings at Define and
-repeats warnings at Review. A block disables "Review grant" and labels the
-control "Cannot be granted". Create requires that exact sentence, refuses if
+composer combines the server's findings in one notice at the top of Define and
+Review, styled by the strongest outcome. It includes at most one short scope
+note when the grant is not blocked. A block disables "Review grant" and labels
+the control "Cannot be granted". Create requires that exact sentence, refuses if
 names or scope presentation changed before commit, and re-evaluates the policy;
-the composer displays the server's findings if create is refused.
+if create is refused with policy findings, they replace the preview decision in
+that same notice and disable "Grant access". Those findings belong to the failed
+draft; a fresh preview or composer reset supersedes them.
 Each finding carries a plain-language `message` and `conflicting_binding_ids`
 for the member's existing bindings that triggered it. The composer shows the
 server's message verbatim: it names the member and existing authority, including

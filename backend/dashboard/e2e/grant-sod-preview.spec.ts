@@ -306,7 +306,9 @@ test("a conflicting grant added after Review is refused with the server's findin
     await composer.getByRole("button", { name: "Add another grant" }).click();
     await composer.getByLabel("Role bundle").selectOption("viewer");
     await composer.getByLabel("Reason category").selectOption("other");
-    await composer.getByLabel("Detail").fill("New independent draft after refusal");
+    await composer
+      .getByLabel("Detail")
+      .fill("New independent draft after refusal");
     await composer.getByRole("button", { name: "Review grant" }).click();
     await expect(composer.getByRole("alert")).toHaveCount(0);
     await expect(composer).not.toContainText(filingMessage);
