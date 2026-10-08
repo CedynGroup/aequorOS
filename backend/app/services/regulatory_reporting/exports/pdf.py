@@ -342,9 +342,7 @@ def _attestation(
         story.append(Spacer(0, 4 * mm))
         printed = True
     if not printed:
-        story.append(
-            Paragraph("No officer decisions are recorded against this version.", _BODY)
-        )
+        story.append(Paragraph("No officer decisions are recorded against this version.", _BODY))
         story.append(Spacer(0, 4 * mm))
 
     for line in rendered.attestation_lines:
@@ -723,9 +721,7 @@ def render_pdf(
     # ``_sections`` and ``_provenance`` each begin with.
     story: list[Flowable] = [
         *_cover(rendered),
-        *_attestation(
-            rendered, signing_required=signing_required, officers=officers
-        ),
+        *_attestation(rendered, signing_required=signing_required, officers=officers),
         NextPageTemplate(_LANDSCAPE_TEMPLATE),
         *_sections(rendered),
         NextPageTemplate(_PORTRAIT_TEMPLATE),

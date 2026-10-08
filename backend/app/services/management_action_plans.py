@@ -63,9 +63,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def _get_plan_or_404(
-    db: Session, ctx: TenantContext, plan_id: UUID
-) -> ManagementActionPlan:
+def _get_plan_or_404(db: Session, ctx: TenantContext, plan_id: UUID) -> ManagementActionPlan:
     plan = db.scalar(
         select(ManagementActionPlan).where(
             ManagementActionPlan.id == plan_id,
@@ -155,9 +153,7 @@ def _read(
     )
 
 
-def _duplicate_code_exists(
-    db: Session, ctx: TenantContext, bank_id: str | None, code: str
-) -> bool:
+def _duplicate_code_exists(db: Session, ctx: TenantContext, bank_id: str | None, code: str) -> bool:
     condition = (
         ManagementActionPlan.bank_id.is_(None)
         if bank_id is None
@@ -175,9 +171,7 @@ def _duplicate_code_exists(
     )
 
 
-def _add_items(
-    db: Session, ctx: TenantContext, plan_id: UUID, actions: list[ActionItemIn]
-) -> None:
+def _add_items(db: Session, ctx: TenantContext, plan_id: UUID, actions: list[ActionItemIn]) -> None:
     for action in actions:
         db.add(
             ManagementActionItem(

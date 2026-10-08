@@ -199,6 +199,8 @@ def _sdi_methodology_pending(
         input_hash=None,
         source_as_of_date=period.period_end,
     )
+
+
 _MOODYS_GRADES = {
     "aaa": "aaa",
     "aa1": "aa+",
@@ -805,9 +807,7 @@ def _support_uplift(
     if not has_foreign_parent:
         return 0
     max_notches = int(
-        _decimal(
-            parameters.get("support_uplift_max_notches", "1"), "support_uplift_max_notches"
-        )
+        _decimal(parameters.get("support_uplift_max_notches", "1"), "support_uplift_max_notches")
     )
     return max(0, min(1, max_notches))
 
@@ -880,9 +880,7 @@ def _methodology(parameters: dict[str, Any]) -> RatingMethodology:
     )
 
 
-def _systematic_factor(
-    operating_environment_score: Decimal, parameters: dict[str, Any]
-) -> Decimal:
+def _systematic_factor(operating_environment_score: Decimal, parameters: dict[str, Any]) -> Decimal:
     """Live systematic factor Z for the PIT conditioning (§6.1).
 
     ``Z = (operating_environment_score − neutral) / scale``. A fragile operating
@@ -894,9 +892,7 @@ def _systematic_factor(
     neutral = _decimal(
         parameters.get("systematic_factor_neutral", "0.65"), "systematic_factor_neutral"
     )
-    scale = _decimal(
-        parameters.get("systematic_factor_scale", "0.15"), "systematic_factor_scale"
-    )
+    scale = _decimal(parameters.get("systematic_factor_scale", "0.15"), "systematic_factor_scale")
     if scale <= _ZERO:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1017,12 +1013,8 @@ def _period_governed_ratios(facts: Sequence[FinancialFactRow]) -> dict[str, Deci
             "net_interest_margin_pct": _ratio(
                 net_interest_income, total_assets, "net interest margin"
             ),
-            "gross_income_to_assets_pct": _ratio(
-                gross_income, total_assets, "gross-income ratio"
-            ),
-            "cost_to_income_pct": _ratio(
-                operating_expenses, gross_income, "cost-to-income ratio"
-            ),
+            "gross_income_to_assets_pct": _ratio(gross_income, total_assets, "gross-income ratio"),
+            "cost_to_income_pct": _ratio(operating_expenses, gross_income, "cost-to-income ratio"),
         }
     except HTTPException:
         return None
@@ -1092,8 +1084,7 @@ def _apply_conservative_basis(
             "applied": False,
             "annual_periods_used": usable,
             "reason": (
-                "fewer than two annual periods with a full governed-ratio set; "
-                "latest figure used"
+                "fewer than two annual periods with a full governed-ratio set; latest figure used"
             ),
             "ratios": {},
         }
@@ -1182,9 +1173,7 @@ def _rating_inputs(
         "gross_income_to_assets_pct": _ratio(gross_income, total_assets, "gross-income ratio"),
         "income_growth_pct": _income_growth_pct(values),
         "roa_pct": _ratio(net_income, total_assets, "return on assets"),
-        "net_interest_margin_pct": _ratio(
-            net_interest_income, total_assets, "net interest margin"
-        ),
+        "net_interest_margin_pct": _ratio(net_interest_income, total_assets, "net interest margin"),
         "cost_to_income_pct": _ratio(operating_expenses, gross_income, "cost-to-income ratio"),
         "cashflow_coverage_pct": _ratio(
             cashflow_inflows, cashflow_outflows, "90-day cash-flow coverage"
