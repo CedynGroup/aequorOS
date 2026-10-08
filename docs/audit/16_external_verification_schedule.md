@@ -177,8 +177,9 @@ them onto HQLA.
 
 ### 3.6 Forecast — 8 authorities, `supervisory_monitoring`
 
-Engine `regulatory-forecasting-v1.0.0`, methodology `bank_forecast_projection_run`, regime
-`advisory_internal`. Missing: `authority_reference`.
+Methodology `bank_forecast_projection_run`, regime `advisory_internal`. The current
+engine version is owned by the [authority registry](../../backend/app/domain/authority/registry.py).
+Missing: `authority_reference`.
 
 |     # | Metrics                                                                                                                                  | Value in question                                        | What would settle it                                                                                                                                                                        | Status                                        |
 | ----: | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |

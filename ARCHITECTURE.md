@@ -1189,9 +1189,8 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
   notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
-  (`app/domain/capital/ecl.py`; active only when `ecl_exposure` facts AND the
-  `ecl-assumptions` register exist — otherwise the ingested-provisions path is
-  byte-identical) + CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
+  ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
+  CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
   `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
   (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
   it). LAS-QUARTERLY is registry+calendar REAL but generates `template_pending` until the
@@ -1199,6 +1198,47 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   filed as the official BSD2 and BSD7A forms. The executable completion proof is
   `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.
+
+#### ECL assumption and coverage contract
+
+The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
+`ecl_exposure` facts and an effective `ecl-assumptions` register both exist.
+Without either input, capital and forecasts retain ingested general provisions.
+
+Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
+loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
+`backend/app/domain/positions/families.py`. Save and lookup trim segments and
+normalize them to upper case; a segment-specific row takes precedence over
+`ALL` for the same stage. Unknown segments return HTTP 422. The category
+vocabulary is owned by the loan-family map, not a separate documentation list.
+
+Every non-zero staged EAD bucket needs a matching assumption or a stage-specific
+`ALL` fallback. Missing coverage fails capital with `ecl_segment_uncovered`,
+forecasts (including what-if and optimizer) with `calculation_error`;
+enterprise stress refuses the request with HTTP 409 and `ecl_coverage_incomplete`.
+Add the missing segment/stage
+rows or an `ALL` row for each affected stage; zero-EAD buckets need no assumption.
+
+Derivation warnings count all unstaged loans, including loans without a
+reporting-currency balance and books that emit no staged buckets. Known EAD is
+reported separately from the count of unconverted unstaged loans. Each emitted
+bucket carries `ecl_coverage_complete`, determined from the source loans before
+unconverted balances are omitted. Incomplete coverage keeps booked general
+provisions in capital and forecasts; enterprise stress refuses a partial model
+when staged exposures and assumptions exist. Complete coverage still permits
+the modelled general-ECL Tier 2 override in capital and forecasts. Forecasts
+retain the source completeness verdict through roll-forward rounding. For facts
+without coverage metadata, the shared capital helper uses aggregate EAD coverage.
+`ecl_unstaged_ead_ghs`, when present in capital metrics, measures only the known
+reporting-currency EAD gap; it is not a completeness verdict.
+
+Current calculation versions are owned by the
+[authority registry](backend/app/domain/authority/registry.py) and the engines'
+`ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
+results of historical runs remain unchanged. Regression evidence lives in
+`backend/tests/services/test_ecl_and_crm.py`,
+`backend/tests/domain/test_forecasting_engine.py` and
+`backend/tests/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 

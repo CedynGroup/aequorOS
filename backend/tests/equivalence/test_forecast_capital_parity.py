@@ -12,8 +12,8 @@ Root cause, established by reading both loaders rather than the summary:
 groups that carry no balance-sheet amount of their own —
 
 * ``ecl_exposure`` — staged IFRS 9 EADs. The capital run turns these into the
-  modeled general ECL that REPLACES ingested general provisions in Tier 2, so
-  omitting them moves the CAR numerator.
+  modeled general ECL that replaces ingested general provisions in Tier 2
+  only with complete staging coverage, so omitting them can move the CAR numerator.
 * ``crm_collateral`` — collateral recognized post-haircut against credit
   exposures, which nets down credit RWA, so omitting them moves the CAR
   denominator.
@@ -37,7 +37,12 @@ from decimal import Decimal
 import pytest
 
 from app.domain.capital.ecl import EclAssumption
-from app.domain.capital.engine import CapitalFact, compute_capital_ratios, compute_rwa
+from app.domain.capital.engine import (
+    CapitalFact,
+    compute_capital_ratios,
+    compute_rwa,
+    has_complete_ecl_coverage,
+)
 from app.domain.forecasting.engine import (
     ForecastFact,
     ForecastParams,
@@ -88,10 +93,20 @@ ECL_ASSUMPTIONS = (
 CRM_HAIRCUTS = {"CASH": Decimal("0")}
 
 
-def _facts(*, ecl: bool, crm: bool) -> tuple[ForecastFact, ...]:
+def _facts(*, ecl: bool, crm: bool, complete_staging: bool = False) -> tuple[ForecastFact, ...]:
     rows = list(sample_bank_latest_facts())
     if ecl:
         rows.extend(ECL_EXPOSURE_FACTS)
+        if complete_staging:
+            rows.extend(
+                (
+                    ForecastFact("ecl_exposure", "retail_other:stage1", Decimal("250") * M),
+                    ForecastFact("ecl_exposure", "residential_mortgage:stage1", Decimal("200") * M),
+                    ForecastFact(
+                        "ecl_exposure", "commercial_real_estate:stage1", Decimal("60") * M
+                    ),
+                )
+            )
     if crm:
         rows.extend(CRM_COLLATERAL_FACTS)
     return tuple(rows)
@@ -106,9 +121,7 @@ def _forecast_params(*, ecl: bool, crm: bool) -> ForecastParams:
     )
 
 
-def _capital_facts(
-    facts: tuple[ForecastFact, ...], groups: set[str]
-) -> tuple[CapitalFact, ...]:
+def _capital_facts(facts: tuple[ForecastFact, ...], groups: set[str]) -> tuple[CapitalFact, ...]:
     return tuple(
         CapitalFact(
             fact_group=row.fact_group,
@@ -120,6 +133,7 @@ def _capital_facts(
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
+            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in facts
         if row.fact_group in groups
@@ -142,9 +156,10 @@ def _capital_run_ratios(facts: tuple[ForecastFact, ...], params: ForecastParams)
     )
     ecl = _modeled_ecl(capital_facts, active, {})
     rwa = compute_rwa(capital_facts, params.capital)
-    ratios = compute_capital_ratios(
-        capital_facts, rwa, params.capital, ecl.general_ecl if ecl is not None else None
+    gp_override = (
+        ecl.general_ecl if ecl is not None and has_complete_ecl_coverage(capital_facts) else None
     )
+    ratios = compute_capital_ratios(capital_facts, rwa, params.capital, gp_override)
     return rwa, ratios
 
 
@@ -214,19 +229,24 @@ def test_projected_fact_set_reaches_the_liquidity_engine_with_the_liquidity_scop
 
 
 @pytest.mark.parametrize(
+    "complete_staging", [False, True], ids=["partial_staging", "complete_staging"]
+)
+@pytest.mark.parametrize(
     ("ecl", "crm"),
     [(False, False), (True, False), (False, True), (True, True)],
     ids=["neither", "ecl_only", "crm_only", "both"],
 )
-def test_year_zero_capital_ratios_equal_the_capital_run(ecl: bool, crm: bool) -> None:
-    """Year 0 is the as-of book, so its capital ratios ARE the capital run's.
+def test_year_zero_capital_ratios_equal_the_capital_run(
+    ecl: bool, crm: bool, complete_staging: bool
+) -> None:
+    """IFRS 9 ¶5.5.17: year-zero capital parity respects complete or partial staging.
 
     Parameterized across the four register configurations because the bug only
     appeared once a tenant configured one of them: with neither register the
     two paths already agreed, which is exactly why the divergence stayed
     latent and undetected on the live book.
     """
-    facts = _facts(ecl=ecl, crm=crm)
+    facts = _facts(ecl=ecl, crm=crm, complete_staging=complete_staging)
     params = _forecast_params(ecl=ecl, crm=crm)
     _, expected = _capital_run_ratios(facts, params)
     year0 = project(facts, params, BASE_ASSUMPTIONS).years[0]
@@ -294,25 +314,33 @@ def test_ecl_and_crm_facts_do_not_disturb_the_balance_sheet() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_registers_actually_move_the_projected_ratio() -> None:
-    """Guard against a vacuous suite.
+@pytest.mark.parametrize(
+    "complete_staging", [False, True], ids=["partial_staging", "complete_staging"]
+)
+def test_the_registers_actually_move_the_projected_ratio(complete_staging: bool) -> None:
+    """IFRS 9 ¶5.5.17: only complete staging allows modelled provisions to move CAR.
 
     If ``ecl_assumptions``/``crm_haircuts`` were dropped on the floor, every
     equivalence assertion above would still pass — both sides would be the
     unconfigured number. These inequalities prove the inputs reach the engine,
     and they state the direction each one pushes CAR.
     """
-    baseline = project(
-        _facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS
-    ).years[0]
+    baseline = project(_facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS).years[
+        0
+    ]
 
-    # Modeled ECL REPLACES ingested general provisions in Tier 2. The fixture's
+    # With complete staging, modelled ECL replaces general provisions in Tier 2.
+    # Partial staging keeps the booked allowance throughout the forecast. At year zero,
     # ingested general provisions are 15m and the modeled stage-1/2 ECL is far
     # smaller, so recognizing the model shrinks Tier 2 and CAR falls.
-    ecl_only = project(
-        _facts(ecl=True, crm=False), _forecast_params(ecl=True, crm=False), BASE_ASSUMPTIONS
-    ).years[0]
-    assert ecl_only.car_pct < baseline.car_pct
+    facts = _facts(ecl=True, crm=False, complete_staging=complete_staging)
+    booked = project(facts, bog_forecast_params(), BASE_ASSUMPTIONS)
+    ecl_only = project(facts, _forecast_params(ecl=True, crm=False), BASE_ASSUMPTIONS)
+    if complete_staging:
+        assert ecl_only.years[0].car_pct < booked.years[0].car_pct
+    else:
+        assert ecl_only.years == booked.years
+        assert ecl_only.summary == booked.summary
 
     # Recognized collateral nets down the credit exposure, so credit RWA falls
     # and CAR rises.
@@ -327,7 +355,9 @@ def test_the_registers_move_every_projected_year_not_just_year_zero() -> None:
     loan book, so the capital effect persists across the horizon."""
     plain = project(_facts(ecl=False, crm=False), bog_forecast_params(), BASE_ASSUMPTIONS)
     widened = project(
-        _facts(ecl=True, crm=True), _forecast_params(ecl=True, crm=True), BASE_ASSUMPTIONS
+        _facts(ecl=True, crm=True, complete_staging=True),
+        _forecast_params(ecl=True, crm=True),
+        BASE_ASSUMPTIONS,
     )
     assert all(
         left.car_pct != right.car_pct
@@ -413,9 +443,7 @@ def test_the_projection_keeps_the_income_window_the_width_it_started_with() -> N
     assert meta.gi_window == width
     for _ in range(5):
         state.gi_history.append((state.gi_history[-1][0] + 1, "gross_income_x", Decimal("1")))
-        rows = [
-            row for row in _state_facts(state, meta) if row.fact_group == "operational_income"
-        ]
+        rows = [row for row in _state_facts(state, meta) if row.fact_group == "operational_income"]
         assert len(rows) == width
 
 

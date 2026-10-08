@@ -30,6 +30,7 @@ from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
     EclAssumption,
+    EclComputationError,
     EclExposure,
     EclResult,
     EclScenario,
@@ -48,9 +49,11 @@ from app.domain.capital.engine import (
     UnsupportedShockError,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
     money,
     ratio_pct,
     run_capital_stress,
+    unstaged_loan_ead,
 )
 from app.domain.reporting import period_windows
 from app.models import (
@@ -132,7 +135,7 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v2.0.0"
+ENGINE_VERSION = "regulatory-capital-v3.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -257,6 +260,9 @@ class CapitalScenarioAnalysis:
     stress: CapitalStressResult | None
     params: CapitalParams
     ecl: EclResult | None
+    #: Known reporting-currency EAD beyond staged buckets, not a source-book
+    #: completeness verdict. ``None`` when no modeled ECL ran.
+    ecl_unstaged_ead: Decimal | None = None
 
 
 def _execute_scenario_compute(
@@ -286,18 +292,33 @@ def _execute_scenario_compute(
         key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
     }
     ecl = _modeled_ecl(engine_facts, active, shocks)
-    gp_override = ecl.general_ecl if ecl is not None else None
+    unstaged_ead = unstaged_loan_ead(engine_facts) if ecl is not None else None
+    # A modeled figure over part of the book would replace provisions the bank
+    # booked against ALL of it, so partial staging keeps the booked figure.
+    gp_override = (
+        ecl.general_ecl if ecl is not None and has_complete_ecl_coverage(engine_facts) else None
+    )
     if not stress_shocks:
         rwa = compute_rwa(engine_facts, engine_params)
         ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
         return CapitalScenarioAnalysis(
-            rwa=rwa, ratios=ratios, stress=None, params=engine_params, ecl=ecl
+            rwa=rwa,
+            ratios=ratios,
+            stress=None,
+            params=engine_params,
+            ecl=ecl,
+            ecl_unstaged_ead=unstaged_ead,
         )
     stress = run_capital_stress(
         scenario_code, engine_facts, engine_params, stress_shocks, gp_override
     )
     return CapitalScenarioAnalysis(
-        rwa=stress.rwa, ratios=stress.ratios, stress=stress, params=engine_params, ecl=ecl
+        rwa=stress.rwa,
+        ratios=stress.ratios,
+        stress=stress,
+        params=engine_params,
+        ecl=ecl,
+        ecl_unstaged_ead=unstaged_ead,
     )
 
 
@@ -699,6 +720,7 @@ def _create_and_execute(
             analysis.stress,
             base_currency(bank),
             analysis.ecl,
+            analysis.ecl_unstaged_ead,
         )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -759,7 +781,11 @@ def _modeled_ecl(
 ) -> EclResult | None:
     """IFRS 9 modeled ECL (item 8) — active only when BOTH staged exposures
     and Board-configured assumptions exist; otherwise the run keeps the
-    ingested-provisions path untouched."""
+    ingested-provisions path untouched.
+
+    A staged exposure no assumption row covers fails the run: pricing it at
+    zero would understate the allowance the run reports.
+    """
     exposures = []
     for fact in facts:
         if fact.fact_group != "ecl_exposure":
@@ -783,7 +809,24 @@ def _modeled_ecl(
         )
     else:
         scenarios = (BASE_SCENARIO,)
-    return compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    result = compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    try:
+        result.require_coverage()
+    except EclComputationError as exc:
+        uncovered = [f"{segment}:stage{stage}" for segment, stage in result.uncovered]
+        raise CapitalRunError(
+            "ecl_segment_uncovered",
+            "Staged loan exposures have no ECL assumption for their segment and stage, "
+            "and no ALL fallback row covers them.",
+            {
+                "uncovered": uncovered,
+                "corrective_action": (
+                    "Add an ECL assumption for each listed segment and stage, or an ALL "
+                    "row for the stage, to the ECL assumptions register."
+                ),
+            },
+        ) from exc
+    return result
 
 
 def _persist_success(  # noqa: PLR0913
@@ -796,6 +839,7 @@ def _persist_success(  # noqa: PLR0913
     stress: CapitalStressResult | None,
     currency: str,
     ecl: EclResult | None = None,
+    ecl_unstaged_ead: Decimal | None = None,
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -810,16 +854,15 @@ def _persist_success(  # noqa: PLR0913
     }
     if ecl is not None:
         # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
-        # general-provisions component in this run's Tier 2 (still capped).
+        # general-provisions component in this run's Tier 2 (still capped)
+        # only when source-book ECL coverage was complete.
         metrics["ecl_total_ghs"] = str(ecl.total_ecl)
         metrics["ecl_general_ghs"] = str(ecl.general_ecl)
         metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)
         for stage in (1, 2, 3):
             metrics[f"ecl_stage{stage}_ghs"] = str(ecl.stage_totals.get(stage, Decimal("0")))
-        if ecl.uncovered:
-            metrics["ecl_uncovered_segments"] = ",".join(
-                f"{segment}:stage{stage}" for segment, stage in ecl.uncovered
-            )
+        if ecl_unstaged_ead:
+            metrics["ecl_unstaged_ead_ghs"] = str(ecl_unstaged_ead)
     if stress is not None:
         metrics["stress_path"] = [
             {
@@ -1850,6 +1893,11 @@ def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -2101,6 +2149,7 @@ def _build_snapshot(  # noqa: PLR0913
                     "capital_tier": fact.capital_tier,
                     "is_deduction": fact.is_deduction,
                     "side": fact.attributes.get("side"),
+                    "ecl_coverage_complete": _to_engine_fact(fact).ecl_coverage_complete,
                 }
                 for fact in facts
             ),

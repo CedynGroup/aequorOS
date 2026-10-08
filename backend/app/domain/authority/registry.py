@@ -1088,7 +1088,7 @@ _PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
 # The declaring constants carry the reasoning and the versioning rule
 # (``app.services.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
 # these must track them, and a registry test asserts they do.
-_CAPITAL_VERSION = "regulatory-capital-v2.0.0"
+_CAPITAL_VERSION = "regulatory-capital-v3.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
 _IRR_VERSION = "regulatory-irr-v1.0.0"
 _IRR_SF_VERSION = "regulatory-irr-sf-v1.0.0"
@@ -1104,8 +1104,8 @@ _NO_VAR_AUTHORITY = (
     "(verified negative, full-text search). Internal market-risk management measure."
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
-_FORECAST_VERSION = "regulatory-forecasting-v1.0.0"
-_STRESS_VERSION = "enterprise-stress-v2.0.0"
+_FORECAST_VERSION = "regulatory-forecasting-v2.0.0"
+_STRESS_VERSION = "enterprise-stress-v3.0.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 
 #: The case-scoped ("legacy/advisory") plane. The forensic audit found its
@@ -2642,7 +2642,7 @@ REGISTRY.register_all(
                 "Active ONLY when ecl_exposure facts AND the ecl-assumptions register both "
                 "exist; otherwise the ingested-provisions path is byte-identical. An exposure "
                 "whose (segment, stage) has no assumption is reported UNCOVERED, never priced "
-                "at zero - the caller decides whether that blocks the run."
+                "at zero, and the capital run fails on it."
             ),
         )
         for metric_id in ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")

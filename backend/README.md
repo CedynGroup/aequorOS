@@ -35,7 +35,9 @@ the tenant API).
   database-direct adapter (see the deployment note below)
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital
   (RWA/CAR/stress), IRRBB, FX, FTP, and balance-sheet forecasting — each a pure
-  Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`
+  Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`. See the
+  [ECL assumption and coverage contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract)
+  for register validation, run refusals and provision handling.
 - Live engine: authoritative ingestion, market-data, governed-input, entitlement,
   and reconciliation mutations enqueue debounced `pipeline_refresh` jobs that
   re-derive facts and update `live_metrics`/`live_findings`; `GET live-summary`

@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.capital.ecl import EclAssumption, EclExposure
+from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.capital.engine import (
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
@@ -137,7 +137,9 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: through ``regulatory_irr.positions_from_facts``. v1 dropped every swap, so the
 #: same book now yields a different ΔEVE and Appendix II Pillar 2 IRRBB charge.
 #: Stored v1 runs keep what they recorded.
-ENGINE_VERSION = "enterprise-stress-v2.0.0"
+#: v3 enforces ECL coverage: corrected segment matching can change allowances,
+#: and an incomplete source book cannot supply a whole-book modelled allowance.
+ENGINE_VERSION = "enterprise-stress-v3.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -342,6 +344,11 @@ def _capital_fact(fact: FinancialFactRow) -> CapitalFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -368,6 +375,11 @@ def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
         cash_derived=fact.attributes.get("source") == "cash",
     )
 
@@ -1535,7 +1547,7 @@ def _require_complete_scenario(
         )
 
 
-def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of the run
+def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
@@ -1688,29 +1700,32 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         irr_inputs = _irr_inputs(irr_rows, irr_curve, tier1)
     fx_inputs = _fx_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_fx else None
 
-    outcome = run_enterprise_stress(
-        EnterpriseStressInputs(
-            scenario_code=scenario.code,
-            scenario_paths=paths,
-            capital_facts=capital_facts,
-            capital_params=capital_params,
-            liquidity_facts=liquidity_facts,
-            liquidity_params=liquidity_params,
-            baseline_annual_preprovision_income=baseline_income,
-            baseline_annual_credit_loss=baseline_credit_loss,
-            baseline_credit_allowance=_general_provisions(capital_facts),
-            tax_rate_pct=plan.tax_rate_pct,
-            ecl_exposures=ecl_exposures,
-            ecl_assumptions=ecl_assumptions,
-            irr=irr_inputs,
-            fx=fx_inputs,
-            bottom_up_credit=bottom_up_inputs,
-            concentration=concentration_inputs,
-            operational=OperationalConfig(annual_gross_income=max(baseline_income, _ZERO)),
-            contingent_leverage=contingent_leverage_inputs,
-            basel_liquidity=basel_liquidity,
+    try:
+        outcome = run_enterprise_stress(
+            EnterpriseStressInputs(
+                scenario_code=scenario.code,
+                scenario_paths=paths,
+                capital_facts=capital_facts,
+                capital_params=capital_params,
+                liquidity_facts=liquidity_facts,
+                liquidity_params=liquidity_params,
+                baseline_annual_preprovision_income=baseline_income,
+                baseline_annual_credit_loss=baseline_credit_loss,
+                baseline_credit_allowance=_general_provisions(capital_facts),
+                tax_rate_pct=plan.tax_rate_pct,
+                ecl_exposures=ecl_exposures,
+                ecl_assumptions=ecl_assumptions,
+                irr=irr_inputs,
+                fx=fx_inputs,
+                bottom_up_credit=bottom_up_inputs,
+                concentration=concentration_inputs,
+                operational=OperationalConfig(annual_gross_income=max(baseline_income, _ZERO)),
+                contingent_leverage=contingent_leverage_inputs,
+                basel_liquidity=basel_liquidity,
+            )
         )
-    )
+    except EclComputationError as exc:
+        raise EnterpriseStressError("ecl_coverage_incomplete", str(exc)) from exc
     # Phase 3: overlay an APPROVED management-actions plan onto the stress leg to
     # produce the "results WITH management actions" (¶67(f), ¶78–81). None when the
     # run models no plan — Table 1's action blocks then stay empty (pre-action).

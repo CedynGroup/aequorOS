@@ -44,6 +44,7 @@ from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
     EclAssumption,
+    EclComputationError,
     EclExposure,
     EclScenario,
     compute_ecl,
@@ -56,6 +57,7 @@ from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
     CapitalStressResult,
+    has_complete_ecl_coverage,
     run_capital_stress,
 )
 from app.domain.fx.engine import (
@@ -132,7 +134,7 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-ENGINE_VERSION = "enterprise-stress-v2.0.0"
+ENGINE_VERSION = "enterprise-stress-v3.0.0"
 
 # --- Capital-path composition coefficients -----------------------------------
 # Documented, defensible linear elasticities that turn the macro scenario into
@@ -243,6 +245,8 @@ def _stress_ecl(
             ),
         ),
     )
+    base.require_coverage()
+    stressed.require_coverage()
     return base.total_ecl, stressed.total_ecl
 
 
@@ -598,6 +602,15 @@ class EnterpriseStressOutcome:
 
 def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOutcome:
     """Drive every engine from one macro scenario into a single enterprise outcome."""
+    if (
+        inputs.ecl_exposures
+        and inputs.ecl_assumptions
+        and not has_complete_ecl_coverage(
+            inputs.capital_facts,
+            staged_ead=sum((exposure.ead for exposure in inputs.ecl_exposures), _ZERO),
+        )
+    ):
+        raise EclComputationError("The modelled ECL does not cover unstaged loan exposure.")
     composition = compose_capital_shocks(
         scenario_paths=inputs.scenario_paths,
         baseline_annual_preprovision_income=inputs.baseline_annual_preprovision_income,

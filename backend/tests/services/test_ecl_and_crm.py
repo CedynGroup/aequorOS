@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -33,7 +35,13 @@ from app.domain.capital.engine import (
     compute_capital_ratios,
     compute_rwa,
 )
-from app.models import BankFinancialFact, BankReportingPeriod, ParamStressShock, RegulatoryRun
+from app.models import (
+    BankFinancialFact,
+    BankReportingPeriod,
+    CanonicalReferenceRow,
+    ParamStressShock,
+    RegulatoryRun,
+)
 from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
@@ -105,6 +113,25 @@ def test_ecl_probability_weighted_scenarios_and_guards() -> None:
     )
     assert partial.total_ecl == Decimal("0.0000")
     assert partial.uncovered == (("mystery_book", 2),)
+
+
+def test_assumption_segment_matches_the_exposure_category_whatever_its_case() -> None:
+    """IFRS 9 ¶B5.5.5: an assumption applies to the exposures grouped under its segment.
+
+    The register stores ``CORPORATE_UNRATED``; the loan family's fact category is
+    ``corporate_unrated``. The Board's 2% segment PD must win over the 0.5% ALL row.
+    """
+    result = compute_ecl(
+        (EclExposure("corporate_unrated", 1, Decimal("100000000")),),
+        (
+            EclAssumption("ALL", 1, Decimal("0.5"), Decimal("45")),
+            EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
+        ),
+    )
+    # 100M x 2% x 45%, not the fallback's 100M x 0.5% x 45% = 225,000.
+    assert result.items[0].pd_pct == Decimal("2.000000")
+    assert result.total_ecl == Decimal("900000.0000")
+    assert result.items[0].segment == "corporate_unrated"
 
 
 def _minimal_capital_params(crm_haircuts: dict[str, Decimal]) -> CapitalParams:
@@ -208,6 +235,7 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
         ifrs9_stage=3,
         extra_attributes={"crm_guarantee_ghs": "1000000", "crm_guarantor_class": "BANK_DEBT"},
     )
+    seeder.position("ECL/L4", "LOAN", Decimal("7000000"), product=product)
 
     result = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
     facts = db_session.scalars(
@@ -230,7 +258,14 @@ def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -
         key for key in by_key if key[0] == "crm_collateral" and key[1].endswith(":BANK_DEBT")
     )
     assert by_key[crm_guarantee_key] == Decimal("1000000")
-    assert result is not None
+    # The unstaged loan derives no staged bucket, and is counted rather than
+    # silently dropped from the modelled book.
+    ecl_group = next(group for group in result.groups if group.group == "ecl_exposure")
+    assert len(ecl_group.warnings) == 1
+    assert ecl_group.warnings[0].startswith(
+        "1 LOAN position(s) with known balances totalling 7,000,000.00"
+    )
+    assert "ECL/L4" in ecl_group.warnings[0]
 
 
 def _seed_ecl_facts(db: Session) -> BankReportingPeriod:
@@ -368,3 +403,303 @@ def test_unstaged_book_keeps_ingested_provisions_untouched(db_session: Session) 
     assert "ecl_total_ghs" not in stored.metrics
     assert "crm_haircuts_pct" not in stored.inputs["parameters"]
     assert "ecl_assumptions" not in stored.inputs["parameters"]
+
+
+def _metric(run: RegulatoryRun, key: str) -> Decimal:
+    metrics = cast(dict[str, object], run.metrics)
+    return Decimal(str(metrics[key]))
+
+
+def _adopt_register(db: Session, *entries: tuple[str, int, str, str]) -> None:
+    credit_params.update_ecl_register(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        EclAssumptionUpdate(
+            assumptions=[
+                EclAssumptionEntry(
+                    segment=segment, stage=stage, pd_pct=Decimal(pd), lgd_pct=Decimal(lgd)
+                )
+                for segment, stage, pd, lgd in entries
+            ],
+            effective_from=date(2026, 1, 1),
+            approved_by="Model committee minute 2026-02",
+            reason="Adopt IFRS 9 PD/LGD set",
+        ),
+    )
+
+
+def test_board_segment_assumption_prices_its_own_loan_family(db_session: Session) -> None:
+    """IFRS 9 ¶B5.5.5, ¶5.5.17(c): a Board PD/LGD saved for a loan family is the one applied.
+
+    Audit evidence 12.2: the register stored ``CORPORATE_UNRATED`` while the
+    exposure was ``corporate_unrated``, so the run reported stage-1 ECL of 0.
+    """
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    _adopt_register(
+        db_session,
+        ("corporate_unrated", 1, "1.5", "45"),
+        ("ALL", 2, "15", "45"),
+        ("ALL", 3, "0", "60"),
+    )
+
+    run = _run_capital(db_session, period.id, "baseline")
+    assert run.status == "succeeded", run
+    stored = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == run.id))
+    assert stored is not None
+    # 100M x 1.5% x 45%.
+    assert _metric(stored, "ecl_stage1_ghs") == Decimal("675000.0000")
+
+
+def test_ecl_register_rejects_a_segment_no_loan_can_land_in(db_session: Session) -> None:
+    """IFRS 9 ¶B5.5.5: a segment must be a grouping the exposures actually carry."""
+    materialize_canonical_test_book(db_session)
+    for segment in ("LN.COMM", "SME_UNRATED", "corporate"):
+        with pytest.raises(HTTPException) as refused:
+            _adopt_register(db_session, (segment, 1, "1.5", "45"))
+        assert refused.value.status_code == 422
+        assert f"'{segment}' is not a loan exposure category" in str(refused.value.detail)
+
+    _adopt_register(db_session, (" sme_retail ", 1, "1.5", "45"), ("all", 2, "15", "45"))
+    register = credit_params.get_ecl_register(db_session, MAKER, SAMPLE_BANK_ID, date(2026, 1, 1))
+    assert [(row.segment, row.stage) for row in register.assumptions] == [
+        ("ALL", 2),
+        ("SME_RETAIL", 1),
+    ]
+
+
+def test_capital_run_fails_when_a_staged_segment_is_unpriced(db_session: Session) -> None:
+    """IFRS 9 ¶5.5.17: staged EAD with no assumption row is never priced at zero."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    _adopt_register(db_session, ("corporate_unrated", 1, "1.5", "45"))
+
+    run = _run_capital(db_session, period.id, "baseline")
+    assert run.status == "failed", run
+    assert run.error is not None and run.error.code == "ecl_segment_uncovered"
+    assert run.error.details is not None
+    assert run.error.details["uncovered"] == [
+        "commercial_loans:stage2",
+        "past_due_unsecured:stage3",
+    ]
+
+
+def test_partly_staged_book_keeps_the_booked_general_provisions(db_session: Session) -> None:
+    """Basis: Prudential (BoG CRD 2018) Tier 2 general provisions; input: the bank's booked
+    IFRS 9 allowance, never a modelled figure that reaches only part of the loan book.
+    """
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    booked = _run_capital(db_session, period.id, "baseline")
+    assert booked.status == "succeeded", booked
+    _adopt_register(
+        db_session, ("ALL", 1, "1.5", "45"), ("ALL", 2, "15", "45"), ("ALL", 3, "0", "60")
+    )
+
+    run = _run_capital(db_session, period.id, "baseline")
+    assert run.status == "succeeded", run
+    stored = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == run.id))
+    stored_booked = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == booked.id))
+    assert stored is not None and stored_booked is not None
+    # The canonical book holds far more loan EAD than the 130M staged here.
+    assert _metric(stored, "ecl_unstaged_ead_ghs") > Decimal("0")
+    assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
+
+
+@pytest.mark.parametrize("stage", [1, 2, 3])
+def test_zero_ead_does_not_require_an_assumption(stage: int) -> None:
+    """IFRS 9 ¶5.5.17: a closed zero-EAD bucket is not an unpriced exposure."""
+    result = compute_ecl(
+        (
+            EclExposure("corporate_unrated", 1, Decimal("100000000")),
+            EclExposure("residential_mortgage", stage, Decimal("0")),
+        ),
+        (EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+    )
+    result.require_coverage()
+    assert result.uncovered == ()
+    assert result.total_ecl == Decimal("900000.0000")
+
+
+@pytest.mark.parametrize("staged", [False, True])
+@pytest.mark.parametrize("unconverted", [False, True])
+def test_unstaged_diagnostic_survives_empty_buckets_and_missing_conversion(
+    db_session: Session, staged: bool, unconverted: bool
+) -> None:
+    """IFRS 9 ¶5.5.17: every unstaged loan is counted even without a converted EAD."""
+    materialize_canonical_test_book(db_session)
+    allow_fixture_balance_gap(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        actor_user_id=DEMO_USER_ID,
+        max_gap_fraction=Decimal("1"),
+    )
+    seeder = _CanonicalSeeder(db_session)
+    product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
+    for index in range(5):
+        seeder.position(
+            f"UNSTAGED/{index}",
+            "LOAN",
+            Decimal("1000000"),
+            product=product,
+            currency="USD" if unconverted and index == 0 else "GHS",
+            extra_attributes={"balance_ghs": None} if unconverted and index == 0 else None,
+        )
+    if staged:
+        seeder.position("STAGED/1", "LOAN", Decimal("1000000"), product=product, ifrs9_stage=1)
+    result = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    group = next(group for group in result.groups if group.group == "ecl_exposure")
+    assert group.status == ("derived" if staged else "skipped")
+    assert group.rows == (1 if staged else 0)
+    assert group.warnings[0].startswith("5 LOAN position(s)")
+    assert "UNSTAGED/0" in group.warnings[0]
+    assert ("4,000,000.00" if unconverted else "5,000,000.00") in group.warnings[0]
+    if unconverted:
+        assert group.warnings[1].startswith("1 unstaged LOAN position(s) lack")
+
+
+def test_new_capital_version_preserves_historical_runs(db_session: Session) -> None:
+    """Reproducibility contract: a new calculation version never rewrites a sealed run."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    historical = _run_capital(db_session, period.id, "baseline")
+    stored = db_session.get(RegulatoryRun, historical.id)
+    assert stored is not None
+    stored.engine_version = "regulatory-capital-v2.0.0"
+    db_session.commit()
+    snapshot, metrics, input_hash = stored.inputs, stored.metrics, stored.input_hash
+    current = _run_capital(db_session, period.id, "baseline")
+    assert current.engine_version == "regulatory-capital-v3.0.0"
+    db_session.refresh(stored)
+    assert stored.engine_version == "regulatory-capital-v2.0.0"
+    assert (stored.inputs, stored.metrics, stored.input_hash) == (snapshot, metrics, input_hash)
+    assert current.id != historical.id
+
+
+def test_capital_run_accepts_an_unpriced_zero_ead_bucket(db_session: Session) -> None:
+    """IFRS 9 ¶5.5.17: a closed zero-EAD mortgage cannot block funded covered loans."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    db_session.add(
+        BankFinancialFact(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=period.id,
+            fact_group="ecl_exposure",
+            category="residential_mortgage:stage2",
+            amount=Decimal("0"),
+            currency="GHS",
+        )
+    )
+    for fact in db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.category.in_(
+                ["commercial_loans:stage2", "past_due_unsecured:stage3"]
+            ),
+        )
+    ):
+        db_session.delete(fact)
+    _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "1.5", "45"))
+    run = _run_capital(db_session, period.id, "baseline")
+    assert run.status == "succeeded", run
+
+
+@pytest.mark.parametrize("scenario", ["baseline", "severe"])
+def test_unconverted_unstaged_loan_keeps_booked_provisions(
+    db_session: Session, scenario: str
+) -> None:
+    """IFRS 9 ¶5.5.17: excluded unconverted loans still make model coverage partial."""
+    materialize_canonical_test_book(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
+    seeder.position("COVERED/GHS", "LOAN", Decimal("100000000"), product=product, ifrs9_stage=1)
+    seeder.position(
+        "UNCOVERED/USD",
+        "LOAN",
+        Decimal("1000000"),
+        product=product,
+        currency="USD",
+        extra_attributes={"balance_ghs": None},
+    )
+    seeder.position("FUNDING/GHS", "DEPOSIT", Decimal("79000000"))
+    seeder.position(
+        "FUNDING/USD",
+        "DEPOSIT",
+        Decimal("1000000"),
+        currency="USD",
+        extra_attributes={"balance_ghs": None},
+    )
+    references: list[tuple[str, dict[str, str]]] = [
+        (
+            "capital_structure",
+            {
+                "capital_component": "paid_up_capital",
+                "amount_ghs": "20000000",
+                "tier": "CET1",
+            },
+        ),
+        (
+            "capital_structure",
+            {
+                "capital_component": "general_provisions",
+                "amount_ghs": "1000000",
+                "tier": "T2",
+            },
+        ),
+    ]
+    references.extend(
+        (
+            "historical_financials",
+            {
+                "period_end": date(2025, month, 28).isoformat(),
+                "net_interest_income_ghs": "1000000",
+            },
+        )
+        for month in range(1, 13)
+    )
+    for index, (kind, payload) in enumerate(references):
+        db_session.add(
+            CanonicalReferenceRow(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                ingestion_batch_id=seeder.common["ingestion_batch_id"],
+                lineage_id=seeder.common["lineage_id"],
+                as_of_date=REPORTING_DATE,
+                dataset_kind=kind,
+                row_index=index,
+                source_reference=f"ECL-COVERAGE/{index}",
+                payload=payload,
+            )
+        )
+    db_session.flush()
+    derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    assert derived.reconciliation is not None and derived.reconciliation.within_tolerance
+    group = next(group for group in derived.groups if group.group == "ecl_exposure")
+    assert group.warnings[0].startswith("1 LOAN position(s)")
+    assert "UNCOVERED/USD" in group.warnings[0]
+    assert group.warnings[1].startswith("1 unstaged LOAN position(s) lack")
+    fact = db_session.scalar(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == derived.reporting_period_id,
+            BankFinancialFact.fact_group == "ecl_exposure",
+        )
+    )
+    assert fact is not None and fact.amount == Decimal("100000000")
+    attributes = cast(dict[str, object], fact.attributes)
+    assert attributes["ecl_coverage_complete"] is False
+    booked = _run_capital(db_session, derived.reporting_period_id, scenario)
+    assert booked.status == "succeeded", booked
+    _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "2", "45"))
+    modelled = _run_capital(db_session, derived.reporting_period_id, scenario)
+    assert modelled.status == "succeeded", modelled
+    stored = db_session.get(RegulatoryRun, modelled.id)
+    stored_booked = db_session.get(RegulatoryRun, booked.id)
+    assert stored is not None and stored_booked is not None
+    assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
+    inputs = cast(dict[str, object], stored.inputs)
+    facts = cast(list[dict[str, object]], inputs["facts"])
+    ecl_input = next(row for row in facts if row["fact_group"] == "ecl_exposure")
+    assert ecl_input["ecl_coverage_complete"] is False

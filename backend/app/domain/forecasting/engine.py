@@ -112,6 +112,7 @@ from app.domain.capital.engine import (
     CapitalParams,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
 )
 from app.domain.liquidity.engine import (
     LiquidityFact,
@@ -251,6 +252,7 @@ class ForecastFact:
     is_deduction: bool = False
     side: str | None = None
     cash_derived: bool = False
+    ecl_coverage_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -275,11 +277,8 @@ class ForecastParams:
 
     liquidity: LiquidityParams
     capital: CapitalParams
-    #: Board-approved IFRS 9 PD/LGD register. Supplied, it drives the SAME
-    #: general-provisions Tier 2 override the capital run applies (Phase 2
-    #: item 8). Empty — the default, and the state of every book with no
-    #: configured register — leaves the ingested-provisions path untouched and
-    #: every projected figure byte-identical.
+    #: Board-approved IFRS 9 PD/LGD register; provision handling follows
+    #: ``ARCHITECTURE.md``'s ECL assumption and coverage contract.
     ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
@@ -490,6 +489,7 @@ class _Meta:
     #: year appends exactly one gross-income year, so the count of
     #: gross-income years carried never decreases.
     gi_window: int = 1
+    ecl_coverage_complete: bool = False
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -966,6 +966,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         # give the roll-forward a year to append onto so it fails loudly there.
         state.gi_history = [(0, "gross_income_0", _ZERO)]
     meta = _Meta(
+        ecl_coverage_complete=has_complete_ecl_coverage(_to_capital_facts(facts)),
         gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
         off_balance_ccf=off_balance_ccf,
@@ -1035,7 +1036,12 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
         )
     for category, amount in sorted(state.ecl_exposures.items()):
         rows.append(
-            ForecastFact(fact_group=FACT_GROUP_ECL_EXPOSURE, category=category, amount=amount)
+            ForecastFact(
+                fact_group=FACT_GROUP_ECL_EXPOSURE,
+                category=category,
+                amount=amount,
+                ecl_coverage_complete=meta.ecl_coverage_complete,
+            )
         )
     for category, amount in sorted(state.crm_collateral.items()):
         rows.append(
@@ -1116,6 +1122,7 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
+            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in rows
         if row.fact_group in relevant
@@ -1143,20 +1150,22 @@ def _ecl_exposures(facts: Sequence[CapitalFact]) -> tuple[EclExposure, ...]:
 def _general_provisions_override(
     capital_facts: Sequence[CapitalFact], params: ForecastParams
 ) -> Decimal | None:
-    """The IFRS 9 modeled general ECL that replaces ingested general provisions.
+    """Modelled general ECL under the capital run's coverage gate.
 
-    The gate is the capital run's gate (Phase 2 item 8): active only when BOTH
-    staged exposures and a Board-approved assumption register exist, otherwise
-    ``None`` and the ingested-provisions path stands untouched. The baseline
-    projection is unshocked, so it uses the unconditioned base scenario — the
-    same one ``_modeled_ecl`` uses when no ECL conditioning shock is supplied.
+    See ``ARCHITECTURE.md``'s ECL assumption and coverage contract for refusals
+    and booked-provision fallback. The projection uses the unconditioned base
+    scenario, as ``_modeled_ecl`` does without an ECL conditioning shock.
     """
     if not params.ecl_assumptions:
         return None
     exposures = _ecl_exposures(capital_facts)
     if not exposures:
         return None
-    return compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,)).general_ecl
+    result = compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,))
+    result.require_coverage()
+    if not has_complete_ecl_coverage(capital_facts):
+        return None
+    return result.general_ecl
 
 
 def _regulatory_ratios(

@@ -1098,9 +1098,7 @@ def _resolve_gl_chart(
     if chart_as_of is None:
         chart = {account.account_code for account, _ in rows}
     else:
-        chart = {
-            account.account_code for account, _ in rows if account.as_of_date >= chart_as_of
-        }
+        chart = {account.account_code for account, _ in rows if account.as_of_date >= chart_as_of}
     # Deterministic scan: (organization, bank, code, as_of) is unique among
     # current rows, so the max by as_of_date is unambiguous; sorting keeps the
     # walk reproducible regardless of the database's row order.
@@ -1231,9 +1229,7 @@ def _ensure_period(
     )
     if period is not None:
         return period, False
-    period = new_snapshot_period(
-        organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
-    )
+    period = new_snapshot_period(organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of)
     db.add(period)
     db.flush()
     return period, True
@@ -2348,28 +2344,57 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
     """Staged EAD buckets for the IFRS 9 ECL engine (Phase 2 item 8).
 
     Emits ``"<family>:stage<n>"`` rows only for loans carrying an ingested
-    IFRS 9 stage — an unstaged book derives nothing, and the capital engine
-    then falls back to ingested provisions rather than modeling on air.
+    IFRS 9 stage and a reporting-currency balance. Completeness is determined
+    from source loans before unconverted balances are omitted, so matching
+    converted EAD totals cannot hide missing model coverage. Unstaged warnings
+    survive even when no buckets are emitted. Provision handling is owned by
+    ``ARCHITECTURE.md``'s ECL assumption and coverage contract.
     """
     totals: dict[str, Decimal] = {}
+    unstaged: list[_LoanRow] = []
     for loan in loan_rows:
         stage = loan.row.ifrs9_stage
         balance = loan.row.balance_ghs
-        if stage is None or balance is None:
+        if stage is None:
+            unstaged.append(loan)
+            continue
+        if balance is None:
             continue
         key = f"{loan.category}:stage{stage}"
         totals[key] = totals.get(key, _ZERO) + balance
+    coverage_complete = all(
+        loan.row.ifrs9_stage is not None and loan.row.balance_ghs is not None for loan in loan_rows
+    )
     specs = [
         _FactSpec(
             fact_group="ecl_exposure",
             category=category,
             amount=amount,
             derived_from="LOAN positions by family and ingested IFRS 9 stage",
+            attributes={"ecl_coverage_complete": coverage_complete},
         )
         for category, amount in sorted(totals.items())
     ]
+    warnings: list[str] = []
+    if unstaged:
+        unstaged_ead = sum((loan.row.balance_ghs or _ZERO for loan in unstaged), _ZERO)
+        warnings.append(
+            f"{len(unstaged)} LOAN position(s) with known balances totalling {unstaged_ead:,.2f} "
+            "in the reporting currency carry no ingested IFRS 9 stage, so the modelled ECL "
+            "does not reach them and the capital run keeps the booked general "
+            "provisions. Ingest the stage for: "
+            f"{_shown([loan.row.source_reference for loan in unstaged])}."
+        )
+        unconverted = sum(loan.row.balance_ghs is None for loan in unstaged)
+        if unconverted:
+            warnings.append(
+                f"{unconverted} unstaged LOAN position(s) lack a reporting-currency balance; "
+                "their EAD is excluded from the known total."
+            )
     if specs:
-        groups.append(GroupResult(group="ecl_exposure", status="derived", rows=len(specs)))
+        groups.append(
+            GroupResult(group="ecl_exposure", status="derived", rows=len(specs), warnings=warnings)
+        )
     else:
         # Audit §3 / P0-10 companion: the empty case used to append NO group at
         # all, so a capital run with no IFRS 9 ECL looked complete. It is now an
@@ -2379,6 +2404,7 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
             GroupResult(
                 group="ecl_exposure",
                 status="skipped",
+                warnings=warnings,
                 note="Not computable: no LOAN position carries an ingested IFRS 9 stage, so "
                 "no staged EAD buckets exist. The capital run uses INGESTED provisions "
                 "instead of a modelled ECL — the impairment figure is the bank's own, not "
@@ -2421,11 +2447,7 @@ def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult])
         if provision is not None:
             any_provision = True
             grade = normalise_bog_classification(attributes.get("bog_classification"))
-            non_performing = (
-                grade in NPL_GRADES
-                if grade is not None
-                else loan.row.ifrs9_stage == 3
-            )
+            non_performing = grade in NPL_GRADES if grade is not None else loan.row.ifrs9_stage == 3
             if non_performing:
                 specific += provision
             else:
@@ -2470,9 +2492,7 @@ def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult])
     return specs
 
 
-def _derive_crm_collateral(
-    loan_rows: list[_LoanRow], groups: list[GroupResult]
-) -> list[_FactSpec]:
+def _derive_crm_collateral(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
     """CRM collateral/guarantee values per loan family + class (item 9).
 
     Reads the documented ``crm_collateral_ghs``/``crm_collateral_class`` and
