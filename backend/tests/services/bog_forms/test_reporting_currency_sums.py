@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
@@ -25,6 +25,7 @@ from app.models import (
     Bank,
     BankReportingPeriod,
     CanonicalCounterparty,
+    CanonicalFxRate,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     IngestionBatch,
@@ -42,6 +43,7 @@ from app.services.regulatory_reporting.bog_forms.sources import (
     get_resolver,
     reporting_currency_value,
 )
+from app.services.regulatory_reporting.bog_forms.sources_ext.bsd8 import load_loans
 from app.services.sdi_views import get_liquidity_monitoring
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -178,6 +180,106 @@ def book(db_session: Session) -> _Book:
     book.cash("CASH/GHS", "GHS", "5000000", None)
     book.cash("CASH/USD-STATED", "USD", "100000", "1250000.50")
     return book
+
+
+@pytest.fixture
+def dated_spots(book: _Book) -> None:
+    rates = {
+        book.period.period_end - timedelta(days=offset): rate
+        for offset, rate in ((0, "14"), (1, "13"), (7, "12"), (8, "11"))
+    }
+    rates[book.period.period_start - timedelta(days=1)] = "10"
+    for day, rate in rates.items():
+        book.db.add(
+            CanonicalFxRate(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                as_of_date=day,
+                source_system="EXCEL_CSV",
+                ingestion_batch_id=book.batch_id,
+                lineage_id=book.lineage_id,
+                validation_status="accepted",
+                source_reference=f"FX/USD/{day.isoformat()}",
+                base_currency="USD",
+                quote_currency="GHS",
+                rate_type="spot",
+                rate=Decimal(rate),
+            )
+        )
+    book.db.flush()
+
+
+@pytest.mark.usefixtures("dated_spots")
+@pytest.mark.parametrize(("column", "offset"), [("wed", 0), ("tue", 1)])
+def test_bsd1_values_daily_and_weekly_changes_at_each_business_date(
+    book: _Book, column: str, offset: int
+) -> None:
+    for days_before in (offset, offset + 7):
+        snapshot = book.position(f"DEPOSIT/DAY-{days_before}", "DEPOSIT", {"fixture": "dated"})
+        snapshot.as_of_date = book.period.period_end - timedelta(days=days_before)
+    book.db.flush()
+    daily = book.resolver("bsd1.daily", column)
+    params: dict[str, object] = {
+        "position_types": ["DEPOSIT"],
+        "attribute_eq": {"fixture": "dated"},
+        "currency": "USD",
+    }
+    current = Decimal("1400000") if offset == 0 else Decimal("1300000")
+    previous = Decimal("1200000") if offset == 0 else Decimal("1100000")
+
+    assert daily(params) == current
+    assert daily({**params, "week": "previous"}) == previous
+    assert daily({**params, "days_before": offset + 7}) == previous
+    assert daily({**params, "week_change": True}) == Decimal("200000")
+    assert daily({**params, "week_change": True, "sign": -1}) == Decimal("-200000")
+
+
+@pytest.mark.usefixtures("dated_spots")
+def test_bsd8_values_opening_and_closing_balances_at_their_cutoff(book: _Book) -> None:
+    snapshot = book.position("LOAN/HISTORICAL-FX", "LOAN", {})
+    snapshot.as_of_date = book.period.period_start - timedelta(days=2)
+    book.db.flush()
+    rc = ResolveContext(
+        db=book.db,
+        ctx=TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID),
+        bank=book.bank,
+        period=book.period,
+        column="current",
+    )
+
+    closing = next(loan for loan in load_loans(rc) if loan.snapshot.id == snapshot.id)
+    opening = next(loan for loan in load_loans(rc, "previous") if loan.snapshot.id == snapshot.id)
+    assert closing.amount_ghs == Decimal("1400000")
+    assert opening.amount_ghs == Decimal("1000000")
+
+
+@pytest.mark.usefixtures("dated_spots")
+@pytest.mark.parametrize("ghs_attr", ["balance_ghs", "notional_ghs"])
+def test_reporting_currency_conversion_caches_quotes_by_valuation_date(
+    book: _Book, ghs_attr: str
+) -> None:
+    snapshot = book.position("POSITION/HISTORICAL-FX", "LOAN", {})
+    snapshot.notional = Decimal("100000")
+    position = book.db.get(CanonicalPosition, snapshot.position_id)
+    assert position is not None
+    rc = ResolveContext(
+        db=book.db,
+        ctx=TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID),
+        bank=book.bank,
+        period=book.period,
+        column="total",
+    )
+    prior_day = book.period.period_end - timedelta(days=7)
+    expected_by_date: tuple[tuple[date | None, Decimal], ...] = (
+        (None, Decimal("1400000")),
+        (prior_day, Decimal("1200000")),
+        (book.period.period_end, Decimal("1400000")),
+        (prior_day, Decimal("1200000")),
+    )
+    for valuation_date, expected in expected_by_date:
+        assert reporting_currency_value(
+            rc, snapshot, position, ghs_attr=ghs_attr, valuation_date=valuation_date
+        ) == expected
 
 
 @pytest.mark.parametrize(

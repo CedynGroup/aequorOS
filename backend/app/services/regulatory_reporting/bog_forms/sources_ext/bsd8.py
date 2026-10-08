@@ -228,7 +228,9 @@ def load_loans(rc: ResolveContext, as_of: str = "current") -> list[Loan]:
                 position=position,
                 counterparty=counterparty,
                 product=product,
-                amount_ghs=reporting_currency_value(rc, snapshot, position, attributes=attrs),
+                amount_ghs=reporting_currency_value(
+                    rc, snapshot, position, attributes=attrs, valuation_date=cutoff
+                ),
                 attrs=attrs,
                 bucket=bucket_of(snapshot.ifrs9_stage, attrs),
             )

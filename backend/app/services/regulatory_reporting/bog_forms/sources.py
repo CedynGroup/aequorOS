@@ -141,6 +141,7 @@ def reporting_currency_value(
     *,
     attributes: dict[str, Any] | None = None,
     ghs_attr: str = "balance_ghs",
+    valuation_date: date | None = None,
 ) -> Decimal:
     off_balance = position.position_type in OFF_BALANCE_TYPES
     if off_balance:
@@ -156,7 +157,8 @@ def reporting_currency_value(
     base = base_currency(rc.bank)
     if position.currency == base:
         return native if native is not None else Decimal("0")
-    key = f"reporting:spot:{position.currency}"
+    as_of = valuation_date if valuation_date is not None else rc.period.period_end
+    key = f"reporting:spot:{position.currency}:{as_of.isoformat()}"
     if key not in rc.cache:
         try:
             view = market_data_sources.preferred_fx_spot(
@@ -165,7 +167,7 @@ def reporting_currency_value(
                 rc.bank.id,
                 position.currency,
                 base,
-                rc.period.period_end,
+                as_of,
             )
             rc.cache[key] = Decimal(str(view.rate)) if view is not None else None
         except Exception:

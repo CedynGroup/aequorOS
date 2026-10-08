@@ -205,7 +205,7 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
                 else snapshot.balance
             )
             if _is_native(params)
-            else reporting_currency_value(rc, snapshot, position)
+            else reporting_currency_value(rc, snapshot, position, valuation_date=day)
             for snapshot, position in rc.db.execute(stmt).tuples()
         ),
         Decimal("0"),
