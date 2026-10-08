@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,7 +38,13 @@ from app.models import (
     RefreshToken,
     User,
 )
-from app.schemas.authorization import AccessRequestReject, BindingPreviewRead
+from app.schemas.authorization import (
+    AccessRequestReject,
+    BindingCreateResponse,
+    BindingPreviewRead,
+    SodDecisionRead,
+)
+from app.schemas.common import JsonObject
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -58,6 +65,15 @@ def _session() -> Session:
 
 def _owner_headers() -> dict[str, str]:
     return headers(roles=("account_admin",), authorization_version=2)
+
+
+def _refused_sod_decision(response_text: str) -> SodDecisionRead:
+    payload = TypeAdapter[JsonObject](JsonObject).validate_json(response_text)
+    error = payload["error"]
+    assert isinstance(error, dict)
+    details = error["details"]
+    assert isinstance(details, dict)
+    return SodDecisionRead.model_validate(details["sod_decision"])
 
 
 def _seed_admin_surface() -> None:
@@ -1012,7 +1028,7 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
         json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
     )
     assert approver.status_code == 201, approver.text
-    approver_id = UUID(approver.json()["binding"]["id"])
+    approver_id = BindingCreateResponse.model_validate_json(approver.text).binding.id
     before = binding_count()
 
     # Each finding names the person and the exact existing grant it fired on,
@@ -1106,7 +1122,7 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         json=_reviewed_payload(grant_client, admin_payload),
     )
     assert admin.status_code == 201, admin.text
-    admin_id = admin.json()["binding"]["id"]
+    admin_id = BindingCreateResponse.model_validate_json(admin.text).binding.id
     owner_headers = headers(roles=("account_admin",), authorization_version=3)
     payload = _payload(role=role, module="reg", sensitivity="restricted", principal_user_id=USER_1)
     preview = grant_client.post(
@@ -1115,24 +1131,25 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         json=payload,
     )
     assert preview.status_code == 200, preview.text
-    decision = preview.json()["sod_decision"]
-    assert decision["outcome"] == "block"
-    [finding] = decision["findings"]
-    assert finding["conflicting_binding_ids"] == [admin_id]
+    preview_read = BindingPreviewRead.model_validate_json(preview.text)
+    decision = preview_read.sod_decision
+    assert decision.outcome == "block"
+    [finding] = decision.findings
+    assert finding.conflicting_binding_ids == [admin_id]
     requested = {"analyst": "an Analyst", "approver": "an Approver", "validator": "a Validator"}
-    assert finding["message"] == (
+    assert finding.message == (
         "Demo User One already has the Organization Administrator grant "
         "(Account Administration, every institution). "
         f"Making Demo User One {requested[role]} would let one person both decide who has "
         "access and do the work that access protects. Remove the Organization Administrator "
         "grant first, or choose someone else."
     )
-    reviewed = {**payload, "expected_authority_sentence": preview.json()["authority_sentence"]}
+    reviewed = {**payload, "expected_authority_sentence": preview_read.authority_sentence}
     blocked = grant_client.post(
         "/api/v1/authorization/bindings", headers=owner_headers, json=reviewed
     )
     assert blocked.status_code == 409, blocked.text
-    assert blocked.json()["error"]["details"]["sod_decision"] == decision
+    assert _refused_sod_decision(blocked.text) == decision
 
     revoked = grant_client.post(
         f"/api/v1/authorization/bindings/{admin_id}/revoke",
@@ -1145,16 +1162,16 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         "/api/v1/authorization/bindings/preview", headers=owner_headers, json=payload
     )
     assert preview.status_code == 200, preview.text
-    decision = preview.json()["sod_decision"]
-    assert decision["outcome"] == "warn"
-    [finding] = decision["findings"]
-    assert finding["code"] == "c9_owner_operational_exception"
-    assert finding["conflicting_binding_ids"] == [str(owner_id)]
+    decision = BindingPreviewRead.model_validate_json(preview.text).sod_decision
+    assert decision.outcome == "warn"
+    [finding] = decision.findings
+    assert finding.code == "c9_owner_operational_exception"
+    assert finding.conflicting_binding_ids == [owner_id]
     created = grant_client.post(
         "/api/v1/authorization/bindings", headers=owner_headers, json=reviewed
     )
     assert created.status_code == 201, created.text
-    assert created.json()["sod_decision"] == decision
+    assert BindingCreateResponse.model_validate_json(created.text).sod_decision == decision
 
 
 @pytest.mark.parametrize(
@@ -1178,7 +1195,7 @@ def test_multiple_conflicting_bindings_must_all_be_removed(
     requested_role: str,
     labels: str,
 ) -> None:
-    remaining: list[str] = []
+    remaining: list[UUID] = []
     with _session() as db:
         for index, role in enumerate(held_roles):
             account = role == "account_admin"
@@ -1204,7 +1221,7 @@ def test_multiple_conflicting_bindings_must_all_be_removed(
                 grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
                 reason="Existing authority for the multi-grant conflict journey",
             )
-            remaining.append(str(binding.id))
+            remaining.append(binding.id)
 
     payload = _payload(role=requested_role, module="reg", sensitivity="restricted")
     if requested_role == "account_admin":
@@ -1214,29 +1231,30 @@ def test_multiple_conflicting_bindings_must_all_be_removed(
             module_scope="account",
             sensitivity_scope="all",
         )
-    single_label = labels.split(" and ")[-1]
+    single_label = labels.rsplit(" and ", maxsplit=1)[-1]
     while remaining:
         preview = grant_client.post(
             "/api/v1/authorization/bindings/preview", headers=_owner_headers(), json=payload
         )
         assert preview.status_code == 200, preview.text
-        decision = preview.json()["sod_decision"]
-        assert decision["outcome"] == "block"
-        [finding] = decision["findings"]
-        assert set(finding["conflicting_binding_ids"]) == set(remaining)
+        preview_read = BindingPreviewRead.model_validate_json(preview.text)
+        decision = preview_read.sod_decision
+        assert decision.outcome == "block"
+        [finding] = decision.findings
+        assert set(finding.conflicting_binding_ids) == set(remaining)
         remedy = (
             f"Remove all these {labels} grants first, or choose someone else."
             if len(remaining) > 1
             else f"Remove the {single_label} grant first, or choose someone else."
         )
-        assert finding["message"].endswith(remedy)
+        assert finding.message.endswith(remedy)
         blocked = grant_client.post(
             "/api/v1/authorization/bindings",
             headers=_owner_headers(),
-            json={**payload, "expected_authority_sentence": preview.json()["authority_sentence"]},
+            json={**payload, "expected_authority_sentence": preview_read.authority_sentence},
         )
         assert blocked.status_code == 409, blocked.text
-        assert blocked.json()["error"]["details"]["sod_decision"] == decision
+        assert _refused_sod_decision(blocked.text) == decision
         revoked = grant_client.post(
             f"/api/v1/authorization/bindings/{remaining.pop(0)}/revoke",
             headers=_owner_headers(),
@@ -1248,14 +1266,18 @@ def test_multiple_conflicting_bindings_must_all_be_removed(
         "/api/v1/authorization/bindings/preview", headers=_owner_headers(), json=payload
     )
     assert preview.status_code == 200, preview.text
-    assert preview.json()["sod_decision"] == {"outcome": "allow", "findings": []}
+    preview_read = BindingPreviewRead.model_validate_json(preview.text)
+    assert preview_read.sod_decision == SodDecisionRead(outcome="allow", findings=[])
     created = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json={**payload, "expected_authority_sentence": preview.json()["authority_sentence"]},
+        json={**payload, "expected_authority_sentence": preview_read.authority_sentence},
     )
     assert created.status_code == 201, created.text
-    assert created.json()["sod_decision"] == preview.json()["sod_decision"]
+    assert (
+        BindingCreateResponse.model_validate_json(created.text).sod_decision
+        == preview_read.sod_decision
+    )
 
 
 def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClient) -> None:
