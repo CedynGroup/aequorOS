@@ -62,20 +62,21 @@ from app.services.fact_derivation import derive_current_facts, derive_facts
 from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.services.sf_book import seed_fx
-from tests.services.test_capital_structure_tiers import (
+from tests.fixtures.capital_structure import (
     MAKER,
     REPORTING_DATE,
-    _push_register,
-    _seed_book,
+    capital_engine_facts,
+    push_register,
+    seed_book,
 )
+from tests.services.sf_book import seed_fx
 from tests.support.authority import grant_organization_analyst
 
 
 @pytest.fixture
 def refused_book(db_session: Session) -> tuple[Bank, BankReportingPeriod]:
-    _seed_book(db_session)
-    _push_register(
+    seed_book(db_session)
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("intangible_assets", "-20000000", "garbage"),
@@ -121,14 +122,14 @@ def test_malformed_stored_sdi_amount_has_an_unavailable_denominator_with_a_reaso
     db_session: Session, surface: str, amount: str
 ) -> None:
     """BoG CRD 2018 ¶32: malformed stored capital cannot escape as a server failure."""
-    _seed_book(db_session)
+    seed_book(db_session)
     derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
     derive_current_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     period = db_session.get(BankReportingPeriod, derived.reporting_period_id)
     assert bank is not None and period is not None
     bank.institution_type = "savings_and_loans"
-    _push_register(
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("intangible_assets", amount, "CET1_DEDUCTION"),
@@ -144,7 +145,7 @@ def test_malformed_stored_sdi_amount_has_an_unavailable_denominator_with_a_reaso
     assert "Net Own Funds denominator is unavailable" in unavailable.value.reason
     assert "capital_structure amounts" in unavailable.value.reason
     assert "re-ingest" in unavailable.value.reason
-    _push_register(
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("intangible_assets", "-20000000", "CET1_DEDUCTION"),
@@ -223,10 +224,8 @@ def test_sdi_capital_refusals_use_each_surfaces_named_failure_contract(
         assert reason is not None and "re-ingest" in reason and "re-derive" in reason
     else:
         with pytest.raises(ModuleDataUnavailable) as refused_input:
-            if surface == "dashboard":
+            if surface in {"dashboard", "trend"}:
                 regulatory_irr.get_irr_dashboard(db_session, MAKER, bank.id)
-            elif surface == "trend":
-                regulatory_irr._build_trend(db_session, MAKER, bank, [period])
             elif surface == "concentration":
                 regulatory_credit.get_credit_concentration(db_session, MAKER, bank.id)
             else:
@@ -426,14 +425,22 @@ def test_denominator_dependent_trends_report_refused_periods(
     module: str,
 ) -> None:
     """BoG CRD 2018 ¶32: a refused trend period retains the named corrective action."""
-    bank, period = refused_book
-    trend = {
-        "irr": regulatory_irr._build_trend,
-        "fx": regulatory_fx._build_trend,
-        "capital": regulatory_capital._build_trend,
+    bank, _period = refused_book
+    # A corrected live plane lets the dashboard reach its official-period trend;
+    # the official facts for this period deliberately retain the refusal marker.
+    push_register(
+        db_session,
+        ("paid_up_capital", "100000000", "CET1"),
+        ("intangible_assets", "-20000000", "CET1_DEDUCTION"),
+    )
+    derive_current_facts(db_session, MAKER, bank.id, REPORTING_DATE)
+    dashboard = {
+        "irr": regulatory_irr.get_irr_dashboard,
+        "fx": regulatory_fx.get_fx_dashboard,
+        "capital": regulatory_capital.get_capital_dashboard,
     }[module]
     with pytest.raises(ModuleDataUnavailable) as refused:
-        trend(db_session, MAKER, bank, [period])
+        dashboard(db_session, MAKER, bank.id)
     _assert_named_refusal(refused.value.error_code, refused.value.reason)
 
 
@@ -707,10 +714,7 @@ def test_synthetic_ecl_charge_does_not_clear_the_refusal_marker(
 ) -> None:
     """BoG CRD 2018 ¶32: a modelled CET1 charge cannot replace a refused capital register."""
     bank, period = refused_book
-    facts = tuple(
-        regulatory_capital._to_engine_fact(row)
-        for row in regulatory_capital._load_facts(db_session, MAKER, bank, period)
-    )
+    facts = capital_engine_facts(db_session, bank, period)
     params = bog_capital_params()
     rwa = compute_rwa(
         tuple(fact for fact in facts if fact.category != CAPITAL_REGISTER_REFUSED_CATEGORY), params
@@ -733,7 +737,7 @@ def test_books_without_a_register_keep_their_existing_zero_capital_behavior(
     db_session: Session,
 ) -> None:
     """BoG CRD 2018 ¶32: refusal markers distinguish invalid registers from unsupplied ones."""
-    _seed_book(db_session)
+    seed_book(db_session)
     db_session.execute(
         delete(CanonicalReferenceRow).where(
             CanonicalReferenceRow.dataset_kind == "capital_structure"
@@ -743,10 +747,7 @@ def test_books_without_a_register_keep_their_existing_zero_capital_behavior(
     bank = db_session.get(Bank, derived.bank_id)
     period = db_session.get(BankReportingPeriod, derived.reporting_period_id)
     assert bank is not None and period is not None
-    facts = tuple(
-        regulatory_capital._to_engine_fact(row)
-        for row in regulatory_capital._load_facts(db_session, MAKER, bank, period)
-    )
+    facts = capital_engine_facts(db_session, bank, period)
     assert not any(fact.fact_group == "capital_component" for fact in facts)
     params = bog_capital_params()
     ratios = compute_capital_ratios(facts, compute_rwa(facts, params), params)
@@ -762,17 +763,14 @@ def test_correcting_the_register_clears_official_and_live_refusals(
 ) -> None:
     """BoG CRD 2018 ¶32: a corrected complete register restores computable capital."""
     bank, period = refused_book
-    _push_register(
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("intangible_assets", "-20000000", "CET1_DEDUCTION"),
     )
     derive_facts(db_session, MAKER, bank.id, REPORTING_DATE)
     derive_current_facts(db_session, MAKER, bank.id, REPORTING_DATE)
-    facts = tuple(
-        regulatory_capital._to_engine_fact(row)
-        for row in regulatory_capital._load_facts(db_session, MAKER, bank, period)
-    )
+    facts = capital_engine_facts(db_session, bank, period)
     assert not any(fact.category == CAPITAL_REGISTER_REFUSED_CATEGORY for fact in facts)
     assert tier1_capital(facts) == Decimal("80000000")
     assert regulatory_irr.tier1_for_period(db_session, MAKER, bank, period) == Decimal("80000000")

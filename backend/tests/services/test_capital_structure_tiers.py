@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -21,7 +20,6 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.domain.authority.outcomes import OutcomeState
 from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.ingestion.capital_tiers import parse_capital_tier
@@ -30,9 +28,7 @@ from app.domain.ingestion.contracts import MappingConfig, ReferenceMapping, Refe
 from app.models import (
     Bank,
     BankFinancialFact,
-    CanonicalReferenceRow,
     IngestionBatch,
-    LineageRecord,
     TranslationFailure,
 )
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
@@ -41,17 +37,11 @@ from app.services.fact_derivation import derive_facts
 from app.services.sdi_capital import net_own_funds
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
-    DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.support.factories.canonical import seed_canonical_fixture
+from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, push_register, seed_book
 from tests.support.inmemory_storage import InMemoryStorageClient
-
-MAKER = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
-)
-REPORTING_DATE = date(2026, 3, 31)
 
 
 @pytest.mark.parametrize(
@@ -120,52 +110,6 @@ def test_finite_capital_amounts_reach_consumers_without_value_changes(amount: ob
     assert sdi_capital.signed_component_amount(row.payload) == -abs(Decimal(str(amount)))
 
 
-def _push_register(db: Session, *rows: tuple[str, str, str]) -> None:
-    """Store a capital_structure generation directly, as a pre-fix push would have."""
-    batch = IngestionBatch(
-        organization_id=DEMO_ORG_ID,
-        bank_id=SAMPLE_BANK_ID,
-        source_system="EXCEL_CSV",
-        adapter_version="1.0",
-        extraction_mode="full",
-        status="accepted",
-        as_of_date=REPORTING_DATE,
-    )
-    db.add(batch)
-    db.flush()
-    lineage = LineageRecord(
-        organization_id=DEMO_ORG_ID,
-        ingestion_batch_id=batch.id,
-        operation_type="ADAPTER_TRANSLATE",
-        operation_ref="capital-structure-tiers",
-        input_lineage_ids=[],
-    )
-    db.add(lineage)
-    db.flush()
-    for index, (component, amount, tier) in enumerate(rows, start=1):
-        db.add(
-            CanonicalReferenceRow(
-                organization_id=DEMO_ORG_ID,
-                bank_id=SAMPLE_BANK_ID,
-                ingestion_batch_id=batch.id,
-                lineage_id=lineage.id,
-                dataset_kind="capital_structure",
-                as_of_date=REPORTING_DATE,
-                row_index=index,
-                source_reference=f"CAPITAL/{index}",
-                payload={"capital_component": component, "amount_ghs": amount, "tier": tier},
-            )
-        )
-    db.flush()
-
-
-def _seed_book(db: Session) -> None:
-    materialize_canonical_test_book(db)
-    seed_canonical_fixture(
-        db, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=REPORTING_DATE
-    )
-
-
 def _capital_facts(db: Session, period_id: UUID) -> dict[str, tuple[Decimal, str | None]]:
     rows = db.scalars(
         select(BankFinancialFact).where(
@@ -185,8 +129,8 @@ def test_spelled_out_tier_lands_in_its_own_tier_and_reserve_in_none(db_session: 
     Guide for Financial Publication BSD/2017 §2.2.1 (repo-cited): the Credit Risk
     Reserve is excluded from the adjusted capital base, whatever tier it is tagged.
     """
-    _seed_book(db_session)
-    _push_register(
+    seed_book(db_session)
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("credit_risk_reserve", "5000000", "CET1"),
@@ -207,8 +151,8 @@ def test_spelled_out_tier_lands_in_its_own_tier_and_reserve_in_none(db_session: 
 def test_unknown_capital_tier_fails_the_register_closed(db_session: Session) -> None:
     """BoG CRD June 2018 ¶32 (repo-cited): a stored row with an unrecognised tier is
     never counted as CET1; the register derives no capital until it is corrected."""
-    _seed_book(db_session)
-    _push_register(
+    seed_book(db_session)
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("subordinated_debt", "20000000", "garbage"),
@@ -226,7 +170,7 @@ def test_credit_risk_reserve_is_not_in_sdi_net_own_funds(db_session: Session) ->
     """Guide for Financial Publication BSD/2017 §2.2.1 (repo-cited): the reserve is not
     own funds, so the SDI Net Own Funds is the register without it."""
     materialize_canonical_test_book(db_session)
-    _push_register(
+    push_register(
         db_session,
         ("paid_up_capital", "22000000", "CET1"),
         ("credit_risk_reserve", "157887.95", "CET1"),
@@ -352,7 +296,7 @@ def test_stored_unknown_tier_refuses_sdi_capital_consumers(
 ) -> None:
     """BoG CRD 2018 ¶32: SDI capital refuses stored unknown tiers, including deductions."""
     materialize_canonical_test_book(db_session)
-    _push_register(
+    push_register(
         db_session,
         ("paid_up_capital", "100000000", "CET1"),
         ("intangible_assets", amount, "garbage"),
@@ -373,6 +317,6 @@ def test_stored_unknown_tier_refuses_sdi_capital_consumers(
     assert refused.value.state == OutcomeState.DATA_QUALITY_BLOCK
     assert refused.value.blocks_filing
     assert refused.value.status_code == 409
-    detail = cast(str, refused.value.detail)
+    detail = refused.value.detail
     assert "intangible_assets" in detail
     assert "garbage" in detail

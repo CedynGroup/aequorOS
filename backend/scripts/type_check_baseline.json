@@ -4832,12 +4832,7 @@
  },
  "tests.services.test_implied_rating_run": {
   "reportAny": 7,
-  "reportMissingParameterType": 5,
-  "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 12,
-  "reportUnknownMemberType": 47,
-  "reportUnknownParameterType": 5,
-  "reportUnknownVariableType": 3
+  "reportPrivateUsage": 1
  },
  "tests.services.test_ingestion_position_locks": {
   "reportAny": 25,
