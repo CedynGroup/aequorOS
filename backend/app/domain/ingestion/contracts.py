@@ -300,8 +300,11 @@ class PositionData(BaseModel):
 #: (P5-B) joins them on the same argument: it is new in this release, no tenant has
 #: a row under it, and an unenforced row there would become a silent orphan in the
 #: branch mart rather than a reported translation failure at the boundary.
+#: ``capital_structure`` joins them on a different argument: an unrecognised tier
+#: used to be counted as CET1, so a refused row is the correction, not a
+#: regression — a stored row with such a tier fails the capital derivation too.
 ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset(
-    {"performance_targets", "business_units", "gl_segment_balances"}
+    {"performance_targets", "business_units", "gl_segment_balances", "capital_structure"}
 )
 
 

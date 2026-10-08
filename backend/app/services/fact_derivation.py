@@ -260,6 +260,7 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
+from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
 from app.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )
@@ -3379,25 +3380,32 @@ def _derive_cashflow_summary(canonical: _Canonical, groups: list[GroupResult]) -
     return specs
 
 
-def _capital_tier(raw_tier: str) -> tuple[str, bool]:
-    tier = raw_tier.strip().upper()
-    is_deduction = tier.endswith("_DEDUCTION")
-    tier = tier.removesuffix("_DEDUCTION")
-    if tier in ("TIER2", "T2"):
-        return "T2", is_deduction
-    if tier == "AT1":
-        return "AT1", is_deduction
-    return "CET1", is_deduction
-
-
 def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
+    """Capital components by tier from the ``capital_structure`` register.
+
+    Basis: Prudential (BoG CRD 2018); input: the bank's IAS 32 ¶15-16
+    classification of each instrument. A row whose tier is not in the closed
+    vocabulary (``capital_tiers.parse_capital_tier``) fails the whole register:
+    counting it anywhere would guess its tier, and dropping it would overstate
+    capital whenever it is a deduction. The BoG Credit Risk Reserve is left out
+    of the capital base whatever tier it carries.
+    """
     totals: dict[str, tuple[Decimal, str, bool]] = {}
+    unrecognised: list[str] = []
+    excluded: list[str] = []
     for payload in canonical.refs.get("capital_structure", ()):
         component = str(payload.get("capital_component", "")).strip()
         amount = _dec_or_none(payload.get("amount_ghs"))
         if not component or amount is None:
             continue
-        tier, is_deduction = _capital_tier(str(payload.get("tier", "CET1")))
+        if is_excluded_component(component):
+            excluded.append(component)
+            continue
+        parsed = parse_capital_tier(payload.get("tier"))
+        if parsed is None:
+            unrecognised.append(f"{component} ({payload.get('tier')!r})")
+            continue
+        tier, is_deduction = parsed
         if amount < _ZERO:
             is_deduction = True
         category = component.lower()
@@ -3414,17 +3422,41 @@ def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult])
         )
         for category, (amount, tier, is_deduction) in sorted(totals.items())
     ]
+    if unrecognised:
+        groups.append(
+            GroupResult(
+                group="capital_component",
+                status="skipped",
+                note="capital_structure rows carry a tier outside CET1 / AT1 / T2 (and their "
+                f"_DEDUCTION forms): {', '.join(sorted(unrecognised))}. No capital "
+                "component is derived until the register is re-pushed with a recognised "
+                "tier; capital, IRR and FX runs will fail without Tier 1 capital.",
+            )
+        )
+        return []
+    warnings: list[str] = []
+    if excluded:
+        warnings.append(
+            f"capital_structure component(s) {', '.join(sorted(set(excluded)))} are the BoG "
+            "Credit Risk Reserve, which is excluded from the adjusted capital base (Guide "
+            "for Financial Publication BSD/2017 §2.2.1), so they count toward no capital tier."
+        )
     if not specs:
         groups.append(
             GroupResult(
                 group="capital_component",
                 status="skipped",
+                warnings=warnings,
                 note="No capital_structure reference rows were ingested; capital, IRR "
                 "and FX runs will fail without Tier 1 capital.",
             )
         )
         return []
-    groups.append(GroupResult(group="capital_component", status="derived", rows=len(specs)))
+    groups.append(
+        GroupResult(
+            group="capital_component", status="derived", rows=len(specs), warnings=warnings
+        )
+    )
     return specs
 
 

@@ -61,6 +61,7 @@ from app.domain.authority.outcomes import (
     OutcomeState,
     outcome,
 )
+from app.domain.ingestion.capital_tiers import TIER_AT1, TIER_CET1, TIER_T2
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -122,9 +123,6 @@ GENERAL_PROVISIONS_CATEGORY = "general_provisions"
 #: The CET1 deduction a stress scenario takes for the increase in modelled
 #: stage 1+2 ECL over its unconditioned baseline.
 MODELLED_ECL_CHARGE_CATEGORY = "modelled_ecl_stress_charge"
-TIER_CET1 = "CET1"
-TIER_AT1 = "AT1"
-TIER_T2 = "T2"
 _TIER_ORDER = {TIER_CET1: 0, TIER_AT1: 1, TIER_T2: 2}
 
 # Zero-weight balance-sheet transparency rows: (line_code, description,

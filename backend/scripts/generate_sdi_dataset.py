@@ -726,7 +726,6 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
             ("paid_up_capital", paid_up, "CET1"),
             ("statutory_reserves", statutory, "CET1"),
             ("retained_earnings", retained, "CET1"),
-            ("credit_risk_reserve", prov_total * 0.15, "CET1"),
             ("intangible_assets", -1_200_000.0, "CET1_DEDUCTION"),
         ]:
             cs_w.writerow([iso, comp, _s(amt), tier])

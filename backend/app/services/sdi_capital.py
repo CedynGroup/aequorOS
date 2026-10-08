@@ -106,6 +106,7 @@ from app.domain.capital.engine import (
     RWA_CLASS_MARKET,
     RWA_CLASS_OPERATIONAL,
 )
+from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.services import institution_types
 from app.services import regulatory_parameters as rp
@@ -116,9 +117,6 @@ _HUNDRED = Decimal("100")
 # Canonical validation statuses that count as usable book data (matches
 # fact_derivation / loan_classification; "warning" is accepted-with-warnings).
 _INCLUDED = ("accepted", "warning")
-
-# CET1 own-funds deduction tiers (subtract from NOF); everything else adds.
-DEDUCTION_TIERS = frozenset({"cet1_deduction", "at1_deduction", "tier2_deduction"})
 
 #: Control-plane parameter carrying the governed position-type → bucket map.
 #: A ``value_json`` row of ``{"<POSITION_TYPE>": "<bucket>"}``; the bucket name
@@ -358,10 +356,16 @@ def signed_component_amount(payload: Mapping[str, object]) -> Decimal:
     than keeping its own (it used ``abs()``, so a deduction row INCREASED the
     paid-up and statutory-reserve totals it fed, while this module summed the
     same rows signed; forensic audit 2026-08-21).
+
+    The BoG Credit Risk Reserve contributes nothing: it is excluded from the
+    adjusted capital base (``capital_tiers.EXCLUDED_CAPITAL_COMPONENTS``).
     """
+    if is_excluded_component(payload.get("capital_component")):
+        return _ZERO
     amount = _dec(payload.get("amount_ghs"))
-    tier = str(payload.get("tier", "")).strip().lower()
-    return -abs(amount) if tier in DEDUCTION_TIERS else amount
+    parsed = parse_capital_tier(payload.get("tier"))
+    is_deduction = parsed is not None and parsed[1]
+    return -abs(amount) if is_deduction else amount
 
 
 def latest_capital_structure_rows(

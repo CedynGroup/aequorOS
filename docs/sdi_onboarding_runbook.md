@@ -108,7 +108,9 @@ Push the SDI canonical dataset (docs/sdi.md §5) via the three-call push
   tier, amount_ghs}`. **The component names must map to the recognised set** so
   the paid-up check resolves: use `paid_up_capital` (or stated_capital /
   share_capital / ordinary_shares / common_equity) and `statutory_reserves`. The
-  S&L chart-of-accounts → component mapping is part of onboarding.
+  S&L chart-of-accounts → component mapping is part of onboarding. `tier` is
+  `CET1`, `AT1`, `T2` or a `_DEDUCTION` form; any other value is refused. Do not
+  send the BoG Credit Risk Reserve as capital: it counts toward no tier.
 - **`historical_cashflows`** (for the 90-day view) if available.
 
 ## 5. Confirm module readiness (data-quality diagnostics)
