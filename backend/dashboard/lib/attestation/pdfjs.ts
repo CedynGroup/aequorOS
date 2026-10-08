@@ -24,12 +24,12 @@
  * 4. **Standard font data and image decoders are bundled, for the same reason
  *    as the worker.** A return is rendered by reportlab against the PDF
  *    standard-14 faces and embeds none of them, so pdf.js has to load its
- *    substitutes — and without them it throws `Ensure that the
- *    'standardFontDataUrl' API parameter is provided` and falls back to
- *    whatever the browser has. A signer reading a return with substituted
+ *    substitutes — a failed font-data fetch logs a warning and leaves pdf.js
+ *    to fall back to available fonts. A signer reading a return with substituted
  *    glyph metrics is reading something other than the filed document. The
  *    JPEG 2000 and JBIG2 decoders are WebAssembly files pdf.js loads the same
- *    way; without them such an image is silently left off the page.
+ *    way; if decoding fails, pdf.js logs a warning and omits the image rather
+ *    than rejecting the page render.
  *    `standardFontDataUrl` and `wasmUrl` are base URLs pdf.js appends filenames
  *    to, which a bundler that content-hashes assets cannot provide, so the
  *    files are resolved through a factory over an explicit name→asset map
