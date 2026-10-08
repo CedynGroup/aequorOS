@@ -48,10 +48,12 @@ from app.domain.capital.engine import (
     CapitalLineItem,
     CapitalParams,
     CapitalRatiosResult,
+    CapitalRegisterRefused,
     CapitalStressResult,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
     money,
@@ -292,6 +294,7 @@ def _execute_scenario_compute(
     lower capital. Conservative: no tax shield applied pending a governed
     tax-rate parameter and supported deferred-tax recognition.
     """
+    assert_capital_register_usable(facts)
     if not facts:
         raise CapitalRunError(
             "financial_facts_missing",
@@ -778,7 +781,11 @@ def _create_and_execute(
             db,
             ctx,
             run_id,
-            CapitalRunError("calculation_error", str(exc), None),
+            CapitalRunError(
+                exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error",
+                str(exc),
+                None,
+            ),
         )
     except HTTPException:
         raise
@@ -1600,7 +1607,9 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
     except CapitalRunError as exc:
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
-        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
+        raise ModuleDataUnavailable(
+            exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error", str(exc)
+        ) from exc
 
 
 def current_input_hash(

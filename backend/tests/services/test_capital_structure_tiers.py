@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import OutcomeState
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.ingestion.capital_tiers import parse_capital_tier
 from app.domain.ingestion.constants import SourceSystem
 from app.domain.ingestion.contracts import MappingConfig, ReferenceMapping, ReferenceRowData
@@ -152,6 +153,7 @@ def _capital_facts(db: Session, period_id: UUID) -> dict[str, tuple[Decimal, str
             BankFinancialFact.bank_id == SAMPLE_BANK_ID,
             BankFinancialFact.reporting_period_id == period_id,
             BankFinancialFact.fact_group == "capital_component",
+            BankFinancialFact.category != CAPITAL_REGISTER_REFUSED_CATEGORY,
         )
     ).all()
     return {row.category: (Decimal(str(row.amount)), row.capital_tier) for row in rows}

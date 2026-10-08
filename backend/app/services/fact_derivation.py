@@ -258,6 +258,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
+from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
 from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
@@ -3429,11 +3430,20 @@ def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult])
                 status="skipped",
                 note="capital_structure rows carry a tier outside CET1 / AT1 / T2 (and their "
                 f"_DEDUCTION forms): {', '.join(sorted(unrecognised))}. No capital "
-                "component is derived until the register is re-pushed with a recognised "
-                "tier; capital, IRR and FX runs will fail without Tier 1 capital.",
+                "component is derived. Correct the refused rows' tiers, re-ingest the "
+                "complete register and re-derive facts; capital-dependent calculations "
+                "are blocked until then.",
             )
         )
-        return []
+        return [
+            _FactSpec(
+                fact_group="capital_component",
+                category=CAPITAL_REGISTER_REFUSED_CATEGORY,
+                amount=_ZERO,
+                derived_from="capital_structure register refusal",
+                attributes={"refused_rows": sorted(unrecognised)},
+            )
+        ]
     warnings: list[str] = []
     if excluded:
         warnings.append(

@@ -103,6 +103,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
 )
@@ -493,6 +494,7 @@ def project(  # noqa: PLR0913, PLR0915
     t=1. Missing engine parameters propagate as the downstream engines'
     ``MissingParameterError``.
     """
+    assert_capital_register_usable(facts)
     if years < 1:
         raise ProjectionError("invalid_horizon", "The projection horizon must be at least 1 year.")
     labels = _resolve_labels(period_labels, years)

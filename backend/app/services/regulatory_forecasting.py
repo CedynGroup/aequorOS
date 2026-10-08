@@ -34,6 +34,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.capital.engine import (
     CapitalComputationError,
     CapitalParams,
+    CapitalRegisterRefused,
     classify_capital_ratio,
 )
 from app.domain.capital.engine import (
@@ -566,6 +567,8 @@ def _missing_assumptions_error() -> ForecastRunError:  # pragma: no cover - defe
 def _run_error(exc: Exception) -> ForecastRunError:  # noqa: PLR0911
     if isinstance(exc, ForecastRunError):
         return exc
+    if isinstance(exc, CapitalRegisterRefused):
+        return ForecastRunError(exc.code, str(exc), None)
     if isinstance(exc, LiquidityMissingParameterError):
         return ForecastRunError(
             "missing_parameter",

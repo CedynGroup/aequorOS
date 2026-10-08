@@ -50,10 +50,10 @@ Methodology notes:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from app.domain.authority.outcomes import (
     NotComputable,
@@ -86,6 +86,7 @@ FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
 FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
+CAPITAL_REGISTER_REFUSED_CATEGORY = "capital_register_refused"
 # Phase 2 items 8/9: staged EAD buckets ("<family>:stage<n>") for the IFRS 9
 # ECL engine, and CRM collateral/guarantee values ("<family>:<class>") netted
 # against credit exposures after supervisory haircuts. Both groups exist only
@@ -186,6 +187,45 @@ class UnsupportedShockError(Exception):
 
 class CapitalComputationError(Exception):
     """The supplied facts produce a degenerate ratio (zero denominator)."""
+
+
+class CapitalRegisterRefused(CapitalComputationError, NotComputable):
+    """The authoritative capital register failed derivation."""
+
+    def __init__(self) -> None:
+        NotComputable.__init__(
+            self,
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=CAPITAL_REGISTER_REFUSED_CATEGORY,
+                reason="The capital_structure register was refused. Correct the refused "
+                "rows' tiers, re-ingest the complete register and re-derive facts before "
+                "computing capital or any calculation that depends on it.",
+                items=("register:capital_structure",),
+            ),
+        )
+
+    @property
+    def code(self) -> str:
+        return CAPITAL_REGISTER_REFUSED_CATEGORY
+
+
+class _CapitalRegisterFact(Protocol):
+    @property
+    def fact_group(self) -> str: ...
+
+    @property
+    def category(self) -> str: ...
+
+
+def assert_capital_register_usable(facts: Iterable[_CapitalRegisterFact]) -> None:
+    """Refuse an explicit register failure while preserving absent-register behavior."""
+    if any(
+        fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT
+        and fact.category == CAPITAL_REGISTER_REFUSED_CATEGORY
+        for fact in facts
+    ):
+        raise CapitalRegisterRefused()
 
 
 class BiaGrossIncomeUnavailable(CapitalComputationError, NotComputable):
@@ -426,11 +466,13 @@ def tier1_capital(facts: Sequence[CapitalFact]) -> Decimal:
     Reused by non-capital engines (e.g. IRRBB) that need Tier 1 as the
     denominator for a supervisory limit without re-running the full RWA build.
     """
+    assert_capital_register_usable(facts)
     components = [fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT]
     return money(_tier_total(components, TIER_CET1) + _tier_total(components, TIER_AT1))
 
 
 def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResult:
+    assert_capital_register_usable(facts)
     credit_items = _credit_line_items(facts, params)
     credit_rwa = money(sum((item.weighted_amount for item in credit_items), _ZERO))
 
@@ -612,6 +654,7 @@ def compute_capital_ratios(
     figure of record, and a modelled increase reaches capital only as a CET1
     charge (:data:`MODELLED_ECL_CHARGE_CATEGORY`).
     """
+    assert_capital_register_usable(facts)
     components = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT),
         key=lambda fact: (

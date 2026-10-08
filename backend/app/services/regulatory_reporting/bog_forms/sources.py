@@ -25,6 +25,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.capital.engine import assert_capital_register_usable
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.models.canonical import (
@@ -110,12 +111,28 @@ def _constant(_rc: ResolveContext, params: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def require_usable_capital_register(rc: ResolveContext) -> None:
+    """Check register status before filtering individual capital components."""
+    assert_capital_register_usable(
+        rc.db.scalars(
+            select(BankFinancialFact).where(
+                BankFinancialFact.organization_id == rc.ctx.organization_id,
+                BankFinancialFact.bank_id == rc.bank.id,
+                BankFinancialFact.reporting_period_id == rc.period.id,
+                BankFinancialFact.fact_group == "capital_component",
+            )
+        )
+    )
+
+
 @resolver("facts.sum")
 def _facts_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
     """Σ ``amount`` over facts in ``group`` whose ``category`` ∈ ``categories``
     for the reporting period, split by the column's currency rule (override
     with ``currency="all"|"GHS"|"FX"``)."""
     group = params["group"]
+    if group == "capital_component":
+        require_usable_capital_register(rc)
     categories: Iterable[str] = params.get("categories", ())
     stmt = select(func.coalesce(func.sum(BankFinancialFact.amount), 0)).where(
         BankFinancialFact.organization_id == rc.ctx.organization_id,
@@ -289,6 +306,8 @@ def _run_metric(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """A metric from the latest SUCCEEDED run of ``module`` / ``scenario`` for
     the period: ``metrics[metric]``. None when no run exists (the cell stays
     blank and the line is flagged input_required until the engine runs)."""
+    if params["module"] == "capital":
+        require_usable_capital_register(rc)
     key = f"run:{params['module']}:{params.get('scenario', 'baseline')}"
     run = rc.cache.get(key)
     if run is None:
