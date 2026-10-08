@@ -288,7 +288,10 @@ def _run_capital(db: Session, period_id, scenario: str):
 
 
 def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Session) -> None:
-    """Basis: Advisory modelled IFRS 9 ECL beside booked prudential allowances, with gross stress."""
+    """Basis: Advisory modelled IFRS 9 ECL beside booked prudential allowances.
+
+    Stress charges are gross.
+    """
     materialize_canonical_test_book(db_session)
     period = _seed_ecl_facts(db_session)
 
@@ -378,7 +381,7 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert Decimal(stored_severe.metrics["ecl_general_ghs"]) == Decimal("4050000.0000")
     # Stage 3 PD is already 100%: conditioning must not inflate it.
     assert Decimal(stored_severe.metrics["ecl_specific_ghs"]) == Decimal("6000000.0000")
-    assert Decimal(severe.metrics["ecl_stress_charge_ghs"]) == Decimal("2025000.0000")
+    assert Decimal(cast(str, severe.metrics["ecl_stress_charge_ghs"])) == Decimal("2025000.0000")
     severe_basis = cast(dict[str, dict[str, str]], severe.metrics["basis"])
     assert severe_basis["ecl_stress_charge_ghs"] == {
         "basis": "prudential_stress",

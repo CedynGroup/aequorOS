@@ -54,9 +54,7 @@ def test_horizon_below_three_years_is_rejected() -> None:
 def test_base_leg_is_identical_to_the_forecasting_engine() -> None:
     """The base leg must reproduce the validated forecasting engine exactly."""
     projection = project_enterprise(_inputs(base_paths()))
-    forecast = project(
-        sample_bank_latest_facts(), bog_forecast_params(), BASE_ASSUMPTIONS, years=3
-    )
+    forecast = project(sample_bank_latest_facts(), bog_forecast_params(), BASE_ASSUMPTIONS, years=3)
     # Year 0 (as-of) ties to the forecast's year 0.
     assert projection.current.ratios.car_pct == forecast.years[0].car_pct
     assert projection.current.lcr_pct == forecast.years[0].lcr_pct
@@ -96,6 +94,7 @@ def test_severe_stress_raises_impairment_and_lowers_profit() -> None:
 
 def test_perfect_foresight_uses_each_years_own_macro() -> None:
     """Different per-year macro ⇒ different per-year PD multipliers (¶48 foresight)."""
+
     # Year 1 GDP trough (delta −0.05), year 3 partial recovery (delta −0.02).
     def gdp(year: int, stress: str) -> MacroPathPoint:
         return MacroPathPoint("gdp_growth", year, Decimal("0.05"), Decimal(stress))
@@ -128,9 +127,7 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
 
 def test_minima_are_assessed_against_all_floors() -> None:
     # A paid-up floor above the bank's 150M paid-up capital breaches immediately.
-    projection = project_enterprise(
-        _inputs(severe_paths(), paid_up_min=Decimal("400000000"))
-    )
+    projection = project_enterprise(_inputs(severe_paths(), paid_up_min=Decimal("400000000")))
     assert projection.stress_stays_above_all_minima is False
     assert projection.first_breach_year == 1
     assert "paid_up" in projection.binding_minima
@@ -160,8 +157,10 @@ def test_credit_rwa_uplift_erodes_car_from_rwa_not_only_pnl() -> None:
     """Phase 4: the bottom-up migration + FX uplift raises stress RWA → lower CAR."""
     baseline = project_enterprise(_inputs(severe_paths()))
     uplifted = project_enterprise(
-        _inputs(severe_paths(), credit_rwa_uplift={1: Decimal("1.2"), 2: Decimal("1.2"),
-                                                   3: Decimal("1.2")})
+        _inputs(
+            severe_paths(),
+            credit_rwa_uplift={1: Decimal("1.2"), 2: Decimal("1.2"), 3: Decimal("1.2")},
+        )
     )
     for base_year, up_year in zip(baseline.stress, uplifted.stress, strict=True):
         # Stress-leg credit RWA scales by the uplift factor; total RWA follows.
@@ -179,8 +178,9 @@ def test_credit_rwa_uplift_erodes_car_from_rwa_not_only_pnl() -> None:
 def test_unit_credit_rwa_uplift_is_a_no_op() -> None:
     baseline = project_enterprise(_inputs(severe_paths()))
     unit = project_enterprise(
-        _inputs(severe_paths(), credit_rwa_uplift={1: Decimal("1"), 2: Decimal("1"),
-                                                   3: Decimal("1")})
+        _inputs(
+            severe_paths(), credit_rwa_uplift={1: Decimal("1"), 2: Decimal("1"), 3: Decimal("1")}
+        )
     )
     for base_year, unit_year in zip(baseline.stress, unit.stress, strict=True):
         assert unit_year.rwa.total_rwa == base_year.rwa.total_rwa
@@ -200,13 +200,14 @@ def _staged_loss_inputs(
     for fact in sample_bank_latest_facts():
         if fact.fact_group == "loan_exposure":
             continue
-        if (
-            fact.fact_group == "balance_sheet" and fact.category.startswith("securities_")
-        ) or (fact.fact_group == "securities" and not fact.cash_derived):
-            fact = replace(fact, amount=Decimal("0"))
+        adjusted_fact = fact
+        if (fact.fact_group == "balance_sheet" and fact.category.startswith("securities_")) or (
+            fact.fact_group == "securities" and not fact.cash_derived
+        ):
+            adjusted_fact = replace(fact, amount=Decimal("0"))
         elif fact.category == "loans_gross":
-            fact = replace(fact, amount=loans)
-        facts.append(fact)
+            adjusted_fact = replace(fact, amount=loans)
+        facts.append(adjusted_fact)
     params = bog_forecast_params()
     return replace(
         _inputs(paths),
@@ -223,8 +224,7 @@ def _staged_loss_inputs(
             ),
         ),
         ecl_assumptions=tuple(
-            EclAssumption("ALL", stage, Decimal("2"), Decimal("40"))
-            for stage, _ in stages
+            EclAssumption("ALL", stage, Decimal("2"), Decimal("40")) for stage, _ in stages
         ),
         plan=replace(
             BASE_ASSUMPTIONS,
@@ -248,7 +248,8 @@ def _staged_loss_inputs(
 )
 @pytest.mark.parametrize("source_complete", (True, None))
 def test_annual_coverage_accepts_independently_rounded_stage_buckets(
-    balance: Decimal, source_complete: bool | None,
+    balance: Decimal,
+    source_complete: bool | None,
 ) -> None:
     """Basis: Prudential staged EAD; four-place bucket rounding is not partial coverage."""
     paths = tuple(
@@ -258,11 +259,15 @@ def test_annual_coverage_accepts_independently_rounded_stage_buckets(
         for point in base_paths()
     )
     inputs = _staged_loss_inputs(((1, balance), (2, balance)), paths)
-    inputs = replace(inputs, facts=tuple(
-        replace(fact, ecl_coverage_complete=source_complete)
-        if fact.fact_group == "ecl_exposure" else fact
-        for fact in inputs.facts
-    ))
+    inputs = replace(
+        inputs,
+        facts=tuple(
+            replace(fact, ecl_coverage_complete=source_complete)
+            if fact.fact_group == "ecl_exposure"
+            else fact
+            for fact in inputs.facts
+        ),
+    )
     result = project_enterprise(inputs)
     assert result.current.balance_sheet.loans == Decimal("10000000.0001")
     for base, stress in zip(result.base, result.stress, strict=True):
@@ -276,22 +281,26 @@ def test_annual_coverage_accepts_independently_rounded_stage_buckets(
 @pytest.mark.parametrize("gap", (Decimal("-0.0003"), Decimal("0.0003")))
 @pytest.mark.parametrize("source_complete", (True, None))
 def test_annual_coverage_refuses_gaps_beyond_bucket_quantization(
-    gap: Decimal, source_complete: bool | None,
+    gap: Decimal,
+    source_complete: bool | None,
 ) -> None:
     """Basis: Prudential staged EAD; two buckets permit at most a 0.0002 EAD difference."""
-    inputs = _staged_loss_inputs(
-        ((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths()
+    inputs = _staged_loss_inputs(((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths())
+    inputs = replace(
+        inputs,
+        facts=tuple(
+            replace(
+                fact,
+                amount=fact.amount + gap if fact.fact_group == "loan_exposure" else fact.amount,
+                ecl_coverage_complete=(
+                    source_complete
+                    if fact.fact_group == "ecl_exposure"
+                    else fact.ecl_coverage_complete
+                ),
+            )
+            for fact in inputs.facts
+        ),
     )
-    inputs = replace(inputs, facts=tuple(
-        replace(
-            fact,
-            amount=fact.amount + gap if fact.fact_group == "loan_exposure" else fact.amount,
-            ecl_coverage_complete=(
-                source_complete if fact.fact_group == "ecl_exposure" else fact.ecl_coverage_complete
-            ),
-        )
-        for fact in inputs.facts
-    ))
     with pytest.raises(ProjectionInputError) as exc:
         project_enterprise(inputs)
     assert exc.value.code == "ecl_coverage_incomplete"
@@ -300,14 +309,14 @@ def test_annual_coverage_refuses_gaps_beyond_bucket_quantization(
 @pytest.mark.parametrize("gap", (Decimal("-0.0002"), Decimal("0.0002")))
 def test_annual_coverage_accepts_the_bucket_quantization_bound(gap: Decimal) -> None:
     """Basis: Prudential staged EAD; a two-bucket rounding tolerance is inclusive."""
-    inputs = _staged_loss_inputs(
-        ((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths()
+    inputs = _staged_loss_inputs(((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths())
+    inputs = replace(
+        inputs,
+        facts=tuple(
+            replace(fact, amount=fact.amount + gap) if fact.fact_group == "loan_exposure" else fact
+            for fact in inputs.facts
+        ),
     )
-    inputs = replace(inputs, facts=tuple(
-        replace(fact, amount=fact.amount + gap)
-        if fact.fact_group == "loan_exposure" else fact
-        for fact in inputs.facts
-    ))
     result = project_enterprise(inputs)
     assert result.current.balance_sheet.loans == Decimal("10000000") + gap
     assert all(row.pnl.incremental_credit_losses == Decimal("0") for row in result.base)
@@ -319,11 +328,15 @@ def test_annual_rounding_tolerance_never_overrides_incomplete_source_coverage(
 ) -> None:
     """Basis: Prudential staged EAD; an incomplete source verdict always blocks stress."""
     inputs = _staged_loss_inputs(((1, balance), (2, balance)), base_paths())
-    inputs = replace(inputs, facts=tuple(
-        replace(fact, ecl_coverage_complete=False)
-        if fact.fact_group == "ecl_exposure" else fact
-        for fact in inputs.facts
-    ))
+    inputs = replace(
+        inputs,
+        facts=tuple(
+            replace(fact, ecl_coverage_complete=False)
+            if fact.fact_group == "ecl_exposure"
+            else fact
+            for fact in inputs.facts
+        ),
+    )
     with pytest.raises(ProjectionInputError) as exc:
         project_enterprise(inputs)
     assert exc.value.code == "ecl_coverage_incomplete"
@@ -342,7 +355,9 @@ def test_annual_rounding_tolerance_never_overrides_incomplete_source_coverage(
     ),
 )
 def test_annual_staged_losses_require_complete_coverage_and_a_register(
-    staged_ead: Decimal, source_complete: bool | None, has_register: bool,
+    staged_ead: Decimal,
+    source_complete: bool | None,
+    has_register: bool,
 ) -> None:
     """Basis: Prudential stress; partial staging must never reduce the assessed loan book."""
     paths = tuple(
@@ -356,7 +371,8 @@ def test_annual_staged_losses_require_complete_coverage_and_a_register(
         inputs,
         facts=tuple(
             replace(fact, amount=staged_ead, ecl_coverage_complete=source_complete)
-            if fact.fact_group == "ecl_exposure" else fact
+            if fact.fact_group == "ecl_exposure"
+            else fact
             for fact in inputs.facts
         ),
         ecl_assumptions=inputs.ecl_assumptions if has_register else (),
@@ -375,11 +391,13 @@ def test_annual_unstaged_book_uses_the_whole_book_proxy_without_a_register() -> 
         for point in base_paths()
     )
     inputs = _staged_loss_inputs(((1, Decimal("10000000")),), paths)
-    result = project_enterprise(replace(
-        inputs,
-        facts=tuple(fact for fact in inputs.facts if fact.fact_group != "ecl_exposure"),
-        ecl_assumptions=(),
-    ))
+    result = project_enterprise(
+        replace(
+            inputs,
+            facts=tuple(fact for fact in inputs.facts if fact.fact_group != "ecl_exposure"),
+            ecl_assumptions=(),
+        )
+    )
     for base, stress in zip(result.base, result.stress, strict=True):
         assert stress.pd_multiplier == Decimal("1.06")
         assert stress.pnl.incremental_credit_losses == Decimal("6000")
@@ -422,8 +440,10 @@ def test_annual_mixed_stage_charge_grows_with_general_ead_only() -> None:
     inputs = replace(inputs, plan=replace(inputs.plan, loan_growth_pct=Decimal("10")))
     result = project_enterprise(inputs)
     for base, stress, expected in zip(
-        result.base, result.stress,
-        (Decimal("3960"), Decimal("4356"), Decimal("4791.6")), strict=True,
+        result.base,
+        result.stress,
+        (Decimal("3960"), Decimal("4356"), Decimal("4791.6")),
+        strict=True,
     ):
         assert stress.pnl.incremental_credit_losses == expected
         assert stress.pnl.credit_losses - base.pnl.credit_losses == expected
@@ -441,7 +461,9 @@ def test_annual_mixed_stage_charge_grows_with_general_ead_only() -> None:
     ),
 )
 def test_annual_incremental_loss_reaches_cet1_without_a_plan_tax_shield(
-    tax_pct: Decimal, nim_pct: Decimal, expected_tax: Decimal,
+    tax_pct: Decimal,
+    nim_pct: Decimal,
+    expected_tax: Decimal,
 ) -> None:
     """Basis: Conservative prudential stress; ungoverned plan tax cannot shield extra loss."""
     paths = tuple(
@@ -478,7 +500,10 @@ def test_annual_tax_and_gross_loss_reach_appendix_ii() -> None:
         )
     )
     appendix = build_appendix_ii(
-        result, paths, currency="GHS", car_target_pct=Decimal("13"),
+        result,
+        paths,
+        currency="GHS",
+        car_target_pct=Decimal("13"),
         recognition_caps=RecognitionCaps(Decimal("1.5"), Decimal("2")),
     )
     row = next(row for row in appendix.table3_profit_and_loss.rows if row.label == "stress_y1")

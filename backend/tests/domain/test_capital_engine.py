@@ -47,7 +47,9 @@ M = Decimal("1000000")
 )
 @pytest.mark.parametrize("explicit_staged_ead", (True, False))
 def test_aggregate_ecl_coverage_tolerance_is_bounded(
-    gap: Decimal, complete: bool, explicit_staged_ead: bool,
+    gap: Decimal,
+    complete: bool,
+    explicit_staged_ead: bool,
 ) -> None:
     """Basis: Prudential staged EAD; aggregate coverage tolerates only bucket quantization."""
     facts = (
@@ -55,9 +57,13 @@ def test_aggregate_ecl_coverage_tolerance_is_bounded(
         CapitalFact("ecl_exposure", "corporate_unrated:stage1", Decimal("5000000")),
         CapitalFact("ecl_exposure", "corporate_unrated:stage2", Decimal("5000000")),
     )
-    assert has_complete_ecl_coverage(
-        facts, staged_ead=Decimal("10000000") if explicit_staged_ead else None,
-    ) is complete
+    assert (
+        has_complete_ecl_coverage(
+            facts,
+            staged_ead=Decimal("10000000") if explicit_staged_ead else None,
+        )
+        is complete
+    )
 
 
 def _bs(category: str, millions: str, side: str) -> CapitalFact:
