@@ -1852,7 +1852,7 @@ def _snapshot_parameters(
 
     The rule is the repo's value-based discipline: a parameter block joins the
     hash when the arithmetic CONSUMES it, not when the loader happens to query
-    it (the CRM/ECL precedent in ``regulatory_forecasting._snapshot_parameters``).
+    it (the CRM precedent in ``regulatory_forecasting._snapshot_parameters``).
 
     Forensic re-audit 2026-08-22 **D-7** corrected which side of that rule the
     HQLA haircuts fall on. The block used to join only when the book held a

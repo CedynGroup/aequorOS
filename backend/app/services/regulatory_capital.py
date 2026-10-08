@@ -29,14 +29,19 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
+    STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
     EclComputationError,
     EclExposure,
     EclResult,
     EclScenario,
     compute_ecl,
+    stress_charge,
 )
 from app.domain.capital.engine import (
+    FACT_GROUP_CAPITAL_COMPONENT,
+    MODELLED_ECL_CHARGE_CATEGORY,
+    TIER_CET1,
     TRIGGER_EARLY_WARNING,
     CapitalComputationError,
     CapitalFact,
@@ -49,7 +54,6 @@ from app.domain.capital.engine import (
     UnsupportedShockError,
     compute_capital_ratios,
     compute_rwa,
-    has_complete_ecl_coverage,
     money,
     ratio_pct,
     run_capital_stress,
@@ -135,7 +139,7 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v3.0.0"
+ENGINE_VERSION = "regulatory-capital-v4.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -217,7 +221,7 @@ class _ActiveCapitalParams:
     thresholds: dict[str, Decimal]
     # Phase 2 items 8/9. crm_haircuts = code defaults overlaid by register
     # rows; ecl_assumptions empty until the bank configures its PD/LGD set
-    # (the engine then falls back to ingested provisions).
+    # (no modelled ECL is then reported).
     crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
     ecl_assumptions: tuple[EclAssumption, ...] = ()
     # SDI Phase E (docs/sdi.md §4.2): the institution class selects the capital
@@ -263,6 +267,9 @@ class CapitalScenarioAnalysis:
     #: Known reporting-currency EAD beyond staged buckets, not a source-book
     #: completeness verdict. ``None`` when no modeled ECL ran.
     ecl_unstaged_ead: Decimal | None = None
+    #: The CET1 deduction for the scenario's increase in modelled general ECL
+    #: over the unconditioned baseline; zero when no ECL conditioning applies.
+    ecl_stress_charge: Decimal = Decimal("0")
 
 
 def _execute_scenario_compute(
@@ -277,6 +284,13 @@ def _execute_scenario_compute(
     Empty stress shocks (net of the ECL conditioning keys) means the point-in-
     time baseline; otherwise the four-quarter stress path. Raises the module's
     domain errors; never writes a ``RegulatoryRun``.
+
+    Tier 2 always carries the bank's booked general provisions: the modelled
+    ECL is a what-if, reported beside the ratios but never substituted for the
+    figure of record. A scenario that conditions the ECL takes its increase in
+    modelled general ECL as a CET1 deduction instead, so a PD stress can only
+    lower capital. Conservative: no tax shield applied pending a governed
+    tax-rate parameter and supported deferred-tax recognition.
     """
     if not facts:
         raise CapitalRunError(
@@ -293,14 +307,26 @@ def _execute_scenario_compute(
     }
     ecl = _modeled_ecl(engine_facts, active, shocks)
     unstaged_ead = unstaged_loan_ead(engine_facts) if ecl is not None else None
-    # A modeled figure over part of the book would replace provisions the bank
-    # booked against ALL of it, so partial staging keeps the booked figure.
-    gp_override = (
-        ecl.general_ecl if ecl is not None and has_complete_ecl_coverage(engine_facts) else None
+    baseline_ecl = _modeled_ecl(engine_facts, active, {}) if ecl is not None else None
+    charge = (
+        stress_charge(baseline_ecl, ecl)
+        if ecl is not None and baseline_ecl is not None
+        else Decimal("0")
     )
+    if charge > 0:
+        engine_facts = (
+            *engine_facts,
+            CapitalFact(
+                FACT_GROUP_CAPITAL_COMPONENT,
+                MODELLED_ECL_CHARGE_CATEGORY,
+                charge,
+                capital_tier=TIER_CET1,
+                is_deduction=True,
+            ),
+        )
     if not stress_shocks:
         rwa = compute_rwa(engine_facts, engine_params)
-        ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
+        ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
         return CapitalScenarioAnalysis(
             rwa=rwa,
             ratios=ratios,
@@ -308,10 +334,9 @@ def _execute_scenario_compute(
             params=engine_params,
             ecl=ecl,
             ecl_unstaged_ead=unstaged_ead,
+            ecl_stress_charge=charge,
         )
-    stress = run_capital_stress(
-        scenario_code, engine_facts, engine_params, stress_shocks, gp_override
-    )
+    stress = run_capital_stress(scenario_code, engine_facts, engine_params, stress_shocks)
     return CapitalScenarioAnalysis(
         rwa=stress.rwa,
         ratios=stress.ratios,
@@ -319,6 +344,7 @@ def _execute_scenario_compute(
         params=engine_params,
         ecl=ecl,
         ecl_unstaged_ead=unstaged_ead,
+        ecl_stress_charge=charge,
     )
 
 
@@ -721,6 +747,7 @@ def _create_and_execute(
             base_currency(bank),
             analysis.ecl,
             analysis.ecl_unstaged_ead,
+            analysis.ecl_stress_charge,
         )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -840,6 +867,7 @@ def _persist_success(  # noqa: PLR0913
     currency: str,
     ecl: EclResult | None = None,
     ecl_unstaged_ead: Decimal | None = None,
+    ecl_stress_charge: Decimal = Decimal("0"),
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -852,10 +880,13 @@ def _persist_success(  # noqa: PLR0913
         "operational_rwa_ghs": str(rwa.operational_rwa),
         "total_capital_ghs": str(ratios.total_capital),
     }
+    basis: dict[str, dict[str, str]] = {
+        key: {"basis": "prudential", "allowance_basis": "booked_general_provisions"}
+        for key in metrics
+    }
     if ecl is not None:
-        # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
-        # general-provisions component in this run's Tier 2 (still capped)
-        # only when source-book ECL coverage was complete.
+        # Item 8: modeled IFRS 9 allowances — a what-if beside the booked
+        # general provisions in Tier 2, never a substitute for them.
         metrics["ecl_total_ghs"] = str(ecl.total_ecl)
         metrics["ecl_general_ghs"] = str(ecl.general_ecl)
         metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)
@@ -863,6 +894,25 @@ def _persist_success(  # noqa: PLR0913
             metrics[f"ecl_stage{stage}_ghs"] = str(ecl.stage_totals.get(stage, Decimal("0")))
         if ecl_unstaged_ead:
             metrics["ecl_unstaged_ead_ghs"] = str(ecl_unstaged_ead)
+        if ecl_stress_charge:
+            metrics["ecl_stress_charge_ghs"] = str(ecl_stress_charge)
+        for key in (
+            "ecl_total_ghs",
+            "ecl_general_ghs",
+            "ecl_specific_ghs",
+            "ecl_stage1_ghs",
+            "ecl_stage2_ghs",
+            "ecl_stage3_ghs",
+        ):
+            basis[key] = {"basis": "modelled_what_if", "advisory_designation": "advisory_only"}
+        if ecl_unstaged_ead:
+            basis["ecl_unstaged_ead_ghs"] = {"basis": "ingested_exposure"}
+        if ecl_stress_charge:
+            basis["ecl_stress_charge_ghs"] = {
+                "basis": "prudential_stress",
+                "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+            }
+    metrics["basis"] = basis
     if stress is not None:
         metrics["stress_path"] = [
             {

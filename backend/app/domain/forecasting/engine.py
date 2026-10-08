@@ -22,10 +22,11 @@ amount of their own — ``ecl_exposure`` (IFRS 9 staged EADs) and
 ``crm_collateral`` (credit-risk-mitigation collateral) — so the forecast fed
 the authoritative capital engine a NARROWER input set than the capital run
 did, and the same bank/period reported two different CARs. The forecast now
-carries both groups end to end and applies the identical IFRS 9 general-ECL
-Tier 2 override, so year-0 CAR/Tier 1/CET1 reconcile with the capital run by
-construction. ``tests/equivalence/`` is the executable proof. If you ever
-need to narrow this fact scope again, you are re-opening that finding.
+carries both groups end to end, so year-0 CAR/Tier 1/CET1 reconcile with the
+capital run by construction. Like the capital run, Tier 2 carries the bank's
+booked general provisions: a modelled ECL never substitutes for them.
+``tests/equivalence/`` is the executable proof. If you ever need to narrow this
+fact scope again, you are re-opening that finding.
 
 Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
 
@@ -99,20 +100,11 @@ from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.capital.ecl import (
-    BASE_SCENARIO as ECL_BASE_SCENARIO,
-)
-from app.domain.capital.ecl import (
-    EclAssumption,
-    EclExposure,
-    compute_ecl,
-)
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
     compute_capital_ratios,
     compute_rwa,
-    has_complete_ecl_coverage,
 )
 from app.domain.liquidity.engine import (
     LiquidityFact,
@@ -143,10 +135,6 @@ FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
 # docstring and tests/equivalence/.
 FACT_GROUP_ECL_EXPOSURE = "ecl_exposure"
 FACT_GROUP_CRM_COLLATERAL = "crm_collateral"
-#: ``ecl_exposure`` categories are ``"<segment>:stage<N>"``. This split MUST
-#: stay identical to ``regulatory_capital._modeled_ecl``; the equivalence suite
-#: is what holds the two in lockstep.
-ECL_STAGE_TOKEN = ":stage"
 
 CASH_CATEGORIES = ("cash_vault", "bog_required_reserves", "bog_excess_reserves")
 SECURITIES_BS_CATEGORIES = ("securities_bog_bills", "securities_gog_bonds")
@@ -277,9 +265,6 @@ class ForecastParams:
 
     liquidity: LiquidityParams
     capital: CapitalParams
-    #: Board-approved IFRS 9 PD/LGD register; provision handling follows
-    #: ``ARCHITECTURE.md``'s ECL assumption and coverage contract.
-    ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -489,7 +474,6 @@ class _Meta:
     #: year appends exactly one gross-income year, so the count of
     #: gross-income years carried never decreases.
     gi_window: int = 1
-    ecl_coverage_complete: bool = False
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -966,7 +950,6 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         # give the roll-forward a year to append onto so it fails loudly there.
         state.gi_history = [(0, "gross_income_0", _ZERO)]
     meta = _Meta(
-        ecl_coverage_complete=has_complete_ecl_coverage(_to_capital_facts(facts)),
         gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
         off_balance_ccf=off_balance_ccf,
@@ -1036,12 +1019,7 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
         )
     for category, amount in sorted(state.ecl_exposures.items()):
         rows.append(
-            ForecastFact(
-                fact_group=FACT_GROUP_ECL_EXPOSURE,
-                category=category,
-                amount=amount,
-                ecl_coverage_complete=meta.ecl_coverage_complete,
-            )
+            ForecastFact(fact_group=FACT_GROUP_ECL_EXPOSURE, category=category, amount=amount)
         )
     for category, amount in sorted(state.crm_collateral.items()):
         rows.append(
@@ -1129,45 +1107,6 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
     )
 
 
-def _ecl_exposures(facts: Sequence[CapitalFact]) -> tuple[EclExposure, ...]:
-    """Parse ``ecl_exposure`` facts into staged exposures.
-
-    Byte-for-byte the split ``regulatory_capital._modeled_ecl`` performs: a
-    category is ``"<segment>:stage<N>"``, and anything that does not parse is
-    skipped rather than guessed at.
-    """
-    exposures: list[EclExposure] = []
-    for fact in facts:
-        if fact.fact_group != FACT_GROUP_ECL_EXPOSURE:
-            continue
-        segment, _, stage_token = fact.category.rpartition(ECL_STAGE_TOKEN)
-        if not segment or not stage_token.isdigit():
-            continue
-        exposures.append(EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount))
-    return tuple(exposures)
-
-
-def _general_provisions_override(
-    capital_facts: Sequence[CapitalFact], params: ForecastParams
-) -> Decimal | None:
-    """Modelled general ECL under the capital run's coverage gate.
-
-    See ``ARCHITECTURE.md``'s ECL assumption and coverage contract for refusals
-    and booked-provision fallback. The projection uses the unconditioned base
-    scenario, as ``_modeled_ecl`` does without an ECL conditioning shock.
-    """
-    if not params.ecl_assumptions:
-        return None
-    exposures = _ecl_exposures(capital_facts)
-    if not exposures:
-        return None
-    result = compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,))
-    result.require_coverage()
-    if not has_complete_ecl_coverage(capital_facts):
-        return None
-    return result.general_ecl
-
-
 def _regulatory_ratios(
     state: _State, meta: _Meta, params: ForecastParams
 ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
@@ -1178,9 +1117,7 @@ def _regulatory_ratios(
     lcr = compute_lcr(liquidity_facts, params.liquidity)
     nsfr = compute_nsfr(liquidity_facts, params.liquidity)
     rwa = compute_rwa(capital_facts, params.capital)
-    ratios = compute_capital_ratios(
-        capital_facts, rwa, params.capital, _general_provisions_override(capital_facts, params)
-    )
+    ratios = compute_capital_ratios(capital_facts, rwa, params.capital)
     return (
         ratios.car_pct,
         ratios.tier1_ratio_pct,

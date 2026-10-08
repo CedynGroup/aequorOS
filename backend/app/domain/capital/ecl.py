@@ -25,6 +25,9 @@ from decimal import Decimal
 
 ALL_SEGMENTS = "ALL"
 STAGE_3 = 3
+STRESS_CHARGE_TAX_TREATMENT = (
+    "conservative: no tax shield applied pending a governed tax-rate parameter"
+)
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
@@ -108,6 +111,19 @@ class EclResult:
 
 class EclComputationError(Exception):
     pass
+
+
+def stress_charge(baseline: EclResult, stressed: EclResult) -> Decimal:
+    """The CET1 charge for a stress scenario's increase in modelled general ECL.
+
+    Basis: Prudential stress, Accounting (IFRS 9) modelled input. Only stages 1+2
+    count: they are the general allowance, and stage 3 is specific. A fall in ECL
+    under the scenario is never credited back to capital.
+
+    Conservative: no tax shield applied pending a governed tax-rate parameter
+    and supported deferred-tax recognition. The charge is taken gross.
+    """
+    return _money(max(stressed.general_ecl - baseline.general_ecl, _ZERO))
 
 
 def _resolve(

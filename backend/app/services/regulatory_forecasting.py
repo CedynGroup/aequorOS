@@ -31,7 +31,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.domain.capital.ecl import EclAssumption, EclComputationError
 from app.domain.capital.engine import (
     CapitalComputationError,
     CapitalParams,
@@ -84,7 +83,6 @@ from app.models import (
     FinancialFactRow,
     ParamCapitalThreshold,
     ParamCrmHaircut,
-    ParamEclAssumption,
     ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
@@ -127,7 +125,7 @@ from app.services.live_types import LiveModuleResult, findings_from_validations,
 from app.services.params import get_active_params
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
-ENGINE_VERSION = "regulatory-forecasting-v2.0.0"
+ENGINE_VERSION = "regulatory-forecasting-v3.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "forecast-projection-v1"
 MODULE_FORECAST = "forecast"
@@ -160,12 +158,12 @@ _FORECAST_FACT_GROUPS = (
     "balance_sheet",
     "capital_component",
     # ``crm_collateral`` and ``ecl_exposure`` carry no balance-sheet amount of
-    # their own, but the CAPITAL engine reads both — collateral nets down credit
-    # RWA and the staged EADs drive the IFRS 9 general-provisions Tier 2
-    # override. Omitting them handed the same engine a narrower input set than
-    # ``regulatory_capital`` does, so year-0 CAR could differ from the capital
-    # run's CAR for the same bank and period (forensic audit 2026-08-21, the
-    # High divergence). They are inputs; they belong in the hashed snapshot.
+    # their own, but the capital run reads both — collateral nets down credit
+    # RWA, and the staged EADs feed its modelled ECL. Omitting them handed the
+    # capital engine a narrower input set than ``regulatory_capital`` does, so
+    # year-0 CAR could differ from the capital run's CAR for the same bank and
+    # period (forensic audit 2026-08-21, the High divergence). The snapshot
+    # keeps the capital run's own input set.
     "crm_collateral",
     "ecl_exposure",
     "lcr_inflow",
@@ -243,7 +241,6 @@ class _ActiveForecastParams:
     # Phase 2 items 8/9, resolved exactly as ``regulatory_capital`` resolves
     # them so the projection's capital arithmetic is the capital run's.
     crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
-    ecl_assumptions: tuple[EclAssumption, ...] = ()
     #: Basel HQLA haircuts + Level-2 caps (enterprise audit P0-8). Defaulted to
     #: the empty set so the dataclass stays constructible in the same shape; the
     #: loader always supplies the resolved values, and the pure engine fails
@@ -585,7 +582,7 @@ def _run_error(exc: Exception) -> ForecastRunError:  # noqa: PLR0911
         return ForecastRunError(exc.code, str(exc), None)
     if isinstance(exc, UnknownShockError):
         return ForecastRunError("unknown_shock", str(exc), {"shock_code": exc.shock_code})
-    if isinstance(exc, LiquidityComputationError | CapitalComputationError | EclComputationError):
+    if isinstance(exc, LiquidityComputationError | CapitalComputationError):
         return ForecastRunError("calculation_error", str(exc), None)
     return ForecastRunError(
         "calculation_error",
@@ -1060,15 +1057,11 @@ def _load_active_params(
     threshold_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
     )
-    # Same two registers ``regulatory_capital._load_active_params`` reads, same
-    # precedence (code defaults overlaid by the effective-dated register for CRM;
-    # register-only for ECL). Resolving them differently here would be the
-    # divergence in another form.
+    # The CRM register ``regulatory_capital._load_active_params`` reads, same
+    # precedence (code defaults overlaid by the effective-dated register).
+    # Resolving it differently here would be the divergence in another form.
     crm_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
-    )
-    ecl_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
     )
     crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
     crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})
@@ -1103,15 +1096,6 @@ def _load_active_params(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
         thresholds=thresholds,
         crm_haircuts=crm_haircuts,
-        ecl_assumptions=tuple(
-            EclAssumption(
-                segment=row.segment,
-                stage=row.stage,
-                pd_pct=Decimal(str(row.pd_pct)),
-                lgd_pct=Decimal(str(row.lgd_pct)),
-            )
-            for row in ecl_rows
-        ),
     )
 
 
@@ -1173,27 +1157,21 @@ def _forecast_engine_params(active: _ActiveForecastParams) -> ForecastParams:
     """The parameter set the projection actually runs on.
 
     ``_engine_params`` resolves the threshold/weight registers. This layer adds
-    the two Phase-2 capital inputs that make the projection's capital arithmetic
-    identical to the capital run's: the CRM haircut schedule (credit RWA) and
-    the IFRS 9 assumption register (the general-provisions Tier 2 override).
+    the Phase-2 capital input that makes the projection's capital arithmetic
+    identical to the capital run's: the CRM haircut schedule (credit RWA).
     ``crm_haircuts`` always carries the Basel code defaults, so this normally
-    layers; the early return covers a caller that supplies neither register.
-    Either way the figures only move for a book that actually holds
-    ``crm_collateral`` facts or a configured IFRS 9 register — the capital run
-    behaves identically.
+    layers; the early return covers a caller that supplies no schedule. Either
+    way the figures only move for a book that actually holds ``crm_collateral``
+    facts — the capital run behaves identically.
 
     It is a separate function rather than extra lines inside ``_engine_params``
     so the threshold-resolution contract stays in one place and this parity
     layer stays reviewable on its own.
     """
     params = _engine_params(active)
-    if not active.crm_haircuts and not active.ecl_assumptions:
+    if not active.crm_haircuts:
         return params
-    return replace(
-        params,
-        capital=replace(params.capital, crm_haircuts=active.crm_haircuts),
-        ecl_assumptions=active.ecl_assumptions,
-    )
+    return replace(params, capital=replace(params.capital, crm_haircuts=active.crm_haircuts))
 
 
 def _period_labels(period: BankReportingPeriod, years: int = PROJECTION_YEARS) -> list[str]:
@@ -1250,7 +1228,6 @@ def _build_snapshot(  # noqa: PLR0913
                     "is_deduction": fact.is_deduction,
                     "side": fact.attributes.get("side"),
                     "cash_derived": fact.attributes.get("source") == "cash",
-                    "ecl_coverage_complete": _to_engine_fact(fact).ecl_coverage_complete,
                 }
                 for fact in facts
             ),
@@ -1577,11 +1554,10 @@ def _snapshot_parameters(
 ) -> dict[str, Any]:
     """Governed inputs recorded in the hashed snapshot.
 
-    Mirrors ``regulatory_capital._snapshot_parameters``: the CRM and ECL blocks
-    join only when a register actually changes the arithmetic, so a book that has
-    configured neither hashes exactly as it did before they became forecast
-    inputs (value-based discipline — the hash tracks what was consumed, not what
-    the loader happened to query).
+    Like ``regulatory_capital._snapshot_parameters``, records optional CRM
+    haircuts only when they differ from the code defaults. Forecasts do not
+    consume ECL assumptions (see ``ARCHITECTURE.md``'s ECL assumption and coverage
+    contract). The hash tracks consumed values, not registers the loader queried.
     """
     parameters: dict[str, Any] = {
         "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
@@ -1621,19 +1597,6 @@ def _snapshot_parameters(
     }
     if configured_crm:
         parameters["crm_haircuts_pct"] = _stringified(configured_crm)
-    if active.ecl_assumptions:
-        parameters["ecl_assumptions"] = sorted(
-            (
-                {
-                    "segment": row.segment,
-                    "stage": row.stage,
-                    "pd_pct": str(row.pd_pct),
-                    "lgd_pct": str(row.lgd_pct),
-                }
-                for row in active.ecl_assumptions
-            ),
-            key=lambda entry: (entry["segment"], entry["stage"]),
-        )
     return parameters
 
 

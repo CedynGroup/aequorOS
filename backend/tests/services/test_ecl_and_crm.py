@@ -1,12 +1,12 @@
 """IFRS 9 ECL engine + CRM supervisory haircuts (Phase 2 items 8/9).
 
 Engine goldens are hand-computed; the capital-run integration proves that
-modeled stage-1/2 ECL replaces the ingested general-provisions component
-(still Tier-2-capped), that stage-3 reports as specific allowances, that
+modeled ECL is reported beside the booked general provisions without ever
+replacing them in Tier 2, that stage-3 reports as specific allowances, that
 scenario runs condition PD/LGD through the ``ecl_*`` shock keys without ever
-reaching the stress engine, and that CRM collateral nets credit exposures
-after the supervisory haircut — while a book without staging or collateral
-keeps the pre-existing ingested-provisions arithmetic untouched.
+reaching the stress engine (the increase is a CET1 charge), and that CRM
+collateral nets credit exposures after the supervisory haircut — while a book
+without staging or collateral keeps the ingested-provisions arithmetic.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.authority.registry import AdvisoryDesignation, authorities_for_metric
 from app.domain.capital.ecl import (
     EclAssumption,
     EclComputationError,
@@ -32,10 +33,10 @@ from app.domain.capital.ecl import (
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
-    compute_capital_ratios,
     compute_rwa,
 )
 from app.models import (
+    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalReferenceRow,
@@ -46,6 +47,7 @@ from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
+from app.services.regulatory_reporting.provenance import declared_methodology_notes
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -171,32 +173,6 @@ def test_crm_collateral_nets_credit_exposure_after_supervisory_haircut() -> None
     assert bare_line.exposure_amount == Decimal("50000000.0000")
 
 
-def test_general_provisions_override_replaces_ingested_component() -> None:
-    facts = (
-        CapitalFact("loan_exposure", "commercial_loans", Decimal("100000000"), "RW100"),
-        CapitalFact("operational_income", "gross_income", Decimal("10000000"), income_year=2025),
-        CapitalFact(
-            "capital_component", "paid_up_capital", Decimal("20000000"), capital_tier="CET1"
-        ),
-        CapitalFact(
-            "capital_component",
-            "general_provisions",
-            Decimal("900000"),
-            capital_tier="T2",
-        ),
-        CapitalFact("balance_sheet", "total_assets", Decimal("120000000"), side="asset"),
-    )
-    params = _minimal_capital_params({})
-    rwa = compute_rwa(facts, params)
-    ingested = compute_capital_ratios(facts, rwa, params)
-    assert ingested.general_provisions_amount == Decimal("900000.0000")
-    modeled = compute_capital_ratios(
-        facts, rwa, params, general_provisions_override=Decimal("600000")
-    )
-    assert modeled.general_provisions_amount == Decimal("600000.0000")
-    assert modeled.tier2_capital == Decimal("600000.0000")
-
-
 def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     # This unit fixture seeds THREE loans and nothing else: no deposits, no
@@ -312,6 +288,10 @@ def _run_capital(db: Session, period_id, scenario: str):
 
 
 def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Session) -> None:
+    """Basis: Advisory modelled IFRS 9 ECL beside booked prudential allowances.
+
+    Stress charges are gross.
+    """
     materialize_canonical_test_book(db_session)
     period = _seed_ecl_facts(db_session)
 
@@ -353,6 +333,23 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert Decimal(metrics["ecl_general_ghs"]) == Decimal("2025000.0000")
     assert Decimal(metrics["ecl_specific_ghs"]) == Decimal("6000000.0000")
     assert Decimal(metrics["ecl_total_ghs"]) == Decimal("8025000.0000")
+    basis = cast(dict[str, dict[str, str]], run.metrics["basis"])
+    for key in (
+        "ecl_total_ghs",
+        "ecl_general_ghs",
+        "ecl_specific_ghs",
+        "ecl_stage1_ghs",
+        "ecl_stage2_ghs",
+        "ecl_stage3_ghs",
+    ):
+        assert basis[key] == {
+            "basis": "modelled_what_if",
+            "advisory_designation": "advisory_only",
+        }
+    assert basis["total_capital_ghs"] == {
+        "basis": "prudential",
+        "allowance_basis": "booked_general_provisions",
+    }
     # Configured assumptions enter the snapshot: the hash must move.
     assert stored.input_hash != stored_before.input_hash
     # Deterministic: an identical rerun reproduces the hash.
@@ -384,6 +381,59 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert Decimal(stored_severe.metrics["ecl_general_ghs"]) == Decimal("4050000.0000")
     # Stage 3 PD is already 100%: conditioning must not inflate it.
     assert Decimal(stored_severe.metrics["ecl_specific_ghs"]) == Decimal("6000000.0000")
+    assert Decimal(cast(str, severe.metrics["ecl_stress_charge_ghs"])) == Decimal("2025000.0000")
+    severe_basis = cast(dict[str, dict[str, str]], severe.metrics["basis"])
+    assert severe_basis["ecl_stress_charge_ghs"] == {
+        "basis": "prudential_stress",
+        "tax_treatment": (
+            "conservative: no tax shield applied pending a governed tax-rate parameter"
+        ),
+    }
+
+
+def test_modelled_ecl_registry_and_reporting_provenance_are_advisory() -> None:
+    """Basis: Advisory IFRS 9 what-if estimates, never filed booked allowances."""
+    metric_ids = ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")
+    for metric_id in metric_ids:
+        entries = authorities_for_metric(metric_id)
+        assert entries
+        assert all(
+            entry.advisory_designation == AdvisoryDesignation.ADVISORY_ONLY for entry in entries
+        )
+    notes = cast(
+        list[dict[str, object]],
+        declared_methodology_notes(dict.fromkeys(metric_ids, "ifrs9_pd_lgd_ead")),
+    )
+    assert {note["metric_id"] for note in notes} == set(metric_ids)
+    assert all(note["advisory_designation"] == "advisory_only" for note in notes)
+
+
+def test_capital_stage3_only_lgd_stress_preserves_cet1_and_tier2(db_session: Session) -> None:
+    """Basis: Prudential capital; modelled stage 3 specific allowances never charge CET1."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    for fact in db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.fact_group == "ecl_exposure",
+        )
+    ):
+        if not fact.category.endswith(":stage3"):
+            fact.amount = Decimal("0")
+    db_session.flush()
+    _adopt_register(db_session, ("ALL", 3, "0", "40"))
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    baseline = regulatory_capital.compute_scenario_analysis(db_session, MAKER, bank, period, {})
+    stressed = regulatory_capital.compute_scenario_analysis(
+        db_session, MAKER, bank, period, {"ecl_lgd_multiplier": Decimal("1.075")}
+    )
+    assert baseline.ecl is not None and stressed.ecl is not None
+    assert baseline.ecl.specific_ecl == Decimal("4000000.0000")
+    assert stressed.ecl.specific_ecl == Decimal("4300000.0000")
+    assert stressed.ecl_stress_charge == Decimal("0.0000")
+    assert stressed.ratios.cet1_capital == baseline.ratios.cet1_capital
+    assert stressed.ratios.tier2_capital == baseline.ratios.tier2_capital
 
 
 def test_unstaged_book_keeps_ingested_provisions_untouched(db_session: Session) -> None:
@@ -567,13 +617,13 @@ def test_new_capital_version_preserves_historical_runs(db_session: Session) -> N
     historical = _run_capital(db_session, period.id, "baseline")
     stored = db_session.get(RegulatoryRun, historical.id)
     assert stored is not None
-    stored.engine_version = "regulatory-capital-v2.0.0"
+    stored.engine_version = "regulatory-capital-v3.0.0"
     db_session.commit()
     snapshot, metrics, input_hash = stored.inputs, stored.metrics, stored.input_hash
     current = _run_capital(db_session, period.id, "baseline")
-    assert current.engine_version == "regulatory-capital-v3.0.0"
+    assert current.engine_version == "regulatory-capital-v4.0.0"
     db_session.refresh(stored)
-    assert stored.engine_version == "regulatory-capital-v2.0.0"
+    assert stored.engine_version == "regulatory-capital-v3.0.0"
     assert (stored.inputs, stored.metrics, stored.input_hash) == (snapshot, metrics, input_hash)
     assert current.id != historical.id
 
@@ -703,3 +753,62 @@ def test_unconverted_unstaged_loan_keeps_booked_provisions(
     facts = cast(list[dict[str, object]], inputs["facts"])
     ecl_input = next(row for row in facts if row["fact_group"] == "ecl_exposure")
     assert ecl_input["ecl_coverage_complete"] is False
+
+
+def test_filed_capital_run_keeps_the_booked_general_provisions(db_session: Session) -> None:
+    """Basis: Prudential (BoG CRD 2018) Tier 2 general provisions; input: the bank's booked
+    IFRS 9 allowance, the figure of record — never the platform's modelled ECL.
+
+    Audit evidence 12.3: switching modelled ECL on moved total capital from 340.0M to
+    327.0M by replacing the booked general provisions.
+    """
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    booked = _run_capital(db_session, period.id, "baseline")
+    assert booked.status == "succeeded", booked
+    _adopt_register(
+        db_session, ("ALL", 1, "1.5", "45"), ("ALL", 2, "15", "45"), ("ALL", 3, "0", "60")
+    )
+
+    modelled = _run_capital(db_session, period.id, "baseline")
+    assert modelled.status == "succeeded", modelled
+    stored_booked = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == booked.id))
+    stored = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == modelled.id))
+    assert stored_booked is not None and stored is not None
+    # The modelled figure is still reported, beside the ratios.
+    assert _metric(stored, "ecl_general_ghs") == Decimal("2025000.0000")
+    for key in ("total_capital_ghs", "car_pct", "cet1_ratio_pct"):
+        assert _metric(stored, key) == _metric(stored_booked, key), key
+    assert "ecl_stress_charge_ghs" not in stored.metrics
+
+
+def test_pd_stress_never_raises_the_capital_ratio(db_session: Session) -> None:
+    """Prudential invariant (no IFRS paragraph); Basis: Prudential (BoG CRD 2018).
+
+    A higher modelled ECL can only cost capital: its increase over the unconditioned
+    baseline is a CET1 charge, and Tier 2 keeps the booked general provisions. Audit
+    evidence 12.3: doubling PD raised CAR from 15.228% to 15.322%.
+    """
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    _adopt_register(
+        db_session, ("ALL", 1, "1.5", "45"), ("ALL", 2, "15", "45"), ("ALL", 3, "0", "60")
+    )
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+
+    def analyse(shocks: dict[str, Decimal]) -> regulatory_capital.CapitalScenarioAnalysis:
+        return regulatory_capital.compute_scenario_analysis(db_session, MAKER, bank, period, shocks)
+
+    baseline = analyse({})
+    stressed = analyse({"ecl_pd_multiplier": Decimal("2")})
+
+    assert stressed.ratios.car_pct < baseline.ratios.car_pct
+    assert stressed.ratios.cet1_ratio_pct < baseline.ratios.cet1_ratio_pct
+    # Stage 1+2 general ECL doubles from 2,025,000 to 4,050,000; stage 3 is fixed.
+    assert stressed.ecl_stress_charge == Decimal("2025000.0000")
+    assert stressed.ratios.cet1_capital == baseline.ratios.cet1_capital - Decimal("2025000")
+    assert stressed.ratios.tier2_capital == baseline.ratios.tier2_capital
+    for multiplier in ("1.5", "3", "10"):
+        harsher = analyse({"ecl_pd_multiplier": Decimal(multiplier)})
+        assert harsher.ratios.car_pct <= baseline.ratios.car_pct, multiplier

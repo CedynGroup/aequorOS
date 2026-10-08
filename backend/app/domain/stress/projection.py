@@ -28,7 +28,13 @@ everywhere) leaves the two legs identical — a zero stress impact, which is
 correct.
 
 **IFRS 9 ECL under stress (¶48–49, AppI¶5–6).** The per-year impairment is the
-plan cost of risk scaled by that year's macro PD/LGD multipliers. This wires the
+plan cost of risk plus that year's incremental macro PD/LGD charge. On staged
+books with complete coverage and an effective ECL assumptions register, only
+stage 1+2 EAD contributes to the increment; stage 3 keeps the plan loss rate.
+Partial staging or a missing register refuses the projection. Without staging,
+the plan cost-of-risk proxy covers the loan book.
+The incremental charge is gross: no tax shield applied pending a governed
+tax-rate parameter and supported deferred-tax recognition. This wires the
 two directive modes into the projection: **Perfect Foresight** — each of the ≥3
 projected years knows its own macro from day one (the multipliers are computed
 per year off the full authored path); **Single Scenario** — the stress path
@@ -49,6 +55,7 @@ from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import (
     GENERAL_PROVISIONS_CATEGORY,
     TIER_AT1,
@@ -59,6 +66,7 @@ from app.domain.capital.engine import (
     RwaResult,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
 )
 from app.domain.forecasting.engine import (
     RETAINED_EARNINGS_CATEGORY,
@@ -156,6 +164,7 @@ class EnterpriseProjectionInputs:
     # stressed ladder on the position book, not the aggregate solvency projection.
     # Default True keeps the bank projection byte-identical.
     basel_liquidity: bool = True
+    ecl_assumptions: Sequence[EclAssumption] = ()
 
 
 PAID_UP_CATEGORIES: frozenset[str] = frozenset(
@@ -175,6 +184,7 @@ class Pnl:
     net_income: Decimal
     dividends: Decimal
     retained: Decimal
+    incremental_credit_losses: Decimal = _ZERO
 
 
 @dataclass(frozen=True)
@@ -271,9 +281,7 @@ class EnterpriseProjection:
     binding_minima: tuple[str, ...]
 
 
-def _paths_at_year(
-    paths: Sequence[MacroPathPoint], year_index: int
-) -> list[MacroPathPoint]:
+def _paths_at_year(paths: Sequence[MacroPathPoint], year_index: int) -> list[MacroPathPoint]:
     return [point for point in paths if point.year_index == year_index]
 
 
@@ -392,15 +400,12 @@ def _stress_assumptions_for_year(
     )
     nim = plan.nim_pct + NIM_PER_RATE * rate_delta
     cost_to_income = plan.cost_to_income_pct + CTI_PER_INFLATION * infl_delta
-    # ECL under stress drives the cost of risk multiplicatively (¶48).
-    credit_loss_rate = plan.credit_loss_rate_pct * pd_mult * lgd_mult
     assumptions = replace(
         plan,
         loan_growth_pct=loan_growth,
         deposit_growth_pct=deposit_growth,
         nim_pct=nim,
         cost_to_income_pct=cost_to_income,
-        credit_loss_rate_pct=credit_loss_rate,
     )
     return assumptions, pd_mult, lgd_mult
 
@@ -416,14 +421,23 @@ def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjecti
 
     # Year 0 (as-of) is identical for both legs — compute it once.
     zero_state, zero_meta = _parse_facts(inputs.facts)
+    if zero_state.ecl_exposures and (
+        not inputs.ecl_assumptions
+        or not has_complete_ecl_coverage(_to_capital_facts(inputs.facts))
+        or abs(sum(zero_state.ecl_exposures.values(), _ZERO) - zero_state.loans_total())
+        > len(zero_state.ecl_exposures) * MONEY
+    ):
+        raise ProjectionInputError(
+            "ecl_coverage_incomplete",
+            "Stage-restricted stress losses require complete loan coverage "
+            "and an effective ECL assumptions register.",
+        )
     current = _snapshot_year(inputs, zero_state, zero_meta, 0, "current", _ONE, _ONE)
 
     base_years = _run_leg(inputs, "base")
     stress_years = _run_leg(inputs, "stress")
 
-    first_breach = next(
-        (year.year for year in stress_years if not year.minima.all_ok), None
-    )
+    first_breach = next((year.year for year in stress_years if not year.minima.all_ok), None)
     binding: set[str] = set()
     for year in stress_years:
         binding.update(year.minima.binding)
@@ -576,12 +590,18 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     equity_prev: Decimal,
     credit_rwa_factor: Decimal = _ONE,
 ) -> tuple[Decimal, Decimal, Decimal, ProjectedYear]:
+    """Roll forward the book, charging only general EAD for incremental macro losses.
+
+    Conservative: tax applies to income after baseline plan losses, before the
+    incremental charge; a request or platform tax rate cannot shield that charge.
+    """
     loan_factor = _ONE + assumptions.loan_growth_pct / _HUNDRED
     deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
     securities_factor = (
         _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
     )
     _scale_in_place(state.loans, loan_factor)
+    _scale_in_place(state.ecl_exposures, loan_factor)
     _scale_in_place(state.off_balance, loan_factor)
     _scale_in_place(state.inflows, loan_factor)
     _scale_in_place(state.deposits, deposit_factor)
@@ -616,9 +636,32 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     )
     total_income = nii + fees
     opex = money(assumptions.cost_to_income_pct / _HUNDRED * total_income)
-    credit_losses = money(assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total())
+    baseline_credit_losses = money(
+        assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total()
+    )
+    general_ead = (
+        sum(
+            (
+                amount
+                for category, amount in state.ecl_exposures.items()
+                if category.endswith((":stage1", ":stage2"))
+            ),
+            _ZERO,
+        )
+        if state.ecl_exposures
+        else state.loans_total()
+    )
+    incremental_credit_losses = money(
+        assumptions.credit_loss_rate_pct
+        / _HUNDRED
+        * general_ead
+        * max(pd_mult * lgd_mult - _ONE, _ZERO)
+    )
+    credit_losses = baseline_credit_losses + incremental_credit_losses
     pre_tax = total_income - opex - credit_losses
-    tax = money(assumptions.tax_rate_pct / _HUNDRED * max(pre_tax, _ZERO))
+    tax = money(
+        assumptions.tax_rate_pct / _HUNDRED * max(pre_tax + incremental_credit_losses, _ZERO)
+    )
     net_income = pre_tax - tax
     dividends = money(assumptions.dividend_payout_pct / _HUNDRED * max(net_income, _ZERO))
     retained = net_income - dividends
@@ -632,9 +675,7 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     # shared forecasting ``_State`` carries so the operational-income facts it
     # emits are indistinguishable from the as-of ones.
     next_income_year = state.gi_history[-1][0] + 1
-    state.gi_history.append(
-        (next_income_year, f"gross_income_{next_income_year}", total_income)
-    )
+    state.gi_history.append((next_income_year, f"gross_income_{next_income_year}", total_income))
 
     pnl = Pnl(
         nii=nii,
@@ -647,9 +688,17 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         net_income=net_income,
         dividends=dividends,
         retained=retained,
+        incremental_credit_losses=incremental_credit_losses,
     )
     row = _snapshot_year(
-        inputs, state, meta, year, leg, pd_mult, lgd_mult, pnl=pnl,
+        inputs,
+        state,
+        meta,
+        year,
+        leg,
+        pd_mult,
+        lgd_mult,
+        pnl=pnl,
         credit_rwa_factor=credit_rwa_factor,
     )
     return earning_assets, state.assets_total(), state.equity, row

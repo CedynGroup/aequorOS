@@ -322,6 +322,11 @@ def test_certified_is_official_tier_and_filed_only(cat: Catalogue) -> None:
     assert cat.measure("engine.car_pct.crd.live").certified is False
     assert cat.measure("engine.pit_pd_upper_pct.advisory_internal.official").certified is False
     assert cat.measure("engine.par_30_pct.crd.official").certified is False
+    for metric_id in ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs"):
+        for tier in ("official", "live"):
+            measure = cat.measure(f"engine.{metric_id}.ifrs9.{tier}")
+            assert measure.advisory_designation == "advisory_only"
+            assert measure.certified is False
 
 
 def test_engine_thresholds_are_register_codes(cat: Catalogue) -> None:

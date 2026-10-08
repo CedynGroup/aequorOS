@@ -31,7 +31,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
+from app.domain.capital.ecl import (
+    STRESS_CHARGE_TAX_TREATMENT,
+    EclAssumption,
+    EclComputationError,
+    EclExposure,
+)
 from app.domain.capital.engine import (
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
@@ -86,6 +91,7 @@ from app.domain.stress.orchestrator import (
 from app.domain.stress.projection import (
     EnterpriseProjection,
     EnterpriseProjectionInputs,
+    ProjectedYear,
     ProjectionInputError,
     project_enterprise,
 )
@@ -139,7 +145,9 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: Stored v1 runs keep what they recorded.
 #: v3 enforces ECL coverage: corrected segment matching can change allowances,
 #: and an incomplete source book cannot supply a whole-book modelled allowance.
-ENGINE_VERSION = "enterprise-stress-v3.0.0"
+#: v4 keeps the booked general provisions in Tier 2 on both legs: modelled ECL,
+#: stage 3 included, no longer stands in for them.
+ENGINE_VERSION = "enterprise-stress-v4.2.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -183,6 +191,7 @@ _FORECAST_GROUPS = (
     "market_risk",
     "operational_income",
     "capital_component",
+    "ecl_exposure",
 )
 _FX_GROUPS = ("fx_position",)
 
@@ -375,12 +384,12 @@ def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        cash_derived=fact.attributes.get("source") == "cash",
         ecl_coverage_complete=(
             fact.attributes.get("ecl_coverage_complete") is True
             if "ecl_coverage_complete" in fact.attributes
             else None
         ),
-        cash_derived=fact.attributes.get("source") == "cash",
     )
 
 
@@ -1446,7 +1455,7 @@ def _hash(payload: dict[str, Any]) -> str:
 
 
 def _serialize_projection(projection: EnterpriseProjection) -> dict[str, Any]:
-    def year(row: Any) -> dict[str, Any]:
+    def year(row: ProjectedYear) -> dict[str, Any]:
         return {
             "year": row.year,
             "leg": row.leg,
@@ -1458,6 +1467,7 @@ def _serialize_projection(projection: EnterpriseProjection) -> dict[str, Any]:
             "nsfr_pct": None if row.nsfr_pct is None else str(row.nsfr_pct),
             "net_income": str(row.pnl.net_income),
             "credit_losses": str(row.pnl.credit_losses),
+            "incremental_credit_losses": str(row.pnl.incremental_credit_losses),
             "pd_multiplier": str(row.pd_multiplier),
             "lgd_multiplier": str(row.lgd_multiplier),
             "minima_all_ok": row.minima.all_ok,
@@ -1467,6 +1477,11 @@ def _serialize_projection(projection: EnterpriseProjection) -> dict[str, Any]:
     return {
         "scenario_code": projection.scenario_code,
         "horizon_years": projection.horizon_years,
+        "credit_loss_basis": {
+            "basis": "prudential_stress_plan_cost_of_risk_proxy",
+            "incremental_scope": "stages_1_2_when_staged",
+            "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+        },
         "stress_stays_above_all_minima": projection.stress_stays_above_all_minima,
         "first_breach_year": projection.first_breach_year,
         "binding_minima": list(projection.binding_minima),
@@ -1677,6 +1692,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
                 scenario_code=scenario.code,
                 scenario_paths=paths,
                 facts=forecast_facts,
+                ecl_assumptions=ecl_assumptions,
                 params=forecast_params,
                 plan=plan,
                 horizon_years=payload.horizon_years,

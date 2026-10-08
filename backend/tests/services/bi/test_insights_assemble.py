@@ -92,16 +92,29 @@ def test_the_prior_period_is_the_pack_windows_own_convention(as_of: date, expect
 # --- which measures earn a headline --------------------------------------------------------
 
 
-def test_a_banks_headline_set_is_its_own_regime_and_an_sdis_is_not() -> None:
+@pytest.mark.parametrize("cap", [HEADLINE_MEASURE_CAP, 10_000])
+def test_a_banks_headline_set_is_its_own_regime_and_an_sdis_is_not(cap: int) -> None:
     """D-070's mechanism, at the measure level: a CRD figure is not an SDI's."""
     cat = _cat()
-    bank = {m.id for m in headline_measures(cat, institution_class="bank", capital_regime="crd")}
-    sdi = {m.id for m in headline_measures(cat, institution_class="sdi", capital_regime="s29")}
+    bank = {
+        m.id
+        for m in headline_measures(cat, institution_class="bank", capital_regime="crd", cap=cap)
+    }
+    sdi = {
+        m.id for m in headline_measures(cat, institution_class="sdi", capital_regime="s29", cap=cap)
+    }
     assert "engine.car_pct.crd.official" in bank
     assert not any(".crd." in member_id for member_id in sdi)
-    # The accounting standard is shared by both classes, so its measures are not
-    # withheld from either: this is a regime question, not a licence-class one.
-    assert any(".ifrs9." in member_id for member_id in sdi)
+    # Modelled ECL remains available in the catalogue, but its advisory status
+    # excludes it from certified headlines for both institution classes.
+    ecl_ids = {
+        m.id
+        for m in cat.engine_measures()
+        if m.engine_rule
+        and m.engine_rule.metric_id in {"ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs"}
+    }
+    assert len(ecl_ids) == 6  # total, general and specific, on both tiers
+    assert not ecl_ids & (bank | sdi)
     assert bank and sdi
 
 

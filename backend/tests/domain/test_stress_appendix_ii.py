@@ -204,6 +204,7 @@ def _management_result(
 
 
 def test_table1_management_actions_block_reports_a_capital_raise() -> None:
+    """Basis: Prudential Appendix II; post-action CAR includes gross annual credit losses."""
     projection = _projection(severe_paths(), paid_up_min=Decimal("400000000"))
     plan = ManagementActionPlan(
         plan_id="raise_only",
@@ -251,7 +252,7 @@ def test_table1_management_actions_block_reports_a_capital_raise() -> None:
     post_cap = tables.table1_summary.post_capitalisation
     assert post_cap is not None
     assert post_cap[0].label == "post_cap_y1"
-    assert post_cap[0].car_pct == Decimal("21.005310")
+    assert post_cap[0].car_pct == Decimal("20.948918")
     # 150M paid-up + a 100M equity raise ⇒ 250,000.000 (GHS'000).
     assert post_cap[0].paid_up == Decimal("250000.000")
     # The T5 == T1 stressed-RWA tie is untouched by the management overlay.

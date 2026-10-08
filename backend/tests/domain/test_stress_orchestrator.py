@@ -11,6 +11,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import replace
 from decimal import Decimal
+from typing import cast
 
 import pytest
 
@@ -151,6 +152,98 @@ def test_compose_uses_the_ecl_engine_when_staged_exposures_are_supplied() -> Non
     # stress ECL = 100M × (2%×1.21) × (45%×1.195) = 100M × 0.0242 × 0.53775.
     assert composition.ecl_stress == Decimal("1301355.0000")
     assert composition.annual_incremental_credit_loss == Decimal("401355.0000")
+
+
+def test_stage3_only_book_has_no_incremental_cet1_charge() -> None:
+    """Basis: Prudential stress; stage 3 specific allowances are excluded from general ECL."""
+    facts = capital_facts()
+    loan = next(fact for fact in facts if fact.fact_group == "loan_exposure")
+    paths = tuple(
+        replace(point, stress_value=Decimal("0"))
+        if point.variable == "gdp_growth" and point.year_index > 0
+        else point
+        for point in base_macro_paths()
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            paths,
+            capital_facts=(
+                *(fact for fact in facts if fact.fact_group != "loan_exposure"),
+                replace(loan, amount=Decimal("10000000")),
+            ),
+            baseline_annual_preprovision_income=Decimal("0"),
+            baseline_annual_credit_loss=Decimal("0"),
+            ecl_exposures=(EclExposure(loan.category, 3, Decimal("10000000")),),
+            ecl_assumptions=(EclAssumption("ALL", 3, Decimal("0"), Decimal("40")),),
+        )
+    )
+    composition = result.capital.composition
+    assert composition.lgd_multiplier == Decimal("1.075")
+    assert composition.ecl_base == Decimal("0.0000")
+    assert composition.ecl_stress == Decimal("0.0000")
+    assert composition.annual_incremental_credit_loss == Decimal("0.0000")
+    assert composition.stressed["quarterly_credit_loss_m"] == Decimal("0.0000")
+    assert [row.cet1_capital for row in result.capital.stressed.path] == [
+        row.cet1_capital for row in result.capital.baseline.path
+    ]
+    serialized = cast(dict[str, object], result.serialize()["capital"])
+    assert serialized["ecl_basis"] == "modelled_what_if_stages_1_2"
+
+
+def test_mixed_stage_charge_keeps_general_ecl_gross_without_a_governed_tax_shield() -> None:
+    """Basis: Prudential stress; only stages 1+2 are charged, conservatively without tax relief."""
+    exposures = (
+        EclExposure("corporate", 1, Decimal("100000000")),
+        EclExposure("corporate", 2, Decimal("20000000")),
+        EclExposure("corporate", 3, Decimal("10000000")),
+    )
+    assumptions = (
+        EclAssumption("ALL", 1, Decimal("1.5"), Decimal("45")),
+        EclAssumption("ALL", 2, Decimal("15"), Decimal("45")),
+        EclAssumption("ALL", 3, Decimal("0"), Decimal("40")),
+    )
+    for tax_rate in (Decimal("0"), Decimal("25"), Decimal("100")):
+        composition = compose_capital_shocks(
+            scenario_paths=severe_paths(),
+            baseline_annual_preprovision_income=Decimal("0"),
+            ecl_exposures=exposures,
+            ecl_assumptions=assumptions,
+            tax_rate_pct=tax_rate,
+        )
+        assert composition.ecl_base == Decimal("2025000.0000")
+        assert composition.ecl_stress == Decimal("2928048.7500")
+        assert composition.annual_incremental_credit_loss == Decimal("903048.7500")
+        assert composition.stressed["quarterly_credit_loss_m"] == Decimal("0.2258")
+
+
+@pytest.mark.parametrize("modelled", (False, True))
+def test_credit_loss_output_labels_basis_and_conservative_tax(modelled: bool) -> None:
+    """Basis: Prudential stress; gross general-allowance increments lack governed tax relief."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            severe_paths(),
+            ecl_exposures=exposures if modelled else (),
+            ecl_assumptions=(
+                (EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),) if modelled else ()
+            ),
+        )
+    )
+    assert result.capital.composition.annual_incremental_credit_loss > Decimal("0")
+    serialized = cast(dict[str, object], result.serialize()["capital"])
+    assert serialized["ecl_basis"] == (
+        "modelled_what_if_stages_1_2" if modelled else "booked_general_provisions_proxy"
+    )
+    assert serialized["incremental_credit_loss_basis"] == {
+        "basis": "prudential_stress",
+        "tax_treatment": (
+            "conservative: no tax shield applied pending a governed tax-rate parameter"
+        ),
+    }
 
 
 def test_base_scenario_produces_zero_enterprise_delta() -> None:
@@ -583,7 +676,7 @@ def test_enterprise_stress_prices_a_fully_staged_book() -> None:
     assert result.capital.composition.ecl_source == "ecl_engine"
     assert result.capital.composition.ecl_base == Decimal("12600000.0000")
     assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
-    assert result.engine_version == "enterprise-stress-v3.0.0"
+    assert result.engine_version == "enterprise-stress-v4.2.0"
 
 
 def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:

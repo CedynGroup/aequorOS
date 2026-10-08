@@ -938,16 +938,34 @@ def test_class_neutral_metrics_carry_their_own_regime() -> None:
     assert grade.unit == "text"
     assert grade.advisory_designation == "advisory_only"
     assert rows["ddep_eligible"].value is None
-    ecl = _by_id(
-        official_run_rows(
-            Run(module="capital", metrics={"ecl_total_ghs": "42"}),
-            as_of_date=AS_OF,
-            regime="crd",
-            institution_class="bank",
+
+
+@pytest.mark.parametrize("metric_id", ["ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs"])
+@pytest.mark.parametrize(("regime", "institution_class"), [("crd", "bank"), ("s29", "sdi")])
+@pytest.mark.parametrize("tier", ["live", "official"])
+def test_modelled_ecl_is_advisory_on_both_tiers_for_both_classes(
+    metric_id: str, regime: str, institution_class: str, tier: str
+) -> None:
+    metrics = {metric_id: "42"}
+    if tier == "live":
+        rows = live_metric_rows(
+            Live(module="capital", metrics=metrics),
+            regime=regime,
+            institution_class=institution_class,
         )
-    )["ecl_total_ghs"]
+    else:
+        rows = official_run_rows(
+            Run(module="capital", metrics=metrics),
+            as_of_date=AS_OF,
+            regime=regime,
+            institution_class=institution_class,
+        )
+    (ecl,) = rows
     assert ecl.regime == "ifrs9"
-    assert ecl.advisory_designation == "filed"
+    assert ecl.advisory_designation == "advisory_only"
+    assert ecl.value == Decimal("42")
+    assert ecl.tier == tier
+    assert ecl.institution_class == institution_class
 
 
 def test_unregistered_figures_are_designated_unregistered_never_promoted() -> None:

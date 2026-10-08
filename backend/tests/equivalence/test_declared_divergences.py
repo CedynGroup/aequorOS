@@ -72,7 +72,6 @@ _IRRBB = "basel_irrbb_run"
 _STRESS = "enterprise_stress_orchestrator"
 _REVERSE = "reverse_stress_frontier"
 _TABLE1 = "lmtd_table1_ratio"
-_ECL = "ifrs9_pd_lgd_ead"
 _GRADES = "bog_five_grade_classification"
 _GRADES4 = "nbfi_four_grade_classification"
 _NPL_MONTHLY_TEST = (
@@ -140,12 +139,6 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         "The capital package prints these as section rows; no test ties them to the "
         "run's RegulatoryLineItem rows.",
         "CAR-RWA", _CAPITAL, ("cet1_capital", "tier1_capital", "tier2_capital"),
-    ),
-    **_rows(
-        Coverage.UNPROVEN,
-        "No test asserts the capital package carries the ECL engine's totals; on a book "
-        "with no ECL assumption register the run emits no ecl_* metric at all.",
-        "CAR-RWA", _ECL, ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,

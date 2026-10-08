@@ -119,6 +119,9 @@ ZERO_RISK_WEIGHT_CODE = "RW0"
 NET_LONG_FX_CATEGORY = "net_long_fx"
 NET_SHORT_FX_CATEGORY = "net_short_fx"
 GENERAL_PROVISIONS_CATEGORY = "general_provisions"
+#: The CET1 deduction a stress scenario takes for the increase in modelled
+#: stage 1+2 ECL over its unconditioned baseline.
+MODELLED_ECL_CHARGE_CATEGORY = "modelled_ecl_stress_charge"
 TIER_CET1 = "CET1"
 TIER_AT1 = "AT1"
 TIER_T2 = "T2"
@@ -260,7 +263,8 @@ def has_complete_ecl_coverage(
 
     Explicit completeness also survives independent forecast rounding of loan
     totals and staged buckets. Aggregate EAD is a fallback for older facts that
-    carry no verdict, not a reason to override an explicit incomplete source.
+    carry no verdict, within one money unit per staged bucket, not a reason to
+    override an explicit incomplete source.
     """
     coverage = [
         fact.ecl_coverage_complete for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE
@@ -270,11 +274,13 @@ def has_complete_ecl_coverage(
     if coverage and all(value is True for value in coverage):
         return True
     if staged_ead is None:
-        return not unstaged_loan_ead(facts)
+        staged_ead = sum(
+            (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE), _ZERO
+        )
     loans = sum(
         (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE), _ZERO
     )
-    return loans <= staged_ead
+    return abs(loans - staged_ead) <= len(coverage) * MONEY
 
 
 @dataclass(frozen=True)
@@ -598,14 +604,16 @@ def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResul
 
 
 def compute_capital_ratios(
-    facts: Sequence[CapitalFact],
-    rwa: RwaResult,
-    params: CapitalParams,
-    general_provisions_override: Decimal | None = None,
+    facts: Sequence[CapitalFact], rwa: RwaResult, params: CapitalParams
 ) -> CapitalRatiosResult:
-    """``general_provisions_override`` replaces the ingested general-provisions
-    component with the IFRS 9 engine's modeled stage-1/2 ECL (Phase 2 item 8:
-    "replaces ingested-provisions-only") — the Tier 2 cap still applies."""
+    """Capital tiers, ratios and their line items for one fact set.
+
+    Basis: Prudential (BoG CRD 2018); input: the bank's booked IFRS 9 allowance as
+    the Tier 2 general provisions (capped at ``tier2_gp_cap_pct_credit_rwa`` of
+    credit RWA). A modelled ECL never stands in for it: the booked allowance is the
+    figure of record, and a modelled increase reaches capital only as a CET1
+    charge (:data:`MODELLED_ECL_CHARGE_CATEGORY`).
+    """
     components = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT),
         key=lambda fact: (
@@ -626,8 +634,6 @@ def compute_capital_ratios(
             _ZERO,
         )
     )
-    if general_provisions_override is not None:
-        gp_amount = money(general_provisions_override)
     gp_cap = money(rwa.credit_rwa * params.tier2_gp_cap_pct_credit_rwa / _HUNDRED)
     gp_included = min(gp_amount, gp_cap)
     gp_cap_applied = gp_amount > gp_cap
@@ -704,7 +710,6 @@ def run_capital_stress(
     facts: Sequence[CapitalFact],
     params: CapitalParams,
     shocks: Mapping[str, Decimal],
-    general_provisions_override: Decimal | None = None,
 ) -> CapitalStressResult:
     """Project the four-quarter capital path for one stress scenario.
 
@@ -724,7 +729,7 @@ def run_capital_stress(
             raise MissingParameterError(f"stress_shock:{scenario_code}:{shock_key}")
 
     rwa = compute_rwa(facts, params)
-    ratios = compute_capital_ratios(facts, rwa, params, general_provisions_override)
+    ratios = compute_capital_ratios(facts, rwa, params)
     growth_factor = _ONE + shocks[SHOCK_QUARTERLY_RWA_GROWTH_PCT] / _HUNDRED
     quarterly_retention = (
         shocks[SHOCK_QUARTERLY_INCOME_M] - shocks[SHOCK_QUARTERLY_CREDIT_LOSS_M]
