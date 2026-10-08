@@ -61,7 +61,12 @@ from app.domain.authority.outcomes import (
     OutcomeState,
     outcome,
 )
-from app.domain.ingestion.capital_tiers import TIER_AT1, TIER_CET1, TIER_T2
+from app.domain.ingestion.capital_tiers import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    TIER_AT1,
+    TIER_CET1,
+    TIER_T2,
+)
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -86,7 +91,6 @@ FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
 FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
-CAPITAL_REGISTER_REFUSED_CATEGORY = "capital_register_refused"
 # Phase 2 items 8/9: staged EAD buckets ("<family>:stage<n>") for the IFRS 9
 # ECL engine, and CRM collateral/guarantee values ("<family>:<class>") netted
 # against credit exposures after supervisory haircuts. Both groups exist only

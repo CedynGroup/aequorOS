@@ -259,10 +259,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
-from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
-from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
+from app.domain.ingestion.capital_tiers import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    is_excluded_component,
+    parse_capital_tier,
+)
 from app.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )

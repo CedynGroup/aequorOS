@@ -49,6 +49,7 @@ from app.domain.capital.engine import (
     CapitalRegisterRefused,
     tier1_capital,
 )
+from app.domain.irr import IrrRunError
 from app.domain.irr.engine import (
     BASE_CURVE_SCENARIO,
     EAR_DOWN_BP,
@@ -144,16 +145,6 @@ _CAPITAL_COMPONENT_GROUP = "capital_component"
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
-
-
-class IrrRunError(Exception):
-    """Domain input failure persisted onto the run instead of raising HTTP 500."""
-
-    def __init__(self, code: str, message: str, details: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.details = details
 
 
 @dataclass(frozen=True)

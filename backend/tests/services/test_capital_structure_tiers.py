@@ -256,6 +256,8 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
         )
         batch = db_session.get(IngestionBatch, result.batch.id)
         assert batch is not None
+        # Persisted ETL reports must be valid JSON on PostgreSQL as well as SQLite.
+        json.dumps(batch.etl_report, allow_nan=False)
         return batch
 
     rejected = ingest(refused_tier, refused_amount)

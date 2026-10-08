@@ -17,6 +17,9 @@ TIER_CET1 = "CET1"
 TIER_AT1 = "AT1"
 TIER_T2 = "T2"
 
+#: Fact marker emitted when the authoritative register cannot be derived.
+CAPITAL_REGISTER_REFUSED_CATEGORY = "capital_register_refused"
+
 #: Every accepted spelling, after :func:`_compact`, → the canonical tier.
 _TIER_ALIASES: dict[str, str] = {
     "CET1": TIER_CET1,

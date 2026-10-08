@@ -51,6 +51,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.irr import IrrRunError
 from app.domain.irr import standardised as sf
 from app.domain.irr import standardised_cash_flows as sfcf
 from app.domain.irr import standardised_params as sfp
@@ -97,7 +98,7 @@ from app.services import (
     regulatory_parameters,
 )
 from app.services.audit import record_event
-from app.services.regulatory_irr import IrrRunError, tier1_for_period
+from app.services.regulatory_irr import tier1_for_period
 from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
     _read_regulatory_run_execution_result,
 )
