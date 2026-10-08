@@ -426,7 +426,8 @@ def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjecti
     if zero_state.ecl_exposures and (
         not inputs.ecl_assumptions
         or not has_complete_ecl_coverage(_to_capital_facts(inputs.facts))
-        or sum(zero_state.ecl_exposures.values(), _ZERO) != zero_state.loans_total()
+        or abs(sum(zero_state.ecl_exposures.values(), _ZERO) - zero_state.loans_total())
+        > len(zero_state.ecl_exposures) * MONEY
     ):
         raise ProjectionInputError(
             "ecl_coverage_incomplete",

@@ -1218,10 +1218,13 @@ specific provisions; its fallback scales booked general provisions. The annual
 projection preserves baseline plan losses on the whole loan book and conditions
 only stage 1+2 EAD for the incremental macro charge after checking source
 coverage, staged EAD against the loan book, and an effective assumptions
-register. Partial staging or a missing register returns `ecl_coverage_incomplete`
-before either projection leg runs. Staged EAD rolls forward with loan growth;
-without staging the annual plan cost-of-risk proxy covers the
-loan book. Annual tax is computed before the incremental charge, which reaches
+register. The absolute EAD difference may be at most the number of staged
+buckets times the derivation rounding unit (0.0001), accommodating independently
+rounded loan totals and stage buckets in either direction. An incomplete source
+verdict still refuses the run. Partial staging or a missing register returns
+`ecl_coverage_incomplete` before either projection leg runs. Staged EAD rolls
+forward with loan growth; without staging the annual plan cost-of-risk proxy
+covers the loan book. Annual tax is computed before the incremental charge, which reaches
 net income and retained earnings gross, including when profit crosses zero.
 The same annual outputs feed management actions and Appendix II.
 
@@ -1257,7 +1260,8 @@ bucket carries `ecl_coverage_complete`, determined from the source loans before
 unconverted balances are omitted. Annual enterprise stress preserves this
 verdict through forecast facts and refuses stage-restricted losses with partial
 coverage, independently of register availability. For facts without coverage
-metadata, the shared capital helper uses aggregate EAD coverage.
+metadata, the shared capital helper uses aggregate EAD coverage with the same
+bucket quantization bound.
 `ecl_unstaged_ead_ghs`, when present in capital metrics, measures only the known
 reporting-currency EAD gap; it is not a completeness verdict.
 

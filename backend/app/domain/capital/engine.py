@@ -263,7 +263,8 @@ def has_complete_ecl_coverage(
 
     Explicit completeness also survives independent forecast rounding of loan
     totals and staged buckets. Aggregate EAD is a fallback for older facts that
-    carry no verdict, not a reason to override an explicit incomplete source.
+    carry no verdict, within one money unit per staged bucket, not a reason to
+    override an explicit incomplete source.
     """
     coverage = [
         fact.ecl_coverage_complete for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE
@@ -273,11 +274,13 @@ def has_complete_ecl_coverage(
     if coverage and all(value is True for value in coverage):
         return True
     if staged_ead is None:
-        return not unstaged_loan_ead(facts)
+        staged_ead = sum(
+            (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE), _ZERO
+        )
     loans = sum(
         (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE), _ZERO
     )
-    return loans <= staged_ead
+    return abs(loans - staged_ead) <= len(coverage) * MONEY
 
 
 @dataclass(frozen=True)

@@ -243,6 +243,93 @@ def _staged_loss_inputs(
 
 
 @pytest.mark.parametrize(
+    "balance",
+    (Decimal("5000000.000060"), Decimal("5000000.000040")),
+)
+@pytest.mark.parametrize("source_complete", (True, None))
+def test_annual_coverage_accepts_independently_rounded_stage_buckets(
+    balance: Decimal, source_complete: bool | None,
+) -> None:
+    """Basis: Prudential staged EAD; four-place bucket rounding is not partial coverage."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    inputs = _staged_loss_inputs(((1, balance), (2, balance)), paths)
+    inputs = replace(inputs, facts=tuple(
+        replace(fact, ecl_coverage_complete=source_complete)
+        if fact.fact_group == "ecl_exposure" else fact
+        for fact in inputs.facts
+    ))
+    result = project_enterprise(inputs)
+    assert result.current.balance_sheet.loans == Decimal("10000000.0001")
+    for base, stress in zip(result.base, result.stress, strict=True):
+        assert stress.pnl.incremental_credit_losses == Decimal("6000.0000")
+        assert stress.pnl.credit_losses - base.pnl.credit_losses == Decimal("6000.0000")
+        assert base.ratios.cet1_capital - stress.ratios.cet1_capital == (
+            Decimal("6000.0000") * stress.year
+        )
+
+
+@pytest.mark.parametrize("gap", (Decimal("-0.0003"), Decimal("0.0003")))
+@pytest.mark.parametrize("source_complete", (True, None))
+def test_annual_coverage_refuses_gaps_beyond_bucket_quantization(
+    gap: Decimal, source_complete: bool | None,
+) -> None:
+    """Basis: Prudential staged EAD; two buckets permit at most a 0.0002 EAD difference."""
+    inputs = _staged_loss_inputs(
+        ((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths()
+    )
+    inputs = replace(inputs, facts=tuple(
+        replace(
+            fact,
+            amount=fact.amount + gap if fact.fact_group == "loan_exposure" else fact.amount,
+            ecl_coverage_complete=(
+                source_complete if fact.fact_group == "ecl_exposure" else fact.ecl_coverage_complete
+            ),
+        )
+        for fact in inputs.facts
+    ))
+    with pytest.raises(ProjectionInputError) as exc:
+        project_enterprise(inputs)
+    assert exc.value.code == "ecl_coverage_incomplete"
+
+
+@pytest.mark.parametrize("gap", (Decimal("-0.0002"), Decimal("0.0002")))
+def test_annual_coverage_accepts_the_bucket_quantization_bound(gap: Decimal) -> None:
+    """Basis: Prudential staged EAD; a two-bucket rounding tolerance is inclusive."""
+    inputs = _staged_loss_inputs(
+        ((1, Decimal("5000000")), (2, Decimal("5000000"))), base_paths()
+    )
+    inputs = replace(inputs, facts=tuple(
+        replace(fact, amount=fact.amount + gap)
+        if fact.fact_group == "loan_exposure" else fact
+        for fact in inputs.facts
+    ))
+    result = project_enterprise(inputs)
+    assert result.current.balance_sheet.loans == Decimal("10000000") + gap
+    assert all(row.pnl.incremental_credit_losses == Decimal("0") for row in result.base)
+
+
+@pytest.mark.parametrize("balance", (Decimal("5000000.000060"), Decimal("5000000.000040")))
+def test_annual_rounding_tolerance_never_overrides_incomplete_source_coverage(
+    balance: Decimal,
+) -> None:
+    """Basis: Prudential staged EAD; an incomplete source verdict always blocks stress."""
+    inputs = _staged_loss_inputs(((1, balance), (2, balance)), base_paths())
+    inputs = replace(inputs, facts=tuple(
+        replace(fact, ecl_coverage_complete=False)
+        if fact.fact_group == "ecl_exposure" else fact
+        for fact in inputs.facts
+    ))
+    with pytest.raises(ProjectionInputError) as exc:
+        project_enterprise(inputs)
+    assert exc.value.code == "ecl_coverage_incomplete"
+
+
+@pytest.mark.parametrize(
     ("staged_ead", "source_complete", "has_register"),
     (
         (Decimal("1000000"), None, False),
