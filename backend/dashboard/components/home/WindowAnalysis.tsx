@@ -33,7 +33,7 @@ const RATIO_LABELS: Record<WindowRatio, string> = {
 /**
  * Short labels for the daily primary-metric keys. Mirrors `PRIMARY_METRIC` in
  * `components/live/moduleDisplay.ts` (and the backend's `_PRIMARY_METRIC_KEY`);
- * `moduleDisplay.test.ts` reads this map and fails when they drift.
+ * `moduleDisplay.test.ts` checks the rendered labels and fails when they drift.
  */
 const METRIC_LABELS: Record<string, string> = {
   lcr_pct: "LCR",
