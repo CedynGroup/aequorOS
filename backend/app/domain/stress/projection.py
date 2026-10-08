@@ -29,8 +29,10 @@ correct.
 
 **IFRS 9 ECL under stress (¶48–49, AppI¶5–6).** The per-year impairment is the
 plan cost of risk plus that year's incremental macro PD/LGD charge. On staged
-books, only stage 1+2 EAD contributes to the increment; stage 3 keeps the plan
-loss rate. Without staging, the plan cost-of-risk proxy covers the loan book.
+books with complete coverage and an effective ECL assumptions register, only
+stage 1+2 EAD contributes to the increment; stage 3 keeps the plan loss rate.
+Partial staging or a missing register refuses the projection. Without staging,
+the plan cost-of-risk proxy covers the loan book.
 The incremental charge is gross: no tax shield applied pending a governed
 tax-rate parameter and supported deferred-tax recognition. This wires the
 two directive modes into the projection: **Perfect Foresight** — each of the ≥3
@@ -53,6 +55,7 @@ from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import (
     GENERAL_PROVISIONS_CATEGORY,
     TIER_AT1,
@@ -63,6 +66,7 @@ from app.domain.capital.engine import (
     RwaResult,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
 )
 from app.domain.forecasting.engine import (
     RETAINED_EARNINGS_CATEGORY,
@@ -160,6 +164,7 @@ class EnterpriseProjectionInputs:
     # stressed ladder on the position book, not the aggregate solvency projection.
     # Default True keeps the bank projection byte-identical.
     basel_liquidity: bool = True
+    ecl_assumptions: Sequence[EclAssumption] = ()
 
 
 PAID_UP_CATEGORIES: frozenset[str] = frozenset(
@@ -418,6 +423,16 @@ def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjecti
 
     # Year 0 (as-of) is identical for both legs — compute it once.
     zero_state, zero_meta = _parse_facts(inputs.facts)
+    if zero_state.ecl_exposures and (
+        not inputs.ecl_assumptions
+        or not has_complete_ecl_coverage(_to_capital_facts(inputs.facts))
+        or sum(zero_state.ecl_exposures.values(), _ZERO) != zero_state.loans_total()
+    ):
+        raise ProjectionInputError(
+            "ecl_coverage_incomplete",
+            "Stage-restricted stress losses require complete loan coverage "
+            "and an effective ECL assumptions register.",
+        )
     current = _snapshot_year(inputs, zero_state, zero_meta, 0, "current", _ONE, _ONE)
 
     base_years = _run_leg(inputs, "base")

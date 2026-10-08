@@ -385,6 +385,11 @@ def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
         cash_derived=fact.attributes.get("source") == "cash",
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -1687,6 +1692,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
                 scenario_code=scenario.code,
                 scenario_paths=paths,
                 facts=forecast_facts,
+                ecl_assumptions=ecl_assumptions,
                 params=forecast_params,
                 plan=plan,
                 horizon_years=payload.horizon_years,

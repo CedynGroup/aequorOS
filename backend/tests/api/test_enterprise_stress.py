@@ -807,3 +807,85 @@ def test_stage3_only_book_has_no_incremental_charge_in_either_projection(
     for year in cast(list[dict[str, object]], projection["stress"]):
         assert Decimal(str(year["pd_multiplier"])) > Decimal("1")
         assert Decimal(str(year["incremental_credit_losses"])) == Decimal("0")
+
+
+@pytest.mark.parametrize(
+    ("staged_ead", "source_complete", "has_register"),
+    (
+        (Decimal("1000000"), None, False),
+        (Decimal("1000000"), True, True),
+        (Decimal("10000000"), False, True),
+        (Decimal("10000000"), True, False),
+    ),
+)
+def test_annual_coverage_refusal_is_independent_of_register_availability(
+    db_client: TestClient, staged_ead: Decimal,
+    source_complete: bool | None, has_register: bool,
+) -> None:
+    """Basis: Prudential stress; persisted coverage and EAD must cover the 10M loan book."""
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client)
+    _approve_scenario(db_client, scenario_id, checker)
+    with get_sessionmaker()() as session:
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == bank_id,
+                BankFinancialFact.reporting_period_id == UUID(period_id),
+                BankFinancialFact.fact_group.in_(("loan_exposure", "ecl_exposure")),
+            )
+        )
+        session.execute(delete(ParamEclAssumption).where(
+            ParamEclAssumption.organization_id == ORG_1,
+        ))
+        session.add(BankFinancialFact(
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            reporting_period_id=UUID(period_id),
+            fact_group="loan_exposure",
+            category="corporate_unrated",
+            amount=Decimal("10000000"),
+            currency="GHS",
+            risk_weight_code="RW100",
+        ))
+        session.add(BankFinancialFact(
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            reporting_period_id=UUID(period_id),
+            fact_group="ecl_exposure",
+            category="corporate_unrated:stage1",
+            amount=staged_ead,
+            currency="GHS",
+            attributes=(
+                {"ecl_coverage_complete": source_complete}
+                if source_complete is not None else {}
+            ),
+        ))
+        if has_register:
+            session.add(ParamEclAssumption(
+                organization_id=ORG_1,
+                jurisdiction_code="GH",
+                effective_from=date(2026, 1, 1),
+                approved_by="Model committee",
+                approval_timestamp=utc_now(),
+                segment="ALL",
+                stage=1,
+                pd_pct=Decimal("2"),
+                lgd_pct=Decimal("40"),
+            ))
+        session.commit()
+        before = list(session.scalars(select(RegulatoryRun.id)))
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Verify partial staging cannot shrink the annual stress charge.",
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["error_code"] == "ecl_coverage_incomplete"
+    with get_sessionmaker()() as session:
+        assert list(session.scalars(select(RegulatoryRun.id))) == before

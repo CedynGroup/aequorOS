@@ -240,6 +240,7 @@ class ForecastFact:
     is_deduction: bool = False
     side: str | None = None
     cash_derived: bool = False
+    ecl_coverage_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -1099,6 +1100,7 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
+            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in rows
         if row.fact_group in relevant

@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain.capital.ecl import EclAssumption
 from app.domain.forecasting.engine import ForecastFact, project
 from app.domain.stress.appendix_ii import build_appendix_ii
 from app.domain.stress.management_actions import RecognitionCaps
@@ -221,6 +222,10 @@ def _staged_loss_inputs(
                 for stage, amount in stages
             ),
         ),
+        ecl_assumptions=tuple(
+            EclAssumption("ALL", stage, Decimal("2"), Decimal("40"))
+            for stage, _ in stages
+        ),
         plan=replace(
             BASE_ASSUMPTIONS,
             loan_growth_pct=Decimal("0"),
@@ -235,6 +240,63 @@ def _staged_loss_inputs(
             securities_shift_pp=Decimal("0"),
         ),
     )
+
+
+@pytest.mark.parametrize(
+    ("staged_ead", "source_complete", "has_register"),
+    (
+        (Decimal("1000000"), None, False),
+        (Decimal("1000000"), False, False),
+        (Decimal("1000000"), None, True),
+        (Decimal("1000000"), True, True),
+        (Decimal("10000000"), False, True),
+        (Decimal("10000000"), True, False),
+        (Decimal("11000000"), True, True),
+    ),
+)
+def test_annual_staged_losses_require_complete_coverage_and_a_register(
+    staged_ead: Decimal, source_complete: bool | None, has_register: bool,
+) -> None:
+    """Basis: Prudential stress; partial staging must never reduce the assessed loan book."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    inputs = _staged_loss_inputs(((1, Decimal("10000000")),), paths)
+    inputs = replace(
+        inputs,
+        facts=tuple(
+            replace(fact, amount=staged_ead, ecl_coverage_complete=source_complete)
+            if fact.fact_group == "ecl_exposure" else fact
+            for fact in inputs.facts
+        ),
+        ecl_assumptions=inputs.ecl_assumptions if has_register else (),
+    )
+    with pytest.raises(ProjectionInputError) as exc:
+        project_enterprise(inputs)
+    assert exc.value.code == "ecl_coverage_incomplete"
+
+
+def test_annual_unstaged_book_uses_the_whole_book_proxy_without_a_register() -> None:
+    """Basis: Conservative prudential proxy; all 10M EAD incurs the 6,000 macro increment."""
+    paths = tuple(
+        replace(point, stress_value=Decimal("0.09"))
+        if point.variable == "unemployment" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    inputs = _staged_loss_inputs(((1, Decimal("10000000")),), paths)
+    result = project_enterprise(replace(
+        inputs,
+        facts=tuple(fact for fact in inputs.facts if fact.fact_group != "ecl_exposure"),
+        ecl_assumptions=(),
+    ))
+    for base, stress in zip(result.base, result.stress, strict=True):
+        assert stress.pd_multiplier == Decimal("1.06")
+        assert stress.pnl.incremental_credit_losses == Decimal("6000")
+        assert stress.pnl.credit_losses - base.pnl.credit_losses == Decimal("6000")
 
 
 def test_annual_stage3_only_book_has_no_incremental_charge() -> None:
