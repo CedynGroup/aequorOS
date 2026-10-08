@@ -180,8 +180,9 @@ operational_income
 
 capital_component
     ``capital_structure`` rows → categories (component name lower-cased),
-    tier from the payload tier (CET1 / AT1 / TIER2, ``*_DEDUCTION`` or a
-    negative amount marks a deduction; amounts stored as absolute values).
+    canonical tier, deduction flag and absolute amount. Register refusal and
+    exclusions are handled by :func:`_derive_capital_components`; the input
+    contract is owned by docs/API_INTEGRATION.md §3.5.
 
 irr_position
     Rate-sensitive positions bucketed into the nine canonical IRRBB buckets by
@@ -3463,9 +3464,7 @@ def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult])
         )
         return []
     groups.append(
-        GroupResult(
-            group="capital_component", status="derived", rows=len(specs), warnings=warnings
-        )
+        GroupResult(group="capital_component", status="derived", rows=len(specs), warnings=warnings)
     )
     return specs
 

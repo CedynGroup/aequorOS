@@ -14,6 +14,9 @@ through a raw alias (``balance_ghs``, ``interest_rate_pct``) is SANCTIONED; null
 regulatory-critical value is a *change* and is therefore FLAGGED for a human — a missing
 balance or rate is surfaced, never silently zeroed (the Sample Bank data deliberately
 carries such gaps).
+
+``capital_structure.amount_ghs`` bypasses coercion so its schema can refuse the
+original malformed Decimal representation; see docs/API_INTEGRATION.md §3.5.
 """
 
 from __future__ import annotations

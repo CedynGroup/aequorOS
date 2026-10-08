@@ -297,9 +297,11 @@ class SfMandate:
                 "No commencement date is governed for the Standardised Framework, so it "
                 "is not yet mandatory."
             )
-        pending = " This date is pending confirmation with the supervisor." if (
-            self.confirmation_status == "pending"
-        ) else ""
+        pending = (
+            " This date is pending confirmation with the supervisor."
+            if (self.confirmation_status == "pending")
+            else ""
+        )
         if self.mandatory:
             return (
                 "The Standardised Framework applies to reporting dates from "
@@ -313,9 +315,9 @@ class SfMandate:
     def to_dict(self) -> dict[str, Any]:
         return {
             "mandatory": self.mandatory,
-            "mandatory_from": None if self.mandatory_from is None else (
-                self.mandatory_from.isoformat()
-            ),
+            "mandatory_from": None
+            if self.mandatory_from is None
+            else (self.mandatory_from.isoformat()),
             "as_of": self.as_of.isoformat(),
             "confirmation_status": self.confirmation_status,
             "source_citation": self.source_citation,
@@ -547,14 +549,10 @@ def refusal_sentence(code: str, message: str) -> str:
     """One sentence a preparer can act on, whatever the refusal was."""
     reason = REFUSAL_COPY.get(code)
     if reason is not None:
-        return (
-            "The standardised framework could not be measured for this date because "
-            f"{reason}"
-        )
+        return f"The standardised framework could not be measured for this date because {reason}"
     detail = message.strip()
-    return (
-        "The standardised framework could not be measured for this date."
-        + (f" {detail}" if detail else "")
+    return "The standardised framework could not be measured for this date." + (
+        f" {detail}" if detail else ""
     )
 
 
@@ -571,9 +569,7 @@ def _attempt_read(run: RegulatoryRun) -> IrrbbSfAttemptRead:
         completed_at=run.completed_at,
         created_at=run.created_at,
         error_code=code,
-        refusal_statement=(
-            refusal_sentence(code or "", run.error_message or "") if failed else ""
-        ),
+        refusal_statement=(refusal_sentence(code or "", run.error_message or "") if failed else ""),
     )
 
 
@@ -635,9 +631,7 @@ def get_standardised_framework_attempts(  # noqa: PLR0913 - the read names its f
     # cannot disagree about which attempt is the newest one.
     latest = latest_sf_attempt(db, ctx, bank, period)
     result = latest_sf_run(db, ctx, bank, period)
-    refusal = next(
-        (row for row in rows if row.status == "failed" and row.error_code), None
-    )
+    refusal = next((row for row in rows if row.status == "failed" and row.error_code), None)
     return IrrbbSfAttemptsRead(
         bank_id=bank.id,
         reporting_period_id=period.id,
@@ -784,9 +778,7 @@ def _record_started(
     )
 
 
-def _persist_failure(
-    db: Session, ctx: TenantContext, run_id: UUID, error: SfRunError
-) -> None:
+def _persist_failure(db: Session, ctx: TenantContext, run_id: UUID, error: SfRunError) -> None:
     db.rollback()
     run = db.scalar(
         select(RegulatoryRun).where(
@@ -995,12 +987,12 @@ def _metrics_payload(book: _Book, result: sf.SfResult) -> dict[str, Any]:
                 "delta_eve": str(row.delta_eve),
                 "delta_eve_net": str(row.delta_eve_net),
                 "delta_nii": str(row.delta_nii),
-                "delta_eve_prior": None if row.delta_eve_prior is None else str(
-                    row.delta_eve_prior
-                ),
-                "delta_nii_prior": None if row.delta_nii_prior is None else str(
-                    row.delta_nii_prior
-                ),
+                "delta_eve_prior": None
+                if row.delta_eve_prior is None
+                else str(row.delta_eve_prior),
+                "delta_nii_prior": None
+                if row.delta_nii_prior is None
+                else str(row.delta_nii_prior),
             }
             for row in result.table8
         ],
@@ -1148,8 +1140,7 @@ def _validations(book: _Book, result: sf.SfResult) -> list[tuple[str, bool, str,
         )
     if result.parameters_pending_confirmation:
         labels = ", ".join(
-            sfp.PARAMETER_LABELS.get(code, code)
-            for code in result.parameters_pending_confirmation
+            sfp.PARAMETER_LABELS.get(code, code) for code in result.parameters_pending_confirmation
         )
         rows.append(
             (
@@ -1284,7 +1275,6 @@ def _load_book(
     return book
 
 
-
 @dataclass
 class _Scan:
     """What one pass over the canonical book produced.
@@ -1344,8 +1334,8 @@ def _scan_records(
             # otherwise the notional is excluded and COUNTED, never zero-filled.
             _count_exclusion(scan.exclusions, EXCLUDED_UNMODELLED_DERIVATIVE, abs(balance))
             continue
-        family = None if position_type == "INTEREST_RATE_SWAP" else _family_for(
-            position_type, snapshot
+        family = (
+            None if position_type == "INTEREST_RATE_SWAP" else _family_for(position_type, snapshot)
         )
         non_maturing = position_type == "DEPOSIT" and _is_non_maturing(snapshot)
         if family is None and position_type != "INTEREST_RATE_SWAP" and not non_maturing:
@@ -1406,9 +1396,7 @@ def _sorted_groups(groups: Mapping[tuple[str, str, str], _LadderGroup]) -> list[
     return [groups[key] for key in sorted(groups)]
 
 
-def _canonical_records(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> Sequence[Any]:
+def _canonical_records(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> Sequence[Any]:
     """(snapshot, position, counterparty, product) for the reporting date.
 
     Current-generation only: superseded and withdrawn rows are excluded, and
@@ -1729,16 +1717,8 @@ def _ladder(group: _LadderGroup) -> sf.Ladder:
         principal=tuple(group.principal),
         interest=tuple(group.interest),
         outstanding_end=tuple(outstanding),
-        cpr0=(
-            None
-            if group.cpr_weight == _ZERO
-            else group.cpr_amount / group.cpr_weight
-        ),
-        tdrr0=(
-            None
-            if group.tdrr_weight == _ZERO
-            else group.tdrr_amount / group.tdrr_weight
-        ),
+        cpr0=(None if group.cpr_weight == _ZERO else group.cpr_amount / group.cpr_weight),
+        tdrr0=(None if group.tdrr_weight == _ZERO else group.tdrr_amount / group.tdrr_weight),
     )
 
 
@@ -1820,9 +1800,7 @@ def _curves(
 ) -> dict[str, market_data.CurveView]:
     curves: dict[str, market_data.CurveView] = {}
     for currency in sorted(sizes):
-        view = market_data.get_yield_curve(
-            db, bank.organization_id, bank.id, currency, as_of
-        )
+        view = market_data.get_yield_curve(db, bank.organization_id, bank.id, currency, as_of)
         if view is not None:
             curves[currency] = view
     return curves
@@ -1901,9 +1879,7 @@ def _continuous(annual: Decimal) -> Decimal:
     return base.ln()
 
 
-def _tier1(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> Decimal:
+def _tier1(db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod) -> Decimal:
     try:
         tier1 = tier1_for_period(db, ctx, bank, period)
     except IrrRunError as exc:
@@ -1978,9 +1954,9 @@ def _build_snapshot(
                 "product": nmd.product,
                 "balance": str(nmd.balance),
                 "core_estimate": None if nmd.core_estimate is None else str(nmd.core_estimate),
-                "core_maturity_years": None if nmd.core_maturity_years is None else str(
-                    nmd.core_maturity_years
-                ),
+                "core_maturity_years": None
+                if nmd.core_maturity_years is None
+                else str(nmd.core_maturity_years),
                 "history_years": None if nmd.history_years is None else str(nmd.history_years),
             }
             for nmd in sorted(inputs.nmds, key=lambda row: (row.currency, row.product))
@@ -2110,23 +2086,17 @@ def _read_model(
         ],
         table7_quantitative=IrrbbSfTable7Read(
             average_repricing_maturity_years=_dec(
-                (metrics.get("table7_quantitative") or {}).get(
-                    "average_repricing_maturity_years"
-                )
+                (metrics.get("table7_quantitative") or {}).get("average_repricing_maturity_years")
             ),
             longest_repricing_maturity_years=_dec(
-                (metrics.get("table7_quantitative") or {}).get(
-                    "longest_repricing_maturity_years"
-                )
+                (metrics.get("table7_quantitative") or {}).get("longest_repricing_maturity_years")
             ),
         ),
         nmd_categories=[
             IrrbbSfNmdCategoryRead(
                 currency=str(row.get("currency")),
                 category=str(row.get("category")),
-                label=NMD_CATEGORY_LABELS.get(
-                    str(row.get("category")), str(row.get("category"))
-                ),
+                label=NMD_CATEGORY_LABELS.get(str(row.get("category")), str(row.get("category"))),
                 balance=_dec(row.get("balance")),
                 core=_dec(row.get("core")),
                 non_core=_dec(row.get("non_core")),
@@ -2230,8 +2200,7 @@ def _parameters_read(run: RegulatoryRun) -> list[IrrbbSfParameterRead]:
         citation = str(entry.get("source_citation") or "")
         confirmation = str(entry.get("confirmation_status") or "")
         representative = (
-            code in sfp.REPRESENTATIVE_CODES
-            or sfp.REPRESENTATIVE_MARKER in citation.upper()
+            code in sfp.REPRESENTATIVE_CODES or sfp.REPRESENTATIVE_MARKER in citation.upper()
         )
         raw = snapshot_values.get(code, entry.get("value"))
         provenance = sfp.ParameterProvenance(
@@ -2327,9 +2296,7 @@ def _scenarios_read(metrics: Mapping[str, Any]) -> list[IrrbbSfScenarioRead]:
                     eve_scenario_native=_dec(row.get("eve_scenario_native")),
                     delta_eve_native=_dec(row.get("delta_eve_native")),
                     delta_eve_reporting=_dec(row.get("delta_eve_reporting")),
-                    automatic_option_addon_native=_dec(
-                        row.get("automatic_option_addon_native")
-                    ),
+                    automatic_option_addon_native=_dec(row.get("automatic_option_addon_native")),
                     delta_nii_native=_dec(row.get("delta_nii_native")),
                     delta_nii_reporting=_dec(row.get("delta_nii_reporting")),
                 )
@@ -2348,9 +2315,7 @@ def _measures_read(metrics: Mapping[str, Any]) -> IrrbbSfMeasuresRead:
     return IrrbbSfMeasuresRead(
         all_scenarios=_measure_read(sf.MEASURE_ALL, bodies.get(sf.MEASURE_ALL) or {}),
         mandatory=_measure_read(sf.MEASURE_MANDATORY, bodies.get(sf.MEASURE_MANDATORY) or {}),
-        outlier_set=_measure_read(
-            sf.MEASURE_OUTLIER_SET, bodies.get(sf.MEASURE_OUTLIER_SET) or {}
-        ),
+        outlier_set=_measure_read(sf.MEASURE_OUTLIER_SET, bodies.get(sf.MEASURE_OUTLIER_SET) or {}),
     )
 
 

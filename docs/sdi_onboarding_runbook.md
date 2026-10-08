@@ -2,8 +2,8 @@
 
 How to stand up a Specialised Deposit-taking Institution as a real, scoped tenant.
 
-> **Licence reform, 27 January 2026.** Notice No. BG/GOV/SEC/2026/03 (*Guideline on
-> the Revised Microfinance Sector Framework*, effective on issuance) abolished the
+> **Licence reform, 27 January 2026.** Notice No. BG/GOV/SEC/2026/03 (_Guideline on
+> the Revised Microfinance Sector Framework_, effective on issuance) abolished the
 > old specialised deposit-taking licence classes: savings & loans companies,
 > finance houses, deposit-taking microfinance companies and micro-credit companies
 > are folded into a single **Microfinance Bank** class (§3.1.3–3.1.5), and rural
@@ -30,16 +30,16 @@ Clients of every institution type sign in from the **same** universal login
 > **not** safely citable today. `backend/docs/bog_parameter_sources.md` and the
 > master register record, with evidence:
 >
-> - **CAR floor 10% cited to "Act 930 s.29"** — s.29 is an *enabling* provision
+> - **CAR floor 10% cited to "Act 930 s.29"** — s.29 is an _enabling_ provision
 >   empowering BoG to prescribe a ratio; it sets no number. The 10% figure is also
->   exactly the DDEP-era *bank* number. Treat as unconfirmed.
+>   exactly the DDEP-era _bank_ number. Treat as unconfirmed.
 > - **Primary/secondary liquidity reserves 10%/15%** and the **4-grade
->   provisioning grid (20/50/100)** are cited to the *NBFI Business (BoG) Rules,
->   2000*, made under PNDCL 328 — **repealed** by Act 774 / Act 930 and no longer
+>   provisioning grid (20/50/100)** are cited to the _NBFI Business (BoG) Rules,
+>   2000_, made under PNDCL 328 — **repealed** by Act 774 / Act 930 and no longer
 >   published by BoG. Historical context only; do not present as current SDI rules.
 >   No current BoG instrument gives SDIs a distinct five-band schedule.
-> - **The 8 LMTD Table-1 floors** come from the *Liquidity Monitoring Tools
->   Directive* **exposure draft** (Feb 2026, stated effective 1 Jan 2027). Not in
+> - **The 8 LMTD Table-1 floors** come from the _Liquidity Monitoring Tools
+>   Directive_ **exposure draft** (Feb 2026, stated effective 1 Jan 2027). Not in
 >   force. The Board's own adopted thresholds are what bind today.
 > - **Paid-up floors** — the 2026 framework sets Microfinance Bank at GH¢50m
 >   (transitioning) / GH¢100m (new entrant) and Community Bank at GH¢5m / GH¢10m
@@ -104,13 +104,13 @@ Push the SDI canonical dataset (docs/sdi.md §5) via the three-call push
   `encumbered`/`pledged_as_collateral`; `regulatory_category` on products.
 - **Counterparties** — `counterparty_type`, `resident`, `group_reference`
   (connected-group limits + concentration).
-- **`capital_structure` reference dataset (MANDATORY)** — `{capital_component,
-  tier, amount_ghs}`. **The component names must map to the recognised set** so
+- **`capital_structure` reference dataset (MANDATORY)** — `capital_component`,
+  `tier`, `amount_ghs`. **The component names must map to the recognised set** so
   the paid-up check resolves: use `paid_up_capital` (or stated_capital /
   share_capital / ordinary_shares / common_equity) and `statutory_reserves`. The
-  S&L chart-of-accounts → component mapping is part of onboarding. `tier` is
-  `CET1`, `AT1`, `T2` or a `_DEDUCTION` form; any other value is refused. Do not
-  send the BoG Credit Risk Reserve as capital: it counts toward no tier.
+  S&L chart-of-accounts → component mapping is part of onboarding. Follow the
+  [capital register contract](API_INTEGRATION.md#capital_structure-contract)
+  for amounts, accepted tier spellings and the Credit Risk Reserve exclusion.
 - **`historical_cashflows`** (for the 90-day view) if available.
 
 ## 5. Confirm module readiness (data-quality diagnostics)

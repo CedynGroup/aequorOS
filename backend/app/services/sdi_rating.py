@@ -593,16 +593,20 @@ def _earnings_evidence(
     missing = "no operational_income facts at this date (an income statement must be ingested)"
     return [
         RatioEvidence(
-            "roa_pct", roa, "operational_income/net_income ÷ total assets",
+            "roa_pct",
+            roa,
+            "operational_income/net_income ÷ total assets",
             None if roa is not None else missing,
         ),
         RatioEvidence(
-            "net_interest_margin_pct", nim,
+            "net_interest_margin_pct",
+            nim,
             "operational_income/net_interest_income ÷ earning assets",
             None if nim is not None else missing,
         ),
         RatioEvidence(
-            "cost_to_income_pct", cti,
+            "cost_to_income_pct",
+            cti,
             "operational_income/operating_expenses ÷ gross_income",
             None if cti is not None else missing,
         ),
@@ -614,9 +618,7 @@ def _earnings_evidence(
 # ---------------------------------------------------------------------------
 
 
-def assessment_state(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> SdiAssessment:
+def assessment_state(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> SdiAssessment:
     """The dossier §4 state for this institution at this date.
 
     Never raises for a missing input: an absent prerequisite is state 1 and an
@@ -647,9 +649,7 @@ def assessment_state(
     available: dict[str, Decimal] = {
         item.code: item.value for item in evidence if item.value is not None
     }
-    present_components = {
-        ratio.component for ratio in CANDIDATE_RATIOS if ratio.code in available
-    }
+    present_components = {ratio.component for ratio in CANDIDATE_RATIOS if ratio.code in available}
     omitted = tuple(
         sorted(
             component.code
@@ -712,9 +712,7 @@ def assessment_state(
         operating_environment_matrix=_IDENTITY_ENVIRONMENT,
     )
     composite = sum((component.contribution for component in components), _ZERO)
-    standalone = grade_for_score(
-        min(max(composite, _ZERO), _ONE), grade_cutpoints(), GRADE_ORDER
-    )
+    standalone = grade_for_score(min(max(composite, _ZERO), _ONE), grade_cutpoints(), GRADE_ORDER)
     # The sovereign ceiling binds an SDI exactly as it binds a bank: a domestic
     # institution is not stronger than the sovereign whose paper it holds and
     # whose economy it lends into. Resolved from the SAME tenant-ingested agency
@@ -748,9 +746,7 @@ def assessment_state(
     )
 
 
-def _sovereign_ceiling(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> str | None:
+def _sovereign_ceiling(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> str | None:
     """Ghana's own grade from the tenant's ingested agency observations, or None.
 
     ``None`` means no observation exists for this tenant — the ceiling is then

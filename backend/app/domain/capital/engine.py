@@ -211,11 +211,13 @@ class CapitalRegisterRefused(CapitalComputationError, NotComputable):
 
 
 class _CapitalRegisterFact(Protocol):
-    @property
-    def fact_group(self) -> str: ...
+    """Equality-only attributes, compatible with ORM descriptors and pure facts."""
 
     @property
-    def category(self) -> str: ...
+    def fact_group(self) -> object: ...
+
+    @property
+    def category(self) -> object: ...
 
 
 def assert_capital_register_usable(facts: Iterable[_CapitalRegisterFact]) -> None:
