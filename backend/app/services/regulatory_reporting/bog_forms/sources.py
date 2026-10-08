@@ -134,7 +134,7 @@ def foreign_amount_not_stated(
     )
 
 
-def reporting_currency_value(
+def reporting_currency_value(  # noqa: PLR0913 — measure, attributes and valuation date are independent
     rc: ResolveContext,
     snapshot: CanonicalPositionSnapshot,
     position: CanonicalPosition,
@@ -291,10 +291,8 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
     positions whose snapshot ``as_of_date`` is the latest on/before period end
     are counted (one snapshot per position).
     """
-    # Amounts in CEDIS: the canonical cedi value of a position lives in
-    # snapshot.attributes["balance_ghs"] (what fact_derivation / LMT use). The
-    # Guide's Foreign column is "converted into cedis" — never a sum of mixed
-    # native currencies — so a foreign row without it refuses the cell.
+    # Resolve reporting-currency amounts before summing: an unavailable conversion
+    # must block generation rather than become a native amount or a blank cell.
     is_notional = params.get("measure") == "notional"
     ghs_attr = "notional_ghs" if is_notional else "balance_ghs"
     latest = (

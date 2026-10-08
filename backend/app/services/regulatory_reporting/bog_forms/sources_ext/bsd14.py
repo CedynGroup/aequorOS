@@ -154,7 +154,7 @@ def sector_group(raw: Any) -> str | None:
 class _Row:
     currency: str
     balance: Decimal
-    weight: Decimal  # cedi equivalent when available (for the mixed "other" bucket)
+    weight: Decimal  # reporting-currency weight for the mixed "other" bucket
     rate: Decimal | None  # decimal fraction
     account_type: str | None
     tenor_months: Decimal | None

@@ -33,10 +33,9 @@ derives a classification by heuristics:
   buckets ``None`` while Current/OLEM still resolve (a stage-3 loan is
   definitely neither). Nothing is guessed, nothing is silently dropped.
 
-* **Amounts** are cedi equivalents (Guide: foreign-currency advances are
-  reported converted): ``balance_ghs`` attribute when the source supplies it,
-  the raw balance for base-currency loans, otherwise the platform's preferred
-  FX spot at period end; an unstated conversion blocks generation.
+* **Amounts** follow ``docs/API_INTEGRATION.md`` §3.4's reporting-currency
+  contract. Opening balances use the previous-period cut-off as their FX
+  valuation date, not the current period end.
 * **Provisions**: Σ ``ecl_provision_ghs`` (the position-level allowance the
   capital/ECL engines consume); **interest in suspense**: Σ
   ``interest_in_suspense_ghs``; **allowable security**: Σ ``crm_collateral_ghs``
