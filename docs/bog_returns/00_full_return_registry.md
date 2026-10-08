@@ -157,7 +157,7 @@ backend/app/services/regulatory_reporting/bog_forms/
   `unscaled` (counts, percents, foreign-currency units) is never divided; formula cells get a unit
   by **unit algebra** over the template's own formula (money ÷ money → unitless, so CAR% and
   '% of total' cells export as percentages, count subtotals as counts).
-- **`positions.sum`** sums the canonical cedi value (`balance_ghs`, falling back to native balance),
+- **`positions.sum`** follows the [reporting-currency amount contract](../API_INTEGRATION.md#34-position),
   compares JSON attributes typed-or-text, and supports `counterparty_types_not`.
 
 ## 5. Waves (sequence only — the assignment is complete only after Wave 4)

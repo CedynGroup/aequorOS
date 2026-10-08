@@ -50,7 +50,7 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
 )
 
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: The template's named foreign-currency rows.
 NAMED_CURRENCIES: tuple[str, ...] = ("USD", "GBP", "DEM")
@@ -154,7 +154,7 @@ def sector_group(raw: Any) -> str | None:
 class _Row:
     currency: str
     balance: Decimal
-    weight: Decimal  # cedi equivalent when available (for the mixed "other" bucket)
+    weight: Decimal  # reporting-currency weight for the mixed "other" bucket
     rate: Decimal | None  # decimal fraction
     account_type: str | None
     tenor_months: Decimal | None
@@ -215,13 +215,8 @@ def _book(rc: ResolveContext, position_type: str) -> tuple[_Row, ...]:
     )
     stmt = (
         select(
-            CanonicalPosition.currency,
-            CanonicalPosition.origination_date,
-            CanonicalPositionSnapshot.balance,
-            CanonicalPositionSnapshot.interest_rate,
-            CanonicalPositionSnapshot.deposit_account_type,
-            CanonicalPositionSnapshot.contractual_maturity,
-            CanonicalPositionSnapshot.attributes,
+            CanonicalPositionSnapshot,
+            CanonicalPosition,
             CanonicalCounterparty.attributes,
         )
         .select_from(CanonicalPositionSnapshot)
@@ -247,35 +242,26 @@ def _book(rc: ResolveContext, position_type: str) -> tuple[_Row, ...]:
         )
     )
     rows: list[_Row] = []
-    for (
-        currency,
-        origination,
-        balance,
-        rate,
-        account_type,
-        maturity,
-        attrs,
-        cp_attrs,
-    ) in rc.db.execute(stmt):
-        attributes = dict(attrs or {})
+    for snapshot, position, cp_attrs in rc.db.execute(stmt).tuples():
+        attributes = dict(snapshot.attributes or {})
         cp_attributes = dict(cp_attrs or {})
         raw_sector = attributes.get("sector", cp_attributes.get("sector"))
-        amount = Decimal(str(balance or 0))
-        ghs = attributes.get("balance_ghs")
-        weight = amount
-        if ghs not in (None, ""):
-            try:
-                weight = Decimal(str(ghs))
-            except ArithmeticError:
-                weight = amount
+        weight = reporting_currency_value(rc, snapshot, position, attributes=attributes)
         rows.append(
             _Row(
-                currency=str(currency).upper(),
-                balance=amount,
+                currency=position.currency.upper(),
+                balance=snapshot.balance,
                 weight=abs(weight),
-                rate=Decimal(str(rate)) if rate is not None else None,
-                account_type=str(account_type).upper() if account_type else None,
-                tenor_months=_tenor_months(attributes, origination, maturity, rc.period.period_end),
+                rate=snapshot.interest_rate,
+                account_type=(
+                    snapshot.deposit_account_type.upper() if snapshot.deposit_account_type else None
+                ),
+                tenor_months=_tenor_months(
+                    attributes,
+                    position.origination_date,
+                    snapshot.contractual_maturity,
+                    rc.period.period_end,
+                ),
                 sector=sector_group(raw_sector),
                 attributes=attributes,
             )

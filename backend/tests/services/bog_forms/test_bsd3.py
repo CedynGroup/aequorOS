@@ -27,7 +27,7 @@ from __future__ import annotations
 import io
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import openpyxl
 import pytest
@@ -264,6 +264,54 @@ def _generate(db_client: TestClient, code: str, reporting_date: str) -> dict[str
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}", headers=headers()
     ).json()
     return detail["snapshot"]
+
+
+@pytest.mark.parametrize(
+    ("reference", "missing"),
+    [
+        ("DEP/KUM/USD", "balance_ghs"),
+        ("SEC/GCB", "balance_ghs"),
+        ("LOAN/KUM", "notional_ghs"),
+        ("UND/KUM", "notional_ghs"),
+        ("LC/KUM", "notional_ghs"),
+    ],
+)
+def test_bsd3_refuses_unstated_foreign_amounts(
+    db_client: TestClient, seeded_book: str, reference: str, missing: str
+) -> None:
+    session = _session()
+    try:
+        snapshot = session.scalar(
+            select(CanonicalPositionSnapshot).where(
+                CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+                CanonicalPositionSnapshot.source_reference == reference,
+            )
+        )
+        assert snapshot is not None
+        position = session.get(CanonicalPosition, snapshot.position_id)
+        assert position is not None
+        position.currency = "USD"
+        attributes = dict(cast(dict[str, object], snapshot.attributes))
+        attributes.pop(missing, None)
+        if reference == "LOAN/KUM":
+            snapshot.notional = Decimal("200000")
+            attributes["credit_conversion_factor"] = "0.5"
+        snapshot.attributes = attributes
+        session.commit()
+    finally:
+        session.close()
+
+    response = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
+        headers=headers(),
+        json={"return_code": "BSD3A", "reporting_date": seeded_book},
+    )
+    assert response.status_code == 409, response.text
+    detail = cast(dict[str, dict[str, dict[str, str]]], response.json())["error"]["details"]
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert reference in detail["message"]
+    assert missing in detail["message"]
+    assert "Ingest" in detail["message"]
 
 
 def _declared_cells(code: str) -> dict[str, set[str]]:

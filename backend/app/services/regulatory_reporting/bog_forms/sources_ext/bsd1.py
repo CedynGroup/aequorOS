@@ -39,7 +39,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, or_, select
 
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
@@ -51,7 +51,7 @@ from app.models.canonical import (
 from app.models.regulatory import BankFinancialFact
 from app.services import market_data_sources
 
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: Column key → days BEFORE the week's Wednesday (the PERIOD / reporting date).
 #: The template's own header formulas fix this: ``B28 = B3-6`` (THURS) … ``H28 = B3``.
@@ -66,8 +66,6 @@ DAY_COLUMNS: dict[str, int] = {
 }
 #: The DEPOSITS block reports the previous week (``B7 = B3-13``).
 PREVIOUS_WEEK_SHIFT = 7
-
-_ZERO = Decimal(0)
 
 
 def target_date(rc: ResolveContext, params: dict[str, Any]) -> date | None:
@@ -142,25 +140,15 @@ def _attribute_equals(key: str, value: Any) -> Any:
     return or_(text_match, attribute.as_float() == float(value))
 
 
-def _cedi_measure(rc: ResolveContext, params: dict[str, Any]) -> Any:
-    """Balance in BASE units: the raw balance for base-currency positions, the
-    ingested ``attributes.balance_ghs`` for foreign-currency ones (the same
-    convention fact derivation applies). ``measure="native"`` returns the raw
-    balance in the position's own currency (Annex 1 balances by currency)."""
-    if params.get("measure") == "native":
-        return CanonicalPositionSnapshot.balance
-    converted = func.coalesce(
-        CanonicalPositionSnapshot.attributes["balance_ghs"].as_numeric(28, 6), _ZERO
-    )
-    return case(
-        (CanonicalPosition.currency == rc.bank.currency, CanonicalPositionSnapshot.balance),
-        else_=converted,
-    )
+def _is_native(params: dict[str, Any]) -> bool:
+    """``measure="native"``: the raw balance in the position's own currency
+    (Annex 1 balances by currency), not a reporting-currency amount."""
+    return params.get("measure") == "native"
 
 
 def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decimal:  # noqa: PLR0912
     stmt = (
-        select(func.coalesce(func.sum(_cedi_measure(rc, params)), 0))
+        select(CanonicalPositionSnapshot, CanonicalPosition)
         .select_from(CanonicalPositionSnapshot)
         .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
         .where(
@@ -209,8 +197,15 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
         stmt = stmt.where(CanonicalPosition.currency == str(currency))
     if excluded := params.get("currencies_not_in"):
         stmt = stmt.where(CanonicalPosition.currency.not_in(list(excluded)))
-    value = rc.db.scalar(stmt)
-    return Decimal(str(value or 0))
+    return sum(
+        (
+            snapshot.balance
+            if _is_native(params) or position.currency == rc.bank.currency
+            else reporting_currency_value(rc, snapshot, position, valuation_date=day)
+            for snapshot, position in rc.db.execute(stmt).tuples()
+        ),
+        Decimal("0"),
+    )
 
 
 def _facts_sum(rc: ResolveContext, spec: dict[str, Any]) -> Decimal:

@@ -71,7 +71,12 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 
-from ..sources import ResolveContext, get_resolver, resolver
+from ..sources import (
+    ResolveContext,
+    get_resolver,
+    reporting_currency_value,
+    resolver,
+)
 
 #: Band keys in template column order (D … K); the line map binds them to the
 #: sheet's bucket columns and the resolver reads them from ``rc.column``.
@@ -161,11 +166,7 @@ class _PositionRow:
 def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
     rc: ResolveContext, params: dict[str, Any], *, bsd2_column: str
 ) -> list[_PositionRow]:
-    measure = (
-        CanonicalPositionSnapshot.notional
-        if params.get("measure") == "notional"
-        else CanonicalPositionSnapshot.balance
-    )
+    ghs_attr = "notional_ghs" if params.get("measure") == "notional" else "balance_ghs"
     latest = (
         select(
             CanonicalPositionSnapshot.position_id.label("pid"),
@@ -183,14 +184,7 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
         .subquery()
     )
     stmt = (
-        select(
-            measure,
-            CanonicalPosition.position_type,
-            CanonicalPositionSnapshot.contractual_maturity,
-            CanonicalPositionSnapshot.behavioral_maturity_months,
-            CanonicalPositionSnapshot.deposit_account_type,
-            CanonicalPositionSnapshot.attributes,
-        )
+        select(CanonicalPositionSnapshot, CanonicalPosition)
         .select_from(CanonicalPositionSnapshot)
         .join(
             latest,
@@ -246,15 +240,20 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
         stmt = stmt.where(CanonicalPosition.currency != rc.bank.currency)
     sign = Decimal(str(params.get("sign", 1)))
     rows: list[_PositionRow] = []
-    for amount, ptype, maturity, behavioural, account_type, attributes in rc.db.execute(stmt):
+    for snapshot, position in rc.db.execute(stmt).tuples():
+        if position.currency == rc.bank.currency:
+            native = snapshot.notional if ghs_attr == "notional_ghs" else snapshot.balance
+            amount = native or Decimal("0")
+        else:
+            amount = reporting_currency_value(rc, snapshot, position, ghs_attr=ghs_attr)
         rows.append(
             _PositionRow(
-                amount=Decimal(str(amount or 0)) * sign,
-                position_type=str(ptype),
-                contractual_maturity=maturity,
-                behavioral_maturity_months=behavioural,
-                deposit_account_type=account_type,
-                attributes=dict(attributes or {}),
+                amount=amount * sign,
+                position_type=position.position_type,
+                contractual_maturity=snapshot.contractual_maturity,
+                behavioral_maturity_months=snapshot.behavioral_maturity_months,
+                deposit_account_type=snapshot.deposit_account_type,
+                attributes=dict(snapshot.attributes or {}),
             )
         )
     return rows

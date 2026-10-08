@@ -206,7 +206,7 @@ def _seed_book(session: Any, as_of: date) -> None:
         )
 
     # Schedule A — USD book
-    position("CASH/USD", "CASH", "USD", USD_CASH)
+    position("CASH/USD", "CASH", "USD", USD_CASH, attributes={"balance_ghs": "250000"})
     position(
         "IBP/USD",
         "INTERBANK_PLACEMENT",
@@ -214,9 +214,24 @@ def _seed_book(session: Any, as_of: date) -> None:
         USD_PLACEMENT_ABROAD,
         counterparty=foreign_bank,
         maturity=as_of + timedelta(days=30),
+        attributes={"balance_ghs": "3750000"},
     )
-    position("LOAN/USD", "LOAN", "USD", USD_LOAN, counterparty=corporate)
-    position("DEP/USD", "DEPOSIT", "USD", USD_DEPOSIT, counterparty=corporate)
+    position(
+        "LOAN/USD",
+        "LOAN",
+        "USD",
+        USD_LOAN,
+        counterparty=corporate,
+        attributes={"balance_ghs": "12500000"},
+    )
+    position(
+        "DEP/USD",
+        "DEPOSIT",
+        "USD",
+        USD_DEPOSIT,
+        counterparty=corporate,
+        attributes={"balance_ghs": "2500000"},
+    )
     # Other currencies (cedi 'Million column): a EUR loan with its cedi value
     position("LOAN/EUR", "LOAN", "EUR", EUR_LOAN, attributes={"balance_ghs": str(EUR_LOAN_GHS)})
     # Schedule C — the FX contract book (engine convention: balance = notional
@@ -234,6 +249,8 @@ def _seed_book(session: Any, as_of: date) -> None:
             "sell_currency": "USD",
             "buy_currency": "GHS",
             "contract_rate": str(FWD_SALE_RATE),
+            "balance_ghs": "7500000",
+            "notional_ghs": "7500000",
         },
     )
     position(
@@ -242,7 +259,13 @@ def _seed_book(session: Any, as_of: date) -> None:
         "USD",
         SPOT_SALE_USD,
         maturity=as_of + timedelta(days=1),
-        attributes={"instrument": "spot", "sell_currency": "USD", "buy_currency": "GHS"},
+        attributes={
+            "instrument": "spot",
+            "sell_currency": "USD",
+            "buy_currency": "GHS",
+            "balance_ghs": "625000",
+            "notional_ghs": "625000",
+        },
     )
     position(
         "FWD/PURCHASE",

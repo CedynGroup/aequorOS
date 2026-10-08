@@ -43,9 +43,9 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
-from app.services import jurisdictions
+from app.policy.public import base_currency
 
-from ..sources import ResolveContext, resolver
+from ..sources import ResolveContext, reporting_currency_value, resolver
 
 #: Roles that make a related party a *director* for Sheets 1/2/4 (Guide BSD11:
 #: "each Director of the bank (including Chairman and Managing Directors)").
@@ -105,32 +105,6 @@ def _fmt_number(value: Decimal) -> str:
     if value == value.to_integral_value():
         return f"{int(value):,}"
     return f"{value:,.2f}"
-
-
-def _amount_ghs(
-    snapshot: CanonicalPositionSnapshot,
-    position: CanonicalPosition,
-    base_currency: str,
-    *,
-    prefer_notional: bool,
-) -> Decimal:
-    """Cedi amount of a snapshot under the platform's documented convention:
-    an ingested ``balance_ghs``/``notional_ghs`` attribute wins; a base-currency
-    book uses the raw figure; a foreign-currency book WITHOUT an ingested
-    conversion contributes zero (never an invented rate)."""
-    attributes = snapshot.attributes or {}
-    if prefer_notional:
-        ingested = _dec(attributes.get("notional_ghs"))
-        if ingested is not None:
-            return ingested
-        if position.currency == base_currency and snapshot.notional is not None:
-            return Decimal(str(snapshot.notional))
-    ingested = _dec(attributes.get("balance_ghs"))
-    if ingested is not None:
-        return ingested
-    if position.currency == base_currency:
-        return Decimal(str(snapshot.balance or _ZERO))
-    return _ZERO
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +230,18 @@ class _Facility:
     amount_ghs: Decimal
 
 
+def _amount_ghs(
+    rc: ResolveContext, snapshot: CanonicalPositionSnapshot, position: CanonicalPosition
+) -> Decimal:
+    if position.currency == base_currency(rc.bank) and position.position_type in OFF_BALANCE_TYPES:
+        notional = _dec((snapshot.attributes or {}).get("notional_ghs"))
+        if notional is not None:
+            return notional
+        if snapshot.notional is not None:
+            return snapshot.notional
+    return reporting_currency_value(rc, snapshot, position)
+
+
 def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> list[_Facility]:
     key = f"bsd11:facilities:{','.join(position_types)}"
     cached = rc.cache.get(key)
@@ -282,46 +268,49 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
     )
-    records = rc.db.execute(
-        select(
-            CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
+    records = (
+        rc.db.execute(
+            select(
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty,
+                CanonicalProduct,
+            )
+            .join(
+                latest,
+                (latest.c.pid == CanonicalPositionSnapshot.position_id)
+                & (latest.c.as_of == CanonicalPositionSnapshot.as_of_date),
+            )
+            .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalCounterparty.id == CanonicalPositionSnapshot.counterparty_id,
+            )
+            .outerjoin(
+                CanonicalProduct, CanonicalProduct.id == CanonicalPositionSnapshot.product_id
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == rc.bank.id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                CanonicalPosition.superseded_by.is_(None),
+                CanonicalPosition.withdrawn_at.is_(None),
+                CanonicalPosition.position_type.in_(list(position_types)),
+            )
+            .order_by(CanonicalPositionSnapshot.source_reference)
         )
-        .join(
-            latest,
-            (latest.c.pid == CanonicalPositionSnapshot.position_id)
-            & (latest.c.as_of == CanonicalPositionSnapshot.as_of_date),
-        )
-        .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalCounterparty.id == CanonicalPositionSnapshot.counterparty_id,
-        )
-        .outerjoin(CanonicalProduct, CanonicalProduct.id == CanonicalPositionSnapshot.product_id)
-        .where(
-            CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == rc.bank.id,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.superseded_by.is_(None),
-            CanonicalPosition.withdrawn_at.is_(None),
-            CanonicalPosition.position_type.in_(list(position_types)),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
-    base = jurisdictions.base_currency(rc.bank)
+        .tuples()
+        .all()
+    )
     facilities = [
         _Facility(
             position=position,
             snapshot=snapshot,
             counterparty=counterparty,
             product=product,
-            amount_ghs=_amount_ghs(
-                snapshot,
-                position,
-                base,
-                prefer_notional=position.position_type in OFF_BALANCE_TYPES,
-            ),
+            amount_ghs=_amount_ghs(rc, snapshot, position),
         )
         for snapshot, position, counterparty, product in records
     ]

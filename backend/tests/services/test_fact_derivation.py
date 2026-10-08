@@ -17,6 +17,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalFxRate,
     CanonicalGlAccount,
+    CanonicalPositionSnapshot,
     CanonicalReferenceRow,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
@@ -111,6 +112,45 @@ def _by_group(facts: list[BankFinancialFact]) -> dict[str, dict[str, BankFinanci
     for fact in facts:
         grouped.setdefault(fact.fact_group, {})[fact.category] = fact
     return grouped
+
+
+def _off_balance_total_with_lc1(db_session: Session, attributes: dict[str, str | None]) -> Decimal:
+    """Derive with LC/1's attributes replaced and return the off-balance fact total."""
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+            CanonicalPositionSnapshot.source_reference == "LC/1",
+        )
+    )
+    assert snapshot is not None
+    snapshot.attributes = attributes
+    db_session.flush()
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    assert not any("LC/1" in warning and "EXCLUDED" in warning for warning in result.warnings)
+    off_balance = _by_group(_facts(db_session, result)).get("off_balance", {})
+    return sum((fact.amount for fact in off_balance.values()), Decimal("0"))
+
+
+@pytest.mark.parametrize("notional", [None, "0"])
+def test_off_balance_guarantee_keeps_its_stated_balance_when_notional_is_missing(
+    db_session: Session, notional: str | None
+) -> None:
+    """Basis: Prudential (BoG CRD 2018) off-balance credit equivalent.
+
+    A guarantee with a stated reporting-currency balance but no notional is measured at
+    that stated amount, exactly as if it were the notional. Dropping it would understate
+    risk-weighted assets and overstate capital.
+    """
+    _prepare(db_session)
+    via_balance = _off_balance_total_with_lc1(
+        db_session,
+        {"balance_ghs": "9999999", "notional_ghs": notional, "credit_conversion_factor": "0.2"},
+    )
+    via_notional = _off_balance_total_with_lc1(
+        db_session, {"notional_ghs": "9999999", "credit_conversion_factor": "0.2"}
+    )
+    assert via_balance == via_notional
+    assert via_balance > Decimal("0")
 
 
 def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0915

@@ -105,13 +105,33 @@ _BOOK: tuple[
     ("DEP/TD12", "DEPOSIT", "GHS", "8000000", "0.17", "FIXED", 200, 165, {}),  # 365-day term
     ("DEP/TD12b", "DEPOSIT", "GHS", "2000000", "0.22", "FIXED", 300, 60, {}),  # 360-day term
     ("DEP/CALL", "DEPOSIT", "GHS", "3000000", None, "CALL", None, None, {}),  # no rate
-    ("DEP/USD", "DEPOSIT", "USD", "200000", "0.03", "SAVINGS", None, None, {}),
+    (
+        "DEP/USD",
+        "DEPOSIT",
+        "USD",
+        "200000",
+        "0.03",
+        "SAVINGS",
+        None,
+        None,
+        {"balance_ghs": "2400000"},
+    ),
     ("LOAN/AGR1", "LOAN", "GHS", "30000000", "0.26", None, None, None, _AGR1),
     ("LOAN/AGR2", "LOAN", "GHS", "10000000", "0.28", None, None, None, _AGR2),
     ("LOAN/IMP", "LOAN", "GHS", "5000000", "0.30", None, None, None, _IMP),
     ("LOAN/EXP", "LOAN", "GHS", "4000000", "0.24", None, None, None, _EXP),
     ("LOAN/UNCL", "LOAN", "GHS", "2000000", "0.35", None, None, None, {}),  # unclassified
-    ("LOAN/USD", "LOAN", "USD", "1000000", "0.10", None, None, None, _MINE),
+    (
+        "LOAN/USD",
+        "LOAN",
+        "USD",
+        "1000000",
+        "0.10",
+        None,
+        None,
+        None,
+        {**_MINE, "balance_ghs": "12000000"},
+    ),
 )
 
 EXPECTED = {

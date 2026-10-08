@@ -44,10 +44,11 @@ Documented derivation decisions (kept honest — nothing absent is fabricated):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -56,6 +57,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.market_data import public as market_data_sources
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -253,7 +255,6 @@ class _CanonicalRow:
     position_type: str
     currency: str
     balance_ghs: Decimal
-    has_ghs_value: bool
     contractual_maturity: date | None
     ifrs9_stage: int | None
     undrawn_ccf_ghs: Decimal
@@ -338,47 +339,93 @@ def _unvalidated_disclosure(
 def _load_canonical_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date, position_types: tuple[str, ...]
 ) -> list[_CanonicalRow]:
-    records = db.execute(
-        select(
-            CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
+    records = (
+        db.execute(
+            select(
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty,
+                CanonicalProduct,
+            )
+            .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
+            )
+            .outerjoin(
+                CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.as_of_date == as_of,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                CanonicalPosition.position_type.in_(position_types),
+            )
+            .order_by(CanonicalPositionSnapshot.source_reference)
         )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .outerjoin(CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id)
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.position_type.in_(position_types),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
+        .tuples()
+        .all()
+    )
 
     base_currency = jurisdictions.base_currency(bank)
     rows: list[_CanonicalRow] = []
-    for snapshot, position, counterparty, product in records:
+    unstated: list[str] = []
+    unstated_currencies: set[str] = set()
+    spot_rates: dict[tuple[str, str, date], Decimal | None] = {}
+    # SQLAlchemy's inferred tuple omits the nullable sides of the outer joins.
+    for snapshot, position, counterparty, product in cast(
+        Sequence[
+            tuple[
+                CanonicalPositionSnapshot,
+                CanonicalPosition,
+                CanonicalCounterparty | None,
+                CanonicalProduct | None,
+            ]
+        ],
+        records,
+    ):
         attributes = snapshot.attributes or {}
         balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
-        has_ghs_value = True
-        if balance_ghs is None:
-            if position.currency == base_currency:
-                balance_ghs = Decimal(str(snapshot.balance or _ZERO))
-            else:
-                # Mirrors fact_derivation: a foreign-currency book without an
-                # ingested GHS conversion contributes zero, never a made-up
-                # converted amount (surfaced as an INFO finding).
-                balance_ghs = _ZERO
-                has_ghs_value = False
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
-        if notional_ghs is None and position.currency == base_currency:
-            notional_ghs = _dec_or_none(snapshot.notional)
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
+        off_balance = position.position_type in _T2_OFF_BALANCE
+        # An off-balance-sheet row is measured by its notional: a foreign one has no
+        # on-balance-sheet amount to state, so a missing balance_ghs is zero, not a gap.
+        foreign_off_balance = off_balance and position.currency != base_currency
+        balance_ghs = _ZERO if foreign_off_balance and balance_ghs is None else balance_ghs
+        if position.currency == base_currency:
+            if balance_ghs is None:
+                balance_ghs = Decimal(str(snapshot.balance or _ZERO))
+            if notional_ghs is None:
+                notional_ghs = _dec_or_none(snapshot.notional)
+        else:
+            if off_balance and notional_ghs is None and snapshot.notional is not None:
+                key = (position.currency, base_currency, as_of)
+                if key not in spot_rates:
+                    quote = market_data_sources.preferred_fx_spot(
+                        db, ctx.organization_id, bank.id, position.currency, base_currency, as_of
+                    )
+                    spot_rates[key] = Decimal(str(quote.rate)) if quote is not None else None
+                rate = spot_rates[key]
+                if rate is not None:
+                    notional_ghs = snapshot.notional * rate
+            missing: list[str] = []
+            if balance_ghs is None:
+                missing.append("balance_ghs")
+            if notional_ghs is None and (
+                snapshot.notional is not None
+                or ccf is not None
+                or position.position_type in _T2_OFF_BALANCE
+            ):
+                missing.append("notional_ghs")
+            if missing:
+                unstated.append(f"{snapshot.source_reference} ({', '.join(missing)})")
+                unstated_currencies.add(position.currency)
+                continue
+        assert balance_ghs is not None
         undrawn = notional_ghs * ccf if notional_ghs is not None and ccf is not None else _ZERO
         issuer = attributes.get("issuer")
         obs_category = attributes.get("obs_category")
@@ -387,7 +434,6 @@ def _load_canonical_rows(
                 position_type=position.position_type,
                 currency=position.currency,
                 balance_ghs=balance_ghs,
-                has_ghs_value=has_ghs_value,
                 contractual_maturity=snapshot.contractual_maturity,
                 ifrs9_stage=snapshot.ifrs9_stage,
                 undrawn_ccf_ghs=undrawn,
@@ -425,6 +471,14 @@ def _load_canonical_rows(
                 collateral=_collateral_attributes(attributes),
                 product_name=product.name if product is not None else None,
             )
+        )
+    if unstated:
+        currencies = ", ".join(sorted(unstated_currencies))
+        raise _conflict_409(
+            "foreign_amount_not_stated",
+            f"{len(unstated)} foreign-currency position(s) in {currencies} at "
+            f"{as_of.isoformat()} lack required reporting-currency amounts: "
+            f"{'; '.join(unstated)}. Ingest the stated amounts before generating the return.",
         )
     return rows
 
@@ -834,7 +888,6 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
             "position data for the period end before generating the Large Exposures "
             "return.",
         )
-
     entities, unattributed_ghs, unattributed_count = _aggregate_entities(rows)
     threshold = nof * _LE_THRESHOLD_FRACTION
     non_exempt = [entity for entity in entities if not entity.exempt]
@@ -872,17 +925,6 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
                 f"{unattributed_count} position(s) totalling {unattributed_ghs} GHS "
                 "carry neither a counterparty link nor an issuer attribute and are "
                 "excluded from the counterparty templates.",
-            )
-        )
-    unconverted = sum(1 for row in rows if not row.has_ghs_value)
-    if unconverted:
-        findings.append(
-            _finding(
-                "le.missing_ghs_conversion",
-                "INFO",
-                f"{unconverted} foreign-currency position(s) without an ingested "
-                "balance_ghs conversion contribute zero exposure (mirrors the fact "
-                "pipeline; nothing is converted at a made-up rate).",
             )
         )
 

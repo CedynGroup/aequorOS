@@ -221,6 +221,11 @@ def _seed_positions(session: Any) -> None:  # noqa: PLR0915 — one linear fixtu
         )
         session.add(row)
         session.flush()
+        # A foreign row states its cedi equivalent, as a bank must; the fixture
+        # states it at par so each expected figure reads as the amount given here.
+        attrs = dict(attributes or {})
+        if currency != "GHS":
+            attrs["balance_ghs"] = balance
         session.add(
             CanonicalPositionSnapshot(
                 **common,
@@ -231,7 +236,7 @@ def _seed_positions(session: Any) -> None:  # noqa: PLR0915 — one linear fixtu
                 contractual_maturity=maturity,
                 deposit_account_type=deposit_account_type,
                 behavioral_maturity_months=behavioral_months,
-                attributes=attributes or {},
+                attributes=attrs,
             )
         )
 

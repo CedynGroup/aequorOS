@@ -1994,19 +1994,19 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.bog_forms.sources": {
-  "reportAny": 61,
+  "reportAny": 59,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 3,
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 33,
+  "reportAny": 30,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd11": {
-  "reportAny": 25,
+  "reportAny": 14,
   "reportUnknownArgumentType": 1,
   "reportUnknownVariableType": 1,
   "reportUnusedFunction": 1
@@ -2018,7 +2018,7 @@
   "reportUnusedFunction": 3
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd14": {
-  "reportAny": 28,
+  "reportAny": 14,
   "reportUnknownArgumentType": 4,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
@@ -2044,7 +2044,7 @@
   "reportUnusedFunction": 2
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd4": {
-  "reportAny": 24,
+  "reportAny": 22,
   "reportUnknownVariableType": 2,
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 3
@@ -2054,7 +2054,7 @@
   "reportUnusedFunction": 6
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd6": {
-  "reportAny": 33,
+  "reportAny": 23,
   "reportUnknownArgumentType": 1,
   "reportUnknownVariableType": 2,
   "reportUnusedFunction": 1
@@ -2067,9 +2067,8 @@
   "reportUnusedFunction": 4
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd8": {
-  "reportAny": 43,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 4,
+  "reportAny": 13,
+  "reportUnknownVariableType": 3,
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 2
  },
@@ -2153,10 +2152,9 @@
   "reportUnnecessaryIsInstance": 1
  },
  "app.services.regulatory_reporting.le_generation": {
-  "reportAny": 53,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 8,
-  "reportUnknownVariableType": 3
+  "reportAny": 12,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1
  },
  "app.services.regulatory_reporting.lrt_generation": {
   "reportAny": 4
@@ -2628,7 +2626,7 @@
   "reportUnusedFunction": 2
  },
  "tests.api.test_bi_commentary_routes": {
-  "reportAny": 147
+  "reportAny": 146
  },
  "tests.api.test_bi_content_metering": {
   "reportAny": 9,
