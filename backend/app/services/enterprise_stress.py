@@ -141,7 +141,7 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: and an incomplete source book cannot supply a whole-book modelled allowance.
 #: v4 keeps the booked general provisions in Tier 2 on both legs: modelled ECL,
 #: stage 3 included, no longer stands in for them.
-ENGINE_VERSION = "enterprise-stress-v4.0.0"
+ENGINE_VERSION = "enterprise-stress-v4.1.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader

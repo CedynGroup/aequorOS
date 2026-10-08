@@ -43,6 +43,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
+    STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
     EclComputationError,
     EclExposure,
@@ -134,7 +135,7 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-ENGINE_VERSION = "enterprise-stress-v4.0.0"
+ENGINE_VERSION = "enterprise-stress-v4.1.0"
 
 # --- Capital-path composition coefficients -----------------------------------
 # Documented, defensible linear elasticities that turn the macro scenario into
@@ -225,12 +226,13 @@ def _stress_ecl(
     pd_mult: Decimal,
     lgd_mult: Decimal,
 ) -> tuple[Decimal, Decimal]:
-    """(baseline_ecl, stressed_ecl) in Perfect-Foresight / Single-Scenario form.
+    """Stage 1+2 ECL in Perfect-Foresight / Single-Scenario form.
 
     Baseline is the through-the-cycle ECL (100% weight, no conditioning);
     stressed ascribes 100% weight to the single macro scenario, its PD/LGD
     scaled by the macro multipliers (¶48–49). Deterministic — no probability
-    blend across scenarios.
+    blend across scenarios. Stage 3 specific provisions never enter the
+    incremental CET1 charge.
     """
     base = compute_ecl(exposures, assumptions, (BASE_SCENARIO,))
     stressed = compute_ecl(
@@ -247,7 +249,7 @@ def _stress_ecl(
     )
     base.require_coverage()
     stressed.require_coverage()
-    return base.total_ecl, stressed.total_ecl
+    return base.general_ecl, stressed.general_ecl
 
 
 def _after_tax_income(
@@ -306,7 +308,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     the macro scenario plus the projected book:
 
     - ``quarterly_credit_loss_m`` — from the ECL-under-stress path: the annual
-      incremental impairment (stressed minus baseline ECL) spread over four
+      incremental general impairment (stressed minus baseline stage 1+2 ECL) over four
       quarters, on top of the through-the-cycle baseline loss. When no staged
       ``ecl_exposure`` data is supplied it falls back to
       ``allowance × (pd·lgd − 1)`` on the existing credit allowance.
@@ -317,6 +319,9 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     - ``fx_rwa_multiplier`` — from the macro FX driver (open-position revaluation).
 
     All four are neutral under a base scenario, so ``baseline`` == ``stressed``.
+    Conservative: no tax shield applied to incremental credit loss pending a
+    governed tax-rate parameter and supported deferred-tax recognition.
+    ``tax_rate_pct`` only taxes positive operating income.
     """
     pd_mult, lgd_mult = _capital_multipliers(scenario_paths, overrides)
     # The three drivers this composition reads outside the elasticity register
@@ -438,7 +443,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
             ),
             "quarterly_credit_loss_m": (
                 f"baseline {money(baseline_annual_credit_loss)} + incremental "
-                f"{annual_incremental_loss} ({ecl_source})"
+                f"{annual_incremental_loss} ({ecl_source}); {STRESS_CHARGE_TAX_TREATMENT}"
             ),
         },
     )
@@ -912,7 +917,16 @@ def _serialize_capital(capital: CapitalOutcome) -> dict[str, object]:
         "lgd_multiplier": str(comp.lgd_multiplier),
         "ecl_base": str(comp.ecl_base),
         "ecl_stress": str(comp.ecl_stress),
+        "ecl_basis": (
+            "modelled_what_if_stages_1_2"
+            if comp.ecl_source == "ecl_engine"
+            else "booked_general_provisions_proxy"
+        ),
         "annual_incremental_credit_loss": str(comp.annual_incremental_credit_loss),
+        "incremental_credit_loss_basis": {
+            "basis": "prudential_stress",
+            "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+        },
         "income_stress_factor": str(comp.income_stress_factor),
         "ecl_source": comp.ecl_source,
         "rationale": comp.rationale,

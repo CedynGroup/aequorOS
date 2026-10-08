@@ -1208,9 +1208,19 @@ general provisions, the figure of record, in capital runs, forecasts and
 enterprise stress. A capital scenario that conditions the ECL (`ecl_*` shock
 keys) takes the increase in modelled stage 1+2 ECL over the unconditioned
 baseline as a CET1 deduction (`modelled_ecl_stress_charge`,
-`ecl_stress_charge_ghs`), gross of tax because the capital run carries no
-governed tax rate; a fall is never credited. Enterprise stress puts its
-incremental credit loss through CET1 via the quarterly credit-loss key.
+`ecl_stress_charge_ghs`); a fall is never credited. Capital and enterprise
+stress apply the conservative treatment: no tax shield applied pending a
+governed tax-rate parameter and supported deferred-tax recognition. Plan tax
+defaults and overrides only tax positive operating income; they do not
+authorize an ECL tax shield. Enterprise stress puts only the increase in
+stage 1+2 ECL through CET1 via the quarterly credit-loss key, excluding stage 3
+specific provisions; its fallback scales booked general provisions.
+
+The ECL registry entries are `advisory_only`, so reporting provenance identifies
+them as what-if estimates. Capital run metrics carry per-figure `basis` metadata
+for prudential figures using booked allowances, modelled totals and stages,
+ingested unstaged EAD and conservative prudential stress charges. Enterprise
+outcomes label their ECL basis and incremental credit-loss tax treatment.
 
 Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
 loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in

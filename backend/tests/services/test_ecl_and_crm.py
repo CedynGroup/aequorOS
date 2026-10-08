@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.authority.registry import AdvisoryDesignation, authorities_for_metric
 from app.domain.capital.ecl import (
     EclAssumption,
     EclComputationError,
@@ -46,6 +47,7 @@ from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
+from app.services.regulatory_reporting.provenance import declared_methodology_notes
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -286,6 +288,7 @@ def _run_capital(db: Session, period_id, scenario: str):
 
 
 def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Session) -> None:
+    """Basis: Advisory modelled IFRS 9 ECL beside booked prudential allowances, with gross stress."""
     materialize_canonical_test_book(db_session)
     period = _seed_ecl_facts(db_session)
 
@@ -327,6 +330,23 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert Decimal(metrics["ecl_general_ghs"]) == Decimal("2025000.0000")
     assert Decimal(metrics["ecl_specific_ghs"]) == Decimal("6000000.0000")
     assert Decimal(metrics["ecl_total_ghs"]) == Decimal("8025000.0000")
+    basis = cast(dict[str, dict[str, str]], run.metrics["basis"])
+    for key in (
+        "ecl_total_ghs",
+        "ecl_general_ghs",
+        "ecl_specific_ghs",
+        "ecl_stage1_ghs",
+        "ecl_stage2_ghs",
+        "ecl_stage3_ghs",
+    ):
+        assert basis[key] == {
+            "basis": "modelled_what_if",
+            "advisory_designation": "advisory_only",
+        }
+    assert basis["total_capital_ghs"] == {
+        "basis": "prudential",
+        "allowance_basis": "booked_general_provisions",
+    }
     # Configured assumptions enter the snapshot: the hash must move.
     assert stored.input_hash != stored_before.input_hash
     # Deterministic: an identical rerun reproduces the hash.
@@ -358,6 +378,59 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert Decimal(stored_severe.metrics["ecl_general_ghs"]) == Decimal("4050000.0000")
     # Stage 3 PD is already 100%: conditioning must not inflate it.
     assert Decimal(stored_severe.metrics["ecl_specific_ghs"]) == Decimal("6000000.0000")
+    assert Decimal(severe.metrics["ecl_stress_charge_ghs"]) == Decimal("2025000.0000")
+    severe_basis = cast(dict[str, dict[str, str]], severe.metrics["basis"])
+    assert severe_basis["ecl_stress_charge_ghs"] == {
+        "basis": "prudential_stress",
+        "tax_treatment": (
+            "conservative: no tax shield applied pending a governed tax-rate parameter"
+        ),
+    }
+
+
+def test_modelled_ecl_registry_and_reporting_provenance_are_advisory() -> None:
+    """Basis: Advisory IFRS 9 what-if estimates, never filed booked allowances."""
+    metric_ids = ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")
+    for metric_id in metric_ids:
+        entries = authorities_for_metric(metric_id)
+        assert entries
+        assert all(
+            entry.advisory_designation == AdvisoryDesignation.ADVISORY_ONLY for entry in entries
+        )
+    notes = cast(
+        list[dict[str, object]],
+        declared_methodology_notes(dict.fromkeys(metric_ids, "ifrs9_pd_lgd_ead")),
+    )
+    assert {note["metric_id"] for note in notes} == set(metric_ids)
+    assert all(note["advisory_designation"] == "advisory_only" for note in notes)
+
+
+def test_capital_stage3_only_lgd_stress_preserves_cet1_and_tier2(db_session: Session) -> None:
+    """Basis: Prudential capital; modelled stage 3 specific allowances never charge CET1."""
+    materialize_canonical_test_book(db_session)
+    period = _seed_ecl_facts(db_session)
+    for fact in db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.fact_group == "ecl_exposure",
+        )
+    ):
+        if not fact.category.endswith(":stage3"):
+            fact.amount = Decimal("0")
+    db_session.flush()
+    _adopt_register(db_session, ("ALL", 3, "0", "40"))
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    baseline = regulatory_capital.compute_scenario_analysis(db_session, MAKER, bank, period, {})
+    stressed = regulatory_capital.compute_scenario_analysis(
+        db_session, MAKER, bank, period, {"ecl_lgd_multiplier": Decimal("1.075")}
+    )
+    assert baseline.ecl is not None and stressed.ecl is not None
+    assert baseline.ecl.specific_ecl == Decimal("4000000.0000")
+    assert stressed.ecl.specific_ecl == Decimal("4300000.0000")
+    assert stressed.ecl_stress_charge == Decimal("0.0000")
+    assert stressed.ratios.cet1_capital == baseline.ratios.cet1_capital
+    assert stressed.ratios.tier2_capital == baseline.ratios.tier2_capital
 
 
 def test_unstaged_book_keeps_ingested_provisions_untouched(db_session: Session) -> None:

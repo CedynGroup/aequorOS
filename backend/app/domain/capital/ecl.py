@@ -25,6 +25,9 @@ from decimal import Decimal
 
 ALL_SEGMENTS = "ALL"
 STAGE_3 = 3
+STRESS_CHARGE_TAX_TREATMENT = (
+    "conservative: no tax shield applied pending a governed tax-rate parameter"
+)
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
@@ -117,8 +120,8 @@ def stress_charge(baseline: EclResult, stressed: EclResult) -> Decimal:
     count: they are the general allowance, and stage 3 is specific. A fall in ECL
     under the scenario is never credited back to capital.
 
-    Deviates from: an after-tax charge — the capital run carries no governed tax
-    rate, so the charge is taken gross (no tax shield), the conservative bound.
+    Conservative: no tax shield applied pending a governed tax-rate parameter
+    and supported deferred-tax recognition. The charge is taken gross.
     """
     return _money(max(stressed.general_ecl - baseline.general_ecl, _ZERO))
 

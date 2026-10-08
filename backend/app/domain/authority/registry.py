@@ -1105,7 +1105,7 @@ _NO_VAR_AUTHORITY = (
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
 _FORECAST_VERSION = "regulatory-forecasting-v3.0.0"
-_STRESS_VERSION = "enterprise-stress-v4.0.0"
+_STRESS_VERSION = "enterprise-stress-v4.1.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 
 #: The case-scoped ("legacy/advisory") plane. The forensic audit found its
@@ -2636,7 +2636,7 @@ REGISTRY.register_all(
             reporting_mappings=("CAR-RWA",),
             expected_tolerance=Decimal("0"),
             forbidden_alternative_sources=_FORBID_CASE_PLANE,
-            advisory_designation=AdvisoryDesignation.FILED,
+            advisory_designation=AdvisoryDesignation.ADVISORY_ONLY,
             authority_reference="IFRS 9 paragraph 5.5.17 (unbiased probability-weighted amount)",
             notes=(
                 "Active ONLY when ecl_exposure facts AND the ecl-assumptions register both "

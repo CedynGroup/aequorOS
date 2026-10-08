@@ -29,6 +29,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
+    STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
     EclComputationError,
     EclExposure,
@@ -288,7 +289,8 @@ def _execute_scenario_compute(
     ECL is a what-if, reported beside the ratios but never substituted for the
     figure of record. A scenario that conditions the ECL takes its increase in
     modelled general ECL as a CET1 deduction instead, so a PD stress can only
-    lower capital.
+    lower capital. Conservative: no tax shield applied pending a governed
+    tax-rate parameter and supported deferred-tax recognition.
     """
     if not facts:
         raise CapitalRunError(
@@ -878,6 +880,10 @@ def _persist_success(  # noqa: PLR0913
         "operational_rwa_ghs": str(rwa.operational_rwa),
         "total_capital_ghs": str(ratios.total_capital),
     }
+    basis: dict[str, dict[str, str]] = {
+        key: {"basis": "prudential", "allowance_basis": "booked_general_provisions"}
+        for key in metrics
+    }
     if ecl is not None:
         # Item 8: modeled IFRS 9 allowances — a what-if beside the booked
         # general provisions in Tier 2, never a substitute for them.
@@ -890,6 +896,23 @@ def _persist_success(  # noqa: PLR0913
             metrics["ecl_unstaged_ead_ghs"] = str(ecl_unstaged_ead)
         if ecl_stress_charge:
             metrics["ecl_stress_charge_ghs"] = str(ecl_stress_charge)
+        for key in (
+            "ecl_total_ghs",
+            "ecl_general_ghs",
+            "ecl_specific_ghs",
+            "ecl_stage1_ghs",
+            "ecl_stage2_ghs",
+            "ecl_stage3_ghs",
+        ):
+            basis[key] = {"basis": "modelled_what_if", "advisory_designation": "advisory_only"}
+        if ecl_unstaged_ead:
+            basis["ecl_unstaged_ead_ghs"] = {"basis": "ingested_exposure"}
+        if ecl_stress_charge:
+            basis["ecl_stress_charge_ghs"] = {
+                "basis": "prudential_stress",
+                "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+            }
+    metrics["basis"] = basis
     if stress is not None:
         metrics["stress_path"] = [
             {
