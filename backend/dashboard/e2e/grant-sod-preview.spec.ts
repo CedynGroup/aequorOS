@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { E2E_PASSWORD, E2E_USERS, mintBackendToken } from "./support/mint";
 
@@ -234,18 +235,26 @@ for (const missingAfterRefresh of [false, true]) {
     expect(competing.status()).toBe(201);
     const competingBody = await competing.json();
     let memberRefreshes = 0;
+    let removedFromFixture = false;
     await page.route(`${API}/organization/members`, async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
       memberRefreshes += 1;
-      if (missingAfterRefresh) {
-        for (const member of body.members) {
-          member.grants = member.grants.filter(
-            (grant: { id: string }) => grant.id !== competingBody.binding.id,
-          );
+      if (missingAfterRefresh && !removedFromFixture) {
+        // The refusal has already named this grant. Make the backing row
+        // unavailable in the disposable SQLite fixture before the refresh,
+        // then let the real API answer: no response payload is mocked.
+        const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"));
+        try {
+          db.exec("PRAGMA foreign_keys = OFF");
+          const deleted = db
+            .prepare("DELETE FROM authorization_bindings WHERE id = ?")
+            .run(competingBody.binding.id.replaceAll("-", ""));
+          expect(deleted.changes).toBe(1);
+          removedFromFixture = true;
+        } finally {
+          db.close();
         }
       }
-      await route.fulfill({ response, json: body });
+      await route.continue();
     });
     let viewerBindingId: string | undefined;
     try {
@@ -298,10 +307,20 @@ for (const missingAfterRefresh of [false, true]) {
       ).toBeFalsy();
       if (evidenceDir) {
         await page.screenshot({
-          path: path.join(evidenceDir, "grant-create-race-refusal.png"),
+          path: path.join(
+            evidenceDir,
+            missingAfterRefresh
+              ? "grant-create-race-fallback.png"
+              : "grant-create-race-refusal.png",
+          ),
         });
         await writeFile(
-          path.join(evidenceDir, "grant-create-race-response.json"),
+          path.join(
+            evidenceDir,
+            missingAfterRefresh
+              ? "grant-create-race-fallback-response.json"
+              : "grant-create-race-response.json",
+          ),
           JSON.stringify(
             {
               status: response.status(),
@@ -335,9 +354,10 @@ for (const missingAfterRefresh of [false, true]) {
           .getByRole("button", { name: "Back to your draft grant" })
           .click();
       }
-      await expect(
-        composer.getByRole("button", { name: "Cannot be granted" }),
-      ).toBeDisabled();
+      if (!missingAfterRefresh)
+        await expect(
+          composer.getByRole("button", { name: "Cannot be granted" }),
+        ).toBeDisabled();
       await composer.getByLabel("Role bundle").selectOption("viewer");
       await composer.getByRole("button", { name: "Review grant" }).click();
       await expect(composer.getByRole("alert")).toHaveCount(0);
@@ -374,14 +394,16 @@ for (const missingAfterRefresh of [false, true]) {
         );
         expect(revokedViewer.ok()).toBeTruthy();
       }
-      const revoked = await page.request.post(
-        `${API}/authorization/bindings/${competingBody.binding.id}/revoke`,
-        {
-          headers,
-          data: { reason: "Clean up isolated race journey" },
-        },
-      );
-      expect(revoked.ok()).toBeTruthy();
+      if (!removedFromFixture) {
+        const revoked = await page.request.post(
+          `${API}/authorization/bindings/${competingBody.binding.id}/revoke`,
+          {
+            headers,
+            data: { reason: "Clean up isolated race journey" },
+          },
+        );
+        expect(revoked.ok()).toBeTruthy();
+      }
     }
   });
 }
@@ -486,6 +508,10 @@ test("the notice links to the conflicting grant and the draft survives revoking 
     await revoke
       .getByLabel("Reason")
       .fill("Moving this person from approving to filing");
+    if (evidenceDir)
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-linked-revoke-confirmation.png"),
+      });
     await revoke.getByRole("button", { name: "Revoke access" }).click();
     await expect(composer).toBeVisible();
     await expect(composer.getByLabel("Role bundle")).toHaveValue("validator");
@@ -496,6 +522,32 @@ test("the notice links to the conflicting grant and the draft survives revoking 
     await expect(
       composer.getByRole("button", { name: "Review grant" }),
     ).toBeEnabled();
+    const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"), { readOnly: true });
+    try {
+      const audit = db
+        .prepare(
+          "SELECT actor_user_id, event_type, entity_id, details FROM audit_events " +
+            "WHERE event_type = 'authorization.binding_revoked' AND entity_id = ?",
+        )
+        .get(approverId);
+      expect(audit?.actor_user_id).toBe(E2E_USERS.admin.id.replaceAll("-", ""));
+      if (typeof audit?.details !== "string")
+        throw new Error("The linked revocation did not persist its audit details");
+      const details: unknown = JSON.parse(audit.details);
+      expect(details).toMatchObject({
+        grantee_user_id: member.id,
+        role_bundle: "approver",
+        scope: { module_scope: "reg", institution_id: "BK-SAMP0001" },
+        reason: "Moving this person from approving to filing",
+      });
+      if (evidenceDir)
+        await writeFile(
+          path.join(evidenceDir, "grant-linked-revoke-audit.json"),
+          JSON.stringify({ ...audit, details }, null, 2),
+        );
+    } finally {
+      db.close();
+    }
     await composer.getByRole("button", { name: "Cancel" }).click();
   } finally {
     const listed = await page.request.get(
@@ -626,6 +678,10 @@ test("a self-revocation draft survives reauthentication and clears on submit or 
     );
     await expect(composer.getByLabel("Reference")).toHaveValue("SOD-SELF-1");
     await expect(composer.getByRole("alert")).toHaveCount(0);
+    if (evidenceDir)
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-self-revocation-restored-draft.png"),
+      });
     await composer.getByRole("button", { name: "Review grant" }).click();
     const submitted = page.waitForResponse(
       (response) =>
@@ -636,6 +692,18 @@ test("a self-revocation draft survives reauthentication and clears on submit or 
     const submittedResponse = await submitted;
     expect(submittedResponse.status()).toBe(201);
     analystId = (await submittedResponse.json()).binding.id;
+    if (evidenceDir)
+      await writeFile(
+        path.join(evidenceDir, "grant-self-revocation-submitted.json"),
+        JSON.stringify(
+          {
+            status: submittedResponse.status(),
+            body: await submittedResponse.json(),
+          },
+          null,
+          2,
+        ),
+      );
     await signIn();
     await expect(composer).toHaveCount(0);
     await page

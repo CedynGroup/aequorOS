@@ -406,6 +406,22 @@ server's message verbatim: it names the member and existing authority, including
 module and institution coverage for conflicting grants. Blocking findings tell
 the administrator to remove every conflicting grant or choose someone else;
 the client does not invent a remedy from policy codes.
+Both blocking and warning notices let authorized grant administrators open each
+revocable conflict in member detail, showing its scope, grantor, and grant time.
+Revoke still uses the normal confirmation, reason, and audit flow. When a
+finding names a binding absent from the loaded member, the composer refetches
+Members before showing the notice. If the binding remains unavailable, the
+server's finding stays visible with "Ask an account administrator" instead of
+a link; that fallback also applies when the viewer cannot revoke the conflict.
+Ownership and other system-managed grants offer no revoke action here.
+
+Opening a conflict preserves the draft and offers "Back to your draft grant";
+after revocation, Define requests a fresh policy decision. With session storage
+available, unfinished drafts are also saved per organization, acting user, and
+target member in the current browser tab. Returning to Members after signing
+in again restores the draft, including after a self-revocation ends the session.
+Successful submission or cancellation clears the saved draft.
+
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid

@@ -202,6 +202,32 @@ _assert_one_identity_per_role()
 E2E_ICAAP_FIRST_AS_OF = date(2025, 12, 31)
 
 
+def _create_sod_owner(session: Session, password_hash: str) -> None:
+    session.add(Organization(id="OR-SOD00001", name="E2E SoD Tenant"))
+    session.flush()
+    sod_owner = User(
+        id=UUID("eeeeeeee-1014-4eee-8eee-eeeeeeee1014"),
+        organization_id="OR-SOD00001",
+        email="e2e.sod_owner@aequoros.example",
+        display_name="E2E Sod Owner",
+        role="admin",
+        auth_provider="password",
+        password_hash=password_hash,
+    )
+    session.add(sod_owner)
+    session.flush()
+    membership.ensure_baseline_membership(
+        session, user=sod_owner, granted_by_id="e2e-bootstrap", commit=False
+    )
+    assign_initial_owner(
+        session,
+        organization_id="OR-SOD00001",
+        candidate=sod_owner,
+        granted_by_id="e2e-bootstrap",
+        commit=False,
+    )
+
+
 def main() -> None:
     database_url = os.environ["DATABASE_URL"]
     if "sqlite" not in database_url:
@@ -289,29 +315,7 @@ def main() -> None:
             granted_by_id="e2e-bootstrap",
             commit=False,
         )
-        session.add(Organization(id="OR-SOD00001", name="E2E SoD Tenant"))
-        session.flush()
-        sod_owner = User(
-            id=UUID("eeeeeeee-1014-4eee-8eee-eeeeeeee1014"),
-            organization_id="OR-SOD00001",
-            email="e2e.sod_owner@aequoros.example",
-            display_name="E2E Sod Owner",
-            role="admin",
-            auth_provider="password",
-            password_hash=password_hash,
-        )
-        session.add(sod_owner)
-        session.flush()
-        membership.ensure_baseline_membership(
-            session, user=sod_owner, granted_by_id="e2e-bootstrap", commit=False
-        )
-        assign_initial_owner(
-            session,
-            organization_id="OR-SOD00001",
-            candidate=sod_owner,
-            granted_by_id="e2e-bootstrap",
-            commit=False,
-        )
+        _create_sod_owner(session, password_hash)
         # A review stage can name the officer titles that may take it, and the
         # check compares the SIGNED-IN user's recorded job title — never a
         # title sent with the decision, which would let a caller state who

@@ -1,18 +1,5 @@
 /**
- * The separation-of-duties findings the server sends with a refused grant.
- *
- * `POST /authorization/bindings` returns 409 with
- * `details.sod_decision.findings`, each one a code and a sentence saying which
- * rule fired. The Members dialog rendered only the exception's own text —
- * "The scoped grant conflicts with separation-of-duties policy." — which names
- * no rule, no bundle and no remedy.
- *
- * An Org Owner who tries to grant themselves Validator is blocked by C9:
- * account administration and operational maker/checker authority must stay on
- * different identities. That is a correct, deliberate refusal. Shown as the
- * generic line it reads as a malfunction, and the Owner's next move is to try
- * the same thing again with different scopes — which cannot work, because the
- * conflict is about WHO they are, not how narrow the grant is.
+ * Read server findings from a refused grant without deriving policy locally.
  *
  * Untrusted shape on purpose: `details` is `unknown` on ApiError, and a
  * malformed payload must produce no findings rather than a crash or a blank
@@ -86,8 +73,9 @@ type ConflictGrant = Readonly<{
  * `reviewable` are the conflicting grants this viewer may open and revoke
  * through the normal Members flow, in finding order and without repeats.
  * `askAdministrator` is true when a revocable conflict exists that this viewer
- * cannot revoke. A grant Members never revokes (ownership, baseline
- * membership) gets neither: nobody can change it from here.
+ * cannot revoke, or a finding names a binding missing from the loaded member.
+ * A loaded grant Members never revokes (ownership, baseline membership) gets
+ * neither: nobody can change it from here.
  */
 export function conflictGrantActions<G extends ConflictGrant>(
   findings: readonly SodFinding[],

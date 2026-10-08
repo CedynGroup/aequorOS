@@ -514,17 +514,17 @@ service (`app/services/approvals.py`) keyed on `(object_type, object_id, org_id)
 
 **Toxic-combination denies (checked at role-assignment time too):**
 
-| #   | Deny both to one identity within the same scope                             | Why                                    |
-| --- | --------------------------------------------------------------------------- | -------------------------------------- |
-| C1  | deal entry (FX) **&** deal confirm/settle                                   | front ≠ back office                    |
-| C2  | payment/settlement **approve** & **release**                                | two-stage even inside back office      |
-| C3  | reconciliation & payment approval                                           | conceal-your-own-error risk            |
-| C4  | DATA ingest/map/activate **&** sign-off/submit of the return built on it    | producer ≠ approver of numbers         |
-| C5  | configure scenario/BEH assumptions **&** approve the run that consumes them | assumption-setter can't self-bless     |
-| C6  | run an engine calc **&** reg sign-off/submit of that result                 | run ≠ approve ≠ submit                 |
-| C7  | BEH model owner **&** model validator **&** audit                           | Three-Lines independence               |
-| C9  | user/role administration **&** operational approve rights on same object    | admin can't grant themselves approvals |
-| C10 | reg-return preparer **&** internal sign-off **&** submitter                 | prepare / attest / submit split        |
+| #   | Deny both to one identity within the same scope                                                                                                  | Why                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| C1  | deal entry (FX) **&** deal confirm/settle                                                                                                        | front ≠ back office                                                 |
+| C2  | payment/settlement **approve** & **release**                                                                                                     | two-stage even inside back office                                   |
+| C3  | reconciliation & payment approval                                                                                                                | conceal-your-own-error risk                                         |
+| C4  | DATA ingest/map/activate **&** sign-off/submit of the return built on it                                                                         | producer ≠ approver of numbers                                      |
+| C5  | configure scenario/BEH assumptions **&** approve the run that consumes them                                                                      | assumption-setter can't self-bless                                  |
+| C6  | run an engine calc **&** reg sign-off/submit of that result                                                                                      | run ≠ approve ≠ submit                                              |
+| C7  | BEH model owner **&** model validator **&** audit                                                                                                | Three-Lines independence                                            |
+| C9  | [Account-administration assignment policy](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29) | Delegated administration and ownership exceptions are defined there |
+| C10 | reg-return preparer **&** internal sign-off **&** submitter                                                                                      | prepare / attest / submit split                                     |
 
 Ship SoD **monitoring/reporting**, not just assignment-time blocks — the Kyriba
 lesson is that role assignment alone is insufficient; auditors want a report of
