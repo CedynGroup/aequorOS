@@ -390,8 +390,10 @@ through the evaluator; scalar account-admin or token claims are insufficient.
 Create has one scalar role bundle, one institution coverage, one module, one
 sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
 rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
-Preview returns the canonical authority sentence; create requires that exact
-sentence and refuses if names or scope presentation changed before commit.
+Preview returns the canonical authority sentence and the assignment-time
+separation-of-duties decision the create call would reach, read-only, so the
+composer refuses a block at Define; create requires that exact sentence and
+refuses if names or scope presentation changed before commit.
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid

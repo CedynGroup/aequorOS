@@ -1023,7 +1023,7 @@ GET   /auth/effective-authority                   BUILT: evaluator-derived capab
 GET   /organization/members                       BUILT: Org Owner; identity + lifecycle + complete grants
 GET   /organization/institutions                  BUILT: Org Owner; every institution, for scoping grants (account plane)
 GET   /authorization/bindings                     BUILT: Org Owner; optional principal filter
-POST  /authorization/bindings/preview             BUILT: canonical review sentence for one scalar grant
+POST  /authorization/bindings/preview             BUILT: canonical review sentence + SoD decision for one scalar grant
 POST  /authorization/bindings                     BUILT: one scalar binding + reason + SoD decision
 POST  /authorization/bindings/{id}/revoke         BUILT: one binding + reason; sessions invalidated
 GET   /orgs/{org}/users                           users:read

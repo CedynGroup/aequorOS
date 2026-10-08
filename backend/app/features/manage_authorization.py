@@ -501,7 +501,14 @@ def preview_authorization_binding(
         )
     except grant_administration.GrantAdministrationError as exc:
         raise grant_conflict(exc) from exc
-    return BindingPreviewRead(authority_sentence=sentence)
+    decision = grant_administration.check_sod_policy(
+        db,
+        organization_id=ctx.organization_id,
+        principal_user_id=payload.principal_user_id,
+        role_bundle=RoleBundle(payload.role_bundle),
+        scope=scope,
+    )
+    return BindingPreviewRead(authority_sentence=sentence, sod_decision=_sod_read(decision))
 
 
 @router.post(

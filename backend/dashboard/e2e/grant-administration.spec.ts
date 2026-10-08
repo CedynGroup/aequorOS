@@ -347,6 +347,68 @@ test.describe("scoped grant administration", () => {
   });
 });
 
+test.describe("separation-of-duties at Define", () => {
+  test.use({ storageState: ownerState });
+
+  test("the composer shows the policy decision before Review and refuses a block there", async ({
+    page,
+  }) => {
+    // E2E Approver holds an organization-wide Approver grant from bootstrap.
+    // Nothing here is created: the preview alone carries the decision.
+    await page.goto("/access/members");
+    const approverRow = page
+      .locator("li")
+      .filter({ hasText: "E2E Approver" })
+      .first();
+    await approverRow.getByRole("button", { name: "Add grant" }).click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Approver",
+    });
+    await composer.getByLabel("Reason category").selectOption("other");
+    await composer.getByLabel("Detail").fill("Separation-of-duties check");
+
+    // Approving and transmitting returns on one identity is a hard block.
+    await composer.getByLabel("Role bundle").selectOption("validator");
+    const refusal = composer.getByRole("alert");
+    await expect(refusal).toContainText(
+      "Separation-of-duties policy refuses this grant.",
+    );
+    await expect(refusal).toContainText(
+      "Approving a return and transmitting it to the regulator must remain separated for one identity.",
+    );
+    await expect(
+      composer.getByRole("button", { name: "Cannot be granted" }),
+    ).toBeDisabled();
+    await expect(
+      composer.getByRole("button", { name: "Review grant" }),
+    ).toHaveCount(0);
+    if (evidenceDir) {
+      await refusal.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-block.png"),
+      });
+    }
+
+    // Overlapping maker and checker grants are allowed but warned, at Define
+    // and again at Review.
+    await composer.getByLabel("Role bundle").selectOption("analyst");
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    const warning = composer.getByRole("status").filter({
+      hasText: "overlapping maker and checker grants",
+    });
+    await expect(warning).toBeVisible();
+    await composer.getByRole("button", { name: "Review grant" }).click();
+    await expect(warning).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-warn-review.png"),
+      });
+    }
+    await composer.getByRole("button", { name: "Back" }).click();
+    await composer.getByRole("button", { name: "Cancel" }).click();
+  });
+});
+
 test.describe("Credit-only book coverage", () => {
   test.use({ storageState: ownerState });
   test("narrowing is offered only for Credit and persists the selected branch", async ({

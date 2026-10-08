@@ -19,6 +19,7 @@ import type {
   AccessRequestRead,
   GrantReasonCategory,
   MemberRead,
+  SodDecisionRead,
 } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { SkeletonLine } from "@/components/ui/Skeleton";
@@ -647,6 +648,7 @@ function GrantComposer({
   const [previewResult, setPreviewResult] = useState<{
     key: string;
     sentence: string;
+    sodDecision: SodDecisionRead;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sodBlocks, setSodBlocks] = useState<readonly SodFinding[]>([]);
@@ -677,6 +679,11 @@ function GrantComposer({
   previewKeyRef.current = previewKey;
   const previewSentence =
     previewResult?.key === previewKey ? previewResult.sentence : null;
+  const previewDecision =
+    previewResult?.key === previewKey ? previewResult.sodDecision : null;
+  // A block is final: the create call would refuse it, so say so at Define and
+  // keep Review out of reach instead of walking the Owner to a 409.
+  const previewBlocked = previewDecision?.outcome === "block";
   const shortfall = grantShortfall(draft);
   const coverageShortfall = dataScopeShortfall(draft);
   const overlap = overlappingGrantNotice(draft, member.grants);
@@ -705,6 +712,7 @@ function GrantComposer({
             setPreviewResult({
               key: requestedKey,
               sentence: result.authoritySentence,
+              sodDecision: result.sodDecision,
             });
           }
         },
@@ -835,6 +843,7 @@ function GrantComposer({
             if (
               reasonDraftComplete(draft) &&
               previewSentence &&
+              !previewBlocked &&
               !scopeRefusal
             ) {
               setError(null);
@@ -977,6 +986,7 @@ function GrantComposer({
             </p>
           )}
           {previewSentence && <SentencePreview sentence={previewSentence} />}
+          <SodDecisionNotice decision={previewDecision} />
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -989,12 +999,17 @@ function GrantComposer({
               type="submit"
               disabled={
                 !previewSentence ||
+                previewBlocked ||
                 !reasonDraftComplete(draft) ||
                 Boolean(scopeRefusal)
               }
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
-              {previewSentence ? "Review grant" : "Preparing review…"}
+              {previewBlocked
+                ? "Cannot be granted"
+                : previewSentence
+                  ? "Review grant"
+                  : "Preparing review…"}
             </button>
           </div>
         </form>
@@ -1006,6 +1021,7 @@ function GrantComposer({
             Review the exact authority before granting it.
           </p>
           <SentencePreview sentence={previewSentence} />
+          <SodDecisionNotice decision={previewDecision} />
           {/* The sentence above is the server's and is the authority. This is
               the coverage chosen, shown as a field rather than prose so it is
               visible even where the sentence words it differently. */}
@@ -1064,7 +1080,7 @@ function GrantComposer({
             <button
               type="button"
               onClick={() => submit.mutate()}
-              disabled={submit.isPending}
+              disabled={submit.isPending || previewBlocked}
               className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
               <ShieldCheck size={15} aria-hidden />{" "}
@@ -1178,6 +1194,43 @@ function GrantSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+/**
+ * The server's assignment-time separation-of-duties decision for the draft,
+ * from the preview. `allow` shows nothing; `warn` explains what the person will
+ * hold; `block` is the refusal the create call would return, shown before
+ * anyone reaches it, with the remedy when the rule has one.
+ */
+function SodDecisionNotice({ decision }: { decision: SodDecisionRead | null }) {
+  if (!decision || decision.outcome === "allow") return null;
+  if (decision.outcome === "warn") {
+    return (
+      <p
+        role="status"
+        className="rounded-md border border-warning/25 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy"
+      >
+        {decision.findings.map((finding) => finding.message).join(" ")}
+      </p>
+    );
+  }
+  const remedy = sodRemedy(decision.findings);
+  return (
+    <div
+      role="alert"
+      className="rounded-md bg-critical-light px-4 py-3 text-caption leading-relaxed text-critical"
+    >
+      <p className="font-medium">
+        Separation-of-duties policy refuses this grant.
+      </p>
+      <ul className="mt-2 list-disc space-y-1 pl-4">
+        {decision.findings.map((finding) => (
+          <li key={finding.code || finding.message}>{finding.message}</li>
+        ))}
+      </ul>
+      {remedy && <p className="mt-2">{remedy}</p>}
+    </div>
   );
 }
 

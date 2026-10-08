@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -972,6 +973,69 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
     owner_decision = owner_exception.json()["sod_decision"]
     assert owner_decision["outcome"] == "warn"
     assert owner_decision["findings"][0]["code"] == "c9_owner_operational_exception"
+
+
+def test_preview_returns_the_decision_the_create_call_would_reach(
+    grant_client: TestClient,
+) -> None:
+    """The composer refuses a blocked combination at Define, not on submit.
+
+    Preview carries the same assignment-time decision as create — allow, warn
+    with its findings, or block — beside the sentence, and writes nothing.
+    """
+
+    def preview(**overrides: Any) -> dict[str, Any]:
+        response = grant_client.post(
+            "/api/v1/authorization/bindings/preview",
+            headers=_owner_headers(),
+            json=_payload(**overrides),
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def binding_count() -> int:
+        with _session() as db:
+            return len(
+                db.scalars(
+                    select(AuthorizationBinding.id).where(
+                        AuthorizationBinding.organization_id == ORG_1
+                    )
+                ).all()
+            )
+
+    assert preview()["sod_decision"] == {"outcome": "allow", "findings": []}
+
+    approver = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
+    )
+    assert approver.status_code == 201, approver.text
+    before = binding_count()
+
+    warned = preview()
+    assert warned["sod_decision"]["outcome"] == "warn"
+    assert [finding["code"] for finding in warned["sod_decision"]["findings"]] == [
+        "maker_checker_runtime_condition_required"
+    ]
+
+    # The sentence is still composed for a block, so the screen can show
+    # exactly what policy refuses.
+    blocked = preview(role="validator", module="reg", sensitivity="restricted")
+    assert "Validator" in blocked["authority_sentence"]
+    assert blocked["sod_decision"]["outcome"] == "block"
+    assert [finding["code"] for finding in blocked["sod_decision"]["findings"]] == [
+        "approval_and_transmission_separation_required"
+    ]
+    assert "must remain separated" in blocked["sod_decision"]["findings"][0]["message"]
+
+    owner_exception = preview(principal_user_id=USER_1)
+    assert owner_exception["sod_decision"]["outcome"] == "warn"
+    assert [finding["code"] for finding in owner_exception["sod_decision"]["findings"]] == [
+        "c9_owner_operational_exception"
+    ]
+
+    assert binding_count() == before
 
 
 def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClient) -> None:
