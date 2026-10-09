@@ -30,6 +30,8 @@ Full layout: [README.md](README.md#repository-layout). System map and tenancy mo
 [ARCHITECTURE.md](ARCHITECTURE.md); coding conventions:
 [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
+Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) for every PR.
+
 ## Commands
 
 ```bash
