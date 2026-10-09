@@ -1,5 +1,5 @@
 # =============================================================================
-# AequorOS client dashboard — production deploy wrapper (Coolify).
+# aequorOS client dashboard — production deploy wrapper (Coolify).
 #
 # Why compose instead of the raw Dockerfile build pack: this is a pnpm
 # WORKSPACE build that needs the REPO ROOT as its docker context, and Coolify's
@@ -35,12 +35,32 @@ services:
     expose:
       - "3000"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''https://dashboard:3000/login'').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 30s
       timeout: 6s
       retries: 3
       start_period: 15s
     env_file:
       - .env
+    volumes:
+      - service-trust:/run/trust:ro
+      - dashboard-tls:/run/tls:ro
     environment:
+      NODE_ENV: "production"
+      TLS_ALLOW_PLAINTEXT: "0"
       AUTH_TRUST_HOST: "true"
+      TLS_CERT_FILE: "/run/tls/dashboard.crt"
+      TLS_KEY_FILE: "/run/tls/dashboard.key"
+      NODE_EXTRA_CA_CERTS: "/run/trust/ca.pem"
+
+volumes:
+  service-trust:
+    external: true
+    name: aequoros-service-trust
+  dashboard-tls:
+    external: true
+    name: aequoros-dashboard-tls

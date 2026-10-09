@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
+from app.core.tls import require_boto_tls, require_https
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 
 
@@ -21,18 +22,24 @@ class S3ObjectStorage:
         secret_access_key: str | None,
         force_path_style: bool,
     ) -> None:
+        if endpoint_url:
+            require_https(endpoint_url, field="S3_ENDPOINT")
         config = Config(
             signature_version="s3v4",
             s3={"addressing_style": "path" if force_path_style else "virtual"},
         )
         self._client = boto3.client(
             "s3",
+            verify=get_settings().tls.ca_bundle or True,
+            use_ssl=True,
             region_name=region_name,
             endpoint_url=endpoint_url or None,
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
             config=config,
         )
+
+        require_boto_tls(cast(object, self._client))
 
     def create_presigned_upload_url(
         self,

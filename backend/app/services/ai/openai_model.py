@@ -42,6 +42,7 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings
 
 from app.core.config import SETTINGS_CONFIG, AiVendor, Settings, get_settings
+from app.core.tls import client_context
 from app.services.ai.client import ModelRequest, ModelResult, UsageRecord
 from app.services.ai.features import AiFeature
 from app.services.ai.vendors import (
@@ -200,6 +201,7 @@ class OpenAiModel:
 
         ai = self._settings.ai
         return httpx.Client(
+            trust_env=False,
             base_url=_API_BASE,
             headers={
                 # Explicit, never the client's environment fallback: the same
@@ -208,7 +210,8 @@ class OpenAiModel:
                 "Content-Type": "application/json",
             },
             timeout=ai.request_timeout_seconds,
-            transport=self._transport or httpx.HTTPTransport(retries=ai.max_retries),
+            transport=self._transport
+            or httpx.HTTPTransport(verify=client_context(), retries=ai.max_retries),
             # A redirect from an API host is a second, unvalidated destination.
             follow_redirects=False,
         )

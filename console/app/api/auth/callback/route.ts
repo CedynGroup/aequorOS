@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
   let idToken: string;
   try {
     const tokenRes = await fetch(tokenEndpoint, {
+      redirect: 'error',
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form.toString(),

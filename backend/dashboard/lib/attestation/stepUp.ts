@@ -98,6 +98,7 @@ export async function fetchClientConfig(): Promise<OidcClientConfig> {
   const internalKey = process.env.SSO_INTERNAL_KEY;
   if (!internalKey) return { enabled: false };
   const response = await fetch(`${apiBase()}/auth/sso/client-config`, {
+    redirect: 'error',
     headers: { 'X-Internal-Auth': internalKey },
     cache: 'no-store',
     signal: AbortSignal.timeout(5000),

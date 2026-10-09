@@ -283,6 +283,8 @@ jobs:
         run: mise run risk-service:sync
       - name: Lint risk service
         run: mise run risk-service:lint
+      - name: Test TLS container environment policy
+        run: mise exec -- node --test deploy/tls/serve-next.test.cjs
       - name: Typecheck risk service
         run: mise run risk-service:typecheck
       - name: Build production risk-service image

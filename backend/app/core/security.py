@@ -342,7 +342,13 @@ def _oidc_opener() -> Any:
             _guard_oidc_target(newurl, field="redirect target")
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-    return urllib.request.build_opener(_GuardedRedirectHandler)
+    from app.core.tls import client_context  # noqa: PLC0415
+
+    return urllib.request.build_opener(
+        _GuardedRedirectHandler,
+        urllib.request.HTTPSHandler(context=client_context()),
+        urllib.request.ProxyHandler({}),
+    )
 
 
 @lru_cache(maxsize=8)

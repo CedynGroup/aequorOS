@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from fastapi import APIRouter, Depends
 
-from app.core.config import get_operator_settings
+from app.core.config import get_operator_settings, get_settings
+from app.core.tls import require_boto_tls, require_https
 from app.operator.deps import Operator, OperatorDb
 from app.operator.services import tenant_provisioning
 from app.operator.services.tenant_provisioning import ProvisioningClients
@@ -37,9 +38,13 @@ def get_provisioning_clients() -> ProvisioningClients:
         except StorageRetiredError as exc:
             unavailable_reason = str(exc)
         else:
+            if storage_settings.endpoint:
+                require_https(storage_settings.endpoint, field="S3_ENDPOINT")
             # Same construction the sanctioned storage client uses.
             s3_client = boto3.client(
                 "s3",
+                verify=get_settings().tls.ca_bundle or True,
+                use_ssl=True,
                 endpoint_url=storage_settings.endpoint,
                 aws_access_key_id=storage_settings.access_key,
                 aws_secret_access_key=storage_settings.secret_key,
@@ -53,10 +58,17 @@ def get_provisioning_clients() -> ProvisioningClients:
                     retries={"max_attempts": 5, "mode": "adaptive"},
                 ),
             )
+            require_boto_tls(cast(object, s3_client))
     kms_client = None
     if get_operator_settings().aws_kms_enabled:
         try:
-            kms_client = boto3.client("kms", region_name=storage_settings.region)
+            kms_client = boto3.client(
+                "kms",
+                region_name=storage_settings.region,
+                verify=get_settings().tls.ca_bundle or True,
+                use_ssl=True,
+            )
+            require_boto_tls(cast(object, kms_client))
         except Exception:  # noqa: BLE001 - saga reports the gap; endpoint must not 500
             logger.exception("failed to construct the KMS client")
     return ProvisioningClients(

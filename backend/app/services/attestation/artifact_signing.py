@@ -511,7 +511,9 @@ def _validation_context(roots: Sequence[bytes]) -> ValidationContext:
         for pem in roots
         for certificate in x509.load_pem_x509_certificates(pem)
     ]
-    return ValidationContext(trust_roots=anchors, allow_fetching=True)
+    from app.services.attestation.tls_fetchers import verified_fetchers  # noqa: PLC0415
+
+    return ValidationContext(trust_roots=anchors, allow_fetching=True, fetchers=verified_fetchers())
 
 
 __all__ = [

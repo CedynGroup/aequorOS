@@ -2,7 +2,7 @@
 
 Every test here runs against a LOCAL responder: pyHanko's ``DummyTimeStamper``
 acts as its own TSA with a throwaway RSA key, and the HTTP tests replace
-``requests.post`` with a transport that feeds the same responder. No test in
+HTTPX with a mock transport that feeds the same responder. No test in
 this file makes a network call, and none may ever be changed to.
 
 The properties pinned are the ones that make a timestamp evidence rather than
@@ -13,9 +13,12 @@ closed, and — Act 930 — nothing but a hash goes on the wire.
 
 from __future__ import annotations
 
+import base64
+import ssl
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 import pytest
 from asn1crypto import cms, tsp
 from asn1crypto import keys as asn1_keys
@@ -66,9 +69,7 @@ def dummy_authority() -> DummyTimeStamper:
         .sign(key, hashes.SHA256())
     )
     return DummyTimeStamper(
-        tsa_cert=asn1_x509.Certificate.load(
-            certificate.public_bytes(serialization.Encoding.DER)
-        ),
+        tsa_cert=asn1_x509.Certificate.load(certificate.public_bytes(serialization.Encoding.DER)),
         tsa_key=asn1_keys.PrivateKeyInfo.load(
             key.private_bytes(
                 serialization.Encoding.DER,
@@ -84,9 +85,7 @@ def _token_imprint(token_der: bytes) -> tuple[str, bytes]:
     token = cms.ContentInfo.load(token_der)
     tst_info = token["content"]["encap_content_info"]["content"].parsed
     imprint = tst_info["message_imprint"]
-    return imprint["hash_algorithm"]["algorithm"].native, bytes(
-        imprint["hashed_message"].native
-    )
+    return imprint["hash_algorithm"]["algorithm"].native, bytes(imprint["hashed_message"].native)
 
 
 # --- the happy path --------------------------------------------------------
@@ -140,22 +139,46 @@ def test_client_satisfies_the_signing_path_timestamper_port(
 
 
 class _CapturingTransport:
-    """Stand-in for ``requests.post`` that records the exact bytes sent."""
+    """Record the HTTPX request bytes and feed them to a local authority."""
 
     def __init__(self, authority: DummyTimeStamper) -> None:
         self._authority = authority
-        self.calls: list[dict[str, Any]] = []
+        self.calls: list[httpx.Request] = []
 
-    def __call__(self, url: str, data: bytes, **kwargs: Any) -> Any:
-        self.calls.append({"url": url, "data": data, **kwargs})
-        response = self._authority.request_tsa_response(tsp.TimeStampReq.load(data))
-        return _FakeHttpResponse(response.dump())
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.calls.append(request)
+        response = self._authority.request_tsa_response(tsp.TimeStampReq.load(request.content))
+        return httpx.Response(
+            200, content=response.dump(), headers={"Content-Type": "application/timestamp-reply"}
+        )
 
 
-class _FakeHttpResponse:
-    def __init__(self, content: bytes) -> None:
-        self.content = content
-        self.headers = {"Content-Type": "application/timestamp-reply"}
+def _install_transport(monkeypatch: pytest.MonkeyPatch, transport: _CapturingTransport) -> None:
+    client_class = httpx.Client
+
+    def client_factory(
+        *,
+        verify: ssl.SSLContext,
+        trust_env: bool,
+        follow_redirects: bool,
+        timeout: float,
+        auth: tuple[str, str] | None,
+    ) -> httpx.Client:
+        assert verify.verify_mode == ssl.CERT_REQUIRED
+        assert verify.check_hostname
+        assert verify.minimum_version >= ssl.TLSVersion.TLSv1_2
+        assert not trust_env
+        assert not follow_redirects
+        return client_class(
+            verify=verify,
+            trust_env=trust_env,
+            follow_redirects=follow_redirects,
+            timeout=timeout,
+            auth=auth,
+            transport=httpx.MockTransport(transport),
+        )
+
+    monkeypatch.setattr("app.services.attestation.tsa.httpx.Client", client_factory)
 
 
 def test_only_a_hash_is_transmitted_over_http(
@@ -168,7 +191,7 @@ def test_only_a_hash_is_transmitted_over_http(
     started attaching anything else to a request would fail here.
     """
     transport = _CapturingTransport(dummy_authority)
-    monkeypatch.setattr("pyhanko.sign.timestamps.requests_client.requests.post", transport)
+    _install_transport(monkeypatch, transport)
 
     token_der, asserted_at = timestamp_digest(
         DIGEST, settings=_tsa_settings(tsa_username="u", tsa_password="p")
@@ -178,7 +201,7 @@ def test_only_a_hash_is_transmitted_over_http(
     assert _token_imprint(token_der)[1] == DIGEST
     assert len(transport.calls) == 1
     call = transport.calls[0]
-    sent = tsp.TimeStampReq.load(call["data"])
+    sent = tsp.TimeStampReq.load(call.content)
     # Nothing but version, imprint, cert_req and the nonce is present …
     present = {name for name, value in sent.native.items() if value is not None}
     assert present <= {"version", "message_imprint", "cert_req", "nonce"}
@@ -187,38 +210,41 @@ def test_only_a_hash_is_transmitted_over_http(
     assert bytes(imprint["hashed_message"].native) == DIGEST
     assert sent["extensions"].native is None
     # A whole RFC 3161 request is tens of bytes; document content could not fit.
-    assert len(call["data"]) < 100
+    assert len(call.content) < 100
 
 
 def test_http_client_passes_url_timeout_and_credentials(
     monkeypatch: pytest.MonkeyPatch, dummy_authority: DummyTimeStamper
 ) -> None:
     transport = _CapturingTransport(dummy_authority)
-    monkeypatch.setattr("pyhanko.sign.timestamps.requests_client.requests.post", transport)
+    _install_transport(monkeypatch, transport)
 
     timestamp_digest(
         DIGEST, settings=_tsa_settings(tsa_username="tsa-user", tsa_password="tsa-secret")
     )
 
     call = transport.calls[0]
-    assert call["url"] == TSA_URL
+    assert str(call.url) == TSA_URL
     # An explicit, finite timeout: a hung authority must not hold a signing
     # request open for the default socket lifetime.
-    assert call["timeout"] == 3.5
-    assert call["auth"] == ("tsa-user", "tsa-secret")
-    assert call["headers"]["Content-Type"] == "application/timestamp-query"
-    assert call["headers"]["Accept"] == "application/timestamp-reply"
+    assert call.extensions["timeout"]["read"] == 3.5
+    assert (
+        call.headers["Authorization"]
+        == "Basic " + base64.b64encode(b"tsa-user:tsa-secret").decode()
+    )
+    assert call.headers["Content-Type"] == "application/timestamp-query"
+    assert call.headers["Accept"] == "application/timestamp-reply"
 
 
 def test_no_credentials_configured_sends_no_auth(
     monkeypatch: pytest.MonkeyPatch, dummy_authority: DummyTimeStamper
 ) -> None:
     transport = _CapturingTransport(dummy_authority)
-    monkeypatch.setattr("pyhanko.sign.timestamps.requests_client.requests.post", transport)
+    _install_transport(monkeypatch, transport)
 
     timestamp_digest(DIGEST, settings=_tsa_settings())
 
-    assert transport.calls[0]["auth"] is None
+    assert "Authorization" not in transport.calls[0].headers
 
 
 # --- nothing is trusted blindly -------------------------------------------

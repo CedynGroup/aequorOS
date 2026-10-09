@@ -54,10 +54,13 @@ ENV NEXT_PUBLIC_RISK_API_BASE_URL=$NEXT_PUBLIC_RISK_API_BASE_URL \
     NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH \
     NEXT_TELEMETRY_DISABLED=1
 
+RUN node -e "if(new URL(process.env.NEXT_PUBLIC_RISK_API_BASE_URL).protocol!=='https:') throw new Error('API URL requires HTTPS')"
 RUN pnpm --filter @aequoros/dashboard build
 
 # ---------- runner: minimal standalone server ---------------------------------
 FROM node:24-slim AS runner
+ARG NEXT_PUBLIC_RISK_API_BASE_URL
+ENV NEXT_PUBLIC_RISK_API_BASE_URL=$NEXT_PUBLIC_RISK_API_BASE_URL
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -70,6 +73,8 @@ RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nextjs
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/static ./backend/dashboard/.next/static
 
+COPY --chown=nextjs:nodejs deploy/tls/serve-next.cjs ./serve-next.cjs
+
 USER nextjs
 EXPOSE 3000
-CMD ["node", "backend/dashboard/server.js"]
+CMD ["node", "serve-next.cjs", "backend/dashboard/server.js"]

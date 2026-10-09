@@ -9,6 +9,7 @@ from contextlib import contextmanager
 # real background worker thread at import that races test-invoked handlers
 # for the entire session (the historical source of order-dependent flakes).
 os.environ["RUN_INPROCESS_WORKER"] = "0"
+os.environ["TLS_ALLOW_PLAINTEXT"] = "1"
 os.environ["DATABASE_URL"] = ""
 os.environ["WORKER_DATABASE_URL"] = ""
 
@@ -69,6 +70,8 @@ pytest_plugins = [
 @pytest.fixture(autouse=True)
 def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("TLS_CA_BUNDLE", "")
     monkeypatch.setenv("APP_NAME", "risk-service")
     monkeypatch.setenv("DEMO_MODE", "0")
     # Set (not delete) so a developer's local .env cannot leak into the suite:

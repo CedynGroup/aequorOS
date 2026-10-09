@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
   let upstream: Response;
   try {
     upstream = await fetch(`${operatorApiUrl()}/operator/auth/login`, {
+      redirect: 'error',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ email, password }),

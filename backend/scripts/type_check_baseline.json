@@ -2090,7 +2090,7 @@
   "reportAny": 5
  },
  "app.services.regulatory_reporting.channels.orass_api": {
-  "reportAny": 6,
+  "reportAny": 5,
   "reportUnknownVariableType": 1
  },
  "app.services.regulatory_reporting.channels.orass_sandbox": {
@@ -4629,7 +4629,7 @@
   "reportUnknownVariableType": 9
  },
  "tests.services.test_attestation_tsa": {
-  "reportAny": 13,
+  "reportAny": 9,
   "reportMissingTypeStubs": 3,
   "reportUnknownArgumentType": 6,
   "reportUnknownMemberType": 13,

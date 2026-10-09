@@ -46,8 +46,25 @@ export function oidcEnv(): OidcEnv | null {
   };
 }
 
+export function requireServiceHttps(value: string): string {
+  const url = new URL(value);
+  if (
+    url.protocol !== 'https:' &&
+    !(
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') &&
+      process.env.TLS_ALLOW_PLAINTEXT === '1'
+    )
+  ) {
+    throw new Error('Service connections require HTTPS.');
+  }
+  return value;
+}
+
 export function operatorApiUrl(): string {
-  return (process.env.OPERATOR_API_URL ?? 'http://127.0.0.1:8100').replace(/\/+$/, '');
+  return requireServiceHttps(process.env.OPERATOR_API_URL ?? 'http://127.0.0.1:8100').replace(
+    /\/+$/,
+    '',
+  );
 }
 
 /** Origin used to build redirect_uri: explicit override, else the request's. */
@@ -71,22 +88,20 @@ const discoveryCache = new Map<string, DiscoveryDocument>();
 export async function discover(issuer: string): Promise<DiscoveryDocument> {
   const cached = discoveryCache.get(issuer);
   if (cached) return cached;
-  const res = await fetch(`${issuer}/.well-known/openid-configuration`, {
+  const res = await fetch(requireServiceHttps(`${issuer}/.well-known/openid-configuration`), {
+    redirect: 'error',
     cache: 'no-store',
   });
   if (!res.ok) {
     throw new Error(`OIDC discovery failed for ${issuer}: HTTP ${res.status}`);
   }
   const doc = (await res.json()) as Partial<DiscoveryDocument>;
-  if (
-    typeof doc.authorization_endpoint !== 'string' ||
-    typeof doc.token_endpoint !== 'string'
-  ) {
+  if (typeof doc.authorization_endpoint !== 'string' || typeof doc.token_endpoint !== 'string') {
     throw new Error(`OIDC discovery for ${issuer} returned no usable endpoints.`);
   }
   const usable = {
-    authorization_endpoint: doc.authorization_endpoint,
-    token_endpoint: doc.token_endpoint,
+    authorization_endpoint: requireServiceHttps(doc.authorization_endpoint),
+    token_endpoint: requireServiceHttps(doc.token_endpoint),
   };
   discoveryCache.set(issuer, usable);
   return usable;
