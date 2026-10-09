@@ -4,10 +4,8 @@ import json
 import os
 import sys
 
-# Exporting the schema must not spin up the in-process live-engine worker: its
-# background-thread logs (loguru JSON) would interleave with the JSON dumped to stdout
-# and corrupt the captured openapi-schema.json. Force it off before importing the app,
-# so the export is deterministic regardless of a developer's .env.
+# Exporting the schema must not start background jobs. Disable the in-process
+# live-engine worker before importing the app, regardless of a developer's .env.
 os.environ["RUN_INPROCESS_WORKER"] = "0"
 
 from app.main import app  # noqa: E402 - import must follow the worker-disable above
@@ -16,10 +14,8 @@ from app.main import app  # noqa: E402 - import must follow the worker-disable a
 def main() -> int:
     """Write the schema to argv[1] when given, else stdout.
 
-    Writing the file directly (rather than shell-redirecting stdout) keeps
-    the schema immune to anything a developer's .env routes to stdout —
-    app-creation warnings through a JSON log sink corrupted the redirect
-    form (2026-08-09).
+    Writing the file directly keeps the schema separate from incidental stdout
+    output during application imports.
     """
     if len(sys.argv) > 1:
         with open(sys.argv[1], "w", encoding="utf-8") as handle:

@@ -54,11 +54,9 @@ The divergences you must not "fix" by asserting equality
 
 ``lcr_pct`` and ``car_pct`` each exist more than once, deliberately:
 
-* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR. It DOES
-  cap inflows: ``lcr_inflow_cap_pct`` is a required threshold
-  (``regulatory_liquidity._REQUIRED_THRESHOLDS``) applied unconditionally at
-  ``app/domain/liquidity/engine.py:264``, and the preview row is labelled
-  "After Cap".
+* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR.
+  ``app.domain.liquidity.engine.compute_lcr`` owns its aggregate inflow cap;
+  ``ARCHITECTURE.md`` §3 owns its per-figure refusal contract.
 * ``lcr_pct`` / ``lmtd_table11_capped`` — the LMT Table 11 by-currency LCR.
   It caps too. The two divergences are (a) the cap SOURCE — a governed,
   effective-dated ``lcr_inflow_cap_pct`` parameter versus the hard-coded
