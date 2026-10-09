@@ -6,13 +6,13 @@
 
 <!-- Write 3-4 sentences explaining the user-facing or engineering outcome and why it matters. -->
 
-## Screenshots
-
-<!-- Required for UI changes: attach light/dark and mobile/desktop screenshots where relevant; never commit images. -->
-
 ## What changed
 
 <!-- Use short, grouped bullets describing meaningful changes without implementation trivia. -->
+
+## Screenshots
+
+<!-- Required for UI changes: attach light/dark and mobile/desktop screenshots where relevant; never commit images. -->
 
 ## How to review
 
@@ -25,6 +25,13 @@
 ## Risk
 
 <!-- Describe material risks, limitations, and mitigations, or state that risk is low and explain why. -->
+
+## Compliance
+
+<!-- Figures changed: None, N/A, or a before/after table in this PR (required whenever a reported/filed figure changes). -->
+<!-- Rule basis: None, N/A, or instrument + paragraph + in force/draft for regulatory logic changes. -->
+<!-- Data, privacy and security: None, N/A, or personal or bank data touched, logging/retention, access or encryption changes. -->
+<!-- Compliance items: None, N/A, or affected IDs from readiness epic #469 and its sub-epics. -->
 
 ## Follow-ups
 
