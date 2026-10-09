@@ -1,4 +1,4 @@
-import type { StatusTone } from './StatusPill';
+import type { StatusTone } from "./StatusPill";
 
 /**
  * Headline ratio gauge — the approved half-arc: value sweeps the arc, the
@@ -10,11 +10,11 @@ export default function RatioGauge({
   value,
   threshold,
   internalBuffer,
-  bufferLabel = 'Internal buffer',
+  bufferLabel = "Internal buffer",
   status,
   decimals = 1,
-  suffix = '%',
-  thresholdLabel = 'Regulatory minimum',
+  suffix = "%",
+  thresholdLabel = "Regulatory minimum",
   higherIsBetter = true,
 }: {
   label: string;
@@ -60,14 +60,14 @@ export default function RatioGauge({
   const tickY2 = CY - (R + 7) * Math.sin(tickAngle);
 
   const arcColor =
-    status === 'breach' || status === 'critical'
-      ? 'rgb(var(--crit))'
-      : status === 'approaching' || status === 'amber'
-        ? 'rgb(var(--warn))'
-        : 'rgb(var(--ok))';
+    status === "breach" || status === "critical"
+      ? "rgb(var(--crit))"
+      : status === "approaching" || status === "amber"
+        ? "rgb(var(--warn))"
+        : "rgb(var(--ok))";
 
   const variance = value - threshold;
-  const varianceSign = variance >= 0 ? '+' : '';
+  const varianceSign = variance >= 0 ? "+" : "";
   const varianceIsGood = higherIsBetter ? variance >= 0 : variance <= 0;
 
   return (
@@ -122,22 +122,22 @@ export default function RatioGauge({
         </p>
         <p
           className={`mt-1 text-body font-mono font-medium tabular-nums ${
-            varianceIsGood ? 'text-success' : 'text-critical'
+            varianceIsGood ? "text-success" : "text-critical"
           }`}
         >
           {varianceSign}
           {variance.toFixed(decimals)} pts vs {thresholdLabel.toLowerCase()}
         </p>
         <p className="mt-1.5 text-caption text-slate">
-          {thresholdLabel}{' '}
+          {thresholdLabel}{" "}
           <span className="font-mono font-medium text-navy tabular-nums">
             {threshold}
             {suffix}
           </span>
           {internalBuffer !== undefined && (
             <>
-              {' · '}
-              {bufferLabel}{' '}
+              {" · "}
+              {bufferLabel}{" "}
               <span className="font-mono font-medium text-navy tabular-nums">
                 {internalBuffer}
                 {suffix}

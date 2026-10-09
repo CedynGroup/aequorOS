@@ -195,9 +195,8 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 - Module-level constants for versions and rule ids:
   `ENGINE_VERSION = "capital-projection-v1.0.0"`, `RULE_VERSION = "liquidity-v1.0.0"`,
   `NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"`, thresholds as `Decimal` constants.
-- Domain input failures are typed exceptions carrying a payload
-  (`CalculationInputError`, `CapitalInputError` with `{code, message, details}`) that services
-  convert into persisted `failed` rows — not HTTP 500s.
+- Calculation failure and per-figure result contracts are owned by
+  [ARCHITECTURE.md §3](ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine).
 - Pure calculation logic (no db/ctx) lives in plain functions like
   `liquidity.calculate_metrics(periods)` so it is unit-testable; its target home follows
   [the feature layout](#5-feature-layout).

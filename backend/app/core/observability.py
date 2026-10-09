@@ -26,8 +26,8 @@ This module supplies that, and nothing else. Deliberately:
   citations, figures and versions, validated input row positions, a platform
   tenant id and a safe correlation id. Other events retain their credential-field backstop.
 
-Every record carries ``condition`` (a :class:`Condition` value) and
-``severity``, alongside ``request_id`` from the logging patcher.
+Every record carries ``condition`` (a :class:`Condition` value),
+``severity`` and ``request_id``.
 """
 
 from __future__ import annotations
@@ -191,8 +191,9 @@ def emit(
 ) -> None:
     """Record an operational condition as a structured log event.
 
-    ``summary`` is a short human sentence; everything queryable belongs in
-    ``fields``. Never raises: an observability failure must not change the
+    General events use ``summary`` as prose and ``fields`` for queryable data.
+    Calculation events discard the summary and use the closed allowlist in
+    :func:`_emit_calculation`. Never raises: an observability failure must not change the
     behaviour of the code path that reported the condition.
     """
     # Suppressed on purpose: these calls sit inside authorization denials and
@@ -218,10 +219,7 @@ def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, 
     is inspected, rendered or serialized. Unknown codes fail closed.
     """
     request_id = get_request_id()
-    if request_id == "-":
-        request_id = str(uuid4())
-    else:
-        request_id = safe_request_id(request_id)
+    request_id = str(uuid4()) if request_id == "-" else safe_request_id(request_id)
     payload: dict[str, str | list[int]] = {
         "condition": condition.value,
         "severity": severity if severity in _LEVELS else "warning",

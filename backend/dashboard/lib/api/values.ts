@@ -5,7 +5,7 @@
  * regulatory math happens client-side.
  */
 
-import type { StatusTone } from '@/components/ui/StatusPill';
+import type { StatusTone } from "@/components/ui/StatusPill";
 
 /**
  * Parse a backend decimal string (or number) for display.
@@ -21,7 +21,7 @@ import type { StatusTone } from '@/components/ui/StatusPill';
  */
 export function num(value: string | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
-  const parsed = typeof value === 'number' ? value : Number(value);
+  const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -33,10 +33,10 @@ export function num(value: string | number | null | undefined): number {
  * may not compute, and for every regulatory floor.
  */
 export function numOrNull(
-  value: string | number | null | undefined
+  value: string | number | null | undefined,
 ): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = typeof value === 'number' ? value : Number(value);
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -48,7 +48,7 @@ export function numOrNull(
  */
 export type FloorAssessment =
   | { assessed: true; breach: boolean; value: number; floor: number }
-  | { assessed: false; reason: 'no_value' | 'no_floor' | 'neither' };
+  | { assessed: false; reason: "no_value" | "no_floor" | "neither" };
 
 /**
  * Compare a ratio against a floor, FAILING CLOSED.
@@ -61,16 +61,16 @@ export type FloorAssessment =
  */
 export function assessAgainstFloor(
   value: number | null | undefined,
-  floor: number | null | undefined
+  floor: number | null | undefined,
 ): FloorAssessment {
-  const hasValue = typeof value === 'number' && Number.isFinite(value);
+  const hasValue = typeof value === "number" && Number.isFinite(value);
   const hasFloor =
-    typeof floor === 'number' && Number.isFinite(floor) && floor > 0;
+    typeof floor === "number" && Number.isFinite(floor) && floor > 0;
   if (hasValue && hasFloor) {
     return { assessed: true, breach: value < floor, value, floor };
   }
-  if (!hasValue && !hasFloor) return { assessed: false, reason: 'neither' };
-  return { assessed: false, reason: hasValue ? 'no_floor' : 'no_value' };
+  if (!hasValue && !hasFloor) return { assessed: false, reason: "neither" };
+  return { assessed: false, reason: hasValue ? "no_floor" : "no_value" };
 }
 
 /**
@@ -79,22 +79,22 @@ export function assessAgainstFloor(
  * KPI reads as a compliance affirmation.
  */
 export function floorStatus(
-  assessment: FloorAssessment
-): 'ok' | 'warn' | 'crit' {
-  if (!assessment.assessed) return 'warn';
-  return assessment.breach ? 'crit' : 'ok';
+  assessment: FloorAssessment,
+): "ok" | "warn" | "crit" {
+  if (!assessment.assessed) return "warn";
+  return assessment.breach ? "crit" : "ok";
 }
 
 /** Plain-language reason an assessment could not be made. */
 export function floorNotAssessedReason(
   assessment: FloorAssessment,
-  what: string
+  what: string,
 ): string | null {
   if (assessment.assessed) return null;
   switch (assessment.reason) {
-    case 'no_floor':
+    case "no_floor":
       return `No ${what} floor configured — compliance not assessed`;
-    case 'no_value':
+    case "no_value":
       return `${what} not computed — compliance not assessed`;
     default:
       return `Neither ${what} nor its floor is available — compliance not assessed`;
@@ -102,7 +102,7 @@ export function floorNotAssessedReason(
 }
 
 /** A module's traffic light, where 'na' means "not computable". */
-export type ModuleStatus = 'green' | 'amber' | 'red' | 'na';
+export type ModuleStatus = "green" | "amber" | "red" | "na";
 
 /**
  * The verdict a compliance banner may draw over a set of module statuses.
@@ -110,7 +110,7 @@ export type ModuleStatus = 'green' | 'amber' | 'red' | 'na';
  * and "some things were measured" cannot collapse into `compliant`.
  */
 export type ComplianceVerdict =
-  'breach' | 'partial' | 'compliant' | 'not_assessed';
+  "breach" | "partial" | "compliant" | "not_assessed";
 
 /**
  * Summarise a set of in-scope module statuses, FAILING CLOSED.
@@ -124,13 +124,13 @@ export type ComplianceVerdict =
  * tenant does not run is 'na' by design and must not be reported as unmeasured.
  */
 export function moduleComplianceVerdict(
-  statuses: readonly ModuleStatus[]
+  statuses: readonly ModuleStatus[],
 ): ComplianceVerdict {
-  if (statuses.some((status) => status === 'red')) return 'breach';
-  const computable = statuses.filter((status) => status !== 'na');
-  if (computable.length === 0) return 'not_assessed';
-  if (computable.length < statuses.length) return 'partial';
-  return 'compliant';
+  if (statuses.some((status) => status === "red")) return "breach";
+  const computable = statuses.filter((status) => status !== "na");
+  if (computable.length === 0) return "not_assessed";
+  if (computable.length < statuses.length) return "partial";
+  return "compliant";
 }
 
 /**
@@ -145,40 +145,40 @@ export function fmtFloorPct(value: number): string {
 export function fmtPctOrNull(
   value: number | null | undefined,
   decimals = 2,
-  fallback = '—'
+  fallback = "—",
 ): string {
-  return typeof value === 'number' && Number.isFinite(value)
+  return typeof value === "number" && Number.isFinite(value)
     ? `${value.toFixed(decimals)}%`
     : fallback;
 }
 
 /** Backend traffic-light status → demo StatusPill tone. */
 export function statusTone(
-  status: 'green' | 'amber' | 'red' | string | null | undefined
+  status: "green" | "amber" | "red" | string | null | undefined,
 ): StatusTone {
   switch (status) {
-    case 'green':
-      return 'compliant';
-    case 'amber':
-      return 'approaching';
-    case 'red':
-      return 'breach';
+    case "green":
+      return "compliant";
+    case "amber":
+      return "approaching";
+    case "red":
+      return "breach";
     default:
-      return 'pending';
+      return "pending";
   }
 }
 
 /** Validation severity → StatusPill tone (for failed rules). */
 export function severityTone(
-  severity: 'error' | 'warning' | 'info' | string
+  severity: "error" | "warning" | "info" | string,
 ): StatusTone {
   switch (severity) {
-    case 'error':
-      return 'critical';
-    case 'warning':
-      return 'amber';
+    case "error":
+      return "critical";
+    case "warning":
+      return "amber";
     default:
-      return 'slate';
+      return "slate";
   }
 }
 
@@ -193,18 +193,18 @@ export function labelize(value: string): string {
     .split(/[_\s]+/)
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 /** Format a run timestamp: "14 Jul 2026 20:58". */
 export function fmtTimestamp(d: Date): string {
-  return `${d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })} ${d.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
+  return `${d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })} ${d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
   })}`;
 }
 
@@ -215,14 +215,14 @@ export function fmtTimestamp(d: Date): string {
  * returns "—" for missing input.
  */
 export function fmtRelative(value: Date | string | null | undefined): string {
-  if (value === null || value === undefined) return '—';
-  const then = typeof value === 'string' ? new Date(value) : value;
+  if (value === null || value === undefined) return "—";
+  const then = typeof value === "string" ? new Date(value) : value;
   const ms = then.getTime();
-  if (!Number.isFinite(ms)) return '—';
+  if (!Number.isFinite(ms)) return "—";
   const diff = Date.now() - ms;
-  if (diff < 0) return 'just now';
+  if (diff < 0) return "just now";
   const sec = Math.floor(diff / 1000);
-  if (sec < 45) return 'just now';
+  if (sec < 45) return "just now";
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
@@ -242,18 +242,18 @@ export function isoDate(d: Date): string {
  * "2026-03-31" renders as 31 Mar 2026 in every timezone.
  */
 export function fmtDateUTC(d: Date): string {
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }
 
 export function formatFigure(
   value: string | number | null | undefined,
-  format: (value: number) => string
+  format: (value: number) => string,
 ): string {
   const parsed = numOrNull(value);
-  return parsed === null ? 'Unavailable' : format(parsed);
+  return parsed === null ? "Unavailable" : format(parsed);
 }

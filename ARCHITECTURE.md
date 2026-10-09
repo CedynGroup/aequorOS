@@ -201,7 +201,7 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
   `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);
   `ENGINE_VERSION = "capital-projection-v1.0.0"` (capital);
   `RULE_VERSION = "liquidity-v1.0.0"` (liquidity). Internal version bumps do NOT bump `/api/v1`.
-- **Failures are data.** Domain input problems raise a typed exception
+- **Failures are data.** Legacy case-engine input problems raise a typed exception
   (`CalculationInputError`, `CapitalInputError`) carrying `{code, message, details}`; the service
   persists a `failed` row and still returns `201` with actionable diagnostics. Unexpected
   exceptions persist a sanitized diagnostic.
@@ -219,26 +219,30 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
 The incremental aequorOS calculation boundary uses
 `app/domain/authority/results.py::FigureResult[T]`: a plain Python union of
 `Computed[T]` and `Refused(reason_code, rule_citation, row_ref)`, consumed with
-`match`. Refused rows are one-based positions in the input sequence. Validated
-positions may appear in operator logs; the optional `OutcomeDetail` remains
-bank-facing data and never enters operator logs.
+`match`. Refused rows are one-based positions in the input sequence. Official
+liquidity runs calculate in the canonical `run.inputs.facts` order, so their
+refusal positions identify the saved snapshot without changing its value-based
+hash. Validated positions may appear in operator logs; the optional `OutcomeDetail`
+remains bank-facing data and never enters operator logs.
 Unexpected bugs and infrastructure failures still raise.
 
 `app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
-LCR and NSFR are evaluated independently. Existing single-ratio entry points keep
-their exception contracts. The service adapter preserves both outcomes for inline
-dashboard reads, trends,
-live metrics and scenario analysis. Refused ratios and dependent totals are null
-in dashboard payloads, with `na` ratio status and a `refusals` map carrying reason
+LCR and NSFR are evaluated independently, including missing threshold parameters.
+Existing single-ratio entry points keep their exception contracts. The service
+adapter preserves both outcomes for inline dashboard reads, trends, live metrics
+and scenario analysis. Refused ratios and dependent totals are null in dashboard
+payloads, with `na` ratio status and a `refusals` map carrying reason
 code, rule citation, reason and one-based input row references. Computed siblings
 retain their values, lines and validations. Live metrics persist refusals and omit
 unavailable numeric keys; a refused figure makes module health red. The scenario
 workbench carries the same refusal map, and window analytics retains computed
-sibling points while leaving gaps for refused ratios. Only official run persistence
-requires both ratios, so filing remains fail-closed. Successful arithmetic, rounding
-and value-based input hashes are unchanged; API schemas and the generated client
-carry nullable figures and refusal metadata. Detailed dashboard refusal rendering (reasons and affected rows) and the
-remaining engines are follow-ups for issue #409.
+sibling points while omitting refused readings from series and statistics. Only
+official run persistence requires both ratios, so filing remains fail-closed.
+Successful arithmetic, rounding and value-based input hashes are unchanged; API schemas and the generated client
+carry nullable figures and refusal metadata. LCR-only reverse-stress probes use
+the LCR outcome boundary without evaluating NSFR. Dashboard display behavior is
+owned by [Unavailable liquidity figures](backend/dashboard/README.md#unavailable-liquidity-figures).
+The remaining engines are follow-ups for issue #409.
 
 `app/core/observability.py::emit` writes calculation/refusal and regulatory-run
 failure events as JSON to stderr for CloudWatch, with a closed allowlist of codes,
@@ -248,13 +252,11 @@ validated one-based input row positions travel with these events. Row locators
 must be tuples of integers within the calculation's input row count; booleans,
 strings, out-of-range positions and other shapes are dropped as a whole. The
 input row count is validation context and is not logged. No raw row ids, bank ids,
-financial data, exception text, tracebacks or bound logging extras do. The shared logging boundary hashes
-all caller-supplied request ids for
+financial data, exception text, tracebacks or bound logging extras do. The shared
+logging boundary hashes all caller-supplied request ids for
 calculation, HTTP error, access and intercepted logs alike; the Loguru sink also
 writes to stderr. Background boundaries mint an id when no request exists.
 The HTTP error boundary does not re-log propagated exception text or tracebacks.
-LCR-only reverse-stress probes use the LCR outcome boundary without evaluating
-NSFR; ordinary readers continue to compute both figures independently.
 Behavioral/redaction tests live in `backend/tests/liquidity/` and
 `backend/tests/core/test_calculation_logging.py`.
 

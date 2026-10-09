@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
 export default function Sparkline({
   data,
-  color = 'rgb(var(--ok))',
+  color = "rgb(var(--ok))",
   width = 80,
   height = 24,
   strokeWidth = 1.5,
@@ -23,12 +23,12 @@ export default function Sparkline({
   const stepX = width / (data.length - 1);
   const points = data
     .map((v, i) => {
-      if (v === null) return '';
+      if (v === null) return "";
       const x = i * stepX;
       const y = height - ((v - min) / range) * height;
-      return `${i === 0 || data[i - 1] === null ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+      return `${i === 0 || data[i - 1] === null ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
     })
-    .join(' ');
+    .join(" ");
 
   return (
     <svg
@@ -37,7 +37,7 @@ export default function Sparkline({
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-hidden
-      style={{ overflow: 'visible' }}
+      style={{ overflow: "visible" }}
     >
       {data.map((value, index) =>
         value !== null && data[index - 1] == null && data[index + 1] == null ? (
@@ -48,7 +48,7 @@ export default function Sparkline({
             r={strokeWidth}
             fill={color}
           />
-        ) : null
+        ) : null,
       )}
       <path
         d={points}

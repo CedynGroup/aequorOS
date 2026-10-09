@@ -1,25 +1,25 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-export type LimitDirection = 'below' | 'above';
+export type LimitDirection = "below" | "above";
 
-type LimitStatus = 'ok' | 'warn' | 'crit';
+type LimitStatus = "ok" | "warn" | "crit";
 
 const barColor: Record<LimitStatus, string> = {
-  ok: 'rgb(var(--ok))',
-  warn: 'rgb(var(--warn))',
-  crit: 'rgb(var(--crit))',
+  ok: "rgb(var(--ok))",
+  warn: "rgb(var(--warn))",
+  crit: "rgb(var(--crit))",
 };
 
 const valueTextColor: Record<LimitStatus, string> = {
-  ok: 'text-success',
-  warn: 'text-warning',
-  crit: 'text-critical',
+  ok: "text-success",
+  warn: "text-warning",
+  crit: "text-critical",
 };
 
 function defaultFormat(v: number): string {
   return Number.isInteger(v)
-    ? v.toLocaleString('en-US')
-    : v.toLocaleString('en-US', {
+    ? v.toLocaleString("en-US")
+    : v.toLocaleString("en-US", {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       });
@@ -43,14 +43,14 @@ export default function LimitBar({
   limit,
   warnAt,
   max,
-  direction = 'below',
-  unit = '',
+  direction = "below",
+  unit = "",
   format = defaultFormat,
-  limitLabel = 'Limit',
-  warnLabel = 'Amber',
+  limitLabel = "Limit",
+  warnLabel = "Amber",
   showHeadroom = true,
   meta,
-  className = '',
+  className = "",
 }: {
   label?: ReactNode;
   /** Measured value. */
@@ -80,20 +80,20 @@ export default function LimitBar({
     );
   }
 
-  const isBelow = direction === 'below';
+  const isBelow = direction === "below";
   const amber = warnAt ?? (isBelow ? limit * 0.8 : limit * 1.2);
 
   const status: LimitStatus = isBelow
     ? value >= limit
-      ? 'crit'
+      ? "crit"
       : value >= amber
-        ? 'warn'
-        : 'ok'
+        ? "warn"
+        : "ok"
     : value <= limit
-      ? 'crit'
+      ? "crit"
       : value <= amber
-        ? 'warn'
-        : 'ok';
+        ? "warn"
+        : "ok";
 
   const scaleMax =
     max ?? Math.max(value, limit, amber) * (isBelow ? 1.15 : 1.25);
@@ -127,7 +127,7 @@ export default function LimitBar({
       {/* Zoned track */}
       <div
         className="relative h-3 rounded-sm overflow-hidden"
-        style={{ background: 'rgb(var(--surface-hover))' }}
+        style={{ background: "rgb(var(--surface-hover))" }}
         role="img"
         aria-label={`${format(value)}${unit} of ${format(limit)}${unit} ${limitLabel.toLowerCase()}`}
       >
@@ -139,7 +139,7 @@ export default function LimitBar({
               style={{
                 left: `${pctAmber}%`,
                 width: `${Math.max(0, pctLimit - pctAmber)}%`,
-                background: 'rgb(var(--warn-soft))',
+                background: "rgb(var(--warn-soft))",
               }}
               aria-hidden
             />
@@ -149,7 +149,7 @@ export default function LimitBar({
               style={{
                 left: `${pctLimit}%`,
                 right: 0,
-                background: 'rgb(var(--crit-soft))',
+                background: "rgb(var(--crit-soft))",
               }}
               aria-hidden
             />
@@ -161,7 +161,7 @@ export default function LimitBar({
               className="absolute inset-y-0 left-0"
               style={{
                 width: `${pctLimit}%`,
-                background: 'rgb(var(--crit-soft))',
+                background: "rgb(var(--crit-soft))",
               }}
               aria-hidden
             />
@@ -171,7 +171,7 @@ export default function LimitBar({
               style={{
                 left: `${pctLimit}%`,
                 width: `${Math.max(0, pctAmber - pctLimit)}%`,
-                background: 'rgb(var(--warn-soft))',
+                background: "rgb(var(--warn-soft))",
               }}
               aria-hidden
             />
@@ -188,14 +188,14 @@ export default function LimitBar({
         {/* Amber threshold tick */}
         <div
           className="absolute inset-y-0 w-px"
-          style={{ left: `${pctAmber}%`, background: 'rgb(var(--warn))' }}
+          style={{ left: `${pctAmber}%`, background: "rgb(var(--warn))" }}
           title={`${warnLabel} ${format(amber)}${unit}`}
           aria-hidden
         />
         {/* Hard limit tick */}
         <div
           className="absolute inset-y-0 w-[2px]"
-          style={{ left: `${pctLimit}%`, background: 'rgb(var(--crit))' }}
+          style={{ left: `${pctLimit}%`, background: "rgb(var(--crit))" }}
           title={`${limitLabel} ${format(limit)}${unit}`}
           aria-hidden
         />
@@ -203,7 +203,7 @@ export default function LimitBar({
 
       <div className="mt-1.5 flex items-center justify-between gap-3 text-caption text-slate">
         <span className="whitespace-nowrap">
-          {limitLabel}{' '}
+          {limitLabel}{" "}
           <span className="font-mono font-medium text-navy tnum">
             {format(limit)}
             {unit}
@@ -212,14 +212,14 @@ export default function LimitBar({
         {showHeadroom && (
           <span
             className={`whitespace-nowrap font-mono tnum ${
-              headroom < 0 ? 'text-critical font-medium' : ''
+              headroom < 0 ? "text-critical font-medium" : ""
             }`}
           >
-            {headroom < 0 ? 'Over by ' : 'Headroom '}
+            {headroom < 0 ? "Over by " : "Headroom "}
             {format(Math.abs(headroom))}
             {unit}
             <span className="text-slate-light">
-              {' '}
+              {" "}
               · {Math.abs(headroomPct).toFixed(0)}%
             </span>
           </span>

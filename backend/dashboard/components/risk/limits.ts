@@ -16,15 +16,15 @@ import type {
   FxDashboardRead,
   IrrDashboardRead,
   LiquidityDashboardRead,
-} from '@aequoros/risk-service-api';
-import { labelize, num, numOrNull } from '@/lib/api/values';
-import { runThresholds } from '@/components/liquidity/runData';
-import { fmtCurrencySigned } from '@/lib/format';
+} from "@aequoros/risk-service-api";
+import { labelize, num, numOrNull } from "@/lib/api/values";
+import { runThresholds } from "@/components/liquidity/runData";
+import { fmtCurrencySigned } from "@/lib/format";
 
 export type LimitModule =
-  'liquidity' | 'capital' | 'exposures' | 'irr' | 'fx' | 'ftp';
-export type LimitStatus = 'ok' | 'warn' | 'crit' | 'na';
-export type LimitDirection = 'above' | 'below';
+  "liquidity" | "capital" | "exposures" | "irr" | "fx" | "ftp";
+export type LimitStatus = "ok" | "warn" | "crit" | "na";
+export type LimitDirection = "above" | "below";
 
 export type LimitRow = {
   module: LimitModule;
@@ -51,48 +51,48 @@ export type ModuleValidation = {
 };
 
 export const MODULE_LABELS: Record<LimitModule, string> = {
-  liquidity: 'Liquidity',
-  capital: 'Capital',
-  exposures: 'Large Exposures',
-  irr: 'Interest Rate Risk',
-  fx: 'FX Risk',
-  ftp: 'FTP',
+  liquidity: "Liquidity",
+  capital: "Capital",
+  exposures: "Large Exposures",
+  irr: "Interest Rate Risk",
+  fx: "FX Risk",
+  ftp: "FTP",
 };
 
 export const MODULE_HREFS: Record<LimitModule, string> = {
-  liquidity: '/liquidity',
-  capital: '/basel',
-  exposures: '/basel/exposures',
-  irr: '/irr',
-  fx: '/fx',
-  ftp: '/ftp',
+  liquidity: "/liquidity",
+  capital: "/basel",
+  exposures: "/basel/exposures",
+  irr: "/irr",
+  fx: "/fx",
+  ftp: "/ftp",
 };
 
 /** Backend traffic light → wall status. */
 function fromTrafficLight(status: string): LimitStatus {
-  if (status === 'red') return 'crit';
-  if (status === 'amber') return 'warn';
-  return 'ok';
+  if (status === "red") return "crit";
+  if (status === "amber") return "warn";
+  return "ok";
 }
 
 export function capitalLimits(
-  data: CapitalDashboardRead | undefined
+  data: CapitalDashboardRead | undefined,
 ): LimitRow[] {
   if (!data) return [];
   const buffers = data.buffers;
   return [
     {
-      module: 'capital',
-      limit: 'Capital adequacy ratio (CAR)',
+      module: "capital",
+      limit: "Capital adequacy ratio (CAR)",
       value: num(data.metrics.carPct),
       threshold: num(buffers.carMinPct),
       warnAt: num(buffers.carEarlyWarningPct),
-      direction: 'above',
+      direction: "above",
       status: fromTrafficLight(data.metrics.carStatus),
-      unit: '%',
+      unit: "%",
       computedAt: data.live?.computedAt,
       detail: `${buffers.carEarlyWarningLabel} · headroom ${num(
-        buffers.headroomPp
+        buffers.headroomPp,
       ).toFixed(1)} pp`,
     },
   ];
@@ -103,13 +103,13 @@ export function irrLimits(data: IrrDashboardRead | undefined): LimitRow[] {
   const metrics = data.metrics;
   return [
     {
-      module: 'irr',
-      limit: 'Worst ΔEVE / Tier 1',
+      module: "irr",
+      limit: "Worst ΔEVE / Tier 1",
       value: num(metrics.worstEveChangePctTier1),
       threshold: num(metrics.eveLimitPct),
-      direction: 'below',
+      direction: "below",
       status: fromTrafficLight(metrics.eveStatus),
-      unit: '%',
+      unit: "%",
       computedAt: data.live?.computedAt,
       detail: `Worst scenario: ${labelize(metrics.worstScenarioCode)}`,
     },
@@ -123,13 +123,13 @@ export function fxLimits(data: FxDashboardRead | undefined): LimitRow[] {
   const singleLimit = num(metrics.nopSingleLimitPct);
   const rows: LimitRow[] = [
     {
-      module: 'fx',
-      limit: 'Aggregate NOP / Tier 1',
+      module: "fx",
+      limit: "Aggregate NOP / Tier 1",
       value: num(metrics.nopPctTier1),
       threshold: num(metrics.nopAggregateLimitPct),
-      direction: 'below',
+      direction: "below",
       status: fromTrafficLight(metrics.nopStatus),
-      unit: '%',
+      unit: "%",
       computedAt,
       detail: `Net ${fmtCurrencySigned(num(metrics.nopGhs))}`,
     },
@@ -139,19 +139,19 @@ export function fxLimits(data: FxDashboardRead | undefined): LimitRow[] {
     // rest only expose the within-limit boolean.
     const isLargest = position.currency === metrics.singleCcyMaxCurrency;
     rows.push({
-      module: 'fx',
+      module: "fx",
       limit: `${position.currency} single-currency position / Tier 1`,
       value: num(position.absPctTier1),
       threshold: singleLimit,
-      direction: 'below',
+      direction: "below",
       status: isLargest
         ? fromTrafficLight(metrics.singleCcyStatus)
         : position.withinSingleLimit
-          ? 'ok'
-          : 'crit',
-      unit: '%',
+          ? "ok"
+          : "crit",
+      unit: "%",
       computedAt,
-      detail: `${position.side === 'long' ? 'Long' : 'Short'} ${fmtCurrencySigned(num(position.netGhs))}`,
+      detail: `${position.side === "long" ? "Long" : "Short"} ${fmtCurrencySigned(num(position.netGhs))}`,
     });
   }
   return rows;
@@ -163,41 +163,41 @@ export function ftpLimits(data: FtpDashboardRead | undefined): LimitRow[] {
   const computedAt = data.live?.computedAt;
   const rows: LimitRow[] = [
     {
-      module: 'ftp',
-      limit: 'NMD core share — policy floor',
+      module: "ftp",
+      limit: "NMD core share — policy floor",
       value: num(metrics.nmdCorePct),
       threshold: num(metrics.nmdCoreMinPct),
-      direction: 'above',
+      direction: "above",
       status: fromTrafficLight(metrics.nmdCoreStatus),
-      unit: '%',
+      unit: "%",
       computedAt,
       detail: `Policy band ${num(metrics.nmdCoreMinPct)}–${num(metrics.nmdCoreMaxPct)}%`,
     },
     {
-      module: 'ftp',
-      limit: 'NMD core share — policy ceiling',
+      module: "ftp",
+      limit: "NMD core share — policy ceiling",
       value: num(metrics.nmdCorePct),
       threshold: num(metrics.nmdCoreMaxPct),
-      direction: 'below',
+      direction: "below",
       status: fromTrafficLight(metrics.nmdCoreStatus),
-      unit: '%',
+      unit: "%",
       computedAt,
       detail: `Policy band ${num(metrics.nmdCoreMinPct)}–${num(metrics.nmdCoreMaxPct)}%`,
     },
   ];
   if (data.products.length > 0) {
     const worstMargin = Math.min(
-      ...data.products.map((product) => num(product.netMarginPct))
+      ...data.products.map((product) => num(product.netMarginPct)),
     );
     const below = metrics.productsBelowMinMargin;
     rows.push({
-      module: 'ftp',
-      limit: 'Lowest product net margin — floor',
+      module: "ftp",
+      limit: "Lowest product net margin — floor",
       value: worstMargin,
       threshold: num(metrics.minProductMarginPct),
-      direction: 'above',
-      status: below > 0 ? 'crit' : 'ok',
-      unit: '%',
+      direction: "above",
+      status: below > 0 ? "crit" : "ok",
+      unit: "%",
       computedAt,
       detail: `${below} of ${metrics.totalProducts} products below the floor`,
     });
@@ -212,54 +212,54 @@ export function ftpLimits(data: FtpDashboardRead | undefined): LimitRow[] {
  * when its floor exists there; nothing is ever invented client-side.
  */
 const RATIO_STATUS: Record<string, LimitStatus> = {
-  green: 'ok',
-  amber: 'warn',
-  red: 'crit',
-  na: 'na',
+  green: "ok",
+  amber: "warn",
+  red: "crit",
+  na: "na",
 };
 
 export function liquidityLimits(
   data: LiquidityDashboardRead | undefined,
-  run?: RegulatoryRunRead
+  run?: RegulatoryRunRead,
 ): LimitRow[] {
   if (!data) return [];
   const thresholds = runThresholds(run);
   const computedAt = data.live?.computedAt;
   const rows: LimitRow[] = [];
-  const lcrMin = thresholds['lcr_min'];
+  const lcrMin = thresholds["lcr_min"];
   if (lcrMin !== undefined) {
     rows.push({
-      module: 'liquidity',
-      limit: 'Liquidity Coverage Ratio',
+      module: "liquidity",
+      limit: "Liquidity Coverage Ratio",
       value: numOrNull(data.metrics.lcrPct),
       threshold: lcrMin,
-      warnAt: thresholds['lcr_amber_floor'],
-      direction: 'above',
+      warnAt: thresholds["lcr_amber_floor"],
+      direction: "above",
       status:
         numOrNull(data.metrics.lcrPct) === null
-          ? 'na'
-          : (RATIO_STATUS[data.metrics.lcrStatus] ?? 'na'),
-      unit: '%',
+          ? "na"
+          : (RATIO_STATUS[data.metrics.lcrStatus] ?? "na"),
+      unit: "%",
       computedAt,
-      detail: '30-day stressed horizon',
+      detail: "30-day stressed horizon",
     });
   }
-  const nsfrMin = thresholds['nsfr_min'];
+  const nsfrMin = thresholds["nsfr_min"];
   if (nsfrMin !== undefined) {
     rows.push({
-      module: 'liquidity',
-      limit: 'Net Stable Funding Ratio',
+      module: "liquidity",
+      limit: "Net Stable Funding Ratio",
       value: numOrNull(data.metrics.nsfrPct),
       threshold: nsfrMin,
-      warnAt: thresholds['nsfr_amber_floor'],
-      direction: 'above',
+      warnAt: thresholds["nsfr_amber_floor"],
+      direction: "above",
       status:
         numOrNull(data.metrics.nsfrPct) === null
-          ? 'na'
-          : (RATIO_STATUS[data.metrics.nsfrStatus] ?? 'na'),
-      unit: '%',
+          ? "na"
+          : (RATIO_STATUS[data.metrics.nsfrStatus] ?? "na"),
+      unit: "%",
       computedAt,
-      detail: '1-year stable funding horizon',
+      detail: "1-year stable funding horizon",
     });
   }
   return rows;

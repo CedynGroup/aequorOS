@@ -2,7 +2,7 @@
 
 Every function here is deterministic, Decimal-only, and free of database or
 tenant concerns: callers supply the bank facts and the active parameter set and
-receive fully materialized results with per-category line items. Monetary
+receive calculation results or refusals. Computed ratios carry per-category line items. Monetary
 amounts quantize to ``MONEY`` (4 dp) and ratio percentages quantize to
 ``RATIO_PCT`` (6 dp) with ``ROUND_HALF_UP``; status classification always
 happens AFTER quantization so stored and displayed values agree.
@@ -62,7 +62,7 @@ SHOCK_NMD_RUNOFF_PREFIX = "nmd_runoff:"
 # kind of thing as a capital tier code, and lives here. The *rates and caps*
 # attached to each tier are regulatory numbers and are NEVER written here: they
 # arrive on ``LiquidityParams`` from the regulatory-parameter layer, and a tier
-# present in the book with no resolved rate fails the calculation closed.
+# present in the book with no resolved rate refuses the LCR.
 HQLA_LEVEL_1 = "L1"
 HQLA_LEVEL_2A = "L2A"
 HQLA_LEVEL_2B = "L2B"
@@ -104,7 +104,7 @@ LINE_CODE_LEVEL2B_CAP = "hqla_level2b_cap_adjustment"
 
 
 class MissingParameterError(Exception):
-    """A category with a non-zero balance has no active rate/weight parameter."""
+    """A required threshold or a non-zero category's rate/weight is unresolved."""
 
     def __init__(self, category: str, message: str | None = None) -> None:
         super().__init__(message or f"No active liquidity parameter covers category '{category}'.")
@@ -251,8 +251,8 @@ class LiquidityFigures:
     nsfr: FigureResult[NsfrResult]
 
 
-def compute_liquidity(
-    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+def compute_liquidity[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> LiquidityFigures:
     """The aequorOS liquidity boundary: expected refusals are per-figure data.
 
@@ -266,16 +266,16 @@ def compute_liquidity(
     )
 
 
-def compute_lcr_result(
-    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+def compute_lcr_result[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> FigureResult[LcrResult]:
     return _compute_figure(facts, params, compute_lcr, "lcr_pct", "BCBS 238")
 
 
-def _compute_figure[ValueT](  # noqa: PLR0913 - explicit figure and authority
+def _compute_figure[ValueT, ThresholdT: Decimal | None](  # noqa: PLR0913 - explicit figure and authority
     facts: Sequence[LiquidityFact],
-    params: LiquidityParams[Decimal | None],
-    compute: Callable[[Sequence[LiquidityFact], LiquidityParams[Decimal | None]], ValueT],
+    params: LiquidityParams[ThresholdT],
+    compute: Callable[[Sequence[LiquidityFact], LiquidityParams[ThresholdT]], ValueT],
     metric_id: str,
     rule_citation: str,
 ) -> FigureResult[ValueT]:
@@ -364,8 +364,8 @@ def _require_threshold(value: Decimal | None, code: str) -> Decimal:
     return value
 
 
-def compute_lcr(
-    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+def compute_lcr[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> LcrResult:
     inflow_cap = _require_threshold(params.inflow_cap_pct, "lcr_inflow_cap_pct")
     minimum = _require_threshold(params.lcr_min_pct, "lcr_min")
@@ -418,8 +418,8 @@ def compute_lcr(
     )
 
 
-def compute_nsfr(
-    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+def compute_nsfr[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> NsfrResult:
     minimum = _require_threshold(params.nsfr_min_pct, "nsfr_min")
     amber_floor = _require_threshold(params.nsfr_amber_floor_pct, "lcr_amber_floor")
@@ -580,7 +580,9 @@ def _hqla_level(fact: LiquidityFact) -> str:
     return level
 
 
-def _hqla_haircut(params: LiquidityParams[Decimal | None], level: str) -> Decimal:
+def _hqla_haircut[ThresholdT: Decimal | None](
+    params: LiquidityParams[ThresholdT], level: str
+) -> Decimal:
     rate = params.hqla_haircut_pct.get(level)
     if rate is None:
         code = hqla_haircut_param_code(level)
@@ -625,8 +627,8 @@ def _hqla_parameter_message(param_code: str, *, level: str | None = None) -> str
     )
 
 
-def _hqla_stock(
-    hqla_facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+def _hqla_stock[ThresholdT: Decimal | None](
+    hqla_facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> tuple[tuple[LiquidityLineItem, ...], HqlaComposition]:
     """The stock of HQLA: per-level haircuts, then the Level-2 caps (BCBS 238).
 
