@@ -8,8 +8,10 @@ import {
   ChevronRight,
   Clock3,
   KeyRound,
+  OctagonAlert,
   Plus,
   ShieldCheck,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -46,6 +48,7 @@ import {
   grantPreviewRequest,
   grantScopeDisplay,
   grantScopeRefusal,
+  grantTimestampLabel,
   MODULE_OPTIONS,
   ROLE_OPTIONS,
   roleBundleLabel,
@@ -659,17 +662,17 @@ function MemberDetail({
                   <DetailFact label="Granted by" value={grantorLabel(grant)} />
                   <DetailFact
                     label="Granted"
-                    value={grant.grantedAt.toLocaleString()}
+                    value={grantTimestampLabel(grant.grantedAt)}
                   />
                   <DetailFact
                     label="Valid from"
-                    value={grant.validFrom.toLocaleString()}
+                    value={grantTimestampLabel(grant.validFrom)}
                   />
                   <DetailFact
                     label="Expires"
                     value={
                       grant.validUntil
-                        ? grant.validUntil.toLocaleString()
+                        ? grantTimestampLabel(grant.validUntil)
                         : "No expiry"
                     }
                   />
@@ -697,7 +700,7 @@ function MemberDetail({
                   {grant.revokedAt && (
                     <DetailFact
                       label="Revoked"
-                      value={grant.revokedAt.toLocaleString()}
+                      value={grantTimestampLabel(grant.revokedAt)}
                     />
                   )}
                   {grant.revokedByName && (
@@ -1424,41 +1427,49 @@ function GrantNotice({
     canAdministerGrants,
   );
   if (findings.length === 0 && !note) return null;
+  const Icon = blocked ? OctagonAlert : TriangleAlert;
   return (
     <div
       role={blocked ? "alert" : "status"}
       data-testid="grant-notice"
-      className={`rounded-md border-l-4 px-4 py-3 text-body leading-relaxed text-navy ${
+      className={`flex items-start gap-3 rounded-md border px-4 py-3 text-body leading-relaxed text-navy ${
         blocked
-          ? "border-critical bg-critical-light"
-          : "border-warning bg-warning-light/50"
+          ? "border-critical/25 bg-critical-light"
+          : "border-warning/30 bg-warning-light/50"
       }`}
     >
-      <p className="font-semibold">
-        {blocked ? "This grant can't be given" : "Check before granting"}
-      </p>
-      <div className="mt-1 space-y-1">
-        {findings.map((finding) => (
-          <p key={finding.code || finding.message}>{finding.message}</p>
-        ))}
-        {note && <p>{note}</p>}
-      </div>
-      {/* Review, never revoke, from here: the grant opens in the member's
+      <Icon
+        size={18}
+        className={`mt-0.5 shrink-0 ${blocked ? "text-critical" : "text-warning"}`}
+        aria-hidden
+      />
+      <div className="min-w-0">
+        <p className="font-semibold">
+          {blocked ? "This grant can't be given" : "Check before granting"}
+        </p>
+        <div className="mt-1 space-y-1">
+          {findings.map((finding) => (
+            <p key={finding.code || finding.message}>{finding.message}</p>
+          ))}
+          {note && <p>{note}</p>}
+        </div>
+        {/* Review, never revoke, from here: the grant opens in the member's
           detail, where Revoke keeps its confirmation, reason and audit. */}
-      {reviewable.map((grant) => (
-        <button
-          key={grant.id}
-          type="button"
-          onClick={() => onViewGrant(grant)}
-          className="mt-2 inline-flex items-center gap-1 font-medium text-action hover:underline"
-        >
-          View {memberName}&apos;s {roleBundleLabel(grant.roleBundle)} grant
-          <ArrowRight size={15} aria-hidden />
-        </button>
-      ))}
-      {askAdministrator && (
-        <p className="mt-2 font-medium">Ask an account administrator.</p>
-      )}
+        {reviewable.map((grant) => (
+          <button
+            key={grant.id}
+            type="button"
+            onClick={() => onViewGrant(grant)}
+            className="mt-2 inline-flex items-center gap-1 font-medium text-action hover:underline"
+          >
+            View {memberName}&apos;s {roleBundleLabel(grant.roleBundle)} grant
+            <ArrowRight size={15} aria-hidden />
+          </button>
+        ))}
+        {askAdministrator && (
+          <p className="mt-2 font-medium">Ask an account administrator.</p>
+        )}
+      </div>
     </div>
   );
 }

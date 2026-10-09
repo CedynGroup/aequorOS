@@ -39,6 +39,7 @@ import {
   grantPreviewRequest,
   grantScopeDisplay,
   grantScopeRefusal,
+  grantTimestampLabel,
   institutionBranchesKey,
   parseBranchDirectory,
   ssoApprovalRequest,
@@ -98,6 +99,17 @@ const DIRECTORY: BranchDirectory = {
 };
 
 // --- the sentence is still scalar -------------------------------------------
+
+test("a string timestamp reads exactly like the same instant as a Date", () => {
+  // The live case: a revoked grant showed "2026-10-08T20:11:31.257422" while
+  // its granted date beside it was formatted. Both now render alike.
+  const iso = "2026-10-08T20:11:31.257422";
+  const label = grantTimestampLabel(iso);
+  assert.equal(label, grantTimestampLabel(new Date(iso)));
+  assert.equal(label, new Date(iso).toLocaleString());
+  assert.notEqual(label, iso);
+  assert.ok(!label.includes("T20:11"), label);
+});
 
 test("every authority dimension but the coverage list is a scalar", () => {
   const composed = draft();

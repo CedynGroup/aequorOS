@@ -553,6 +553,22 @@ test("the notice links to the conflicting grant and the draft survives revoking 
       db.close();
     }
     await composer.getByRole("button", { name: "Cancel" }).click();
+
+    // The revoked grant's history reads every timestamp as a local date and
+    // time; the nullable ones used to show as raw ISO text.
+    await page.getByRole("button", { name: "View E2E Sod Member" }).click();
+    const revokedGrant = page
+      .getByRole("dialog", { name: "E2E Sod Member" })
+      .locator("li")
+      .filter({ hasText: "Moving this person from approving to filing" });
+    await expect(revokedGrant).toContainText("Revoked");
+    await expect(revokedGrant).not.toContainText(/\d{4}-\d{2}-\d{2}T\d{2}:/);
+    if (evidenceDir) {
+      await revokedGrant.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-history-revoked.png"),
+      });
+    }
   } finally {
     const listed = await page.request.get(
       `${API}/authorization/bindings?principal_user_id=${member.id}`,
