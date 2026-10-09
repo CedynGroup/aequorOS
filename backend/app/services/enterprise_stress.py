@@ -141,7 +141,7 @@ from app.services import (
 )
 from app.services.audit import record_event
 from app.services.params import get_active_params
-from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
+from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS, _SDI_STRUCTURAL_CAPITAL
 
 #: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap
 #: hedges decomposed into their legs, positions at their contractual rates —
@@ -200,6 +200,7 @@ _FORECAST_GROUPS = (
     "operational_income",
     "capital_component",
     "ecl_exposure",
+    "crm_collateral",
 )
 _FX_GROUPS = ("fx_position",)
 
@@ -432,7 +433,8 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         as_of=as_of,
     ).values
     risk_weights = {row.risk_weight_code: _dec(row.weight_pct) for row in weight_rows}
-    crm_haircuts = {row.collateral_class: _dec(row.haircut_pct) for row in crm_rows}
+    crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
+    crm_haircuts.update({row.collateral_class: _dec(row.haircut_pct) for row in crm_rows})
     # SDI simplified s.29 solvency (docs/sdi.md §4.6, Phase H): only the CAR floor
     # is a required regulatory value; market/operational/tier/leverage take the
     # s.29 structural settings and `basel_applicable=False` so the projection's
