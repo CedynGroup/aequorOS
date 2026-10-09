@@ -8394,14 +8394,19 @@
       },
       "BindingPreviewRead": {
         "additionalProperties": false,
+        "description": "The sentence and the separation-of-duties decision a create would reach.\n\nThe decision is the same assignment-time policy the create call applies,\nread without writing, so the composer can refuse a blocked combination at\nDefine instead of on submit.",
         "properties": {
           "authority_sentence": {
             "title": "Authority Sentence",
             "type": "string"
+          },
+          "sod_decision": {
+            "$ref": "#/components/schemas/SodDecisionRead"
           }
         },
         "required": [
-          "authority_sentence"
+          "authority_sentence",
+          "sod_decision"
         ],
         "title": "BindingPreviewRead",
         "type": "object"
@@ -56904,6 +56909,14 @@
             "title": "Code",
             "type": "string"
           },
+          "conflicting_binding_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Conflicting Binding Ids",
+            "type": "array"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -56911,7 +56924,8 @@
         },
         "required": [
           "code",
-          "message"
+          "message",
+          "conflicting_binding_ids"
         ],
         "title": "SodPolicyFindingRead",
         "type": "object"

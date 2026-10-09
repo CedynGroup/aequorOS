@@ -41,8 +41,11 @@ class SodOutcome(StrEnum):
 
 @dataclass(frozen=True)
 class SodFinding:
+    """One rule that fired, in plain words, and the existing grants it fired on."""
+
     code: str
     message: str
+    conflicting_binding_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -189,7 +192,7 @@ def check_sod_policy(
 ) -> SodDecision:
     """Return the server-authoritative assignment-time SoD decision.
 
-    C9 is a hard block: an account administrator/owner cannot also receive an
+    C9 is a hard block: a delegated account administrator cannot also receive an
     operational maker or checker bundle, and an operational maker/checker
     cannot be turned into an account administrator.  An overlapping
     Analyst/Approver pair is allowed because the engine deliberately unions
@@ -213,6 +216,7 @@ def check_sod_policy(
     active = [row for row in rows if binding_is_effective(row)]
     existing_bundles = {RoleBundle(row.role_bundle) for row in active}
     findings: list[SodFinding] = []
+    conflict = _ConflictWording(db, organization_id, principal_user_id, role_bundle)
 
     held_account_admin = existing_bundles & _ACCOUNT_ADMIN_BUNDLES
     if role_bundle in _OPERATIONAL_WRITE_BUNDLES and held_account_admin:
@@ -235,43 +239,48 @@ def check_sod_policy(
         # per-object condition can catch this at action time
         # (docs/filing_workflow_redesign.md §3.3 layer 3).
         owner_only = held_account_admin == {RoleBundle.ORG_OWNER}
-        findings.append(
-            SodFinding(
-                code=(
-                    "c9_owner_operational_exception"
-                    if owner_only
-                    else "c9_account_administration_operational_conflict"
-                ),
-                message=(
-                    (
-                        "This identity owns the organization and will also hold "
-                        "operational authority, so the same person decides who may "
-                        "file returns and files them. Recorded as an accepted "
-                        "exception."
-                    )
-                    if owner_only
-                    else (
-                        "Account administration and operational maker/checker "
-                        "authority must remain separated for one identity."
-                    )
-                ),
+        held_bundle = RoleBundle.ORG_OWNER if owner_only else RoleBundle.ACCOUNT_ADMIN
+        held = [row for row in active if row.role_bundle == held_bundle.value]
+        if owner_only:
+            findings.append(
+                _sod_finding(
+                    "c9_owner_operational_exception",
+                    held,
+                    f"{conflict.name} owns the organization. "
+                    f"Making {conflict.name} {conflict.requested} means the owner also "
+                    "does operational work. This is allowed for the owner and recorded "
+                    "as an accepted exception.",
+                )
             )
-        )
+        else:
+            findings.append(
+                _sod_finding(
+                    "c9_account_administration_operational_conflict",
+                    held,
+                    f"{conflict.name} already has {conflict.held(held)}. "
+                    f"Making {conflict.name} {conflict.requested} would let one person "
+                    "both decide who has access and do the work that access protects. "
+                    f"{conflict.remedy(held)}",
+                )
+            )
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and existing_bundles & _OPERATIONAL_WRITE_BUNDLES:
+        held = [row for row in active if RoleBundle(row.role_bundle) in _OPERATIONAL_WRITE_BUNDLES]
         findings.append(
-            SodFinding(
-                code="c9_account_administration_operational_conflict",
-                message=(
-                    "Account administration and operational maker/checker authority "
-                    "must remain separated for one identity."
-                ),
+            _sod_finding(
+                "c9_account_administration_operational_conflict",
+                held,
+                f"{conflict.name} already has {conflict.held(held)}. "
+                f"Making {conflict.name} {conflict.requested} would let one person both "
+                "do operational work and decide who has access to it. "
+                f"{conflict.remedy(held)}",
             )
         )
 
     # Approving a return and transmitting it to the regulator must not land on
     # one identity. Unlike the Analyst/Approver pair below this is NOT scope
-    # sensitive: transmission authority is a single Regulatory Reporting grant
-    # that files every family, so an approval grant on any module overlaps it.
+    # sensitive: Approver and Validator roles must stay with different people
+    # whatever their scopes. This does not imply that an Approver grant on
+    # another module can approve regulatory returns.
     # It is also a BLOCK rather than a warn, because the per-object condition
     # that would catch it at action time does not exist yet — the stage engine
     # owns it (docs/filing_workflow_redesign.md §3.3 layer 3). Relax this to a
@@ -284,13 +293,14 @@ def check_sod_policy(
         else None
     )
     if filing_counterpart is not None and filing_counterpart in existing_bundles:
+        held = [row for row in active if RoleBundle(row.role_bundle) is filing_counterpart]
         findings.append(
-            SodFinding(
-                code="approval_and_transmission_separation_required",
-                message=(
-                    "Approving a return and transmitting it to the regulator must "
-                    "remain separated for one identity."
-                ),
+            _sod_finding(
+                "approval_and_transmission_separation_required",
+                held,
+                f"{conflict.name} already has {conflict.held(held)}. "
+                "Approver and Validator roles must stay with different people, "
+                f"whatever the scope. {conflict.remedy(held)}",
             )
         )
 
@@ -301,16 +311,22 @@ def check_sod_policy(
         if role_bundle is RoleBundle.APPROVER
         else None
     )
-    if counterpart is not None and any(
-        RoleBundle(row.role_bundle) is counterpart and _scope_overlaps(row, scope) for row in active
-    ):
+    overlapping = [
+        row
+        for row in active
+        if counterpart is not None
+        and RoleBundle(row.role_bundle) is counterpart
+        and _scope_overlaps(row, scope)
+    ]
+    if overlapping:
         findings.append(
-            SodFinding(
-                code="maker_checker_runtime_condition_required",
-                message=(
-                    "This identity will hold overlapping maker and checker grants. "
-                    "A person still cannot approve work they prepared."
-                ),
+            _sod_finding(
+                "maker_checker_runtime_condition_required",
+                overlapping,
+                f"{conflict.name} already has {conflict.held(overlapping)}. "
+                f"Making {conflict.name} {conflict.requested} lets one person both prepare "
+                "and check work here. Nobody can approve work they prepared, so each item "
+                "still needs a second person.",
             )
         )
 
@@ -320,6 +336,60 @@ def check_sod_policy(
     if findings:
         return SodDecision(SodOutcome.WARN, tuple(findings))
     return SodDecision(SodOutcome.ALLOW)
+
+
+def _sod_finding(code: str, held: Sequence[AuthorizationBinding], message: str) -> SodFinding:
+    return SodFinding(code, message, tuple(row.id for row in held))
+
+
+class _ConflictWording:
+    """Plain-language parts of a finding: who, what they already hold, what is asked.
+
+    A finding names the person and the exact grants it fired on, so the screen
+    never has to guess which grant conflicts or what to remove.
+    """
+
+    def __init__(
+        self,
+        db: Session,
+        organization_id: str,
+        principal_user_id: UUID,
+        role_bundle: RoleBundle,
+    ) -> None:
+        self._db = db
+        self._organization_id = organization_id
+        principal = db.get(User, principal_user_id)
+        self.name = (principal.display_name or principal.email) if principal else "This person"
+        self.requested = _with_article(_ROLE_LABELS[role_bundle])
+
+    def held(self, rows: Sequence[AuthorizationBinding]) -> str:
+        grants = [
+            f"the {_ROLE_LABELS[RoleBundle(row.role_bundle)]} grant "
+            f"({_MODULE_LABELS[ModuleScope(row.module_scope)]}, {self._institution(row)})"
+            for row in rows
+        ]
+        return _joined(grants)
+
+    def remedy(self, rows: Sequence[AuthorizationBinding]) -> str:
+        roles = sorted({_ROLE_LABELS[RoleBundle(row.role_bundle)] for row in rows})
+        if len(rows) > 1:
+            return f"Remove all these {_joined(roles)} grants first, or choose someone else."
+        return f"Remove the {_joined(roles)} grant first, or choose someone else."
+
+    def _institution(self, row: AuthorizationBinding) -> str:
+        if row.institution_id is None:
+            return "every institution"
+        bank = self._db.scalar(
+            select(Bank).where(
+                Bank.id == row.institution_id,
+                Bank.organization_id == self._organization_id,
+            )
+        )
+        return bank.name if bank is not None else row.institution_id
+
+
+def _with_article(label: str) -> str:
+    return f"{'an' if label[0].lower() in 'aeiou' else 'a'} {label}"
 
 
 def _joined(values: Sequence[str]) -> str:

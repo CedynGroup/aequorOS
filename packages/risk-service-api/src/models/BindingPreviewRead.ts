@@ -11,8 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { SodDecisionRead } from "./SodDecisionRead";
+import {
+  SodDecisionReadFromJSON,
+  SodDecisionReadFromJSONTyped,
+  SodDecisionReadToJSON,
+  SodDecisionReadToJSONTyped,
+} from "./SodDecisionRead";
+
 /**
+ * The sentence and the separation-of-duties decision a create would reach.
  *
+ * The decision is the same assignment-time policy the create call applies,
+ * read without writing, so the composer can refuse a blocked combination at
+ * Define instead of on submit.
  * @export
  * @interface BindingPreviewRead
  */
@@ -23,6 +35,12 @@ export interface BindingPreviewRead {
    * @memberof BindingPreviewRead
    */
   authoritySentence: string;
+  /**
+   *
+   * @type {SodDecisionRead}
+   * @memberof BindingPreviewRead
+   */
+  sodDecision: SodDecisionRead;
 }
 
 /**
@@ -35,6 +53,8 @@ export function instanceOfBindingPreviewRead(
     !("authoritySentence" in value) ||
     value["authoritySentence"] === undefined
   )
+    return false;
+  if (!("sodDecision" in value) || value["sodDecision"] === undefined)
     return false;
   return true;
 }
@@ -53,6 +73,7 @@ export function BindingPreviewReadFromJSONTyped(
   return {
     ...json,
     authoritySentence: json["authority_sentence"],
+    sodDecision: SodDecisionReadFromJSON(json["sod_decision"]),
   };
 }
 
@@ -70,5 +91,6 @@ export function BindingPreviewReadToJSONTyped(
 
   return {
     authority_sentence: value["authoritySentence"],
+    sod_decision: SodDecisionReadToJSON(value["sodDecision"]),
   };
 }

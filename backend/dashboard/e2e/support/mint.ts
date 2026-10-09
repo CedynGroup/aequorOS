@@ -58,6 +58,11 @@ export const E2E_USERS: Record<
     roles: ["analyst"],
     authv: 3,
   },
+  sod_owner: {
+    ...identities.journey.sod_owner,
+    roles: ["admin"],
+    authv: 4,
+  },
   viewer: {
     id: identities.bootstrap.viewer,
     roles: ["viewer"],
@@ -82,6 +87,16 @@ export const E2E_USERS: Record<
     id: identities.bootstrap.grant_member,
     roles: ["viewer"],
     authv: 2,
+  },
+  sod_member: {
+    id: identities.bootstrap.sod_member,
+    roles: ["viewer"],
+    authv: 2,
+  },
+  sod_approver: {
+    id: identities.bootstrap.sod_approver,
+    roles: ["viewer"],
+    authv: 3,
   },
   forecast_member: {
     id: identities.bootstrap.forecast_member,

@@ -268,7 +268,11 @@ def _sod_read(decision: grant_administration.SodDecision) -> SodDecisionRead:
     return SodDecisionRead(
         outcome=decision.outcome.value,
         findings=[
-            SodPolicyFindingRead(code=finding.code, message=finding.message)
+            SodPolicyFindingRead(
+                code=finding.code,
+                message=finding.message,
+                conflicting_binding_ids=list(finding.conflicting_binding_ids),
+            )
             for finding in decision.findings
         ],
     )
@@ -501,7 +505,14 @@ def preview_authorization_binding(
         )
     except grant_administration.GrantAdministrationError as exc:
         raise grant_conflict(exc) from exc
-    return BindingPreviewRead(authority_sentence=sentence)
+    decision = grant_administration.check_sod_policy(
+        db,
+        organization_id=ctx.organization_id,
+        principal_user_id=payload.principal_user_id,
+        role_bundle=RoleBundle(payload.role_bundle),
+        scope=scope,
+    )
+    return BindingPreviewRead(authority_sentence=sentence, sod_decision=_sod_read(decision))
 
 
 @router.post(

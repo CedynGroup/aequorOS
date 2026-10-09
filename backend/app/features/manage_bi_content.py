@@ -416,7 +416,11 @@ def _sod_read(decision: grant_administration.SodDecision) -> SodDecisionRead:
     return SodDecisionRead(
         outcome=decision.outcome.value,
         findings=[
-            SodPolicyFindingRead(code=finding.code, message=finding.message)
+            SodPolicyFindingRead(
+                code=finding.code,
+                message=finding.message,
+                conflicting_binding_ids=list(finding.conflicting_binding_ids),
+            )
             for finding in decision.findings
         ],
     )

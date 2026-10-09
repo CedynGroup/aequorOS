@@ -347,6 +347,100 @@ test.describe("scoped grant administration", () => {
   });
 });
 
+test.describe("separation-of-duties at Define", () => {
+  test.use({ storageState: ownerState });
+
+  test("the composer shows the policy decision before Review and refuses a block there", async ({
+    page,
+  }) => {
+    // E2E Approver holds an organization-wide Approver grant from bootstrap.
+    // Nothing here is created: the preview alone carries the decision.
+    await page.goto("/access/members");
+    const approverRow = page
+      .locator("li")
+      .filter({ hasText: "E2E Approver" })
+      .first();
+    await approverRow.getByRole("button", { name: "Add grant" }).click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Approver",
+    });
+    await composer.getByLabel("Reason category").selectOption("other");
+    // Typed key by key, as a person would: every keystroke must stay in the
+    // field rather than being lost to the dialog taking focus back.
+    await composer
+      .getByLabel("Detail")
+      .pressSequentially("Separation-of-duties check");
+    await expect(composer.getByLabel("Detail")).toHaveValue(
+      "Separation-of-duties check",
+    );
+
+    // Approving and transmitting returns on one identity is a hard block. One
+    // notice names the grant they already hold and what to change; the scope
+    // note is left out, because a grant that cannot be given needs no advice.
+    await composer.getByLabel("Role bundle").selectOption("validator");
+    const refusal = composer.getByRole("alert");
+    await expect(composer.getByTestId("grant-notice")).toHaveCount(1);
+    await expect(refusal).toContainText("This grant can't be given");
+    await expect(refusal).toContainText(
+      "E2E Approver already has the Approver grant (all modules, every institution). " +
+        "Approver and Validator roles must stay with different people, whatever the scope. " +
+        "Remove the Approver grant first, or choose someone else.",
+    );
+    await expect(refusal).not.toContainText("won't let them");
+    await expect(
+      refusal.getByRole("button", {
+        name: "View E2E Approver's Approver grant",
+      }),
+    ).toBeVisible();
+    await expect(
+      composer.getByRole("button", { name: "Cannot be granted" }),
+    ).toBeDisabled();
+    await expect(
+      composer.getByRole("button", { name: "Review grant" }),
+    ).toHaveCount(0);
+    if (evidenceDir) {
+      await refusal.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-block.png"),
+      });
+    }
+
+    // Overlapping maker and checker grants are allowed but warned, at Define
+    // and again at Review.
+    await composer.getByLabel("Role bundle").selectOption("analyst");
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    const warning = composer.getByRole("status").filter({
+      hasText:
+        "E2E Approver already has the Approver grant (all modules, every institution). " +
+        "Making E2E Approver an Analyst lets one person both prepare and check work here.",
+    });
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText("Check before granting");
+    // The warning links to the same grant as the block did.
+    await expect(
+      warning.getByRole("button", {
+        name: "View E2E Approver's Approver grant",
+      }),
+    ).toBeVisible();
+    await expect(composer.getByTestId("grant-notice")).toHaveCount(1);
+    if (evidenceDir) {
+      await warning.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-warn-define.png"),
+      });
+    }
+    await composer.getByRole("button", { name: "Review grant" }).click();
+    await expect(warning).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "grant-composer-sod-warn-review.png"),
+      });
+    }
+    await composer.getByRole("button", { name: "Back" }).click();
+    await composer.getByRole("button", { name: "Cancel" }).click();
+  });
+});
+
 test.describe("Credit-only book coverage", () => {
   test.use({ storageState: ownerState });
   test("narrowing is offered only for Credit and persists the selected branch", async ({
@@ -373,16 +467,13 @@ test.describe("Credit-only book coverage", () => {
     await composer.getByLabel("Sensitivity").selectOption("restricted");
     await composer.getByLabel("Only the branches I choose").check();
     await composer.getByRole("checkbox", { name: /Head Office/ }).check();
-    await expect(composer).toContainText(
-      "Figures for the institution as a whole are refused",
-    );
-    await expect(composer).toContainText(
-      "Regulatory Reporting authority; ICAAP requires Capital",
+    const notice = composer.getByTestId("grant-notice");
+    await expect(notice).toContainText("Check before granting");
+    await expect(notice).toContainText(
+      "It covers only the branches you chose, so figures for the institution as a whole stay refused.",
     );
     if (evidenceDir) {
-      await expect(
-        composer.getByTestId("grant-coverage-shortfall"),
-      ).toBeInViewport({ ratio: 1 });
+      await notice.scrollIntoViewIfNeeded();
       await page.screenshot({
         path: path.join(evidenceDir, "after-credit.png"),
         fullPage: true,

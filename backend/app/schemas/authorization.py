@@ -211,8 +211,30 @@ class BindingPreviewRequest(ScopedGrantInput):
     principal_user_id: UUID
 
 
+class SodPolicyFindingRead(ClosedModel):
+    code: str
+    #: Plain-language finding that names the person, the existing grant it
+    #: conflicts with and, for a block, what to change. Shown verbatim.
+    message: str
+    #: The member's existing bindings this finding fired on.
+    conflicting_binding_ids: list[UUID]
+
+
+class SodDecisionRead(ClosedModel):
+    outcome: Literal["allow", "warn", "block"]
+    findings: list[SodPolicyFindingRead]
+
+
 class BindingPreviewRead(ClosedModel):
+    """The sentence and the separation-of-duties decision a create would reach.
+
+    The decision is the same assignment-time policy the create call applies,
+    read without writing, so the composer can refuse a blocked combination at
+    Define instead of on submit.
+    """
+
     authority_sentence: str
+    sod_decision: SodDecisionRead
 
 
 class BindingRevokeRequest(ClosedModel):
@@ -224,16 +246,6 @@ class BindingRevokeRequest(ClosedModel):
         if not self.reason:
             raise ValueError("a revocation reason is required")
         return self
-
-
-class SodPolicyFindingRead(ClosedModel):
-    code: str
-    message: str
-
-
-class SodDecisionRead(ClosedModel):
-    outcome: Literal["allow", "warn", "block"]
-    findings: list[SodPolicyFindingRead]
 
 
 class BindingRead(ClosedModel):

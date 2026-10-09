@@ -471,8 +471,11 @@ platform:flags     platform:billing     platform:audit   platform:staff
 | `org:settings`                                  |   —    |    —    |    —    |    —     |     ●     |     ●     |
 | `billing:* / org:transfer / org:delete`         |   —    |    —    |    —    |    —     |     —     |     ●     |
 
-¹ Org Admin/Owner see dashboards for administration context but hold no operational write.
-Built for Owner on 2026-09-16 as an explicit organization-wide Viewer sentence written
+¹ Ownership and account administration do not themselves grant operational write;
+additional assignments follow the
+[assignment-time policy](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
+Dashboard access for administration context was built for Owner on 2026-09-16
+as an explicit organization-wide Viewer sentence written
 with ownership; an Org Admin still receives it only as a separate grant.
 ² `configure` is granted per-preset (FTP owner, ALM assumptions, Risk limits) — not to every Analyst/Approver.
 ³ Board/Exec "Viewer" gets published-dashboard view only; raw `export` is off by default.
@@ -514,17 +517,17 @@ service (`app/services/approvals.py`) keyed on `(object_type, object_id, org_id)
 
 **Toxic-combination denies (checked at role-assignment time too):**
 
-| #   | Deny both to one identity within the same scope                             | Why                                    |
-| --- | --------------------------------------------------------------------------- | -------------------------------------- |
-| C1  | deal entry (FX) **&** deal confirm/settle                                   | front ≠ back office                    |
-| C2  | payment/settlement **approve** & **release**                                | two-stage even inside back office      |
-| C3  | reconciliation & payment approval                                           | conceal-your-own-error risk            |
-| C4  | DATA ingest/map/activate **&** sign-off/submit of the return built on it    | producer ≠ approver of numbers         |
-| C5  | configure scenario/BEH assumptions **&** approve the run that consumes them | assumption-setter can't self-bless     |
-| C6  | run an engine calc **&** reg sign-off/submit of that result                 | run ≠ approve ≠ submit                 |
-| C7  | BEH model owner **&** model validator **&** audit                           | Three-Lines independence               |
-| C9  | user/role administration **&** operational approve rights on same object    | admin can't grant themselves approvals |
-| C10 | reg-return preparer **&** internal sign-off **&** submitter                 | prepare / attest / submit split        |
+| #   | Deny both to one identity within the same scope                                                                                                  | Why                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| C1  | deal entry (FX) **&** deal confirm/settle                                                                                                        | front ≠ back office                                                 |
+| C2  | payment/settlement **approve** & **release**                                                                                                     | two-stage even inside back office                                   |
+| C3  | reconciliation & payment approval                                                                                                                | conceal-your-own-error risk                                         |
+| C4  | DATA ingest/map/activate **&** sign-off/submit of the return built on it                                                                         | producer ≠ approver of numbers                                      |
+| C5  | configure scenario/BEH assumptions **&** approve the run that consumes them                                                                      | assumption-setter can't self-bless                                  |
+| C6  | run an engine calc **&** reg sign-off/submit of that result                                                                                      | run ≠ approve ≠ submit                                              |
+| C7  | BEH model owner **&** model validator **&** audit                                                                                                | Three-Lines independence                                            |
+| C9  | [Account-administration assignment policy](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29) | Delegated administration and ownership exceptions are defined there |
+| C10 | reg-return preparer **&** internal sign-off **&** submitter                                                                                      | prepare / attest / submit split                                     |
 
 Ship SoD **monitoring/reporting**, not just assignment-time blocks — the Kyriba
 lesson is that role assignment alone is insufficient; auditors want a report of
@@ -1023,7 +1026,7 @@ GET   /auth/effective-authority                   BUILT: evaluator-derived capab
 GET   /organization/members                       BUILT: Org Owner; identity + lifecycle + complete grants
 GET   /organization/institutions                  BUILT: Org Owner; every institution, for scoping grants (account plane)
 GET   /authorization/bindings                     BUILT: Org Owner; optional principal filter
-POST  /authorization/bindings/preview             BUILT: canonical review sentence for one scalar grant
+POST  /authorization/bindings/preview             BUILT: canonical review sentence + SoD decision for one scalar grant
 POST  /authorization/bindings                     BUILT: one scalar binding + reason + SoD decision
 POST  /authorization/bindings/{id}/revoke         BUILT: one binding + reason; sessions invalidated
 GET   /orgs/{org}/users                           users:read

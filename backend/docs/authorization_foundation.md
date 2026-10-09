@@ -390,20 +390,54 @@ through the evaluator; scalar account-admin or token claims are insufficient.
 Create has one scalar role bundle, one institution coverage, one module, one
 sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
 rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
-Preview returns the canonical authority sentence; create requires that exact
-sentence and refuses if names or scope presentation changed before commit.
+Preview returns the canonical authority sentence and the assignment-time
+separation-of-duties decision for the current bindings without writing. The
+composer combines the server's findings in one notice at the top of Define and
+Review, styled by the strongest outcome. It includes at most one short scope
+note when the grant is not blocked. A block disables "Review grant" and labels
+the control "Cannot be granted". Create requires that exact sentence, refuses if
+names or scope presentation changed before commit, and re-evaluates the policy;
+if create is refused with policy findings, they replace the preview decision in
+that same notice and disable "Grant access". Those findings belong to the failed
+draft; a fresh preview or composer reset supersedes them.
+Each finding carries a plain-language `message` and `conflicting_binding_ids`
+for the member's existing bindings that triggered it. The composer shows the
+server's message verbatim: it names the member and existing authority, including
+module and institution coverage for conflicting grants. Blocking findings tell
+the administrator to remove every conflicting grant or choose someone else;
+the client does not invent a remedy from policy codes.
+Both blocking and warning notices let authorized grant administrators open each
+revocable conflict in member detail, showing its scope, grantor, and grant time.
+Revoke still uses the normal confirmation, reason, and audit flow. When a
+finding names a binding absent from the loaded member, the composer refetches
+Members before showing the notice. If the binding remains unavailable, the
+server's finding stays visible with "Ask an account administrator" instead of
+a link; that fallback also applies when the viewer cannot revoke the conflict.
+Ownership and other system-managed grants offer no revoke action here.
+
+Opening a conflict preserves the draft and offers "Back to your draft grant";
+after revocation, Define requests a fresh policy decision. With session storage
+available, unfinished drafts are also saved per organization, acting user, and
+target member in the current browser tab. Returning to Members after signing
+in again restores the draft, including after a self-revocation ends the session.
+Successful submission or cancellation clears the saved draft.
+
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
 The server runs assignment-time separation-of-duties policy and returns the
-authoritative `allow`, `warn`, or `block` decision. C9 account-administration
-versus operational maker/checker authority is blocked. An overlapping Analyst
+authoritative `allow`, `warn`, or `block` decision. C9 blocks delegated Account
+Admin authority combined with operational maker/checker authority in either
+assignment direction. An Org Owner without delegated Account Admin authority
+may receive an operational grant with a warning recording the accepted
+exception; the grant still requires a reason and is audited. An overlapping Analyst
 and Approver pair is warned because per-object maker-checker remains a runtime
 condition that no additional binding may bypass. An Approver and Validator pair
 is BLOCKED, scope-independently, because no such runtime condition exists yet
-for approve-then-file.
+for approve-then-file. Relax it to a warning only when the stage engine enforces
+that per-object condition at action time — never to make an assignment pass.
 
 Revoke changes only the targeted row and records revoker, time, and reason.
 Create and revoke both write an `audit_events` record containing actor, grantee,

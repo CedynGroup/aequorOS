@@ -692,6 +692,41 @@ export function visibleGrantFragments(
   };
 }
 
+/**
+ * Bundles the Members surface never revokes: baseline membership and
+ * integration writers are system-managed, and ownership changes only through
+ * the operator plane.
+ */
+const NOT_REVOCABLE_FROM_MEMBERS: ReadonlySet<string> = new Set([
+  "member",
+  "org_owner",
+  "integration_writer",
+]);
+
+/** Whether Members offers Revoke for this grant. */
+export function canRevokeFromMembers(
+  grant: Pick<BindingRead, "roleBundle" | "effective">,
+): boolean {
+  return grant.effective && !NOT_REVOCABLE_FROM_MEMBERS.has(grant.roleBundle);
+}
+
+/**
+ * A grant-history timestamp in the viewer's local date and time.
+ *
+ * The generated client parses required timestamps (`grantedAt`, `validFrom`)
+ * into `Date` but passes nullable ones (`validUntil`, `revokedAt`) through as
+ * ISO strings, so formatting each by hand left the nullable ones as raw ISO
+ * text. Every timestamp in one card goes through here.
+ */
+export function grantTimestampLabel(value: Date | string): string {
+  return (value instanceof Date ? value : new Date(value)).toLocaleString();
+}
+
+/** The display label for a role bundle code. */
+export function roleBundleLabel(roleBundle: string): string {
+  return optionLabel(ROLE_OPTIONS, roleBundle);
+}
+
 export function canAddGrantToMember(
   member: Pick<
     MemberRead,
