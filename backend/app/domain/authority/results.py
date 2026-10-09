@@ -1,7 +1,7 @@
 """Per-figure results for aequorOS calculation boundaries.
 
 Refusals are expected input or policy conditions, not exceptions. Row references
-are one-based positions in the input sequence, for authorised bank readers only.
+are one-based positions in the input sequence, validated before operator logging.
 The optional detail retains the existing bank-facing fail-closed vocabulary;
 neither its prose nor its context belongs in operator logs.
 """

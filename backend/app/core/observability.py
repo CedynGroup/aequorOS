@@ -23,8 +23,8 @@ This module supplies that, and nothing else. Deliberately:
 * **Never carries a secret.** Call sites pass identifiers and reason codes.
   Passwords, tokens, credential material, full request bodies and raw vendor
   payloads must not be passed. Calculation errors allow only registered codes,
-  citations, figures and versions, a platform tenant id and a safe correlation
-  id. Other events retain their credential-field backstop.
+  citations, figures and versions, validated input row positions, a platform
+  tenant id and a safe correlation id. Other events retain their credential-field backstop.
 
 Every record carries ``condition`` (a :class:`Condition` value) and
 ``severity``, alongside ``request_id`` from the logging patcher.
@@ -38,7 +38,7 @@ import re
 import sys
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any, Final
+from typing import Any, Final, cast
 from uuid import uuid4
 
 from loguru import logger
@@ -222,7 +222,7 @@ def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, 
         request_id = str(uuid4())
     else:
         request_id = safe_request_id(request_id)
-    payload: dict[str, str] = {
+    payload: dict[str, str | list[int]] = {
         "condition": condition.value,
         "severity": severity if severity in _LEVELS else "warning",
         "request_id": request_id,
@@ -243,6 +243,12 @@ def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, 
         value = fields.get(key)
         if isinstance(value, str) and value in allowed:
             payload[key] = value
+    row_ref = fields.get("row_ref")
+    row_count = fields.get("row_count")
+    if type(row_count) is int and row_count >= 0 and isinstance(row_ref, tuple):
+        positions = cast(tuple[object, ...], row_ref)
+        if all(type(position) is int and 1 <= position <= row_count for position in positions):
+            payload["row_ref"] = list(cast(tuple[int, ...], positions))
     _ = sys.stderr.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
 

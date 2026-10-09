@@ -261,9 +261,15 @@ def compute_liquidity(
     Unexpected exceptions propagate to the service boundary.
     """
     return LiquidityFigures(
-        lcr=_compute_figure(facts, params, compute_lcr, "lcr_pct", "BCBS 238"),
+        lcr=compute_lcr_result(facts, params),
         nsfr=_compute_figure(facts, params, compute_nsfr, "nsfr_pct", "BCBS 295"),
     )
+
+
+def compute_lcr_result(
+    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None]
+) -> FigureResult[LcrResult]:
+    return _compute_figure(facts, params, compute_lcr, "lcr_pct", "BCBS 238")
 
 
 def _compute_figure[ValueT](  # noqa: PLR0913 - explicit figure and authority

@@ -38,7 +38,8 @@ def test_calculation_events_allow_only_codes_and_safe_context(
                 figure_id="lcr_pct",
                 engine_version="regulatory-liquidity-v2.0.0",
                 bank_id="BK-PRIVATE1",
-                row_ref=(123456789012,),
+                row_ref=(2, 3),
+                row_count=3,
                 exception=RuntimeError(_CUSTOMER_DATA),
                 detail={"nested": _CUSTOMER_DATA},
                 amount="9876543.21",
@@ -60,9 +61,61 @@ def test_calculation_events_allow_only_codes_and_safe_context(
         "rule_citation": "BCBS 238",
         "figure_id": "lcr_pct",
         "engine_version": "regulatory-liquidity-v2.0.0",
+        "row_ref": [2, 3],
     }
     for secret in ("Jane Private", "123456789012", "9876543.21", "13.75", "BK-PRIVATE1"):
         assert secret not in captured.err
+
+
+@pytest.mark.parametrize(
+    "row_ref, row_count",
+    [
+        ((0,), 3),
+        ((-1,), 3),
+        ((4,), 3),
+        ((True,), 3),
+        ((2.0,), 3),
+        (("2",), 3),
+        ((2, _CUSTOMER_DATA), 3),
+        ((123456789012,), 3),
+        ((9876543,), 3),
+        ((13.75,), 3),
+        (("00000000-0000-4000-8000-123456789012",), 3),
+        ([2], 3),
+        ({"row": _CUSTOMER_DATA}, 3),
+        (_CUSTOMER_DATA, 3),
+        ((2,), None),
+        ((2,), _CUSTOMER_DATA),
+        ((2,), True),
+        ((2,), 3.0),
+        ((2,), -1),
+    ],
+)
+def test_invalid_row_locators_are_dropped_without_customer_content(
+    capsys: pytest.CaptureFixture[str], row_ref: object, row_count: object
+) -> None:
+    emit(
+        Condition.CALCULATION_BLOCKED,
+        _CUSTOMER_DATA,
+        reason_code="missing_parameter",
+        row_ref=row_ref,
+        row_count=row_count,
+    )
+    output = capsys.readouterr().err
+    payload = cast(dict[str, object], json.loads(output))
+    assert payload["reason_code"] == "missing_parameter"
+    assert "row_ref" not in payload and "row_count" not in payload
+    for secret in ("Jane Private", "123456789012", "9876543", "13.75"):
+        assert secret not in output
+
+
+def test_empty_internal_row_positions_do_not_invent_an_affected_row(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    emit(Condition.CALCULATION_BLOCKED, "refused", row_ref=(), row_count=0)
+    payload = cast(dict[str, object], json.loads(capsys.readouterr().err))
+    assert payload["row_ref"] == []
+    assert "row_count" not in payload
 
 
 @pytest.mark.parametrize("caller_id", [_CUSTOMER_DATA, "00000000-0000-4000-8000-123456789012"])

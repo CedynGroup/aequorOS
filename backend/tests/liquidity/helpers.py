@@ -5,13 +5,13 @@ from decimal import Decimal
 from app.domain.liquidity.engine import LiquidityFact, LiquidityParams
 
 
-def inputs() -> tuple[tuple[LiquidityFact, ...], LiquidityParams]:
+def inputs() -> tuple[tuple[LiquidityFact, ...], LiquidityParams[Decimal | None]]:
     facts = (
         LiquidityFact("securities", "bond", Decimal("100"), hqla_level="L1"),
         LiquidityFact("balance_sheet", "deposit", Decimal("100"), side="liability"),
         LiquidityFact("balance_sheet", "asset", Decimal("100"), side="asset"),
     )
-    params = LiquidityParams(
+    params = LiquidityParams[Decimal | None](
         outflow_rates={"deposit": Decimal("10")},
         inflow_rates={},
         asf_weights={"deposit": Decimal("95")},

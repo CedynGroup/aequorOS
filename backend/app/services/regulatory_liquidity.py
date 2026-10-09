@@ -43,6 +43,7 @@ from app.domain.liquidity.engine import (
     UnsupportedShockError,
     apply_liquidity_stress,
     compute_currency_gaps,
+    compute_lcr_result,
     compute_liquidity,
     compute_stressed_ladder,
 )
@@ -1580,23 +1581,34 @@ def compute_liquidity_results(
             )
             raise
         for figure_id, result in (("lcr_pct", figures.lcr), ("nsfr_pct", figures.nsfr)):
-            match result:
-                case Refused(reason_code=code, rule_citation=citation):
-                    emit(
-                        Condition.CALCULATION_BLOCKED,
-                        "Calculation refused",
-                        tenant_id=tenant_id,
-                        reason_code=code,
-                        rule_citation=citation,
-                        figure_id=figure_id,
-                        engine_version=ENGINE_VERSION,
-                    )
-                case Computed():
-                    pass
+            _emit_liquidity_refusal(result, figure_id, tenant_id, len(facts))
         return figures.lcr, figures.nsfr
     finally:
         if token is not None:
             reset_request_id(token)
+
+
+def _emit_liquidity_refusal(
+    result: FigureResult[LcrResult] | FigureResult[NsfrResult],
+    figure_id: str,
+    tenant_id: str,
+    row_count: int,
+) -> None:
+    match result:
+        case Refused(reason_code=code, rule_citation=citation, row_ref=positions):
+            emit(
+                Condition.CALCULATION_BLOCKED,
+                "Calculation refused",
+                tenant_id=tenant_id,
+                reason_code=code,
+                rule_citation=citation,
+                row_ref=positions,
+                row_count=row_count,
+                figure_id=figure_id,
+                engine_version=ENGINE_VERSION,
+            )
+        case Computed():
+            pass
 
 
 def _require_figure[ValueT](result: FigureResult[ValueT]) -> ValueT:
@@ -2227,8 +2239,6 @@ def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
                 scaled[key] = max(_ZERO, one + (value - one) * k)
             elif key == "hqla_securities_haircut_pct":
                 scaled[key] = min(hundred, max(_ZERO, value * k))
-            elif key.startswith("asf:") or key == "rsf:securities_weight_override":
-                scaled[key] = value  # NSFR shocks do not move the LCR frontier
             # fx_depreciation_pct / nmd_runoff:* never reach the fact engine.
         return scaled
 
@@ -2236,7 +2246,19 @@ def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
         stressed_facts, stressed_params = apply_liquidity_stress(
             scenario_code, engine_facts, engine_params, scaled_shocks(k)
         )
-        result, _ = compute_liquidity_results(stressed_facts, stressed_params, bank.organization_id)
+        try:
+            result = compute_lcr_result(stressed_facts, stressed_params)
+        except Exception:
+            emit(
+                Condition.CALCULATION_FAILED,
+                "Calculation failed",
+                severity="error",
+                tenant_id=bank.organization_id,
+                reason_code="unexpected_error",
+                engine_version=ENGINE_VERSION,
+            )
+            raise
+        _emit_liquidity_refusal(result, "lcr_pct", bank.organization_id, len(stressed_facts))
         if isinstance(result, Refused) and result.reason_code == "non_positive_denominator":
             return None
         return _require_figure(result).lcr_pct
