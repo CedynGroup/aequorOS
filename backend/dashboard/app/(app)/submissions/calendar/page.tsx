@@ -236,6 +236,11 @@ export default function RegulatoryCalendarPage() {
           error={query.error}
           onRetry={() => query.refetch()}
         >
+          {query.data?.coverageNote && (
+            <p className="rounded border border-border bg-surface-raised px-4 py-3 text-body text-slate">
+              {query.data.coverageNote}
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiStat
               label="Overdue"
