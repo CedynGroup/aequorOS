@@ -146,7 +146,8 @@ test.describe("Organization Owner", () => {
     await page.route("**/auth/me", async (route) => {
       const response = await route.fetch();
       const profile = await response.json();
-      for (const institution of profile.effective_authority.institution_capabilities) {
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
         institution.capabilities = institution.capabilities.filter(
           (capability: { module: string }) => capability.module !== "cap",
         );
@@ -166,12 +167,17 @@ test.describe("Organization Owner", () => {
     await page.goto("/submissions/settings");
     const selector = page.getByLabel("Return code", { exact: true });
     await expect(selector).toBeVisible();
-    await expect(selector.locator('option[value="ICAAP-REPORT"]')).toHaveCount(1);
+    await expect(selector.locator('option[value="ICAAP-REPORT"]')).toHaveCount(
+      1,
+    );
     await selector.selectOption("ICAAP-REPORT");
     await expect(selector).toHaveValue("ICAAP-REPORT");
     if (evidenceDir) {
       await page.screenshot({
-        path: path.join(evidenceDir, "owner-signing-policy-without-capital-read.png"),
+        path: path.join(
+          evidenceDir,
+          "owner-signing-policy-without-capital-read.png",
+        ),
         fullPage: true,
       });
     }

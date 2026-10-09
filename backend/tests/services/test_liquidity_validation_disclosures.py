@@ -3,9 +3,9 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.authorization import ModuleScope, SensitivityScope
-from app.db.session import get_sessionmaker
 from app.models import (
     BankReportingPeriod,
     ParamCapitalThreshold,
@@ -28,9 +28,9 @@ DISCLOSURE = "governed monitoring threshold (Basel reference ratio)"
 
 
 def _create_monitored_run(
-    db_client: TestClient, threshold: Decimal
+    db_client: TestClient, threshold: Decimal, session_factory: sessionmaker[Session]
 ) -> tuple[LiquidityDashboardRead, RegulatoryRunRead]:
-    with get_sessionmaker()() as db:
+    with session_factory() as db:
         materialize_canonical_test_book(db)
         for module, sensitivity in (
             (ModuleScope.LIQUIDITY, SensitivityScope.CONFIDENTIAL),
@@ -106,11 +106,12 @@ def _create_monitored_run(
 
 @pytest.mark.parametrize("threshold", [Decimal("100"), Decimal("160")])
 def test_dashboard_and_run_disclose_governed_thresholds_without_rewriting_history(
-    db_client: TestClient, threshold: Decimal
+    db_client: TestClient, threshold: Decimal, _bound_test_sessionmaker: sessionmaker[Session]
 ) -> None:
-    inline, created = _create_monitored_run(db_client, threshold)
+    session_factory = _bound_test_sessionmaker
+    inline, created = _create_monitored_run(db_client, threshold, session_factory)
 
-    with get_sessionmaker()() as db:
+    with session_factory() as db:
         rows = list(
             db.scalars(
                 select(RegulatoryValidation)
@@ -164,7 +165,7 @@ def test_dashboard_and_run_disclose_governed_thresholds_without_rewriting_histor
     assert detail.metrics == created.metrics
     assert detail.input_hash == created.input_hash
 
-    with get_sessionmaker()() as db:
+    with session_factory() as db:
         saved = db.get(RegulatoryRun, created.id)
         assert saved is not None
         assert saved.input_hash == created.input_hash
