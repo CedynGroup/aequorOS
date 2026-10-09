@@ -11,11 +11,13 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.db.session import get_sessionmaker
 from app.models import (
@@ -29,7 +31,10 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.services.fact_derivation import _derive_specs, _load_canonical
+from app.services.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.api.test_enterprise_stress import (
     RUNS_URL,
     _approve_scenario,
@@ -49,7 +54,7 @@ _AS_OF = date(2026, 3, 31)
 def _seed_canonical_positions(bank_id: str) -> None:
     """A compact canonical book: a connected corporate group, a bank placement,
     a foreign-currency loan, a deposit funder and a derivative."""
-    session = get_sessionmaker()()
+    session = cast(Session, get_sessionmaker()())
     try:
         batch = IngestionBatch(
             organization_id=ORG_1,
@@ -231,6 +236,13 @@ def _seed_canonical_positions(bank_id: str) -> None:
         )
         assert bank is not None and period is not None
         specs, _, _ = _derive_specs(_load_canonical(session, MAKER, bank, _AS_OF), live=True)
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == bank_id,
+                BankFinancialFact.reporting_period_id == period.id,
+                BankFinancialFact.fact_group == "credit_exposure",
+            )
+        )
         session.add_all(
             [
                 BankFinancialFact(

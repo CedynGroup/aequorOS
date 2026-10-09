@@ -30,6 +30,7 @@ from app.models import Bank
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate, PlanAssumptionsIn
 from app.services import enterprise_stress as svc
 from app.services import regulatory_parameters
+from app.services.credit_exposure_book import ExposureRow
 from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
@@ -287,11 +288,13 @@ def test_in_range_plan_assumptions_are_accepted() -> None:
 # pointing the wrong way. These four are the behavioural anchor.
 
 
-def _exposure_row(reference: str, *, code: str | None, product_code: str | None = None) -> Any:
+def _exposure_row(
+    reference: str, *, code: str | None, product_code: str | None = None
+) -> ExposureRow:
     """A minimal flattened credit exposure. ``code`` rides on the snapshot
     attributes (the source-system path); ``product_code`` on the product register
     (the ingested ``CanonicalProduct.risk_weight_code`` path)."""
-    return svc._ExposureRow(  # noqa: SLF001 - the unit under test is module-private
+    return ExposureRow(
         source_reference=reference,
         position_type="LOAN",
         currency="GHS",
@@ -310,7 +313,7 @@ def _exposure_row(reference: str, *, code: str | None, product_code: str | None 
     )
 
 
-def _capital_params(**weights: str) -> Any:
+def _capital_params(**weights: str) -> CapitalParams:
     return CapitalParams(
         risk_weights={code: Decimal(value) for code, value in weights.items()},
         bia_alpha_pct=Decimal("15"),

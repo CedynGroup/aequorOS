@@ -2325,6 +2325,7 @@ def _position_credit_class(row: _PositionRow, canonical: _Canonical) -> tuple[st
         row,
         foreign=row.currency.upper() != canonical.base_currency.upper(),
         sovereign_names=canonical.sovereign_issuer_names,
+        central_bank_names=canonical.central_bank_names.full,
         domestic_country=canonical.domestic_country,
     )
 

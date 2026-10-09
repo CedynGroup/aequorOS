@@ -255,6 +255,7 @@ def test_bsd5b_binds_every_input_cell_plus_the_blank_data_cells() -> None:
 def test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic(  # noqa: PLR0915
     db_client: TestClient,
 ) -> None:
+    """BoG CRD (June 2018) ¶139: SME 100% yields 1,472.5M credit RWA and 15.332582% CAR."""
     _materialize(db_client)
     run = _run_capital_baseline(db_client)
     snapshot = _generate(db_client, "BSD5A")
@@ -389,7 +390,7 @@ def test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic(  # noqa: PLR091
     assert _close(market_rwa, e["E67"] * 2 * fx_pct / 100 * mult / 100, "0.01")
     assert _close(op_rwa, e["E68"] * alpha / 100 * mult / 100, "0.01")
     car_pct = Decimal(run["metrics"]["car_pct"])
-    assert _close(car_pct, Decimal("15.8324"), "0.0001")
+    assert _close(car_pct, Decimal("340") / Decimal("2217.5") * 100, "0.0001")
     assert not _close(e["E70"] * 100, car_pct, "0.5")  # by construction, not by accident
 
     # -- export: millions on CAR FORMAT, item numbers / percentages unscaled -----

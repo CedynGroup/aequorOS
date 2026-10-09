@@ -189,6 +189,7 @@ def public_credit_class(
     foreign: bool,
     sovereign_names: tuple[str, ...],
     domestic_country: str | None,
+    central_bank_names: tuple[str, ...] = (),
 ) -> tuple[str, str | None]:
     """BoG CRD (June 2018) ¶106–122: counterparty evidence independent of liquidity."""
     attributes = row.attributes
@@ -216,6 +217,12 @@ def public_credit_class(
         or attribute_text(attributes, "issuer") in sovereign_names
         or bool({"TBILL", "GOG", "BOG"}.intersection(product))
         or (row.regulatory_category or "").upper() == "SOVEREIGN_LOCAL_CCY"
+        or (
+            row.counterparty_type in ("SOVEREIGN", "CENTRAL_BANK")
+            and bool(domestic_code)
+            and country == domestic_code
+            and row.counterparty_resident is True
+        )
     )
     if domestic and (foreign_domicile or issuer_class):
         return "unclassified_issuer", None
@@ -225,12 +232,14 @@ def public_credit_class(
             instrument.startswith("bog_")
             or "BOG" in product
             or row.counterparty_type == "CENTRAL_BANK"
+            or attribute_text(attributes, "issuer") in central_bank_names
         ):
             issuer_role = "bog"
         elif (
             instrument in DOMESTIC_SOVEREIGN_INSTRUMENTS
             or {"TBILL", "GOG"}.intersection(product)
             or row.counterparty_type == "SOVEREIGN"
+            or attribute_text(attributes, "issuer") in sovereign_names
         ):
             issuer_role = "gog"
         category = f"domestic_sovereign:{issuer_role}" if issuer_role else "domestic_sovereign"
@@ -246,11 +255,16 @@ def capital_credit_class(
     foreign: bool,
     sovereign_names: tuple[str, ...] = (),
     domestic_country: str | None = None,
+    central_bank_names: tuple[str, ...] = (),
 ) -> tuple[str, str | None]:
     """BoG CRD (June 2018) ¶106–124, ¶139: one classifier for capital and stress."""
     if row.position_type == "SECURITY_HOLDING":
         category, code = public_credit_class(
-            row, foreign=foreign, sovereign_names=sovereign_names, domestic_country=domestic_country
+            row,
+            foreign=foreign,
+            sovereign_names=sovereign_names,
+            domestic_country=domestic_country,
+            central_bank_names=central_bank_names,
         )
         regulatory_category = (row.regulatory_category or "").upper()
         debt = not regulatory_category.startswith("EQUITY") and (
@@ -274,7 +288,11 @@ def capital_credit_class(
         return PAST_DUE_CATEGORY
     if public_debt_evidence(row, sovereign_names):
         category, code = public_credit_class(
-            row, foreign=foreign, sovereign_names=sovereign_names, domestic_country=domestic_country
+            row,
+            foreign=foreign,
+            sovereign_names=sovereign_names,
+            domestic_country=domestic_country,
+            central_bank_names=central_bank_names,
         )
         prefix = "loans" if row.position_type == "LOAN" else "interbank"
         return f"{prefix}:{category}", code

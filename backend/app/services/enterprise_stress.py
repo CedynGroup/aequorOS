@@ -43,8 +43,6 @@ from app.domain.capital.engine import (
     TIER_T2,
     CapitalFact,
     CapitalParams,
-    CapitalRegisterRefused,
-    CreditExposureBasisUnavailable,
     RiskWeightUnavailable,
     assert_capital_register_usable,
     compute_capital_ratios,
@@ -871,12 +869,13 @@ def _exposure_pd_lgd(row: _ExposureRow, crd_class: str) -> tuple[Decimal, Decima
 _MAX_REPORTED_UNRESOLVED = 20
 
 
-def _build_credit_exposures(
+def _build_credit_exposures(  # noqa: PLR0913
     rows: list[_ExposureRow],
     capital_params: CapitalParams,
     *,
     sovereign_names: tuple[str, ...] = (),
     domestic_country: str | None = None,
+    central_bank_names: tuple[str, ...] = (),
     capital_facts: Sequence[CapitalFact],
 ) -> list[CreditExposure]:
     """The exposure book for the bottom-up credit stress — or a refusal.
@@ -898,6 +897,7 @@ def _build_credit_exposures(
                 row,
                 foreign=row.is_foreign_currency,
                 sovereign_names=sovereign_names,
+                central_bank_names=central_bank_names,
                 domestic_country=domestic_country,
             )
             risk_weight_pct = resolve_risk_weight(capital_params, code, row.source_reference)
@@ -1559,7 +1559,17 @@ def _require_complete_scenario(
         )
 
 
-def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
+def run_enterprise_stress_test(
+    db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
+) -> EnterpriseStressRead:
+    """Run enterprise stress, translating declared calculation refusals before persistence."""
+    try:
+        return _run_enterprise_stress_test(db, ctx, bank_id, payload)
+    except NotComputable as exc:
+        raise EnterpriseStressError(exc.code, str(exc), {"outcome": exc.to_dict()}) from exc
+
+
+def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
@@ -1618,10 +1628,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     _require_complete_scenario(scenario.code, paths, payload)
 
     capital_rows = _load_facts(db, ctx, bank, period, _CAPITAL_GROUPS)
-    try:
-        assert_capital_register_usable(capital_rows)
-    except CapitalRegisterRefused as exc:
-        raise EnterpriseStressError(exc.code, str(exc)) from exc
+    assert_capital_register_usable(capital_rows)
     liquidity_rows = _load_facts(db, ctx, bank, period, _LIQUIDITY_GROUPS)
     forecast_rows = _load_facts(db, ctx, bank, period, _FORECAST_GROUPS)
     if not capital_rows or not forecast_rows:
@@ -1629,11 +1636,8 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
             "financial_facts_missing", "The reporting period has no financial facts to analyze."
         )
 
-    try:
-        require_credit_exposure_basis(capital_rows)
-        require_credit_exposure_basis(forecast_rows)
-    except CreditExposureBasisUnavailable as exc:
-        raise EnterpriseStressError(exc.code, str(exc)) from exc
+    require_credit_exposure_basis(capital_rows)
+    require_credit_exposure_basis(forecast_rows)
     capital_facts = [_capital_fact(fact) for fact in capital_rows]
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
@@ -1680,6 +1684,11 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
         credit_rows,
         capital_params,
         sovereign_names=sovereign_names,
+        central_bank_names=(
+            (jurisdiction.central_bank_name.strip().lower(),)
+            if jurisdiction is not None and jurisdiction.central_bank_name.strip()
+            else ()
+        ),
         domestic_country=bank.jurisdiction_code,
         capital_facts=capital_facts,
     )
