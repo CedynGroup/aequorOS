@@ -11,11 +11,22 @@ import { formatFigure } from "../../lib/api/values";
 import RatioGauge from "../ui/RatioGauge";
 import LimitBar from "../ui/LimitBar";
 import Sparkline from "../ui/Sparkline";
+import type { ModuleScope } from "../../lib/modules";
 
 const loader = NodeModule as typeof NodeModule & {
   _load: (request: string, parent: unknown, isMain: boolean) => unknown;
 };
 const originalLoad = loader._load;
+const scope: ModuleScope = {
+  modules: new Set(["liquidity"]),
+  entitledModules: new Set(["liquidity"]),
+  organizationModules: new Set(),
+  hasInstitutionAuthority: true,
+  institutionClass: "bank",
+  isResolved: true,
+  liquidityAggregatedView: true,
+  liquidityConfidentialView: true,
+};
 let dashboard: LiquidityDashboardRead;
 let chartOption: {
   series: { data: { value: number | null }[]; markLine?: unknown }[];
@@ -29,13 +40,25 @@ loader._load = (request, parent, isMain) => {
       {},
       {
         get: (_target, name) => () =>
-          name === "useLiquidityDashboard" ? { data: dashboard } : {},
+          name === "useLiquidityDashboard"
+            ? { data: dashboard }
+            : name === "useBankAlerts"
+              ? { data: { items: [], bySeverity: {} } }
+              : {},
       },
     );
   if (request === "@/components/shell/BankContext")
     return {
-      useBankContext: () => ({ bank: { name: "Fixture Bank" } }),
-      useModuleScope: () => ({ liquidityAggregatedView: true }),
+      useBankContext: () => ({
+        bank: { id: "fixture", name: "Fixture Bank" },
+        moduleScope: scope,
+      }),
+      useModuleScope: () => scope,
+    };
+  if (request === "@/components/bi/InsightStrip")
+    return {
+      LandingInsightStrip: () => null,
+      useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
     };
   if (request === "@/components/bi/EChart")
     return {
@@ -54,7 +77,8 @@ loader._load = (request, parent, isMain) => {
   return originalLoad(request, parent, isMain);
 };
 
-const Page = require("../../app/(app)/liquidity/nsfr/page").default;
+const Page = require("../../app/(app)/liquidity/nsfr/page")
+  .default as typeof import("../../app/(app)/liquidity/nsfr/page").default;
 const Trend = require("./charts/RatioTrendChart").default;
 const Outflow = require("./charts/NetOutflowChart").default;
 const LimitWall = require("../risk/LimitWall")
@@ -63,6 +87,14 @@ const { liquidityLimits } =
   require("../risk/limits") as typeof import("../risk/limits");
 const { usePulseCards } =
   require("../home/pulse") as typeof import("../home/pulse");
+const PulseWall = require("../home/PulseWall")
+  .default as typeof import("../home/PulseWall").default;
+const BreachBanner = require("../home/BreachBanner")
+  .default as typeof import("../home/BreachBanner").default;
+const Buffer = require("../../app/(app)/liquidity/buffer/page")
+  .default as typeof import("../../app/(app)/liquidity/buffer/page").default;
+const Overview = require("../../app/(app)/liquidity/page")
+  .default as typeof import("../../app/(app)/liquidity/page").default;
 const fixture = (value: string | null) =>
   ({
     metrics: {
@@ -77,6 +109,10 @@ const fixture = (value: string | null) =>
     },
     asf: [],
     rsf: [],
+    outflows: [],
+    inflows: [],
+    hqlaComposition: [],
+    validations: [],
     period: { id: "current" },
     trend: [
       { reportingPeriodId: "previous", lcrPct: "123" },
@@ -88,6 +124,8 @@ const run = {
     parameters: { thresholds_pct: { lcr_min: "100", nsfr_min: "100" } },
   },
 } as unknown as RegulatoryRunRead;
+const textOf = (markup: string) =>
+  markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
 try {
   assert.equal(
     formatFigure(null, (value) => `${value}%`),
@@ -142,6 +180,126 @@ try {
     ],
   );
   assert.equal(usePulseCards("fixture", true).cards.liquidity.value, "0.00");
+  for (const refusedFigure of ["lcr", "nsfr"] as const) {
+    for (const staleLive of [false, true]) {
+      dashboard = fixture("125");
+      dashboard.metrics.lcrStatus = "green";
+      dashboard.metrics.nsfrPct = "150";
+      dashboard.metrics.nsfrStatus = "green";
+      dashboard.metrics[`${refusedFigure}Pct`] = null;
+      dashboard.metrics[`${refusedFigure}Status`] = "na";
+      dashboard.trend[1][`${refusedFigure}Pct`] = null;
+      if (staleLive)
+        dashboard.live = {
+          calculationGeneration: 1,
+          status: "green",
+          computedAt: new Date("2026-09-29"),
+          computedFromInputHash: "fixture",
+          engineVersion: "fixture",
+          metrics: {},
+          module: "liquidity",
+          pipelineError: null,
+          pipelineState: "ready",
+          sourceAsOfDate: new Date("2026-09-29"),
+          sourceFactPeriodId: "previous",
+        };
+      const pulse = usePulseCards("fixture", true).cards.liquidity;
+      assert.equal(pulse.status, "na");
+      assert.equal(
+        pulse.value,
+        refusedFigure === "lcr" ? "Unavailable" : "125.00",
+      );
+      assert.equal(
+        pulse.hint,
+        refusedFigure === "lcr" ? "NSFR 150.00%" : "NSFR Unavailable",
+      );
+      const pulseWall = renderToStaticMarkup(
+        <PulseWall bankId="fixture" moduleOrder={["liquidity"]} />,
+      );
+      assert.match(pulseWall, /Unavailable/);
+      assert.doesNotMatch(pulseWall, /Compliant/);
+      const banner = renderToStaticMarkup(<BreachBanner bankId="fixture" />);
+      assert.match(banner, /Limit compliance not assessed/);
+      assert.doesNotMatch(banner, /All limits compliant|modules computed/);
+    }
+  }
+  dashboard = fixture(null);
+  assert.match(
+    renderToStaticMarkup(<BreachBanner bankId="fixture" />),
+    /Limit compliance not assessed/,
+  );
+  dashboard = fixture("0");
+  assert.equal(usePulseCards("fixture", true).cards.liquidity.status, "red");
+  assert.match(
+    renderToStaticMarkup(
+      <PulseWall bankId="fixture" moduleOrder={["liquidity"]} />,
+    ),
+    /Breach/,
+  );
+  assert.match(
+    renderToStaticMarkup(<BreachBanner bankId="fixture" />),
+    /breaching live limits/,
+  );
+  dashboard = fixture("125");
+  dashboard.metrics.lcrStatus = "green";
+  dashboard.metrics.nsfrStatus = "green";
+  assert.match(
+    renderToStaticMarkup(
+      <PulseWall bankId="fixture" moduleOrder={["liquidity"]} />,
+    ),
+    /Compliant/,
+  );
+  assert.match(
+    renderToStaticMarkup(<BreachBanner bankId="fixture" />),
+    /All limits compliant/,
+  );
+  dashboard = fixture(null);
+  dashboard.metrics.nsfrPct = "150";
+  dashboard.metrics.nsfrStatus = "green";
+  const refusedBuffer = textOf(renderToStaticMarkup(<Buffer />));
+  assert.match(refusedBuffer, /Asset classes held Unavailable/);
+  assert.match(refusedBuffer, /Buffer quality Unavailable/);
+  assert.doesNotMatch(
+    refusedBuffer,
+    /Asset classes held 0|All Level 1|Includes/,
+  );
+  const refusedOverview = textOf(renderToStaticMarkup(<Overview />));
+  assert.match(refusedOverview, /Largest HQLA concentration Unavailable/);
+  assert.doesNotMatch(refusedOverview, /No HQLA instruments/);
+  for (const empty of [true, false]) {
+    for (const allLevel1 of [true, false]) {
+      dashboard = fixture(empty ? "0" : "125");
+      dashboard.validations = [
+        {
+          ruleCode: "hqla_all_level1",
+          passed: allLevel1,
+          message: "Synthetic buffer quality result",
+          severity: "info",
+        },
+      ];
+      if (!empty)
+        dashboard.hqlaComposition = [
+          {
+            lineCode: "securities",
+            description: "Synthetic securities",
+            exposureAmount: "125",
+            ratePct: "100",
+            weightedAmount: "125",
+          },
+        ];
+      const buffer = textOf(renderToStaticMarkup(<Buffer />));
+      assert.match(buffer, new RegExp(`Asset classes held ${empty ? 0 : 1}`));
+      assert.match(buffer, allLevel1 ? /All Level 1/ : /Includes &lt; Level 1/);
+      assert.doesNotMatch(buffer, /Unavailable/);
+      const overview = textOf(renderToStaticMarkup(<Overview />));
+      if (empty) assert.match(overview, /No HQLA instruments/);
+      else
+        assert.match(
+          overview,
+          /Largest HQLA concentration 100\.0% Synthetic securities/,
+        );
+    }
+  }
   const spark = renderToStaticMarkup(<Sparkline data={[1, null, 3, 4]} />);
   assert.match(spark, /d="M[^L]*M[^L]*L/);
   assert.match(

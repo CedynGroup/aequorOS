@@ -222,10 +222,15 @@ export function usePulseCards(
         computedAt: liq.data.live?.computedAt ?? null,
         basisNote: "current live calculation",
       }),
-      status: liq.data
-        ? (liq.data.live?.status ??
-          worstOf(liq.data.metrics.lcrStatus, liq.data.metrics.nsfrStatus))
-        : "na",
+      status:
+        !liq.data ||
+        numOrNull(liq.data.metrics.lcrPct) === null ||
+        numOrNull(liq.data.metrics.nsfrPct) === null ||
+        liq.data.metrics.lcrStatus === "na" ||
+        liq.data.metrics.nsfrStatus === "na"
+          ? "na"
+          : (liq.data.live?.status ??
+            worstOf(liq.data.metrics.lcrStatus, liq.data.metrics.nsfrStatus)),
     },
     capital: {
       module: "capital",

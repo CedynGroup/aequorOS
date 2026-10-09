@@ -268,11 +268,11 @@ export default function LiquidityCockpit() {
                 />
                 <KpiStat
                   label="Largest HQLA concentration"
-                  value={
+                  value={formatFigure(hqlaTotal, () =>
                     largestHqlaShare === null
                       ? "—"
-                      : fmtPct(largestHqlaShare, 1)
-                  }
+                      : fmtPct(largestHqlaShare, 1),
+                  )}
                   status={
                     largestHqlaShare === null
                       ? undefined
@@ -280,7 +280,11 @@ export default function LiquidityCockpit() {
                         ? "warn"
                         : "ok"
                   }
-                  hint={largestHqla?.description ?? "No HQLA instruments"}
+                  hint={
+                    hqlaTotal === null
+                      ? "Unavailable"
+                      : (largestHqla?.description ?? "No HQLA instruments")
+                  }
                 />
                 {moduleScope.liquidityConfidentialView && ewi && (
                   <KpiStat

@@ -152,8 +152,14 @@ export default function LiquidityBuffer() {
               />
               <KpiStat
                 label="Asset classes held"
-                value={rows.length}
-                hint={largest ? `Largest: ${largest.instrument}` : undefined}
+                value={formatFigure(hqlaTotal, () => `${rows.length}`)}
+                hint={
+                  hqlaTotal === null
+                    ? "Unavailable"
+                    : largest
+                      ? `Largest: ${largest.instrument}`
+                      : undefined
+                }
               />
               <div className="card px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
                 <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
@@ -163,15 +169,31 @@ export default function LiquidityBuffer() {
                   <ShieldCheck
                     size={18}
                     className={
-                      allLevel1?.passed ? "text-success" : "text-warning"
+                      hqlaTotal === null
+                        ? "text-slate"
+                        : allLevel1?.passed
+                          ? "text-success"
+                          : "text-warning"
                     }
                     aria-hidden
                   />
-                  <StatusPill tone={allLevel1?.passed ? "success" : "amber"}>
-                    {allLevel1?.passed ? "All Level 1" : "Includes < Level 1"}
+                  <StatusPill
+                    tone={
+                      hqlaTotal === null
+                        ? "slate"
+                        : allLevel1?.passed
+                          ? "success"
+                          : "amber"
+                    }
+                  >
+                    {hqlaTotal === null
+                      ? "Unavailable"
+                      : allLevel1?.passed
+                        ? "All Level 1"
+                        : "Includes < Level 1"}
                   </StatusPill>
                 </div>
-                {allLevel1 && (
+                {hqlaTotal !== null && allLevel1 && (
                   <p className="text-caption text-slate leading-snug">
                     {allLevel1.message}
                   </p>
@@ -188,10 +210,14 @@ export default function LiquidityBuffer() {
                 height={Math.max(200, stackData.length * 44 + 40)}
                 footer={provenance}
               >
-                <HQLAStackChart
-                  data={stackData}
-                  height={Math.max(200, stackData.length * 44 + 40)}
-                />
+                {hqlaTotal === null ? (
+                  <p className="text-caption text-slate">Unavailable</p>
+                ) : (
+                  <HQLAStackChart
+                    data={stackData}
+                    height={Math.max(200, stackData.length * 44 + 40)}
+                  />
+                )}
               </ChartFrame>
 
               <SectionCard
