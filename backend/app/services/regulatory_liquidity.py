@@ -1320,6 +1320,8 @@ def _stored_validations(db: Session, run: RegulatoryRun) -> list[RegulatoryValid
     )
     validations = [RegulatoryValidationRead.model_validate(row) for row in rows]
     if run.module == MODULE_LIQUIDITY:
+        # Correct historical disclosure only on the read projection: the stored
+        # validation is immutable run evidence, including its assessed outcome.
         for item in validations:
             if item.rule_code in ("lcr_above_minimum", "nsfr_above_minimum"):
                 item.message = item.message.replace(

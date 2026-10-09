@@ -601,10 +601,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         limit=page_limit,
         offset=offset,
         has_more=offset + len(page) < total,
-        # The note the eligibility authority has always been able to write, now
-        # carried on the payload (audit 2026-08-22 D-20). It is None whenever the
-        # institution has an eligible return set, so this adds a sentence exactly
-        # where a reader would otherwise see an unexplained empty calendar.
+        # Explain both missing coverage and omitted preparation packs so a
+        # reader cannot mistake the absence of obligations for missing returns.
         coverage_note=_instrument_coverage_note(
             _coverage_note(eligibility.coverage_note(), deadline_gaps, effective_gaps),
             inactive_instruments,

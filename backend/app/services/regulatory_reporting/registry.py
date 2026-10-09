@@ -1,6 +1,6 @@
 """Return-family registry (docs/regulatory_reporting.md §4).
 
-Each :class:`ReturnDefinition` names one official return, the generator that
+Each :class:`ReturnDefinition` names a return or preparation pack, the generator that
 assembles its snapshot from existing computed state, the template it renders
 into, and an honest fidelity grade:
 

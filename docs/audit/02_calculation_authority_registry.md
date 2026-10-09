@@ -1,6 +1,6 @@
 # 02. Calculation Authority Registry
 
-**Module:** `backend/app/domain/authority/registry.py` (1,785 lines)
+**Module:** `backend/app/domain/authority/registry.py`
 **Tests:** `backend/tests/domain/authority/test_registry.py`, `backend/tests/equivalence/test_declared_divergences.py`
 **Prepared:** 2026-08-22
 
@@ -82,7 +82,7 @@ command in §1 derives their counts. BI's projection is owned by
 
 ---
 
-## 4. The six metrics with more than one authority
+## 4. Selected metrics with more than one authority
 
 | Metric                         | Methodologies                                                                                                                                                                                                 | Status                                                   |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -215,7 +215,7 @@ whose `confirmation_status` cannot honestly be `confirmed` — is §04 §5 and �
 ## 9. Reporting authority is stamped, not assumed (`ARCH-4`)
 
 Every generated package is stamped in one place
-(`app/services/regulatory_reporting/provenance.py::_stamp_provenance`), so a new generator
+(`app/services/regulatory_reporting/generation.py::_stamp_provenance`), so a new generator
 cannot ship without a stated authority. `ReportAuthority` distinguishes
 `template_formula` (the BoG workbook's own formula is the authority) from `engine_run`
 (a sealed `RegulatoryRun` is the authority) and `guide_instruction`.

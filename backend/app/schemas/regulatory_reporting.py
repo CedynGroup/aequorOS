@@ -6,9 +6,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.regulatory_instruments import InstrumentStatus
+
 # The signing vocabulary is owned by the attestation contract; reusing the alias
 # keeps one enum on the wire rather than two that could drift apart.
-from app.domain.regulatory_instruments import InstrumentStatus
 from app.schemas.attestation import SigningRole
 
 type ReturnFamily = Literal[

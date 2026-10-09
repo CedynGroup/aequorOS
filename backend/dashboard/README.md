@@ -119,11 +119,15 @@ These are correctness rules, not style preferences. The evidence is
   bank is measured against, so a `10` written into display code understates it
   while looking authoritative. It is tenant data, never a literal: see rule 1
   under "Client-side arithmetic".
-- **LCR and NSFR** are **Basel** standards. The Bank of Ghana has published no
-  LCR requirement and nothing at all on NSFR, so any 100% threshold, run-off
-  rate, inflow rate or inflow cap in use is a BCBS 238 default. Label these
-  "Basel minimum" — never `${regShort()} minimum`, and never "CRD" (the CRD is
-  the _Capital_ Requirements Directive and contains none of them).
+- **LCR and NSFR:** label the ratios "Basel reference" and the bank's resolved
+  thresholds "governed monitoring thresholds"; a governed value can differ from
+  the Basel reference. Use those labels for headroom, trend counts and validation
+  titles/messages, never `${regShort()} minimum` or "regulatory minimum".
+  Historical dashboard, preview and run reads correct the disclosure without
+  changing stored validations, calculations or input hashes; see
+  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
+  owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
   6.5% (¶73(a)), 8.0% (¶73(b)) and 6% (¶90), all VERIFIED with locators. The
   Tier 1 8% coincides numerically with Basel's _total capital_ minimum; that is

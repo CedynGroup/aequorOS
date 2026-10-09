@@ -339,6 +339,9 @@ listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disc
 optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig
 (credentials write-only). Conventions: manage_live_engine.py patterns, tenant 404s, audit events.
 
+Omitting `bank_id` from `listReturnTemplates` returns the registry-only catalogue:
+status uses registry commencement literals and cannot resolve a bank-governed date.
+
 ## 7. UI (Governance → Regulatory Reporting, route `/submissions` retained)
 
 Tabs: **Calendar** (deadline board, RAG, next obligations; due-date-ordered 25-row pages with a

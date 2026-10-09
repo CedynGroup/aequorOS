@@ -493,9 +493,10 @@ class InstitutionEligibility:
         )
 
     def effective_from(self, definition: ReturnDefinition) -> date | None:
-        """The resolved first in-force date, or ``None`` when none is established.
+        """Resolved commencement, conditional for a draft, or ``None`` if unestablished.
 
-        The calendar reads this to decide which anchors are real obligations.
+        Publication status must also permit commencement; a draft date alone
+        cannot create an obligation.
         An unresolvable governed parameter answers ``None`` here and the
         ``effective_date`` criterion refuses separately, so a caller cannot
         mistake "not established" for "resolved as unrestricted".

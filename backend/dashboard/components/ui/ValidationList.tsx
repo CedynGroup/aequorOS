@@ -1,11 +1,17 @@
-import { CheckCircle2, AlertTriangle, XCircle, Info, MinusCircle } from 'lucide-react';
-import { labelize, severityTone } from '@/lib/api/values';
-import StatusPill from './StatusPill';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Info,
+  MinusCircle,
+} from "lucide-react";
+import { labelize, severityTone } from "@/lib/api/values";
+import StatusPill from "./StatusPill";
 
 export type ValidationItem = {
   ruleCode: string;
   passed: boolean;
-  severity: 'error' | 'warning' | 'info' | string;
+  severity: "error" | "warning" | "info" | string;
   message: string;
   /**
    * `false` when the rule's threshold does not resolve from the institution's
@@ -19,19 +25,39 @@ export type ValidationItem = {
 
 function ValidationIcon({ item }: { item: ValidationItem }) {
   if (item.assessed === false) {
-    return <MinusCircle size={15} className="text-slate shrink-0 mt-0.5" aria-hidden />;
+    return (
+      <MinusCircle
+        size={15}
+        className="text-slate shrink-0 mt-0.5"
+        aria-hidden
+      />
+    );
   }
   if (item.passed) {
     return (
-      <CheckCircle2 size={15} className="text-success shrink-0 mt-0.5" aria-hidden />
+      <CheckCircle2
+        size={15}
+        className="text-success shrink-0 mt-0.5"
+        aria-hidden
+      />
     );
   }
-  if (item.severity === 'error') {
-    return <XCircle size={15} className="text-critical shrink-0 mt-0.5" aria-hidden />;
-  }
-  if (item.severity === 'warning') {
+  if (item.severity === "error") {
     return (
-      <AlertTriangle size={15} className="text-warning shrink-0 mt-0.5" aria-hidden />
+      <XCircle
+        size={15}
+        className="text-critical shrink-0 mt-0.5"
+        aria-hidden
+      />
+    );
+  }
+  if (item.severity === "warning") {
+    return (
+      <AlertTriangle
+        size={15}
+        className="text-warning shrink-0 mt-0.5"
+        aria-hidden
+      />
     );
   }
   return <Info size={15} className="text-slate shrink-0 mt-0.5" aria-hidden />;
@@ -57,11 +83,11 @@ export default function ValidationList({
           <ValidationIcon item={v} />
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-navy">
-              {v.ruleCode === 'lcr_above_minimum'
-                ? 'LCR governed monitoring threshold'
-                : v.ruleCode === 'nsfr_above_minimum'
-                ? 'NSFR governed monitoring threshold'
-                : labelize(v.ruleCode)}
+              {v.ruleCode === "lcr_above_minimum"
+                ? "LCR governed monitoring threshold"
+                : v.ruleCode === "nsfr_above_minimum"
+                  ? "NSFR governed monitoring threshold"
+                  : labelize(v.ruleCode)}
             </p>
             <p className="mt-0.5 text-caption text-slate leading-relaxed">
               {v.message}
@@ -70,18 +96,18 @@ export default function ValidationList({
           <StatusPill
             tone={
               v.assessed === false
-                ? 'pending'
+                ? "pending"
                 : v.passed
-                ? 'success'
-                : severityTone(v.severity)
+                  ? "success"
+                  : severityTone(v.severity)
             }
             className="shrink-0"
           >
             {v.assessed === false
-              ? 'Not assessed'
+              ? "Not assessed"
               : v.passed
-              ? 'Pass'
-              : labelize(v.severity)}
+                ? "Pass"
+                : labelize(v.severity)}
           </StatusPill>
         </li>
       ))}
