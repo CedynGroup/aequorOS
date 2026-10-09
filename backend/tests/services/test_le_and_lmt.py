@@ -369,16 +369,23 @@ def test_le_registry_entry_is_periodic_monthly_confirmed() -> None:
     assert "Part VI" in definition.directive_citation
 
 
-def test_le_calendar_expands_monthly_obligation(db_session: Session) -> None:
+@pytest.mark.parametrize("year", [2026, 2027])
+def test_le_calendar_expands_only_in_force_monthly_obligations(
+    db_session: Session, year: int
+) -> None:
     materialize_canonical_test_book(db_session)
     obligations = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 5)
+        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(year, 4, 5)
     ).obligations
     le_items = [item for item in obligations if item.return_code == "LE-MONTHLY"]
-    assert le_items, "the calendar must expand LE-MONTHLY like any periodic return"
-    march = [item for item in le_items if item.reporting_date == REPORTING_DATE]
-    assert march and march[0].due_date == date(2026, 4, 9)
-    assert march[0].return_family == "large_exposures"
+    if year == 2026:
+        assert le_items == []
+    else:
+        march = [item for item in le_items if item.reporting_date == date(year, 3, 31)]
+        assert len(march) == 1
+        assert march[0].due_date == date(year, 4, 9)
+        assert march[0].return_family == "large_exposures"
+        assert all(item.instrument_status == "in_force" for item in le_items)
 
 
 def test_le_generation_derives_templates_from_canonical_exposures(db_session: Session) -> None:

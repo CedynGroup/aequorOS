@@ -18,7 +18,7 @@ Four properties this suite exists to keep true:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -712,11 +712,15 @@ def test_the_calendar_never_shows_an_obligation_before_a_return_is_in_force(
 ) -> None:
     """D-058. The FY2025 ICAAP row had a due date of 31 March 2026 — already past.
 
-    Telling a bank it is late on a filing it never owed is worse than omitting
-    the row: the Guideline is an exposure draft effective 1 January 2027, and
-    the governed first as-of date says so.
+    This scenario assumes the Guideline has been finalised. Its governed
+    first as-of date must still exclude the earlier annual obligation.
     """
     materialize_canonical_test_book(db_session)
+    monkeypatch.setitem(
+        REGISTRY,
+        "ICAAP-REPORT",
+        replace(REGISTRY["ICAAP-REPORT"], instrument_status="final_not_in_force"),
+    )
     _resolved, codes = _governed(db_session, date(2026, 12, 31))
     _patch_governed(monkeypatch, codes, months={"icaap_submission_months": 3})
 
@@ -734,6 +738,11 @@ def test_an_unconfigured_first_as_of_date_omits_the_obligation_and_says_so(
 ) -> None:
     """Fail closed. A commencement date is never assumed (D-024)."""
     materialize_canonical_test_book(db_session)
+    monkeypatch.setitem(
+        REGISTRY,
+        "ICAAP-REPORT",
+        replace(REGISTRY["ICAAP-REPORT"], instrument_status="final_not_in_force"),
+    )
     _resolved, codes = _governed(db_session, None)
     _patch_governed(monkeypatch, codes, months={"icaap_submission_months": 3})
 
@@ -773,7 +782,8 @@ def test_the_returns_picker_still_offers_the_rehearsal_date_and_marks_it(
     by_date = {anchor.reporting_date: anchor for anchor in listing.anchors}
     assert date(2025, 12, 31) in by_date
     assert by_date[date(2025, 12, 31)].in_force is False
-    assert by_date[date(2026, 12, 31)].in_force is True
+    assert by_date[date(2026, 12, 31)].in_force is False
+    assert listing.instrument_status == "exposure_draft"
 
 
 def test_the_freeze_path_ignores_the_effective_date(db_session: Session) -> None:
@@ -879,6 +889,10 @@ def test_the_annex_rides_under_its_parent_once_the_parent_is_in_force(
 ) -> None:
     """D-011: Appendix II is part of the ICAAP submission, not a second filing."""
     materialize_canonical_test_book(db_session)
+    for code in ("ICAAP-REPORT", "ICAAP-STRESS-APPENDIX2"):
+        monkeypatch.setitem(
+            REGISTRY, code, replace(REGISTRY[code], instrument_status="final_not_in_force")
+        )
     _resolved, codes = _governed(db_session, date(2026, 12, 31))
     _patch_governed(
         monkeypatch,
@@ -886,12 +900,12 @@ def test_the_annex_rides_under_its_parent_once_the_parent_is_in_force(
         months={"icaap_submission_months": 3, "icaap_disclosure_submission_months": 3},
     )
     listing = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 12, lookback_months=6, as_of=date(2026, 9, 19)
+        db_session, MAKER, SAMPLE_BANK_ID, 12, lookback_months=6, as_of=date(2027, 9, 19)
     )
     parents = [
         row
         for row in listing.obligations
-        if row.return_code == "ICAAP-REPORT" and row.reporting_date == date(2026, 12, 31)
+        if row.return_code == "ICAAP-REPORT" and row.reporting_date == date(2027, 12, 31)
     ]
     assert len(parents) == 1
     annex_codes = {annex.return_code for annex in parents[0].annexes}
@@ -900,7 +914,7 @@ def test_the_annex_rides_under_its_parent_once_the_parent_is_in_force(
     assert not [
         row
         for row in listing.obligations
-        if row.return_code == "ICAAP-STRESS-APPENDIX2" and row.reporting_date == date(2026, 12, 31)
+        if row.return_code == "ICAAP-STRESS-APPENDIX2" and row.reporting_date == date(2027, 12, 31)
     ]
 
 
@@ -1012,6 +1026,11 @@ def test_a_rehearsal_never_satisfies_a_calendar_obligation(
 ) -> None:
     """A dry run that turned a calendar row green would be worse than no dry run."""
     materialize_canonical_test_book(db_session)
+    monkeypatch.setitem(
+        REGISTRY,
+        "ICAAP-REPORT",
+        replace(REGISTRY["ICAAP-REPORT"], instrument_status="final_not_in_force"),
+    )
     _resolved, codes = _governed(db_session, date(2025, 1, 1))
     _patch_governed(monkeypatch, codes, months={"icaap_submission_months": 3})
     rehearsal = _package(db_session, return_code="ICAAP-REPORT", family="icaap")

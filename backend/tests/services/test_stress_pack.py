@@ -12,7 +12,7 @@ from __future__ import annotations
 import io
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -129,15 +129,14 @@ def test_stress_pack_assembles_stored_runs_without_recomputation(db_session: Ses
     assert snapshot["template_id"] == "aeq-stress-pack-v1"
     assert package.return_family == "stress"
 
-    # Traffic lights: exactly the engines' stored headline metric results —
-    # value, threshold and status re-tabulated for every consumed run.
+    # Stored LCR figures remain visible without a statutory compliance verdict.
     lights = _section(snapshot, "traffic_lights")["rows"]
     lcr_combined = next(r for r in lights if r["code"] == "liquidity:combined:lcr_pct")
-    assert lcr_combined["status"] in ("green", "amber", "red")
-    assert Decimal(lcr_combined["threshold"]) == Decimal("100")
-    # The seeded combined scenario lands below the 100% floor (LCR 87.36).
+    assert lcr_combined["status"] is None
+    assert lcr_combined["threshold"] is None
+    assert cast(str, lcr_combined["compliance_basis"]).startswith("Reported for information only")
+    # The seeded combined scenario remains below the 100% Basel reference (LCR 87.36).
     assert Decimal(lcr_combined["value"]) < Decimal("100")
-    assert lcr_combined["status"] in ("amber", "red")
 
     # Ratio evolution: the severe capital scenario's stored quarterly path
     # (quarter 0 is the unstressed starting position).
@@ -174,10 +173,9 @@ def test_stress_pack_assembles_stored_runs_without_recomputation(db_session: Ses
     assert Decimal(liq_frontier["value"]) < Decimal("1")
     assert snapshot["metadata"]["reverse_stress_narrative"]
 
-    # Recommended actions include a funding-remediation line for the breached
-    # combined-scenario LCR.
+    # Advisory figures do not create statutory breach-remediation actions.
     actions = _section(snapshot, "recommended_actions")["rows"]
-    assert any(r["code"] == "liquidity:combined:lcr_pct" for r in actions)
+    assert not any(r["code"] == "liquidity:combined:lcr_pct" for r in actions)
 
     # Provenance: every consumed run appears in source_runs, and the headline
     # totals summarize the stress ensemble.
@@ -405,14 +403,14 @@ def test_a_withheld_row_cannot_produce_a_remedial_action(db_session: Session) ->
     [
         ("car_pct", "capital", True),
         ("tier1_ratio_pct", "capital", True),
-        ("lcr_pct", "liquidity", True),
-        ("nsfr_pct", "liquidity", True),
+        ("lcr_pct", "liquidity", False),
+        ("nsfr_pct", "liquidity", False),
         # No registered authority at all — the legacy post-stress ratio.
         ("car_pct_end", "capital", False),
         # Never registered, and never will be by accident: the rule is a lookup,
         # not a list of forbidden names.
         ("some_metric_invented_next_quarter", "capital", False),
-        # Registered and filed, but under a DIFFERENT sealing engine.
+        # Registered liquidity metric, but under a DIFFERENT sealing engine.
         ("lcr_pct", "capital", False),
         # Registered, but as supervisory monitoring — reviewed, never filed.
         ("year5_car_pct", "forecast", False),

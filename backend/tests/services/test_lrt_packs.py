@@ -571,8 +571,9 @@ def test_event_driven_returns_absent_from_calendar(db_session: Session) -> None:
     codes = {item.return_code for item in obligations}
     assert codes.isdisjoint(CORPORATE_CODES)
     assert "corporate" not in {item.return_family for item in obligations}
-    # Periodic returns are unaffected by the skip.
-    assert {"LCR-NSFR", "CAR-RWA", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS", "LMT"} <= codes
+    # In-force periodic returns remain; drafts and unpublished references do not.
+    assert {"CAR-RWA", "FX-NOP"} <= codes
+    assert codes.isdisjoint({"LCR-NSFR", "IRRBB-PILOT", "ICAAP-STRESS", "LMT"})
 
 
 def test_corporate_package_appears_in_package_list(db_session: Session) -> None:

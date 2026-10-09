@@ -164,15 +164,8 @@ def test_sdi_end_to_end_engine_slice(db_session: Session) -> None:
     obligations = calendar.list_obligations(
         db_session, _CTX, sdi.id, as_of=FIXTURE_AS_OF
     ).obligations
-    assert {obligation.return_code for obligation in obligations} == {
-        "SDI-LMT-MONTHLY",
-        "SDI-LE-MONTHLY",
-        "SDI-STRESS-ANNUAL",
-        "SDI-IRRBB-QUARTERLY",
-        # Credit PR-6: the Notice 2025/23 monthly NPL report binds SDIs too -
-        # the one return family an SDI shares with a bank by design.
-        "NPL-MONTHLY",
-    }
+    assert {obligation.return_code for obligation in obligations} == {"NPL-MONTHLY"}
+    assert all(obligation.instrument_status == "in_force" for obligation in obligations)
 
 
 def test_sdi_lmt_generator_renders_only_the_published_applicable_tables(

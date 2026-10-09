@@ -161,7 +161,7 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "policy",
     ),
     (r"^models/(regulatory_parameter|parameter_register|jurisdiction|institution_type)$", "policy"),
-    (r"^domain/policy/", "policy"),
+    (r"^domain/(policy/|regulatory_instruments$)", "policy"),
     # ---- notifications
     (
         r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",

@@ -142,9 +142,18 @@ def test_every_module_with_a_candidate_reaches_the_strip() -> None:
         counts[measure.module] = counts.get(measure.module, 0) + 1
     assert len(available) > len(selected), "the cap is not exercised; this test is vacuous"
     assert set(counts) == {measure.module for measure in available}
-    # A module may hold two slots where it has both a certified figure and a
-    # bridgeable ratio; it may never hold a share of the strip out of proportion.
-    assert max(counts.values()) <= 3, counts
+    # Each module/family gets a turn while it still has eligible candidates.
+    # Exhausted groups cannot reserve slots after a regulatory-status change.
+    capacities: dict[tuple[str, bool], int] = {}
+    for measure in available:
+        key = (measure.module, measure.certified)
+        capacities[key] = capacities.get(key, 0) + 1
+    used = dict.fromkeys(capacities, 0)
+    for measure in selected:
+        key = (measure.module, measure.certified)
+        active_counts = [used[group] for group in capacities if used[group] < capacities[group]]
+        assert used[key] == min(active_counts)
+        used[key] += 1
 
 
 def test_a_target_variant_is_never_a_headline() -> None:
