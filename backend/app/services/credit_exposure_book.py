@@ -20,10 +20,11 @@ zero.** That distinction is the reason this module exists as a separate shape
 rather than a straight lift: a foreign-currency position whose conversion was
 never ingested and a position that genuinely holds nothing are not the same
 fact, and a reader that cannot tell them apart either silently drops real
-exposure or counts an unknown as an empty one. The enterprise stress test has
-always treated both as zero and must keep doing so byte for byte, so it adapts
-``None`` at its own call sites; the granularity adjustment instead EXCLUDES the
-unconverted rows and discloses how many it excluded.
+exposure or counts an unknown as an empty one. Enterprise credit stress requires
+official facts with an established net credit basis before using these rows;
+an unconverted credit exposure carries no risk weight and refuses calculation.
+The granularity adjustment instead EXCLUDES unconverted rows and discloses how
+many it excluded.
 
 The conversion itself is read, never performed: an ingested
 ``attributes.balance_ghs`` wins, otherwise a position already denominated in the

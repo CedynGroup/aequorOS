@@ -781,10 +781,8 @@ Bank-issued securities enter this assessment only with a `BOND` or
 `ssnit_educational_bond`). Equity categories override a debt instrument label.
 Other non-debt and unknown holdings retain the securities fallback.
 
-Bottom-up stress still returns losses and exposure-level RWA for a known
-zero-RWA book. Its aggregate `credit_rwa_uplift_factor` is `null` when base
-credit RWA is zero; annual projection consumes the exposure-level deltas.
-An absent exposure book remains a missing-input refusal.
+Calculation prerequisites and enterprise-stress refusals follow the
+[calculation basis and refusal contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract).
 
 `specific_provision_ghs` explicitly states the
 specific provision on a loan, security or interbank claim. If absent, the

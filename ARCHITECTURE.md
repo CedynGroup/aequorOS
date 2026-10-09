@@ -1206,18 +1206,29 @@ derived by `fact_derivation._derive_credit_exposure` under BoG CRD (June 2018)
 Part 2. It nets specific provisions and interest in suspense per exposure (¶98),
 classifies securities separately from HQLA, and uses original maturity for the
 short interbank weight (¶123–124). Accounting loan balances and staged IFRS 9
-EAD stay gross. Capital excludes loan-loss GL contra accounts from residual RWA
-to avoid deducting the same provision twice; general allowances do not reduce
+EAD stay gross. Capital excludes covered loan, securities and interbank GL contra
+accounts from residual RWA to avoid deducting the same provision twice; general allowances do not reduce
 credit RWA. Official, live, forecast and enterprise-stress readers must include
-this group. Older immutable snapshots retain their original measurement basis.
+this group; a missing basis refuses fresh calculations until facts are re-derived.
+Older immutable snapshots retain their original measurement basis.
 Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
 
 Enterprise stress compares the current accepted loan and placement source identities,
 lineage and values with the source basis recorded on `bank_reporting_periods` by
 successful official derivation. A changed or withdrawn book, including withdrawal
-of its final snapshot, requires official re-derivation before stress. This source
+of its final snapshot, or a missing recorded source basis requires official
+re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
+book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
 Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+
+The bottom-up migration and FX overlay covers loans and interbank placements.
+It applies exposure-level RWA deltas to each year's grown net credit buckets after
+governed CRM allocation, leaving other credit buckets outside the overlay.
+Supplied exposures with zero base RWA still produce losses and RWA deltas;
+`credit_rwa_uplift_factor` is `null` because its denominator is zero. Calling the
+bottom-up engine without exposures refuses as missing input; enterprise stress
+omits that overlay for a matching empty book.
 
 The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
 `ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It

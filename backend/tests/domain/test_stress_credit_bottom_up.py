@@ -26,14 +26,23 @@ from app.domain.stress.translation import MacroPathPoint
 def _book() -> tuple[CreditExposure, ...]:
     return (
         # corporate: 100M @ 2%/45%, RW100, domestic.
-        CreditExposure("E1", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
-                       Decimal("100")),
+        CreditExposure(
+            "E1", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"), Decimal("100")
+        ),
         # retail/SME: 50M @ 5%/40%, RW75, domestic.
-        CreditExposure("E2", "retail_sme", Decimal("50000000"), Decimal("5"), Decimal("40"),
-                       Decimal("75")),
+        CreditExposure(
+            "E2", "retail_sme", Decimal("50000000"), Decimal("5"), Decimal("40"), Decimal("75")
+        ),
         # bank: 20M @ 1%/30%, RW20, FX-denominated.
-        CreditExposure("E3", "banks", Decimal("20000000"), Decimal("1"), Decimal("30"),
-                       Decimal("20"), is_foreign_currency=True),
+        CreditExposure(
+            "E3",
+            "banks",
+            Decimal("20000000"),
+            Decimal("1"),
+            Decimal("30"),
+            Decimal("20"),
+            is_foreign_currency=True,
+        ),
     )
 
 
@@ -111,8 +120,9 @@ def test_fx_appreciation_never_reduces_stressed_ead() -> None:
 def test_migration_fraction_and_rw_cap_are_respected() -> None:
     # A severe PD doubling saturates the migration cap (0.5) and the RW cap (150).
     exposure = (
-        CreditExposure("H", "corporates", Decimal("10000000"), Decimal("3"), Decimal("50"),
-                       Decimal("120")),
+        CreditExposure(
+            "H", "corporates", Decimal("10000000"), Decimal("3"), Decimal("50"), Decimal("120")
+        ),
     )
     result = compute_bottom_up_credit(
         exposure,
@@ -134,8 +144,9 @@ def test_override_params_change_the_migration() -> None:
         rw_cap_pct=Decimal("150"),
     )
     exposure = (
-        CreditExposure("O", "corporates", Decimal("10000000"), Decimal("2"), Decimal("45"),
-                       Decimal("100")),
+        CreditExposure(
+            "O", "corporates", Decimal("10000000"), Decimal("2"), Decimal("45"), Decimal("100")
+        ),
     )
     result = compute_bottom_up_credit(
         exposure,
@@ -151,6 +162,7 @@ def test_override_params_change_the_migration() -> None:
 
 def test_perfect_foresight_uses_each_years_own_macro() -> None:
     """result_for_year conditions each year on its own macro (¶48)."""
+
     def gdp(year: int, stress: str) -> MacroPathPoint:
         return MacroPathPoint("gdp_growth", year, Decimal("0.05"), Decimal(stress))
 
@@ -167,8 +179,9 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
         *(flat("gse_index", year, "5000") for year in (1, 2)),
     )
     book = (
-        CreditExposure("C", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
-                       Decimal("100")),
+        CreditExposure(
+            "C", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"), Decimal("100")
+        ),
     )
     year1 = result_for_year(book, paths, 1)
     year2 = result_for_year(book, paths, 2)
@@ -207,11 +220,20 @@ def test_zero_base_rwa_preserves_losses_and_positive_migration_delta() -> None:
     https://www.bog.gov.gh/wp-content/uploads/2022/05/Basel-II-BOG-CRD-Final-27-June-2018-Basel-Committee-BSD.pdf
     """
     zero_rwa_book = (
-        CreditExposure("E1", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
-                       Decimal("0"), credit_category="corporate_unrated:RW0"),
+        CreditExposure(
+            "E1",
+            "corporates",
+            Decimal("100000000"),
+            Decimal("2"),
+            Decimal("45"),
+            Decimal("0"),
+            credit_category="corporate_unrated:RW0",
+        ),
     )
     result = compute_bottom_up_credit(
-        zero_rwa_book, pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("2"),
+        zero_rwa_book,
+        pd_multiplier=Decimal("2"),
+        lgd_multiplier=Decimal("2"),
         fx_fraction=Decimal("0"),
     )
     assert result.credit_rwa_uplift_factor is None
@@ -227,8 +249,14 @@ def test_zero_base_rwa_preserves_losses_and_positive_migration_delta() -> None:
 def test_an_unregistered_crd_class_refuses_instead_of_becoming_other() -> None:
     """A class the registry does not know moved the loss onto the wrong Table 1 line."""
     book = (
-        CreditExposure("E1", "project_finance", Decimal("100000000"), Decimal("2"),
-                       Decimal("45"), Decimal("100")),
+        CreditExposure(
+            "E1",
+            "project_finance",
+            Decimal("100000000"),
+            Decimal("2"),
+            Decimal("45"),
+            Decimal("100"),
+        ),
     )
     with pytest.raises(NotComputable) as exc:
         compute_bottom_up_credit(

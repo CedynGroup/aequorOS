@@ -141,7 +141,7 @@ from app.services import (
 )
 from app.services.audit import record_event
 from app.services.params import get_active_params
-from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS, _SDI_STRUCTURAL_CAPITAL
+from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL, DEFAULT_CRM_HAIRCUTS
 
 #: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap
 #: hedges decomposed into their legs, positions at their contractual rates —
