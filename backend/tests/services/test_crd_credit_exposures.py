@@ -518,7 +518,12 @@ def test_sme_fx_stress_uses_corrected_credit_weights() -> None:
         ),
     ]
     book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
-        [_stress_row(row) for row in rows], bog_capital_params(), capital_facts=()
+        [_stress_row(row) for row in rows],
+        bog_capital_params(),
+        capital_facts=[
+            CapitalFact(spec.fact_group, spec.category, spec.amount, spec.risk_weight_code)
+            for spec in _derive_specs(_canonical(*rows), live=False)[0]
+        ],
     )
     result = compute_bottom_up_credit(
         book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
@@ -570,7 +575,12 @@ def test_bottom_up_rwa_matches_net_capital_without_netting_expected_loss(
     )
     row = replace(row, counterparty_resident=True)
     book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
-        [_stress_row(row)], bog_capital_params(), capital_facts=()
+        [_stress_row(row)],
+        bog_capital_params(),
+        capital_facts=[
+            CapitalFact(spec.fact_group, spec.category, spec.amount, spec.risk_weight_code)
+            for spec in _derive_specs(_canonical(row), live=False)[0]
+        ],
     )
     result = compute_bottom_up_credit(
         book, pd_multiplier=Decimal("1"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
@@ -592,7 +602,12 @@ def test_projection_overlay_does_not_revalue_constant_residual_assets() -> None:
         ),
     ]
     book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
-        [_stress_row(row) for row in rows], bog_capital_params(), capital_facts=()
+        [_stress_row(row) for row in rows],
+        bog_capital_params(),
+        capital_facts=[
+            CapitalFact(spec.fact_group, spec.category, spec.amount, spec.risk_weight_code)
+            for spec in _derive_specs(_canonical(*rows), live=False)[0]
+        ],
     )
     paths = [
         MacroPathPoint(

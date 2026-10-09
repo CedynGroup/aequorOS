@@ -24,7 +24,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.domain.authority.outcomes import OutcomeState
-from app.domain.capital.engine import CapitalParams
+from app.domain.capital.engine import CapitalFact, CapitalParams
 from app.domain.stress.translation import MacroPathPoint
 from app.models import Bank
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate, PlanAssumptionsIn
@@ -391,7 +391,9 @@ def test_crd_classification_overrides_snapshot_and_product_weights() -> None:
             _exposure_row("LOAN/PRODUCT", code=None, product_code="RW50"),
         ],
         _capital_params(RW100="100", RW50="50"),
-        capital_facts=(),
+        capital_facts=(
+            CapitalFact("credit_exposure", "corporate_unrated:RW100", Decimal("2000000"), "RW100"),
+        ),
     )
 
     assert [(item.exposure_id, item.risk_weight_pct) for item in exposures] == [

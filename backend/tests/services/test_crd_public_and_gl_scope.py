@@ -6,7 +6,7 @@ from itertools import combinations
 
 import pytest
 
-from app.domain.capital.engine import RiskWeightUnavailable
+from app.domain.capital.engine import CapitalFact, RiskWeightUnavailable
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
 from app.models import (
     CanonicalCounterparty,
@@ -276,7 +276,14 @@ def test_domicile_uses_the_supplied_jurisdiction_instead_of_a_country_literal() 
         counterparty_resident=None,
     )
     book = _build_credit_exposures(
-        [_stress_row(row)], bog_capital_params(), domestic_country="KE", capital_facts=()
+        [_stress_row(row)],
+        bog_capital_params(),
+        domestic_country="KE",
+        capital_facts=(
+            CapitalFact(
+                "credit_exposure", "loans:pse_public_institution:RW50", Decimal("1000"), "RW50"
+            ),
+        ),
     )
     assert book[0].risk_weight_pct == Decimal("50")
     with pytest.raises(EnterpriseStressError):
@@ -306,6 +313,9 @@ def test_typed_sovereign_loan_with_central_government_borrower_retains_weight(
     )
     assert _credit_rwa(row) == Decimal("200" if foreign else "0")
     book = _build_credit_exposures(
-        [_stress_row(row)], bog_capital_params(), domestic_country="GH", capital_facts=()
+        [_stress_row(row)],
+        bog_capital_params(),
+        domestic_country="GH",
+        capital_facts=_capital_facts([row]),
     )
     assert book[0].risk_weight_pct == Decimal("20" if foreign else "0")

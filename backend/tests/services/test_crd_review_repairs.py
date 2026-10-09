@@ -254,12 +254,18 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     detail = TypeAdapter(_ErrorResponse).validate_json(response.text)["error"]["details"]
     outcome = detail["details"]["outcome"]
     assert outcome["blocks_filing"] is True
-    assert outcome["details"][0]["items"] == [
-        "exposure:loans:pse_public_institution:unclassified"
+    assert outcome["details"][0]["items"] == (
+        ["exposure:loans:pse_public_institution:unclassified"]
         if failure == "foreign_pse"
-        else "fact:credit_exposure:sme_retail:RW100"
-    ]
-    assert outcome["details"][0]["state"] == "missing_required_input"
+        else [
+            "fact:credit_exposure:corporate_unrated:RW100",
+            "fact:credit_exposure:sme_retail:RW100",
+            "fact:credit_exposure:sme_retail:RW100+RW20",
+        ]
+    )
+    assert outcome["details"][0]["state"] == (
+        "missing_required_input" if failure == "foreign_pse" else "reconciliation_failed"
+    )
     session = db_session
     assert (
         session.scalar(

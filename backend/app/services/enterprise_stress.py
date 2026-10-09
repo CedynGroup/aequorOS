@@ -38,6 +38,7 @@ from app.domain.capital.ecl import (
     EclExposure,
 )
 from app.domain.capital.engine import (
+    FACT_GROUP_CREDIT_EXPOSURE,
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
     TIER_T2,
@@ -47,6 +48,7 @@ from app.domain.capital.engine import (
     assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
+    money,
     require_credit_exposure_basis,
     resolve_risk_weight,
     tier1_capital,
@@ -61,6 +63,7 @@ from app.domain.liquidity.engine import (
     consumed_hqla_levels,
 )
 from app.domain.positions.credit import capital_credit_class, specific_deductions
+from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -886,12 +889,11 @@ def _build_credit_exposures(  # noqa: PLR0913
     and hide that the whole register is missing.
     """
     exposures: list[CreditExposure] = []
+    current_basis: dict[tuple[str, str | None], Decimal] = {}
     unresolved_exposures: list[str] = []
     unresolved_codes: set[str] = set()
     missing_code_only = True
     for row in rows:
-        if _reported(row.balance_rep) <= _ZERO:
-            continue
         try:
             credit_category, code = capital_credit_class(
                 row,
@@ -916,13 +918,20 @@ def _build_credit_exposures(  # noqa: PLR0913
             deduction = specific_deductions(attributes, non_performing=non_performing)
         except ValueError as exc:
             raise EnterpriseStressError("invalid_specific_provision", str(exc)) from exc
+        category = f"{credit_category}:{code}"
+        credit_amount = max(_reported(row.balance_rep) - deduction, _ZERO)
+        if row.position_type in _CREDIT_POSITION_TYPES:
+            key = (category, code)
+            current_basis[key] = current_basis.get(key, _ZERO) + credit_amount
+        if _reported(row.balance_rep) <= _ZERO:
+            continue
         exposures.append(
             CreditExposure(
                 exposure_id=row.source_reference,
                 crd_class=crd_class,
                 ead=_reported(row.balance_rep),
-                credit_amount=max(_reported(row.balance_rep) - deduction, _ZERO),
-                credit_category=f"{credit_category}:{code}",
+                credit_amount=credit_amount,
+                credit_category=category,
                 pd_pct=pd_pct,
                 lgd_pct=lgd_pct,
                 risk_weight_pct=risk_weight_pct,
@@ -933,6 +942,37 @@ def _build_credit_exposures(  # noqa: PLR0913
         raise _unresolved_risk_weight_error(
             unresolved_exposures, sorted(unresolved_codes), missing_code_only
         )
+    if rows:
+        official_basis: dict[tuple[str, str | None], Decimal] = {}
+        for fact in capital_facts:
+            if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE and (
+                fact.category.split(":", 1)[0] in LOAN_EXPOSURE_CATEGORIES
+                or fact.category.startswith(("loans:", "interbank:"))
+            ):
+                key = (fact.category, fact.risk_weight_code)
+                official_basis[key] = official_basis.get(key, _ZERO) + fact.amount
+        mismatches = sorted(
+            {
+                category
+                for category, code in current_basis.keys() | official_basis.keys()
+                if (category, code) not in current_basis
+                or (category, code) not in official_basis
+                or money(current_basis[(category, code)]) != money(official_basis[(category, code)])
+            }
+        )
+        if mismatches:
+            raise NotComputable(
+                OutcomeDetail(
+                    state=OutcomeState.RECONCILIATION_FAILED,
+                    metric_id="stressed_credit_rwa",
+                    reason=(
+                        "The current loan and placement net credit basis differs from the official "
+                        "facts. Re-derive the official facts for this reporting period before "
+                        "running enterprise stress."
+                    ),
+                    items=tuple(f"fact:credit_exposure:{category}" for category in mismatches),
+                )
+            )
     return list(apply_credit_collateral(exposures, capital_facts, capital_params))
 
 

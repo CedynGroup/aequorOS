@@ -264,7 +264,7 @@ def test_fully_provided_claim_has_zero_rwa_increment_but_gross_expected_loss() -
         attributes={"specific_provision_ghs": "1000"},
     )
     book = enterprise_stress._build_credit_exposures(  # pyright: ignore[reportPrivateUsage]
-        [_stress_row(row)], bog_capital_params(), capital_facts=()
+        [_stress_row(row)], bog_capital_params(), capital_facts=_capital_facts([row])
     )
     result = compute_bottom_up_credit(
         book, pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("1"), fx_fraction=Decimal("0.1")
