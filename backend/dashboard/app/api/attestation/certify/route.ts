@@ -14,6 +14,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@/auth';
+import { backendRequest } from '@/lib/backendRequest';
 import { apiBase, takeAuthorizationCookie } from '@/lib/attestation/stepUp';
 
 interface CertifyBody {
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const response = await fetch(
+  const response = await backendRequest(
     `${apiBase()}/banks/${bankId}/regulatory-packages/${packageId}/attestation/certify`,
     {
       method: 'POST',

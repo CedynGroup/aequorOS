@@ -429,6 +429,36 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert operator_db.scalar(select(Organization)) is None
 
 
+def test_unavailable_kms_refuses_provisioning_and_rolls_back(
+    operator_client: TestClient,
+    operator_db: Session,
+    fake_s3: FakeS3Client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
+    get_operator_settings.cache_clear()
+    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
+        lambda: ProvisioningClients(
+            s3_client=fake_s3,
+            storage_settings=fake_storage_settings(),
+            kms_client=None,
+        )
+    )
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["succeeded"] is False
+    steps = _steps_by_name(body)
+    assert steps["kms"]["status"] == "failed"
+    assert "no KMS client is available" in steps["kms"]["detail"]
+    assert operator_db.scalar(select(Organization)) is None
+    assert operator_db.scalar(select(Bank)) is None
+    assert fake_s3.buckets == {}
+    assert fake_s3.encryption == {}
+
+
 @pytest.mark.parametrize("institution_type", ["universal_bank", "savings_and_loans"])
 def test_provisioning_leaves_forecast_assumptions_for_the_bank_to_author(
     operator_client: TestClient, operator_db: Session, institution_type: str

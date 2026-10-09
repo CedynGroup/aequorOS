@@ -10,6 +10,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@/auth';
+import { backendRequest } from '@/lib/backendRequest';
 import { requestOrigin } from '@/lib/requestOrigin';
 import {
   apiBase,
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // The risk service is the verifier: it checks the signature against the
     // issuer's JWKS, that the subject matches the signed-in user, and that
     // auth_time is recent enough to count as step-up.
-    const stepUp = await fetch(
+    const stepUp = await backendRequest(
       `${apiBase()}/banks/${context.bankId}/regulatory-packages/${context.packageId}` +
         `/attestation/step-up`,
       {

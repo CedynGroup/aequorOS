@@ -70,6 +70,7 @@ def get_provisioning_clients() -> ProvisioningClients:
             )
             require_boto_tls(cast(object, kms_client))
         except Exception:  # noqa: BLE001 - saga reports the gap; endpoint must not 500
+            kms_client = None
             logger.exception("failed to construct the KMS client")
     return ProvisioningClients(
         s3_client=s3_client,

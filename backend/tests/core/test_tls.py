@@ -25,7 +25,7 @@ from starlette.routing import Route
 from app.adapters.database_direct.config import ConnectionConfig, TlsConfig
 from app.adapters.database_direct.drivers.base import require_verified_transport
 from app.adapters.database_direct.errors import DatabaseDirectError
-from app.core.config import Settings, TsaSettings, get_settings
+from app.core.config import Settings, TsaSettings, get_operator_settings, get_settings
 from app.core.serve import listener_options
 from app.core.tls import (
     RequireTLSMiddleware,
@@ -38,7 +38,9 @@ from app.core.tls import (
 from app.core.tls_evidence import probe_https
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
+from app.operator.features.provision import get_provisioning_clients
 from app.services.attestation.tsa import build_pdf_timestamper
+from app.services.regulatory_reporting.channels.errors import ChannelPreconditionError
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
 
 
@@ -244,10 +246,185 @@ def test_tsa_refuses_plaintext(production: None) -> None:
         build_pdf_timestamper(TsaSettings(TSA_URL="http://tsa.example"))
 
 
-def test_orass_refuses_certificate_bypass(production: None) -> None:
-    channel = OrassApiChannel(config={"verify_tls": False})
-    with pytest.raises(TransportSecurityError, match="verification"):
-        channel.poll("synthetic-reference")
+@pytest.mark.parametrize("operation", ["submit", "poll", "poll_with_detail", "resubmit"])
+@pytest.mark.parametrize("verify_tls", [False, 0, "false"])
+def test_orass_refuses_certificate_bypass(
+    production: None, operation: str, verify_tls: object
+) -> None:
+    import httpx  # noqa: PLC0415
+
+    from app.models import RegulatoryPackage, RegulatoryPackageArtifact  # noqa: PLC0415
+
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={})
+
+    channel = OrassApiChannel(
+        config={"verify_tls": verify_tls, "api_base_url": "https://orass.example"},
+        credentials={"api_key": "synthetic"},
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(ChannelPreconditionError, match="verification"):
+        if operation == "submit":
+            channel.submit(
+                RegulatoryPackage(
+                    status="approved",
+                    return_code="synthetic",
+                    reporting_date=datetime.now(UTC).date(),
+                    version=1,
+                ),
+                [RegulatoryPackageArtifact(kind="xlsx", checksum_sha256="a" * 64, size_bytes=1)],
+            )
+        elif operation == "resubmit":
+            channel.request_resubmission("synthetic-reference", "synthetic reason")
+        elif operation == "poll_with_detail":
+            channel.poll_with_detail("synthetic-reference")
+        else:
+            channel.poll("synthetic-reference")
+    assert sent == []
+
+
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_provisioning_exposes_only_verified_kms_clients(
+    production: None, monkeypatch: pytest.MonkeyPatch, scheme: str
+) -> None:
+    from app.storage.config import get_storage_settings  # noqa: PLC0415
+
+    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
+    monkeypatch.setenv("AWS_ENDPOINT_URL_KMS", f"{scheme}://kms.example")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "synthetic")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.setenv("S3_ACCESS_KEY", "")
+    monkeypatch.setenv("S3_SECRET_KEY", "")
+    get_operator_settings.cache_clear()
+    get_storage_settings.cache_clear()
+    try:
+        clients = get_provisioning_clients()
+        assert (cast(object, clients.kms_client) is not None) == (scheme == "https")
+    finally:
+        get_operator_settings.cache_clear()
+        get_storage_settings.cache_clear()
+
+
+def test_dashboard_backend_requests_refuse_http_redirects(tmp_path: Path) -> None:
+    import json  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: PLC0415
+
+    cert, key = certificate(tmp_path)
+    requests: list[tuple[str, bytes, str | None, str | None]] = []
+    plaintext_requests: list[bytes] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            if self.server is plaintext:
+                plaintext_requests.append(body)
+            else:
+                requests.append(
+                    (
+                        self.path,
+                        body,
+                        self.headers.get("Authorization"),
+                        self.headers.get("X-Internal-Auth"),
+                    )
+                )
+            code = int(self.path.rsplit("=", 1)[-1])
+            self.send_response(code)
+            if code in {307, 308}:
+                self.send_header(
+                    "Location", f"http://localhost:{plaintext.server_port}/sink?code=200"
+                )
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"accepted":true}')
+
+        do_GET = do_POST
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    plaintext = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    secure = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert, key)
+    secure.socket = context.wrap_socket(secure.socket, server_side=True)
+    threads = [threading.Thread(target=server.serve_forever) for server in (plaintext, secure)]
+    for thread in threads:
+        thread.start()
+    targets = [
+        {"path": "/auth/sso/client-config", "body": ""},
+        {"path": "/attestation/step-up", "body": '{"id_token":"synthetic-id-token"}'},
+        {
+            "path": "/attestation/certify",
+            "body": '{"authorization_token":"synthetic-signing-token"}',
+        },
+        {
+            "path": "/attestation/certify-and-send",
+            "body": '{"authorization_token":"synthetic-signing-token"}',
+        },
+    ]
+    helper = Path(__file__).resolve().parents[3] / "backend/dashboard/lib/backendRequest.ts"
+    script = """
+const assert = require('node:assert/strict');
+const { backendRequest } = require(process.argv[1]);
+(async () => {
+  for (const target of JSON.parse(process.argv[3])) {
+    const options = {
+      method: target.body ? 'POST' : 'GET',
+      headers: target.body
+        ? {Authorization: 'Bearer synthetic-access-token', 'Content-Type': 'application/json'}
+        : {'X-Internal-Auth': 'synthetic-internal-key'},
+      body: target.body || undefined,
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(3000),
+    };
+    for (const code of [307, 308]) {
+      await assert.rejects(
+        backendRequest(`${process.argv[2]}${target.path}?code=${code}`, options), TypeError,
+      );
+    }
+    const response = await backendRequest(`${process.argv[2]}${target.path}?code=201`, options);
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), {accepted: true});
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+    try:
+        result = subprocess.run(
+            [
+                "node", "-e", script, str(helper),
+                f"https://localhost:{secure.server_port}", json.dumps(targets),
+            ],
+            env={**os.environ, "NODE_EXTRA_CA_CERTS": str(cert)},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+        assert plaintext_requests == []
+        assert requests == [
+            (
+                f"{target['path']}?code={code}",
+                target["body"].encode(),
+                "Bearer synthetic-access-token" if target["body"] else None,
+                None if target["body"] else "synthetic-internal-key",
+            )
+            for target in targets
+            for code in (307, 308, 201)
+        ]
+    finally:
+        for server in (plaintext, secure):
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=5)
 
 
 def test_native_core_refuses_unverified_tls(production: None) -> None:

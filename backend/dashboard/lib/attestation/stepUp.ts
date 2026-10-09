@@ -20,6 +20,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { backendRequest } from '../backendRequest';
 import { guardedFetch } from '../outbound';
 
 /** Correlates the authorize redirect with its callback. HttpOnly, short-lived. */
@@ -97,8 +98,7 @@ export function unverifiedNonce(idToken: string): string | null {
 export async function fetchClientConfig(): Promise<OidcClientConfig> {
   const internalKey = process.env.SSO_INTERNAL_KEY;
   if (!internalKey) return { enabled: false };
-  const response = await fetch(`${apiBase()}/auth/sso/client-config`, {
-    redirect: 'error',
+  const response = await backendRequest(`${apiBase()}/auth/sso/client-config`, {
     headers: { 'X-Internal-Auth': internalKey },
     cache: 'no-store',
     signal: AbortSignal.timeout(5000),

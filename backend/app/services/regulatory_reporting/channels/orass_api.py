@@ -42,7 +42,7 @@ from typing import Any
 import httpx
 
 from app.core.outbound import OutboundTargetBlocked, check_url, redirect_guard
-from app.core.tls import TransportSecurityError, client_context
+from app.core.tls import client_context
 from app.models import RegulatoryPackage
 from app.services.regulatory_reporting.channels.base import (
     FiledArtifact,
@@ -196,7 +196,7 @@ class OrassApiChannel:
     def _client(self) -> httpx.Client:
         timeout = float(self._config.get("timeout_seconds") or _DEFAULT_TIMEOUT_SECONDS)
         if self._config.get("verify_tls", True) is not True:
-            raise TransportSecurityError("ORASS certificate verification cannot be disabled.")
+            raise ChannelPreconditionError("ORASS certificate verification cannot be disabled.")
         return httpx.Client(
             base_url=self._guarded_base_url(),
             headers=self._auth_headers(),
