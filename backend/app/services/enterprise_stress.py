@@ -38,7 +38,6 @@ from app.domain.capital.ecl import (
     EclExposure,
 )
 from app.domain.capital.engine import (
-    FACT_GROUP_CREDIT_EXPOSURE,
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
     TIER_T2,
@@ -48,7 +47,6 @@ from app.domain.capital.engine import (
     assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
-    money,
     require_credit_exposure_basis,
     resolve_risk_weight,
     tier1_capital,
@@ -63,7 +61,6 @@ from app.domain.liquidity.engine import (
     consumed_hqla_levels,
 )
 from app.domain.positions.credit import capital_credit_class, specific_deductions
-from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -803,7 +800,6 @@ def _fx_positions(rows: Sequence[FinancialFactRow]) -> list[FxPosition]:
 # its sealed runs and their input hashes are reproduced from that reading, so it
 # keeps it: ``_reported`` is the adapter, and the only place the two meet.
 
-_CREDIT_POSITION_TYPES = credit_exposure_book.CREDIT_POSITION_TYPES
 _CONCENTRATION_POSITION_TYPES = credit_exposure_book.CONCENTRATION_POSITION_TYPES
 _FUNDING_POSITION_TYPES = credit_exposure_book.FUNDING_POSITION_TYPES
 _DERIVATIVE_POSITION_TYPES = credit_exposure_book.DERIVATIVE_POSITION_TYPES
@@ -889,7 +885,6 @@ def _build_credit_exposures(  # noqa: PLR0913
     and hide that the whole register is missing.
     """
     exposures: list[CreditExposure] = []
-    current_basis: dict[tuple[str, str | None], Decimal] = {}
     unresolved_exposures: list[str] = []
     unresolved_codes: set[str] = set()
     missing_code_only = True
@@ -920,9 +915,6 @@ def _build_credit_exposures(  # noqa: PLR0913
             raise EnterpriseStressError("invalid_specific_provision", str(exc)) from exc
         category = f"{credit_category}:{code}"
         credit_amount = max(_reported(row.balance_rep) - deduction, _ZERO)
-        if row.position_type in _CREDIT_POSITION_TYPES:
-            key = (category, code)
-            current_basis[key] = current_basis.get(key, _ZERO) + credit_amount
         if _reported(row.balance_rep) <= _ZERO:
             continue
         exposures.append(
@@ -942,37 +934,6 @@ def _build_credit_exposures(  # noqa: PLR0913
         raise _unresolved_risk_weight_error(
             unresolved_exposures, sorted(unresolved_codes), missing_code_only
         )
-    if rows:
-        official_basis: dict[tuple[str, str | None], Decimal] = {}
-        for fact in capital_facts:
-            if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE and (
-                fact.category.split(":", 1)[0] in LOAN_EXPOSURE_CATEGORIES
-                or fact.category.startswith(("loans:", "interbank:"))
-            ):
-                key = (fact.category, fact.risk_weight_code)
-                official_basis[key] = official_basis.get(key, _ZERO) + fact.amount
-        mismatches = sorted(
-            {
-                category
-                for category, code in current_basis.keys() | official_basis.keys()
-                if (category, code) not in current_basis
-                or (category, code) not in official_basis
-                or money(current_basis[(category, code)]) != money(official_basis[(category, code)])
-            }
-        )
-        if mismatches:
-            raise NotComputable(
-                OutcomeDetail(
-                    state=OutcomeState.RECONCILIATION_FAILED,
-                    metric_id="stressed_credit_rwa",
-                    reason=(
-                        "The current loan and placement net credit basis differs from the official "
-                        "facts. Re-derive the official facts for this reporting period before "
-                        "running enterprise stress."
-                    ),
-                    items=tuple(f"fact:credit_exposure:{category}" for category in mismatches),
-                )
-            )
     return list(apply_credit_collateral(exposures, capital_facts, capital_params))
 
 
@@ -1678,6 +1639,10 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
 
     require_credit_exposure_basis(capital_rows)
     require_credit_exposure_basis(forecast_rows)
+    credit_rows, current_credit_basis = credit_exposure_book.load_credit_book(db, ctx, bank, as_of)
+    credit_exposure_book.require_credit_source_basis(
+        period.credit_source_basis, current_credit_basis
+    )
     capital_facts = [_capital_fact(fact) for fact in capital_rows]
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
@@ -1701,7 +1666,6 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
     base_ratios = compute_capital_ratios(capital_facts, base_rwa, capital_params)
 
     # --- Phase 4: exposure-level per-risk inputs (canonical book; graceful) --
-    credit_rows = _load_exposure_rows(db, ctx, bank, as_of, _CREDIT_POSITION_TYPES)
     concentration_rows = _load_exposure_rows(db, ctx, bank, as_of, _CONCENTRATION_POSITION_TYPES)
     funding_rows = _load_exposure_rows(db, ctx, bank, as_of, _FUNDING_POSITION_TYPES)
     derivative_rows = _load_exposure_rows(db, ctx, bank, as_of, _DERIVATIVE_POSITION_TYPES)

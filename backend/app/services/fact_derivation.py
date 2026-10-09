@@ -302,7 +302,7 @@ from app.models import (
     CurrentFinancialFact,
     IngestionBatch,
 )
-from app.services import jurisdictions, market_data_sources, reconciliation
+from app.services import credit_exposure_book, jurisdictions, market_data_sources, reconciliation
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,
@@ -684,6 +684,8 @@ class _Canonical:
     market_spots: dict[str, Decimal] = field(default_factory=dict)
     market_fx_history: dict[str, list[tuple[date, Decimal]]] = field(default_factory=dict)
 
+    credit_source_basis: str | None = None
+
     def by_type(self, *position_types: str) -> list[_PositionRow]:
         return [row for row in self.positions if row.position_type in position_types]
 
@@ -745,6 +747,7 @@ def derive_facts(
         )
 
     period, period_created = _ensure_period(db, ctx, bank, as_of_date)
+    period.credit_source_basis = canonical.credit_source_basis
     facts_deleted = _delete_period_facts(db, ctx, bank, period)
     facts = [_fact(bank, period, spec) for spec in specs]
 
@@ -872,28 +875,11 @@ def _load_position_rows(
     so it can never be measured over a different population than the balance
     sheet it explains.
     """
-    rows = db.execute(
-        select(
-            CanonicalPositionSnapshot, CanonicalPosition, CanonicalProduct, CanonicalCounterparty
-        )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
-        )
-    ).all()
     return [
         _position_row(snapshot, position, product, counterparty, base_currency)
-        for snapshot, position, product, counterparty in rows
+        for snapshot, position, counterparty, product in credit_exposure_book.load_position_records(
+            db, ctx, bank, as_of
+        )
     ]
 
 
@@ -989,7 +975,11 @@ def current_reconciliation_record(
 
 def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Canonical:
     base_currency = jurisdictions.base_currency(bank)
-    positions = _load_position_rows(db, ctx, bank, as_of, base_currency)
+    records = credit_exposure_book.load_position_records(db, ctx, bank, as_of)
+    positions = [
+        _position_row(snapshot, position, product, counterparty, base_currency)
+        for snapshot, position, counterparty, product in records
+    ]
 
     # The whole current GL history at or before the as-of, INCLUDING rows with
     # no balance: a balance-less row still proves the code is on the chart, and
@@ -1055,6 +1045,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         as_of=as_of,
         base_currency=base_currency,
         positions=positions,
+        credit_source_basis=credit_exposure_book.credit_source_basis(records),
         gl_accounts=gl_accounts,
         gl_chart_as_of=gl_chart_as_of,
         gl_retired=gl_retired,

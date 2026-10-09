@@ -1212,6 +1212,13 @@ credit RWA. Official, live, forecast and enterprise-stress readers must include
 this group. Older immutable snapshots retain their original measurement basis.
 Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
 
+Enterprise stress compares the current accepted loan and placement source identities,
+lineage and values with the source basis recorded on `bank_reporting_periods` by
+successful official derivation. A changed or withdrawn book, including withdrawal
+of its final snapshot, requires official re-derivation before stress. This source
+provenance stays outside financial facts, calculation input snapshots and hashes.
+Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+
 The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
 `ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
 is a what-if and stress estimate: Tier 2 always carries the bank's booked

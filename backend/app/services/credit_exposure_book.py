@@ -37,8 +37,10 @@ own reporting currency, whichever that is.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, cast
 
@@ -46,6 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.positions.credit import credit_classification_attributes
 from app.models import (
     Bank,
@@ -191,6 +194,117 @@ def _reporting_notional(
     return None
 
 
+_SourceRecord = tuple[
+    CanonicalPositionSnapshot,
+    CanonicalPosition,
+    CanonicalCounterparty | None,
+    CanonicalProduct | None,
+]
+
+
+def load_position_records(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    position_types: tuple[str, ...] | None = None,
+) -> list[_SourceRecord]:
+    return cast(
+        list[_SourceRecord],
+        (
+            db.execute(
+                select(
+                    CanonicalPositionSnapshot,
+                    CanonicalPosition,
+                    CanonicalCounterparty,
+                    CanonicalProduct,
+                )
+                .join(
+                    CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id
+                )
+                .outerjoin(
+                    CanonicalCounterparty,
+                    CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
+                )
+                .outerjoin(
+                    CanonicalProduct,
+                    CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
+                )
+                .where(
+                    CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                    CanonicalPositionSnapshot.bank_id == bank.id,
+                    CanonicalPositionSnapshot.as_of_date == as_of,
+                    CanonicalPositionSnapshot.superseded_by.is_(None),
+                    CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                    CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+                    *(
+                        (CanonicalPosition.position_type.in_(position_types),)
+                        if position_types is not None
+                        else ()
+                    ),
+                )
+                .order_by(CanonicalPositionSnapshot.source_reference)
+            )
+            .tuples()
+            .all()
+        ),
+    )
+
+
+def _source_value(value: object) -> str:
+    if isinstance(value, Decimal):
+        return format(value.normalize(), "f")
+    if isinstance(value, datetime):
+        return (
+            value.replace(tzinfo=UTC).isoformat()
+            if value.tzinfo is None
+            else value.astimezone(UTC).isoformat()
+        )
+    return str(value)
+
+
+def credit_source_basis(records: Sequence[_SourceRecord]) -> str:
+    """Serialize the exact accepted credit source records, including an empty book."""
+    versions = [
+        [
+            None
+            if model is None
+            else {
+                column.key: cast(object, getattr(model, column.key))
+                for column in model.__table__.columns
+                if column.key not in ("created_at", "updated_at", "ingested_at")
+            }
+            for model in record
+        ]
+        for record in records
+        if record[1].position_type in CREDIT_POSITION_TYPES
+    ]
+    return json.dumps(
+        sorted(
+            versions, key=lambda version: json.dumps(version, sort_keys=True, default=_source_value)
+        ),
+        sort_keys=True,
+        default=_source_value,
+    )
+
+
+def require_credit_source_basis(official: str | None, current: str) -> None:
+    """BoG CRD (June 2018) ¶98, ¶123–124: stress only the officially derived source book."""
+    if official != current:
+        raise NotComputable(
+            OutcomeDetail(
+                state=OutcomeState.RECONCILIATION_FAILED,
+                metric_id="stressed_credit_rwa",
+                reason=(
+                    "The official facts are stale: their accepted loan and placement source "
+                    "versions differ from the current book. Re-derive the official facts for "
+                    "this reporting period before running enterprise stress."
+                ),
+                items=("source:credit_book",),
+            )
+        )
+
+
 def load_exposure_rows(
     db: Session,
     ctx: TenantContext,
@@ -203,54 +317,22 @@ def load_exposure_rows(
     The single place a SQLAlchemy ``Row`` from this query is unpacked. Ordered
     by source reference, so the list a caller receives is stable.
     """
-    # ``jurisdictions.base_currency`` deliberately raises rather than substituting
-    # (enterprise audit 2026-08-20 §6): ``banks.currency`` is NOT NULL with no
-    # default, so an unset value is a skipped decision at the creation site, not a
-    # Ghanaian bank.
-    base_currency = jurisdictions.base_currency(bank)
-    records = (
-        db.execute(
-            select(
-                CanonicalPositionSnapshot,
-                CanonicalPosition,
-                CanonicalCounterparty,
-                CanonicalProduct,
-            )
-            .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-            .outerjoin(
-                CanonicalCounterparty,
-                CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-            )
-            .outerjoin(
-                CanonicalProduct,
-                CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
-            )
-            .where(
-                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-                CanonicalPositionSnapshot.bank_id == bank.id,
-                CanonicalPositionSnapshot.as_of_date == as_of,
-                CanonicalPositionSnapshot.superseded_by.is_(None),
-                CanonicalPositionSnapshot.withdrawn_at.is_(None),
-                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-                CanonicalPosition.position_type.in_(position_types),
-            )
-            .order_by(CanonicalPositionSnapshot.source_reference)
-        )
-        .tuples()
-        .all()
-    )
+    return _exposure_rows(load_position_records(db, ctx, bank, as_of, position_types), bank)
 
+
+def load_credit_book(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[list[ExposureRow], str]:
+    """Load stress exposures and source versions from the same accepted record set."""
+    records = load_position_records(db, ctx, bank, as_of, CREDIT_POSITION_TYPES)
+    return _exposure_rows(records, bank), credit_source_basis(records)
+
+
+def _exposure_rows(records: Sequence[_SourceRecord], bank: Bank) -> list[ExposureRow]:
+    base_currency = jurisdictions.base_currency(bank)
     rows: list[ExposureRow] = []
     for record in records:
-        snapshot, position, counterparty, product = cast(
-            tuple[
-                CanonicalPositionSnapshot,
-                CanonicalPosition,
-                CanonicalCounterparty | None,
-                CanonicalProduct | None,
-            ],
-            record,
-        )
+        snapshot, position, counterparty, product = record
         attributes: dict[str, Any] = credit_classification_attributes(
             snapshot.attributes or {},
             counterparty.attributes or {} if counterparty is not None else {},
@@ -312,5 +394,9 @@ __all__ = [
     "STAGE_CREDIT_IMPAIRED",
     "ExposureRow",
     "canonical_group_key",
+    "credit_source_basis",
+    "load_credit_book",
+    "load_position_records",
+    "require_credit_source_basis",
     "load_exposure_rows",
 ]

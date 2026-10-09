@@ -842,6 +842,7 @@ def _fact(
 
 
 def _build_period_facts(period: BankReportingPeriod, index: int) -> list[BankFinancialFact]:
+    period.credit_source_basis = "[]"
     factors = _factors(index)
     loan_rows = [
         (category, _amount(millions, factors.loans), code)

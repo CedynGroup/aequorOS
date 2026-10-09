@@ -215,7 +215,9 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
         )
         assert bank is not None and period is not None
         session.flush()
-        specs, _, _ = _derive_specs(_load_canonical(session, MAKER, bank, _AS_OF), live=False)
+        canonical = _load_canonical(session, MAKER, bank, _AS_OF)
+        specs, _, _ = _derive_specs(canonical, live=False)
+        period.credit_source_basis = canonical.credit_source_basis
         session.execute(
             delete(BankFinancialFact).where(
                 BankFinancialFact.bank_id == bank_id,
@@ -257,11 +259,7 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     assert outcome["details"][0]["items"] == (
         ["exposure:loans:pse_public_institution:unclassified"]
         if failure == "foreign_pse"
-        else [
-            "fact:credit_exposure:corporate_unrated:RW100",
-            "fact:credit_exposure:sme_retail:RW100",
-            "fact:credit_exposure:sme_retail:RW100+RW20",
-        ]
+        else ["source:credit_book"]
     )
     assert outcome["details"][0]["state"] == (
         "missing_required_input" if failure == "foreign_pse" else "reconciliation_failed"

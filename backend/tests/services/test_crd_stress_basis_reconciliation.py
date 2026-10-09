@@ -1,8 +1,10 @@
 """BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139: reconcile before stress growth."""
 
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
 from decimal import Decimal
 from typing import TypedDict
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +12,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
@@ -27,7 +30,7 @@ from app.models import (
     CanonicalPositionSnapshot,
     RegulatoryRun,
 )
-from app.services import enterprise_stress
+from app.services import canonical_withdrawal, credit_exposure_book, enterprise_stress
 from app.services.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
@@ -67,7 +70,7 @@ from tests.services.test_crd_review_repairs import (
 from tests.services.test_derivation_fail_closed_defaults import (
     _row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.support.helpers import headers
+from tests.support.helpers import USER_2, headers
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139")
 
@@ -87,7 +90,7 @@ def test_changed_current_book_refuses_an_existing_official_bucket(
     if foreign:
         first, second, bank = (replace(row, currency="USD") for row in (first, second, bank))
     rows = [first, second, bank]
-    official = _capital_facts(rows)
+    official_source = json.dumps([asdict(row) for row in rows], default=str, sort_keys=True)
     changed = first if claim_type == "LOAN" else bank
     if change == "category":
         changed = replace(
@@ -102,20 +105,22 @@ def test_changed_current_book_refuses_an_existing_official_bucket(
         key = "specific_provision_ghs" if change == "provision" else "interest_in_suspense_ghs"
         changed = replace(changed, attributes={key: "100"})
     else:
-        official = [
-            replace(fact, risk_weight_code="RW20")
-            if fact.category == "corporate_unrated:RW100"
-            else fact
-            for fact in official
-        ]
+        official_source = json.dumps(
+            [{**asdict(row), "product_risk_weight_code": "RW20"} for row in rows],
+            default=str,
+            sort_keys=True,
+        )
     current = [changed, second, bank] if claim_type == "LOAN" else [first, second, changed]
     with pytest.raises(NotComputable) as refused:
-        _build_credit_exposures(
-            [_stress_row(row) for row in current], bog_capital_params(), capital_facts=official
+        credit_exposure_book.require_credit_source_basis(
+            official_source,
+            json.dumps([asdict(row) for row in current], default=str, sort_keys=True),
         )
     assert refused.value.details[0].state is OutcomeState.RECONCILIATION_FAILED
     assert "Re-derive the official facts" in str(refused.value)
     assert refused.value.details[0].items
+    current_source = json.dumps([asdict(row) for row in current], default=str, sort_keys=True)
+    credit_exposure_book.require_credit_source_basis(current_source, current_source)
     refreshed = _capital_facts(current)
     book = _build_credit_exposures(
         [_stress_row(row) for row in current], bog_capital_params(), capital_facts=refreshed
@@ -211,16 +216,26 @@ def test_zero_net_category_presence_is_part_of_the_official_basis(missing: bool)
     )
     official = _capital_facts([row])
     if missing:
-        official = [fact for fact in official if fact.category != "sme_retail:RW100"]
         with pytest.raises(NotComputable):
-            _build_credit_exposures(
-                [_stress_row(row)], bog_capital_params(), capital_facts=official
+            credit_exposure_book.require_credit_source_basis(
+                "[]", json.dumps([asdict(row)], default=str, sort_keys=True)
             )
     else:
         book = _build_credit_exposures(
             [_stress_row(row)], bog_capital_params(), capital_facts=official
         )
         assert book[0].credit_amount == Decimal("0")
+
+
+@pytest.mark.parametrize("official", [None, "[]"])
+def test_empty_source_book_requires_matching_recorded_provenance(official: str | None) -> None:
+    """BoG CRD (June 2018) ¶98: empty sources are distinct from unknown historic sources."""
+    if official is None:
+        with pytest.raises(NotComputable) as refused:
+            credit_exposure_book.require_credit_source_basis(official, "[]")
+        assert refused.value.details[0].state is OutcomeState.RECONCILIATION_FAILED
+    else:
+        credit_exposure_book.require_credit_source_basis(official, "[]")
 
 
 class _BottomUp(TypedDict):
@@ -245,7 +260,9 @@ def _refresh_credit_basis(session: Session, bank_id: str) -> None:
     )
     assert bank is not None and period is not None
     session.flush()
-    specs, _, _ = _derive_specs(_load_canonical(session, MAKER, bank, _AS_OF), live=False)
+    canonical = _load_canonical(session, MAKER, bank, _AS_OF)
+    specs, _, _ = _derive_specs(canonical, live=False)
+    period.credit_source_basis = canonical.credit_source_basis
     session.execute(
         delete(BankFinancialFact).where(
             BankFinancialFact.bank_id == bank_id,
@@ -294,12 +311,9 @@ def _observe_projection(monkeypatch: pytest.MonkeyPatch) -> list[EnterpriseProje
     return projections
 
 
-@pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
-def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
-    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """BoG CRD (June 2018) ¶98, ¶123, ¶138: 2,500 versus 2,000 RWA requires re-derivation."""
-    projections = _observe_projection(monkeypatch)
+def _prepare_credit_basis_run(
+    db_client: TestClient, db_session: Session, change: str
+) -> tuple[str, dict[str, object]]:
     bank_id = seed_bank(db_client)
     _seed_canonical_positions(bank_id)
     snapshots = list(
@@ -310,7 +324,11 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
     for snapshot in snapshots:
         position = db_session.get(CanonicalPosition, snapshot.position_id)
         assert position is not None
-        if position.source_reference == "LOAN/USD":
+        if position.source_reference == "LOAN/USD" or (
+            change == "withdrawal"
+            and position.position_type in ("LOAN", "INTERBANK_PLACEMENT")
+            and position.source_reference != "LOAN/CORP1"
+        ):
             db_session.delete(snapshot)
             db_session.flush()
             db_session.delete(position)
@@ -355,7 +373,7 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
     scenario_id = TypeAdapter(dict[str, object]).validate_json(scenario.text)["id"]
     assert isinstance(scenario_id, str)
     _approve_scenario(db_client, scenario_id, checker)
-    payload = {
+    payload: dict[str, object] = {
         "scenario_id": scenario_id,
         "reporting_period_id": period_id,
         "include_irr": False,
@@ -368,14 +386,10 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
         },
         "reason": "Compare neutral credit results.",
     }
-    initial = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
-    assert initial.status_code == 201, initial.text
-    _assert_neutral_rwa(TypeAdapter(_Run).validate_json(initial.text), projections[-1], "2500")
-    count_before = db_session.scalar(
-        select(func.count())
-        .select_from(RegulatoryRun)
-        .where(RegulatoryRun.bank_id == bank_id, RegulatoryRun.module == "enterprise_stress")
-    )
+    return bank_id, payload
+
+
+def _change_credit_source(db_session: Session, bank_id: str, change: str) -> None:
     snapshot = db_session.scalar(
         select(CanonicalPositionSnapshot).where(
             CanonicalPositionSnapshot.bank_id == bank_id,
@@ -389,8 +403,95 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
         )
     )
     assert snapshot is not None and bank_counterparty is not None
-    snapshot.counterparty_id = bank_counterparty.id
+    if change == "counterparty":
+        snapshot.counterparty_id = bank_counterparty.id
+    elif change == "amount":
+        snapshot.balance = Decimal("1100")
+        snapshot.attributes = {"balance_ghs": "1100"}
+    elif change == "replacement":
+        replacement = CanonicalPositionSnapshot(
+            id=uuid4(),
+            organization_id=snapshot.organization_id,
+            bank_id=snapshot.bank_id,
+            as_of_date=snapshot.as_of_date,
+            source_system=snapshot.source_system,
+            source_reference=snapshot.source_reference,
+            ingestion_batch_id=snapshot.ingestion_batch_id,
+            lineage_id=snapshot.lineage_id,
+            validation_status=snapshot.validation_status,
+            position_id=snapshot.position_id,
+            counterparty_id=snapshot.counterparty_id,
+            product_id=snapshot.product_id,
+            balance=snapshot.balance,
+            notional=snapshot.notional,
+            interest_rate=snapshot.interest_rate,
+            rate_type=snapshot.rate_type,
+            contractual_maturity=snapshot.contractual_maturity,
+            next_repricing_date=snapshot.next_repricing_date,
+            ifrs9_stage=snapshot.ifrs9_stage,
+            attributes=dict(snapshot.attributes),
+        )
+        snapshot.superseded_by = replacement.id
+        db_session.flush()
+        db_session.add(replacement)
+    elif change == "withdrawal":
+        bank = db_session.get(Bank, bank_id)
+        assert bank is not None
+        withdrawal = canonical_withdrawal.request_withdrawal(
+            db_session,
+            MAKER,
+            bank,
+            entity="position",
+            source_system=snapshot.source_system,
+            as_of_date=_AS_OF,
+            position_type="LOAN",
+            reason="Retire the final accepted loan.",
+            requested_by="maker@bank.test",
+        )
+        approved = canonical_withdrawal.approve_withdrawal(
+            db_session,
+            TenantContext(
+                organization_id=MAKER.organization_id, actor_user_id=USER_2, authorization_version=1
+            ),
+            bank,
+            withdrawal.id,
+            approved_by="checker@bank.test",
+        )
+        assert approved.status == "applied"
     db_session.commit()
+
+
+@pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+@pytest.mark.parametrize(
+    "change", ["counterparty", "amount", "replacement", "withdrawal", "unchanged"]
+)
+def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """BoG CRD (June 2018) ¶98, ¶123, ¶138: 2,500 versus 2,000 RWA requires re-derivation."""
+    projections = _observe_projection(monkeypatch)
+    bank_id, payload = _prepare_credit_basis_run(db_client, db_session, change)
+    initial = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
+    assert initial.status_code == 201, initial.text
+    initial_rwa = "1000" if change == "withdrawal" else "2500"
+    _assert_neutral_rwa(TypeAdapter(_Run).validate_json(initial.text), projections[-1], initial_rwa)
+    initial_run = TypeAdapter(dict[str, object]).validate_json(initial.text)
+    initial_id = initial_run["run_id"]
+    assert isinstance(initial_id, str)
+    initial_stored = db_session.get(RegulatoryRun, UUID(initial_id))
+    assert initial_stored is not None
+    initial_hash = initial_stored.input_hash
+    count_before = db_session.scalar(
+        select(func.count())
+        .select_from(RegulatoryRun)
+        .where(RegulatoryRun.bank_id == bank_id, RegulatoryRun.module == "enterprise_stress")
+    )
+    _change_credit_source(db_session, bank_id, change)
+    if change == "unchanged":
+        repeat = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
+        assert repeat.status_code == 201, repeat.text
+        _assert_neutral_rwa(TypeAdapter(_Run).validate_json(repeat.text), projections[-1], "2500")
+        return
     refused = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
     assert refused.status_code == 409, refused.text
     assert len(projections) == 1
@@ -399,10 +500,7 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
     ]["outcome"]
     assert outcome["blocks_filing"] is True
     assert outcome["details"][0]["state"] == "reconciliation_failed"
-    assert outcome["details"][0]["items"] == [
-        "fact:credit_exposure:corporate_unrated:RW100",
-        "fact:credit_exposure:loans:banks:RW50",
-    ]
+    assert outcome["details"][0]["items"] == ["source:credit_book"]
     assert "Re-derive the official facts" in refused.text
     assert (
         db_session.scalar(
@@ -412,8 +510,23 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
         )
         == count_before
     )
+    if change == "withdrawal":
+        bank = db_session.get(Bank, bank_id)
+        assert bank is not None
+        book, basis = credit_exposure_book.load_credit_book(db_session, MAKER, bank, _AS_OF)
+        assert book == [] and basis == "[]"
+        return
     _refresh_credit_basis(db_session, bank_id)
     repaired = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
     assert repaired.status_code == 201, repaired.text
     assert len(projections) == 2
-    _assert_neutral_rwa(TypeAdapter(_Run).validate_json(repaired.text), projections[-1], "2000")
+    expected_rwa = {"counterparty": "2000", "amount": "2600", "replacement": "2500"}[change]
+    _assert_neutral_rwa(
+        TypeAdapter(_Run).validate_json(repaired.text), projections[-1], expected_rwa
+    )
+    if change == "replacement":
+        repaired_id = TypeAdapter(dict[str, object]).validate_json(repaired.text)["run_id"]
+        assert isinstance(repaired_id, str)
+        repaired_stored = db_session.get(RegulatoryRun, UUID(repaired_id))
+        assert repaired_stored is not None
+        assert repaired_stored.input_hash == initial_hash

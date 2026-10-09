@@ -235,7 +235,9 @@ def _seed_canonical_positions(bank_id: str) -> None:
             )
         )
         assert bank is not None and period is not None
-        specs, _, _ = _derive_specs(_load_canonical(session, MAKER, bank, _AS_OF), live=True)
+        canonical = _load_canonical(session, MAKER, bank, _AS_OF)
+        specs, _, _ = _derive_specs(canonical, live=True)
+        period.credit_source_basis = canonical.credit_source_basis
         session.execute(
             delete(BankFinancialFact).where(
                 BankFinancialFact.bank_id == bank_id,

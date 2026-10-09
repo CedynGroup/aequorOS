@@ -1398,7 +1398,7 @@
   "reportPrivateUsage": 2
  },
  "app.services.fact_derivation": {
-  "reportAny": 44,
+  "reportAny": 36,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 4

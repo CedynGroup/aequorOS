@@ -73,3 +73,43 @@ def test_migration_admits_credit_basis_without_changing_accounting_rows(
                 connection.execute(text(f"INSERT INTO {table} VALUES ('credit_exposure', 750)"))
             assert connection.execute(text(f"SELECT amount FROM {table}")).scalar_one() == 1000
     engine.dispose()
+
+
+def test_credit_source_provenance_migration_preserves_periods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BoG CRD (June 2018) ¶98: unknown historic source basis stays unknown."""
+    path = (
+        Path(__file__).resolve().parents[2] / "alembic/versions/202610080086_credit_source_basis.py"
+    )
+    spec = spec_from_file_location("credit_source_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    upgrade = cast(Callable[[], None], migration.upgrade)
+    downgrade = cast(Callable[[], None], migration.downgrade)
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE bank_reporting_periods (id TEXT PRIMARY KEY)"))
+        connection.execute(text("INSERT INTO bank_reporting_periods VALUES ('existing')"))
+        monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(connection)))
+        upgrade()
+        assert (
+            connection.execute(
+                text("SELECT credit_source_basis FROM bank_reporting_periods WHERE id='existing'")
+            ).scalar_one()
+            is None
+        )
+        connection.execute(text("UPDATE bank_reporting_periods SET credit_source_basis='[]'"))
+        assert (
+            connection.execute(
+                text("SELECT credit_source_basis FROM bank_reporting_periods")
+            ).scalar_one()
+            == "[]"
+        )
+        downgrade()
+        assert (
+            connection.execute(text("SELECT id FROM bank_reporting_periods")).scalar_one()
+            == "existing"
+        )
+    engine.dispose()
