@@ -39,7 +39,7 @@ jobs:
       # libraries are apt packages outside the cache and install either way.
       - name: Cache the Playwright browsers
         id: playwright-browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('backend/dashboard/package.json') }}
