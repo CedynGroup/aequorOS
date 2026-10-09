@@ -320,7 +320,12 @@ on one canonical store — the live tier for intraday awareness, the official ti
   ingested current FX quote; full FX analysis refuses until its history is supplied.
   `app/live/fx_book.py` checks facts and filing runs against accepted positions at the exact
   source date, so older partial runs cannot supply DBK, FX-NOP or BSD13 totals. Dashboard
-  coverage uses one scoped query for the whole window. The NOP-only workbench can compute
+  coverage uses one scoped, database-deduplicated currency projection for the whole window,
+  including both FX-hedge legs without hydrating positions, balances, products or counterparties.
+  Stored trend points are checked against each date's accepted currency universe and official
+  FX facts; incomplete historical points are omitted while direct selection still names the
+  missing currency in its refusal. A complete newer or current headline remains available.
+  The NOP-only workbench can compute
   from complete valued positions without a VaR history. NOF, long-position and contingent
   rules are separate from this coverage check.
   Capital FX aggregation has its own writer and retains its existing basis;

@@ -193,6 +193,14 @@ class _FxDashboardBatch:
     shocks: PrefetchedActiveParams[ParamStressShock]
     currencies: dict[date, set[str]]
 
+    def require_run_coverage(self, period: BankReportingPeriod, run: RegulatoryRun) -> None:
+        expected = self.currencies[period.period_end] | {
+            str(fact.attributes.get("currency") or fact.category).strip().upper()
+            for fact in self.facts.get(period.id, [])
+            if fact.fact_group == "fx_position"
+        }
+        require_run_currency_coverage(cast(dict[str, object], run.metrics), expected)
+
 
 @dataclass(frozen=True)
 class _FxAnalysis:
@@ -252,12 +260,7 @@ def get_fx_dashboard(
     latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     if latest_run is not None:
         try:
-            expected = batch.currencies[period.period_end] | {
-                str(fact.attributes.get("currency") or fact.category).strip().upper()
-                for fact in batch.facts.get(period.id, [])
-                if fact.fact_group == "fx_position"
-            }
-            require_run_currency_coverage(cast(dict[str, object], latest_run.metrics), expected)
+            batch.require_run_coverage(period, latest_run)
         except NotComputable as exc:
             raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
         metrics = _metrics_from_run(latest_run)
@@ -967,6 +970,10 @@ def _build_trend(
     for period in trend_periods:
         run = batch.runs.get(period.id)
         if run is not None:
+            try:
+                batch.require_run_coverage(period, run)
+            except NotComputable:
+                continue
             metrics = run.metrics
             points.append(
                 FxTrendPointRead(

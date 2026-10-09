@@ -1,16 +1,23 @@
 """Notice BG/FMD/2026/07 ¶1(a)–(b): every currency enters the NOP basis."""
 
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import cast
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.engine import Result
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Executable
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.fx.engine import compute_nop
+from app.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
+from app.live.public import required_fx_currencies_by_date
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -31,12 +38,13 @@ from app.services.regulatory_reporting.bog_forms.sources import ResolveContext
 from app.services.regulatory_reporting.bog_forms.sources_ext import bsd13
 from app.services.regulatory_reporting.registry import get_definition
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.live_plane import materialize_live_plane
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.support.factories.canonical import seed_canonical_fixture
-from tests.support.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 pytestmark = pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
 
@@ -227,6 +235,186 @@ def test_stored_dashboard_refuses_a_partial_currency_book(db_session: Session) -
     with pytest.raises(ModuleDataUnavailable) as exc:
         regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, period.id)
     assert "CHF" in str(exc.value)
+
+
+@pytest.mark.parametrize("current", [False, True])
+@pytest.mark.parametrize("source", ["accepted_position", "official_fact"])
+def test_dashboard_omits_partial_older_runs_without_blocking_complete_headline(
+    db_session: Session, current: bool, source: str
+) -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): a trend cannot disclose a partial currency book."""
+    bank, latest, ctx = _book(db_session)
+    older = db_session.scalars(
+        select(BankReportingPeriod)
+        .where(BankReportingPeriod.bank_id == bank.id)
+        .order_by(BankReportingPeriod.period_end.desc())
+        .offset(1)
+        .limit(1)
+    ).one()
+    old_run = regulatory_fx._create_and_execute(  # pyright: ignore[reportPrivateUsage]
+        db_session, ctx, bank, older, "baseline"
+    )
+    assert old_run.status == "succeeded"
+    before = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, latest.id)
+    assert older.id in {point.reporting_period_id for point in before.trend}
+    if source == "accepted_position":
+        _add_unrepresented_currency(db_session, bank, older)
+    else:
+        db_session.add(
+            BankFinancialFact(
+                organization_id=ORG_1,
+                bank_id=bank.id,
+                reporting_period_id=older.id,
+                fact_group="fx_position",
+                category="CHF",
+                currency="CHF",
+                amount=Decimal("12850"),
+                attributes={"currency": "CHF", "net_ccy": "1000", "spot_ghs": "12.85"},
+            )
+        )
+        db_session.flush()
+    if current:
+        materialize_live_plane(db_session, organization_id=ORG_1, bank_id=bank.id)
+    after = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, None if current else latest.id)
+    assert after.metrics == before.metrics
+    assert after.stored is not current
+    assert latest.id in {point.reporting_period_id for point in after.trend}
+    assert [point for point in after.trend if point.reporting_period_id != older.id] == [
+        point for point in before.trend if point.reporting_period_id != older.id
+    ]
+    assert older.id not in {point.reporting_period_id for point in after.trend}
+    with pytest.raises(ModuleDataUnavailable) as exc:
+        regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, older.id)
+    assert "CHF" in str(exc.value)
+
+
+def test_currency_projection_is_compact_scoped_and_covers_both_hedge_legs(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): accepted exact-date coverage uses currency fields."""
+    bank, period, ctx = _book(db_session)
+    as_of = period.period_end
+    other_date = as_of - timedelta(days=1)
+    peers = [
+        Bank(
+            organization_id=org,
+            name=f"Coverage peer {org}",
+            short_name="Coverage peer",
+            currency=bank.currency,
+            jurisdiction_code=bank.jurisdiction_code,
+            institution_type=bank.institution_type,
+            license_type=bank.license_type,
+        )
+        for org in (ORG_1, ORG_2)
+    ]
+    db_session.add_all(peers)
+    db_session.flush()
+    for peer in peers:
+        seed_canonical_fixture(
+            db_session, organization_id=peer.organization_id, bank_id=peer.id, as_of=as_of
+        )
+
+    def add(
+        ref: str,
+        currency: str,
+        position_type: str = "LOAN",
+        *,
+        day: date = as_of,
+        owner: Bank = bank,
+        attrs: dict[str, object] | None = None,
+        validation: str = "accepted",
+        retired: bool = False,
+        withdrawn: bool = False,
+    ) -> None:
+        owner_batch = db_session.scalars(
+            select(IngestionBatch).where(IngestionBatch.bank_id == owner.id)
+        ).first()
+        assert owner_batch is not None
+        owner_lineage = db_session.scalars(
+            select(LineageRecord).where(LineageRecord.ingestion_batch_id == owner_batch.id)
+        ).first()
+        assert owner_lineage is not None
+        position = CanonicalPosition(
+            organization_id=owner.organization_id,
+            bank_id=owner.id,
+            as_of_date=day,
+            source_reference=ref,
+            source_system="API_PUSH",
+            ingestion_batch_id=owner_batch.id,
+            lineage_id=owner_lineage.id,
+            currency=currency,
+            position_type=position_type,
+            validation_status="accepted",
+        )
+        db_session.add(position)
+        db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                organization_id=owner.organization_id,
+                bank_id=owner.id,
+                as_of_date=day,
+                source_reference=ref,
+                source_system="API_PUSH",
+                ingestion_batch_id=owner_batch.id,
+                lineage_id=owner_lineage.id,
+                position_id=position.id,
+                balance=Decimal("1000"),
+                attributes=attrs or {},
+                validation_status=validation,
+                superseded_by=uuid4() if retired else None,
+                withdrawn_at=datetime.now(UTC) if withdrawn else None,
+            )
+        )
+
+    for position_type in (*FX_ASSET_TYPES, *FX_LIABILITY_TYPES):
+        for index in range(10):
+            add(f"{position_type}/DOMESTIC/{index}", "GHS", position_type)
+            add(
+                f"{position_type}/FOREIGN/{index}",
+                "USD",
+                position_type,
+                attrs={"balance_ghs": str(index)},
+            )
+    add("HEDGE/LEGS", "GHS", "FX_HEDGE", attrs={"sell_currency": "CHF", "buy_currency": "JPY"})
+    add("HEDGE/DEFAULTS", "EUR", "FX_HEDGE", validation="warning")
+    add("OTHER/DATE", "NOK", day=other_date)
+    add("OUTSIDE/DATE", "CAD", day=as_of + timedelta(days=1))
+    add("PENDING", "AUD", validation="pending")
+    add("SUPERSEDED", "GBP", retired=True)
+    add("WITHDRAWN", "CNY", withdrawn=True)
+    add("OTHER/BANK", "SEK", owner=peers[0])
+    add("OTHER/ORG", "DKK", owner=peers[1])
+    add("OTHER/TYPE", "ZAR", "INTEREST_RATE_SWAP")
+    db_session.flush()
+    bank_id = bank.id
+    db_session.expunge_all()
+    bank = db_session.get(Bank, bank_id)
+    assert bank is not None
+    execute = db_session.execute
+    projected: list[tuple[object, ...]] = []
+    calls: list[int] = []
+
+    def capture_projection(statement: Executable) -> Result[tuple[object, ...]]:
+        calls.append(1)
+        result = cast(Result[tuple[object, ...]], execute(statement)).freeze()
+        projected.extend(cast(list[tuple[object, ...]], result.data))
+        return result()
+
+    monkeypatch.setattr(db_session, "execute", capture_projection)
+    currencies = required_fx_currencies_by_date(db_session, ctx, bank, (as_of, other_date))
+    assert currencies == {as_of: {"USD", "CHF", "JPY", "EUR"}, other_date: {"NOK"}}
+    expected = {
+        (as_of, position_type, "USD", None, None)
+        for position_type in (*FX_ASSET_TYPES, *FX_LIABILITY_TYPES)
+    } | {
+        (as_of, "FX_HEDGE", "GHS", "CHF", "JPY"),
+        (as_of, "FX_HEDGE", "EUR", None, None),
+        (other_date, "LOAN", "NOK", None, None),
+    }
+    assert len(calls) == 1
+    assert len(projected) == len(expected)
+    assert set(projected) == expected
+    assert list(db_session.identity_map.values()) == [bank]
 
 
 @pytest.mark.parametrize("return_code", ["DBK-DAILY", "FX-NOP"])

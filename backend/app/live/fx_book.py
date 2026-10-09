@@ -4,17 +4,18 @@ from collections.abc import Collection
 from datetime import date
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.tenancy import TenantContext
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.domain.positions.fx import (
     FX_POSITION_TYPES,
     position_currencies,
     require_currency_coverage,
 )
 from app.identity.public import Bank
-from app.live.position_book import load_position_records
+from app.live.position_book import INCLUDED_VALIDATION_STATUSES
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_run import RegulatoryRun
 from app.policy.public import base_currency
@@ -30,10 +31,46 @@ def required_fx_currencies_by_date(
 ) -> dict[date, set[str]]:
     """Load accepted currency coverage for the dashboard window in one query."""
     currencies: dict[date, set[str]] = {as_of: set() for as_of in dates}
-    for snapshot, position, _, _ in load_position_records(db, ctx, bank, dates, FX_POSITION_TYPES):
-        currencies[snapshot.as_of_date].update(
+    if not currencies:
+        return currencies
+    hedge = CanonicalPosition.position_type == "FX_HEDGE"
+    rows = db.execute(
+        select(
+            CanonicalPositionSnapshot.as_of_date,
+            CanonicalPosition.position_type,
+            CanonicalPosition.currency,
+            case((hedge, CanonicalPositionSnapshot.attributes["sell_currency"].as_string())),
+            case((hedge, CanonicalPositionSnapshot.attributes["buy_currency"].as_string())),
+        )
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPosition.organization_id == ctx.organization_id,
+            CanonicalPosition.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date.in_(dates),
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+            CanonicalPosition.position_type.in_(FX_POSITION_TYPES),
+            or_(
+                hedge,
+                func.upper(func.trim(CanonicalPosition.currency)).not_in(
+                    (base_currency(bank).strip().upper(), "")
+                ),
+            ),
+        )
+        .distinct()
+    ).tuples()
+    for as_of, position_type, currency, sell, buy in cast(
+        Collection[tuple[date, str, str, str | None, str | None]], rows.all()
+    ):
+        currencies[as_of].update(
             position_currencies(
-                position.position_type, position.currency, snapshot.attributes, base_currency(bank)
+                position_type,
+                currency,
+                {"sell_currency": sell, "buy_currency": buy},
+                base_currency(bank),
             )
         )
     return currencies
