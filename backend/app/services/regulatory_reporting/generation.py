@@ -66,7 +66,10 @@ from app.services.regulatory_reporting.common import (
     read_package,
     require_actor,
 )
-from app.services.regulatory_reporting.eligibility import resolve_eligibility
+from app.services.regulatory_reporting.eligibility import (
+    InstitutionEligibility,
+    resolve_eligibility,
+)
 from app.services.regulatory_reporting.provenance import (
     UNCLASSIFIED_STATUS,
     ReportAuthority,
@@ -429,6 +432,7 @@ def _generate_package(
         ctx,
         bank,
         definition,
+        eligibility=eligibility,
         reporting_date=payload.reporting_date,
         snapshot=generated.snapshot,
         source_runs=generated.source_runs,
@@ -611,6 +615,7 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         ctx,
         bank,
         definition,
+        eligibility=eligibility,
         reporting_date=reporting_date,
         snapshot=snapshot,
         source_runs=built.source_runs,
@@ -926,6 +931,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     bank: Bank,
     definition: ReturnDefinition,
     *,
+    eligibility: InstitutionEligibility,
     reporting_date: date,
     snapshot: dict[str, Any],
     source_runs: list[dict[str, Any]],
@@ -969,6 +975,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
         )
         snapshot["provenance"] = build_engine_provenance(
             definition=definition,
+            eligibility=eligibility,
             bank=bank,
             effective_date=reporting_date,
             runs=runs,

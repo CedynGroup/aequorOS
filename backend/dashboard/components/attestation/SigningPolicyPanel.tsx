@@ -121,7 +121,7 @@ export default function SigningPolicyPanel() {
 function SigningPolicyPanelInner() {
   const { bank } = useBankContext();
   const policiesQuery = useSigningPolicies();
-  const templatesQuery = useReturnTemplates();
+  const templatesQuery = useReturnTemplates(bank?.id);
   const upsert = useUpsertSigningPolicy();
 
   const [form, setForm] = useState<FormState>(emptyForm);

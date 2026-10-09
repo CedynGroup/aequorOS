@@ -83,8 +83,8 @@ from app.domain.authority.registry import (
 from app.domain.regulatory_instruments import (
     InstrumentStatus,
     instrument_status_label,
-    instrument_status_on,
 )
+from app.services.regulatory_reporting.eligibility import InstitutionEligibility
 from app.services.regulatory_reporting.registry import ReturnDefinition
 
 __all__ = [
@@ -733,9 +733,10 @@ def _fact_generation(runs: Sequence[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_engine_provenance(
+def build_engine_provenance(  # noqa: PLR0913
     *,
     definition: ReturnDefinition,
+    eligibility: InstitutionEligibility,
     bank: Any,
     effective_date: date,
     runs: Sequence[Any],
@@ -752,10 +753,8 @@ def build_engine_provenance(
         authority=authority,
         effective_date=effective_date,
         template_id=definition.template_id,
-        instrument_status=instrument_status_on(
-            definition.instrument_status, definition.effective_from, effective_date
-        ),
-        instrument_effective_from=definition.effective_from,
+        instrument_status=eligibility.instrument_status(definition, effective_date),
+        instrument_effective_from=eligibility.effective_from(definition),
         instrument_citation=definition.directive_citation,
         source_runs=entries,
         source_runs_rationale=(None if entries else SOURCE_RUNS_RATIONALE.get(authority)),
@@ -772,6 +771,7 @@ def build_engine_provenance(
 def build_template_provenance(  # noqa: PLR0913 — one keyword per provenance dimension
     *,
     definition: ReturnDefinition,
+    eligibility: InstitutionEligibility,
     bank: Any,
     effective_date: date,
     form_code: str,
@@ -793,10 +793,8 @@ def build_template_provenance(  # noqa: PLR0913 — one keyword per provenance d
         authority=ReportAuthority.TEMPLATE_FORMULA,
         effective_date=effective_date,
         template_id=definition.template_id,
-        instrument_status=instrument_status_on(
-            definition.instrument_status, definition.effective_from, effective_date
-        ),
-        instrument_effective_from=definition.effective_from,
+        instrument_status=eligibility.instrument_status(definition, effective_date),
+        instrument_effective_from=eligibility.effective_from(definition),
         instrument_citation=definition.directive_citation,
         authority_counts=dict(authority_counts),
         source_runs=[],

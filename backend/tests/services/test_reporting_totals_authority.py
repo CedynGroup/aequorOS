@@ -45,6 +45,7 @@ from app.schemas.regulatory_reporting import (
 from app.services.regulatory_reporting import generation, validation, workflow
 from app.services.regulatory_reporting.bog_forms.catalog import form_spec
 from app.services.regulatory_reporting.bog_forms.layout import load_layout
+from app.services.regulatory_reporting.eligibility import InstitutionEligibility
 from app.services.regulatory_reporting.provenance import (
     ReportAuthority,
     build_template_provenance,
@@ -183,6 +184,13 @@ def test_the_declaration_is_available_to_every_registered_bog_return() -> None:
     assert len(codes) == 23, codes  # noqa: PLR2004 — BSD1 … BSD17, 23 registered returns
     for code in codes:
         provenance = build_template_provenance(
+            eligibility=InstitutionEligibility(
+                bank_id=SAMPLE_BANK_ID,
+                institution_class="bank",
+                jurisdiction_code="GH",
+                regulator="BOG",
+                as_of=PERIOD_END,
+            ),
             definition=REGISTRY[code],
             bank=_STUB_BANK,
             effective_date=PERIOD_END,
@@ -454,6 +462,13 @@ def test_the_bog_generator_and_the_rule_agree_on_the_declaration() -> None:
     something else) is the exact regression that made 23 returns unfileable.
     """
     provenance = build_template_provenance(
+        eligibility=InstitutionEligibility(
+            bank_id=SAMPLE_BANK_ID,
+            institution_class="bank",
+            jurisdiction_code="GH",
+            regulator="BOG",
+            as_of=PERIOD_END,
+        ),
         definition=REGISTRY["BSD2"],
         bank=_STUB_BANK,
         effective_date=PERIOD_END,

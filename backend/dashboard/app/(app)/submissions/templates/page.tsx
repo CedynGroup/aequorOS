@@ -24,11 +24,13 @@ import {
   FidelityPill,
   TEMPLATE_SECTIONS,
 } from '@/components/submissions/shared';
+import { useBankContext } from '@/components/shell/BankContext';
 import { useReturnTemplates } from '@/lib/api/hooks';
 import { centralBankName } from '@/lib/format';
 
 export default function TemplatesPage() {
-  const query = useReturnTemplates();
+  const { bank } = useBankContext();
+  const query = useReturnTemplates(bank?.id);
   const templates = query.data?.templates ?? [];
 
   return (

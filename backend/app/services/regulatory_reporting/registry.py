@@ -439,11 +439,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="IRRBB-PILOT",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="irrbb",
             title="IRRBB Pilot Return (Repricing Gap, ΔEVE & ΔNII by Shock)",
             directive_citation=(
                 "Guideline on Management and Measurement of IRRBB (exposure draft, "
-                "Feb 2026; effective 1 Jan 2027; one-year pilot with quarterly "
+                "Feb 2026; effective 1 Jan 2027 if final; one-year pilot with quarterly "
                 "reports from publication, ¶10). Appendix IV Table 8 ΔEVE/ΔNII grid "
                 "is published; engine shocks are Basel ±200 bp pending alignment to "
                 "the prescribed GHS ±450 bp standardised framework."
@@ -459,6 +461,8 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-IRRBB-QUARTERLY",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="sdi",
             title="SDI IRRBB Quarterly Pilot Return (Appendix IV)",
             directive_citation=(
@@ -635,6 +639,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # refuses them by name (``icaap_generated_by_freeze``).
         ReturnDefinition(
             code="ICAAP-REPORT",
+            instrument_status="exposure_draft",
             family="icaap",
             title="Internal Capital Adequacy Assessment Process (ICAAP) Report",
             directive_citation=(
@@ -699,6 +704,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-UPDATE",
+            instrument_status="exposure_draft",
             family="icaap",
             title="ICAAP Update (material change)",
             directive_citation=(
@@ -747,6 +753,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-DISCLOSURE",
+            instrument_status="exposure_draft",
             family="icaap",
             title="ICAAP Public Disclosure",
             directive_citation=(
@@ -781,14 +788,16 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-STRESS",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="icaap_stress",
             title="ICAAP Data Companion & Stress Summary",
             directive_citation=(
-                "ICAAP Guideline (Feb 2026) ¶72 — annual submission no later than "
+                "BoG ICAAP Guideline (Exposure Draft, February 2026) ¶72 — annual submission no later than "
                 "three months after year-end with Board resolutions; Stress Testing "
-                "Guideline (Feb 2026) ¶67 — stress results within the ICAAP 'by end "
+                "Guideline (Exposure Draft, February 2026) ¶67 — stress results within the ICAAP 'by end "
                 "of March of the ensuing year', Appendix II Tables 1–6 published. "
-                "Both effective 1 Jan 2027."
+                "Both effective 1 Jan 2027 if final."
             ),
             frequency="annual",
             # CONFIRMED: end of March of the ensuing year (Stress Testing
@@ -805,10 +814,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-STRESS-APPENDIX2",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="icaap_stress",
             title="ICAAP Stress Test — Appendix II Tables 1–6",
             directive_citation=(
-                "Stress Testing Guideline (Feb 2026) ¶67 — RFIs submit annual stress-test "
+                "BoG Stress Testing Guideline (Exposure Draft, February 2026) ¶67 — RFIs "
+                "submit annual stress-test "
                 "results to BoG as part of the ICAAP in the Appendix II formats by end of "
                 "March of the ensuing year; ¶68 / Part IV — pre/post-stress regulatory "
                 "capital projected ≥3 years; Appendix II Tables 1–6 (Summary Results, "
@@ -818,7 +830,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
                 "exposure class (allocated by credit-RWA share where exposure-level data "
                 "is absent); the ¶67(g) currency / business-line / sector / borrower-group "
                 "vulnerability analysis is not provided in this return and belongs in the "
-                "ICAAP narrative. Board-attested per ¶20. Effective 1 Jan 2027."
+                "ICAAP narrative. Board-attested per ¶20. Effective 1 Jan 2027 if final."
             ),
             frequency="annual",
             # CONFIRMED: end of March of the ensuing year (Stress Testing
@@ -841,6 +853,8 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-STRESS-ANNUAL",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="sdi",
             title="SDI Annual Stress Test Return (Proportionate Appendix II)",
             directive_citation=(
@@ -879,12 +893,15 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # gated: its official layout is still unpublished.
         ReturnDefinition(
             code="LAS-QUARTERLY",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="liquidity",
             title="Quarterly Liquidity Adequacy Statement (LAS)",
             directive_citation=(
-                "LRMD 2026 ¶12 — the Board files a quarterly Liquidity Adequacy "
+                "BoG LRMD (Exposure Draft, February 2026) ¶12 — the Board files a quarterly "
+                "Liquidity Adequacy "
                 "Statement to the regulator, ILAAP-supported and embedded in the "
-                "annual ICAAP report; quarterly from 2027. No template is "
+                "annual ICAAP report; quarterly from 2027 if final. No template is "
                 "published; generation is gated until the form is obtained. The "
                 "Board-level signing chain is an open practitioner question "
                 "(lrmd_gap_analysis.md §9 Q12). The quarterly ILAAP snapshot "
@@ -903,10 +920,12 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="STRESS-PACK",
+            instrument_status="exposure_draft",
             family="stress",
             title="Stress Test Output Report pack",
             directive_citation=(
-                "Stress Testing Guideline (Feb 2026) ¶¶24–27 — stress-test results "
+                "BoG Stress Testing Guideline (Exposure Draft, February 2026) ¶¶24–27 — "
+                "stress-test results "
                 "must be reported to Board and senior management with remedial "
                 "actions; the standardized output-report structure (traffic lights, "
                 "pro-forma capital, ratio evolution, attribution, recommended "

@@ -3103,11 +3103,11 @@ export function useReturnAnchors(
   });
 }
 
-export function useReturnTemplates() {
+export function useReturnTemplates(bankId?: string) {
   return useQuery({
-    queryKey: ["rr-templates"],
+    queryKey: ["rr-templates", bankId],
     queryFn: () =>
-      apiCall(() => regulatoryReportingApi.listReturnTemplates({})),
+      apiCall(() => regulatoryReportingApi.listReturnTemplates({ bankId })),
     staleTime: 10 * 60_000,
   });
 }

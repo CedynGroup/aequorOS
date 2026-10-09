@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod
 from app.services.regulatory_reporting.common import unvalidated_book_finding
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.provenance import (
     ReportAuthority,
     build_template_provenance,
@@ -287,6 +288,7 @@ def generate_bog_form(
     result = compute_with_dependencies(db, ctx, bank, period, spec.code)
     provenance = build_template_provenance(
         definition=definition,
+        eligibility=resolve_eligibility(db, ctx, bank, as_of=period.period_end),
         bank=bank,
         effective_date=period.period_end,
         form_code=spec.code,

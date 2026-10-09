@@ -41,7 +41,7 @@ export default function ReturnVersionCompare({
 }: {
   bankId: string | undefined;
 }) {
-  const templatesQuery = useReturnTemplates();
+  const templatesQuery = useReturnTemplates(bankId);
   const templates = useMemo(
     () => templatesQuery.data?.templates ?? [],
     [templatesQuery.data],

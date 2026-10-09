@@ -18,6 +18,7 @@ from app.schemas.regulatory_reporting import (
     ReturnTemplateRead,
 )
 from app.services.regulatory_reporting import family_access
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_package_or_404,
@@ -124,7 +125,15 @@ def get_package(
     return read_package(db, package)
 
 
-def list_return_templates(*, as_of: date | None = None) -> ReturnTemplateListRead:
+def list_return_templates(
+    db: Session, ctx: TenantContext, bank_id: str | None = None, *, as_of: date | None = None
+) -> ReturnTemplateListRead:
+    today = as_of or date.today()
+    bank = get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=today) if bank is not None else None
+    hidden: frozenset[str] = (
+        family_access.hidden_families(db, ctx, bank) if bank is not None else frozenset()
+    )
     return ReturnTemplateListRead(
         templates=[
             ReturnTemplateRead(
@@ -133,10 +142,18 @@ def list_return_templates(*, as_of: date | None = None) -> ReturnTemplateListRea
                 title=definition.title,
                 regulator=definition.regulator,
                 directive_citation=definition.directive_citation,
-                instrument_status=instrument_status_on(
-                    definition.instrument_status, definition.effective_from, as_of or date.today()
+                instrument_status=(
+                    eligibility.instrument_status(definition, today)
+                    if eligibility is not None
+                    else instrument_status_on(
+                        definition.instrument_status, definition.effective_from, today
+                    )
                 ),
-                effective_from=definition.effective_from,
+                effective_from=(
+                    eligibility.effective_from(definition)
+                    if eligibility is not None
+                    else definition.effective_from
+                ),
                 frequency=definition.frequency,
                 generator=definition.generator,
                 template_id=definition.template_id,
@@ -147,5 +164,6 @@ def list_return_templates(*, as_of: date | None = None) -> ReturnTemplateListRea
                 ),
             )
             for definition in REGISTRY.values()
+            if definition.family not in hidden
         ]
     )

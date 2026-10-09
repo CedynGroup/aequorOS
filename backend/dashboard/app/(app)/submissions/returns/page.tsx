@@ -214,7 +214,7 @@ function ReturnsWorkspace() {
     readOnly: inspection.impersonating,
   });
 
-  const templatesQuery = useReturnTemplates();
+  const templatesQuery = useReturnTemplates(bankId);
   const templates = useMemo(
     () =>
       (templatesQuery.data?.templates ?? []).filter((template) =>

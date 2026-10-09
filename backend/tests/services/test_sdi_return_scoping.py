@@ -77,13 +77,11 @@ def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in result.obligations} == {
-        "SDI-STRESS-ANNUAL",
-        "SDI-IRRBB-QUARTERLY",
         # Credit PR-6: the Notice 2025/23 monthly NPL report binds banks AND
         # SDIs - the deliberate first return family the two classes share.
         "NPL-MONTHLY",
     }
-    assert {obligation.return_family for obligation in result.obligations} == {"sdi", "credit"}
+    assert {obligation.return_family for obligation in result.obligations} == {"credit"}
     assert result.coverage_note is not None
     assert "SDI-LMT-MONTHLY" in result.coverage_note
 
@@ -94,8 +92,6 @@ def test_finance_house_sees_the_same_sdi_return_calendar(db_session: Session) ->
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in result.obligations} == {
-        "SDI-STRESS-ANNUAL",
-        "SDI-IRRBB-QUARTERLY",
         # Credit PR-6: the Notice 2025/23 monthly NPL report binds banks AND
         # SDIs - the deliberate first return family the two classes share.
         "NPL-MONTHLY",

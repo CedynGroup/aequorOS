@@ -723,9 +723,10 @@ def list_submission_events(  # noqa: PLR0913
     response_model=ReturnTemplateListRead,
     operation_id="listReturnTemplates",
 )
-def list_return_templates(ctx: Tenant) -> ReturnTemplateListRead:
-    _ = ctx
-    return regulatory_reporting.list_return_templates()
+def list_return_templates(
+    db: DbSession, ctx: Tenant, bank_id: Annotated[str | None, Query()] = None
+) -> ReturnTemplateListRead:
+    return regulatory_reporting.list_return_templates(db, ctx, bank_id)
 
 
 @router.get(

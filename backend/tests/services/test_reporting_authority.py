@@ -808,11 +808,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
     }
 
     obligations = calendar.list_obligations(db_session, ctx, sdi.id, as_of=_AS_OF)
-    assert {obligation.return_code for obligation in obligations.obligations} == {
-        "SDI-STRESS-ANNUAL",
-        "SDI-IRRBB-QUARTERLY",
-        "NPL-MONTHLY",
-    }
+    assert {obligation.return_code for obligation in obligations.obligations} == {"NPL-MONTHLY"}
     assert obligations.coverage_note is not None
     assert "SDI-LMT-MONTHLY" in obligations.coverage_note
 
