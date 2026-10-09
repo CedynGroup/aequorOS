@@ -977,9 +977,7 @@ For banks with international operations, SWIFT message feeds provide interbank p
 ### 14.2 Encryption
 
 - At rest: AES-256 via AWS KMS or GCP KMS with customer-managed keys.
-- In transit: verified TLS 1.2 minimum for service connections; TLS 1.3 is
-  negotiated where supported. Deployment evidence must record each hop's actual
-  negotiated version, trust validation and narrowly bounded exceptions; see
+- In transit: governed by
   [the transport control and evidence contract](../backend/docs/transport_security.md).
 - Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
 - PII masking in non-production environments; synthetic data only for development and testing.

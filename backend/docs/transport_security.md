@@ -29,7 +29,9 @@ implementation; deployment evidence remains a release acceptance requirement.
 `TLS_ALLOW_PLAINTEXT=1` is explicitly allowed only with `APP_ENV=local` or `test`.
 The checked-in local `.env.example` and hermetic test fixture select it; it is
 not a default. Staging and production refuse startup when it is selected.
-Certificate verification cannot be disabled even for a local TLS connection.
+The shared HTTPS client contexts always verify certificates and hostnames;
+the local switch permits HTTP without weakening those contexts. It also bypasses
+the PostgreSQL and Database-Direct transport guards for local/test connections.
 
 The Next.js container gateway accepts TLS on its network port and forwards to
 Next.js on **127.0.0.1 inside the same container**. That loopback socket is the
@@ -89,8 +91,8 @@ peer hostname, minimum configured version, negotiated version and cipher,
 certificate fingerprint, issuer/expiry/SAN checks, trust-store identity, and
 reviewer. Store proxy-generated configuration and negative-test results with it.
 
-Run the read-only collector **from every relevant client network**, using the
-same trust bundle as that client:
+Run the read-only collector **from every relevant client network**, from the
+`backend/` directory and using the same trust bundle as that client:
 
 ```bash
 uv run python -m app.core.tls_evidence \
@@ -114,6 +116,11 @@ acceptance environment as well. For SMTP and optional native bank drivers,
 retain vendor-specific negotiation evidence. Scan edge and origin listeners to
 prove TLS 1.0/1.1 are refused, rather than inferring that from a successful 1.3
 handshake. Do not transmit bank records for any evidence test.
+
+`--databases` resolves configured service database URLs through the application
+settings, including `.env` and environment overrides. Unconfigured URLs are
+skipped; record which roles share a fallback pool and confirm the pack covers
+every configured role.
 
 Repository verification:
 

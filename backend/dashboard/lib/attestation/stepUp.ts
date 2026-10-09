@@ -17,16 +17,16 @@
  * That is why the certify call is proxied rather than made from the client.
  */
 
-import { createHash, randomBytes } from 'crypto';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { backendRequest } from '../backendRequest';
-import { guardedFetch } from '../outbound';
+import { createHash, randomBytes } from "crypto";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { backendRequest } from "../backendRequest";
+import { guardedFetch } from "../outbound";
 
 /** Correlates the authorize redirect with its callback. HttpOnly, short-lived. */
-export const STATE_COOKIE = 'aeq-stepup-state';
+export const STATE_COOKIE = "aeq-stepup-state";
 /** Holds the single-use signing authorisation between callback and certify. */
-export const AUTHORIZATION_COOKIE = 'aeq-stepup-authorization';
+export const AUTHORIZATION_COOKIE = "aeq-stepup-authorization";
 
 const STATE_TTL_SECONDS = 600;
 
@@ -61,7 +61,7 @@ export function apiBase(): string {
   return (
     process.env.RISK_API_INTERNAL_BASE_URL ??
     process.env.NEXT_PUBLIC_RISK_API_BASE_URL ??
-    'http://127.0.0.1:8000/api/v1'
+    "http://127.0.0.1:8000/api/v1"
   );
 }
 
@@ -74,12 +74,12 @@ export function apiBase(): string {
  */
 export function unverifiedNonce(idToken: string): string | null {
   try {
-    const payload = idToken.split('.')[1];
+    const payload = idToken.split(".")[1];
     if (!payload) return null;
-    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as {
       nonce?: unknown;
     };
-    return typeof claims.nonce === 'string' ? claims.nonce : null;
+    return typeof claims.nonce === "string" ? claims.nonce : null;
   } catch {
     return null;
   }
@@ -99,13 +99,15 @@ export async function fetchClientConfig(): Promise<OidcClientConfig> {
   const internalKey = process.env.SSO_INTERNAL_KEY;
   if (!internalKey) return { enabled: false };
   const response = await backendRequest(`${apiBase()}/auth/sso/client-config`, {
-    headers: { 'X-Internal-Auth': internalKey },
-    cache: 'no-store',
+    headers: { "X-Internal-Auth": internalKey },
+    cache: "no-store",
     signal: AbortSignal.timeout(5000),
   });
   if (response.status === 404) return { enabled: false };
   if (!response.ok) {
-    throw new Error(`Could not read the SSO client config (${response.status}).`);
+    throw new Error(
+      `Could not read the SSO client config (${response.status}).`,
+    );
   }
   return (await response.json()) as OidcClientConfig;
 }
@@ -122,18 +124,18 @@ export async function fetchClientConfig(): Promise<OidcClientConfig> {
  * reaches the signer's browser as anything but "try the password path".
  */
 export async function discover(issuer: string): Promise<OidcDiscovery> {
-  const base = issuer.replace(/\/$/, '');
+  const base = issuer.replace(/\/$/, "");
   const response = await guardedFetch(
     `${base}/.well-known/openid-configuration`,
-    { cache: 'no-store' },
-    { field: 'SSO issuer' },
+    { cache: "no-store" },
+    { field: "SSO issuer" },
   );
   if (!response.ok) {
     throw new Error(`OIDC discovery failed for ${base} (${response.status}).`);
   }
   const document = (await response.json()) as Partial<OidcDiscovery>;
   if (!document.authorization_endpoint || !document.token_endpoint) {
-    throw new Error('OIDC discovery document is missing required endpoints.');
+    throw new Error("OIDC discovery document is missing required endpoints.");
   }
   return {
     authorization_endpoint: document.authorization_endpoint,
@@ -142,12 +144,12 @@ export async function discover(issuer: string): Promise<OidcDiscovery> {
 }
 
 function base64Url(input: Buffer): string {
-  return input.toString('base64url');
+  return input.toString("base64url");
 }
 
 export function newPkcePair(): { verifier: string; challenge: string } {
   const verifier = base64Url(randomBytes(32));
-  const challenge = base64Url(createHash('sha256').update(verifier).digest());
+  const challenge = base64Url(createHash("sha256").update(verifier).digest());
   return { verifier, challenge };
 }
 
@@ -159,9 +161,9 @@ export async function writeStateCookie(context: StepUpContext): Promise<void> {
   const store = await cookies();
   store.set(STATE_COOKIE, JSON.stringify(context), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax', // the IdP redirect is a cross-site GET; 'strict' would drop it
-    path: '/',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax", // the IdP redirect is a cross-site GET; 'strict' would drop it
+    path: "/",
     maxAge: STATE_TTL_SECONDS,
   });
 }
@@ -188,11 +190,11 @@ export async function writeAuthorizationCookie(
   const store = await cookies();
   store.set(AUTHORIZATION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
     // Strict is correct here: this cookie is only ever read by our own
     // same-site certify proxy, never by a cross-site navigation.
-    sameSite: 'strict',
-    path: '/',
+    sameSite: "strict",
+    path: "/",
     maxAge: Math.max(30, Math.min(ttlSeconds, 300)),
   });
 }
@@ -221,7 +223,7 @@ export async function exchangeCode(params: {
   redirectUri: string;
 }): Promise<{ id_token?: string }> {
   const body = new URLSearchParams({
-    grant_type: 'authorization_code',
+    grant_type: "authorization_code",
     code: params.code,
     redirect_uri: params.redirectUri,
     client_id: params.clientId,
@@ -231,12 +233,12 @@ export async function exchangeCode(params: {
   const response = await guardedFetch(
     params.tokenEndpoint,
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      cache: 'no-store',
+      cache: "no-store",
     },
-    { field: 'OIDC token endpoint' },
+    { field: "OIDC token endpoint" },
   );
   if (!response.ok) {
     throw new Error(`Token exchange failed (${response.status}).`);
@@ -265,6 +267,6 @@ export function backToCeremony(
   // returnTo is validated as a relative path when the flow starts, and is read
   // from an HttpOnly cookie thereafter — a tampered query string cannot steer it.
   const target = new URL(returnTo, origin);
-  target.searchParams.set('stepUp', outcome);
+  target.searchParams.set("stepUp", outcome);
   return NextResponse.redirect(target.toString());
 }

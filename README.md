@@ -40,9 +40,12 @@ find here is held privately — ask for it.
 | `frontend`          | Vercel (see `frontend/README.md`)                                                                                                            | `aequoros.com`                        |
 | `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
 | `backend`           | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
-| `console`           | none committed yet — no Dockerfile or compose file in this repo                                                                              | intended `console.aequoros.com`       |
+| `console`           | `docker-compose.console.yml` — Docker Compose build pack, **repo root** as build context                                                     | intended `console.aequoros.com`       |
 
 `backend/.dockerignore` excludes `dashboard/`, so the API image never carries the UI.
+
+The compose files require the coordinated certificate and proxy preparation in
+[the transport deployment contract](backend/docs/transport_security.md#deployment-preparation-review-before-applying).
 
 ## Prerequisites
 
@@ -56,6 +59,8 @@ find here is held privately — ask for it.
   `postgres:17`.
 - **Environment**: `cp backend/.env.example backend/.env` and fill in the database
   and object-storage values. Secrets live only in the untracked `.env`.
+  For the staff console, copy [`console/.env.example`](console/.env.example) to
+  `console/.env.local` before starting local development.
 
 ## Quick start
 

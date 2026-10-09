@@ -92,9 +92,7 @@ def field_signing_roles(return_family: str) -> frozenset[str]:
     Whether a role is REQUIRED is the signing policy's answer; this is only
     whether the document could hold the signature at all.
     """
-    return frozenset(
-        layouts.LAYOUT_ROLES[layouts.layout_for_family(return_family)]
-    )
+    return frozenset(layouts.LAYOUT_ROLES[layouts.layout_for_family(return_family)])
 
 
 def signer_unavailable(message: str) -> HTTPException:
@@ -149,8 +147,8 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
     # it is the two-signer order every return has always used — never the
     # layout's maximum, because a role the caller did not ask for would put an
     # unfillable field on a filed document.
-    order = tuple(signing_order) if signing_order is not None else tuple(
-        layouts.STANDARD_SIGNING_ORDER
+    order = (
+        tuple(signing_order) if signing_order is not None else tuple(layouts.STANDARD_SIGNING_ORDER)
     )
     if role not in order:
         raise AttestationConflict(
@@ -181,8 +179,14 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
                 algorithm=key.algorithm,
                 settings=resolved,
             ) as built:
-                payload = _apply(base, role=role, signer=built, appearance=appearance,
-                                 profile=profile, signing_order=order)
+                payload = _apply(
+                    base,
+                    role=role,
+                    signer=built,
+                    appearance=appearance,
+                    profile=profile,
+                    signing_order=order,
+                )
         except signers.SignerBackendError as exc:
             raise signer_unavailable(
                 f"The return PDF could not be signed with the key enrolled for "

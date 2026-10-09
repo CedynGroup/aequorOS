@@ -5,12 +5,9 @@
 # This is a pnpm WORKSPACE build: the app depends on @aequoros/risk-service-api
 # via `workspace:*`, so the build needs the repo root (root lockfile + packages/).
 #
-# COOLIFY SETTINGS for this app:
-#   • Build Pack:          Dockerfile
-#   • Base Directory:      /            (build context MUST be the repo root)
-#   • Dockerfile Location: /backend/dashboard/Dockerfile
-#   • Ports Exposes:       3000
-#   • Mark NEXT_PUBLIC_* env vars as Build-time (they are inlined at build).
+# Coolify uses the repository-root docker-compose.dashboard.yml wrapper;
+# its header owns build-pack, build-context and build-time variable settings.
+# Certificate and proxy preparation: backend/docs/transport_security.md.
 # ---------------------------------------------------------------------------
 
 FROM node:24-slim AS base

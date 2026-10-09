@@ -27,7 +27,7 @@
  *                               when the console sits behind a proxy
  */
 
-import type { NextRequest } from 'next/server';
+import type { NextRequest } from "next/server";
 
 export interface OidcEnv {
   issuer: string;
@@ -40,7 +40,7 @@ export function oidcEnv(): OidcEnv | null {
   const clientId = process.env.OPERATOR_OIDC_CLIENT_ID?.trim();
   if (!issuer || !clientId) return null;
   return {
-    issuer: issuer.replace(/\/+$/, ''),
+    issuer: issuer.replace(/\/+$/, ""),
     clientId,
     clientSecret: process.env.OPERATOR_OIDC_CLIENT_SECRET?.trim() || null,
   };
@@ -49,28 +49,28 @@ export function oidcEnv(): OidcEnv | null {
 export function requireServiceHttps(value: string): string {
   const url = new URL(value);
   if (
-    url.protocol !== 'https:' &&
+    url.protocol !== "https:" &&
     !(
-      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') &&
-      process.env.TLS_ALLOW_PLAINTEXT === '1'
+      (process.env.NODE_ENV === "development" ||
+        process.env.NODE_ENV === "test") &&
+      process.env.TLS_ALLOW_PLAINTEXT === "1"
     )
   ) {
-    throw new Error('Service connections require HTTPS.');
+    throw new Error("Service connections require HTTPS.");
   }
   return value;
 }
 
 export function operatorApiUrl(): string {
-  return requireServiceHttps(process.env.OPERATOR_API_URL ?? 'http://127.0.0.1:8100').replace(
-    /\/+$/,
-    '',
-  );
+  return requireServiceHttps(
+    process.env.OPERATOR_API_URL ?? "http://127.0.0.1:8100",
+  ).replace(/\/+$/, "");
 }
 
 /** Origin used to build redirect_uri: explicit override, else the request's. */
 export function consoleBaseUrl(req: NextRequest): string {
   const override = process.env.CONSOLE_BASE_URL?.trim();
-  if (override) return override.replace(/\/+$/, '');
+  if (override) return override.replace(/\/+$/, "");
   return req.nextUrl.origin;
 }
 
@@ -88,16 +88,24 @@ const discoveryCache = new Map<string, DiscoveryDocument>();
 export async function discover(issuer: string): Promise<DiscoveryDocument> {
   const cached = discoveryCache.get(issuer);
   if (cached) return cached;
-  const res = await fetch(requireServiceHttps(`${issuer}/.well-known/openid-configuration`), {
-    redirect: 'error',
-    cache: 'no-store',
-  });
+  const res = await fetch(
+    requireServiceHttps(`${issuer}/.well-known/openid-configuration`),
+    {
+      redirect: "error",
+      cache: "no-store",
+    },
+  );
   if (!res.ok) {
     throw new Error(`OIDC discovery failed for ${issuer}: HTTP ${res.status}`);
   }
   const doc = (await res.json()) as Partial<DiscoveryDocument>;
-  if (typeof doc.authorization_endpoint !== 'string' || typeof doc.token_endpoint !== 'string') {
-    throw new Error(`OIDC discovery for ${issuer} returned no usable endpoints.`);
+  if (
+    typeof doc.authorization_endpoint !== "string" ||
+    typeof doc.token_endpoint !== "string"
+  ) {
+    throw new Error(
+      `OIDC discovery for ${issuer} returned no usable endpoints.`,
+    );
   }
   const usable = {
     authorization_endpoint: requireServiceHttps(doc.authorization_endpoint),
@@ -119,20 +127,23 @@ export function randomUrlSafe(bytes: number): string {
 
 /** PKCE S256 code challenge for a verifier. */
 export async function s256(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(verifier),
+  );
   return b64url(new Uint8Array(digest));
 }
 
 function b64url(buf: Uint8Array): string {
-  return Buffer.from(buf).toString('base64url');
+  return Buffer.from(buf).toString("base64url");
 }
 
 // ---------------------------------------------------------------------------
 // Cookie payloads
 // ---------------------------------------------------------------------------
 
-export const OAUTH_TXN_COOKIE = 'op_oauth';
-export const SESSION_COOKIE = 'op_session';
+export const OAUTH_TXN_COOKIE = "op_oauth";
+export const SESSION_COOKIE = "op_session";
 
 /** In-flight authorization transaction (state/nonce/PKCE verifier). */
 export interface OauthTxn {
@@ -160,7 +171,7 @@ export interface OperatorSession {
   email: string;
   /** Unix seconds — mirrors the credential's exp; the API is the authority. */
   exp: number;
-  mode?: 'password' | 'oidc';
+  mode?: "password" | "oidc";
 }
 
 /** The bearer the /api/op proxy forwards — operator JWT or OIDC id_token. */
@@ -169,37 +180,45 @@ export function sessionBearer(session: OperatorSession): string | null {
 }
 
 /** Which sign-in produced this session (legacy cookies predate `mode`). */
-export function sessionMode(session: OperatorSession): 'password' | 'oidc' {
-  return session.mode ?? (session.token ? 'password' : 'oidc');
+export function sessionMode(session: OperatorSession): "password" | "oidc" {
+  return session.mode ?? (session.token ? "password" : "oidc");
 }
 
 export function encodeCookie(value: object): string {
-  return Buffer.from(JSON.stringify(value)).toString('base64url');
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
 export function decodeCookie<T>(raw: string | undefined): T | null {
   if (!raw) return null;
   try {
-    return JSON.parse(Buffer.from(raw, 'base64url').toString()) as T;
+    return JSON.parse(Buffer.from(raw, "base64url").toString()) as T;
   } catch {
     return null;
   }
 }
 
 export function readSession(req: NextRequest): OperatorSession | null {
-  const session = decodeCookie<OperatorSession>(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!session || !session.email || typeof session.exp !== 'number') return null;
+  const session = decodeCookie<OperatorSession>(
+    req.cookies.get(SESSION_COOKIE)?.value,
+  );
+  if (!session || !session.email || typeof session.exp !== "number")
+    return null;
   if (!sessionBearer(session)) return null;
   if (session.exp * 1000 <= Date.now()) return null;
   return session;
 }
 
 /** Decode a JWT payload WITHOUT verification (the operator API verifies). */
-export function unverifiedJwtPayload(jwt: string): Record<string, unknown> | null {
-  const parts = jwt.split('.');
+export function unverifiedJwtPayload(
+  jwt: string,
+): Record<string, unknown> | null {
+  const parts = jwt.split(".");
   if (parts.length !== 3) return null;
   try {
-    return JSON.parse(Buffer.from(parts[1], 'base64url').toString()) as Record<string, unknown>;
+    return JSON.parse(Buffer.from(parts[1], "base64url").toString()) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return null;
   }
