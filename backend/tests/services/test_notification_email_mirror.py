@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import smtplib
+import ssl
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -45,8 +46,11 @@ class _FakeSmtp:
     def __exit__(self, *args) -> None:
         return None
 
-    def starttls(self) -> None:
-        return None
+    def starttls(self, *, context: ssl.SSLContext | None = None) -> None:
+        assert context is not None
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+        assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
     def login(self, username: str, password: str) -> None:
         return None

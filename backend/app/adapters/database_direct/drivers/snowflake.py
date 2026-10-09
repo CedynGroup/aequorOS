@@ -36,6 +36,7 @@ from app.adapters.database_direct.drivers.base import (
     DriverCapabilities,
     QueryResult,
     TableSchema,
+    require_verified_transport,
 )
 from app.adapters.database_direct.errors import (
     DatabaseDirectError,
@@ -168,6 +169,7 @@ class SnowflakeDriver(DatabaseDriver):
     def connect(
         self, connection: ConnectionConfig, credentials: DbCredentials
     ) -> _SnowflakeSession:
+        require_verified_transport(connection)
         connector = _import_connector(connection.display_label)
         sf = connection.snowflake
         if sf is None:  # guarded by ConnectionConfig validator; defensive here

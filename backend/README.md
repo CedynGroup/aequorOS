@@ -13,6 +13,11 @@ attestation/e-signature ceremony. It has three entrypoints: the tenant API
 staff operator control plane (`app.operator.main:app`, :8100 — never mounted on
 the tenant API).
 
+Deployed API and operator listeners start through `python -m app.core.serve api`
+and `python -m app.core.serve operator`. Certificate, trust-store, database URL,
+and local-development exceptions are governed by
+[the transport contract](docs/transport_security.md).
+
 - Health and readiness under `/api/health`; readiness reports database, storage,
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
@@ -486,30 +491,11 @@ mise run risk-service:revision "describe change"
 
 ## Environment Variables
 
-```bash
-APP_ENV=local
-APP_NAME=risk-service
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
-LOG_LEVEL=INFO
-
-# Primary database (shared remote; real credentials only in the untracked .env).
-# DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>
-
-# Object storage. Document upload, presigned URLs and the storage-health probe
-# share ONE credential set with the Data Engine — there is no separate RISK_S3_*
-# set. The values below are the LOCAL compose stack (backend/docker-compose.yml);
-# deployed environments point S3_ENDPOINT at the real object store.
-STORAGE_BACKEND=minio
-STORAGE_ENV=mvp
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_BUCKET=risk-local
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_FORCE_PATH_STYLE=true
-STORAGE_PRESIGN_EXPIRES_SECONDS=900
-RISK_MAX_UPLOAD_BYTES=25000000
-```
+Copy [`.env.example`](.env.example) to `.env` for the current local settings,
+including the explicit plaintext opt-in. Document uploads, presigned URLs,
+storage health, and Data Engine canonical tiers share that one storage
+credential set. For deployed settings, follow
+[the transport deployment contract](docs/transport_security.md#deployment-preparation-review-before-applying).
 
 `RISK_MAX_UPLOAD_BYTES` is the only surviving `RISK_*` variable, and it is a size limit
 (25 MB), not a credential. The eight `RISK_S3_*` / `RISK_STORAGE_BACKEND` names this

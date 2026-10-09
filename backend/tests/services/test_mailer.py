@@ -16,6 +16,7 @@ records what it was asked to do, exactly as the mirror's own suite does it.
 from __future__ import annotations
 
 import smtplib
+import ssl
 from email.message import EmailMessage
 from typing import Any
 
@@ -48,7 +49,11 @@ class _FakeSmtp:
     def __exit__(self, *args: object) -> None:
         _FakeSmtp.calls.append("close")
 
-    def starttls(self) -> None:
+    def starttls(self, *, context: ssl.SSLContext | None = None) -> None:
+        assert context is not None
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+        assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
         _FakeSmtp.calls.append("starttls")
 
     def login(self, username: str, password: str) -> None:

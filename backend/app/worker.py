@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.tls import validate_service_transports
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
 from app.jobs import (
@@ -404,6 +405,7 @@ def _warn_if_bi_disabled(settings) -> None:  # pragma: no cover - process entryp
 
 def main() -> None:  # pragma: no cover - process entrypoint
     settings = get_settings()
+    validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
     job_types = resolve_job_types(settings.worker.worker_job_types)
     lanes = {job_queue.lane_of(job_type) for job_type in job_types}

@@ -27,6 +27,7 @@ the messages, exactly as the notification mirror's own suite does it, and the re
 from __future__ import annotations
 
 import smtplib
+import ssl
 from datetime import UTC, date, datetime
 from email.message import EmailMessage
 from typing import Any
@@ -81,8 +82,11 @@ class _FakeSmtp:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def starttls(self) -> None:
-        return None
+    def starttls(self, *, context: ssl.SSLContext | None = None) -> None:
+        assert context is not None
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+        assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
     def login(self, username: str, password: str) -> None:
         return None

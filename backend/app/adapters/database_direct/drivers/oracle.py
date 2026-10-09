@@ -38,6 +38,7 @@ from app.adapters.database_direct.drivers.base import (
     DriverCapabilities,
     QueryResult,
     TableSchema,
+    require_verified_transport,
 )
 from app.adapters.database_direct.errors import (
     DatabaseDirectError,
@@ -163,6 +164,7 @@ class OracleDriver(DatabaseDriver):
         )
 
     def connect(self, connection: ConnectionConfig, credentials: DbCredentials) -> _OracleSession:
+        require_verified_transport(connection)
         oracledb = _import_oracledb(connection.display_label)
         service = connection.service_name or connection.database
         endpoints = connection.endpoints_in_preference_order() or ("",)

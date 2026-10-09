@@ -150,6 +150,7 @@ new topic, add a row here.
 | Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
+| TLS enforcement and bank-reviewable transport evidence         | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
 | Coolify deployment rules                                       | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                             | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
 

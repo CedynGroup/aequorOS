@@ -46,13 +46,13 @@ from __future__ import annotations
 
 import asyncio
 import hmac
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import Any, Final, cast
 
+import httpx
 from asn1crypto import cms, tsp
-from loguru import logger
 from pyhanko.sign.timestamps import HTTPTimeStamper, TimeStamper
 from pyhanko.sign.timestamps.common_utils import (
     TimestampRequestError,
@@ -60,6 +60,7 @@ from pyhanko.sign.timestamps.common_utils import (
 )
 
 from app.core.config import TsaSettings, get_settings
+from app.core.tls import client_context, require_https
 
 #: Imprint algorithms we accept. Per RFC 8933 the imprint algorithm must be the
 #: one that produced the digest, so this is also the set of digests a caller may
@@ -129,7 +130,7 @@ def _require_configured(settings: TsaSettings) -> str:
             "time is available. Attestation must fail closed rather than sign with "
             "the application host's wall clock (gap G4)."
         )
-    return settings.tsa_url
+    return require_https(settings.tsa_url, field="TSA_URL")
 
 
 def _require_supported_algorithm(hash_algorithm: str) -> int:
@@ -152,24 +153,50 @@ def build_pdf_timestamper(settings: TsaSettings | None = None) -> HTTPTimeStampe
     resolved = _settings(settings)
     url = _require_configured(resolved)
     _require_supported_algorithm(resolved.tsa_hash_algorithm)
-    if not url.lower().startswith("https:"):
-        # Not fatal: an in-country TSA may sit on a private link. But the token
-        # is evidence about time, and plaintext transport invites a downgrade,
-        # so the operator gets told every time a process starts one.
-        logger.warning(
-            "TSA_URL is not HTTPS ({url}); RFC 3161 requests will traverse plaintext "
-            "transport. Only a hash is sent, but prefer HTTPS for trusted time.",
-            url=url,
-        )
-    return HTTPTimeStamper(
+    return VerifiedHTTPTimeStamper(
         url,
-        https=False,  # enforced by the warning above, not by construction
-        # pyHanko's constructor is unannotated (its int default makes the checker
-        # infer int); requests accepts a float timeout, which is what we want so
-        # sub-second budgets stay expressible.
-        timeout=resolved.tsa_timeout_seconds,  # type: ignore[arg-type]
+        timeout=resolved.tsa_timeout_seconds,
         auth=resolved.basic_auth,
     )
+
+
+class VerifiedHTTPTimeStamper(HTTPTimeStamper):
+    """pyHanko protocol with verified TLS, a minimum version and no redirects."""
+
+    def __init__(self, url: str, *, timeout: float, auth: tuple[str, str] | None) -> None:
+        super().__init__(url, timeout=timeout, auth=auth)  # type: ignore[arg-type]
+        self._url = url
+        self._timeout = timeout
+        self._auth = auth
+
+    async def async_request_tsa_response(self, req: tsp.TimeStampReq) -> tsp.TimeStampResp:
+        url = require_https(self._url, field="TSA_URL")
+        with httpx.Client(
+            verify=client_context(),
+            trust_env=False,
+            follow_redirects=False,
+            timeout=self._timeout,
+            auth=self._auth,
+        ) as client:
+            try:
+                response = await asyncio.to_thread(
+                    client.post,
+                    url,
+                    content=cast(bytes, req.dump()),
+                    headers={
+                        "Content-Type": "application/timestamp-query",
+                        "Accept": "application/timestamp-reply",
+                    },
+                )
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise TimestampRequestError("Timestamp transport failed.") from OSError(
+                    type(exc).__name__
+                )
+        if response.headers.get("Content-Type") != "application/timestamp-reply":
+            raise TimestampRequestError("Timestamp server response is malformed.")
+        load = cast(Callable[[bytes], tsp.TimeStampResp], tsp.TimeStampResp.load)  # type: ignore[reportUnknownMemberType] - untyped ASN.1 parser boundary
+        return load(response.content)
 
 
 def _assert_only_hash_leaves(
@@ -220,8 +247,7 @@ def _parse_and_verify_token(
         encap: Any = content["encap_content_info"]
         if encap["content_type"].native != "tst_info":
             raise TsaResponseInvalid(
-                f"Timestamp token encapsulates {encap['content_type'].native!r}, "
-                f"not tst_info."
+                f"Timestamp token encapsulates {encap['content_type'].native!r}, not tst_info."
             )
         tst_info: Any = encap["content"].parsed
         imprint: Any = tst_info["message_imprint"]
@@ -331,9 +357,7 @@ def request_timestamp(
     timestamper: TimeStamper | None = None,
 ) -> TimestampToken:
     """Synchronous :func:`async_request_timestamp` — the signing path is sync."""
-    return _run(
-        async_request_timestamp(digest, settings=settings, timestamper=timestamper)
-    )
+    return _run(async_request_timestamp(digest, settings=settings, timestamper=timestamper))
 
 
 def timestamp_digest(
@@ -386,9 +410,7 @@ class TsaClient:
         return build_pdf_timestamper(self._settings)
 
     def request_timestamp(self, digest: bytes) -> TimestampToken:
-        return request_timestamp(
-            digest, settings=self._settings, timestamper=self._timestamper
-        )
+        return request_timestamp(digest, settings=self._settings, timestamper=self._timestamper)
 
     def timestamp_digest(self, digest: bytes) -> tuple[bytes, datetime]:
         """``(token_bytes, asserted_at)`` — only the hash is transmitted."""

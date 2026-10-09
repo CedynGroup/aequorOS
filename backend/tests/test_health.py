@@ -61,6 +61,7 @@ def test_production_still_starts_when_it_cannot_sign(
     the filing path refuses via `ensure_signing_configured`.
     """
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     # setenv("") not delenv: deleting lets pydantic-settings read the value
     # back out of a developer's .env (see tests/conftest.py).
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
@@ -126,6 +127,7 @@ def test_ready_fails_in_production_when_signing_is_unconfigured(
     filing, because the operator reading it is deciding whether to roll back.
     """
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     _worker_url_from_env(monkeypatch)
@@ -166,6 +168,7 @@ def test_ready_ignores_the_signing_gap_when_esign_is_disabled(
     a signature, so a production deployment that cannot sign is not a filing
     outage and must not fail its probe."""
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
@@ -389,6 +392,7 @@ def test_ready_fails_closed_on_a_blind_worker_in_production(
         lambda: WorkerVisibility(can_claim=False, role="tenant_role", detail="no BYPASSRLS."),
     )
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "1")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "health-test-pepper-not-production")
     get_settings.cache_clear()
@@ -536,6 +540,7 @@ def test_ready_health_requires_database_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     # A production app refuses to construct when it cannot sign, because every
     # return requires signatures and an unsignable deployment cannot file. That
     # guard is asserted in its own test; here it is satisfied so the readiness
@@ -545,7 +550,7 @@ def test_ready_health_requires_database_in_production(
 
     get_settings.cache_clear()
 
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, base_url="https://testserver")
 
     response = client.get("/api/health/ready", headers={"X-Request-ID": "ready-request"})
 

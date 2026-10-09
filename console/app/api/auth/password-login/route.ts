@@ -12,10 +12,14 @@
  * is the login throttle, 503 is the unset-OPERATOR_JWT_SECRET refusal.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { SESSION_COOKIE, encodeCookie, operatorApiUrl } from '@/lib/server-auth';
+import { NextResponse, type NextRequest } from "next/server";
+import {
+  SESSION_COOKIE,
+  encodeCookie,
+  operatorApiUrl,
+} from "@/lib/server-auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 interface LoginUpstream {
   access_token?: unknown;
@@ -29,15 +33,23 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as { email?: unknown; password?: unknown };
   } catch {
     return NextResponse.json(
-      { error: { code: 'invalid_request', message: 'Malformed request body.' } },
+      {
+        error: { code: "invalid_request", message: "Malformed request body." },
+      },
       { status: 400 },
     );
   }
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const password = typeof body.password === 'string' ? body.password : '';
+  const email =
+    typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const password = typeof body.password === "string" ? body.password : "";
   if (!email || !password) {
     return NextResponse.json(
-      { error: { code: 'invalid_request', message: 'Email and password are required.' } },
+      {
+        error: {
+          code: "invalid_request",
+          message: "Email and password are required.",
+        },
+      },
       { status: 400 },
     );
   }
@@ -45,16 +57,20 @@ export async function POST(req: NextRequest) {
   let upstream: Response;
   try {
     upstream = await fetch(`${operatorApiUrl()}/operator/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      redirect: "error",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
       body: JSON.stringify({ email, password }),
-      cache: 'no-store',
+      cache: "no-store",
     });
   } catch {
     return NextResponse.json(
       {
         error: {
-          code: 'operator_api_unreachable',
+          code: "operator_api_unreachable",
           message: `The console could not reach the operator API at ${operatorApiUrl()}.`,
         },
       },
@@ -67,7 +83,10 @@ export async function POST(req: NextRequest) {
     const text = await upstream.text();
     return new NextResponse(text, {
       status: upstream.status,
-      headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
+      headers: {
+        "Content-Type":
+          upstream.headers.get("content-type") ?? "application/json",
+      },
     });
   }
 
@@ -76,18 +95,33 @@ export async function POST(req: NextRequest) {
     payload = (await upstream.json()) as LoginUpstream;
   } catch {
     return NextResponse.json(
-      { error: { code: 'malformed_response', message: 'The operator API returned an unreadable response.' } },
+      {
+        error: {
+          code: "malformed_response",
+          message: "The operator API returned an unreadable response.",
+        },
+      },
       { status: 502 },
     );
   }
   const token = payload.access_token;
   const expiresAt = payload.expires_at;
   const sessionEmail =
-    typeof payload.operator?.email === 'string' ? payload.operator.email : email;
-  const exp = typeof expiresAt === 'string' ? Math.floor(Date.parse(expiresAt) / 1000) : NaN;
-  if (typeof token !== 'string' || !token || !Number.isFinite(exp)) {
+    typeof payload.operator?.email === "string"
+      ? payload.operator.email
+      : email;
+  const exp =
+    typeof expiresAt === "string"
+      ? Math.floor(Date.parse(expiresAt) / 1000)
+      : NaN;
+  if (typeof token !== "string" || !token || !Number.isFinite(exp)) {
     return NextResponse.json(
-      { error: { code: 'malformed_response', message: 'The operator API returned no usable session.' } },
+      {
+        error: {
+          code: "malformed_response",
+          message: "The operator API returned no usable session.",
+        },
+      },
       { status: 502 },
     );
   }
@@ -95,19 +129,23 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({
     ok: true,
     email: sessionEmail,
-    role: typeof payload.operator?.role === 'string' ? payload.operator.role : null,
+    role:
+      typeof payload.operator?.role === "string" ? payload.operator.role : null,
   });
   res.cookies.set(
     SESSION_COOKIE,
-    encodeCookie({ token, email: sessionEmail, exp, mode: 'password' }),
+    encodeCookie({ token, email: sessionEmail, exp, mode: "password" }),
     {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: req.nextUrl.protocol === 'https:',
-      path: '/',
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      path: "/",
       // Cookie dies with the JWT — the operator API would 401 an expired
       // token anyway; the cookie just stops pretending earlier.
-      maxAge: Math.max(1, Math.min(exp - Math.floor(Date.now() / 1000), 12 * 3600)),
+      maxAge: Math.max(
+        1,
+        Math.min(exp - Math.floor(Date.now() / 1000), 12 * 3600),
+      ),
     },
   );
   return res;

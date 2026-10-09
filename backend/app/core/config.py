@@ -37,6 +37,19 @@ class AppSettings(BaseSettings):
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
 
+class TlsSettings(BaseSettings):
+    """Plaintext is an explicit convenience for local/test environments only."""
+
+    model_config = SETTINGS_CONFIG
+    allow_plaintext: bool = Field(default=False, alias="TLS_ALLOW_PLAINTEXT")
+    ca_bundle: str | None = Field(default=None, alias="TLS_CA_BUNDLE")
+
+    @field_validator("ca_bundle", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        return value if value and value.strip() else None
+
+
 class DatabaseSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
@@ -1189,6 +1202,7 @@ class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     app: AppSettings = Field(default_factory=AppSettings)
+    tls: TlsSettings = Field(default_factory=TlsSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)

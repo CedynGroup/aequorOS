@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 
 from app.core.config import get_settings
+from app.core.tls import TransportSecurityError, client_context, plaintext_allowed
 
 #: Every subject line the platform sends carries it, so a bank's mail rules can
 #: match on one string. The product name is not a jurisdiction value.
@@ -178,10 +179,12 @@ def open_relay() -> Iterator[Relay]:
         raise MailerNotConfigured(
             "No outbound mail relay is configured. Set SMTP_HOST and SMTP_FROM."
         )
+    if not settings.smtp_starttls and not plaintext_allowed():
+        raise TransportSecurityError("SMTP_STARTTLS must be enabled.")
     client = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=CONNECT_TIMEOUT_SECONDS)
     with client:
         if settings.smtp_starttls:
-            client.starttls()
+            client.starttls(context=client_context())
         if settings.smtp_username and settings.smtp_password:
             client.login(settings.smtp_username, settings.smtp_password)
         yield Relay(client)

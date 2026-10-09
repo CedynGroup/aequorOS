@@ -54,6 +54,7 @@ dependencies = [
   "scipy",
   "sqlalchemy",
   "torch",
+  "requests>=2.34.2",
 ]
 
 # Driver-heavy database-direct backends. Lazily imported by
@@ -87,6 +88,7 @@ dev = [
   "pytest",
   "ruff",
   "pytest-xdist",
+  "types-requests>=2.33.0.20261006",
 ]
 
 [tool.pytest.ini_options]

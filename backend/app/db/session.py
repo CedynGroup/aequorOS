@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.tls import database_connect_args
 
 
 class RlsBlindError(RuntimeError):
@@ -54,6 +55,7 @@ def get_engine(database_url: str) -> Engine:
     # next request; a small default pool also starves under the API + in-process worker
     # sharing it. Keep connections warm, size the pool for both, and recycle before any
     # server-side idle timeout.
+    tls_args = database_connect_args(database_url)
     if database_url.startswith("postgresql"):
         return create_engine(
             database_url,
@@ -63,6 +65,7 @@ def get_engine(database_url: str) -> Engine:
             pool_timeout=30,
             pool_recycle=1800,
             connect_args={
+                **tls_args,
                 "keepalives": 1,
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,
@@ -98,6 +101,7 @@ def get_bi_engine(database_url: str) -> Engine:
     Keepalives and recycle match the primary pool for the same remote-primary
     reasons documented there.
     """
+    tls_args = database_connect_args(database_url)
     if database_url.startswith("postgresql"):
         return create_engine(
             database_url,
@@ -107,6 +111,7 @@ def get_bi_engine(database_url: str) -> Engine:
             pool_timeout=30,
             pool_recycle=1800,
             connect_args={
+                **tls_args,
                 "application_name": "aequoros-bi",
                 "keepalives": 1,
                 "keepalives_idle": 30,
@@ -178,9 +183,7 @@ def forced_rls_tables(connection: Connection, table_names: tuple[str, ...]) -> t
     """Which of ``table_names`` currently have FORCE ROW LEVEL SECURITY on."""
     if connection.dialect.name != "postgresql" or not table_names:
         return ()
-    found = connection.execute(
-        _FORCED_RLS_TABLES_SQL, {"table_names": list(table_names)}
-    ).scalars()
+    found = connection.execute(_FORCED_RLS_TABLES_SQL, {"table_names": list(table_names)}).scalars()
     return tuple(sorted(found))
 
 

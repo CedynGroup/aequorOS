@@ -46,4 +46,4 @@ EXPOSE 8000
 # Multi-worker in production (WEB_CONCURRENCY, default 4). The background worker
 # runs as a SEPARATE process (`python -m app.worker`, see docker-compose), so keep
 # RUN_INPROCESS_WORKER unset here — N API workers must not each spawn a poller.
-CMD ["sh", "-c", "fastapi run app/main.py --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}"]
+CMD ["python", "-m", "app.core.serve", "api"]

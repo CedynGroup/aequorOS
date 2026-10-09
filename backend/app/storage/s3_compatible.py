@@ -22,7 +22,7 @@ import logging
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, BinaryIO, Literal
+from typing import Any, BinaryIO, Literal, cast
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -30,6 +30,8 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 
+from app.core.config import get_settings
+from app.core.tls import require_boto_tls, require_https
 from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
@@ -88,6 +90,8 @@ class S3CompatibleStorageClient(StorageClient):
         if not settings.configured:
             msg = "Storage endpoint and credentials are not configured."
             raise StorageValidationError(msg)
+        if settings.endpoint:
+            require_https(settings.endpoint, field="S3_ENDPOINT")
         enforce_retirement(settings)
         self._settings = settings
         self._env: StorageEnv = settings.env
@@ -95,6 +99,8 @@ class S3CompatibleStorageClient(StorageClient):
         factory = client_factory or boto3.client
         self._s3 = factory(
             "s3",
+            verify=get_settings().tls.ca_bundle or True,
+            use_ssl=True,
             endpoint_url=settings.endpoint,
             aws_access_key_id=settings.access_key,
             aws_secret_access_key=settings.secret_key,
@@ -104,6 +110,9 @@ class S3CompatibleStorageClient(StorageClient):
                 retries={"max_attempts": 5, "mode": "adaptive"},
             ),
         )
+
+        if client_factory is None:
+            require_boto_tls(cast(object, self._s3))
 
     # -- contract operations ------------------------------------------------
 

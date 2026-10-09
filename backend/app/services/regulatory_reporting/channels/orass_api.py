@@ -21,7 +21,7 @@ configuration event, not a code change:
 
 Config (channel ``orass_api``): ``api_base_url`` (required), ``auth_mode``
 (``api_key`` | ``basic``, default ``api_key``), ``institution_code``,
-``timeout_seconds`` (default 30), ``verify_tls`` (default true).
+``timeout_seconds`` (default 30). ``verify_tls=false`` is refused.
 Credentials (vaulted, write-only): ``api_key`` for bearer auth, or
 ``username``/``password`` for basic auth.
 
@@ -42,6 +42,7 @@ from typing import Any
 import httpx
 
 from app.core.outbound import OutboundTargetBlocked, check_url, redirect_guard
+from app.core.tls import client_context
 from app.models import RegulatoryPackage
 from app.services.regulatory_reporting.channels.base import (
     FiledArtifact,
@@ -194,12 +195,14 @@ class OrassApiChannel:
 
     def _client(self) -> httpx.Client:
         timeout = float(self._config.get("timeout_seconds") or _DEFAULT_TIMEOUT_SECONDS)
-        verify = bool(self._config.get("verify_tls", True))
+        if self._config.get("verify_tls", True) is not True:
+            raise ChannelPreconditionError("ORASS certificate verification cannot be disabled.")
         return httpx.Client(
             base_url=self._guarded_base_url(),
             headers=self._auth_headers(),
             timeout=timeout,
-            verify=verify,
+            verify=client_context(),
+            trust_env=False,
             transport=self._transport,
             # A redirect is a second, unvalidated destination. Do not follow one;
             # the hook is the belt-and-braces check if that ever changes.

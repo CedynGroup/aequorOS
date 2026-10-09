@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 import app.models
 from alembic import context
 from app.core.config import get_settings
+from app.core.tls import database_connect_args
 from app.db.base import Base
 
 #: The registry: importing it maps every feature's tables onto ``Base.metadata``.
@@ -53,6 +54,7 @@ def run_migrations_online() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=database_connect_args(get_database_url()),
     )
 
     with connectable.connect() as connection:

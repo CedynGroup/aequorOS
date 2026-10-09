@@ -86,6 +86,7 @@ from pyhanko.sign import signers as pyhanko_signers
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 
 from app.core.config import Settings, get_settings
+from app.core.tls import client_context, require_https
 from app.services.attestation.signers import (
     DEFAULT_ALGORITHM,
     ECDSA_P256_SHA256,
@@ -212,6 +213,7 @@ class OpenBaoTransitRawSigner:
                 "OpenBao signing backend authenticates with an AppRole and cannot "
                 "reach the Transit mount without one."
             )
+        require_https(address, field="OPENBAO_ADDR")
         self._address = address.rstrip("/")
         self._role_id = role_id
         self._secret_id = secret_id
@@ -247,11 +249,13 @@ class OpenBaoTransitRawSigner:
             base_url=f"{self._address}/v1",
             headers=headers,
             timeout=self._timeout,
-            # `verify` takes a CA bundle path or True. There is deliberately no
-            # way to pass False: the signing channel carries the digests an
+            # The verified context loads public or configured private roots.
+            # There is no verification bypass: the signing channel carries the digests an
             # officer is committing to, and an unverified TLS peer could be
             # anyone.
-            verify=self._ca_cert if self._ca_cert else True,
+            verify=client_context(self._ca_cert),
+            trust_env=False,
+            follow_redirects=False,
             transport=self._transport,
         )
         try:
@@ -340,8 +344,7 @@ class OpenBaoTransitRawSigner:
             )
         if response.status_code >= 400:
             raise SignerBackendUnavailable(
-                f"OpenBao at {self._address} refused the AppRole login: "
-                f"{self._errors(response)}"
+                f"OpenBao at {self._address} refused the AppRole login: {self._errors(response)}"
             )
         auth = self._payload(response).get("auth") or {}
         token = auth.get("client_token")
@@ -362,9 +365,7 @@ class OpenBaoTransitRawSigner:
         Renewal is preferred over re-login so a deployment whose AppRole limits
         ``secret_id_num_uses`` does not burn a use on every token refresh.
         """
-        response = self._send(
-            client, "POST", "auth/token/renew-self", json={}, token=token.value
-        )
+        response = self._send(client, "POST", "auth/token/renew-self", json={}, token=token.value)
         if response.status_code >= 400:
             return None
         auth = self._payload(response).get("auth") or {}
@@ -417,8 +418,7 @@ class OpenBaoTransitRawSigner:
         response = self._call("GET", self._key_path(key_ref))
         if response.status_code == 404:
             raise SignerKeyMaterialMissing(
-                f"No OpenBao Transit key named {key_ref!r} exists on the "
-                f"{self._mount!r} mount."
+                f"No OpenBao Transit key named {key_ref!r} exists on the {self._mount!r} mount."
             )
         if response.status_code == 403:
             raise SignerBackendForbidden(
@@ -427,14 +427,11 @@ class OpenBaoTransitRawSigner:
             )
         if response.status_code >= 400:
             raise SignerBackendError(
-                f"OpenBao could not describe Transit key {key_ref!r}: "
-                f"{self._errors(response)}"
+                f"OpenBao could not describe Transit key {key_ref!r}: {self._errors(response)}"
             )
         data = self._payload(response).get("data")
         if not isinstance(data, dict):
-            raise SignerBackendError(
-                f"OpenBao returned no key data for Transit key {key_ref!r}."
-            )
+            raise SignerBackendError(f"OpenBao returned no key data for Transit key {key_ref!r}.")
         return data
 
     @staticmethod
@@ -507,8 +504,7 @@ class OpenBaoTransitRawSigner:
             )
         if response.status_code >= 400:
             raise SignerBackendError(
-                f"OpenBao refused to create Transit key {key_ref!r}: "
-                f"{self._errors(response)}"
+                f"OpenBao refused to create Transit key {key_ref!r}: {self._errors(response)}"
             )
         self._key_types[key_ref] = algorithm
         return key_ref
@@ -602,8 +598,7 @@ class OpenBaoTransitRawSigner:
             )
         if response.status_code >= 400:
             raise SignerBackendError(
-                f"OpenBao refused to sign with Transit key {key_ref!r}: "
-                f"{self._errors(response)}"
+                f"OpenBao refused to sign with Transit key {key_ref!r}: {self._errors(response)}"
             )
         data = self._payload(response).get("data") or {}
         return _decode_signature(data.get("signature"), key_ref=key_ref)
@@ -621,8 +616,7 @@ class OpenBaoTransitRawSigner:
             return x509.load_pem_x509_certificates(chain.encode("ascii"))[0]
         except (ValueError, IndexError, UnicodeEncodeError) as exc:
             raise SignerBackendError(
-                f"The certificate chain OpenBao holds for {key_ref!r} could not be "
-                f"parsed: {exc}"
+                f"The certificate chain OpenBao holds for {key_ref!r} could not be parsed: {exc}"
             ) from exc
 
     # -- the pyHanko bridge ------------------------------------------------
@@ -829,9 +823,7 @@ class OpenBaoPkiIssuer:
             }
         )
         signature_algorithm = _signed_digest_algorithm(algorithm)
-        signature = self._signer.sign_digest(
-            hashlib.sha256(info.dump()).digest(), key_ref=key_ref
-        )
+        signature = self._signer.sign_digest(hashlib.sha256(info.dump()).digest(), key_ref=key_ref)
         request = asn1_csr.CertificationRequest(
             {
                 "certification_request_info": info,
@@ -896,9 +888,7 @@ class OpenBaoPkiIssuer:
             )
         data = self._signer._payload(response).get("data")  # noqa: SLF001
         if not isinstance(data, dict):
-            raise SignerBackendError(
-                f"OpenBao returned no certificate data for {key_ref!r}."
-            )
+            raise SignerBackendError(f"OpenBao returned no certificate data for {key_ref!r}.")
         issued = _parse_issued(data, key_ref=key_ref)
         _require_subject_identity(issued.certificate, signer_id=signer_id)
         _require_public_key(issued.certificate, public_der=self._public_der(key_ref))
@@ -943,9 +933,7 @@ class OpenBaoPkiIssuer:
             errors = self._signer._errors(response)  # noqa: SLF001
             if response.status_code == 400 and "not found" in errors.lower():
                 return "unknown_to_ca"
-            raise SignerBackendError(
-                f"OpenBao refused to revoke certificate {serial}: {errors}"
-            )
+            raise SignerBackendError(f"OpenBao refused to revoke certificate {serial}: {errors}")
         return "revoked"
 
     # -- the trust anchor --------------------------------------------------
@@ -962,8 +950,7 @@ class OpenBaoPkiIssuer:
             chain = x509.load_pem_x509_certificates(response.text.encode("ascii"))
         except (ValueError, UnicodeEncodeError) as exc:
             raise SignerBackendError(
-                f"The CA chain OpenBao holds for mount {self._mount!r} could not be "
-                f"parsed: {exc}"
+                f"The CA chain OpenBao holds for mount {self._mount!r} could not be parsed: {exc}"
             ) from exc
         if not chain:
             raise SignerBackendUnavailable(
@@ -1008,9 +995,7 @@ def certificates_to_pem(certificates: Sequence[x509.Certificate]) -> str:
     )
 
 
-def self_signed_anchor(
-    chain: Sequence[x509.Certificate], *, source: str
-) -> x509.Certificate:
+def self_signed_anchor(chain: Sequence[x509.Certificate], *, source: str) -> x509.Certificate:
     """The self-signed CA in a chain — the only certificate that anchors anything.
 
     Picked by the property rather than by position: a trust root that was really
@@ -1037,8 +1022,7 @@ def _common_name(subject: x509.Name, *, fallback: str) -> str:
     name has been withheld or later redacted (Act 843; legal register L10).
     """
     values = [
-        str(attribute.value)
-        for attribute in subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        str(attribute.value) for attribute in subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     ]
     return values[0] if values and values[0] else fallback
 
@@ -1080,8 +1064,7 @@ def _require_well_formed_csr(pem: str, *, public_der: bytes, key_ref: str) -> No
         parsed = x509.load_pem_x509_csr(pem.encode("ascii"))
     except (ValueError, UnicodeEncodeError) as exc:
         raise SignerBackendError(
-            f"The CSR assembled for {key_ref!r} is not a readable "
-            f"CertificationRequest: {exc}"
+            f"The CSR assembled for {key_ref!r} is not a readable CertificationRequest: {exc}"
         ) from exc
     if not parsed.is_signature_valid:
         raise SignerBackendError(
@@ -1235,9 +1218,7 @@ def _decode_signature(value: Any, *, key_ref: str) -> bytes:
     signature bytes nothing can verify.
     """
     if not isinstance(value, str):
-        raise SignerBackendError(
-            f"OpenBao returned no signature for Transit key {key_ref!r}."
-        )
+        raise SignerBackendError(f"OpenBao returned no signature for Transit key {key_ref!r}.")
     match = _SIGNATURE_PATTERN.match(value)
     if match is None:
         raise SignerBackendError(

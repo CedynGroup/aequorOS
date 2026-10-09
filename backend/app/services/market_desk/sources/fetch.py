@@ -7,9 +7,9 @@ pacing sleeps through an injectable sleeper.
 
 Site contracts encoded here:
 
-**BoG (www.bog.gov.gh)** — broken TLS chain, so the client for this host
-(and ONLY this host) is built with ``verify=False``; a browser User-Agent is
-mandatory (the bot filter rejects bare clients) and data requests must carry
+**BoG (www.bog.gov.gh)** — certificate verification is mandatory;
+a browser User-Agent is also required (the bot filter rejects bare clients)
+and data requests must carry
 a ``Referer`` naming the page the table lives on. wpDataTables protocol:
 GET the host page, scrape the per-table nonce
 (``name="wdtNonceFrontendServerSide_<id>" value="..."`` — nonces rotate, so
@@ -45,6 +45,9 @@ from datetime import date, datetime
 from typing import Any
 
 import httpx
+
+from app.core.outbound import redirect_guard
+from app.core.tls import client_context, require_https
 
 BOG_HOSTS = ("www.bog.gov.gh", "bog.gov.gh")
 BROWSER_USER_AGENT = (
@@ -108,22 +111,12 @@ def _raw(url: str, content: bytes, meta: dict[str, Any] | None = None) -> RawFet
 
 
 def client_kwargs(host: str) -> dict[str, Any]:
-    """httpx.Client kwargs for a source host.
-
-    ``verify=False`` is applied ONLY to bog.gov.gh: the site serves a broken
-    TLS chain (fixtures README §1) and every harvested byte required it.
-    Never widen this to other hosts.
-    """
-    if host in BOG_HOSTS:
-        return {
-            "verify": False,
-            "headers": {"User-Agent": BROWSER_USER_AGENT},
-            "follow_redirects": True,
-            "trust_env": False,
-        }
+    """Verified TLS for every source; a broken certificate fails the capture."""
     return {
+        "verify": client_context(),
         "headers": {"User-Agent": BROWSER_USER_AGENT},
         "follow_redirects": True,
+        "event_hooks": {"response": [redirect_guard(field="research source redirect")]},
         "trust_env": False,
     }
 
@@ -161,6 +154,7 @@ class DeskSession:
         self._pacer = pacer or Pacer()
 
     def get(self, url: str, *, referer: str | None = None) -> httpx.Response:
+        require_https(url, field="research source")
         self._pacer.wait()
         headers = {"Referer": referer} if referer else None
         response = self._client.get(url, headers=headers)
@@ -176,6 +170,7 @@ class DeskSession:
         referer: str | None = None,
         headers: dict[str, str] | None = None,
     ) -> httpx.Response:
+        require_https(url, field="research source")
         self._pacer.wait()
         merged = dict(headers or {})
         if referer:
@@ -233,8 +228,7 @@ def _page_reaches_watermark(rows: list[Any], *, date_column: int, since: date) -
     were fetched — and stored — on an earlier run.
     """
     return any(
-        (row_date := _row_date(row, date_column)) is not None and row_date <= since
-        for row in rows
+        (row_date := _row_date(row, date_column)) is not None and row_date <= since for row in rows
     )
 
 
@@ -384,9 +378,7 @@ def fetch_auction_results(
     return fetches
 
 
-def fetch_publication_pdf(
-    session: DeskSession, *, page_url: str
-) -> list[RawFetch]:
+def fetch_publication_pdf(session: DeskSession, *, page_url: str) -> list[RawFetch]:
     """A BoG publication page (APR notice, SEFD edition) -> its PDF."""
     page_response = session.get(page_url)
     pdf_url = extract_uploads_pdf_url(page_response.text)
@@ -544,6 +536,7 @@ def fetch_pxweb_table(
 # Dispatch
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class WdtSource:
     """One registered wpDataTables view: which table, which host page, and —
@@ -574,9 +567,7 @@ _WDT_SOURCES: dict[str, WdtSource] = {
     "bog_mpr": WdtSource(62, f"{_TREASURY}interbank-interest-rates/"),
     "bog_fx_daily": WdtSource(31, f"{_TREASURY}daily-interbank-fx-rates/", date_column=0),
     "bog_fx_reference": WdtSource(32, f"{_TREASURY}daily-interbank-fx-rates/"),
-    "bog_fx_historical": WdtSource(
-        40, f"{_TREASURY}historical-interbank-fx-rates/", date_column=0
-    ),
+    "bog_fx_historical": WdtSource(40, f"{_TREASURY}historical-interbank-fx-rates/", date_column=0),
     "bog_econ_interest_monthly": WdtSource(
         21, "https://www.bog.gov.gh/economic-data/interest-rates/"
     ),

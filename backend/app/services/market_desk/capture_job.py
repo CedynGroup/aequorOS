@@ -174,9 +174,7 @@ def run_desk_capture(session: Session, job: Job) -> None:
     auction_pass = bool(job.payload.get("auction_pass"))
     # An operator asks for an archive walk by naming sources here; nothing
     # else re-reads a backfill source, and the allow-list still gates it.
-    backfill_sources = frozenset(
-        str(key) for key in (job.payload.get("backfill_sources") or ())
-    )
+    backfill_sources = frozenset(str(key) for key in (job.payload.get("backfill_sources") or ()))
     allowlist = settings.capture_source_allowlist
 
     sources_summary: dict[str, dict[str, Any]] = {}
@@ -378,8 +376,8 @@ def _fetch(spec: SourceSpec, cob: date, *, since: date | None = None) -> list[Ra
 
     Tests monkeypatch module-level ``fetch_source`` (or inject an
     ``httpx.MockTransport`` client); the per-host client honors
-    ``client_kwargs`` — BoG's broken TLS chain and browser-UA requirement
-    live there, never here.
+    ``client_kwargs`` — certificate verification and the browser User-Agent
+    live there.
     """
     with httpx.Client(**client_kwargs(_host_for(spec.source_key))) as client:
         desk_session = DeskSession(client)
@@ -400,9 +398,7 @@ def _previous_month(day: date) -> date:
 _MONTHLY_EDITION_LOOKBACK = 6
 
 
-def _fetch_monthly_edition(
-    source_key: str, desk_session: DeskSession, cob: date
-) -> list[RawFetch]:
+def _fetch_monthly_edition(source_key: str, desk_session: DeskSession, cob: date) -> list[RawFetch]:
     """Resolve the most-recent PUBLISHED edition, probing back a bounded window.
 
     BoG publishes the APR / SEFD notices one to two months in arrears, so the

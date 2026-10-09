@@ -1,5 +1,5 @@
 # =============================================================================
-# AequorOS AI worker — PRODUCTION compose, deployed as its OWN Coolify app
+# aequorOS AI worker — PRODUCTION compose, deployed as its OWN Coolify app
 # (Coolify: Base Directory /backend, Docker Compose Location
 # /docker-compose.ai.prod.yml).
 #
@@ -60,17 +60,31 @@ services:
       # without BYPASSRLS matches zero rows forever, silently), and has its
       # poll loop written a heartbeat recently. WORKER_ID is pinned below so
       # the check reads THIS worker's heartbeat rather than a peer's.
-      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "from app.worker import healthcheck; healthcheck()"',
+        ]
       interval: 60s
       timeout: 15s
       retries: 3
       start_period: 60s
     env_file:
       - .env
+    volumes:
+      - service-trust:/run/trust:ro
     environment:
+      APP_ENV: "production"
+      TLS_ALLOW_PLAINTEXT: "0"
+      TLS_CA_BUNDLE: "/run/trust/ca.pem"
       # Literal pins (these override env_file). The lane selection is what
       # makes this the ONLY process that can claim AI jobs; mixing it with any
       # other lane is refused at startup.
       WORKER_JOB_TYPES: "lane:ai"
       WORKER_ID: "risk-worker-ai"
       RUN_INPROCESS_WORKER: "0"
+
+volumes:
+  service-trust:
+    external: true
+    name: aequoros-service-trust

@@ -30,6 +30,13 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from app.adapters.database_direct.errors import (
+    DatabaseDirectError,
+    DbDirectErrorCode,
+    render_bank_facing,
+)
+from app.core.tls import plaintext_allowed
+
 if TYPE_CHECKING:
     from app.adapters.database_direct.config import Backend, ConnectionConfig
     from app.adapters.database_direct.query_builder import BuiltQuery
@@ -150,3 +157,25 @@ class DatabaseDriver(ABC):
         DatabaseDirectError` on any failure — never a raw DBAPI exception, and
         never one carrying core-internal text onto a bank-facing surface.
         """
+
+
+def require_verified_transport(connection: ConnectionConfig) -> None:
+    """Refuse a plaintext or unverified core connection outside explicit local tests."""
+    if plaintext_allowed():
+        return
+    if not connection.tls.enabled or not connection.tls.verify_server_certificate:
+        raise DatabaseDirectError(
+            render_bank_facing(DbDirectErrorCode.TLS_REQUIRED, database=connection.display_label),
+            internal_detail=(
+                "Core connections require TLS with certificate and hostname verification."
+            ),
+        )
+    # Generic vendor JARs and DSNs expose no common certificate-verification
+    # contract. An encryption hint alone cannot establish peer authentication.
+    if connection.backend in {"jdbc", "odbc"}:
+        raise DatabaseDirectError(
+            render_bank_facing(DbDirectErrorCode.TLS_REQUIRED, database=connection.display_label),
+            internal_detail=(
+                "Generic JDBC/ODBC transport has no verified TLS profile; use a native driver."
+            ),
+        )

@@ -553,14 +553,14 @@ without changing how the product selects a reporting date.
 
 ## Deploy to bank.aequoros.com
 
-Separate Vercel/Coolify project from the marketing site.
+Use [the repository-root compose wrapper](../../docker-compose.dashboard.yml)
+as a separate Coolify app from the marketing site. Its header owns the build
+pack, base-directory, domain, and port settings. Complete
+[the transport deployment preparation](../docs/transport_security.md#deployment-preparation-review-before-applying)
+before applying the template.
 
-1. Import the monorepo, root directory `backend/dashboard`.
-2. Framework: Next.js. Build: `pnpm build` (Next production build plus the home
-   entry-graph guard described above).
-3. Bind `bank.aequoros.com`.
-4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
-   it needs a rebuild, not a restart.
+`NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
+it needs a rebuild, not a restart.
 
 When changing the public host, update the dashboard's `AUTH_URL`, backend
 `CORS_ORIGINS`, and marketing app's `NEXT_PUBLIC_LOGIN_URL` destination, and

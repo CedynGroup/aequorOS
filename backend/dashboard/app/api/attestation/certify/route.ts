@@ -12,9 +12,10 @@
  * the SSO completion.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { auth } from '@/auth';
-import { apiBase, takeAuthorizationCookie } from '@/lib/attestation/stepUp';
+import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
+import { backendRequest } from "@/lib/backendRequest";
+import { apiBase, takeAuthorizationCookie } from "@/lib/attestation/stepUp";
 
 interface CertifyBody {
   bankId?: string;
@@ -26,21 +27,21 @@ interface CertifyBody {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await auth();
   if (!session?.accessToken) {
-    return NextResponse.json({ error: 'not_authenticated' }, { status: 401 });
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   let body: CertifyBody;
   try {
     body = (await request.json()) as CertifyBody;
   } catch {
-    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
   const { bankId, packageId, signingRole, expectedCertificationDigest } = body;
   if (!bankId || !packageId || !signingRole || !expectedCertificationDigest) {
     return NextResponse.json(
       {
         error:
-          'bankId, packageId, signingRole and expectedCertificationDigest are required',
+          "bankId, packageId, signingRole and expectedCertificationDigest are required",
       },
       { status: 400 },
     );
@@ -52,35 +53,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!authorization) {
     return NextResponse.json(
       {
-        error: 'step_up_required',
+        error: "step_up_required",
         message:
-          'No signing authorisation is held. Re-authenticate with your institution to sign.',
+          "No signing authorisation is held. Re-authenticate with your institution to sign.",
       },
       { status: 401 },
     );
   }
 
-  const response = await fetch(
+  const response = await backendRequest(
     `${apiBase()}/banks/${bankId}/regulatory-packages/${packageId}/attestation/certify`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         signing_role: signingRole,
         authorization_token: authorization,
         expected_certification_digest: expectedCertificationDigest,
       }),
-      cache: 'no-store',
+      cache: "no-store",
     },
   );
 
   // Pass the risk service's own verdict through unchanged — the dialog branches
   // on its error codes (maker_checker, figures_changed_since_certification, …).
   const payload: unknown = await response.json().catch(() => null);
-  return NextResponse.json(payload ?? { error: 'certify_failed' }, {
+  return NextResponse.json(payload ?? { error: "certify_failed" }, {
     status: response.status,
   });
 }
