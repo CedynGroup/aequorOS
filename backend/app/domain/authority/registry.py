@@ -1092,7 +1092,7 @@ _CAPITAL_VERSION = "regulatory-capital-v5.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
 _IRR_VERSION = "regulatory-irr-v1.0.0"
 _IRR_SF_VERSION = "regulatory-irr-sf-v1.0.0"
-_FX_VERSION = "regulatory-fx-v1.0.0"
+_FX_VERSION = "regulatory-fx-v1.1.0"
 
 #: Not the pending-verification sentinel: a stated negative. The Capital
 #: Requirements Directive was searched in full and contains no value-at-risk

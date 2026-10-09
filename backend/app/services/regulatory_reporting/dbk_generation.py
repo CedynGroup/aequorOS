@@ -23,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import NotComputable
+from app.live.public import require_fx_run_coverage
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.services.regulatory_reporting.generation import (
     BASELINE_SCENARIO,
@@ -64,6 +66,13 @@ def _latest_fx_run_or_409(
                 ),
             },
         )
+    try:
+        require_fx_run_coverage(db, ctx, bank, period, run)
+    except NotComputable as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error_code": exc.state.value, "message": str(exc)},
+        ) from exc
     return run
 
 

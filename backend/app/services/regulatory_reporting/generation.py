@@ -36,7 +36,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core import observability
+from app.domain.authority.outcomes import NotComputable
 from app.domain.policy import Direction, direction_for
+from app.live.public import require_fx_run_coverage
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -1696,6 +1698,13 @@ def _generate_fx(
     run = _baseline_run_or_409(
         db, ctx, bank, period, MODULE_FX, artifact="the Net Open Position return"
     )
+    try:
+        require_fx_run_coverage(db, ctx, bank, period, run)
+    except NotComputable as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error_code": exc.state.value, "message": str(exc)},
+        ) from exc
     metrics = run.metrics
     position_rows = [
         _row(

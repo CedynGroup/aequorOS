@@ -27,6 +27,8 @@ from typing import Any
 
 from sqlalchemy import select
 
+from app.domain.authority.outcomes import NotComputable
+from app.live.public import require_fx_run_coverage
 from app.models import RegulatoryRun
 from app.models.regulatory import BankFinancialFact
 
@@ -47,6 +49,8 @@ _THOUSAND = Decimal(1000)
 def _fx_run(rc: ResolveContext, scenario: str) -> RegulatoryRun | None:
     key = f"run:{MODULE_FX}:{scenario}"
     cached = rc.cache.get(key)
+    if isinstance(cached, NotComputable):
+        raise cached
     if cached is not None:
         return cached or None
     run = rc.db.scalar(
@@ -62,6 +66,12 @@ def _fx_run(rc: ResolveContext, scenario: str) -> RegulatoryRun | None:
         .order_by(RegulatoryRun.created_at.desc())
         .limit(1)
     )
+    if run is not None:
+        try:
+            require_fx_run_coverage(rc.db, rc.ctx, rc.bank, rc.period, run)
+        except NotComputable as exc:
+            rc.cache[key] = exc
+            raise
     rc.cache[key] = run or False
     return run
 

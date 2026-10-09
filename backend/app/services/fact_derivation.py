@@ -149,21 +149,23 @@ market_risk / fx_position
     bought currency's net (GHS legs are ignored — GHS is the base currency, so
     only foreign-currency exposure moves). The delta per currency is carried
     as ``net_derivatives_ccy`` in the fact attributes, mirroring the seed.
-    Spot from ``fx_rates_current``, else implied from the position book (warned
-    and stamped ``spot_source``); a rate is never invented, so a currency whose
-    hedge legs cannot be converted is excluded from the book entirely rather
-    than valued at par, and the implied fallback is withdrawn altogether once
+    Spot from ``fx_rates_current``; the existing position-book fallback requires
+    a return history (warned and stamped ``spot_source``); a currency whose
+    hedge legs cannot be converted is retained with a missing-rate refusal
+    rather than valued at par, and the implied fallback is withdrawn once
     part of a currency's book carries no conversion. A position with no ingested
     ``balance_ghs`` is EXCLUDED from the reporting-currency leg and COUNTED
     (``unconverted_position_count`` on the fact) rather than converted to zero;
     the currency leg still carries it in full, so the two legs describe
     different books and ``regulatory_fx`` refuses the run. LC_GUARANTEE is
     off-balance and excluded from the NOP.
-    A currency without a daily return history has no ``fx_position`` row (the
-    VaR engine requires a history) but still counts in the net open position.
-    ``net_long_fx`` / ``net_short_fx`` are the long/short sums over EVERY
-    currency's post-hedge net — the capital charge and the NOP limits cover the
-    whole book even where the VaR row cannot exist.
+    Every currency has an ``fx_position`` row regardless of return history.
+    NOP quote and history requirements follow the currency coverage contract in
+    ``ARCHITECTURE.md`` §3b; missing evidence produces a named refusal.
+    ``net_long_fx`` / ``net_short_fx`` retain the capital calculation's existing
+    booked/implied-rate basis, computed separately from the Notice NOP facts.
+    The stricter NOP quote requirement does not change that capital basis; its
+    unconvertible-hedge refusal remains a separate capital concern.
 
 fx_return_history
     ``fx_rates_historical`` per currency, chronological: simple daily returns
@@ -289,6 +291,7 @@ from app.domain.positions.families import PAST_DUE_CATEGORY as _PAST_DUE_CATEGOR
 from app.domain.positions.families import RETAIL_LOAN_CATEGORIES as _RETAIL_LOAN_CATEGORIES
 from app.domain.positions.families import loan_family as _loan_family
 from app.domain.positions.families import unclassified_category as _unclassified_category
+from app.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
 from app.live import position_book
 from app.models import (
     Bank,
@@ -2913,8 +2916,8 @@ def _derive_lcr_inflows(  # noqa: PLR0912
 # FX
 # ---------------------------------------------------------------------------
 
-_FX_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "INTERBANK_PLACEMENT")
-_FX_LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING")
+_FX_ASSET_TYPES = FX_ASSET_TYPES
+_FX_LIABILITY_TYPES = FX_LIABILITY_TYPES
 
 
 def _spot_rates(canonical: _Canonical) -> dict[str, Decimal]:
@@ -2930,12 +2933,7 @@ def _spot_rates(canonical: _Canonical) -> dict[str, Decimal]:
 
 
 def _historical_currencies(canonical: _Canonical) -> set[str]:
-    legacy = {
-        str(payload.get("currency", "")).strip().upper()
-        for payload in canonical.refs.get("fx_rates_historical", ())
-        if payload.get("currency")
-    }
-    return legacy | set(canonical.market_fx_history)
+    return {currency for currency, points in _fx_rate_series(canonical).items() if len(points) >= 2}
 
 
 def _fx_hedge_deltas(canonical: _Canonical, warnings: list[str]) -> dict[str, Decimal]:
@@ -3037,6 +3035,11 @@ def _fx_legs(canonical: _Canonical) -> dict[str, _FxLeg]:
 def _derive_fx_positions(
     canonical: _Canonical, groups: list[GroupResult]
 ) -> tuple[list[_FactSpec], set[str]]:
+    """Basis: Notice BG/FMD/2026/07 (in force).
+
+    Implements: ¶1(a)–(b), "NET OPEN POSITION COMPUTATION": every currency.
+    Not: return-history gating, NOF, long-position or contingent-scope changes.
+    """
     warnings: list[str] = []
     spots = _spot_rates(canonical)
     with_history = _historical_currencies(canonical)
@@ -3047,8 +3050,6 @@ def _derive_fx_positions(
     currencies = sorted(set(legs) | set(hedge_deltas))
     specs: list[_FactSpec] = []
     included: set[str] = set()
-    net_long = _ZERO
-    net_short = _ZERO
     for currency in currencies:
         leg = legs.get(currency, _FxLeg())
         base_ccy = leg.net_ccy
@@ -3066,38 +3067,37 @@ def _derive_fx_positions(
             )
         # The spot resolves from the on-balance book before hedge deltas apply,
         # so an implied fallback rate stays consistent with the position data.
-        # It is REQUIRED only to convert a hedge delta; without a delta the net
-        # is already in base currency and needs no rate.
-        resolved = _resolve_spot(currency, spots.get(currency), leg, warnings)
+        # A missing-history currency needs an ingested current quote rather
+        # than an implied book ratio; no exposure is discarded for missing data.
+        resolved = _resolve_spot(
+            currency, spots.get(currency), leg, warnings, allow_implied=currency in with_history
+        )
         if resolved is None and delta != _ZERO:
             # Audit §3: this branch used to substitute a 1.0 spot, valuing the
             # hedge leg at par with the base currency. Nothing is invented now.
             warnings.append(
-                f"{currency} was excluded from the FX book: its FX_HEDGE legs cannot be "
-                "converted because no spot rate was ingested and none is implied by the "
-                "position book (missing_required_input). Ingest an fx_rates_current row "
+                f"{currency} is retained in the FX book, but its FX_HEDGE legs cannot be "
+                "converted without a governed current spot rate (missing_required_input). "
+                "Ingest an fx_rates_current row "
                 f"for {currency}."
             )
-            continue
+            # Keep the currency row so the named missing-rate refusal reaches every reader.
         spot = resolved[0] if resolved is not None else None
-        spot_source = resolved[1] if resolved is not None else "not_required"
         net_ccy = base_ccy + delta
         net_ghs = base_ghs + (delta * spot if (delta != _ZERO and spot is not None) else _ZERO)
-        # The open position drives the FX capital charge and the NOP limits, so
-        # it covers EVERY currency the bank holds. Only the per-currency VaR row
-        # needs a return history (audit §3: a currency with no history used to
-        # vanish from the book entirely, understating the capital charge).
-        if net_ghs >= _ZERO:
-            net_long += net_ghs
-        else:
-            net_short += -net_ghs
+        spot_source = (
+            resolved[1]
+            if resolved is not None
+            else "missing_required_input"
+            if net_ccy != _ZERO or net_ghs != _ZERO or delta != _ZERO
+            else "not_required"
+        )
         if currency not in with_history:
             warnings.append(
                 f"{currency} carries no ingested daily return history, so it has no VaR "
-                f"row; its net of {money(net_ghs)} {canonical.base_currency} IS included "
-                "in the net open position and therefore in the FX capital charge."
+                f"estimate. Its net of {money(net_ghs)} {canonical.base_currency} is retained "
+                "for NOP limits; the full FX analysis refuses until history is ingested."
             )
-            continue
         included.add(currency)
         attributes = {
             "currency": currency,
@@ -3132,7 +3132,50 @@ def _derive_fx_positions(
             )
         )
 
-    market_specs = [
+    market_specs = _derive_fx_market_risk(legs, hedge_deltas, spots)
+    groups.append(GroupResult(group="market_risk", status="derived", rows=len(market_specs)))
+    if specs:
+        groups.append(
+            GroupResult(group="fx_position", status="derived", rows=len(specs), warnings=warnings)
+        )
+    else:
+        groups.append(
+            GroupResult(
+                group="fx_position",
+                status="skipped",
+                warnings=warnings,
+                note="No foreign-currency positions exist in the NOP book.",
+            )
+        )
+    return market_specs + specs, included
+
+
+def _derive_fx_market_risk(
+    legs: dict[str, _FxLeg], hedge_deltas: dict[str, Decimal], spots: dict[str, Decimal]
+) -> list[_FactSpec]:
+    """Preserve the capital FX basis independently of the Notice NOP basis.
+
+    Capital retains its existing implied-rate fallback and excludes a currency
+    whose hedge delta cannot be converted. Its valuation refusal is a separate
+    capital concern; changing the NOP quote requirement must not change CAR.
+    """
+    net_long = _ZERO
+    net_short = _ZERO
+    for currency in sorted(set(legs) | set(hedge_deltas)):
+        leg = legs.get(currency, _FxLeg())
+        delta = hedge_deltas.get(currency, _ZERO)
+        resolved = _resolve_spot(currency, spots.get(currency), leg, [])
+        if resolved is None and delta != _ZERO:
+            continue
+        spot = resolved[0] if resolved is not None else None
+        net_ghs = leg.net_reporting + (
+            delta * spot if delta != _ZERO and spot is not None else _ZERO
+        )
+        if net_ghs >= _ZERO:
+            net_long += net_ghs
+        else:
+            net_short += -net_ghs
+    return [
         _FactSpec(
             fact_group="market_risk",
             category="net_long_fx",
@@ -3146,22 +3189,6 @@ def _derive_fx_positions(
             derived_from="|Σ short per-currency FX nets|",
         ),
     ]
-    groups.append(GroupResult(group="market_risk", status="derived", rows=len(market_specs)))
-    if specs:
-        groups.append(
-            GroupResult(group="fx_position", status="derived", rows=len(specs), warnings=warnings)
-        )
-    else:
-        groups.append(
-            GroupResult(
-                group="fx_position",
-                status="skipped",
-                warnings=warnings,
-                note="No foreign-currency positions with return histories exist; the FX module "
-                "will report no open positions.",
-            )
-        )
-    return market_specs + specs, included
 
 
 def _resolve_spot(
@@ -3169,15 +3196,17 @@ def _resolve_spot(
     spot: Decimal | None,
     leg: _FxLeg,
     warnings: list[str],
+    *,
+    allow_implied: bool = True,
 ) -> tuple[Decimal, str] | None:
     """(rate, source) for one currency, or ``None`` when no rate is knowable.
 
     Audit §3: the pre-audit form returned ``1.0`` when neither an ingested spot
     nor an implied rate existed, and that 1.0 then converted hedge deltas — a
     foreign-currency exposure silently valued at par with the base currency.
-    A rate is never invented now: absence returns ``None`` and the caller
-    excludes the currency from the FX book with a MISSING_REQUIRED_INPUT
-    warning.
+    A rate is never invented: absence returns ``None``. The Notice NOP caller
+    retains the currency with a missing-rate refusal when valuation needs a rate;
+    the separate capital caller preserves its existing unconvertible-hedge exclusion.
 
     ``leg.leg_complete`` says whether EVERY position in this currency carried an
     ingested reporting-currency balance. When it did not, the implied fallback is
@@ -3189,6 +3218,12 @@ def _resolve_spot(
     """
     if spot is not None:
         return spot, "ingested"
+    if not allow_implied:
+        warnings.append(
+            f"{currency} has no governed current FX quote or return history. Its currency "
+            "position is retained; valuing any open exposure requires an ingested quote."
+        )
+        return None
     if not leg.leg_complete:
         warnings.append(
             f"No spot rate was ingested for {currency} and none was implied from its "
@@ -3208,9 +3243,8 @@ def _resolve_spot(
     return None
 
 
-def _derive_fx_returns(
-    canonical: _Canonical, currencies: set[str], groups: list[GroupResult]
-) -> list[_FactSpec]:
+def _fx_rate_series(canonical: _Canonical) -> dict[str, list[tuple[str, Decimal]]]:
+    """The same accepted spot observations govern history availability and returns."""
     series: dict[str, list[tuple[str, Decimal]]] = {}
     for payload in canonical.refs.get("fx_rates_historical", ()):
         currency = str(payload.get("currency", "")).strip().upper()
@@ -3223,6 +3257,13 @@ def _derive_fx_returns(
     for currency, history in canonical.market_fx_history.items():
         series[currency] = [(day.isoformat(), rate) for day, rate in history if rate > _ZERO]
 
+    return series
+
+
+def _derive_fx_returns(
+    canonical: _Canonical, currencies: set[str], groups: list[GroupResult]
+) -> list[_FactSpec]:
+    series = _fx_rate_series(canonical)
     del currencies  # histories derive for every currency; the engine ignores extras
     specs: list[_FactSpec] = []
     for currency in sorted(series):

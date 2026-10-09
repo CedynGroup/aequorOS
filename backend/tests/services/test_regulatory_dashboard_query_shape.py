@@ -62,7 +62,7 @@ _FULL_HTTP_QUERY_COUNTS = {
     "irr": 16,
     # Scoped FX view reuses the router-resolved tenant bank, then adds principal,
     # binding, and institution checks, plus the same data-scope re-read.
-    "fx": 16,
+    "fx": 17,  # One batched accepted-book currency coverage query.
     # Prefetched scoped FTP view reuses the dashboard's resolved bank.
     "ftp": 12,
 }
@@ -83,7 +83,7 @@ _CURRENT_MODE_HTTP_QUERY_COUNTS = {
     "capital": 22,
     "irr": 18,
     # +1 over the pre-Phase-4 17 for the data-scope re-read, as above.
-    "fx": 18,
+    "fx": 19,  # One batched accepted-book currency coverage query.
     "ftp": 14,
 }
 
