@@ -12,23 +12,23 @@ authoritative run type, the reporting mappings, and whether the result may be fi
 
 ---
 
-## 1. Registry census — measured
+## 1. Registry census
 
-```
-$ cd backend && uv run python -c "from app.domain.authority.registry import REGISTRY; ..."
-total authorities: 78
-counts_by_family: {'capital': 19, 'credit': 7, 'forecast': 8, 'ftp': 5,
-                   'fx': 5, 'irrbb': 7, 'liquidity': 21, 'stress': 6}
-advisory_designation: {'filed': 47, 'supervisory_monitoring': 23, 'advisory_only': 8}
-requiring_external_verification(): 40
-multi_authority_metrics(): car_pct, lcr_pct, npl_ratio, nsfr_pct,
-                           total_provision_required_ghs, total_rwa_ghs
-unresolved_divergences(): car_pct, lcr_pct, nsfr_pct — all via bank_forecast_projection_path
-```
+Generate the current census from the executable registry; copied counts are not
+an authority for the live filing designations or verification backlog:
 
-> **Correction to the remediation register.** The register records 41 authorities requiring
-> external regulatory verification. The registry's own accessor returns **40**. The measured
-> figure is used throughout this package.
+```sh
+cd backend && uv run python -c "
+from collections import Counter
+from app.domain.authority.registry import REGISTRY
+print('total authorities:', len(REGISTRY.all()))
+print('counts_by_family:', dict(REGISTRY.counts_by_family()))
+print('advisory_designation:', dict(Counter(e.advisory_designation.value for e in REGISTRY.all())))
+print('requiring_external_verification:', len(REGISTRY.requiring_external_verification()))
+for metric, entries in REGISTRY.multi_authority_metrics().items():
+    print(metric, [(e.methodology_id, e.advisory_designation.value) for e in entries])
+print('unresolved_divergences:', [(e.metric_id, e.methodology_id) for e in REGISTRY.unresolved_divergences()])"
+```
 
 ## 2. Uniqueness is structural
 
@@ -72,11 +72,10 @@ boundary described in §01 §2.
 
 ## 3. Designations, and what each permits
 
-| Designation              | Count | Meaning                                                                       |
-| ------------------------ | ----- | ----------------------------------------------------------------------------- |
-| `filed`                  | 47    | May appear in a regulatory return                                             |
-| `supervisory_monitoring` | 23    | Computed and shown; not bound into a filed return today                       |
-| `advisory_only`          | 8     | **Cannot be filed** — includes every metric carrying an unresolved divergence |
+The executable [`AdvisoryDesignation`](../../backend/app/domain/authority/registry.py)
+enum owns each designation's meaning, including `basel_reference`; the census
+command in §1 derives their counts. BI's projection is owned by
+[`app/domain/bi/authority.py`](../../backend/app/domain/bi/authority.py).
 
 `test_unresolved_divergences_are_never_designated_filed` is the guard: an authority whose
 `divergence.resolution_status` is not `accepted_by_authority` can never carry `FILED`.
@@ -89,8 +88,8 @@ boundary described in §01 §2.
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `car_pct`                      | `crd_basel_capital_run` (primary, filed) · `bog_bsd5a_form_ratio` (filed, accepted divergence) · `act930_s29_nof_rwa` (SDI primary, monitoring) · `bank_forecast_projection_path` (advisory only, unresolved) | see §5, §6                                               |
 | `total_rwa_ghs`                | `crd_basel_capital_run` (filed) · `act930_s29_nof_rwa` (monitoring)                                                                                                                                           | Different legal regimes                                  |
-| `lcr_pct`                      | `basel_bog_liquidity_run` (primary, filed) · `lmtd_table11_capped` (filed, accepted divergence) · `bank_forecast_projection_path` (advisory only)                                                             | see §5                                                   |
-| `nsfr_pct`                     | `basel_bog_liquidity_run` (filed) · `bank_forecast_projection_path` (advisory only)                                                                                                                           | see §6                                                   |
+| `lcr_pct`                      | Current methods and filing designations: executable `REGISTRY` (§1 census)                                                                                                                                    | see §5                                                   |
+| `nsfr_pct`                     | Current methods and filing designations: executable `REGISTRY` (§1 census)                                                                                                                                    | see §6                                                   |
 | `npl_ratio`                    | `bog_five_grade_classification` (bank, filed) · `nbfi_four_grade_classification` (SDI, monitoring)                                                                                                            | SDI methodology rests on a repealed instrument — see §15 |
 | `total_provision_required_ghs` | as `npl_ratio`                                                                                                                                                                                                | as above                                                 |
 
@@ -185,22 +184,17 @@ That is how a future divergence gets caught rather than discovered by an examine
 
 ---
 
-## 8. The 40 authorities requiring external regulatory verification
+## 8. Authorities requiring external regulatory verification
 
 `requires_external_verification()` is a **substring** test over `authority_reference`,
 `policy_resolver` and `calculation_version` (`registry.py:356-370`) — deliberately, because
 several citations are partially established. A metric is flagged if any governance field
 still carries the sentinel.
 
-| Family    | Count | What is missing                                                                                            |
-| --------- | ----- | ---------------------------------------------------------------------------------------------------------- |
-| Forecast  | 8     | No prescribed projection method; code-default elasticities                                                 |
-| IRRBB     | 7     | Basel standard known; **BoG's prescribed shock set is not in the repository**                              |
-| Capital   | 6     | 5 SDI/s.29 entries (statute cited, no engine version, risk weights seeded `pending`) + 1 advisory-internal |
-| Stress    | 6     | No prescribed macro scenario set                                                                           |
-| FX        | 5     | No BoG NOP/VaR citation bound to the engine                                                                |
-| Liquidity | 4     | 2 SDI reserve ratios + 2 advisory-internal                                                                 |
-| Credit    | 4     | Provisioning citation not located to a clause                                                              |
+The current family split and each entry's unresolved basis are generated from
+`REGISTRY.requiring_external_verification()` below. This includes Basel references
+whose BoG instrument or calibration is unpublished; the register's notes own the
+specific gap rather than a copied family/count table.
 
 Full enumeration (metric · regime · class · designation) is reproducible with:
 

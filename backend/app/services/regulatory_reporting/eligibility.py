@@ -13,8 +13,9 @@ This module is that rule, once. :func:`resolve_eligibility` returns an
 ``calendar.list_obligations`` builds its obligation list from
 :meth:`InstitutionEligibility.eligible_definitions`, and
 ``generation.generate_package`` gates on
-:meth:`InstitutionEligibility.require` before a package row can be minted. They
-cannot drift, because there is only one decision function.
+:meth:`InstitutionEligibility.require` before a package row can be minted.
+Preparation may ignore commencement; the calendar admits only instruments in
+force on their reporting dates. Both use this module's status resolution.
 
 The dimensions
 --------------

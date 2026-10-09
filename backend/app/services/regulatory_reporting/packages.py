@@ -18,13 +18,13 @@ from app.schemas.regulatory_reporting import (
     ReturnTemplateRead,
 )
 from app.services.regulatory_reporting import family_access
-from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_package_or_404,
     read_package,
     read_summary,
 )
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.registry import REGISTRY
 
 

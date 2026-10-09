@@ -206,13 +206,10 @@ class ReturnDefinition:
     # are the only source registered), so ``("GH",)`` states a fact rather than
     # standing in for an unmade decision. An empty tuple = unrestricted.
     jurisdictions: tuple[str, ...] = ("GH",)
-    # The date this return comes into force, where the registry establishes one.
-    # ``None`` means NO effective date is established here, and the eligibility
-    # decision says so explicitly instead of treating silence as "in force
-    # forever". Several citations above DO name a directive commencement date
-    # ("effective 1 Jan 2027"); those are deliberately not encoded as generation
-    # gates, because blocking generation on them would stop a bank preparing and
-    # dry-running a return before its first live filing.
+    # Literal commencement, or a conditional date for an exposure draft.
+    # ``None`` defers to effective_from_parameter if declared; otherwise status
+    # remains the explicit instrument_status. Commencement cannot finalise a
+    # draft or block its preparation before the first live filing.
     effective_from: date | None = None
     # A draft date is conditional: reaching it never makes the instrument final.
     instrument_status: InstrumentStatus = "in_force"
@@ -793,9 +790,11 @@ REGISTRY: dict[str, ReturnDefinition] = {
             family="icaap_stress",
             title="ICAAP Data Companion & Stress Summary",
             directive_citation=(
-                "BoG ICAAP Guideline (Exposure Draft, February 2026) ¶72 — annual submission no later than "
+                "BoG ICAAP Guideline (Exposure Draft, February 2026) ¶72 — annual submission "
+                "no later than "
                 "three months after year-end with Board resolutions; Stress Testing "
-                "Guideline (Exposure Draft, February 2026) ¶67 — stress results within the ICAAP 'by end "
+                "Guideline (Exposure Draft, February 2026) ¶67 — stress results within the "
+                "ICAAP 'by end "
                 "of March of the ensuing year', Appendix II Tables 1–6 published. "
                 "Both effective 1 Jan 2027 if final."
             ),

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Compare two versions of ONE return — v1 against v2 of LCR-NSFR, say.
@@ -22,19 +22,19 @@
  * the one the platform computed, shown one way.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { GitCompareArrows } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import SectionCard from '@/components/ui/SectionCard';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import { useEffect, useMemo, useState } from "react";
+import { GitCompareArrows } from "lucide-react";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import SectionCard from "@/components/ui/SectionCard";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import {
   useComparePackageVersions,
   useRegulatoryPackages,
   useReturnTemplates,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate } from '@/lib/api/values';
-import { ComparisonPanel } from './PriorVersionsCard';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, isoDate } from "@/lib/api/values";
+import { ComparisonPanel } from "./PriorVersionsCard";
 
 export default function ReturnVersionCompare({
   bankId,
@@ -47,7 +47,7 @@ export default function ReturnVersionCompare({
     [templatesQuery.data],
   );
 
-  const [code, setCode] = useState<string>('');
+  const [code, setCode] = useState<string>("");
   useEffect(() => {
     if (!code && templates.length > 0) setCode(templates[0].code);
   }, [code, templates]);
@@ -63,7 +63,9 @@ export default function ReturnVersionCompare({
   const packages = useMemo(
     () =>
       [...(packagesQuery.data?.packages ?? [])].sort((a, b) => {
-        const date = isoDate(b.reportingDate).localeCompare(isoDate(a.reportingDate));
+        const date = isoDate(b.reportingDate).localeCompare(
+          isoDate(a.reportingDate),
+        );
         return date !== 0 ? date : b.version - a.version;
       }),
     [packagesQuery.data],
@@ -73,7 +75,7 @@ export default function ReturnVersionCompare({
     () => [...new Set(packages.map((pkg) => isoDate(pkg.reportingDate)))],
     [packages],
   );
-  const [date, setDate] = useState<string>('');
+  const [date, setDate] = useState<string>("");
   useEffect(() => {
     if (dates.length > 0 && !dates.includes(date)) setDate(dates[0]);
   }, [date, dates]);
@@ -83,8 +85,8 @@ export default function ReturnVersionCompare({
     [packages, date],
   );
 
-  const [baseId, setBaseId] = useState<string>('');
-  const [targetId, setTargetId] = useState<string>('');
+  const [baseId, setBaseId] = useState<string>("");
+  const [targetId, setTargetId] = useState<string>("");
   useEffect(() => {
     // Default to the most useful pair: the newest version against the one it
     // replaced. That is the question a send-back leaves behind.
@@ -92,8 +94,8 @@ export default function ReturnVersionCompare({
       setTargetId(versions[0].id);
       setBaseId(versions[1].id);
     } else {
-      setTargetId(versions[0]?.id ?? '');
-      setBaseId('');
+      setTargetId(versions[0]?.id ?? "");
+      setBaseId("");
     }
   }, [versions]);
 

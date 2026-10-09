@@ -446,8 +446,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         for definition in eligibility.eligible_definitions()
     }
     # Which returns are filed INSIDE another one's submission (D-011), and from
-    # which date. Before the parent is in force the annex keeps its own row, so
-    # the pre-commencement dry runs are untouched.
+    # which date. An in-force annex keeps its own row until its parent commences;
+    # preparation dates remain available through list_return_anchors.
     annex_parents = {
         definition.code: definition.annex_of
         for definition in eligibility.eligible_definitions()

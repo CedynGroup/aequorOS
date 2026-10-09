@@ -139,11 +139,12 @@ These are correctness rules, not style preferences. The evidence is
   jurisdiction-calibrated parallel ±450bp shocks appear with readable labels
   and informational descriptions when the active parameter set supplies them.
   These additional shocks do not enter the worst-case or breach calculation.
-  Ghana's IRRBB guideline is a February 2026 exposure draft stated effective
-  1 January 2027.
-- **LMTD, LRMD, the stress-testing directive and the ICAAP guideline** are all
-  February 2026 **exposure drafts**. Copy must say "draft" / "not yet in force";
-  it must not call their minimums binding.
+  Instrument status and preparation labels follow the
+  [reporting-date contract](../../docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
+- **Draft instruments:** copy must say "draft" / "not yet in force" and must
+  not call their minimums binding. The
+  [research dossier](../../docs/research/bog_returns_and_templates.md) owns publication
+  status and conditional commencement; the reporting-date contract governs preparation.
 - Jurisdiction is data: use `lib/format.ts` (`fmtCurrency`, `regShort()`,
   `centralBankName()`), never a `'GHS'` / `'BoG'` literal in display code.
 

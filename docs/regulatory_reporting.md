@@ -129,15 +129,17 @@ any regeneration for the same (return_code, reporting_date, basis)
 
 | family               | return_code(s)                                                                                                                                                                                                | source                                                                                                                                                                                                                                                              | frequency/deadline (per research)                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| liquidity            | LCR/NSFR return (`LCR-NSFR`; registered as `BSD3` before the official templates were available — official BSD3 is Large Exposures, recoded 2026-08-15), Liquidity Monitoring Tools set                        | `get_bsd3_preview` + liquidity runs + maturity/funding analytics                                                                                                                                                                                                    | monthly (LMT by day 9 per 2026 directive — confirm from research)                                                                                                                                                                                                                                                                                                                      |
+| liquidity            | LCR/NSFR preparation pack (`LCR-NSFR`; registered as `BSD3` before the official templates were available — official BSD3 is Large Exposures, recoded 2026-08-15), Liquidity Monitoring Tools set              | `get_bsd3_preview` + liquidity runs + maturity/funding analytics                                                                                                                                                                                                    | Preparation cadence; publication and commencement governed by §5b                                                                                                                                                                                                                                                                                                                      |
 | capital              | CAR/RWA reconstruction (`CAR-RWA`; was mis-coded `BSD2` — the official Capital Adequacy Return is **BSD5A**, now generated on its official layout from this same engine)                                      | `get_bsd2_preview` + capital runs                                                                                                                                                                                                                                   | monthly/quarterly per research                                                                                                                                                                                                                                                                                                                                                         |
-| irrbb                | IRRBB pilot return (repricing gap, ΔEVE/ΔNII by shock)                                                                                                                                                        | IRR dashboard/run payloads                                                                                                                                                                                                                                          | quarterly (pilot)                                                                                                                                                                                                                                                                                                                                                                      |
-| icaap_stress         | ICAAP data companion + stress summary                                                                                                                                                                         | forecast + stress runs                                                                                                                                                                                                                                              | annual / per research                                                                                                                                                                                                                                                                                                                                                                  |
+| irrbb                | IRRBB pilot return (repricing gap, ΔEVE/ΔNII by shock)                                                                                                                                                        | IRR dashboard/run payloads                                                                                                                                                                                                                                          | Draft preparation; see §5b                                                                                                                                                                                                                                                                                                                                                             |
+| icaap_stress         | ICAAP data companion + stress summary                                                                                                                                                                         | forecast + stress runs                                                                                                                                                                                                                                              | Draft preparation; see §5b                                                                                                                                                                                                                                                                                                                                                             |
 | fx                   | Net Open Position return                                                                                                                                                                                      | FX dashboard/runs                                                                                                                                                                                                                                                   | per research                                                                                                                                                                                                                                                                                                                                                                           |
 | **bsd** (2026-08-15) | **Every official Bank of Ghana BSD prudential return** — BSD1, 1A, 1B, 2, 2A, 3A, 3B, 4, 5A, 5B, 6 (6A/6B), 7A, 7B, 8, 9, 10, 11, 13, 14, 15A, 15B, 16, 17 (24 workbooks / 76 sheets under `docs/reporting/`) | `bog_form` — `bog_forms/` computes each form by filling the official INPUT cells from named platform sources and **evaluating the templates' own formulas** (5,903 formula cells, 100% covered), then exports the **official workbook layout** values-only (sealed) | frequency + time limit from the Guide's List of Prudential Returns (weekly 9 days; monthly/quarterly/half-yearly 14 days); basis solo, consolidated only on BSD7B/BSD9 (+ GROUP variants BSD3B/BSD5B). Registry doc: `docs/bog_returns/00_full_return_registry.md`; per-form line maps `docs/bog_returns/<form>_line_map.md`; coverage matrix `docs/bog_returns/99_coverage_matrix.md` |
 
 Registry entries: code, title, directive citation, frequency, deadline rule (callable:
-reporting_date → due_date), generator, template id + fidelity grade, channel default.
+reporting_date → due_date), generator, template id + fidelity grade, channel default,
+publication status and literal or governed commencement. The executable registry owns
+the per-return declarations; a cadence or template fidelity does not establish a filing duty.
 
 ### 4a. Export artifacts of a package (2026-08-16)
 
@@ -227,8 +229,9 @@ Corrected direction, now pinned by `tests/services/test_reporting_anchors.py`:
 ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
 ```
 
-An anchor with no snapshot is listed and marked `awaiting_data`, because the obligation is BoG's and
-its deadline runs regardless. Generation resolves the snapshot **exactly** for every cadence — the
+An anchor with no snapshot is listed and marked `awaiting_data`; an in-force filing
+obligation's deadline runs regardless of data arrival. Preparation-only anchors follow
+the status rule in §5b. Generation resolves the snapshot **exactly** for every cadence — the
 daily "latest period ending on or before" fallback was removed with it, since it would have filed a
 month-old book as a business day's position — and refuses with `no_computed_position` naming the
 date required, the nearest earlier computed date, and the remedy. Snapshot `period_start` remains
@@ -243,7 +246,8 @@ figures are still the bank's position as of some date, resolved exactly like eve
 `list_return_anchors` offers the positions the bank actually holds: `anchors.computed_snapshot_dates`
 (on or before `as_of`, newest first, bounded by `EVENT_DRIVEN_SNAPSHOT_LIMIT`), every one
 `computed`, none carrying a deadline (`due_date` is null, so an authorized reader sees
-`rag=on_track`, as for an unconfigured governed deadline; hidden families have `rag=null`).
+`rag=on_track` for an in-force, visible family, as for an unconfigured governed deadline;
+preparation-only anchors and hidden families have `rag=null`).
 The payload's `reporting_date_source` says which kind
 of date it offers — `regulator_anchor` or `computed_snapshot`. The Returns workspace keeps the
 "Reporting date" label and adds a hint explaining computed position dates for event-driven packs.
@@ -270,7 +274,7 @@ the calendar still never lists event-driven packs as obligations.
   on or before" fallback would fail open by filing a month-old book as a business day's
   position; a miss is `no_computed_position` (409) naming the date required and the
   nearest earlier one, which is reported and NEVER substituted. An anchor with no data is
-  still listed (`data_status='awaiting_data'`) — the deadline is BoG's and runs
+  still listed (`data_status='awaiting_data'`) — an in-force obligation's deadline runs
   regardless. `period_start` stays day-1-of-month: it is the fiscal month-to-date window
   BSD7 (YTD), BSD8 (opening balance) and `implied_rating` read, not filler.
 - **The anchor window runs BOTH ways,** so an overdue return stays reachable: a tenant
@@ -287,6 +291,19 @@ the calendar still never lists event-driven packs as obligations.
   exception:** no regulator date exists, so they take their as-of date from the bank's
   computed snapshots (`anchors.computed_snapshot_dates`, labelled
   `reporting_date_source='computed_snapshot'`) — rule in §5a above.
+- **Publication status and commencement are separate.**
+  `domain/regulatory_instruments.py` resolves a final instrument against the reporting
+  date; an `exposure_draft` or `unpublished` instrument never becomes in force merely
+  because a proposed date arrives. `eligibility.py` resolves literal or bank-governed
+  commencement. The calendar omits drafts, unpublished instruments and reporting dates
+  before final commencement from obligations and Act 930 s.93(3) indicative estimates.
+  The Returns workspace retains preparation anchors and package history, with
+  `in_force=false`, no deadline and no RAG. Preparation and rehearsal remain available
+  subject to the existing generation prerequisites; preparation establishes no filing duty.
+  Template metadata resolves status as of today, while sealed package provenance records
+  status at the reporting date, the resolved commencement and the registry citation.
+  Exports consume that sealed disclosure. The contract is pinned by
+  `backend/tests/services/test_reporting_instrument_status.py`.
 
 ### Filing-state disclosure
 
@@ -318,7 +335,8 @@ listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPa
 createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
 exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
-listSubmissionEvents, listReturnTemplates (registry + fidelity), get/putChannelConfig
+listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
+optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig
 (credentials write-only). Conventions: manage_live_engine.py patterns, tenant 404s, audit events.
 
 ## 7. UI (Governance → Regulatory Reporting, route `/submissions` retained)
