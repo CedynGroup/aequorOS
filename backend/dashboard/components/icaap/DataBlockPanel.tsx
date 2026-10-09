@@ -111,7 +111,7 @@ export default function DataBlockPanel({
           typing numbers into the prose.
         </p>
       ) : (
-        <div className="max-h-[32rem] overflow-y-auto">
+        <div className="max-h-128 overflow-y-auto">
           {ordered.map((block) => (
             <div key={block.id}>
               <DataBlockCard

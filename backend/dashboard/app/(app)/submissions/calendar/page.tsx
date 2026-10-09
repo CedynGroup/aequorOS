@@ -108,7 +108,7 @@ export default function RegulatoryCalendarPage() {
                   <span
                     key={annex.returnCode}
                     title={`Filed within ${o.returnCode}`}
-                    className="inline-flex items-center rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-caption text-slate"
+                    className="inline-flex items-center rounded-sm border border-border bg-surface px-1.5 py-0.5 font-mono text-caption text-slate"
                   >
                     {annex.returnCode}
                   </span>
@@ -122,7 +122,7 @@ export default function RegulatoryCalendarPage() {
         key: "family",
         header: "Family",
         render: (o) => (
-          <span className="inline-flex items-center px-2 py-0.5 rounded border border-border bg-surface text-caption text-slate">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-sm border border-border bg-surface text-caption text-slate">
             {FAMILY_LABELS[o.returnFamily] ?? o.returnFamily}
           </span>
         ),
@@ -213,7 +213,7 @@ export default function RegulatoryCalendarPage() {
                 setHorizon(Number(e.target.value));
                 setOffset(0);
               }}
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               {HORIZON_OPTIONS.map((months) => (
                 <option key={months} value={months}>
@@ -289,7 +289,7 @@ export default function RegulatoryCalendarPage() {
                     onClick={() =>
                       setOffset((current) => Math.max(0, current - PAGE_SIZE))
                     }
-                    className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                    className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
                   >
                     <ChevronLeft size={11} aria-hidden />
                     Prev
@@ -298,7 +298,7 @@ export default function RegulatoryCalendarPage() {
                     type="button"
                     disabled={!query.data?.hasMore || query.isFetching}
                     onClick={() => setOffset((current) => current + PAGE_SIZE)}
-                    className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                    className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
                   >
                     Next
                     <ChevronRight size={11} aria-hidden />
@@ -344,7 +344,7 @@ export default function RegulatoryCalendarPage() {
                   return (
                     <li
                       key={`${o.returnCode}-${isoDate(o.reportingDate)}`}
-                      className="flex items-start gap-2.5 rounded border border-critical/20 bg-critical-light/30 px-3.5 py-2.5"
+                      className="flex items-start gap-2.5 rounded-sm border border-critical/20 bg-critical-light/30 px-3.5 py-2.5"
                     >
                       <TriangleAlert
                         size={14}

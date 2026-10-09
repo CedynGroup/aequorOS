@@ -146,7 +146,7 @@ export default function DocumentCanvas({
     return (
       <div
         role="alert"
-        className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3"
+        className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3"
       >
         <p className="inline-flex items-center gap-2 text-body font-medium text-navy">
           <AlertTriangle size={14} className="text-critical" aria-hidden />
@@ -182,7 +182,7 @@ export default function DocumentCanvas({
       <canvas
         ref={canvasRef}
         aria-label={`Return document, page ${pageIndex + 1}`}
-        className="block bg-white shadow-pop rounded-sm"
+        className="block bg-white shadow-pop rounded-xs"
         style={size ? { width: size.width, height: size.height } : undefined}
       />
       {size && children}

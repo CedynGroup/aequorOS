@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting — Compare. A line-by-line diff of two generated returns,
@@ -16,29 +16,29 @@
  * needed. Currency is jurisdiction-neutral via lib/format — never hardcoded.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import ReturnVersionCompare from '@/components/submissions/ReturnVersionCompare';
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, GitCompareArrows, Scale } from 'lucide-react';
+import PageContainer from "@/components/ui/PageContainer";
+import ReturnVersionCompare from "@/components/submissions/ReturnVersionCompare";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeftRight, GitCompareArrows, Scale } from "lucide-react";
 import type {
   BankReportingPeriodRead,
   RegulatoryRunSummaryRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { SemanticDelta } from '@/components/ui/DeltaBadge';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { SemanticDelta } from "@/components/ui/DeltaBadge";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useRegulatoryRuns,
   useReportComparison,
   useReportingPeriods,
-} from '@/lib/api/hooks';
-import { isApiError } from '@/lib/api/client';
-import { fmtDateUTC, fmtTimestamp, labelize } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtInt } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { isApiError } from "@/lib/api/client";
+import { fmtDateUTC, fmtTimestamp, labelize } from "@/lib/api/values";
+import { fmtCurrency, fmtCurrencySigned, fmtInt } from "@/lib/format";
 import {
   COMPARISON_MODULES,
   COMPARISON_MODULE_LABELS,
@@ -47,7 +47,7 @@ import {
   type ComparisonModule,
   type ComparisonSide,
   type ComparisonUnit,
-} from '@/lib/api/reportComparison';
+} from "@/lib/api/reportComparison";
 
 // ---------------------------------------------------------------------------
 // Value / delta formatting — driven by the line's unit.
@@ -55,37 +55,37 @@ import {
 
 /** A cell value in its native unit: currency, percentage, ratio, or count. */
 function formatValue(unit: ComparisonUnit, value: number | null): string {
-  if (value === null) return '—';
+  if (value === null) return "—";
   switch (unit) {
-    case 'ccy':
+    case "ccy":
       return fmtCurrency(value);
-    case 'pct':
-    case 'ratio':
+    case "pct":
+    case "ratio":
       // Both are percentage-scaled on the wire (see reportComparison.ts).
       return `${value.toFixed(2)}%`;
-    case 'count':
+    case "count":
       return fmtInt(Math.round(value));
   }
 }
 
 /** The absolute delta (`delta_ccy`) in the line's native unit, signed. */
 function formatAbsDelta(unit: ComparisonUnit, value: number | null): string {
-  if (value === null) return '—';
-  const sign = value > 0 ? '+' : '';
+  if (value === null) return "—";
+  const sign = value > 0 ? "+" : "";
   switch (unit) {
-    case 'ccy':
+    case "ccy":
       return fmtCurrencySigned(value);
-    case 'pct':
-    case 'ratio':
+    case "pct":
+    case "ratio":
       return `${sign}${value.toFixed(2)} pp`;
-    case 'count':
+    case "count":
       return `${sign}${fmtInt(Math.round(value))}`;
   }
 }
 
 /** The relative % change (`delta_pct`), signed — null/new handled by caller. */
 function formatRelPct(value: number): string {
-  const sign = value > 0 ? '+' : '';
+  const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}%`;
 }
 
@@ -101,12 +101,12 @@ function ModeToggle({
   onChange: (next: ComparisonMode) => void;
 }) {
   const options: { value: ComparisonMode; label: string }[] = [
-    { value: 'version', label: 'Version' },
-    { value: 'period', label: 'Period' },
+    { value: "version", label: "Version" },
+    { value: "period", label: "Period" },
     // The question an officer asks after a send-back: what changed between the
     // version I filed and the one I am about to. It compares PACKAGE cells,
     // not run metrics, so it has its own surface.
-    { value: 'return', label: 'Return version' },
+    { value: "return", label: "Return version" },
   ];
   return (
     <div
@@ -125,8 +125,8 @@ function ModeToggle({
             onClick={() => onChange(opt.value)}
             className={`px-3 py-1 text-caption font-medium rounded transition-colors ${
               active
-                ? 'bg-action-light text-action'
-                : 'text-slate hover:text-navy'
+                ? "bg-action-light text-action"
+                : "text-slate hover:text-navy"
             }`}
           >
             {opt.label}
@@ -159,7 +159,7 @@ function Selector({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-50 min-w-[12rem]"
+        className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-50 min-w-48"
       >
         {children}
       </select>
@@ -178,9 +178,9 @@ function CountChips({
   neutral: number;
 }) {
   const chips = [
-    { n: favorable, tone: 'text-success', label: 'favorable' },
-    { n: adverse, tone: 'text-critical', label: 'adverse' },
-    { n: neutral, tone: 'text-slate', label: 'neutral' },
+    { n: favorable, tone: "text-success", label: "favorable" },
+    { n: adverse, tone: "text-critical", label: "adverse" },
+    { n: neutral, tone: "text-slate", label: "neutral" },
   ];
   return (
     <div className="flex items-center gap-4">
@@ -198,7 +198,7 @@ function SideCard({
   role,
   side,
 }: {
-  role: 'Baseline (left)' | 'Compared (right)';
+  role: "Baseline (left)" | "Compared (right)";
   side: ComparisonSide;
 }) {
   return (
@@ -206,10 +206,10 @@ function SideCard({
       <p className="text-micro font-medium text-slate uppercase tracking-wider">
         {role}
       </p>
-      <p className="mt-0.5 text-h3 text-navy truncate">{side.label || '—'}</p>
+      <p className="mt-0.5 text-h3 text-navy truncate">{side.label || "—"}</p>
       <p className="mt-0.5 text-caption text-slate">
         {side.periodLabel}
-        {side.reportingDate ? ` · ${fmtDateUTC(side.reportingDate)}` : ''}
+        {side.reportingDate ? ` · ${fmtDateUTC(side.reportingDate)}` : ""}
       </p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-micro text-slate tnum">
         {side.version != null && <span>v{side.version}</span>}
@@ -247,7 +247,7 @@ function DeltaLineRow({ line }: { line: ComparisonLine }) {
       </td>
       <td className="py-1.5 px-4 align-middle text-right num">
         {line.isNew ? (
-          <span className="inline-flex items-center rounded border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-action">
+          <span className="inline-flex items-center rounded-sm border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-action">
             new
           </span>
         ) : line.deltaPct === null ? (
@@ -255,11 +255,11 @@ function DeltaLineRow({ line }: { line: ComparisonLine }) {
         ) : (
           <span
             className={`text-caption font-mono tnum ${
-              line.favorability === 'favorable'
-                ? 'text-success'
-                : line.favorability === 'adverse'
-                  ? 'text-critical'
-                  : 'text-slate'
+              line.favorability === "favorable"
+                ? "text-success"
+                : line.favorability === "adverse"
+                  ? "text-critical"
+                  : "text-slate"
             }`}
           >
             {formatRelPct(line.deltaPct)}
@@ -302,10 +302,10 @@ function DeltaTable({
                   <th className="py-1.5 px-4 text-left text-micro font-medium uppercase tracking-wider text-slate">
                     Line
                   </th>
-                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-[10rem] truncate">
+                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-40 truncate">
                     {leftLabel}
                   </th>
-                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-[10rem] truncate">
+                  <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate max-w-40 truncate">
                     {rightLabel}
                   </th>
                   <th className="py-1.5 px-4 text-right text-micro font-medium uppercase tracking-wider text-slate">
@@ -338,18 +338,18 @@ function DeltaTable({
 // ---------------------------------------------------------------------------
 
 function sortRunsNewestFirst(
-  runs: RegulatoryRunSummaryRead[]
+  runs: RegulatoryRunSummaryRead[],
 ): RegulatoryRunSummaryRead[] {
   return [...runs].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
 }
 
 function sortPeriodsNewestFirst(
-  periods: BankReportingPeriodRead[]
+  periods: BankReportingPeriodRead[],
 ): BankReportingPeriodRead[] {
   return [...periods].sort(
-    (a, b) => b.periodEnd.getTime() - a.periodEnd.getTime()
+    (a, b) => b.periodEnd.getTime() - a.periodEnd.getTime(),
   );
 }
 
@@ -365,9 +365,9 @@ export default function ComparePage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
 
-  const [mode, setMode] = useState<ComparisonMode>('version');
-  const [module, setModule] = useState<ComparisonModule>('liquidity');
-  const [scenarioCode, setScenarioCode] = useState('baseline');
+  const [mode, setMode] = useState<ComparisonMode>("version");
+  const [module, setModule] = useState<ComparisonModule>("liquidity");
+  const [scenarioCode, setScenarioCode] = useState("baseline");
 
   // Version mode: a period, then two runs within it.
   const [versionPeriodId, setVersionPeriodId] = useState<string | null>(null);
@@ -385,11 +385,11 @@ export default function ComparePage() {
 
   const allRuns = useMemo(
     () => sortRunsNewestFirst(runsQuery.data?.runs ?? []),
-    [runsQuery.data]
+    [runsQuery.data],
   );
   const allPeriods = useMemo(
     () => sortPeriodsNewestFirst(periodsQuery.data?.periods ?? []),
-    [periodsQuery.data]
+    [periodsQuery.data],
   );
 
   // Scenarios present for this module, baseline first.
@@ -398,9 +398,9 @@ export default function ComparePage() {
     for (const run of allRuns) seen.add(run.scenarioCode);
     const codes = [...seen];
     codes.sort((a, b) =>
-      a === 'baseline' ? -1 : b === 'baseline' ? 1 : a.localeCompare(b)
+      a === "baseline" ? -1 : b === "baseline" ? 1 : a.localeCompare(b),
     );
-    return codes.length > 0 ? codes : ['baseline'];
+    return codes.length > 0 ? codes : ["baseline"];
   }, [allRuns]);
 
   // Periods that have at least one run for the selected module + scenario — the
@@ -409,7 +409,7 @@ export default function ComparePage() {
     const ids = new Set(
       allRuns
         .filter((r) => r.scenarioCode === scenarioCode)
-        .map((r) => r.reportingPeriodId)
+        .map((r) => r.reportingPeriodId),
     );
     return allPeriods.filter((p) => ids.has(p.id));
   }, [allPeriods, allRuns, scenarioCode]);
@@ -420,9 +420,9 @@ export default function ComparePage() {
       allRuns.filter(
         (r) =>
           r.reportingPeriodId === versionPeriodId &&
-          r.scenarioCode === scenarioCode
+          r.scenarioCode === scenarioCode,
       ),
-    [allRuns, versionPeriodId, scenarioCode]
+    [allRuns, versionPeriodId, scenarioCode],
   );
 
   // Keep the scenario valid as modules change.
@@ -430,43 +430,43 @@ export default function ComparePage() {
     setScenarioCode((prev) =>
       scenarioOptions.includes(prev)
         ? prev
-        : scenarioOptions.includes('baseline')
-          ? 'baseline'
-          : scenarioOptions[0]
+        : scenarioOptions.includes("baseline")
+          ? "baseline"
+          : scenarioOptions[0],
     );
   }, [scenarioOptions]);
 
   // Version mode: default the period to the newest with runs.
   useEffect(() => {
-    if (mode !== 'version') return;
+    if (mode !== "version") return;
     setVersionPeriodId((prev) =>
       prev && periodsWithRuns.some((p) => p.id === prev)
         ? prev
-        : (periodsWithRuns[0]?.id ?? null)
+        : (periodsWithRuns[0]?.id ?? null),
     );
   }, [mode, periodsWithRuns]);
 
   // Version mode: default right = newest run, left = the one before it.
   useEffect(() => {
-    if (mode !== 'version') return;
+    if (mode !== "version") return;
     if (versionRuns.length === 0) {
       setVersionRight(null);
       setVersionLeft(null);
       return;
     }
     setVersionRight((prev) =>
-      prev && versionRuns.some((r) => r.id === prev) ? prev : versionRuns[0].id
+      prev && versionRuns.some((r) => r.id === prev) ? prev : versionRuns[0].id,
     );
     setVersionLeft((prev) =>
       prev && versionRuns.some((r) => r.id === prev)
         ? prev
-        : (versionRuns[1]?.id ?? versionRuns[0].id)
+        : (versionRuns[1]?.id ?? versionRuns[0].id),
     );
   }, [mode, versionRuns]);
 
   // Period mode: default right = newest period, left = the one before it.
   useEffect(() => {
-    if (mode !== 'period') return;
+    if (mode !== "period") return;
     if (periodsWithRuns.length === 0) {
       setPeriodRight(null);
       setPeriodLeft(null);
@@ -475,22 +475,22 @@ export default function ComparePage() {
     setPeriodRight((prev) =>
       prev && periodsWithRuns.some((p) => p.id === prev)
         ? prev
-        : periodsWithRuns[0].id
+        : periodsWithRuns[0].id,
     );
     setPeriodLeft((prev) =>
       prev && periodsWithRuns.some((p) => p.id === prev)
         ? prev
-        : (periodsWithRuns[1]?.id ?? periodsWithRuns[0].id)
+        : (periodsWithRuns[1]?.id ?? periodsWithRuns[0].id),
     );
   }, [mode, periodsWithRuns]);
 
-  const left = mode === 'version' ? versionLeft : periodLeft;
-  const right = mode === 'version' ? versionRight : periodRight;
+  const left = mode === "version" ? versionLeft : periodLeft;
+  const right = mode === "version" ? versionRight : periodRight;
 
   const comparison = useReportComparison(
     bankId,
-    { mode, module, left: left ?? '', right: right ?? '', scenarioCode },
-    Boolean(left && right)
+    { mode, module, left: left ?? "", right: right ?? "", scenarioCode },
+    Boolean(left && right),
   );
 
   const selectorsLoading = periodsQuery.isLoading || runsQuery.isLoading;
@@ -499,21 +499,20 @@ export default function ComparePage() {
   // Nothing to compare: no runs at all, or (mode-specific) fewer than two picks.
   const noRuns = periodsWithRuns.length === 0;
   const notEnoughVersions =
-    mode === 'version' && !noRuns && versionRuns.length < 2;
-  const notEnoughPeriods =
-    mode === 'period' && periodsWithRuns.length < 2;
+    mode === "version" && !noRuns && versionRuns.length < 2;
+  const notEnoughPeriods = mode === "period" && periodsWithRuns.length < 2;
   const sameSelection = Boolean(left && right && left === right);
 
   const leftColLabel = comparison.data
     ? comparison.data.left.version != null
       ? `v${comparison.data.left.version}`
-      : comparison.data.left.periodLabel || 'Left'
-    : 'Left';
+      : comparison.data.left.periodLabel || "Left"
+    : "Left";
   const rightColLabel = comparison.data
     ? comparison.data.right.version != null
       ? `v${comparison.data.right.version}`
-      : comparison.data.right.periodLabel || 'Right'
-    : 'Right';
+      : comparison.data.right.periodLabel || "Right"
+    : "Right";
 
   return (
     <>
@@ -524,171 +523,171 @@ export default function ComparePage() {
       />
 
       <PageContainer className="py-6 space-y-6">
-        {mode === 'return' ? (
+        {mode === "return" ? (
           <ReturnVersionCompare bankId={bank?.id} />
         ) : (
-        <QueryBoundary
-          contained
-          isLoading={selectorsLoading}
-          error={selectorsError}
-          onRetry={() => {
-            void periodsQuery.refetch();
-            void runsQuery.refetch();
-          }}
-        >
-          {/* Selectors */}
-          <SectionCard
-            title="What to compare"
-            subtitle={
-              mode === 'version'
-                ? 'Two run versions of the same reporting period'
-                : 'One return across two reporting periods'
-            }
+          <QueryBoundary
+            contained
+            isLoading={selectorsLoading}
+            error={selectorsError}
+            onRetry={() => {
+              void periodsQuery.refetch();
+              void runsQuery.refetch();
+            }}
           >
-            <div className="flex flex-wrap items-end gap-4">
-              <Selector
-                label="Return family"
-                value={module}
-                onChange={(v) => setModule(v as ComparisonModule)}
-              >
-                {COMPARISON_MODULES.map((m) => (
-                  <option key={m} value={m}>
-                    {COMPARISON_MODULE_LABELS[m]}
-                  </option>
-                ))}
-              </Selector>
+            {/* Selectors */}
+            <SectionCard
+              title="What to compare"
+              subtitle={
+                mode === "version"
+                  ? "Two run versions of the same reporting period"
+                  : "One return across two reporting periods"
+              }
+            >
+              <div className="flex flex-wrap items-end gap-4">
+                <Selector
+                  label="Return family"
+                  value={module}
+                  onChange={(v) => setModule(v as ComparisonModule)}
+                >
+                  {COMPARISON_MODULES.map((m) => (
+                    <option key={m} value={m}>
+                      {COMPARISON_MODULE_LABELS[m]}
+                    </option>
+                  ))}
+                </Selector>
 
-              <Selector
-                label="Scenario"
-                value={scenarioCode}
-                onChange={setScenarioCode}
-                disabled={scenarioOptions.length <= 1}
-              >
-                {scenarioOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {labelize(code)}
-                  </option>
-                ))}
-              </Selector>
+                <Selector
+                  label="Scenario"
+                  value={scenarioCode}
+                  onChange={setScenarioCode}
+                  disabled={scenarioOptions.length <= 1}
+                >
+                  {scenarioOptions.map((code) => (
+                    <option key={code} value={code}>
+                      {labelize(code)}
+                    </option>
+                  ))}
+                </Selector>
 
-              {mode === 'version' ? (
-                <>
-                  <Selector
-                    label="Reporting period"
-                    value={versionPeriodId ?? ''}
-                    onChange={setVersionPeriodId}
-                    disabled={periodsWithRuns.length === 0}
-                  >
-                    {periodsWithRuns.length === 0 && (
-                      <option value="">No periods with runs</option>
-                    )}
-                    {periodsWithRuns.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </Selector>
-                  <Selector
-                    label="Baseline version"
-                    value={versionLeft ?? ''}
-                    onChange={setVersionLeft}
-                    disabled={versionRuns.length === 0}
-                  >
-                    {versionRuns.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {runOptionLabel(r)}
-                      </option>
-                    ))}
-                  </Selector>
-                  <ArrowLeftRight
-                    size={16}
-                    className="mb-2 text-slate shrink-0"
-                    aria-hidden
-                  />
-                  <Selector
-                    label="Compared version"
-                    value={versionRight ?? ''}
-                    onChange={setVersionRight}
-                    disabled={versionRuns.length === 0}
-                  >
-                    {versionRuns.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {runOptionLabel(r)}
-                      </option>
-                    ))}
-                  </Selector>
-                </>
-              ) : (
-                <>
-                  <Selector
-                    label="Baseline period"
-                    value={periodLeft ?? ''}
-                    onChange={setPeriodLeft}
-                    disabled={periodsWithRuns.length === 0}
-                  >
-                    {periodsWithRuns.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </Selector>
-                  <ArrowLeftRight
-                    size={16}
-                    className="mb-2 text-slate shrink-0"
-                    aria-hidden
-                  />
-                  <Selector
-                    label="Compared period"
-                    value={periodRight ?? ''}
-                    onChange={setPeriodRight}
-                    disabled={periodsWithRuns.length === 0}
-                  >
-                    {periodsWithRuns.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </Selector>
-                </>
-              )}
-            </div>
-          </SectionCard>
+                {mode === "version" ? (
+                  <>
+                    <Selector
+                      label="Reporting period"
+                      value={versionPeriodId ?? ""}
+                      onChange={setVersionPeriodId}
+                      disabled={periodsWithRuns.length === 0}
+                    >
+                      {periodsWithRuns.length === 0 && (
+                        <option value="">No periods with runs</option>
+                      )}
+                      {periodsWithRuns.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Selector>
+                    <Selector
+                      label="Baseline version"
+                      value={versionLeft ?? ""}
+                      onChange={setVersionLeft}
+                      disabled={versionRuns.length === 0}
+                    >
+                      {versionRuns.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {runOptionLabel(r)}
+                        </option>
+                      ))}
+                    </Selector>
+                    <ArrowLeftRight
+                      size={16}
+                      className="mb-2 text-slate shrink-0"
+                      aria-hidden
+                    />
+                    <Selector
+                      label="Compared version"
+                      value={versionRight ?? ""}
+                      onChange={setVersionRight}
+                      disabled={versionRuns.length === 0}
+                    >
+                      {versionRuns.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {runOptionLabel(r)}
+                        </option>
+                      ))}
+                    </Selector>
+                  </>
+                ) : (
+                  <>
+                    <Selector
+                      label="Baseline period"
+                      value={periodLeft ?? ""}
+                      onChange={setPeriodLeft}
+                      disabled={periodsWithRuns.length === 0}
+                    >
+                      {periodsWithRuns.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Selector>
+                    <ArrowLeftRight
+                      size={16}
+                      className="mb-2 text-slate shrink-0"
+                      aria-hidden
+                    />
+                    <Selector
+                      label="Compared period"
+                      value={periodRight ?? ""}
+                      onChange={setPeriodRight}
+                      disabled={periodsWithRuns.length === 0}
+                    >
+                      {periodsWithRuns.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Selector>
+                  </>
+                )}
+              </div>
+            </SectionCard>
 
-          {/* Guard states before hitting the diff */}
-          {noRuns ? (
-            <EmptyState
-              Icon={Scale}
-              title="No runs to compare"
-              description={`No ${COMPARISON_MODULE_LABELS[module]} runs exist for the ${labelize(
-                scenarioCode
-              )} scenario yet. Generate returns from the Returns workspace, then compare their versions here.`}
-            />
-          ) : notEnoughVersions ? (
-            <EmptyState
-              Icon={GitCompareArrows}
-              title="Only one version for this period"
-              description="A version comparison needs at least two runs of the same period. Regenerate the return to produce another version, or switch to Period mode."
-            />
-          ) : notEnoughPeriods ? (
-            <EmptyState
-              Icon={GitCompareArrows}
-              title="Only one period has runs"
-              description={`A period comparison needs two reporting periods with ${COMPARISON_MODULE_LABELS[module]} runs for this scenario. Generate the return for another period first.`}
-            />
-          ) : sameSelection ? (
-            <EmptyState
-              Icon={GitCompareArrows}
-              title="Pick two different sides"
-              description="The baseline and compared selections are the same. Choose two distinct versions (or periods) to see a diff."
-            />
-          ) : (
-            <ComparisonBody
-              comparison={comparison}
-              leftColLabel={leftColLabel}
-              rightColLabel={rightColLabel}
-            />
-          )}
-        </QueryBoundary>
+            {/* Guard states before hitting the diff */}
+            {noRuns ? (
+              <EmptyState
+                Icon={Scale}
+                title="No runs to compare"
+                description={`No ${COMPARISON_MODULE_LABELS[module]} runs exist for the ${labelize(
+                  scenarioCode,
+                )} scenario yet. Generate returns from the Returns workspace, then compare their versions here.`}
+              />
+            ) : notEnoughVersions ? (
+              <EmptyState
+                Icon={GitCompareArrows}
+                title="Only one version for this period"
+                description="A version comparison needs at least two runs of the same period. Regenerate the return to produce another version, or switch to Period mode."
+              />
+            ) : notEnoughPeriods ? (
+              <EmptyState
+                Icon={GitCompareArrows}
+                title="Only one period has runs"
+                description={`A period comparison needs two reporting periods with ${COMPARISON_MODULE_LABELS[module]} runs for this scenario. Generate the return for another period first.`}
+              />
+            ) : sameSelection ? (
+              <EmptyState
+                Icon={GitCompareArrows}
+                title="Pick two different sides"
+                description="The baseline and compared selections are the same. Choose two distinct versions (or periods) to see a diff."
+              />
+            ) : (
+              <ComparisonBody
+                comparison={comparison}
+                leftColLabel={leftColLabel}
+                rightColLabel={rightColLabel}
+              />
+            )}
+          </QueryBoundary>
         )}
       </PageContainer>
     </>
@@ -720,8 +719,7 @@ function ComparisonBody({
 
   if (comparison.error) {
     const err = comparison.error;
-    const notComparable =
-      isApiError(err) && err.errorCode === 'not_comparable';
+    const notComparable = isApiError(err) && err.errorCode === "not_comparable";
     const missing = isApiError(err) && err.status === 404;
     if (notComparable) {
       return (
@@ -738,8 +736,8 @@ function ComparisonBody({
         onRetry={() => comparison.refetch()}
         title={
           missing
-            ? 'One of the selected runs or periods no longer exists'
-            : 'Could not load the comparison'
+            ? "One of the selected runs or periods no longer exists"
+            : "Could not load the comparison"
         }
       />
     );
@@ -756,9 +754,9 @@ function ComparisonBody({
       <SectionCard
         title="Comparison summary"
         subtitle={
-          data.mode === 'version'
-            ? 'Two versions of the same period'
-            : 'One return across two periods'
+          data.mode === "version"
+            ? "Two versions of the same period"
+            : "One return across two periods"
         }
       >
         <div className="flex flex-col gap-5">

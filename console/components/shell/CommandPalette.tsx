@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowRight, Building2, Search, type LucideIcon } from 'lucide-react';
-import { listTenants } from '@/lib/api';
-import { ALL_NAV_ITEMS } from './nav';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Building2, Search, type LucideIcon } from "lucide-react";
+import { listTenants } from "@/lib/api";
+import { ALL_NAV_ITEMS } from "./nav";
 
 export type PaletteHit = {
   id: string;
@@ -28,19 +28,20 @@ const defaultTenantSearch: TenantSearchProvider = async (query) => {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   return res.tenants
     .filter((t) => {
-      const hay = `${t.organization_name} ${t.bank_name ?? ''} ${t.organization_id} ${
-        t.bank_id ?? ''
-      }`.toLowerCase();
+      const hay =
+        `${t.organization_name} ${t.bank_name ?? ""} ${t.organization_id} ${
+          t.bank_id ?? ""
+        }`.toLowerCase();
       return terms.every((term) => hay.includes(term));
     })
     .slice(0, 8)
     .map<PaletteHit>((t) => ({
       id: t.organization_id,
       label: t.bank_name ?? t.organization_name,
-      sub: `${t.organization_id}${t.bank_id ? ` · ${t.bank_id}` : ''}`,
+      sub: `${t.organization_id}${t.bank_id ? ` · ${t.bank_id}` : ""}`,
       href: `/tenants/${t.organization_id}`,
       icon: Building2,
-      group: 'Tenant matches',
+      group: "Tenant matches",
     }));
 };
 
@@ -49,14 +50,14 @@ const NAV_HITS: PaletteHit[] = ALL_NAV_ITEMS.map((item) => ({
   label: item.label,
   href: item.href,
   icon: item.icon,
-  group: 'Navigate',
+  group: "Navigate",
   sub: undefined,
 }));
 
 const NAV_HAYSTACK = new Map<string, string>(
   ALL_NAV_ITEMS.map((item) => [
     item.href,
-    `${item.label} ${item.keywords ?? ''}`.toLowerCase(),
+    `${item.label} ${item.keywords ?? ""}`.toLowerCase(),
   ]),
 );
 
@@ -74,7 +75,7 @@ export default function CommandPalette({
   onClose: () => void;
   tenantSearch?: TenantSearchProvider;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [tenantHits, setTenantHits] = useState<PaletteHit[]>([]);
   const router = useRouter();
@@ -106,7 +107,10 @@ export default function CommandPalette({
     };
   }, [open, query, tenantSearch]);
 
-  const hits = useMemo(() => [...navHits, ...tenantHits], [navHits, tenantHits]);
+  const hits = useMemo(
+    () => [...navHits, ...tenantHits],
+    [navHits, tenantHits],
+  );
 
   useEffect(() => setActive(0), [query, tenantHits.length]);
 
@@ -115,7 +119,7 @@ export default function CommandPalette({
   // changes `hits`, which would retrigger the effect (Maximum update depth).
   useEffect(() => {
     if (!open) {
-      setQuery('');
+      setQuery("");
       setTenantHits((prev) => (prev.length ? [] : prev));
     }
   }, [open]);
@@ -123,23 +127,23 @@ export default function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowDown') {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setActive((a) => Math.min(hits.length - 1, a + 1));
       }
-      if (e.key === 'ArrowUp') {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         setActive((a) => Math.max(0, a - 1));
       }
-      if (e.key === 'Enter' && hits[active]) {
+      if (e.key === "Enter" && hits[active]) {
         e.preventDefault();
         router.push(hits[active].href);
         onClose();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, hits, active, onClose, router]);
 
   if (!open) return null;
@@ -158,13 +162,13 @@ export default function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-24"
+      className="fixed inset-0 z-60 flex items-start justify-center px-4 pt-24"
     >
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs"
       />
       <div className="relative w-full max-w-xl overflow-hidden rounded-lg border border-border bg-surface-raised shadow-pop">
         <div className="flex items-center gap-3 border-b border-border-light px-4 py-3">
@@ -175,9 +179,9 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search screens and tenants (name / BK- / OR-)…"
-            className="flex-1 bg-transparent text-body text-navy outline-none placeholder:text-slate"
+            className="flex-1 bg-transparent text-body text-navy outline-hidden placeholder:text-slate"
           />
-          <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px] text-slate">
+          <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px] text-slate">
             ESC
           </kbd>
         </div>
@@ -208,12 +212,14 @@ export default function CommandPalette({
                             onClose();
                           }}
                           className={`flex w-full items-center gap-3 px-4 py-2 text-left text-body ${
-                            isActive ? 'bg-action-light text-navy' : 'text-navy/85 hover:bg-surface'
+                            isActive
+                              ? "bg-action-light text-navy"
+                              : "text-navy/85 hover:bg-surface"
                           }`}
                         >
                           <Icon
                             size={14}
-                            className={isActive ? 'text-action' : 'text-slate'}
+                            className={isActive ? "text-action" : "text-slate"}
                             aria-hidden
                           />
                           <span className="flex-1 truncate">{hit.label}</span>
@@ -224,7 +230,9 @@ export default function CommandPalette({
                           )}
                           <ArrowRight
                             size={12}
-                            className={isActive ? 'text-action' : 'text-transparent'}
+                            className={
+                              isActive ? "text-action" : "text-transparent"
+                            }
                             aria-hidden
                           />
                         </button>
@@ -239,13 +247,13 @@ export default function CommandPalette({
 
         <div className="flex items-center gap-4 border-t border-border-light px-4 py-2 text-caption text-slate">
           <span className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
+            <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
               ↑↓
             </kbd>
             navigate
           </span>
           <span className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
+            <kbd className="rounded-sm border border-border-light bg-surface px-1.5 py-0.5 font-mono text-[10px]">
               ↵
             </kbd>
             select

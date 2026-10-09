@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Institution Profile — the corporate profile card of the register: legal
@@ -9,28 +9,33 @@
  * institution's latest computed position so the pack is ready to generate).
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { AlertTriangle, ArrowUpRight, Building2, Pencil } from 'lucide-react';
+import { useState } from "react";
+import Link from "next/link";
+import { AlertTriangle, ArrowUpRight, Building2, Pencil } from "lucide-react";
 import type {
   InstitutionProfileFullReadProfile,
   InstitutionProfilePut,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import PageContainer from '@/components/ui/PageContainer';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { isApiError } from "@/lib/api/client";
 import {
   useInstitutionProfile,
   useReturnAnchors,
   useSaveInstitutionProfile,
-} from '@/lib/api/hooks';
-import { fmtTimestamp, isoDate, labelize, num } from '@/lib/api/values';
-import { currencyCode, fmtCurrencyFull, fmtPct, submissionPortal } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtTimestamp, isoDate, labelize, num } from "@/lib/api/values";
+import {
+  currencyCode,
+  fmtCurrencyFull,
+  fmtPct,
+  submissionPortal,
+} from "@/lib/format";
 import {
   Field,
   FormActions,
@@ -39,7 +44,7 @@ import {
   fmtRegisterDate,
   inputCls,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 
 export default function InstitutionProfilePage() {
   const { bank } = useBankContext();
@@ -50,11 +55,11 @@ export default function InstitutionProfilePage() {
   // An LRT pack is event-driven, so its as-of dates are the bank's computed
   // positions (newest first) rather than a regulator calendar. Carrying the
   // newest one on the link opens the workspace ready to generate.
-  const lrtAnchors = useReturnAnchors(bankId, 'LRT-PROFILE');
+  const lrtAnchors = useReturnAnchors(bankId, "LRT-PROFILE");
   const latestPosition = lrtAnchors.data?.anchors[0]?.reportingDate;
   const lrtHref = latestPosition
     ? `/submissions/returns?code=LRT-PROFILE&date=${isoDate(latestPosition)}`
-    : '/submissions/returns?code=LRT-PROFILE';
+    : "/submissions/returns?code=LRT-PROFILE";
 
   // The composed read returns profile: null until first configured; treat a
   // 404 (register endpoint unavailable for the bank) the same way.
@@ -139,14 +144,16 @@ function ProfileView({
       }
       footer={
         <span>
-          Last updated{' '}
-          <span className="font-mono tnum">{fmtTimestamp(profile.updatedAt)}</span>
+          Last updated{" "}
+          <span className="font-mono tnum">
+            {fmtTimestamp(profile.updatedAt)}
+          </span>
         </span>
       }
     >
       <div className="space-y-5">
         {profile.warnings.length > 0 && (
-          <div className="rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
+          <div className="rounded-sm border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
             {profile.warnings.map((warning) => (
               <p
                 key={warning}
@@ -164,7 +171,10 @@ function ProfileView({
         )}
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-body">
-          <ProfileItem label="Institution type" value={labelize(profile.institutionType)} />
+          <ProfileItem
+            label="Institution type"
+            value={labelize(profile.institutionType)}
+          />
           <ProfileItem
             label="Legal entity structure"
             value={labelize(profile.legalEntityStructure)}
@@ -184,7 +194,7 @@ function ProfileView({
             value={
               profile.approvedCapital != null
                 ? fmtCurrencyFull(num(profile.approvedCapital))
-                : '—'
+                : "—"
             }
             mono
           />
@@ -195,7 +205,7 @@ function ProfileView({
             mono
           />
           <ProfileItem
-            label={`${submissionPortal() ?? 'Regulator portal'} institution code`}
+            label={`${submissionPortal() ?? "Regulator portal"} institution code`}
             value={dash(profile.orassInstitutionCode)}
             mono
           />
@@ -203,10 +213,10 @@ function ProfileView({
             label="Exchange listing"
             value={
               profile.tradedOnExchange
-                ? `${profile.exchangeName ?? 'Listed'}${
-                    profile.isin ? ` · ISIN ${profile.isin}` : ''
+                ? `${profile.exchangeName ?? "Listed"}${
+                    profile.isin ? ` · ISIN ${profile.isin}` : ""
                   }`
-                : 'Not listed'
+                : "Not listed"
             }
           />
           <ProfileItem
@@ -214,7 +224,7 @@ function ProfileView({
             value={
               profile.ownershipLocalPct != null
                 ? fmtPct(num(profile.ownershipLocalPct))
-                : '—'
+                : "—"
             }
             mono
           />
@@ -223,7 +233,7 @@ function ProfileView({
             value={
               profile.ownershipForeignPct != null
                 ? fmtPct(num(profile.ownershipForeignPct))
-                : '—'
+                : "—"
             }
             mono
           />
@@ -252,7 +262,9 @@ function ProfileItem({
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </dt>
-      <dd className={`mt-1 text-navy ${mono ? 'font-mono tnum' : ''}`}>{value}</dd>
+      <dd className={`mt-1 text-navy ${mono ? "font-mono tnum" : ""}`}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -269,42 +281,42 @@ function ProfileForm({
   const save = useSaveInstitutionProfile(bankId);
 
   const [institutionType, setInstitutionType] = useState(
-    profile?.institutionType ?? ''
+    profile?.institutionType ?? "",
   );
   const [legalEntityStructure, setLegalEntityStructure] = useState(
-    profile?.legalEntityStructure ?? ''
+    profile?.legalEntityStructure ?? "",
   );
   const [authorisationDate, setAuthorisationDate] = useState(
-    profile?.authorisationDate ?? ''
+    profile?.authorisationDate ?? "",
   );
   const [incorporationDate, setIncorporationDate] = useState(
-    profile?.incorporationDate ?? ''
+    profile?.incorporationDate ?? "",
   );
   const [approvedCapital, setApprovedCapital] = useState(
-    profile?.approvedCapital ?? ''
+    profile?.approvedCapital ?? "",
   );
-  const [tin, setTin] = useState(profile?.tin ?? '');
+  const [tin, setTin] = useState(profile?.tin ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(
-    profile?.registrationNumber ?? ''
+    profile?.registrationNumber ?? "",
   );
   const [orassInstitutionCode, setOrassInstitutionCode] = useState(
-    profile?.orassInstitutionCode ?? ''
+    profile?.orassInstitutionCode ?? "",
   );
   const [tradedOnExchange, setTradedOnExchange] = useState(
-    profile?.tradedOnExchange ?? false
+    profile?.tradedOnExchange ?? false,
   );
-  const [exchangeName, setExchangeName] = useState(profile?.exchangeName ?? '');
-  const [isin, setIsin] = useState(profile?.isin ?? '');
+  const [exchangeName, setExchangeName] = useState(profile?.exchangeName ?? "");
+  const [isin, setIsin] = useState(profile?.isin ?? "");
   const [ownershipLocalPct, setOwnershipLocalPct] = useState(
-    profile?.ownershipLocalPct ?? ''
+    profile?.ownershipLocalPct ?? "",
   );
   const [ownershipForeignPct, setOwnershipForeignPct] = useState(
-    profile?.ownershipForeignPct ?? ''
+    profile?.ownershipForeignPct ?? "",
   );
   const [parentCountryCode, setParentCountryCode] = useState(
-    profile?.parentCountryCode ?? ''
+    profile?.parentCountryCode ?? "",
   );
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const canSubmit =
     institutionType.trim().length > 0 &&
@@ -336,7 +348,7 @@ function ProfileForm({
 
   return (
     <SectionCard
-      title={profile ? 'Edit corporate profile' : 'Set up corporate profile'}
+      title={profile ? "Edit corporate profile" : "Set up corporate profile"}
       subtitle="Full replacement — every save records the audit reason below"
     >
       <form onSubmit={submit} className="space-y-4">
@@ -408,7 +420,7 @@ function ProfileForm({
             />
           </Field>
           <Field
-            label={`${submissionPortal() ?? 'Regulator portal'} institution code`}
+            label={`${submissionPortal() ?? "Regulator portal"} institution code`}
             htmlFor="ip-orass"
           >
             <input
@@ -418,7 +430,11 @@ function ProfileForm({
               className={inputCls}
             />
           </Field>
-          <Field label="Parent country code" htmlFor="ip-parent" hint="ISO country code of the parent entity, if foreign-owned.">
+          <Field
+            label="Parent country code"
+            htmlFor="ip-parent"
+            hint="ISO country code of the parent entity, if foreign-owned."
+          >
             <input
               id="ip-parent"
               value={parentCountryCode}

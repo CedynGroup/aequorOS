@@ -571,9 +571,9 @@ are described under [Sign-in and session recovery](#sign-in-and-session-recovery
 ## Design system
 
 Palette, typography scale, density rules and the traffic-light semantics are in
-`docs/DASHBOARD_DESIGN_SYSTEM.md` and `tailwind.config.ts`. Color is functional:
-green/amber/red map to regulatory thresholds, never to branding. Numerical cells
-are right-aligned with tabular numerals.
+`docs/DASHBOARD_DESIGN_SYSTEM.md` and the `@theme` block in `app/globals.css`.
+Color is functional: green/amber/red map to regulatory thresholds, never to
+branding. Numerical cells are right-aligned with tabular numerals.
 
 **No table may overflow silently (NEW-54).** `DataTable` has always been
 `overflow-x-auto`, which scrolls but says nothing, so at 1280px the FTP Line

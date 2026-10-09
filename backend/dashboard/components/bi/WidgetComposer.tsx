@@ -125,7 +125,7 @@ export default function WidgetComposer({
             onChange={(event) => setTitle(event.target.value)}
             maxLength={WIDGET_TITLE_MAX}
             placeholder="Deposits by product"
-            className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+            className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
           />
         </label>
         <label className="flex flex-col gap-1.5">
@@ -138,7 +138,7 @@ export default function WidgetComposer({
             onChange={(event) => setCaption(event.target.value)}
             maxLength={WIDGET_CAPTION_MAX}
             placeholder="Optional"
-            className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+            className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
           />
         </label>
       </div>
@@ -221,7 +221,7 @@ export default function WidgetComposer({
                             {designationLabel(
                               measure.advisoryDesignation ?? null,
                             ) && (
-                              <span className="mt-0.5 inline-block rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
+                              <span className="mt-0.5 inline-block rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro text-slate">
                                 {designationLabel(
                                   measure.advisoryDesignation ?? null,
                                 )}

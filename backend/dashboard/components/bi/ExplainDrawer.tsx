@@ -29,7 +29,11 @@ import { X } from "lucide-react";
 import type { BiQuery } from "@aequoros/risk-service-api";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { biRefusalSentence, isBiAccessDenied, useBiExplain } from "@/lib/api/bi";
+import {
+  biRefusalSentence,
+  isBiAccessDenied,
+  useBiExplain,
+} from "@/lib/api/bi";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
 import {
@@ -46,7 +50,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5">
       <dt className="text-caption text-slate">{label}</dt>
-      <dd className="min-w-0 text-right text-caption text-navy break-words">
+      <dd className="min-w-0 text-right text-caption text-navy wrap-break-word">
         {value}
       </dd>
     </div>
@@ -99,7 +103,7 @@ export default function ExplainDrawer({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs"
       />
       <aside className="relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface-raised shadow-pop">
         <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border-light bg-surface-raised px-5 py-4">
@@ -134,13 +138,15 @@ export default function ExplainDrawer({
 
           {refusal !== null && <RefusedWidget sentence={refusal} />}
 
-          {explain.error && !isBiAccessDenied(explain.error) && refusal === null && (
-            <ErrorPanel
-              error={explain.error}
-              onRetry={() => void explain.refetch()}
-              title="Could not load this figure's provenance"
-            />
-          )}
+          {explain.error &&
+            !isBiAccessDenied(explain.error) &&
+            refusal === null && (
+              <ErrorPanel
+                error={explain.error}
+                onRetry={() => void explain.refetch()}
+                title="Could not load this figure's provenance"
+              />
+            )}
 
           {data && (
             <>
@@ -150,12 +156,12 @@ export default function ExplainDrawer({
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {data.measure.certified && (
-                    <span className="rounded border border-success/20 bg-success-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-success">
+                    <span className="rounded-sm border border-success/20 bg-success-light px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-success">
                       Filed figure
                     </span>
                   )}
                   {data.measure.advisoryDesignation && (
-                    <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+                    <span className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
                       {designationLabel(data.measure.advisoryDesignation)}
                     </span>
                   )}

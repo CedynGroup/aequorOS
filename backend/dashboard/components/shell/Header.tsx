@@ -64,7 +64,7 @@ export default function Header({
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10 pointer-events-none bg-surface-alt/90 backdrop-blur-sm"
+        className="absolute inset-0 -z-10 pointer-events-none bg-surface-alt/90 backdrop-blur-xs"
       />
       <div className="flex items-center gap-3 min-w-0">
         {onMobileMenu && (
@@ -72,7 +72,7 @@ export default function Header({
             type="button"
             onClick={onMobileMenu}
             aria-label="Open menu"
-            className="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
+            className="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface"
           >
             <Menu size={18} aria-hidden />
           </button>
@@ -101,7 +101,7 @@ export default function Header({
         >
           <Search size={13} aria-hidden className="shrink-0" />
           <span className="flex-1 truncate text-left">Search…</span>
-          <kbd className="text-[10px] font-mono bg-surface-raised border border-border-light rounded px-1.5 py-0.5 shrink-0">
+          <kbd className="text-[10px] font-mono bg-surface-raised border border-border-light rounded-sm px-1.5 py-0.5 shrink-0">
             ⌘K
           </kbd>
         </button>
@@ -110,7 +110,7 @@ export default function Header({
           type="button"
           onClick={() => setPaletteOpen(true)}
           aria-label="Search"
-          className="md:hidden w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
+          className="md:hidden w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface"
         >
           <Search size={16} aria-hidden />
         </button>
@@ -164,7 +164,7 @@ function BankClock({
   return (
     <span
       title={`Bank local time: ${fullFormatter.format(now)} (${timezone})`}
-      className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded text-caption font-medium text-slate whitespace-nowrap"
+      className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-sm text-caption font-medium text-slate whitespace-nowrap"
     >
       <Clock3 size={13} aria-hidden />
       <time dateTime={now.toISOString()}>{formatter.format(now)}</time>
@@ -261,7 +261,7 @@ function ThemeToggle() {
       onClick={toggle}
       aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
       title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
-      className="w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface hover:text-navy transition-colors"
+      className="w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface hover:text-navy transition-colors"
     >
       {resolvedTheme === "dark" ? (
         <Sun size={16} aria-hidden />
@@ -326,7 +326,7 @@ function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 ml-2 px-2 py-1.5 rounded hover:bg-surface"
+        className="inline-flex items-center gap-2 ml-2 px-2 py-1.5 rounded-sm hover:bg-surface"
       >
         <span
           className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white text-caption font-semibold shrink-0"
@@ -335,7 +335,7 @@ function UserMenu() {
           {initials}
         </span>
         <span className="hidden lg:block text-left">
-          <span className="block text-caption font-medium text-navy leading-tight max-w-[12rem] truncate">
+          <span className="block text-caption font-medium text-navy leading-tight max-w-48 truncate">
             {name}
           </span>
           <span className="block text-[10px] text-slate leading-tight">

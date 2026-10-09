@@ -136,7 +136,7 @@ function InsightCard({ insight }: { insight: BiInsight }) {
         {insight.qualifiers.map((qualifier) => (
           <span
             key={qualifier}
-            className="rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate"
+            className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro text-slate"
           >
             {qualifier}
           </span>

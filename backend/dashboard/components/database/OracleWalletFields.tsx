@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Client wallet (mTLS) control — the friendly path for onboarding an Oracle
@@ -14,16 +14,16 @@
  * that a wallet may already be stored.
  */
 
-import { useRef, useState } from 'react';
-import { FileKey2, Loader2 } from 'lucide-react';
+import { useRef, useState } from "react";
+import { FileKey2, Loader2 } from "lucide-react";
 
 /** Read a file's raw text (used for a `.pem` upload). */
 function fileToText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onload = () => resolve(String(reader.result ?? ""));
     reader.onerror = () =>
-      reject(reader.error ?? new Error('Could not read the wallet file.'));
+      reject(reader.error ?? new Error("Could not read the wallet file."));
     reader.readAsText(file);
   });
 }
@@ -35,15 +35,15 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Unexpected file read result.'));
+      if (typeof result !== "string") {
+        reject(new Error("Unexpected file read result."));
         return;
       }
-      const comma = result.indexOf(',');
+      const comma = result.indexOf(",");
       resolve(comma >= 0 ? result.slice(comma + 1) : result);
     };
     reader.onerror = () =>
-      reject(reader.error ?? new Error('Could not read the wallet file.'));
+      reject(reader.error ?? new Error("Could not read the wallet file."));
     reader.readAsDataURL(file);
   });
 }
@@ -59,7 +59,7 @@ export default function OracleWalletFields({
   idPrefix: string;
   /** required: onboarding a new connection. rotate: editing an existing one,
    * where a wallet may already be stored (but is never returned). */
-  mode: 'required' | 'rotate';
+  mode: "required" | "rotate";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -74,17 +74,21 @@ export default function OracleWalletFields({
     setReading(true);
     try {
       const isPem = /\.pem$/i.test(file.name);
-      const material = isPem ? await fileToText(file) : await fileToBase64(file);
+      const material = isPem
+        ? await fileToText(file)
+        : await fileToBase64(file);
       if (!material.trim()) {
-        throw new Error('The wallet file is empty.');
+        throw new Error("The wallet file is empty.");
       }
-      onChange('oracle_wallet', material);
+      onChange("oracle_wallet", material);
       setFileName(file.name);
     } catch (error) {
-      onChange('oracle_wallet', '');
+      onChange("oracle_wallet", "");
       setFileName(null);
       setReadError(
-        error instanceof Error ? error.message : 'Could not read the wallet file.',
+        error instanceof Error
+          ? error.message
+          : "Could not read the wallet file.",
       );
     } finally {
       setReading(false);
@@ -92,14 +96,14 @@ export default function OracleWalletFields({
   };
 
   const clearWallet = () => {
-    onChange('oracle_wallet', '');
+    onChange("oracle_wallet", "");
     setFileName(null);
     setReadError(null);
-    if (inputRef.current) inputRef.current.value = '';
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
-    <fieldset className="rounded border border-border p-4 space-y-3">
+    <fieldset className="rounded-sm border border-border p-4 space-y-3">
       <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
         Client wallet (mTLS)
       </legend>
@@ -122,7 +126,7 @@ export default function OracleWalletFields({
           type="file"
           accept=".zip,.pem"
           onChange={(event) => void handleFile(event.target.files?.[0])}
-          className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
+          className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded-sm file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
         />
         {reading ? (
           <p className="mt-1 inline-flex items-center gap-1.5 text-caption text-slate">
@@ -132,7 +136,9 @@ export default function OracleWalletFields({
         ) : walletLoaded ? (
           <p className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-caption text-success">
             <FileKey2 size={12} aria-hidden />
-            {fileName ? `${fileName} ready to upload` : 'Wallet ready to upload'}
+            {fileName
+              ? `${fileName} ready to upload`
+              : "Wallet ready to upload"}
             <button
               type="button"
               onClick={clearWallet}
@@ -142,14 +148,16 @@ export default function OracleWalletFields({
             </button>
           </p>
         ) : (
-          mode === 'rotate' && (
+          mode === "rotate" && (
             <p className="mt-1 text-caption text-slate">
               A wallet is stored — upload a new one to replace it. It is never
               displayed.
             </p>
           )
         )}
-        {readError && <p className="mt-1 text-caption text-critical">{readError}</p>}
+        {readError && (
+          <p className="mt-1 text-caption text-critical">{readError}</p>
+        )}
       </div>
 
       <div>
@@ -162,11 +170,11 @@ export default function OracleWalletFields({
         <input
           id={`${idPrefix}-password`}
           type="password"
-          value={values.wallet_password ?? ''}
-          onChange={(event) => onChange('wallet_password', event.target.value)}
+          value={values.wallet_password ?? ""}
+          onChange={(event) => onChange("wallet_password", event.target.value)}
           placeholder="The password set when the wallet was downloaded"
           autoComplete="off"
-          className="w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+          className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
         />
       </div>
     </fieldset>

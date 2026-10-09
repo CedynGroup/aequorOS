@@ -731,7 +731,7 @@ export default function CurveWorkspacePage() {
                               onChange={(e) =>
                                 updateRow(r.key, { include: e.target.checked })
                               }
-                              className="h-4 w-4 accent-[color:rgb(var(--accent))]"
+                              className="h-4 w-4 accent-[rgb(var(--accent))]"
                               aria-label="Include in construction"
                             />
                           </td>
@@ -795,7 +795,7 @@ export default function CurveWorkspacePage() {
                             <button
                               type="button"
                               onClick={() => removeRow(r.key)}
-                              className="rounded p-1 text-slate hover:bg-surface hover:text-critical"
+                              className="rounded-sm p-1 text-slate hover:bg-surface hover:text-critical"
                               aria-label="Remove instrument"
                             >
                               <Trash2 size={14} />
@@ -1163,7 +1163,7 @@ export default function CurveWorkspacePage() {
                     Methodology — the exact recipe (v{active.version})
                   </summary>
                   <div className="space-y-4 border-t border-border-light px-5 py-4">
-                    <p className="rounded border border-border-light bg-surface p-3 text-caption text-slate">
+                    <p className="rounded-sm border border-border-light bg-surface p-3 text-caption text-slate">
                       <span className="font-medium text-ink">Rationale:</span>{" "}
                       {active.change_rationale}
                     </p>
@@ -1216,7 +1216,7 @@ export default function CurveWorkspacePage() {
                         <div className="mb-1 text-micro uppercase tracking-wide text-slate-light">
                           Advanced params
                         </div>
-                        <pre className="overflow-x-auto rounded border border-border-light bg-surface p-3 font-mono text-caption text-ink">
+                        <pre className="overflow-x-auto rounded-sm border border-border-light bg-surface p-3 font-mono text-caption text-ink">
                           {JSON.stringify(active.params, null, 2)}
                         </pre>
                       </div>

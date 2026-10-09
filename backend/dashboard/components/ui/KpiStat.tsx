@@ -1,18 +1,18 @@
-import type { ReactNode } from 'react';
-import { Info } from 'lucide-react';
-import type { BiQuery } from '@aequoros/risk-service-api';
-import DeltaBadge from './DeltaBadge';
+import type { ReactNode } from "react";
+import { Info } from "lucide-react";
+import type { BiQuery } from "@aequoros/risk-service-api";
+import DeltaBadge from "./DeltaBadge";
 
-export type KpiStatus = 'ok' | 'warn' | 'crit';
+export type KpiStatus = "ok" | "warn" | "crit";
 
 const edgeStyles: Record<KpiStatus, string> = {
-  ok: 'inset 3px 0 0 rgb(var(--ok))',
-  warn: 'inset 3px 0 0 rgb(var(--warn))',
-  crit: 'inset 3px 0 0 rgb(var(--crit))',
+  ok: "inset 3px 0 0 rgb(var(--ok))",
+  warn: "inset 3px 0 0 rgb(var(--warn))",
+  crit: "inset 3px 0 0 rgb(var(--crit))",
 };
 
 /** The accessible name of the provenance affordance. Production copy. */
-export const KPI_EXPLAIN_LABEL = 'Where this figure came from';
+export const KPI_EXPLAIN_LABEL = "Where this figure came from";
 
 /**
  * A KPI value that is a PHRASE rather than a figure.
@@ -30,7 +30,9 @@ export const KPI_EXPLAIN_LABEL = 'Where this figure came from';
  * tabular KPI treatment unchanged.
  */
 function isPhraseValue(value: string | number): boolean {
-  return typeof value === 'string' && !/\d/.test(value) && /[A-Za-z]{3,}/.test(value);
+  return (
+    typeof value === "string" && !/\d/.test(value) && /[A-Za-z]{3,}/.test(value)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +66,16 @@ export type EngineMeasureLike = Readonly<{
  * catalogue exposes the metric id and the tier as fields but not the regime, and
  * the regime is the whole question when a metric is multi-authority.
  */
-function engineRegimeOf(id: string, metricId: string, tier: string): string | null {
+function engineRegimeOf(
+  id: string,
+  metricId: string,
+  tier: string,
+): string | null {
   const prefix = `engine.${metricId}.`;
   const suffix = `.${tier}`;
   if (!id.startsWith(prefix) || !id.endsWith(suffix)) return null;
   const regime = id.slice(prefix.length, id.length - suffix.length);
-  return regime.length > 0 && !regime.includes('.') ? regime : null;
+  return regime.length > 0 && !regime.includes(".") ? regime : null;
 }
 
 /**
@@ -99,14 +105,14 @@ export function liveEngineMeasureId(
   if (!measures) return null;
   const copies = measures.filter(
     (measure) =>
-      measure.measureKind === 'certified_engine' &&
+      measure.measureKind === "certified_engine" &&
       measure.engineMetricId === metricId &&
-      measure.engineTier === 'live',
+      measure.engineTier === "live",
   );
   if (copies.length === 1) return copies[0].id;
   if (copies.length === 0 || !capitalRegime) return null;
   const own = copies.filter(
-    (measure) => engineRegimeOf(measure.id, metricId, 'live') === capitalRegime,
+    (measure) => engineRegimeOf(measure.id, metricId, "live") === capitalRegime,
   );
   return own.length === 1 ? own[0].id : null;
 }
@@ -137,14 +143,14 @@ export default function KpiStat({
   value,
   unit,
   delta,
-  deltaSuffix = ' pts',
+  deltaSuffix = " pts",
   deltaDecimals = 1,
   invertDelta = false,
   status,
   sparkline,
   hint,
   explain,
-  className = '',
+  className = "",
 }: {
   label: string;
   /** Pre-formatted display value (string) or a raw number. */
@@ -187,7 +193,7 @@ export default function KpiStat({
             onClick={explain}
             aria-label={KPI_EXPLAIN_LABEL}
             title={KPI_EXPLAIN_LABEL}
-            className="-mr-1 -mt-0.5 shrink-0 rounded p-0.5 text-slate hover:bg-surface hover:text-navy"
+            className="-mr-1 -mt-0.5 shrink-0 rounded-sm p-0.5 text-slate hover:bg-surface hover:text-navy"
           >
             <Info size={12} aria-hidden />
           </button>
@@ -201,14 +207,16 @@ export default function KpiStat({
           <span
             className={`font-mono ${
               isPhraseValue(value)
-                ? 'text-h2 whitespace-normal'
-                : 'text-kpi whitespace-nowrap'
+                ? "text-h2 whitespace-normal"
+                : "text-kpi whitespace-nowrap"
             } text-navy tnum`}
-            title={typeof value === 'number' ? String(value) : value}
+            title={typeof value === "number" ? String(value) : value}
           >
-            {typeof value === 'number' ? String(value) : value}
+            {typeof value === "number" ? String(value) : value}
           </span>
-          {unit && <span className="text-body text-slate shrink-0">{unit}</span>}
+          {unit && (
+            <span className="text-body text-slate shrink-0">{unit}</span>
+          )}
         </div>
         {sparkline && <div className="shrink-0 pb-1">{sparkline}</div>}
       </div>
@@ -225,9 +233,7 @@ export default function KpiStat({
           ) : (
             <span />
           )}
-          {hint && (
-            <span className="text-caption text-slate">{hint}</span>
-          )}
+          {hint && <span className="text-caption text-slate">{hint}</span>}
         </div>
       )}
     </div>

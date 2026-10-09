@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Zero-dependency spotlight tour over the app shell.
@@ -15,17 +15,11 @@
  * traps focus, and target rects recompute on scroll/resize.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { Compass, X } from 'lucide-react';
-import { TOUR_STEPS, type TourStep } from './steps';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Compass, X } from "lucide-react";
+import { TOUR_STEPS, type TourStep } from "./steps";
 
-const DONE_KEY = 'aeq-tour-done';
+const DONE_KEY = "aeq-tour-done";
 
 type Rect = { top: number; left: number; width: number; height: number };
 
@@ -47,7 +41,7 @@ function findTarget(step: TourStep): HTMLElement | null {
 
 function markDone() {
   try {
-    window.localStorage.setItem(DONE_KEY, '1');
+    window.localStorage.setItem(DONE_KEY, "1");
   } catch {
     // storage unavailable — the tour just stays offerable this session
   }
@@ -83,13 +77,13 @@ export default function GuidedTour() {
   // Entry triggers: ?tour=1 (then strip it) or the first-visit pill.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tour') === '1') {
-      params.delete('tour');
+    if (params.get("tour") === "1") {
+      params.delete("tour");
       const query = params.toString();
       window.history.replaceState(
         null,
-        '',
-        `${window.location.pathname}${query ? `?${query}` : ''}`
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
       );
       start();
       return;
@@ -122,15 +116,15 @@ export default function GuidedTour() {
 
     targetRef.current = findTarget(step);
     if (targetRef.current) {
-      targetRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      targetRef.current.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
     measure();
 
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
     return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [active, step]);
 
@@ -138,20 +132,20 @@ export default function GuidedTour() {
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         finish();
       }
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [active, finish]);
 
   useEffect(() => {
     if (!active) return;
     const frame = requestAnimationFrame(() => {
       const focusable = cardRef.current?.querySelector<HTMLElement>(
-        'button[data-tour-primary]'
+        "button[data-tour-primary]",
       );
       focusable?.focus();
     });
@@ -160,17 +154,20 @@ export default function GuidedTour() {
 
   // Simple focus trap: Tab cycles within the card.
   const trapFocus = useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== 'Tab' || !cardRef.current) return;
+    if (e.key !== "Tab" || !cardRef.current) return;
     const focusables = Array.from(
       cardRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-      )
+        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ),
     );
     if (focusables.length === 0) return;
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
     const current = document.activeElement;
-    if (e.shiftKey && (current === first || !cardRef.current.contains(current))) {
+    if (
+      e.shiftKey &&
+      (current === first || !cardRef.current.contains(current))
+    ) {
       e.preventDefault();
       last.focus();
     } else if (!e.shiftKey && current === last) {
@@ -184,11 +181,11 @@ export default function GuidedTour() {
     const CARD_W = 340;
     const CARD_H = 240; // conservative estimate; clamped anyway
     const GAP = 14;
-    if (typeof window === 'undefined' || !rect) {
+    if (typeof window === "undefined" || !rect) {
       return {
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
         width: CARD_W,
       };
     }
@@ -206,7 +203,11 @@ export default function GuidedTour() {
       };
     }
     // Below, else above.
-    const left = clamp(rect.left + rect.width / 2 - CARD_W / 2, 16, vw - CARD_W - 16);
+    const left = clamp(
+      rect.left + rect.width / 2 - CARD_W / 2,
+      16,
+      vw - CARD_W - 16,
+    );
     if (rect.top + rect.height + GAP + CARD_H <= vh - 16) {
       return { top: rect.top + rect.height + GAP, left, width: CARD_W };
     }
@@ -220,7 +221,7 @@ export default function GuidedTour() {
   if (!active) {
     if (!showPill) return null;
     return (
-      <div className="no-print fixed bottom-5 right-5 z-[60] flex items-center gap-1 rounded-full bg-nav text-white shadow-pop pl-4 pr-1.5 py-1.5">
+      <div className="no-print fixed bottom-5 right-5 z-60 flex items-center gap-1 rounded-full bg-nav text-white shadow-pop pl-4 pr-1.5 py-1.5">
         <Compass size={14} className="text-action shrink-0" aria-hidden />
         <button
           type="button"
@@ -245,7 +246,7 @@ export default function GuidedTour() {
   const isLast = stepIndex === TOUR_STEPS.length - 1;
 
   return (
-    <div className="no-print fixed inset-0 z-[70]" role="presentation">
+    <div className="no-print fixed inset-0 z-70" role="presentation">
       {/* Spotlight cutout — the box-shadow dims everything around it. */}
       {rect ? (
         <div
@@ -256,14 +257,14 @@ export default function GuidedTour() {
             left: rect.left - 6,
             width: rect.width + 12,
             height: rect.height + 12,
-            boxShadow: '0 0 0 9999px rgb(var(--nav-bg) / 0.72)',
+            boxShadow: "0 0 0 9999px rgb(var(--nav-bg) / 0.72)",
           }}
         />
       ) : (
         <div
           aria-hidden
           className="fixed inset-0"
-          style={{ backgroundColor: 'rgb(var(--nav-bg) / 0.72)' }}
+          style={{ backgroundColor: "rgb(var(--nav-bg) / 0.72)" }}
         />
       )}
 
@@ -288,7 +289,7 @@ export default function GuidedTour() {
             type="button"
             onClick={finish}
             aria-label="Exit tour"
-            className="w-6 h-6 -mt-1 -mr-1 inline-flex items-center justify-center rounded text-slate hover:text-navy hover:bg-surface transition-colors"
+            className="w-6 h-6 -mt-1 -mr-1 inline-flex items-center justify-center rounded-sm text-slate hover:text-navy hover:bg-surface transition-colors"
           >
             <X size={13} aria-hidden />
           </button>
@@ -307,8 +308,8 @@ export default function GuidedTour() {
                 key={s.id}
                 className={`rounded-full transition-all ${
                   i === stepIndex
-                    ? 'w-4 h-1.5 bg-action'
-                    : 'w-1.5 h-1.5 bg-border'
+                    ? "w-4 h-1.5 bg-action"
+                    : "w-1.5 h-1.5 bg-border"
                 }`}
               />
             ))}
@@ -336,12 +337,10 @@ export default function GuidedTour() {
             <button
               type="button"
               data-tour-primary
-              onClick={() =>
-                isLast ? finish() : setStepIndex((i) => i + 1)
-              }
+              onClick={() => (isLast ? finish() : setStepIndex((i) => i + 1))}
               className="btn-primary px-4 py-1.5 text-caption font-medium"
             >
-              {isLast ? 'Finish' : 'Next'}
+              {isLast ? "Finish" : "Next"}
             </button>
           </div>
         </div>

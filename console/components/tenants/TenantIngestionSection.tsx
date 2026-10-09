@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import type {
   ApiError,
   TenantIngestionBatch,
   TenantIngestionListResponse,
   TenantTranslationFailure,
-} from '@/lib/api';
-import { getTenantIngestionBatch } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { fmtDate, fmtTs, relTime, shortId, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { getTenantIngestionBatch } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { fmtDate, fmtTs, relTime, shortId, DASH } from "@/lib/format";
 import {
   Chip,
   DataTable,
@@ -21,9 +21,9 @@ import {
   SkeletonRows,
   StatusChip,
   type Column,
-} from '@/components/ui';
-import { DeepSectionBody } from './DeepSectionBody';
-import { formatJson, isInspectionRequired } from './util';
+} from "@/components/ui";
+import { DeepSectionBody } from "./DeepSectionBody";
+import { formatJson, isInspectionRequired } from "./util";
 
 /**
  * Recent ingestion batches for one tenant, with a row → Drawer detail that
@@ -32,15 +32,20 @@ import { formatJson, isInspectionRequired } from './util';
  */
 
 /** Number with a subdued colour only when non-zero (0 stays neutral). */
-function Count({ value, tone }: { value: number; tone?: 'warn' | 'crit' }) {
+function Count({ value, tone }: { value: number; tone?: "warn" | "crit" }) {
   if (!value) return <span className="text-slate-light">0</span>;
-  const cls = tone === 'crit' ? 'text-critical' : tone === 'warn' ? 'text-warning' : 'text-navy';
+  const cls =
+    tone === "crit"
+      ? "text-critical"
+      : tone === "warn"
+        ? "text-warning"
+        : "text-navy";
   return <span className={`font-mono ${cls}`}>{value.toLocaleString()}</span>;
 }
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-72 overflow-auto rounded border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
+    <pre className="max-h-72 overflow-auto rounded-sm border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
       {formatJson(value)}
     </pre>
   );
@@ -56,12 +61,19 @@ function TranslationFailureCard({ f }: { f: TenantTranslationFailure }) {
             {f.error_code}
           </Chip>
         </div>
-        <span className="font-mono text-micro text-slate" title={fmtTs(f.created_at)}>
+        <span
+          className="font-mono text-micro text-slate"
+          title={fmtTs(f.created_at)}
+        >
           {relTime(f.created_at)}
         </span>
       </div>
-      <p className="mt-2 break-words text-caption text-navy/90">{f.error_message}</p>
-      <p className="mt-1 font-mono text-micro text-slate">at {f.source_locator}</p>
+      <p className="mt-2 wrap-break-word text-caption text-navy/90">
+        {f.error_message}
+      </p>
+      <p className="mt-1 font-mono text-micro text-slate">
+        at {f.source_locator}
+      </p>
       <details className="mt-2">
         <summary className="cursor-pointer text-micro font-medium uppercase tracking-wider text-slate hover:text-navy">
           Raw record
@@ -86,7 +98,8 @@ function BatchDetailDrawer({
   onClose: () => void;
 }) {
   const detail = useApi(
-    () => (batchId ? getTenantIngestionBatch(orgId, batchId) : Promise.resolve(null)),
+    () =>
+      batchId ? getTenantIngestionBatch(orgId, batchId) : Promise.resolve(null),
     [orgId, batchId],
   );
   const d = detail.data;
@@ -107,7 +120,11 @@ function BatchDetailDrawer({
           description="Re-open an inspection session to view this batch's detail."
         />
       ) : detail.error ? (
-        <ErrorPanel error={detail.error} onRetry={detail.reload} context="Loading batch" />
+        <ErrorPanel
+          error={detail.error}
+          onRetry={detail.reload}
+          context="Loading batch"
+        />
       ) : d ? (
         <div className="space-y-5">
           <div className="grid gap-x-8 sm:grid-cols-2">
@@ -119,19 +136,27 @@ function BatchDetailDrawer({
             </FieldRow>
             <FieldRow label="As of">{fmtDate(d.batch.as_of_date)}</FieldRow>
             <FieldRow label="Extraction">
-              <span className="font-mono text-caption">{d.batch.extraction_mode}</span>
+              <span className="font-mono text-caption">
+                {d.batch.extraction_mode}
+              </span>
             </FieldRow>
             <FieldRow label="Adapter">
-              <span className="font-mono text-caption">{d.batch.adapter_version}</span>
+              <span className="font-mono text-caption">
+                {d.batch.adapter_version}
+              </span>
             </FieldRow>
             <FieldRow label="Bank">
               <span className="font-mono text-caption">{d.batch.bank_id}</span>
             </FieldRow>
             <FieldRow label="Completed">
-              <span title={fmtTs(d.batch.completed_at)}>{relTime(d.batch.completed_at)}</span>
+              <span title={fmtTs(d.batch.completed_at)}>
+                {relTime(d.batch.completed_at)}
+              </span>
             </FieldRow>
             <FieldRow label="Created">
-              <span title={fmtTs(d.batch.created_at)}>{relTime(d.batch.created_at)}</span>
+              <span title={fmtTs(d.batch.created_at)}>
+                {relTime(d.batch.created_at)}
+              </span>
             </FieldRow>
           </div>
 
@@ -139,9 +164,21 @@ function BatchDetailDrawer({
             <RecordStat label="Extracted" value={d.batch.records_extracted} />
             <RecordStat label="Translated" value={d.batch.records_translated} />
             <RecordStat label="Accepted" value={d.batch.records_accepted} />
-            <RecordStat label="Warning" value={d.batch.records_warning} tone="warn" />
-            <RecordStat label="Error" value={d.batch.records_error} tone="crit" />
-            <RecordStat label="Blocked" value={d.batch.records_blocked} tone="crit" />
+            <RecordStat
+              label="Warning"
+              value={d.batch.records_warning}
+              tone="warn"
+            />
+            <RecordStat
+              label="Error"
+              value={d.batch.records_error}
+              tone="crit"
+            />
+            <RecordStat
+              label="Blocked"
+              value={d.batch.records_blocked}
+              tone="crit"
+            />
           </div>
 
           {(d.batch.error_code || d.batch.error_message) && (
@@ -152,7 +189,9 @@ function BatchDetailDrawer({
                 </span>
               )}
               {d.batch.error_message && (
-                <p className="mt-1 break-words text-caption text-critical">{d.batch.error_message}</p>
+                <p className="mt-1 wrap-break-word text-caption text-critical">
+                  {d.batch.error_message}
+                </p>
               )}
             </div>
           )}
@@ -164,11 +203,16 @@ function BatchDetailDrawer({
             {d.translation_failures.length > 0 ? (
               <div className="space-y-2">
                 {d.translation_failures.map((f, i) => (
-                  <TranslationFailureCard key={`${f.source_locator}-${i}`} f={f} />
+                  <TranslationFailureCard
+                    key={`${f.source_locator}-${i}`}
+                    f={f}
+                  />
                 ))}
               </div>
             ) : (
-              <p className="text-caption text-slate">No per-row translation failures recorded.</p>
+              <p className="text-caption text-slate">
+                No per-row translation failures recorded.
+              </p>
             )}
           </div>
 
@@ -202,11 +246,13 @@ function RecordStat({
 }: {
   label: string;
   value: number;
-  tone?: 'warn' | 'crit';
+  tone?: "warn" | "crit";
 }) {
   return (
-    <div className="rounded border border-border-light px-2 py-1.5">
-      <div className="text-micro uppercase tracking-wider text-slate">{label}</div>
+    <div className="rounded-sm border border-border-light px-2 py-1.5">
+      <div className="text-micro uppercase tracking-wider text-slate">
+        {label}
+      </div>
       <div className="text-body">
         <Count value={value} tone={tone} />
       </div>
@@ -234,52 +280,60 @@ export function TenantIngestionSection({
 
   const columns: Column<TenantIngestionBatch>[] = [
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       sortable: true,
       sortAccessor: (b) => b.status,
       render: (b) => <StatusChip value={b.status} />,
     },
     {
-      key: 'source',
-      header: 'Source',
+      key: "source",
+      header: "Source",
       sortable: true,
       sortAccessor: (b) => b.source_system,
       render: (b) => (
         <div className="min-w-0">
-          <div className="font-mono text-caption text-navy">{b.source_system}</div>
-          <div className="font-mono text-micro text-slate">{b.extraction_mode}</div>
+          <div className="font-mono text-caption text-navy">
+            {b.source_system}
+          </div>
+          <div className="font-mono text-micro text-slate">
+            {b.extraction_mode}
+          </div>
         </div>
       ),
     },
     {
-      key: 'as_of',
-      header: 'As of',
+      key: "as_of",
+      header: "As of",
       sortable: true,
       sortAccessor: (b) => b.as_of_date,
-      render: (b) => <span className="text-caption text-navy/90">{fmtDate(b.as_of_date)}</span>,
+      render: (b) => (
+        <span className="text-caption text-navy/90">
+          {fmtDate(b.as_of_date)}
+        </span>
+      ),
     },
     {
-      key: 'records',
-      header: 'Records',
+      key: "records",
+      header: "Records",
       render: (b) => (
         <span className="font-mono text-caption">
           <Count value={b.records_accepted} /> ok
           {b.records_warning > 0 && (
             <>
-              {' · '}
+              {" · "}
               <Count value={b.records_warning} tone="warn" /> warn
             </>
           )}
           {b.records_error > 0 && (
             <>
-              {' · '}
+              {" · "}
               <Count value={b.records_error} tone="crit" /> err
             </>
           )}
           {b.records_blocked > 0 && (
             <>
-              {' · '}
+              {" · "}
               <Count value={b.records_blocked} tone="crit" /> blk
             </>
           )}
@@ -287,8 +341,8 @@ export function TenantIngestionSection({
       ),
     },
     {
-      key: 'error',
-      header: 'Error',
+      key: "error",
+      header: "Error",
       render: (b) =>
         b.error_code ? (
           <Chip tone="crit" mono title={b.error_message ?? b.error_code}>
@@ -299,13 +353,16 @@ export function TenantIngestionSection({
         ),
     },
     {
-      key: 'created',
-      header: 'Created',
-      align: 'right',
+      key: "created",
+      header: "Created",
+      align: "right",
       sortable: true,
       sortAccessor: (b) => b.created_at,
       render: (b) => (
-        <span className="whitespace-nowrap text-caption text-slate" title={fmtTs(b.created_at)}>
+        <span
+          className="whitespace-nowrap text-caption text-slate"
+          title={fmtTs(b.created_at)}
+        >
           {relTime(b.created_at)}
         </span>
       ),
@@ -337,9 +394,15 @@ export function TenantIngestionSection({
           columns={columns}
           rows={batches}
           density="compact"
-          initialSort={{ key: 'created', dir: 'desc' }}
+          initialSort={{ key: "created", dir: "desc" }}
           getFilterText={(b) =>
-            [b.source_system, b.extraction_mode, b.status, b.error_code ?? '', b.as_of_date].join(' ')
+            [
+              b.source_system,
+              b.extraction_mode,
+              b.status,
+              b.error_code ?? "",
+              b.as_of_date,
+            ].join(" ")
           }
           filterPlaceholder="Filter batches…"
           pageSize={12}

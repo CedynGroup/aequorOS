@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The signing ceremony for a role the document has no field for
@@ -39,17 +39,17 @@
  * cannot certify figures nobody looked at.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
-import type { SigningRole } from '@aequoros/risk-service-api';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import type { SigningRole } from "@aequoros/risk-service-api";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import {
   useCertificationPreview,
   useCertifyPackage,
   useCertifyWithHeldAuthorization,
   useStepUpForSigning,
-} from '@/lib/api/hooks';
-import { SIGNING_ROLE_ACTIONS, roleNoun } from './shared';
+} from "@/lib/api/hooks";
+import { SIGNING_ROLE_ACTIONS, roleNoun } from "./shared";
 import {
   CertificationFailure,
   FiguresSection,
@@ -58,8 +58,8 @@ import {
   StatementSection,
   StepUpSection,
   isTerminalFailure,
-} from './review';
-import { startSsoStepUp } from '@/lib/attestation/ssoStepUp';
+} from "./review";
+import { startSsoStepUp } from "@/lib/attestation/ssoStepUp";
 
 export default function CertifyDialog({
   bankId,
@@ -95,29 +95,31 @@ export default function CertifyDialog({
   const certify = useCertifyPackage(bankId);
   const certifyWithHeld = useCertifyWithHeldAuthorization(bankId);
 
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Escape closes, matching the shell's drawers. Focus lands on the heading so a
   // screen reader announces what the dialog is before the signer meets a field.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
     headingRef.current?.focus();
-    return () => window.removeEventListener('keydown', onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   const preview = previewQuery.data;
-  const pending = stepUp.isPending || certify.isPending || certifyWithHeld.isPending;
+  const pending =
+    stepUp.isPending || certify.isPending || certifyWithHeld.isPending;
   // Any of the three calls can refuse; the signer cares about one failure, not three.
-  const failure = certifyWithHeld.error ?? certify.error ?? stepUp.error ?? null;
+  const failure =
+    certifyWithHeld.error ?? certify.error ?? stepUp.error ?? null;
   const terminal = isTerminalFailure(failure);
-  const authorizationHeld = ssoOutcome === 'ready';
+  const authorizationHeld = ssoOutcome === "ready";
 
   const finish = () => {
-    setPassword('');
+    setPassword("");
     onCertified?.();
     onClose();
   };
@@ -127,7 +129,11 @@ export default function CertifyDialog({
     if (!preview) return;
     // Rejections are rendered from the mutations' own error state.
     void (async () => {
-      const granted = await stepUp.mutateAsync({ packageId, signingRole, password });
+      const granted = await stepUp.mutateAsync({
+        packageId,
+        signingRole,
+        password,
+      });
       await certify.mutateAsync({
         packageId,
         signingRole,
@@ -165,24 +171,28 @@ export default function CertifyDialog({
         type="button"
         aria-label="Cancel certification"
         onClick={onClose}
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs"
       />
       <section className="relative w-full max-w-3xl rounded-lg bg-surface-raised border border-border shadow-pop">
         <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border-light">
           <div className="min-w-0">
-            <h2 ref={headingRef} tabIndex={-1} className="text-h3 text-navy outline-none">
-              {SIGNING_ROLE_ACTIONS[signingRole] ?? 'Certify'} — {returnLabel}
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-h3 text-navy outline-hidden"
+            >
+              {SIGNING_ROLE_ACTIONS[signingRole] ?? "Certify"} — {returnLabel}
             </h2>
             <p className="mt-0.5 text-caption text-slate">
-              Signing as {roleNoun(signingRole).toLowerCase()} · your signature covers
-              the figures digest and the statement exactly as shown below
+              Signing as {roleNoun(signingRole).toLowerCase()} · your signature
+              covers the figures digest and the statement exactly as shown below
             </p>
           </div>
           <button
             type="button"
             aria-label="Cancel certification"
             onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded text-slate hover:bg-surface inline-flex items-center justify-center"
+            className="shrink-0 w-9 h-9 rounded-sm text-slate hover:bg-surface inline-flex items-center justify-center"
           >
             <X size={16} aria-hidden />
           </button>
@@ -222,18 +232,25 @@ export default function CertifyDialog({
               signingRole={signingRole}
               password={password}
               onPasswordChange={setPassword}
-              onSubmit={authorizationHeld ? onHeldAuthorizationSubmit : onPasswordSubmit}
+              onSubmit={
+                authorizationHeld ? onHeldAuthorizationSubmit : onPasswordSubmit
+              }
               onSsoClick={() =>
-                startSsoStepUp({ bankId, packageId, signingRole, resume: 'certify' })
+                startSsoStepUp({
+                  bankId,
+                  packageId,
+                  signingRole,
+                  resume: "certify",
+                })
               }
               pending={pending}
               authorizationHeld={authorizationHeld}
               stage={
                 certify.isPending || certifyWithHeld.isPending
-                  ? 'signing'
+                  ? "signing"
                   : stepUp.isPending
-                    ? 'proving'
-                    : 'idle'
+                    ? "proving"
+                    : "idle"
               }
               onCancel={onClose}
             />

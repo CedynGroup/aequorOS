@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The direct-database connection form: backend, endpoint (host/port/database/
@@ -12,10 +12,10 @@ import type {
   DatabaseConnectionCreate,
   DatabaseConnectionRead,
   DatabaseConnectionUpdate,
-} from '@aequoros/risk-service-api';
-import CredentialFields from './CredentialFields';
-import OracleWalletFields from './OracleWalletFields';
-import SnowflakeFields from './SnowflakeFields';
+} from "@aequoros/risk-service-api";
+import CredentialFields from "./CredentialFields";
+import OracleWalletFields from "./OracleWalletFields";
+import SnowflakeFields from "./SnowflakeFields";
 import {
   BACKENDS,
   type BackendKey,
@@ -24,7 +24,7 @@ import {
   backendMeta,
   parseExtra,
   splitList,
-} from './shared';
+} from "./shared";
 
 /** Snowflake warehouse config — the non-secret block serialized into
  * `connection_options.snowflake`. Key-pair material lives in `cred`, not here. */
@@ -37,7 +37,13 @@ export type SnowflakeConfig = {
 };
 
 export function emptySnowflakeConfig(): SnowflakeConfig {
-  return { account: '', warehouse: '', role: '', defaultSchema: '', useStreams: false };
+  return {
+    account: "",
+    warehouse: "",
+    role: "",
+    defaultSchema: "",
+    useStreams: false,
+  };
 }
 
 export type DbFormState = {
@@ -57,21 +63,21 @@ export type DbFormState = {
   cred: Record<string, string>;
 };
 
-export function emptyFormState(backend: BackendKey = 'oracle'): DbFormState {
+export function emptyFormState(backend: BackendKey = "oracle"): DbFormState {
   const meta = backendMeta(backend);
   return {
     backend,
-    displayName: '',
-    host: '',
-    port: meta && meta.defaultPort > 0 ? String(meta.defaultPort) : '',
-    database: '',
-    serviceName: '',
-    schemas: '',
+    displayName: "",
+    host: "",
+    port: meta && meta.defaultPort > 0 ? String(meta.defaultPort) : "",
+    database: "",
+    serviceName: "",
+    schemas: "",
     tlsEnabled: true,
     tlsVerifyServerCertificate: true,
     preferReadReplica: false,
-    readReplicas: '',
-    queryTimeoutSeconds: '',
+    readReplicas: "",
+    queryTimeoutSeconds: "",
     snowflake: emptySnowflakeConfig(),
     cred: {},
   };
@@ -85,19 +91,19 @@ export function formStateFromConnection(
   return {
     backend: connection.backend,
     displayName: connection.displayName,
-    host: connection.host ?? '',
-    port: connection.port != null ? String(connection.port) : '',
-    database: connection.database ?? '',
-    serviceName: connection.serviceName ?? '',
-    schemas: (connection.schemas ?? []).join(', '),
+    host: connection.host ?? "",
+    port: connection.port != null ? String(connection.port) : "",
+    database: connection.database ?? "",
+    serviceName: connection.serviceName ?? "",
+    schemas: (connection.schemas ?? []).join(", "),
     tlsEnabled: connection.tlsEnabled,
     tlsVerifyServerCertificate: connection.tlsVerifyServerCertificate,
     preferReadReplica: connection.preferReadReplica,
-    readReplicas: (connection.readReplicas ?? []).join(', '),
+    readReplicas: (connection.readReplicas ?? []).join(", "),
     queryTimeoutSeconds:
       connection.queryTimeoutSeconds != null
         ? String(connection.queryTimeoutSeconds)
-        : '',
+        : "",
     // Non-secret Snowflake config round-trips through connection_options; the
     // key pair is write-only, so cred always starts empty (rotation only).
     snowflake: snowflakeConfigFromOptions(connection.connectionOptions),
@@ -111,9 +117,9 @@ function snowflakeConfigFromOptions(
   options: { [key: string]: unknown } | null | undefined,
 ): SnowflakeConfig {
   const raw = options?.snowflake;
-  if (!raw || typeof raw !== 'object') return emptySnowflakeConfig();
+  if (!raw || typeof raw !== "object") return emptySnowflakeConfig();
   const snow = raw as Record<string, unknown>;
-  const str = (value: unknown) => (typeof value === 'string' ? value : '');
+  const str = (value: unknown) => (typeof value === "string" ? value : "");
   return {
     account: str(snow.account),
     warehouse: str(snow.warehouse),
@@ -149,14 +155,16 @@ export function collectCredentials(
   if (password) out.password = password;
   // Start from the power-user "extra JSON" escape hatch, then let the friendly
   // backend controls merge their secret material into the same object.
-  const extra: Record<string, unknown> = { ...(parseExtra(cred.extra ?? '') ?? {}) };
-  if (backend === 'oracle') {
+  const extra: Record<string, unknown> = {
+    ...(parseExtra(cred.extra ?? "") ?? {}),
+  };
+  if (backend === "oracle") {
     const wallet = cred.oracle_wallet?.trim();
     const walletPassword = cred.wallet_password?.trim();
     if (wallet) extra.oracle_wallet = wallet;
     if (walletPassword) extra.wallet_password = walletPassword;
   }
-  if (backend === 'snowflake') {
+  if (backend === "snowflake") {
     // Key-pair auth: the PKCS#8 PEM and its optional passphrase are the secret
     // material — Snowflake never uses a password.
     const privateKey = cred.snowflake_private_key?.trim();
@@ -175,7 +183,7 @@ export function collectCredentials(
 export function collectConnectionOptions(
   form: DbFormState,
 ): { [key: string]: unknown } | undefined {
-  if (form.backend !== 'snowflake') return undefined;
+  if (form.backend !== "snowflake") return undefined;
   const s = form.snowflake;
   const snowflake: Record<string, unknown> = {
     account: s.account.trim(),
@@ -189,12 +197,14 @@ export function collectConnectionOptions(
   return { snowflake };
 }
 
-export function buildCreatePayload(form: DbFormState): DatabaseConnectionCreate {
+export function buildCreatePayload(
+  form: DbFormState,
+): DatabaseConnectionCreate {
   return {
     // `backend` is widened locally to include "snowflake"; the generated enum
     // does not carry it yet (see shared.tsx). Cast keeps the payload typed while
     // sending the value verbatim.
-    backend: form.backend as DatabaseConnectionCreate['backend'],
+    backend: form.backend as DatabaseConnectionCreate["backend"],
     displayName: form.displayName.trim(),
     host: form.host.trim() || undefined,
     port: parsePort(form.port),
@@ -211,7 +221,9 @@ export function buildCreatePayload(form: DbFormState): DatabaseConnectionCreate 
   };
 }
 
-export function buildUpdatePayload(form: DbFormState): DatabaseConnectionUpdate {
+export function buildUpdatePayload(
+  form: DbFormState,
+): DatabaseConnectionUpdate {
   return {
     displayName: form.displayName.trim(),
     host: form.host.trim() || null,
@@ -232,14 +244,14 @@ export function buildUpdatePayload(form: DbFormState): DatabaseConnectionUpdate 
 }
 
 const inputClass =
-  'w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono';
-const labelClass = 'block text-caption font-medium text-slate mb-1';
+  "w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono";
+const labelClass = "block text-caption font-medium text-slate mb-1";
 
 export default function ConnectionForm({
   form,
   onChange,
   idPrefix,
-  credentialsMode = 'required',
+  credentialsMode = "required",
   lockBackend = false,
 }: {
   form: DbFormState;
@@ -247,7 +259,7 @@ export default function ConnectionForm({
   idPrefix: string;
   /** create: a first credential set is required; rotate: leaving them blank
    * keeps the stored set. */
-  credentialsMode?: 'required' | 'rotate';
+  credentialsMode?: "required" | "rotate";
   /** The backend cannot change after creation. */
   lockBackend?: boolean;
 }) {
@@ -263,12 +275,13 @@ export default function ConnectionForm({
     const next = backendMeta(backend);
     // Adopt the new backend's default port when the field is empty or still
     // holds the previous backend's default.
-    const prevDefault = meta && meta.defaultPort > 0 ? String(meta.defaultPort) : '';
+    const prevDefault =
+      meta && meta.defaultPort > 0 ? String(meta.defaultPort) : "";
     const port =
       !form.port.trim() || form.port === prevDefault
         ? next && next.defaultPort > 0
           ? String(next.defaultPort)
-          : ''
+          : ""
         : form.port;
     onChange({ backend, port });
   };
@@ -288,12 +301,16 @@ export default function ConnectionForm({
                   onClick={() => chooseBackend(backend.key)}
                   className={`text-left rounded border p-3 space-y-1 ${
                     active
-                      ? 'border-action bg-action-light/60'
-                      : 'border-border hover:border-action/50'
+                      ? "border-action bg-action-light/60"
+                      : "border-border hover:border-action/50"
                   }`}
                 >
-                  <p className="text-body font-medium text-navy">{backend.name}</p>
-                  <p className="text-caption text-slate leading-snug">{backend.blurb}</p>
+                  <p className="text-body font-medium text-navy">
+                    {backend.name}
+                  </p>
+                  <p className="text-caption text-slate leading-snug">
+                    {backend.blurb}
+                  </p>
                 </button>
               );
             })}
@@ -311,7 +328,7 @@ export default function ConnectionForm({
             type="text"
             value={form.displayName}
             onChange={(event) => onChange({ displayName: event.target.value })}
-            className="w-full px-3 py-1.5 rounded border border-border text-body text-navy"
+            className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy"
           />
         </div>
         <div>
@@ -323,9 +340,11 @@ export default function ConnectionForm({
             type="number"
             min={1}
             value={form.queryTimeoutSeconds}
-            onChange={(event) => onChange({ queryTimeoutSeconds: event.target.value })}
+            onChange={(event) =>
+              onChange({ queryTimeoutSeconds: event.target.value })
+            }
             placeholder="default"
-            className="w-40 px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+            className="w-40 px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
           />
         </div>
       </div>
@@ -363,7 +382,7 @@ export default function ConnectionForm({
         )}
         <div>
           <label htmlFor={`${idPrefix}-database`} className={labelClass}>
-            {meta?.databaseLabel ?? 'Database'}
+            {meta?.databaseLabel ?? "Database"}
           </label>
           <input
             id={`${idPrefix}-database`}
@@ -385,7 +404,9 @@ export default function ConnectionForm({
               id={`${idPrefix}-service`}
               type="text"
               value={form.serviceName}
-              onChange={(event) => onChange({ serviceName: event.target.value })}
+              onChange={(event) =>
+                onChange({ serviceName: event.target.value })
+              }
               placeholder="CORE.bank.internal"
               className={inputClass}
             />
@@ -406,12 +427,12 @@ export default function ConnectionForm({
           className={inputClass}
         />
         <p className="mt-1 text-caption text-slate">
-          Comma-separated schemas the extraction is scoped to. Leave blank to use the
-          service user&apos;s default schema.
+          Comma-separated schemas the extraction is scoped to. Leave blank to
+          use the service user&apos;s default schema.
         </p>
       </div>
 
-      <fieldset className="rounded border border-border p-4 space-y-3 max-w-3xl">
+      <fieldset className="rounded-sm border border-border p-4 space-y-3 max-w-3xl">
         <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
           Transport &amp; routing
         </legend>
@@ -420,7 +441,7 @@ export default function ConnectionForm({
             type="checkbox"
             checked={form.tlsEnabled}
             onChange={(event) => onChange({ tlsEnabled: event.target.checked })}
-            className="mt-1 rounded border-border"
+            className="mt-1 rounded-sm border-border"
           />
           <span>
             TLS enabled
@@ -437,7 +458,7 @@ export default function ConnectionForm({
             onChange={(event) =>
               onChange({ tlsVerifyServerCertificate: event.target.checked })
             }
-            className="mt-1 rounded border-border disabled:opacity-40"
+            className="mt-1 rounded-sm border-border disabled:opacity-40"
           />
           <span>
             Verify server certificate
@@ -450,13 +471,16 @@ export default function ConnectionForm({
           <input
             type="checkbox"
             checked={form.preferReadReplica}
-            onChange={(event) => onChange({ preferReadReplica: event.target.checked })}
-            className="mt-1 rounded border-border"
+            onChange={(event) =>
+              onChange({ preferReadReplica: event.target.checked })
+            }
+            className="mt-1 rounded-sm border-border"
           />
           <span>
             Prefer a read replica
             <span className="block text-caption text-slate">
-              Route extraction to a replica when one is reachable, sparing the primary.
+              Route extraction to a replica when one is reachable, sparing the
+              primary.
             </span>
           </span>
         </label>
@@ -480,19 +504,21 @@ export default function ConnectionForm({
 
       <div className="space-y-3 max-w-3xl">
         <p className="text-body text-slate">
-          {credentialsMode === 'required'
-            ? 'Credentials for the read-only service user. Validated on submission and stored encrypted; only the fingerprint is shown afterwards.'
-            : 'Enter a new credential set to rotate it. Leave blank to keep the stored set. A new set is validated first; only on success is it swapped.'}
+          {credentialsMode === "required"
+            ? "Credentials for the read-only service user. Validated on submission and stored encrypted; only the fingerprint is shown afterwards."
+            : "Enter a new credential set to rotate it. Leave blank to keep the stored set. A new set is validated first; only on success is it swapped."}
         </p>
         <CredentialFields
           values={form.cred}
           onChange={setCred}
           idPrefix={`${idPrefix}-cred`}
           fields={
-            form.backend === 'snowflake' ? SNOWFLAKE_CREDENTIAL_FIELDS : CREDENTIAL_FIELDS
+            form.backend === "snowflake"
+              ? SNOWFLAKE_CREDENTIAL_FIELDS
+              : CREDENTIAL_FIELDS
           }
         />
-        {form.backend === 'oracle' && (
+        {form.backend === "oracle" && (
           <OracleWalletFields
             values={form.cred}
             onChange={setCred}
@@ -500,7 +526,7 @@ export default function ConnectionForm({
             mode={credentialsMode}
           />
         )}
-        {form.backend === 'snowflake' && (
+        {form.backend === "snowflake" && (
           <SnowflakeFields
             config={form.snowflake}
             onConfigChange={setSnowflake}

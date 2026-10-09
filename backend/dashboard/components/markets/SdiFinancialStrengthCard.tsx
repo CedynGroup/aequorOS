@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The advisory SDI financial-strength assessment (`AEQ-GH-SDI-FS`).
@@ -17,8 +17,8 @@
  * the assessment that was actually recorded.
  */
 
-import type { LiveModuleView } from '@aequoros/risk-service-api';
-import { fmtDateUTC } from '@/lib/api/values';
+import type { LiveModuleView } from "@aequoros/risk-service-api";
+import { fmtDateUTC } from "@/lib/api/values";
 
 type ComponentScore = {
   code: string;
@@ -28,19 +28,19 @@ type ComponentScore = {
 };
 
 const COMPONENT_LABELS: Record<string, string> = {
-  capital_resilience: 'Capital resilience',
-  asset_quality: 'Asset quality',
-  liquidity_resilience: 'Liquidity resilience',
-  concentration: 'Concentration',
-  earnings_capacity: 'Earnings capacity',
-  irrbb_sensitivity: 'Interest-rate sensitivity',
+  capital_resilience: "Capital resilience",
+  asset_quality: "Asset quality",
+  liquidity_resilience: "Liquidity resilience",
+  concentration: "Concentration",
+  earnings_capacity: "Earnings capacity",
+  irrbb_sensitivity: "Interest-rate sensitivity",
 };
 
 /** Score bands are presentational only — they are NOT a grade. */
 function barTone(score: number): string {
-  if (score >= 0.66) return 'bg-success';
-  if (score >= 0.33) return 'bg-warning';
-  return 'bg-critical';
+  if (score >= 0.66) return "bg-success";
+  if (score >= 0.33) return "bg-warning";
+  return "bg-critical";
 }
 
 export default function SdiFinancialStrengthCard({
@@ -63,19 +63,23 @@ export default function SdiFinancialStrengthCard({
     // The card states the advisory scope itself (footer, first line); the
     // backend ships the same sentence inside `limitations`, and printing it
     // twice reads as boilerplate rather than a warning.
-    (limitation) => !limitation.toLowerCase().includes('not an agency rating')
+    (limitation) => !limitation.toLowerCase().includes("not an agency rating"),
   );
   const version = metrics.methodology_version;
   const grade =
-    typeof metrics.rating_grade === 'string' ? metrics.rating_grade : undefined;
+    typeof metrics.rating_grade === "string" ? metrics.rating_grade : undefined;
   const standalone =
-    typeof metrics.standalone_grade === 'string' ? metrics.standalone_grade : undefined;
+    typeof metrics.standalone_grade === "string"
+      ? metrics.standalone_grade
+      : undefined;
   const ceiling =
-    typeof metrics.sovereign_ceiling === 'string' ? metrics.sovereign_ceiling : undefined;
+    typeof metrics.sovereign_ceiling === "string"
+      ? metrics.sovereign_ceiling
+      : undefined;
   const ceilingApplied = metrics.ceiling_applied === true;
   const composite = components.reduce(
     (total, component) => total + Number(component.contribution),
-    0
+    0,
   );
 
   return (
@@ -86,8 +90,8 @@ export default function SdiFinancialStrengthCard({
             SDI financial strength — advisory
           </p>
           <p className="mt-1 text-caption text-slate">
-            {String(metrics.methodology_code ?? 'AEQ-GH-SDI-FS')}
-            {version ? ` v${String(version)}` : ''} · as of{' '}
+            {String(metrics.methodology_code ?? "AEQ-GH-SDI-FS")}
+            {version ? ` v${String(version)}` : ""} · as of{" "}
             {fmtDateUTC(rating.sourceAsOfDate)}
           </p>
         </div>
@@ -104,7 +108,7 @@ export default function SdiFinancialStrengthCard({
                 // grade as a standalone judgement.
                 <p className="mt-1 text-micro text-slate">
                   capped at sovereign {ceiling}
-                  {standalone ? ` · standalone ${standalone}` : ''}
+                  {standalone ? ` · standalone ${standalone}` : ""}
                 </p>
               ) : null}
             </div>
@@ -126,7 +130,7 @@ export default function SdiFinancialStrengthCard({
               <span className="w-48 shrink-0 text-caption text-navy/85">
                 {COMPONENT_LABELS[component.code] ?? component.code}
               </span>
-              <span className="flex-1 h-2 rounded bg-surface overflow-hidden">
+              <span className="flex-1 h-2 rounded-sm bg-surface overflow-hidden">
                 <span
                   className={`block h-full ${barTone(score)}`}
                   style={{ width: `${Math.round(score * 100)}%` }}
@@ -152,11 +156,9 @@ export default function SdiFinancialStrengthCard({
         </p>
         {omitted.length > 0 ? (
           <p className="text-micro text-slate leading-relaxed">
-            Omitted (no usable input, never scored at a neutral value):{' '}
-            {omitted
-              .map((code) => COMPONENT_LABELS[code] ?? code)
-              .join(', ')}
-            . Remaining weights are renormalised.
+            Omitted (no usable input, never scored at a neutral value):{" "}
+            {omitted.map((code) => COMPONENT_LABELS[code] ?? code).join(", ")}.
+            Remaining weights are renormalised.
           </p>
         ) : null}
         {limitations.map((limitation) => (

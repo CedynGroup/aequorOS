@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Persistent, un-dismissable staff-inspection banner.
@@ -13,18 +13,18 @@
  * operator is never trapped.
  */
 
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Loader2, LogOut } from 'lucide-react';
-import { useImpersonation } from './useImpersonation';
+import { useEffect, useState } from "react";
+import { AlertTriangle, Loader2, LogOut } from "lucide-react";
+import { useImpersonation } from "./useImpersonation";
 import {
   leaveImpersonation,
   markImpersonationExpired,
   refreshImpersonationStatus,
-} from '@/lib/api/impersonation';
-import { LOGIN_URL } from '@/lib/loginUrl';
+} from "@/lib/api/impersonation";
+import { LOGIN_URL } from "@/lib/loginUrl";
 
 /** Height of the fixed bar; also the body offset applied while it shows. */
-const BANNER_HEIGHT = '2.5rem';
+const BANNER_HEIGHT = "2.5rem";
 
 export default function ImpersonationBanner() {
   const state = useImpersonation();
@@ -75,21 +75,24 @@ export default function ImpersonationBanner() {
     <div
       role="alert"
       aria-live="assertive"
-      className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-3 px-4 text-caption font-semibold text-white shadow-md"
-      style={{ height: BANNER_HEIGHT, backgroundColor: ended ? '#b91c1c' : '#b45309' }}
+      className="fixed inset-x-0 top-0 z-100 flex items-center justify-center gap-3 px-4 text-caption font-semibold text-white shadow-md"
+      style={{
+        height: BANNER_HEIGHT,
+        backgroundColor: ended ? "#b91c1c" : "#b45309",
+      }}
     >
       <AlertTriangle size={14} aria-hidden className="shrink-0" />
       <span className="truncate">
         {ended ? (
-          'Inspection session ended — this hand-off has expired. Leave to close it.'
+          "Inspection session ended — this hand-off has expired. Leave to close it."
         ) : (
           <>
             AequorOS staff is inspecting this account — read-only.
             {state.operator ? (
               <span className="hidden sm:inline font-normal opacity-90">
-                {' '}
+                {" "}
                 Operator: {state.operator}
-                {state.org ? ` · ${state.org}` : ''}
+                {state.org ? ` · ${state.org}` : ""}
               </span>
             ) : null}
           </>
@@ -99,7 +102,7 @@ export default function ImpersonationBanner() {
         type="button"
         onClick={onLeave}
         disabled={leaving}
-        className="shrink-0 inline-flex items-center gap-1.5 rounded bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25 disabled:opacity-60"
+        className="shrink-0 inline-flex items-center gap-1.5 rounded-sm bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25 disabled:opacity-60"
       >
         {leaving ? (
           <Loader2 size={12} className="animate-spin" aria-hidden />

@@ -23,10 +23,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import type {
-  IcaapDataBlockRead,
-  IcaapFactChangeRead,
-} from "@/lib/api/icaap";
+import type { IcaapDataBlockRead, IcaapFactChangeRead } from "@/lib/api/icaap";
 import {
   blockStatusCopy,
   blockTitle,
@@ -99,9 +96,17 @@ export default function DataBlockCard({
           aria-expanded={expanded}
         >
           {expanded ? (
-            <ChevronDown size={14} className="mt-1 shrink-0 text-slate" aria-hidden />
+            <ChevronDown
+              size={14}
+              className="mt-1 shrink-0 text-slate"
+              aria-hidden
+            />
           ) : (
-            <ChevronRight size={14} className="mt-1 shrink-0 text-slate" aria-hidden />
+            <ChevronRight
+              size={14}
+              className="mt-1 shrink-0 text-slate"
+              aria-hidden
+            />
           )}
           <span className="min-w-0">
             <span className="block truncate text-body font-medium text-navy">
@@ -125,7 +130,9 @@ export default function DataBlockCard({
       </div>
 
       {block.statusDetail && (
-        <p className="mt-1 pl-6 text-caption text-slate">{block.statusDetail}</p>
+        <p className="mt-1 pl-6 text-caption text-slate">
+          {block.statusDetail}
+        </p>
       )}
 
       {refreshOutcome === "unchanged" && (
@@ -134,10 +141,8 @@ export default function DataBlockCard({
         </p>
       )}
       {refreshOutcome === "bound" && (changedFacts?.length ?? 0) > 0 && (
-        <div className="mt-2 ml-6 rounded border border-border-light bg-surface/60 p-2">
-          <p className="text-caption font-medium text-navy">
-            Updated figures
-          </p>
+        <div className="mt-2 ml-6 rounded-sm border border-border-light bg-surface/60 p-2">
+          <p className="text-caption font-medium text-navy">Updated figures</p>
           <ul className="mt-1 space-y-0.5">
             {changedFacts?.map((change) => (
               <li key={change.key} className="text-caption text-slate">

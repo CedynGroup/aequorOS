@@ -76,7 +76,7 @@ const TIMEZONES = [
 ];
 
 const INPUT_CLASS =
-  "w-full px-3 py-2.5 border border-border rounded-md bg-surface text-body text-navy placeholder:text-slate-light focus:outline-none focus:ring-2 focus:ring-action/25 focus:border-action";
+  "w-full px-3 py-2.5 border border-border rounded-md bg-surface text-body text-navy placeholder:text-slate-light focus:outline-hidden focus:ring-2 focus:ring-action/25 focus:border-action";
 
 function optional(value: string): string | null {
   return value.trim() || null;
@@ -230,7 +230,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="mt-4 px-4 py-2 rounded bg-action text-white text-caption font-medium hover:bg-action/90"
+                className="mt-4 px-4 py-2 rounded-sm bg-action text-white text-caption font-medium hover:bg-action/90"
               >
                 Try again
               </button>
@@ -438,7 +438,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 rounded bg-action text-white text-body font-medium hover:bg-action/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-5 py-2.5 rounded-sm bg-action text-white text-body font-medium hover:bg-action/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? "Saving…" : "Save changes"}
                 </button>

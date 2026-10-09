@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import Kicker from '@/components/Kicker';
-import PageHeader from '@/components/PageHeader';
-import ModuleShowcase from '@/components/ModuleShowcase';
-import ScreenTabs from '@/components/ScreenTabs';
+import type { Metadata } from "next";
+import Link from "next/link";
+import Kicker from "@/components/Kicker";
+import PageHeader from "@/components/PageHeader";
+import ModuleShowcase from "@/components/ModuleShowcase";
+import ScreenTabs from "@/components/ScreenTabs";
 
 export const metadata: Metadata = {
-  title: 'Product — AequorOS',
+  title: "Product — AequorOS",
   description:
-    'Ingestion, seven calculation engines, and regulatory reporting on one auditable spine. Browse the working product interface — no login required.',
+    "Ingestion, seven calculation engines, and regulatory reporting on one auditable spine. Browse the working product interface — no login required.",
 };
 
 export default function ProductPage() {
@@ -49,25 +49,25 @@ export default function ProductPage() {
           <ScreenTabs
             items={[
               {
-                tab: 'Ingestion & health',
-                eyebrow: 'DATA ENGINE · INGESTION',
-                title: 'Every load lands in an auditable canonical model.',
-                body: 'File upload, secure API push, or a read-only extract from the core your bank already runs. Where a source is unusual, the mapping is configured for that bank — never hard-coded into the product. Downstream calculations trigger automatically on every accepted load.',
-                screenId: 'data-engine',
+                tab: "Ingestion & health",
+                eyebrow: "DATA ENGINE · INGESTION",
+                title: "Every load lands in an auditable canonical model.",
+                body: "File upload, secure API push, or a read-only extract from the core your bank already runs. Where a source is unusual, the mapping is configured for that bank — never hard-coded into the product. Downstream calculations trigger automatically on every accepted load.",
+                screenId: "data-engine",
               },
               {
-                tab: 'Behavioral models',
-                eyebrow: 'DATA ENGINE · BEHAVIORAL',
-                title: 'Assumptions your institution can stand behind.',
-                body: 'Per-institution behavioral models for non-maturity deposits and prepayment, reviewed and versioned before any engine consumes them. Core/volatile splits come from evidence, not folklore.',
-                screenId: 'behavioral',
+                tab: "Behavioral models",
+                eyebrow: "DATA ENGINE · BEHAVIORAL",
+                title: "Assumptions your institution can stand behind.",
+                body: "Per-institution behavioral models for non-maturity deposits and prepayment, reviewed and versioned before any engine consumes them. Core/volatile splits come from evidence, not folklore.",
+                screenId: "behavioral",
               },
               {
-                tab: 'Positions & lineage',
-                eyebrow: 'DATA ENGINE · LINEAGE',
-                title: 'Every figure answers for itself.',
-                body: 'The canonical position book behind every module calculation. Each number traces back to its source input, batch, and timestamp; corrections supersede prior records, and nothing is silently overwritten.',
-                screenId: 'positions-lineage',
+                tab: "Positions & lineage",
+                eyebrow: "DATA ENGINE · LINEAGE",
+                title: "Every figure answers for itself.",
+                body: "The canonical position book behind every module calculation. Each number traces back to its source input, batch, and timestamp; corrections supersede prior records, and nothing is silently overwritten.",
+                screenId: "positions-lineage",
               },
             ]}
           />
@@ -86,25 +86,25 @@ export default function ProductPage() {
           <ScreenTabs
             items={[
               {
-                tab: 'Regulatory reporting',
-                eyebrow: 'GOVERNANCE · REGULATORY REPORTING',
-                title: 'Sealed runs, export-ready returns.',
+                tab: "Regulatory reporting",
+                eyebrow: "GOVERNANCE · REGULATORY REPORTING",
+                title: "Sealed runs, export-ready returns.",
                 body: "Bank of Ghana returns generated from immutable calculation runs in the regulator's own workbook layouts, exported to Excel, CSV, and PDF for officer review and signature.",
-                screenId: 'submissions',
+                screenId: "submissions",
               },
               {
-                tab: 'Reports',
-                eyebrow: 'GOVERNANCE · REPORTS',
-                title: 'One library for every official number.',
-                body: 'Run freshness per module, return packages with their provenance, saved analyses, and a print-ready executive board pack — composed from live figures, formatted for the boardroom.',
-                screenId: 'reports',
+                tab: "Reports",
+                eyebrow: "GOVERNANCE · REPORTS",
+                title: "One library for every official number.",
+                body: "Run freshness per module, return packages with their provenance, saved analyses, and a print-ready executive board pack — composed from live figures, formatted for the boardroom.",
+                screenId: "reports",
               },
               {
-                tab: 'Institution profile',
-                eyebrow: 'GOVERNANCE · INSTITUTION PROFILE',
-                title: 'The registers behind the numbers.',
+                tab: "Institution profile",
+                eyebrow: "GOVERNANCE · INSTITUTION PROFILE",
+                title: "The registers behind the numbers.",
                 body: "Your institution's parties, products, outlets, and Board-governed parameter registers, each change carrying approval evidence and an audit trail.",
-                screenId: 'institution',
+                screenId: "institution",
               },
             ]}
           />
@@ -118,7 +118,7 @@ export default function ProductPage() {
         </h2>
         <Link
           href="/contact"
-          className="inline-flex h-12 items-center rounded bg-navy-deep px-6 text-[15px] font-semibold text-white hover:bg-navy transition-colors shrink-0"
+          className="inline-flex h-12 items-center rounded-sm bg-navy-deep px-6 text-[15px] font-semibold text-white hover:bg-navy transition-colors shrink-0"
         >
           Request a demo
         </Link>

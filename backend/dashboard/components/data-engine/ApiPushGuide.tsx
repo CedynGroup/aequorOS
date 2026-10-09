@@ -42,7 +42,7 @@ import {
 
 function CodeBlock({ code, label }: { code: string; label: string }) {
   return (
-    <div className="relative rounded bg-nav text-white">
+    <div className="relative rounded-sm bg-nav text-white">
       <div className="absolute right-2 top-2">
         <CopyButton text={code} label={label} variant="dark" />
       </div>
@@ -93,7 +93,7 @@ export function ConnectionCard() {
             hint="Your integration key, sent as the bearer credential on every request — generated under Access → Integration keys."
           />
         </div>
-        <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/40 p-4">
           <p className="inline-flex items-center gap-1.5 text-caption font-medium text-warning">
             <ShieldAlert size={13} aria-hidden /> Key handling
           </p>
@@ -156,7 +156,7 @@ export function IntegrationKeysPanel() {
       </div>
 
       {freshKey && (
-        <div className="mt-3 rounded border border-success/40 bg-success-light/40 p-4">
+        <div className="mt-3 rounded-sm border border-success/40 bg-success-light/40 p-4">
           <p className="text-caption font-medium text-navy">
             {freshKey.purposeName} generated — copy it now. It will not be shown
             again.
@@ -243,7 +243,7 @@ export function IntegrationKeysPanel() {
           })}
         </fieldset>
         <div className="flex items-center gap-2">
-          <div className="rounded border border-border bg-surface px-3 py-2">
+          <div className="rounded-sm border border-border bg-surface px-3 py-2">
             <p className="text-micro uppercase tracking-wider text-slate">
               Authorized institution
             </p>
@@ -259,7 +259,7 @@ export function IntegrationKeysPanel() {
             onChange={(event) => setLabel(event.target.value)}
             placeholder={chosen.labelPlaceholder}
             maxLength={80}
-            className="flex-1 rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
+            className="flex-1 rounded-sm border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
             aria-label="Key label"
           />
           <button
@@ -406,7 +406,7 @@ export function ExampleClient() {
               "text/x-shellscript;charset=utf-8",
             )
           }
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-caption font-medium border border-border text-slate hover:text-navy hover:border-slate"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm text-caption font-medium border border-border text-slate hover:text-navy hover:border-slate"
         >
           <Download size={13} aria-hidden /> Download .sh
         </button>

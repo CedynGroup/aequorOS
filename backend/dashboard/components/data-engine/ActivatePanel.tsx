@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Data flow status + advanced pipeline actions.
@@ -16,25 +16,31 @@
  * Both enqueue a job, poll it to completion, and report the outcome inline.
  */
 
-import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, Loader2, RefreshCw, Stamp } from 'lucide-react';
-import type { JobRead } from '@aequoros/risk-service-api';
-import { useBankContext } from '@/components/shell/BankContext';
-import StatusPill from '@/components/ui/StatusPill';
-import { isApiError } from '@/lib/api/client';
+import { useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  RefreshCw,
+  Stamp,
+} from "lucide-react";
+import type { JobRead } from "@aequoros/risk-service-api";
+import { useBankContext } from "@/components/shell/BankContext";
+import StatusPill from "@/components/ui/StatusPill";
+import { isApiError } from "@/lib/api/client";
 import {
   useLiveSummary,
   useMintOfficialRun,
   useRefreshBankData,
-} from '@/lib/api/hooks';
-import { useIngestionBatches } from '@/lib/api/ingestion';
-import { fmtRelative } from '@/lib/api/values';
-import { formatDate } from './shared';
+} from "@/lib/api/hooks";
+import { useIngestionBatches } from "@/lib/api/ingestion";
+import { fmtRelative } from "@/lib/api/values";
+import { formatDate } from "./shared";
 
 function progressCount(job: JobRead | undefined, key: string): number | null {
   const value = job?.progress?.[key];
   if (Array.isArray(value)) return value.length;
-  if (value && typeof value === 'object') return Object.keys(value).length;
+  if (value && typeof value === "object") return Object.keys(value).length;
   return null;
 }
 
@@ -49,14 +55,14 @@ export default function ActivatePanel() {
 
   const latestBatchAsOf = useMemo(() => {
     const dates = (batchesQuery.data?.batches ?? [])
-      .filter((batch) => batch.status.startsWith('accepted'))
+      .filter((batch) => batch.status.startsWith("accepted"))
       .map((batch) => formatDate(batch.asOfDate));
     return dates.sort().at(-1);
   }, [batchesQuery.data]);
 
   const periodAsOf = period ? formatDate(period.periodEnd) : undefined;
-  const [asOfDate, setAsOfDate] = useState<string>('');
-  const effectiveAsOf = asOfDate || latestBatchAsOf || periodAsOf || '';
+  const [asOfDate, setAsOfDate] = useState<string>("");
+  const effectiveAsOf = asOfDate || latestBatchAsOf || periodAsOf || "";
 
   const computedAt = liveSummary.data?.computedAt ?? null;
   const refreshDelayed = !computedAt;
@@ -74,7 +80,7 @@ export default function ActivatePanel() {
       </div>
 
       {/* Live status line */}
-      <div className="rounded border border-border-light bg-surface/60 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="rounded-sm border border-border-light bg-surface/60 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         {running ? (
           <StatusPill tone="action">
             <Loader2 size={11} className="animate-spin" aria-hidden />
@@ -86,14 +92,14 @@ export default function ActivatePanel() {
           <StatusPill tone="compliant">Up to date</StatusPill>
         )}
         <span className="text-body text-navy">
-          Last recompute{' '}
+          Last recompute{" "}
           <span className="font-medium">
-            {computedAt ? fmtRelative(computedAt) : 'not yet'}
+            {computedAt ? fmtRelative(computedAt) : "not yet"}
           </span>
           {liveSummary.data?.periodLabel && (
             <span className="text-slate">
-              {' '}
-              · period{' '}
+              {" "}
+              · period{" "}
               <span className="font-mono text-navy">
                 {liveSummary.data.periodLabel}
               </span>
@@ -113,7 +119,7 @@ export default function ActivatePanel() {
           <ChevronDown
             size={14}
             aria-hidden
-            className={`transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+            className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`}
           />
           Advanced actions
         </button>
@@ -128,20 +134,22 @@ export default function ActivatePanel() {
                 type="date"
                 value={effectiveAsOf}
                 onChange={(event) => setAsOfDate(event.target.value)}
-                className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+                className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
               />
               <p className="mt-1 text-micro text-slate">
-                Defaults to the latest accepted upload. Both actions run for this
-                reporting date.
+                Defaults to the latest accepted upload. Both actions run for
+                this reporting date.
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Recompute now → /refresh */}
-              <div className="rounded border border-border-light p-4 space-y-2">
+              <div className="rounded-sm border border-border-light p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <RefreshCw size={15} className="text-action" aria-hidden />
-                  <h3 className="text-body font-medium text-navy">Recompute now</h3>
+                  <h3 className="text-body font-medium text-navy">
+                    Recompute now
+                  </h3>
                 </div>
                 <p className="text-caption text-slate leading-relaxed">
                   Re-derive facts and refresh live metrics and alerts. Does not
@@ -153,32 +161,32 @@ export default function ActivatePanel() {
                   onClick={() =>
                     refresh.mutate({
                       asOfDate: effectiveAsOf,
-                      reason: 'Recompute now from the Data Engine console.',
+                      reason: "Recompute now from the Data Engine console.",
                     })
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {refresh.isPending && (
                     <Loader2 size={14} className="animate-spin" aria-hidden />
                   )}
-                  {refresh.isPending ? 'Recomputing…' : 'Recompute now'}
+                  {refresh.isPending ? "Recomputing…" : "Recompute now"}
                 </button>
                 <ActionResult
                   isError={refresh.isError}
                   error={refresh.error}
                   job={refresh.data}
                   successLabel={(job) => {
-                    const ok = progressCount(job, 'modules_ok');
-                    const failed = progressCount(job, 'modules_failed') ?? 0;
-                    return `Recomputed${ok !== null ? ` ${ok} modules` : ''}${
-                      failed > 0 ? ` · ${failed} failed` : ''
+                    const ok = progressCount(job, "modules_ok");
+                    const failed = progressCount(job, "modules_failed") ?? 0;
+                    return `Recomputed${ok !== null ? ` ${ok} modules` : ""}${
+                      failed > 0 ? ` · ${failed} failed` : ""
                     }`;
                   }}
                 />
               </div>
 
               {/* Mint official run → /official-runs */}
-              <div className="rounded border border-border-light p-4 space-y-2">
+              <div className="rounded-sm border border-border-light p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <Stamp size={15} className="text-navy" aria-hidden />
                   <h3 className="text-body font-medium text-navy">
@@ -186,8 +194,8 @@ export default function ActivatePanel() {
                   </h3>
                 </div>
                 <p className="text-caption text-slate leading-relaxed">
-                  Create the immutable, auditable regulatory runs (22 scenarios +
-                  forecast) for this reporting date.
+                  Create the immutable, auditable regulatory runs (22 scenarios
+                  + forecast) for this reporting date.
                 </p>
                 <button
                   type="button"
@@ -195,24 +203,25 @@ export default function ActivatePanel() {
                   onClick={() =>
                     mint.mutate({
                       asOfDate: effectiveAsOf,
-                      reason: 'Minted official run for filing from the Data Engine console.',
+                      reason:
+                        "Minted official run for filing from the Data Engine console.",
                     })
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {mint.isPending && (
                     <Loader2 size={14} className="animate-spin" aria-hidden />
                   )}
-                  {mint.isPending ? 'Minting…' : 'Mint official run'}
+                  {mint.isPending ? "Minting…" : "Mint official run"}
                 </button>
                 <ActionResult
                   isError={mint.isError}
                   error={mint.error}
                   job={mint.data}
                   successLabel={(job) => {
-                    const count = progressCount(job, 'modules');
+                    const count = progressCount(job, "modules");
                     return `Official run minted${
-                      count !== null ? ` · ${count} modules` : ''
+                      count !== null ? ` · ${count} modules` : ""
                     }`;
                   }}
                 />
@@ -239,11 +248,11 @@ function ActionResult({
   if (isError) {
     return (
       <p className="text-caption text-critical">
-        {isApiError(error) ? error.message : 'The job failed.'}
+        {isApiError(error) ? error.message : "The job failed."}
       </p>
     );
   }
-  if (job && job.status === 'succeeded') {
+  if (job && job.status === "succeeded") {
     return (
       <p className="inline-flex items-center gap-1.5 text-caption text-success">
         <CheckCircle2 size={13} aria-hidden />

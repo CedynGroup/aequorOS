@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * EWI trigger-level register editor (LRMD ¶28(e)–(f)).
@@ -14,20 +14,33 @@
  * full state because the register write replaces the row.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import type {
   EwiDashboardRead,
   EwiIndicatorUpdate,
   EwiRegisterPut,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useEwiDashboard, useUpdateLiquidityEwiRegister } from '@/lib/api/hooks';
-import { Field, FormActions, ReasonField, inputCls } from '@/components/institution/shared';
-import { EditRegisterAction, numericInputCls, sameDecimal, useApproverGate } from './common';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import {
+  useEwiDashboard,
+  useUpdateLiquidityEwiRegister,
+} from "@/lib/api/hooks";
+import {
+  Field,
+  FormActions,
+  ReasonField,
+  inputCls,
+} from "@/components/institution/shared";
+import {
+  EditRegisterAction,
+  numericInputCls,
+  sameDecimal,
+  useApproverGate,
+} from "./common";
 
 // ---------------------------------------------------------------------------
 // Directive starter vocabulary — mirrors the backend's LRMD ¶28(f) starter
@@ -38,74 +51,74 @@ type StarterMirror = {
   code: string;
   name: string;
   unit: string;
-  direction: 'above' | 'below';
+  direction: "above" | "below";
 };
 
 const STARTER_INDICATORS: StarterMirror[] = [
   {
-    code: 'asset_growth_volatile_funding',
-    name: 'Rapid asset growth funded by volatile liabilities',
-    unit: 'pct',
-    direction: 'above',
+    code: "asset_growth_volatile_funding",
+    name: "Rapid asset growth funded by volatile liabilities",
+    unit: "pct",
+    direction: "above",
   },
   {
-    code: 'funding_concentration',
-    name: 'Growing concentration in funding sources',
-    unit: 'pct',
-    direction: 'above',
+    code: "funding_concentration",
+    name: "Growing concentration in funding sources",
+    unit: "pct",
+    direction: "above",
   },
   {
-    code: 'currency_mismatch',
-    name: 'Increase in currency mismatches',
-    unit: 'pct',
-    direction: 'above',
+    code: "currency_mismatch",
+    name: "Increase in currency mismatches",
+    unit: "pct",
+    direction: "above",
   },
   {
-    code: 'weighted_liability_maturity',
-    name: 'Decline in weighted-average maturity of liabilities',
-    unit: 'days',
-    direction: 'below',
+    code: "weighted_liability_maturity",
+    name: "Decline in weighted-average maturity of liabilities",
+    unit: "days",
+    direction: "below",
   },
   {
-    code: 'near_limit_incidents',
-    name: 'Repeated incidents approaching internal or regulatory limits',
-    unit: 'count',
-    direction: 'above',
+    code: "near_limit_incidents",
+    name: "Repeated incidents approaching internal or regulatory limits",
+    unit: "count",
+    direction: "above",
   },
   {
-    code: 'earnings_asset_quality',
-    name: 'Deterioration in earnings or asset quality',
-    unit: 'pct',
-    direction: 'above',
+    code: "earnings_asset_quality",
+    name: "Deterioration in earnings or asset quality",
+    unit: "pct",
+    direction: "above",
   },
   {
-    code: 'debt_spreads',
-    name: 'Widening of debt or credit-default spreads',
-    unit: 'pct',
-    direction: 'above',
+    code: "debt_spreads",
+    name: "Widening of debt or credit-default spreads",
+    unit: "pct",
+    direction: "above",
   },
   {
-    code: 'funding_costs',
-    name: 'Rising cost of funding',
-    unit: 'pct',
-    direction: 'above',
+    code: "funding_costs",
+    name: "Rising cost of funding",
+    unit: "pct",
+    direction: "above",
   },
 ];
 
 const STATUS_TONE: Record<string, StatusTone> = {
-  normal: 'success',
-  watch: 'amber',
-  action: 'critical',
-  unconfigured: 'slate',
-  no_data: 'slate',
+  normal: "success",
+  watch: "amber",
+  action: "critical",
+  unconfigured: "slate",
+  no_data: "slate",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  normal: 'Normal',
-  watch: 'Watch',
-  action: 'Action',
-  unconfigured: 'Unconfigured',
-  no_data: 'No data',
+  normal: "Normal",
+  watch: "Watch",
+  action: "Action",
+  unconfigured: "Unconfigured",
+  no_data: "No data",
 };
 
 /** One row of the register editor — dashboard state merged over the mirror. */
@@ -114,7 +127,7 @@ type EwiRow = {
   name: string;
   metricBasis: string | null;
   unit: string;
-  direction: 'above' | 'below';
+  direction: "above" | "below";
   custom: boolean;
   enabled: boolean;
   watch: string;
@@ -125,14 +138,16 @@ type EwiRow = {
 };
 
 function thresholdText(row: EwiRow, level: string): string {
-  if (!level) return 'Not set';
-  const op = row.direction === 'below' ? '<' : '≥';
-  const unit = row.unit === 'count' ? '' : row.unit === 'days' ? ' days' : '%';
+  if (!level) return "Not set";
+  const op = row.direction === "below" ? "<" : "≥";
+  const unit = row.unit === "count" ? "" : row.unit === "days" ? " days" : "%";
   return `${op} ${level}${unit}`;
 }
 
 function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
-  const byCode = new Map(dashboard.indicators.map((entry) => [entry.code, entry]));
+  const byCode = new Map(
+    dashboard.indicators.map((entry) => [entry.code, entry]),
+  );
   const rows: EwiRow[] = [];
   for (const starter of STARTER_INDICATORS) {
     const live = byCode.get(starter.code);
@@ -143,14 +158,19 @@ function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
             name: live.name,
             metricBasis: live.metricBasis,
             unit: String(live.unit),
-            direction: live.direction === 'below' ? 'below' : 'above',
+            direction: live.direction === "below" ? "below" : "above",
             custom: false,
             enabled: true,
-            watch: live.watchThreshold == null ? '' : String(live.watchThreshold),
-            action: live.actionThreshold == null ? '' : String(live.actionThreshold),
-            description: live.description == null ? null : String(live.description),
+            watch:
+              live.watchThreshold == null ? "" : String(live.watchThreshold),
+            action:
+              live.actionThreshold == null ? "" : String(live.actionThreshold),
+            description:
+              live.description == null ? null : String(live.description),
             recoveryPlanReference:
-              live.recoveryPlanReference == null ? null : String(live.recoveryPlanReference),
+              live.recoveryPlanReference == null
+                ? null
+                : String(live.recoveryPlanReference),
             status: String(live.status),
           }
         : {
@@ -161,30 +181,34 @@ function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
             direction: starter.direction,
             custom: false,
             enabled: false,
-            watch: '',
-            action: '',
+            watch: "",
+            action: "",
             description: null,
             recoveryPlanReference: null,
             status: null,
-          }
+          },
     );
   }
   // Board additions beyond the directive starters.
   for (const entry of dashboard.indicators) {
-    if (STARTER_INDICATORS.some((starter) => starter.code === entry.code)) continue;
+    if (STARTER_INDICATORS.some((starter) => starter.code === entry.code))
+      continue;
     rows.push({
       code: entry.code,
       name: entry.name,
       metricBasis: entry.metricBasis,
       unit: String(entry.unit),
-      direction: entry.direction === 'below' ? 'below' : 'above',
+      direction: entry.direction === "below" ? "below" : "above",
       custom: true,
       enabled: true,
-      watch: entry.watchThreshold == null ? '' : String(entry.watchThreshold),
-      action: entry.actionThreshold == null ? '' : String(entry.actionThreshold),
+      watch: entry.watchThreshold == null ? "" : String(entry.watchThreshold),
+      action:
+        entry.actionThreshold == null ? "" : String(entry.actionThreshold),
       description: entry.description == null ? null : String(entry.description),
       recoveryPlanReference:
-        entry.recoveryPlanReference == null ? null : String(entry.recoveryPlanReference),
+        entry.recoveryPlanReference == null
+          ? null
+          : String(entry.recoveryPlanReference),
       status: String(entry.status),
     });
   }
@@ -193,15 +217,15 @@ function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
 
 const viewColumns: Column<EwiRow>[] = [
   {
-    key: 'name',
-    header: 'Early-warning indicator',
-    width: '36%',
+    key: "name",
+    header: "Early-warning indicator",
+    width: "36%",
     render: (r) => (
       <div>
         <p className="font-medium text-navy">{r.name}</p>
         <p className="text-caption text-slate">
-          {r.metricBasis ?? 'Directive starter indicator'}
-          {r.custom ? ' · Board addition' : ''}
+          {r.metricBasis ?? "Directive starter indicator"}
+          {r.custom ? " · Board addition" : ""}
         </p>
         {r.recoveryPlanReference ? (
           <p className="text-caption text-slate/80">
@@ -212,25 +236,25 @@ const viewColumns: Column<EwiRow>[] = [
     ),
   },
   {
-    key: 'watch',
-    header: 'Watch trigger',
+    key: "watch",
+    header: "Watch trigger",
     numeric: true,
     render: (r) => thresholdText(r, r.watch),
   },
   {
-    key: 'action',
-    header: 'Action trigger',
+    key: "action",
+    header: "Action trigger",
     numeric: true,
     render: (r) => thresholdText(r, r.action),
   },
   {
-    key: 'status',
-    header: 'Status',
-    align: 'right',
+    key: "status",
+    header: "Status",
+    align: "right",
     render: (r) =>
       r.enabled ? (
-        <StatusPill tone={STATUS_TONE[r.status ?? ''] ?? 'slate'}>
-          {STATUS_LABEL[r.status ?? ''] ?? r.status ?? '—'}
+        <StatusPill tone={STATUS_TONE[r.status ?? ""] ?? "slate"}>
+          {STATUS_LABEL[r.status ?? ""] ?? r.status ?? "—"}
         </StatusPill>
       ) : (
         <StatusPill tone="slate">Disabled</StatusPill>
@@ -249,7 +273,10 @@ export default function EwiRegisterCard({
   const query = useEwiDashboard(bankId, periodId);
   const [editing, setEditing] = useState(false);
 
-  const rows = useMemo(() => (query.data ? buildRows(query.data) : []), [query.data]);
+  const rows = useMemo(
+    () => (query.data ? buildRows(query.data) : []),
+    [query.data],
+  );
 
   return (
     <SectionCard
@@ -292,7 +319,11 @@ export default function EwiRegisterCard({
         </div>
       ) : query.data ? (
         editing ? (
-          <EwiEditor bankId={bankId} rows={rows} onClose={() => setEditing(false)} />
+          <EwiEditor
+            bankId={bankId}
+            rows={rows}
+            onClose={() => setEditing(false)}
+          />
         ) : (
           <DataTable columns={viewColumns} rows={rows} density="compact" />
         )
@@ -317,12 +348,16 @@ function EwiEditor({
   const [drafts, setDrafts] = useState<Record<string, EwiDraft>>(() => {
     const initial: Record<string, EwiDraft> = {};
     for (const row of rows) {
-      initial[row.code] = { watch: row.watch, action: row.action, enabled: row.enabled };
+      initial[row.code] = {
+        watch: row.watch,
+        action: row.action,
+        enabled: row.enabled,
+      };
     }
     return initial;
   });
-  const [approvedBy, setApprovedBy] = useState('');
-  const [reason, setReason] = useState('');
+  const [approvedBy, setApprovedBy] = useState("");
+  const [reason, setReason] = useState("");
 
   const setDraft = (code: string, patch: Partial<EwiDraft>) =>
     setDrafts((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
@@ -340,8 +375,9 @@ function EwiEditor({
       if (!watchChanged && !actionChanged && !enabledChanged) continue;
       entries.push({
         code: row.code,
-        watchThreshold: draft.watch.trim() === '' ? null : draft.watch.trim(),
-        actionThreshold: draft.action.trim() === '' ? null : draft.action.trim(),
+        watchThreshold: draft.watch.trim() === "" ? null : draft.watch.trim(),
+        actionThreshold:
+          draft.action.trim() === "" ? null : draft.action.trim(),
         enabled: draft.enabled,
         custom: row.custom,
         recoveryPlanReference: row.recoveryPlanReference,
@@ -352,7 +388,7 @@ function EwiEditor({
               name: row.name,
               description: row.description,
               direction: row.direction,
-              unit: row.unit as EwiIndicatorUpdate['unit'],
+              unit: row.unit as EwiIndicatorUpdate["unit"],
             }
           : {}),
       });
@@ -361,7 +397,9 @@ function EwiEditor({
   }, [rows, drafts]);
 
   const canSubmit =
-    changedEntries.length > 0 && approvedBy.trim().length > 0 && reason.trim().length > 0;
+    changedEntries.length > 0 &&
+    approvedBy.trim().length > 0 &&
+    reason.trim().length > 0;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -385,19 +423,19 @@ function EwiEditor({
           const draft = drafts[row.code];
           if (!draft) return null;
           const unitSuffix =
-            row.unit === 'count' ? 'count' : row.unit === 'days' ? 'days' : '%';
+            row.unit === "count" ? "count" : row.unit === "days" ? "days" : "%";
           return (
             <div
               key={row.code}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-border-light px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border-light px-3 py-2"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-body font-medium text-navy">{row.name}</p>
                 <p className="text-caption text-slate">
-                  <span className="font-mono">{row.code}</span> · triggers{' '}
-                  {row.direction === 'below' ? 'below' : 'at or above'} the level ·{' '}
-                  {unitSuffix}
-                  {row.custom ? ' · Board addition' : ''}
+                  <span className="font-mono">{row.code}</span> · triggers{" "}
+                  {row.direction === "below" ? "below" : "at or above"} the
+                  level · {unitSuffix}
+                  {row.custom ? " · Board addition" : ""}
                 </p>
               </div>
               <div className="shrink-0 flex items-center gap-3">
@@ -411,7 +449,9 @@ function EwiEditor({
                   id={`ewi-${row.code}-watch`}
                   inputMode="decimal"
                   value={draft.watch}
-                  onChange={(e) => setDraft(row.code, { watch: e.target.value })}
+                  onChange={(e) =>
+                    setDraft(row.code, { watch: e.target.value })
+                  }
                   className={`${numericInputCls} w-24`}
                   disabled={!draft.enabled}
                 />
@@ -425,7 +465,9 @@ function EwiEditor({
                   id={`ewi-${row.code}-action`}
                   inputMode="decimal"
                   value={draft.action}
-                  onChange={(e) => setDraft(row.code, { action: e.target.value })}
+                  onChange={(e) =>
+                    setDraft(row.code, { action: e.target.value })
+                  }
                   className={`${numericInputCls} w-24`}
                   disabled={!draft.enabled}
                 />
@@ -433,7 +475,9 @@ function EwiEditor({
                   <input
                     type="checkbox"
                     checked={draft.enabled}
-                    onChange={(e) => setDraft(row.code, { enabled: e.target.checked })}
+                    onChange={(e) =>
+                      setDraft(row.code, { enabled: e.target.checked })
+                    }
                   />
                   Enabled
                 </label>
@@ -444,8 +488,8 @@ function EwiEditor({
       </div>
 
       <p className="text-caption text-slate">
-        Re-enabling an indicator with blank triggers leaves it Unconfigured until
-        the Board sets levels. Blank levels clear the stored trigger.
+        Re-enabling an indicator with blank triggers leaves it Unconfigured
+        until the Board sets levels. Blank levels clear the stored trigger.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -471,12 +515,15 @@ function EwiEditor({
 
       <p className="text-caption text-slate">
         {changedEntries.length === 0
-          ? 'No trigger levels changed yet — only changed indicators are written.'
-          : `${changedEntries.length} indicator${changedEntries.length === 1 ? '' : 's'} will be updated.`}
+          ? "No trigger levels changed yet — only changed indicators are written."
+          : `${changedEntries.length} indicator${changedEntries.length === 1 ? "" : "s"} will be updated.`}
       </p>
 
       {update.error && (
-        <ErrorPanel error={update.error} title="Could not record the trigger levels" />
+        <ErrorPanel
+          error={update.error}
+          title="Could not record the trigger levels"
+        />
       )}
 
       <FormActions

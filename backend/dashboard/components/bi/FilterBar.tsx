@@ -29,8 +29,6 @@ import type {
 import { narrowingFieldsFor } from "./query";
 import type { ReactNode } from "react";
 
-
-
 function valueLabel(
   dimension: BiCatalogueDimensionRead | undefined,
   code: unknown,
@@ -174,7 +172,7 @@ export default function FilterBar({
             );
             return (
               <li key={filter.member}>
-                <span className="inline-flex items-center gap-1.5 rounded border border-action/20 bg-action-light px-2 py-1 text-caption text-action">
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-action/20 bg-action-light px-2 py-1 text-caption text-action">
                   <SlidersHorizontal size={11} aria-hidden />
                   {dimension?.label ?? filter.member}:{" "}
                   {valueLabel(dimension, (filter.values ?? [])[0])}
@@ -184,7 +182,7 @@ export default function FilterBar({
                       dimension?.label ?? filter.member
                     } filter`}
                     onClick={() => removeFilter(filter.member)}
-                    className="rounded hover:bg-action/10"
+                    className="rounded-sm hover:bg-action/10"
                   >
                     <X size={11} aria-hidden />
                   </button>

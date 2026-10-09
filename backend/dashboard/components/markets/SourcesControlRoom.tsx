@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Sources tab — the three-plane control room (spec §5). Per-category base-source
@@ -9,16 +9,16 @@
  * call) — so a prominent banner states where it flows.
  */
 
-import { useState } from 'react';
-import { Info, Radio, Waypoints } from 'lucide-react';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import StatusPill from '@/components/ui/StatusPill';
-import { fmtTimestamp } from '@/lib/api/values';
+import { useState } from "react";
+import { Info, Radio, Waypoints } from "lucide-react";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import StatusPill from "@/components/ui/StatusPill";
+import { fmtTimestamp } from "@/lib/api/values";
 import {
   useMarketDataPlanes,
   useMarketDataSourcePreferences,
   useUpdateMarketDataSourcePreferences,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   CATEGORY_LABELS,
   MARKET_DATA_CATEGORIES,
@@ -29,23 +29,29 @@ import {
   type MarketDataPlanesResponse,
   type MarketDataSource,
   type MarketDataSourcePreferencesPatch,
-} from '@/lib/api/marketDataSources';
-import PlaneComparison from './PlaneComparison';
-import SourceSegmentedControl from './SourceSegmentedControl';
+} from "@/lib/api/marketDataSources";
+import PlaneComparison from "./PlaneComparison";
+import SourceSegmentedControl from "./SourceSegmentedControl";
 
 const CATEGORY_HINTS: Record<MarketDataCategory, string> = {
-  curves: 'Yield & discount curves feeding IRRBB duration and FTP discounting',
-  fx: 'Spot & tenor FX for revaluation and the FX net-open-position return',
-  rates: 'Policy, money-market and lending reference rates',
+  curves: "Yield & discount curves feeding IRRBB duration and FTP discounting",
+  fx: "Spot & tenor FX for revaluation and the FX net-open-position return",
+  rates: "Policy, money-market and lending reference rates",
 };
 
 function availableMap(
-  planes: MarketDataPlanesResponse | undefined
+  planes: MarketDataPlanesResponse | undefined,
 ): Record<MarketDataSource, boolean> {
-  const map: Record<MarketDataSource, boolean> = { aequor: true, bank: true, vendor: true };
+  const map: Record<MarketDataSource, boolean> = {
+    aequor: true,
+    bank: true,
+    vendor: true,
+  };
   if (!planes) return map;
   for (const source of MARKET_DATA_SOURCES) {
-    const plane = planes.planes.find((candidate) => candidate.source === source);
+    const plane = planes.planes.find(
+      (candidate) => candidate.source === source,
+    );
     map[source] = plane ? plane.available : false;
   }
   return map;
@@ -53,14 +59,14 @@ function availableMap(
 
 function buildPatch(
   category: MarketDataCategory,
-  partial: Partial<CategorySourcePreference>
+  partial: Partial<CategorySourcePreference>,
 ): MarketDataSourcePreferencesPatch {
   switch (category) {
-    case 'curves':
+    case "curves":
       return { curves: partial };
-    case 'fx':
+    case "fx":
       return { fx: partial };
-    case 'rates':
+    case "rates":
       return { rates: partial };
   }
 }
@@ -82,13 +88,13 @@ function OverlayToggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-        checked ? 'bg-action border-action' : 'bg-surface border-border'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        checked ? "bg-action border-action" : "bg-surface border-border"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       <span
         aria-hidden
         className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-subtle transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0.5'
+          checked ? "translate-x-4" : "translate-x-0.5"
         }`}
       />
     </button>
@@ -119,7 +125,9 @@ function CategoryRow({
   const fellBack = selectedPlane?.attribution?.fellBack ?? false;
 
   return (
-    <tr className={`border-t border-border-light transition-colors ${focused ? 'bg-action-light/20' : 'hover:bg-surface/60'}`}>
+    <tr
+      className={`border-t border-border-light transition-colors ${focused ? "bg-action-light/20" : "hover:bg-surface/60"}`}
+    >
       <td className="px-4 py-3 align-top">
         <button
           type="button"
@@ -128,11 +136,15 @@ function CategoryRow({
           aria-pressed={focused}
         >
           <span className="inline-flex items-center gap-2">
-            <span className="text-body font-semibold text-navy">{CATEGORY_LABELS[category]}</span>
+            <span className="text-body font-semibold text-navy">
+              {CATEGORY_LABELS[category]}
+            </span>
             {focused && <StatusPill tone="action">Comparing</StatusPill>}
             {fellBack && <StatusPill tone="amber">Fell back</StatusPill>}
           </span>
-          <span className="block mt-0.5 text-caption text-slate">{CATEGORY_HINTS[category]}</span>
+          <span className="block mt-0.5 text-caption text-slate">
+            {CATEGORY_HINTS[category]}
+          </span>
         </button>
       </td>
       <td className="px-4 py-3 align-middle">
@@ -146,7 +158,11 @@ function CategoryRow({
       <td className="px-4 py-3 text-right align-middle">
         <label className="inline-flex items-center gap-2 whitespace-nowrap">
           <span className="text-caption font-medium text-slate">Overlay</span>
-          <OverlayToggle checked={preference.overlay} onChange={onOverlay} disabled={busy} />
+          <OverlayToggle
+            checked={preference.overlay}
+            onChange={onOverlay}
+            disabled={busy}
+          />
         </label>
       </td>
     </tr>
@@ -166,9 +182,9 @@ export default function SourcesControlRoom({
 
   // One planes query per category so every row reflects availability and the
   // comparison can switch categories without a refetch storm.
-  const curvesPlanes = useMarketDataPlanes(bankId, 'curves', asOfParam);
-  const fxPlanes = useMarketDataPlanes(bankId, 'fx', asOfParam);
-  const ratesPlanes = useMarketDataPlanes(bankId, 'rates', asOfParam);
+  const curvesPlanes = useMarketDataPlanes(bankId, "curves", asOfParam);
+  const fxPlanes = useMarketDataPlanes(bankId, "fx", asOfParam);
+  const ratesPlanes = useMarketDataPlanes(bankId, "rates", asOfParam);
   const planesByCategory: Record<
     MarketDataCategory,
     MarketDataPlanesResponse | undefined
@@ -178,7 +194,7 @@ export default function SourcesControlRoom({
     rates: ratesPlanes.data,
   };
 
-  const [focused, setFocused] = useState<MarketDataCategory>('curves');
+  const [focused, setFocused] = useState<MarketDataCategory>("curves");
 
   if (prefs.isError) {
     return <ErrorPanel error={prefs.error} onRetry={() => prefs.refetch()} />;
@@ -197,9 +213,10 @@ export default function SourcesControlRoom({
             Your selection flows live into IRRBB / FTP and official runs.
           </p>
           <p className="text-caption text-slate mt-0.5">
-            Switching a plane changes which values the risk engines consume immediately — there is
-            no approval gate. If a chosen plane has no data at a date, arbitration falls back and
-            flags it, so a calculation never breaks.
+            Switching a plane changes which values the risk engines consume
+            immediately — there is no approval gate. If a chosen plane has no
+            data at a date, arbitration falls back and flags it, so a
+            calculation never breaks.
           </p>
         </div>
       </div>
@@ -209,7 +226,9 @@ export default function SourcesControlRoom({
           <Waypoints size={15} className="text-slate" aria-hidden />
           <div>
             <h3 className="text-h3 text-navy">Source routing</h3>
-            <p className="mt-0.5 text-caption text-slate">Choose the plane each market category supplies to the engines.</p>
+            <p className="mt-0.5 text-caption text-slate">
+              Choose the plane each market category supplies to the engines.
+            </p>
           </div>
         </div>
         {!data ? (
@@ -222,7 +241,7 @@ export default function SourcesControlRoom({
             ))}
           </div>
         ) : (
-          <table className="w-full min-w-[46rem] text-body">
+          <table className="w-full min-w-184 text-body">
             <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
               <tr>
                 <th className="px-4 py-2.5 text-left">Market category</th>
@@ -240,8 +259,12 @@ export default function SourcesControlRoom({
                   busy={busy}
                   focused={focused === category}
                   onFocus={() => setFocused(category)}
-                  onSource={(source) => update.mutate(buildPatch(category, { source }))}
-                  onOverlay={(overlay) => update.mutate(buildPatch(category, { overlay }))}
+                  onSource={(source) =>
+                    update.mutate(buildPatch(category, { source }))
+                  }
+                  onOverlay={(overlay) =>
+                    update.mutate(buildPatch(category, { overlay }))
+                  }
                 />
               ))}
             </tbody>
@@ -251,12 +274,12 @@ export default function SourcesControlRoom({
         {data && (data.updatedBy || data.updatedAt) && (
           <p className="text-micro text-slate">
             {busy ? (
-              'Saving…'
+              "Saving…"
             ) : (
               <>
                 Last changed
-                {data.updatedBy ? ` by ${data.updatedBy}` : ''}
-                {data.updatedAt ? ` · ${fmtTimestamp(data.updatedAt)}` : ''}
+                {data.updatedBy ? ` by ${data.updatedBy}` : ""}
+                {data.updatedAt ? ` · ${fmtTimestamp(data.updatedAt)}` : ""}
               </>
             )}
           </p>
@@ -274,8 +297,8 @@ export default function SourcesControlRoom({
           <div>
             <h3 className="text-h3 text-navy">Plane comparison</h3>
             <p className="text-caption text-slate">
-              The same {CATEGORY_LABELS[focused]} scope resolved under every plane — the selected
-              one is highlighted.
+              The same {CATEGORY_LABELS[focused]} scope resolved under every
+              plane — the selected one is highlighted.
             </p>
           </div>
           <div
@@ -291,8 +314,8 @@ export default function SourcesControlRoom({
                 aria-pressed={focused === category}
                 className={`px-3 py-1.5 rounded text-caption font-medium whitespace-nowrap transition-colors ${
                   focused === category
-                    ? 'bg-action-light text-action shadow-subtle'
-                    : 'text-slate hover:text-navy'
+                    ? "bg-action-light text-action shadow-subtle"
+                    : "text-slate hover:text-navy"
                 }`}
               >
                 {CATEGORY_LABELS[category]}
@@ -304,15 +327,18 @@ export default function SourcesControlRoom({
         <div className="card overflow-hidden">
           {(() => {
             const query =
-              focused === 'curves'
+              focused === "curves"
                 ? curvesPlanes
-                : focused === 'fx'
+                : focused === "fx"
                   ? fxPlanes
                   : ratesPlanes;
             if (query.isError) {
               return (
                 <div className="p-5">
-                  <ErrorPanel error={query.error} onRetry={() => query.refetch()} />
+                  <ErrorPanel
+                    error={query.error}
+                    onRetry={() => query.refetch()}
+                  />
                 </div>
               );
             }
@@ -334,10 +360,11 @@ export default function SourcesControlRoom({
       <p className="inline-flex items-start gap-1.5 text-caption text-slate">
         <Info size={12} className="mt-0.5 shrink-0" aria-hidden />
         <span>
-          Planes are read from what is already ingested — a plane greys out when it has no data for
-          a category at the as-of date. The {SOURCE_LABELS.aequor} plane is the desk&rsquo;s golden
-          copy; the {SOURCE_LABELS.bank} plane is your own uploads/pushes; the {SOURCE_LABELS.vendor}{' '}
-          plane is your licensed feed.
+          Planes are read from what is already ingested — a plane greys out when
+          it has no data for a category at the as-of date. The{" "}
+          {SOURCE_LABELS.aequor} plane is the desk&rsquo;s golden copy; the{" "}
+          {SOURCE_LABELS.bank} plane is your own uploads/pushes; the{" "}
+          {SOURCE_LABELS.vendor} plane is your licensed feed.
         </span>
       </p>
     </div>

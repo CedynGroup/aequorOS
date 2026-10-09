@@ -32,7 +32,7 @@ For the separate Access and Settings areas, see
 Placement rules: market data **management** (connect/rotate/upload) lives in the Data Engine;
 market data **consumption** (curves, rates, ratings analysis) lives in Markets.
 
-## 2. Token system (`app/globals.css` + `tailwind.config.ts`)
+## 2. Token system (`app/globals.css`)
 
 Semantic CSS variables under `:root[data-theme='dark']` (default) and `[data-theme='light']`,
 stored as RGB channel triplets so Tailwind opacity modifiers work (`text-navy/85`).
@@ -75,7 +75,7 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   Engine eyebrow, with both Data Engine and Batches linking back to
   `/data-engine`. The sticky top bar, module tab strip, page header, and body all
   sit on the page ground; the sidebar rail is the only always-dark chrome. The
-  top bar uses `bg-surface-alt/90` and `backdrop-blur-sm` on a separate background
+  top bar uses `bg-surface-alt/90` and `backdrop-blur-xs` on a separate background
   layer. Keep the header itself free of backdrop filters so its command-palette
   and notification-inbox overlays remain fixed to the viewport. Page headers use
   spacing rather than a filled band or divider, while the tab strip keeps its

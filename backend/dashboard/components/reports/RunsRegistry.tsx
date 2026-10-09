@@ -190,7 +190,7 @@ export default function RunsRegistry({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="bg-surface-raised border border-border rounded px-2 py-1.5 text-caption text-navy"
+            className="bg-surface-raised border border-border rounded-sm px-2 py-1.5 text-caption text-navy"
             aria-label="Filter runs by status"
           >
             <option value="all">All</option>

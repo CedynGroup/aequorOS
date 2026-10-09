@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Where a return is, who holds it, every decision taken on it, and what happens
@@ -17,16 +17,16 @@
  * button for it.
  */
 
-import { useState } from 'react';
-import { Check, ChevronDown, CornerUpLeft, Send, XCircle } from 'lucide-react';
+import { useState } from "react";
+import { Check, ChevronDown, CornerUpLeft, Send, XCircle } from "lucide-react";
 import type {
   AttestationStatusRead,
   PackageApprovalRead,
   PackageStatus,
   SubmissionEventRead,
-} from '@aequoros/risk-service-api';
-import { fmtTimestamp } from '@/lib/api/values';
-import { centralBankName, regShort, submissionPortal } from '@/lib/format';
+} from "@aequoros/risk-service-api";
+import { fmtTimestamp } from "@/lib/api/values";
+import { centralBankName, regShort, submissionPortal } from "@/lib/format";
 import {
   buildFilingChain,
   outcomeLabel,
@@ -34,7 +34,7 @@ import {
   type ChainStage,
   type FilingChain,
   type RegulatorNaming,
-} from '@/lib/submissions/filingChain';
+} from "@/lib/submissions/filingChain";
 
 /** The active jurisdiction's own words — never a literal in this package. */
 export function activeRegulatorNaming(): RegulatorNaming {
@@ -45,26 +45,26 @@ export function activeRegulatorNaming(): RegulatorNaming {
   };
 }
 
-const MARK_TONE: Record<ChainStage['state'], string> = {
-  done: 'bg-success',
-  current: 'bg-action ring-4 ring-action-light',
-  ahead: 'bg-border',
-  returned: 'bg-critical',
-  closed: 'bg-border',
+const MARK_TONE: Record<ChainStage["state"], string> = {
+  done: "bg-success",
+  current: "bg-action ring-4 ring-action-light",
+  ahead: "bg-border",
+  returned: "bg-critical",
+  closed: "bg-border",
 };
 
-const NAME_TONE: Record<ChainStage['state'], string> = {
-  done: 'text-navy/80',
-  current: 'text-navy font-medium',
-  ahead: 'text-slate-light',
-  returned: 'text-critical',
-  closed: 'text-slate-light',
+const NAME_TONE: Record<ChainStage["state"], string> = {
+  done: "text-navy/80",
+  current: "text-navy font-medium",
+  ahead: "text-slate-light",
+  returned: "text-critical",
+  closed: "text-slate-light",
 };
 
 function StageChip({ stage }: { stage: ChainStage }) {
   const holder = stage.holder
-    ? `${stage.holder}${stage.holderTitle ? ` — ${stage.holderTitle}` : ''}`
-    : 'No officer named for this stage yet';
+    ? `${stage.holder}${stage.holderTitle ? ` — ${stage.holderTitle}` : ""}`
+    : "No officer named for this stage yet";
   return (
     <span
       className="inline-flex items-center gap-1.5 whitespace-nowrap"
@@ -88,32 +88,32 @@ function EntryRow({
   entry: ChainEntry;
   regulator: RegulatorNaming;
 }) {
-  const returned = entry.outcome === 'returned' || entry.outcome === 'rejected';
-  const declined = entry.outcome === 'declined';
+  const returned = entry.outcome === "returned" || entry.outcome === "rejected";
+  const declined = entry.outcome === "declined";
   return (
-    <li className="rounded border border-border-light bg-surface px-3 py-2">
+    <li className="rounded-sm border border-border-light bg-surface px-3 py-2">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-mono text-micro text-slate tnum whitespace-nowrap">
-          {entry.at ? fmtTimestamp(entry.at) : 'Time not recorded'}
+          {entry.at ? fmtTimestamp(entry.at) : "Time not recorded"}
         </span>
         <span className="text-caption text-navy/85">
-          {entry.actorName ?? 'Officer not named on the record'}
-          {entry.actorTitle ? ` — ${entry.actorTitle}` : ''}
+          {entry.actorName ?? "Officer not named on the record"}
+          {entry.actorTitle ? ` — ${entry.actorTitle}` : ""}
         </span>
         <span className="text-caption text-slate">· {entry.roleName} ·</span>
         <span className="text-caption text-slate">
-          {entry.round !== null ? `round ${entry.round}` : 'round not recorded'}
+          {entry.round !== null ? `round ${entry.round}` : "round not recorded"}
         </span>
         <span
           className={`inline-flex items-center gap-1.5 text-caption font-medium ${
-            declined || returned ? 'text-critical' : 'text-navy'
+            declined || returned ? "text-critical" : "text-navy"
           }`}
         >
           {returned ? (
             <CornerUpLeft size={12} aria-hidden />
           ) : declined ? (
             <XCircle size={12} aria-hidden />
-          ) : entry.outcome === 'filed' ? (
+          ) : entry.outcome === "filed" ? (
             <Send size={12} aria-hidden />
           ) : (
             <Check size={12} aria-hidden />
@@ -152,7 +152,7 @@ export function FilingChainStrip({
 }) {
   const stages = showRegulatorStage
     ? chain.stages
-    : chain.stages.filter((stage) => stage.key !== 'regulator');
+    : chain.stages.filter((stage) => stage.key !== "regulator");
   return (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
       {stages.map((stage, index) => (
@@ -225,20 +225,20 @@ export default function FilingChainPanel({
         />
         <div className="flex items-center gap-3 ml-auto">
           <span className="text-caption text-slate whitespace-nowrap">
-            {heldByViewer ? 'Held by you' : chain.position}
-            {chain.round !== null ? ` · round ${chain.round}` : ''}
+            {heldByViewer ? "Held by you" : chain.position}
+            {chain.round !== null ? ` · round ${chain.round}` : ""}
           </span>
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-caption font-medium text-navy hover:bg-surface"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-caption font-medium text-navy hover:bg-surface"
           >
-            {open ? 'Hide history' : 'Show history'}
+            {open ? "Hide history" : "Show history"}
             <ChevronDown
               size={13}
               aria-hidden
-              className={`transition-transform ${open ? 'rotate-180' : ''}`}
+              className={`transition-transform ${open ? "rotate-180" : ""}`}
             />
           </button>
         </div>
@@ -252,8 +252,8 @@ export default function FilingChainPanel({
         <div className="mt-3 border-t border-border-light pt-3 space-y-3">
           {chain.entries.length === 0 ? (
             <p className="text-caption text-slate leading-relaxed">
-              Nothing has been decided on this version yet. The first decision is
-              the preparer certifying the figures.
+              Nothing has been decided on this version yet. The first decision
+              is the preparer certifying the figures.
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -267,8 +267,8 @@ export default function FilingChainPanel({
             </ul>
           )}
           {chain.next && (
-            <p className="rounded border border-border-light bg-surface px-3 py-2 text-caption text-navy/85 leading-relaxed">
-              <span className="font-medium text-navy">What happens next.</span>{' '}
+            <p className="rounded-sm border border-border-light bg-surface px-3 py-2 text-caption text-navy/85 leading-relaxed">
+              <span className="font-medium text-navy">What happens next.</span>{" "}
               {chain.next}
             </p>
           )}

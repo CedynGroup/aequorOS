@@ -197,7 +197,7 @@ export default function BatchDetailPage(props: {
               {Object.entries(referenceCounts).map(([kind, count]) => (
                 <span
                   key={kind}
-                  className="inline-flex items-center gap-2 rounded border border-border px-2.5 py-1 text-caption font-mono text-navy"
+                  className="inline-flex items-center gap-2 rounded-sm border border-border px-2.5 py-1 text-caption font-mono text-navy"
                 >
                   {kind}
                   <span className="text-slate">{count}</span>
@@ -287,7 +287,7 @@ export default function BatchDetailPage(props: {
                   <p className="mt-1 text-body text-navy">
                     {failure.errorMessage}
                   </p>
-                  <pre className="mt-2 rounded bg-surface px-3 py-2 text-caption font-mono text-slate overflow-x-auto">
+                  <pre className="mt-2 rounded-sm bg-surface px-3 py-2 text-caption font-mono text-slate overflow-x-auto">
                     {JSON.stringify(failure.rawRecord)}
                   </pre>
                 </div>

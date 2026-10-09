@@ -26,7 +26,12 @@ import {
 } from "@/lib/icaap/appetite";
 import { numOrNull } from "@/lib/api/values";
 import { PERCENT_BASE } from "./display";
-import { NO_REGULATORY_FLOOR, NOT_ASSESSED, fmtInUnit, orderingSentence } from "./labels";
+import {
+  NO_REGULATORY_FLOOR,
+  NOT_ASSESSED,
+  fmtInUnit,
+  orderingSentence,
+} from "./labels";
 
 type Marker = {
   key: string;
@@ -97,9 +102,10 @@ export default function AppetiteScale({
     },
   ];
 
-  const domain = scaleDomain(
-    [...markers.map((marker) => marker.value), values.current],
-  );
+  const domain = scaleDomain([
+    ...markers.map((marker) => marker.value),
+    values.current,
+  ]);
 
   return (
     <div className="space-y-2">
@@ -108,7 +114,7 @@ export default function AppetiteScale({
           There are not enough levels set to draw a scale yet.
         </p>
       ) : (
-        <div className="relative h-10 rounded bg-gradient-to-r from-critical-light via-warning-light to-success-light">
+        <div className="relative h-10 rounded-sm bg-linear-to-r from-critical-light via-warning-light to-success-light">
           {markers
             .filter((marker) => marker.value !== null)
             .map((marker) => (

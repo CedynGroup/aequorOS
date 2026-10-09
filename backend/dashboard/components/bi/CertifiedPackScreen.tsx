@@ -204,7 +204,7 @@ export default function CertifiedPackScreen({ id }: { id: string }) {
         asOf={asOf}
         action={
           <div className="flex items-center gap-2">
-            <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+            <span className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
               {CERTIFICATION_LABELS[dashboard.certification]}
             </span>
             <span className="text-micro text-slate">

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Compact "which plane is feeding this" badge for the Curves / FX / Rates tabs.
@@ -7,13 +7,13 @@
  * this surfaces the active choice and links to the Sources tab to change it.
  */
 
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from "lucide-react";
 import {
   SOURCE_LABELS,
   type CategorySourcePreference,
   type MarketDataCategory,
   CATEGORY_LABELS,
-} from '@/lib/api/marketDataSources';
+} from "@/lib/api/marketDataSources";
 
 export default function SourceIndicator({
   category,
@@ -33,13 +33,13 @@ export default function SourceIndicator({
     >
       <SlidersHorizontal size={13} aria-hidden />
       <span>
-        Source:{' '}
+        Source:{" "}
         <span className="font-medium text-navy">
-          {preference ? SOURCE_LABELS[preference.source] : '—'}
+          {preference ? SOURCE_LABELS[preference.source] : "—"}
         </span>
       </span>
       {preference?.overlay && (
-        <span className="inline-flex items-center rounded border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium text-action">
+        <span className="inline-flex items-center rounded-sm border border-action/30 bg-action-light px-1.5 py-0.5 text-micro font-medium text-action">
           Overlay on
         </span>
       )}

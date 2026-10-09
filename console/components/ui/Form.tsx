@@ -3,14 +3,14 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
-} from 'react';
+} from "react";
 
 /**
  * The shared control class. Exported for back-compat so the `inputClass`
  * string that was copy-pasted across desk pages resolves to one definition.
  */
 export const inputClass =
-  'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60';
+  "w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Labeled field wrapper: a caption label, the control, and optional hint /
@@ -24,7 +24,7 @@ export function Field({
   required,
   htmlFor,
   children,
-  className = '',
+  className = "",
 }: {
   label?: ReactNode;
   hint?: ReactNode;
@@ -46,7 +46,9 @@ export function Field({
       {error ? (
         <FormError>{error}</FormError>
       ) : (
-        hint && <span className="mt-1 block text-micro text-slate-light">{hint}</span>
+        hint && (
+          <span className="mt-1 block text-micro text-slate-light">{hint}</span>
+        )
       )}
     </label>
   );
@@ -64,12 +66,12 @@ export function FormError({ children }: { children: ReactNode }) {
 
 export function Input({
   invalid = false,
-  className = '',
+  className = "",
   ...rest
 }: { invalid?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`${inputClass} ${invalid ? 'border-critical focus:border-critical' : ''} ${className}`}
+      className={`${inputClass} ${invalid ? "border-critical focus:border-critical" : ""} ${className}`}
       aria-invalid={invalid || undefined}
       {...rest}
     />
@@ -78,12 +80,12 @@ export function Input({
 
 export function Textarea({
   invalid = false,
-  className = '',
+  className = "",
   ...rest
 }: { invalid?: boolean } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`${inputClass} ${invalid ? 'border-critical focus:border-critical' : ''} ${className}`}
+      className={`${inputClass} ${invalid ? "border-critical focus:border-critical" : ""} ${className}`}
       aria-invalid={invalid || undefined}
       {...rest}
     />
@@ -92,13 +94,13 @@ export function Textarea({
 
 export function Select({
   invalid = false,
-  className = '',
+  className = "",
   children,
   ...rest
 }: { invalid?: boolean } & SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`${inputClass} ${invalid ? 'border-critical focus:border-critical' : ''} ${className}`}
+      className={`${inputClass} ${invalid ? "border-critical focus:border-critical" : ""} ${className}`}
       aria-invalid={invalid || undefined}
       {...rest}
     >

@@ -69,7 +69,7 @@ function InfoTip({
       <span
         role="tooltip"
         id={id}
-        className={`pointer-events-none absolute z-50 ${width} rounded border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
+        className={`pointer-events-none absolute z-50 ${width} rounded-sm border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
       >
         {children}
       </span>
@@ -117,13 +117,13 @@ function PdTrack({ band }: { band: Band }) {
       </div>
 
       <div
-        className="relative h-3.5 rounded"
+        className="relative h-3.5 rounded-sm"
         style={{ background: PD_GRADIENT }}
         aria-hidden
       >
         {/* band window (lower→upper) */}
         <div
-          className="absolute inset-y-0 rounded-sm border-2 border-navy"
+          className="absolute inset-y-0 rounded-xs border-2 border-navy"
           style={{
             left: `${lo}%`,
             width: `${Math.max(0, up - lo)}%`,
@@ -167,7 +167,7 @@ function DriverChip({
   const Icon = tone === "up" ? TrendingUp : TrendingDown;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-caption font-medium ${styles}`}
+      className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-caption font-medium ${styles}`}
     >
       <Icon size={12} aria-hidden />
       {prefix}
@@ -255,33 +255,36 @@ export default function ImpliedRatingCard({
   const methodologyTip = (
     <span className="block space-y-1.5">
       <span className="block">
-        Built only from your reported financials, using a documented method modeled
-        on the S&amp;P, Moody’s and Fitch frameworks:
+        Built only from your reported financials, using a documented method
+        modeled on the S&amp;P, Moody’s and Fitch frameworks:
       </span>
       <span className="block space-y-1">
         <span className="block">
-          <span className="font-semibold text-white">Scorecard</span> — capital, asset
-          quality, earnings, funding &amp; liquidity are scored on the agency factor
-          framework to place a through-the-cycle (TTC) grade.
+          <span className="font-semibold text-white">Scorecard</span> — capital,
+          asset quality, earnings, funding &amp; liquidity are scored on the
+          agency factor framework to place a through-the-cycle (TTC) grade.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Master scale</span> — each grade maps
-          to an idealised one-year default rate (agency-aligned): the TTC anchor PD.
+          <span className="font-semibold text-white">Master scale</span> — each
+          grade maps to an idealised one-year default rate (agency-aligned): the
+          TTC anchor PD.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Point-in-time</span> — the anchor is
-          conditioned on the live operating-environment factor (Z) through a Vasicek
-          single-factor model, so a weaker environment lifts PIT above TTC.
+          <span className="font-semibold text-white">Point-in-time</span> — the
+          anchor is conditioned on the live operating-environment factor (Z)
+          through a Vasicek single-factor model, so a weaker environment lifts
+          PIT above TTC.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Range, not a point</span> — a Bayesian
-          posterior band reflects thin local default history; a margin of conservatism sets
-          the upper figure used for capital decisions.
+          <span className="font-semibold text-white">Range, not a point</span> —
+          a Bayesian posterior band reflects thin local default history; a
+          margin of conservatism sets the upper figure used for capital
+          decisions.
         </span>
         <span className="block">
-          <span className="font-semibold text-white">Floor &amp; ceiling</span> — no PD
-          falls below the Basel 0.03% floor, and the grade is capped near the sovereign
-          (a real risk shown by the DDEP).
+          <span className="font-semibold text-white">Floor &amp; ceiling</span>{" "}
+          — no PD falls below the Basel 0.03% floor, and the grade is capped
+          near the sovereign (a real risk shown by the DDEP).
         </span>
       </span>
       {present(metrics.methodology_version) && (
@@ -386,7 +389,7 @@ export default function ImpliedRatingCard({
               <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-slate">
                 <span className="inline-flex items-center gap-1.5">
                   <span
-                    className="inline-block h-2 w-8 rounded-sm"
+                    className="inline-block h-2 w-8 rounded-xs"
                     style={{ background: PD_GRADIENT }}
                     aria-hidden
                   />
@@ -418,7 +421,7 @@ export default function ImpliedRatingCard({
 
           {!ddepEligible &&
             present(metrics.ddep_post_stress_capital_ratio_pct) && (
-              <p className="mt-2.5 rounded border border-critical/20 bg-critical-light px-3 py-1.5 text-caption text-critical">
+              <p className="mt-2.5 rounded-sm border border-critical/20 bg-critical-light px-3 py-1.5 text-caption text-critical">
                 DDEP-ineligible: post-stress capital ratio{" "}
                 <span className="font-mono tnum font-semibold">
                   {formatPercent(metrics.ddep_post_stress_capital_ratio_pct)}

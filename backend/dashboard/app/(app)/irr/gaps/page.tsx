@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Gap Analysis: full repricing ladder (RSA up, RSL down, net gap, cumulative
@@ -7,23 +7,22 @@
  * outputs; RSL is only negated for the mirrored presentation.
  */
 
-import { useState } from 'react';
-import type { IrrGapBucketRead } from '@aequoros/risk-service-api';
-import IrrWorkspace from '@/components/irr/IrrWorkspace';
-import RepricingLadderChart from '@/components/irr/charts/RepricingLadderChart';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { num, shortId } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned } from '@/lib/format';
+import { useState } from "react";
+import type { IrrGapBucketRead } from "@aequoros/risk-service-api";
+import IrrWorkspace from "@/components/irr/IrrWorkspace";
+import RepricingLadderChart from "@/components/irr/charts/RepricingLadderChart";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { num, shortId } from "@/lib/api/values";
+import { fmtCurrency, fmtCurrencySigned } from "@/lib/format";
 
 export default function IrrGapsPage() {
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null);
 
   return (
-    <IrrWorkspace
-    >
+    <IrrWorkspace>
       {({ data, metrics: m, latestRun, computedAt }) => {
         const rows = data.gapTable ?? [];
 
@@ -40,16 +39,17 @@ export default function IrrGapsPage() {
         const selected = rows.find((r) => r.bucket === selectedBucket) ?? null;
         const selectedLineItem =
           selected && latestRun
-            ? latestRun.lineItems.find(
-                (li) => li.section === 'irr_gap' && li.lineCode === selected.bucket
-              ) ?? null
+            ? (latestRun.lineItems.find(
+                (li) =>
+                  li.section === "irr_gap" && li.lineCode === selected.bucket,
+              ) ?? null)
             : null;
 
         const columns: Column<IrrGapBucketRead>[] = [
           {
-            key: 'bucket',
-            header: 'Tenor bucket',
-            width: '16%',
+            key: "bucket",
+            header: "Tenor bucket",
+            width: "16%",
             render: (r) => (
               <span className="font-mono text-caption font-medium text-navy">
                 {r.bucket}
@@ -57,39 +57,39 @@ export default function IrrGapsPage() {
             ),
           },
           {
-            key: 'midpoint',
-            header: 'Midpoint',
+            key: "midpoint",
+            header: "Midpoint",
             numeric: true,
             render: (r) => `${num(r.midpointYears).toFixed(2)}y`,
           },
           {
-            key: 'rsa',
-            header: 'RSA',
+            key: "rsa",
+            header: "RSA",
             numeric: true,
             render: (r) => fmtCurrency(num(r.rsaGhs)),
           },
           {
-            key: 'rsl',
-            header: 'RSL',
+            key: "rsl",
+            header: "RSL",
             numeric: true,
             render: (r) => fmtCurrency(num(r.rslGhs)),
           },
           {
-            key: 'gap',
-            header: 'Period gap',
+            key: "gap",
+            header: "Period gap",
             numeric: true,
             render: (r) => fmtCurrencySigned(num(r.gapGhs)),
           },
           {
-            key: 'cum',
-            header: 'Cumulative gap',
+            key: "cum",
+            header: "Cumulative gap",
             numeric: true,
             render: (r) => fmtCurrencySigned(num(r.cumulativeGapGhs)),
           },
           {
-            key: 'window',
-            header: '≤12m',
-            align: 'right',
+            key: "window",
+            header: "≤12m",
+            align: "right",
             render: (r) =>
               r.within12m ? (
                 <StatusPill tone="action">EaR window</StatusPill>
@@ -106,11 +106,11 @@ export default function IrrGapsPage() {
               <KpiStat
                 label="12-month cumulative gap"
                 value={fmtCurrencySigned(cum12m)}
-                status={cum12m < 0 ? 'warn' : 'ok'}
+                status={cum12m < 0 ? "warn" : "ok"}
                 hint={
                   cum12m < 0
-                    ? 'Liability-sensitive over 12 months'
-                    : 'Asset-sensitive over 12 months'
+                    ? "Liability-sensitive over 12 months"
+                    : "Asset-sensitive over 12 months"
                 }
               />
               <KpiStat
@@ -141,7 +141,9 @@ export default function IrrGapsPage() {
               {ladder.length > 0 ? (
                 <RepricingLadderChart data={ladder} height={360} />
               ) : (
-                <p className="text-body text-slate">No repricing buckets for this period.</p>
+                <p className="text-body text-slate">
+                  No repricing buckets for this period.
+                </p>
               )}
             </SectionCard>
 
@@ -156,10 +158,12 @@ export default function IrrGapsPage() {
                 rows={rows}
                 density="compact"
                 onRowClick={(r) =>
-                  setSelectedBucket((cur) => (cur === r.bucket ? null : r.bucket))
+                  setSelectedBucket((cur) =>
+                    cur === r.bucket ? null : r.bucket,
+                  )
                 }
                 rowClassName={(r) =>
-                  r.bucket === selectedBucket ? 'bg-action-light/40' : ''
+                  r.bucket === selectedBucket ? "bg-action-light/40" : ""
                 }
               />
               {selected && (
@@ -175,38 +179,51 @@ export default function IrrGapsPage() {
                     )}
                   </div>
                   <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-body">
-                    <DrillField label="Repricing midpoint" value={`${num(selected.midpointYears).toFixed(3)} years`} />
-                    <DrillField label="Rate-sensitive assets" value={fmtCurrency(num(selected.rsaGhs))} />
-                    <DrillField label="Rate-sensitive liabilities" value={fmtCurrency(num(selected.rslGhs))} />
+                    <DrillField
+                      label="Repricing midpoint"
+                      value={`${num(selected.midpointYears).toFixed(3)} years`}
+                    />
+                    <DrillField
+                      label="Rate-sensitive assets"
+                      value={fmtCurrency(num(selected.rsaGhs))}
+                    />
+                    <DrillField
+                      label="Rate-sensitive liabilities"
+                      value={fmtCurrency(num(selected.rslGhs))}
+                    />
                     <DrillField
                       label="Period gap (RSA − RSL)"
                       value={fmtCurrencySigned(num(selected.gapGhs))}
                     />
                   </dl>
                   {selectedLineItem ? (
-                    <div className="mt-3 rounded border border-border-light bg-surface-raised px-4 py-3">
+                    <div className="mt-3 rounded-sm border border-border-light bg-surface-raised px-4 py-3">
                       <p className="text-caption text-slate">
-                        Stored run line item{' '}
+                        Stored run line item{" "}
                         <span className="font-mono text-navy">
                           {selectedLineItem.section}/{selectedLineItem.lineCode}
-                        </span>{' '}
+                        </span>{" "}
                         · position {selectedLineItem.position}
                       </p>
-                      <p className="mt-1 text-body text-navy">{selectedLineItem.description}</p>
+                      <p className="mt-1 text-body text-navy">
+                        {selectedLineItem.description}
+                      </p>
                       <p className="mt-1 text-caption text-slate">
-                        exposure{' '}
+                        exposure{" "}
                         <span className="font-mono tnum text-navy">
                           {selectedLineItem.exposureAmount != null
                             ? fmtCurrency(num(selectedLineItem.exposureAmount))
-                            : '—'}
+                            : "—"}
                         </span>
-                        {' · '}weighted (gap){' '}
+                        {" · "}weighted (gap){" "}
                         <span className="font-mono tnum text-navy">
-                          {fmtCurrencySigned(num(selectedLineItem.weightedAmount))}
+                          {fmtCurrencySigned(
+                            num(selectedLineItem.weightedAmount),
+                          )}
                         </span>
                         {latestRun && (
                           <>
-                            {' · '}run{' '}
+                            {" · "}run{" "}
                             <span className="font-mono text-navy">
                               {shortId(latestRun.id, 8)}
                             </span>
@@ -216,8 +233,8 @@ export default function IrrGapsPage() {
                     </div>
                   ) : (
                     <p className="mt-3 text-caption text-slate">
-                      No stored results for this period yet — figures above are the
-                      live computation. Line-item drilldown appears once the
+                      No stored results for this period yet — figures above are
+                      the live computation. Line-item drilldown appears once the
                       period&apos;s results are finalised under Governance.
                     </p>
                   )}
@@ -234,7 +251,9 @@ export default function IrrGapsPage() {
 function DrillField({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-micro uppercase tracking-wider text-slate">{label}</dt>
+      <dt className="text-micro uppercase tracking-wider text-slate">
+        {label}
+      </dt>
       <dd className="mt-0.5 font-mono tnum text-navy">{value}</dd>
     </div>
   );

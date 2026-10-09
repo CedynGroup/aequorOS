@@ -66,7 +66,7 @@ export default function DeadlineBadge({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-caption font-medium ${tone} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-caption font-medium ${tone} ${className}`}
     >
       <CalendarClock size={12} aria-hidden />
       {label}

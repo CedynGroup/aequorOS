@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Verification panel — the five independent checks of
@@ -24,7 +24,7 @@
  * `passed` alone is what keeps skipped from reading as failure.
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 import {
   CheckCircle2,
   Download,
@@ -32,17 +32,17 @@ import {
   MinusCircle,
   ShieldCheck,
   XCircle,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   VerificationCheckRead,
   VerificationReportRead,
-} from '@aequoros/risk-service-api';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { isoDate, labelize } from '@/lib/api/values';
-import { downloadTextFile } from '@/lib/download';
-import { DigestChip, fmtSignatureTimestamp } from './shared';
+} from "@aequoros/risk-service-api";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { isoDate, labelize } from "@/lib/api/values";
+import { downloadTextFile } from "@/lib/download";
+import { DigestChip, fmtSignatureTimestamp } from "./shared";
 
-type Outcome = 'passed' | 'failed' | 'skipped';
+type Outcome = "passed" | "failed" | "skipped";
 
 /**
  * The §3.5 order, mirroring the service's own `CHECK_ORDER`, so the panel reads
@@ -50,20 +50,20 @@ type Outcome = 'passed' | 'failed' | 'skipped';
  * listed here render after these, in payload order — the API decides what ran.
  */
 const CHECK_ORDER = [
-  'pdf_signature',
-  'inter_signature_tamper',
-  'detached_attestation',
-  'content_binding',
-  'artifact_binding',
+  "pdf_signature",
+  "inter_signature_tamper",
+  "detached_attestation",
+  "content_binding",
+  "artifact_binding",
 ];
 
 /** Human phrasing per check key; anything unknown falls back to `labelize`. */
 const CHECK_LABELS: Record<string, string> = {
-  pdf_signature: 'PDF cryptographic validity',
-  inter_signature_tamper: 'Tamper between signatures',
-  detached_attestation: 'Detached attestation',
-  content_binding: 'Content binding',
-  artifact_binding: 'Artifact binding',
+  pdf_signature: "PDF cryptographic validity",
+  inter_signature_tamper: "Tamper between signatures",
+  detached_attestation: "Detached attestation",
+  content_binding: "Content binding",
+  artifact_binding: "Artifact binding",
 };
 
 /**
@@ -74,22 +74,22 @@ const CHECK_LABELS: Record<string, string> = {
  */
 function outcomeOf(check: VerificationCheckRead): Outcome {
   const evidence = check.evidence ?? {};
-  if (evidence.status === 'skipped') return 'skipped';
-  if (evidence.skipped === true) return 'skipped';
-  if (evidence.applicable === false) return 'skipped';
-  return check.passed ? 'passed' : 'failed';
+  if (evidence.status === "skipped") return "skipped";
+  if (evidence.skipped === true) return "skipped";
+  if (evidence.applicable === false) return "skipped";
+  return check.passed ? "passed" : "failed";
 }
 
 const OUTCOME_TONES: Record<Outcome, StatusTone> = {
-  passed: 'success',
-  failed: 'critical',
-  skipped: 'slate',
+  passed: "success",
+  failed: "critical",
+  skipped: "slate",
 };
 
 const OUTCOME_LABELS: Record<Outcome, string> = {
-  passed: 'Pass',
-  failed: 'Fail',
-  skipped: 'Skipped',
+  passed: "Pass",
+  failed: "Fail",
+  skipped: "Skipped",
 };
 
 const OUTCOME_ICONS: Record<Outcome, typeof CheckCircle2> = {
@@ -99,12 +99,14 @@ const OUTCOME_ICONS: Record<Outcome, typeof CheckCircle2> = {
 };
 
 const OUTCOME_ICON_COLORS: Record<Outcome, string> = {
-  passed: 'text-success',
-  failed: 'text-critical',
-  skipped: 'text-slate',
+  passed: "text-success",
+  failed: "text-critical",
+  skipped: "text-slate",
 };
 
-function orderedChecks(checks: VerificationCheckRead[]): VerificationCheckRead[] {
+function orderedChecks(
+  checks: VerificationCheckRead[],
+): VerificationCheckRead[] {
   const rank = (check: VerificationCheckRead) => {
     const index = CHECK_ORDER.indexOf(check.check);
     return index === -1 ? CHECK_ORDER.length : index;
@@ -118,8 +120,10 @@ export default function VerificationPanel({
   report: VerificationReportRead;
 }) {
   const checks = orderedChecks(report.checks);
-  const failed = checks.filter((check) => outcomeOf(check) === 'failed').length;
-  const skipped = checks.filter((check) => outcomeOf(check) === 'skipped').length;
+  const failed = checks.filter((check) => outcomeOf(check) === "failed").length;
+  const skipped = checks.filter(
+    (check) => outcomeOf(check) === "skipped",
+  ).length;
   const passed = checks.length - failed - skipped;
 
   return (
@@ -127,25 +131,25 @@ export default function VerificationPanel({
       <div
         className={`flex items-start gap-2.5 rounded border px-3.5 py-2.5 ${
           report.overallPassed
-            ? 'border-success/25 bg-success-light/50'
-            : 'border-critical/30 bg-critical-light/50'
+            ? "border-success/25 bg-success-light/50"
+            : "border-critical/30 bg-critical-light/50"
         }`}
       >
         <ShieldCheck
           size={15}
           className={`shrink-0 mt-0.5 ${
-            report.overallPassed ? 'text-success' : 'text-critical'
+            report.overallPassed ? "text-success" : "text-critical"
           }`}
           aria-hidden
         />
         <div className="min-w-0 text-body">
           <p className="font-medium text-navy">
             {report.overallPassed
-              ? 'Every applicable check passed.'
-              : 'Verification did not pass — at least one check failed.'}
+              ? "Every applicable check passed."
+              : "Verification did not pass — at least one check failed."}
           </p>
           <p className="mt-0.5 text-caption text-slate tnum">
-            {passed} pass · {failed} fail · {skipped} skipped · verified{' '}
+            {passed} pass · {failed} fail · {skipped} skipped · verified{" "}
             {fmtSignatureTimestamp(report.verifiedAt)}
           </p>
           {skipped > 0 && (
@@ -178,7 +182,7 @@ export default function VerificationPanel({
           downloadTextFile(
             `verification-${report.returnCode}-${isoDate(report.reportingDate)}.json`,
             JSON.stringify(report, null, 2),
-            'application/json;charset=utf-8'
+            "application/json;charset=utf-8",
           )
         }
         className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
@@ -197,7 +201,7 @@ function CheckRow({ check }: { check: VerificationCheckRead }) {
   const evidence = Object.entries(check.evidence ?? {});
 
   return (
-    <li className="rounded border border-border-light bg-surface px-3.5 py-2.5">
+    <li className="rounded-sm border border-border-light bg-surface px-3.5 py-2.5">
       <div className="flex items-start gap-2.5">
         <Icon
           size={15}
@@ -225,7 +229,10 @@ function CheckRow({ check }: { check: VerificationCheckRead }) {
                     {labelize(key)}
                   </dt>
                   <dd className="min-w-0 text-micro text-navy/85 break-all">
-                    <EvidenceValue value={value} label={`${check.check} ${key}`} />
+                    <EvidenceValue
+                      value={value}
+                      label={`${check.check} ${key}`}
+                    />
                   </dd>
                 </div>
               ))}
@@ -241,19 +248,25 @@ function CheckRow({ check }: { check: VerificationCheckRead }) {
  * Evidence is an untyped record. Hash-shaped strings become copyable digest
  * chips (an examiner needs the whole value); everything else renders as text.
  */
-function EvidenceValue({ value, label }: { value: unknown; label: string }): ReactNode {
-  if (value === null || value === undefined) return <span className="text-slate">—</span>;
-  if (typeof value === 'boolean') return value ? 'yes' : 'no';
-  if (typeof value === 'number') return <span className="font-mono tnum">{value}</span>;
-  if (typeof value === 'string') {
+function EvidenceValue({
+  value,
+  label,
+}: {
+  value: unknown;
+  label: string;
+}): ReactNode {
+  if (value === null || value === undefined)
+    return <span className="text-slate">—</span>;
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number")
+    return <span className="font-mono tnum">{value}</span>;
+  if (typeof value === "string") {
     if (/^[0-9a-f]{32,}$/i.test(value)) {
       return <DigestChip digest={value} label={label} />;
     }
     return value;
   }
-  return (
-    <code className="font-mono text-micro">{JSON.stringify(value)}</code>
-  );
+  return <code className="font-mono text-micro">{JSON.stringify(value)}</code>;
 }
 
 /**
@@ -273,25 +286,33 @@ function ChainStatus({
     <div
       className={`flex items-start gap-2.5 rounded border px-3.5 py-2.5 ${
         chainOk
-          ? 'border-border-light bg-surface'
-          : 'border-critical/30 bg-critical-light/50'
+          ? "border-border-light bg-surface"
+          : "border-critical/30 bg-critical-light/50"
       }`}
     >
       {chainOk ? (
-        <ShieldCheck size={15} className="text-success shrink-0 mt-0.5" aria-hidden />
+        <ShieldCheck
+          size={15}
+          className="text-success shrink-0 mt-0.5"
+          aria-hidden
+        />
       ) : (
-        <Link2Off size={15} className="text-critical shrink-0 mt-0.5" aria-hidden />
+        <Link2Off
+          size={15}
+          className="text-critical shrink-0 mt-0.5"
+          aria-hidden
+        />
       )}
       <div className="min-w-0 text-body">
         <p className="font-medium text-navy">
           {chainOk
-            ? 'Signature hash chain intact'
-            : 'Signature hash chain is broken'}
+            ? "Signature hash chain intact"
+            : "Signature hash chain is broken"}
         </p>
         <p className="mt-0.5 text-caption text-navy/80 leading-relaxed">
           {chainOk
             ? `Every signature row (${signatureCount}) links to its predecessor by hash, so an insertion, deletion or edit anywhere in the tenant's signature history would show here.`
-            : 'A row does not link to its predecessor — the append-only history has been tampered with or was written out of order. Escalate: this is an integrity failure, not a data-entry problem.'}
+            : "A row does not link to its predecessor — the append-only history has been tampered with or was written out of order. Escalate: this is an integrity failure, not a data-entry problem."}
         </p>
         {!chainOk && chainBrokenAt && (
           <p className="mt-1 font-mono text-micro text-critical break-all">

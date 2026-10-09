@@ -1,8 +1,8 @@
 /**
  * Pins the live engine's headline-metric map so its two mirrors cannot drift:
  * `_PRIMARY_METRIC_KEY` in `backend/app/services/window_analytics.py` (its
- * parity test reads THIS file's source) and `METRIC_LABELS` in
- * `components/home/WindowAnalysis.tsx` (read here). Also pins the D-013
+ * parity test reads THIS file's source) and the labels rendered by
+ * `components/home/WindowAnalysis.tsx`. Also pins the D-013
  * direction rule: the IRR headline is stored signed, judged on magnitude —
  * and (A1-02) that the pulse badge's glyph and figure follow the SIGNED move
  * while only its colour follows the magnitude judgement.
@@ -11,9 +11,15 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import type { LiveModule } from "@aequoros/risk-service-api";
+import NodeModule from "node:module";
+import { join } from "node:path";
+import { createElement } from "react";
+import { act, create, type ReactTestInstance } from "react-test-renderer";
+import type {
+  LiveModule,
+  WindowAnalyticsRead,
+} from "@aequoros/risk-service-api";
+import { SemanticDelta } from "../ui/DeltaBadge";
 import {
   DEFAULT_MODULE_ORDER,
   LIVE_MODULE_HREFS,
@@ -37,16 +43,12 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-/** The dashboard root (holds tsconfig.test.json), found from the emitted test. */
-function dashboardRoot(): string {
-  let dir = __dirname;
-  for (let i = 0; i < 10; i += 1) {
-    if (existsSync(join(dir, "tsconfig.test.json"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error("could not locate the dashboard root from " + __dirname);
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+function renderedText(node: ReactTestInstance): string {
+  return node.children
+    .map((child) => (typeof child === "string" ? child : renderedText(child)))
+    .join("");
 }
 
 const MODULES = Object.keys(LIVE_MODULE_LABELS) as LiveModule[];
@@ -125,21 +127,6 @@ test("the IRR delta is judged on magnitude; other ratios stay signed", () => {
   assert.equal(livePrimaryMetricDelta("credit", 6, 4), 2);
 });
 
-/** `SemanticDelta`'s glyph per direction, read from the component source. */
-function badgeGlyphs(): Record<string, string> {
-  const source = readFileSync(
-    join(dashboardRoot(), "components", "ui", "DeltaBadge.tsx"),
-    "utf8",
-  );
-  const block = /const DIRECTION_GLYPH[^{]*\{([\s\S]*?)\};/.exec(source);
-  assert.ok(block, "DIRECTION_GLYPH block not found in DeltaBadge.tsx");
-  const glyphs: Record<string, string> = {};
-  for (const match of block[1].matchAll(/^\s*(\w+):\s*'([^']*)'/gm)) {
-    glyphs[match[1]] = match[2];
-  }
-  return glyphs;
-}
-
 /** What the pulse card badge shows: glyph + text, and the tone it wears. */
 function renderedBadge(
   module: LiveModule,
@@ -147,12 +134,37 @@ function renderedBadge(
   prev: number,
 ): { text: string; tone: string } {
   const change = livePrimaryMetricChange(module, next, prev);
-  const glyph = badgeGlyphs()[change.direction];
-  assert.ok(glyph !== undefined, `glyph for ${change.direction}`);
-  return {
-    text: `${glyph} ${liveMetricChangeText(change.change)}`,
-    tone: change.favorability,
-  };
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      createElement(
+        SemanticDelta,
+        { direction: change.direction, favorability: change.favorability },
+        liveMetricChangeText(change.change),
+      ),
+    );
+  });
+  try {
+    const glyphNode = renderer.root.findByProps({ "aria-hidden": true });
+    const badge = glyphNode.parent;
+    assert.ok(badge);
+    const glyph = renderedText(glyphNode);
+    const tones: Record<string, string> = {
+      "text-success": "favorable",
+      "text-critical": "adverse",
+      "text-slate": "neutral",
+    };
+    const tone = badge.props.className
+      .split(" ")
+      .find((name: string) => name in tones);
+    assert.ok(tone, "badge must render a semantic tone");
+    return {
+      text: `${glyph} ${badge.children.filter((child) => typeof child === "string").join("")}`,
+      tone: tones[tone],
+    };
+  } finally {
+    act(() => renderer.unmount());
+  }
 }
 
 test("A1-02: the IRR badge's arrow and figure are signed; only its colour is |ΔEVE|", () => {
@@ -245,6 +257,10 @@ test("rise-is-adverse modules still colour a rise red; the rest colour it green"
   });
   assert.equal(liveMetricChangeText(-0), "0.00 pts");
   assert.equal(liveMetricChangeText(-0.001), "0.00 pts");
+  assert.deepEqual(renderedBadge("capital", 12, 12), {
+    text: "– 0.00 pts",
+    tone: "neutral",
+  });
 });
 
 test("headlines that are never filed read as advisory, filed ones do not", () => {
@@ -269,30 +285,80 @@ test("headlines that are never filed read as advisory, filed ones do not", () =>
   }
 });
 
-test("WindowAnalysis METRIC_LABELS mirrors the headline map exactly", () => {
-  const source = readFileSync(
-    join(dashboardRoot(), "components", "home", "WindowAnalysis.tsx"),
-    "utf8",
-  );
-  const block = /const METRIC_LABELS[^{]*\{([\s\S]*?)\};/.exec(source);
-  assert.ok(block, "METRIC_LABELS block not found in WindowAnalysis.tsx");
-  const mirrored = new Map<string, string>();
-  for (const match of block[1].matchAll(/^\s*([a-z0-9_]+):\s*'([^']*)'/gm)) {
-    mirrored.set(match[1], match[2]);
-  }
-  const expected = new Map<string, string>();
-  for (const liveModule of MODULES) {
-    const metric = livePrimaryMetric(liveModule, {
-      [livePrimaryMetricKey(liveModule)]: 0,
+test("WindowAnalysis renders each daily headline with the live card's label", () => {
+  const data: WindowAnalyticsRead = {
+    bankId: "BK-AAAAAAAA",
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-01-31"),
+    periodCount: 1,
+    ratios: [],
+    daily: MODULES.map((module) => ({
+      module,
+      metricKey: livePrimaryMetricKey(module),
+      dayCount: 2,
+      avg: "12",
+      min: "11",
+      max: "13",
+    })),
+  };
+  const loader = NodeModule as typeof NodeModule & {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = loader._load;
+  loader._load = (request, parent, isMain) => {
+    if (request === "@/lib/api/hooks") {
+      return {
+        useWindowAnalytics: () => ({ data, isFetching: false, error: null }),
+      };
+    }
+    if (request === "@/lib/api/client") {
+      return { isApiError: () => false, isModuleUnavailable: () => false };
+    }
+    const resolved = request.startsWith("@/")
+      ? join(__dirname, "../..", request.slice(2))
+      : request;
+    return originalLoad(resolved, parent, isMain);
+  };
+  let renderer: ReturnType<typeof create> | undefined;
+  try {
+    const WindowAnalysis: typeof import("../home/WindowAnalysis").default =
+      require("../home/WindowAnalysis").default;
+    act(() => {
+      renderer = create(createElement(WindowAnalysis, { bankId: data.bankId }));
     });
-    assert.ok(metric, `headline for ${liveModule}`);
-    expected.set(livePrimaryMetricKey(liveModule), metric.label);
+    assert.ok(renderer);
+    for (const [label, value] of [
+      ["Window start date", "2026-01-01"],
+      ["Window end date", "2026-01-31"],
+    ]) {
+      const input = renderer.root.findByProps({ "aria-label": label });
+      act(() => input.props.onChange({ target: { value } }));
+    }
+    const compute = renderer.root
+      .findAllByType("button")
+      .find((button) => renderedText(button) === "Compute");
+    assert.ok(compute);
+    assert.equal(compute.props.disabled, false);
+    act(() => compute.props.onClick());
+    const rows = renderer.root
+      .findAllByType("p")
+      .filter((row) => renderedText(row).includes("daily closes"));
+    assert.equal(rows.length, MODULES.length);
+    for (const [index, module] of MODULES.entries()) {
+      const metric = livePrimaryMetric(module, {
+        [livePrimaryMetricKey(module)]: 12,
+      });
+      assert.ok(metric);
+      const advisory = livePrimaryMetricIsAdvisory(module) ? " (advisory)" : "";
+      assert.equal(
+        renderedText(rows[index]),
+        `${LIVE_MODULE_LABELS[module]}: 2 daily closes · ${metric.label}${advisory} avg 12.0% · min 11.0%`,
+      );
+    }
+  } finally {
+    if (renderer) act(() => renderer!.unmount());
+    loader._load = originalLoad;
   }
-  assert.deepEqual(
-    [...mirrored.entries()].sort(),
-    [...expected.entries()].sort(),
-    "WindowAnalysis.tsx METRIC_LABELS has drifted from moduleDisplay.ts",
-  );
 });
 
 if (failures > 0) {

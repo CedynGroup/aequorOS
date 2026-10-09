@@ -1,15 +1,16 @@
-'use client';
+"use client";
 
-import { useId, type ReactNode } from 'react';
-import { Info } from 'lucide-react';
+import { useId, type ReactNode } from "react";
+import { Info } from "lucide-react";
 
-export type InfoTipPlacement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
+export type InfoTipPlacement =
+  "bottom-start" | "bottom-end" | "top-start" | "top-end";
 
 const PLACEMENT: Record<InfoTipPlacement, string> = {
-  'bottom-start': 'top-full left-0 mt-2',
-  'bottom-end': 'top-full right-0 mt-2',
-  'top-start': 'bottom-full left-0 mb-2',
-  'top-end': 'bottom-full right-0 mb-2',
+  "bottom-start": "top-full left-0 mt-2",
+  "bottom-end": "top-full right-0 mt-2",
+  "top-start": "bottom-full left-0 mb-2",
+  "top-end": "bottom-full right-0 mb-2",
 };
 
 /**
@@ -20,8 +21,8 @@ const PLACEMENT: Record<InfoTipPlacement, string> = {
  */
 export function InfoTip({
   label,
-  placement = 'bottom-start',
-  width = 'w-72',
+  placement = "bottom-start",
+  width = "w-72",
   children,
 }: {
   label: string;
@@ -43,7 +44,7 @@ export function InfoTip({
       <span
         role="tooltip"
         id={id}
-        className={`pointer-events-none absolute z-50 ${width} rounded border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
+        className={`pointer-events-none absolute z-50 ${width} rounded-sm border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
       >
         {children}
       </span>

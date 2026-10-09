@@ -225,7 +225,7 @@ export default function ExpressionEditor({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search"
-              className="w-full bg-transparent text-caption text-navy outline-none"
+              className="w-full bg-transparent text-caption text-navy outline-hidden"
             />
           </label>
           {figures.length === 0 ? (
@@ -241,13 +241,14 @@ export default function ExpressionEditor({
                     type="button"
                     disabled={disabled}
                     onClick={() => insert(figure.id)}
-                    className="w-full rounded px-1 py-1 text-left hover:bg-surface disabled:opacity-60"
+                    className="w-full rounded-sm px-1 py-1 text-left hover:bg-surface disabled:opacity-60"
                   >
                     <span className="block text-caption text-navy">
                       {figure.label}
                     </span>
                     <span className="block font-mono text-micro text-slate">
-                      {figureReference(figure.id)} · {moduleLabel(figure.module)}
+                      {figureReference(figure.id)} ·{" "}
+                      {moduleLabel(figure.module)}
                     </span>
                   </button>
                 </li>
@@ -284,11 +285,11 @@ export default function ExpressionEditor({
             ))}
           </dl>
           <p className="mt-2 text-caption text-slate">
-            Where a formula compares periods, write which period it compares over
-            — {PERIOD_GRAINS.map((grain) => grain.word).join(", ")} — so the
-            measure means the same comparison everywhere it is used. A formula can
-            look back up to {MAX_LAG_PERIODS} periods, and no further than the
-            history this deployment keeps.
+            Where a formula compares periods, write which period it compares
+            over — {PERIOD_GRAINS.map((grain) => grain.word).join(", ")} — so
+            the measure means the same comparison everywhere it is used. A
+            formula can look back up to {MAX_LAG_PERIODS} periods, and no
+            further than the history this deployment keeps.
           </p>
         </section>
       </div>

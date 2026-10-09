@@ -651,7 +651,7 @@ export default function SigningWorkspace({
             type="button"
             aria-label="Close the signing workspace"
             onClick={onClose}
-            className="w-9 h-9 rounded text-slate hover:bg-surface inline-flex items-center justify-center"
+            className="w-9 h-9 rounded-sm text-slate hover:bg-surface inline-flex items-center justify-center"
           >
             <X size={16} aria-hidden />
           </button>
@@ -812,7 +812,7 @@ export default function SigningWorkspace({
               rows={2}
               maxLength={500}
               onChange={(event) => setReason(event.target.value)}
-              className="w-full rounded border border-border bg-surface px-2.5 py-2 text-body text-navy"
+              className="w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-body text-navy"
             />
           </label>
 
@@ -933,7 +933,7 @@ function SendBackPanel({
           maxLength={2000}
           onChange={(event) => onNoteChange(event.target.value)}
           placeholder="e.g. Line 12 double-counts the placement maturing 2 April."
-          className="w-full rounded border border-border bg-surface px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+          className="w-full rounded-sm border border-border bg-surface px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
         />
       </label>
       <button
@@ -1101,7 +1101,7 @@ function Toolbar({
         aria-label="Previous page"
         disabled={pageIndex === 0}
         onClick={() => onPage(pageIndex - 1)}
-        className="w-8 h-8 rounded border border-border text-slate hover:bg-surface disabled:opacity-40 inline-flex items-center justify-center"
+        className="w-8 h-8 rounded-sm border border-border text-slate hover:bg-surface disabled:opacity-40 inline-flex items-center justify-center"
       >
         <ChevronLeft size={14} aria-hidden />
       </button>
@@ -1113,7 +1113,7 @@ function Toolbar({
         aria-label="Next page"
         disabled={pageIndex >= pageCount - 1}
         onClick={() => onPage(pageIndex + 1)}
-        className="w-8 h-8 rounded border border-border text-slate hover:bg-surface disabled:opacity-40 inline-flex items-center justify-center"
+        className="w-8 h-8 rounded-sm border border-border text-slate hover:bg-surface disabled:opacity-40 inline-flex items-center justify-center"
       >
         <ChevronRight size={14} aria-hidden />
       </button>
@@ -1123,7 +1123,7 @@ function Toolbar({
           type="button"
           aria-label="Zoom out"
           onClick={() => step(-1)}
-          className="w-8 h-8 rounded border border-border text-slate hover:bg-surface inline-flex items-center justify-center"
+          className="w-8 h-8 rounded-sm border border-border text-slate hover:bg-surface inline-flex items-center justify-center"
         >
           <Minus size={14} aria-hidden />
         </button>
@@ -1134,7 +1134,7 @@ function Toolbar({
           type="button"
           aria-label="Zoom in"
           onClick={() => step(1)}
-          className="w-8 h-8 rounded border border-border text-slate hover:bg-surface inline-flex items-center justify-center"
+          className="w-8 h-8 rounded-sm border border-border text-slate hover:bg-surface inline-flex items-center justify-center"
         >
           <Plus size={14} aria-hidden />
         </button>

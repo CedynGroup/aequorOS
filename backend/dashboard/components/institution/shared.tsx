@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared vocabulary + form primitives for the Institution Profile register:
@@ -8,8 +8,8 @@
  * Display copy only — the generated contracts stay the source of truth.
  */
 
-import type { ReactNode } from 'react';
-import { Loader2, Save } from 'lucide-react';
+import type { ReactNode } from "react";
+import { Loader2, Save } from "lucide-react";
 import type {
   LicenseStatus,
   OutletStatus,
@@ -18,63 +18,67 @@ import type {
   PartyType,
   ProductStatus,
   RelatedPartyRoleCode,
-} from '@aequoros/risk-service-api';
-import { RelatedPartyRoleCode as RoleCodes } from '@aequoros/risk-service-api';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { labelize } from '@/lib/api/values';
+} from "@aequoros/risk-service-api";
+import { RelatedPartyRoleCode as RoleCodes } from "@aequoros/risk-service-api";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { labelize } from "@/lib/api/values";
 
 // ---------------------------------------------------------------------------
 // Labels + pills
 // ---------------------------------------------------------------------------
 
 export const PARTY_TYPE_LABELS: Record<PartyType, string> = {
-  individual: 'Individual',
-  legal_entity: 'Legal entity',
+  individual: "Individual",
+  legal_entity: "Legal entity",
 };
 
 export function PartyStatusPill({ status }: { status: PartyStatus }) {
   return (
-    <StatusPill tone={status === 'active' ? 'success' : 'slate'}>
+    <StatusPill tone={status === "active" ? "success" : "slate"}>
       {labelize(status)}
     </StatusPill>
   );
 }
 
 export const OUTLET_TYPE_LABELS: Record<OutletType, string> = {
-  head_office: 'Head office',
-  branch: 'Branch',
-  agency: 'Agency',
+  head_office: "Head office",
+  branch: "Branch",
+  agency: "Agency",
 };
 
 export function OutletStatusPill({ status }: { status: OutletStatus }) {
   return (
-    <StatusPill tone={status === 'active' ? 'success' : 'slate'}>
+    <StatusPill tone={status === "active" ? "success" : "slate"}>
       {labelize(status)}
     </StatusPill>
   );
 }
 
 const PRODUCT_STATUS_TONES: Record<ProductStatus, StatusTone> = {
-  proposed: 'amber',
-  approved: 'success',
-  withdrawn: 'slate',
+  proposed: "amber",
+  approved: "success",
+  withdrawn: "slate",
 };
 
 export function ProductStatusPill({ status }: { status: ProductStatus }) {
   return (
-    <StatusPill tone={PRODUCT_STATUS_TONES[status]}>{labelize(status)}</StatusPill>
+    <StatusPill tone={PRODUCT_STATUS_TONES[status]}>
+      {labelize(status)}
+    </StatusPill>
   );
 }
 
 const LICENSE_STATUS_TONES: Record<LicenseStatus, StatusTone> = {
-  active: 'success',
-  revoked: 'critical',
-  expired: 'slate',
+  active: "success",
+  revoked: "critical",
+  expired: "slate",
 };
 
 export function LicenseStatusPill({ status }: { status: LicenseStatus }) {
   return (
-    <StatusPill tone={LICENSE_STATUS_TONES[status]}>{labelize(status)}</StatusPill>
+    <StatusPill tone={LICENSE_STATUS_TONES[status]}>
+      {labelize(status)}
+    </StatusPill>
   );
 }
 
@@ -91,7 +95,7 @@ export function roleLabel(role: RelatedPartyRoleCode): string {
 // ---------------------------------------------------------------------------
 
 export const inputCls =
-  'w-full rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light';
+  "w-full rounded-sm border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light";
 
 export function Field({
   label,
@@ -99,7 +103,7 @@ export function Field({
   required = false,
   hint,
   children,
-  className = '',
+  className = "",
 }: {
   label: string;
   htmlFor?: string;
@@ -120,7 +124,9 @@ export function Field({
         ) : null}
       </label>
       {children}
-      {hint && <p className="mt-1 text-micro text-slate leading-relaxed">{hint}</p>}
+      {hint && (
+        <p className="mt-1 text-micro text-slate leading-relaxed">{hint}</p>
+      )}
     </div>
   );
 }
@@ -198,18 +204,18 @@ export function textOrNull(value: string): string | null {
 
 /** Show a nullable read-model value, em-dash when unset. */
 export function dash(value: string | null | undefined): string {
-  return value != null && value !== '' ? value : '—';
+  return value != null && value !== "" ? value : "—";
 }
 
 /** Register date-only strings ("2020-06-30") → "30 Jun 2020"; "—" when unset. */
 export function fmtRegisterDate(value: string | null | undefined): string {
-  if (!value) return '—';
+  if (!value) return "—";
   const parsed = new Date(`${value}T00:00:00Z`);
   if (!Number.isFinite(parsed.getTime())) return value;
-  return parsed.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
+  return parsed.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 }

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Active market data source cards (§9.3): one card per configured connection
@@ -9,7 +9,7 @@
  * displayed — only the fingerprint identifies what is on file.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   CheckCircle2,
   KeyRound,
@@ -17,32 +17,32 @@ import {
   PauseCircle,
   PlayCircle,
   ShieldAlert,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   MarketDataConnectionRead,
   QuotaSummaryRead,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useDisableMarketDataConnection,
   useEnableMarketDataConnection,
   useRevokeMarketDataConnection,
   useUpdateMarketDataConnection,
   useValidateMarketDataConnection,
-} from '@/lib/api/hooks';
-import CredentialFields from './CredentialFields';
-import { fmtLocale } from '@/lib/format';
+} from "@/lib/api/hooks";
+import CredentialFields from "./CredentialFields";
+import { fmtLocale } from "@/lib/format";
 import {
   ConnectionStatusPill,
   fmtWhen,
   vendorName,
   type VendorKey,
-} from './shared';
+} from "./shared";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   if (error instanceof Error) return error.message;
-  return 'The request failed.';
+  return "The request failed.";
 }
 
 function ActionButton({
@@ -50,13 +50,13 @@ function ActionButton({
   disabled,
   icon,
   children,
-  tone = 'default',
+  tone = "default",
 }: {
   onClick: () => void;
   disabled?: boolean;
   icon: React.ReactNode;
   children: React.ReactNode;
-  tone?: 'default' | 'danger';
+  tone?: "default" | "danger";
 }) {
   return (
     <button
@@ -64,9 +64,9 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
-        tone === 'danger'
-          ? 'border-critical/30 text-critical hover:bg-critical-light/40'
-          : 'border-border text-navy hover:bg-surface'
+        tone === "danger"
+          ? "border-critical/30 text-critical hover:bg-critical-light/40"
+          : "border-border text-navy hover:bg-surface"
       }`}
     >
       {icon}
@@ -95,9 +95,9 @@ export default function SourceCard({
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const isVendor = connection.vendor !== 'manual_upload';
-  const isRevoked = connection.status === 'REVOKED';
-  const isDisabled = connection.status === 'DISABLED';
+  const isVendor = connection.vendor !== "manual_upload";
+  const isRevoked = connection.status === "REVOKED";
+  const isDisabled = connection.status === "DISABLED";
   const busy =
     validate.isPending ||
     update.isPending ||
@@ -124,7 +124,7 @@ export default function SourceCard({
       });
       setRotating(false);
       setRotateValues({});
-    }, 'Credentials rotated. The stored set was swapped atomically after configuration validation.');
+    }, "Credentials rotated. The stored set was swapped atomically after configuration validation.");
 
   return (
     <section className="card p-5 space-y-4">
@@ -144,9 +144,9 @@ export default function SourceCard({
             {connection.lastPullStatus && (
               <span
                 className={
-                  connection.lastPullStatus === 'succeeded'
-                    ? 'text-success ml-1.5'
-                    : 'text-critical ml-1.5'
+                  connection.lastPullStatus === "succeeded"
+                    ? "text-success ml-1.5"
+                    : "text-critical ml-1.5"
                 }
               >
                 ({connection.lastPullStatus})
@@ -159,9 +159,12 @@ export default function SourceCard({
           <dd className="font-mono text-navy">
             {quota
               ? `${quota.unitsConsumed.toLocaleString(fmtLocale())} units · ${quota.pullCount} pulls`
-              : '—'}
+              : "—"}
             {quota?.monthlyCap != null && (
-              <span className="text-slate"> / cap {quota.monthlyCap.toLocaleString(fmtLocale())}</span>
+              <span className="text-slate">
+                {" "}
+                / cap {quota.monthlyCap.toLocaleString(fmtLocale())}
+              </span>
             )}
           </dd>
         </div>
@@ -171,7 +174,7 @@ export default function SourceCard({
         </div>
         <div>
           <dt className="text-caption text-slate">
-            {isVendor ? 'Credential fingerprint' : 'Credentials'}
+            {isVendor ? "Credential fingerprint" : "Credentials"}
           </dt>
           <dd
             className="font-mono text-navy truncate"
@@ -180,32 +183,40 @@ export default function SourceCard({
             {isVendor
               ? connection.credentialFingerprint
                 ? `${connection.credentialFingerprint.slice(0, 12)}…`
-                : 'none stored'
-              : 'not required'}
+                : "none stored"
+              : "not required"}
           </dd>
         </div>
       </dl>
 
       {connection.credentialExpiresAt && (
         <p className="text-caption text-slate">
-          Credential expires{' '}
-          <span className="font-mono">{fmtWhen(connection.credentialExpiresAt)}</span> · last
-          validated <span className="font-mono">{fmtWhen(connection.lastValidatedAt)}</span>
+          Credential expires{" "}
+          <span className="font-mono">
+            {fmtWhen(connection.credentialExpiresAt)}
+          </span>{" "}
+          · last validated{" "}
+          <span className="font-mono">
+            {fmtWhen(connection.lastValidatedAt)}
+          </span>
         </p>
       )}
 
       {connection.validationError && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
           <p className="text-body text-navy">{connection.validationError}</p>
         </div>
       )}
 
       {isVendor && (
-        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
-          <p className="text-body font-medium text-navy">Live vendor transport unavailable</p>
+        <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
+          <p className="text-body font-medium text-navy">
+            Live vendor transport unavailable
+          </p>
           <p className="mt-1 text-caption text-slate">
-            Credentials and scopes are retained for onboarding, but this deployment does not send
-            requests to {vendorName(connection.vendor)}. Use manual upload for current market data.
+            Credentials and scopes are retained for onboarding, but this
+            deployment does not send requests to {vendorName(connection.vendor)}
+            . Use manual upload for current market data.
           </p>
         </div>
       )}
@@ -217,7 +228,7 @@ export default function SourceCard({
               onClick={() =>
                 run(
                   () => validate.mutateAsync(connection.id),
-                  'Credential configuration check completed.'
+                  "Credential configuration check completed.",
                 )
               }
               disabled={busy || isDisabled}
@@ -236,7 +247,7 @@ export default function SourceCard({
               disabled={busy}
               icon={<KeyRound size={13} aria-hidden />}
             >
-              {rotating ? 'Cancel rotation' : 'Rotate credentials'}
+              {rotating ? "Cancel rotation" : "Rotate credentials"}
             </ActionButton>
           )}
           {isDisabled ? (
@@ -244,7 +255,7 @@ export default function SourceCard({
               onClick={() =>
                 run(
                   () => enable.mutateAsync(connection.id),
-                  'Connection re-validated and enabled.'
+                  "Connection re-validated and enabled.",
                 )
               }
               disabled={busy}
@@ -257,7 +268,7 @@ export default function SourceCard({
               onClick={() =>
                 run(
                   () => disable.mutateAsync(connection.id),
-                  'Connection disabled. Scheduled pulls are paused; credentials stay stored.'
+                  "Connection disabled. Scheduled pulls are paused; credentials stay stored.",
                 )
               }
               disabled={busy}
@@ -271,8 +282,8 @@ export default function SourceCard({
               if (
                 window.confirm(
                   `Revoke the ${vendorName(connection.vendor)} connection "${connection.displayName}"? ` +
-                    'Stored credentials are cryptographically wiped and scheduled pulls stop. ' +
-                    'Historical data already pulled remains valid.'
+                    "Stored credentials are cryptographically wiped and scheduled pulls stop. " +
+                    "Historical data already pulled remains valid.",
                 )
               ) {
                 void run(() => revoke.mutateAsync(connection.id));
@@ -288,14 +299,14 @@ export default function SourceCard({
       )}
 
       {rotating && isVendor && !isRevoked && (
-        <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
+        <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
-            Enter replacement credentials from {vendorName(connection.vendor)}. They are checked
-            for configuration validity before the stored set is swapped; no vendor request is sent
-            in this deployment.
+            Enter replacement credentials from {vendorName(connection.vendor)}.
+            They are checked for configuration validity before the stored set is
+            swapped; no vendor request is sent in this deployment.
           </p>
           <CredentialFields
-            vendor={connection.vendor as Exclude<VendorKey, 'manual_upload'>}
+            vendor={connection.vendor as Exclude<VendorKey, "manual_upload">}
             values={rotateValues}
             onChange={(key, value) =>
               setRotateValues((current) => ({ ...current, [key]: value }))
@@ -305,8 +316,11 @@ export default function SourceCard({
           <button
             type="button"
             onClick={() => void submitRotation()}
-            disabled={busy || Object.values(rotateValues).every((value) => !value.trim())}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={
+              busy ||
+              Object.values(rotateValues).every((value) => !value.trim())
+            }
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
               <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -319,7 +333,7 @@ export default function SourceCard({
       )}
 
       {actionError && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{actionError}</p>
         </div>
       )}

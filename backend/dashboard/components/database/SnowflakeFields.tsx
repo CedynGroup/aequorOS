@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Snowflake warehouse control — the friendly path for onboarding a Snowflake
@@ -23,24 +23,24 @@
  * wallet and password fields.
  */
 
-import { useRef, useState } from 'react';
-import { FileKey2, Loader2 } from 'lucide-react';
-import type { SnowflakeConfig } from './ConnectionForm';
+import { useRef, useState } from "react";
+import { FileKey2, Loader2 } from "lucide-react";
+import type { SnowflakeConfig } from "./ConnectionForm";
 
 /** Read a private-key file's raw text (`.p8` / `.pem` / `.key` are PEM text). */
 function fileToText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onload = () => resolve(String(reader.result ?? ""));
     reader.onerror = () =>
-      reject(reader.error ?? new Error('Could not read the private key file.'));
+      reject(reader.error ?? new Error("Could not read the private key file."));
     reader.readAsText(file);
   });
 }
 
 const inputClass =
-  'w-full px-3 py-1.5 rounded border border-border text-body text-navy font-mono';
-const labelClass = 'block text-caption font-medium text-slate mb-1';
+  "w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono";
+const labelClass = "block text-caption font-medium text-slate mb-1";
 
 export default function SnowflakeFields({
   config,
@@ -57,7 +57,7 @@ export default function SnowflakeFields({
   idPrefix: string;
   /** required: onboarding a new connection. rotate: editing an existing one,
    * where a key may already be stored (but is never returned). */
-  mode: 'required' | 'rotate';
+  mode: "required" | "rotate";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -73,17 +73,17 @@ export default function SnowflakeFields({
     try {
       const material = await fileToText(file);
       if (!material.trim()) {
-        throw new Error('The private key file is empty.');
+        throw new Error("The private key file is empty.");
       }
-      onCredChange('snowflake_private_key', material);
+      onCredChange("snowflake_private_key", material);
       setFileName(file.name);
     } catch (error) {
-      onCredChange('snowflake_private_key', '');
+      onCredChange("snowflake_private_key", "");
       setFileName(null);
       setReadError(
         error instanceof Error
           ? error.message
-          : 'Could not read the private key file.',
+          : "Could not read the private key file.",
       );
     } finally {
       setReading(false);
@@ -91,14 +91,14 @@ export default function SnowflakeFields({
   };
 
   const clearKey = () => {
-    onCredChange('snowflake_private_key', '');
+    onCredChange("snowflake_private_key", "");
     setFileName(null);
     setReadError(null);
-    if (inputRef.current) inputRef.current.value = '';
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
-    <fieldset className="rounded border border-border p-4 space-y-4">
+    <fieldset className="rounded-sm border border-border p-4 space-y-4">
       <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
         Snowflake warehouse
       </legend>
@@ -117,7 +117,9 @@ export default function SnowflakeFields({
             id={`${idPrefix}-account`}
             type="text"
             value={config.account}
-            onChange={(event) => onConfigChange({ account: event.target.value })}
+            onChange={(event) =>
+              onConfigChange({ account: event.target.value })
+            }
             placeholder="orgname-accountname"
             className={inputClass}
           />
@@ -134,7 +136,9 @@ export default function SnowflakeFields({
             id={`${idPrefix}-warehouse`}
             type="text"
             value={config.warehouse}
-            onChange={(event) => onConfigChange({ warehouse: event.target.value })}
+            onChange={(event) =>
+              onConfigChange({ warehouse: event.target.value })
+            }
             placeholder="REPORTING_WH"
             className={inputClass}
           />
@@ -182,8 +186,10 @@ export default function SnowflakeFields({
         <input
           type="checkbox"
           checked={config.useStreams}
-          onChange={(event) => onConfigChange({ useStreams: event.target.checked })}
-          className="mt-1 rounded border-border"
+          onChange={(event) =>
+            onConfigChange({ useStreams: event.target.checked })
+          }
+          className="mt-1 rounded-sm border-border"
         />
         <span>
           Use change streams
@@ -207,7 +213,7 @@ export default function SnowflakeFields({
               <FileKey2 size={12} aria-hidden />
               {fileName
                 ? `${fileName} ready to upload`
-                : 'Private key ready to upload'}
+                : "Private key ready to upload"}
               <button
                 type="button"
                 onClick={clearKey}
@@ -222,20 +228,20 @@ export default function SnowflakeFields({
                 id={`${idPrefix}-key`}
                 value=""
                 onChange={(event) =>
-                  onCredChange('snowflake_private_key', event.target.value)
+                  onCredChange("snowflake_private_key", event.target.value)
                 }
                 onPaste={(event) => {
                   event.preventDefault();
-                  const pasted = event.clipboardData.getData('text');
-                  if (pasted) onCredChange('snowflake_private_key', pasted);
+                  const pasted = event.clipboardData.getData("text");
+                  if (pasted) onCredChange("snowflake_private_key", pasted);
                 }}
                 rows={4}
                 placeholder={
-                  '-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----'
+                  "-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----"
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full px-3 py-1.5 rounded border border-border text-caption text-navy font-mono"
+                className="w-full px-3 py-1.5 rounded-sm border border-border text-caption text-navy font-mono"
               />
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <input
@@ -244,7 +250,7 @@ export default function SnowflakeFields({
                   type="file"
                   accept=".p8,.pem,.key"
                   onChange={(event) => void handleFile(event.target.files?.[0])}
-                  className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
+                  className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded-sm file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
                 />
                 {reading && (
                   <span className="inline-flex items-center gap-1.5 text-caption text-slate">
@@ -254,10 +260,10 @@ export default function SnowflakeFields({
                 )}
               </div>
               <p className="mt-1 text-caption text-slate">
-                Paste the PEM or upload a .p8 / .pem / .key file. Stored encrypted
-                and never displayed again.
-                {mode === 'rotate' &&
-                  ' A key may already be stored — provide a new one to replace it.'}
+                Paste the PEM or upload a .p8 / .pem / .key file. Stored
+                encrypted and never displayed again.
+                {mode === "rotate" &&
+                  " A key may already be stored — provide a new one to replace it."}
               </p>
             </>
           )}
@@ -273,9 +279,9 @@ export default function SnowflakeFields({
           <input
             id={`${idPrefix}-passphrase`}
             type="password"
-            value={values.private_key_passphrase ?? ''}
+            value={values.private_key_passphrase ?? ""}
             onChange={(event) =>
-              onCredChange('private_key_passphrase', event.target.value)
+              onCredChange("private_key_passphrase", event.target.value)
             }
             placeholder="Only if the private key is encrypted"
             autoComplete="off"

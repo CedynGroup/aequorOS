@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * A return after it has been filed — board 5 of the approved design.
@@ -21,37 +21,46 @@
  * Jurisdiction comes from the active bank; there are no country literals here.
  */
 
-import { useState } from 'react';
-import { Download, Loader2, RefreshCw } from 'lucide-react';
+import { useState } from "react";
+import { Download, Loader2, RefreshCw } from "lucide-react";
 import type {
   PackageChainRead,
   RegulatoryPackageSummaryRead,
   SubmissionEventRead,
-} from '@aequoros/risk-service-api';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { centralBankName, regShort, submissionPortal } from '@/lib/format';
-import { fmtDateUTC, fmtTimestamp } from '@/lib/api/values';
+} from "@aequoros/risk-service-api";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { centralBankName, regShort, submissionPortal } from "@/lib/format";
+import { fmtDateUTC, fmtTimestamp } from "@/lib/api/values";
 import {
   FILED_ROLE_LABEL,
   filedArtifacts,
   shortChecksum,
-} from '@/lib/submissions/filedArtifacts';
+} from "@/lib/submissions/filedArtifacts";
 import {
   CHANNEL_LABELS,
   RehearsalNotice,
   RehearsalPill,
   fmtBytes,
-} from './shared';
+} from "./shared";
 
 /** Where the regulator has it. Pulled, never pushed — see the module note. */
-const REGULATOR_STEPS = ['Sent', 'Received', 'Under review', 'Decision'] as const;
+const REGULATOR_STEPS = [
+  "Sent",
+  "Received",
+  "Under review",
+  "Decision",
+] as const;
 
-function stepIndexFor(latestPollStatus: string | null, hasReference: boolean): number {
-  if (latestPollStatus === 'acknowledged') return 3;
-  if (latestPollStatus === 'rejected' || latestPollStatus === 'declined') return 3;
-  if (latestPollStatus === 'pending') return 2;
+function stepIndexFor(
+  latestPollStatus: string | null,
+  hasReference: boolean,
+): number {
+  if (latestPollStatus === "acknowledged") return 3;
+  if (latestPollStatus === "rejected" || latestPollStatus === "declined")
+    return 3;
+  if (latestPollStatus === "pending") return 2;
   return hasReference ? 1 : 0;
 }
 
@@ -83,13 +92,13 @@ export default function FiledRecord({
 
   const submitted = [...events]
     .reverse()
-    .find((event) => event.event === 'submitted');
+    .find((event) => event.event === "submitted");
   const latestPoll = [...events]
     .reverse()
-    .find((event) => event.event === 'status_poll');
+    .find((event) => event.event === "status_poll");
   const pollStatus =
-    typeof latestPoll?.detail?.['poll_status'] === 'string'
-      ? (latestPoll.detail['poll_status'] as string)
+    typeof latestPoll?.detail?.["poll_status"] === "string"
+      ? (latestPoll.detail["poll_status"] as string)
       : null;
 
   // The evidence, read from the submission record itself.
@@ -146,16 +155,18 @@ export default function FiledRecord({
         <div className="grid gap-4 md:grid-cols-2">
           <dl className="space-y-2 text-caption">
             <Row label={`${portal} reference`} mono>
-              {submitted?.externalRef ?? 'Not returned'}
+              {submitted?.externalRef ?? "Not returned"}
             </Row>
             <Row label="Transmitted" mono>
-              {submitted ? fmtTimestamp(submitted.occurredAt) : '—'}
+              {submitted ? fmtTimestamp(submitted.occurredAt) : "—"}
             </Row>
             <Row label="Channel">
-              {submitted ? (CHANNEL_LABELS[submitted.channel] ?? submitted.channel) : '—'}
+              {submitted
+                ? (CHANNEL_LABELS[submitted.channel] ?? submitted.channel)
+                : "—"}
             </Row>
             <Row label="Submission revision" mono>
-              {pkg.submissionRevision ?? '—'}
+              {pkg.submissionRevision ?? "—"}
             </Row>
           </dl>
 
@@ -177,10 +188,10 @@ export default function FiledRecord({
                   <span
                     className={
                       index < step
-                        ? 'text-positive text-caption'
+                        ? "text-positive text-caption"
                         : index === step
-                          ? 'text-caption font-medium text-navy'
-                          : 'text-caption text-slate'
+                          ? "text-caption font-medium text-navy"
+                          : "text-caption text-slate"
                     }
                   >
                     {label}
@@ -188,10 +199,10 @@ export default function FiledRecord({
                 </li>
               ))}
             </ol>
-            <p className="mt-2 rounded border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
+            <p className="mt-2 rounded-sm border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
               {/* No background poller exists. A timeline that advanced on its
                   own would be fiction, so the screen says who has to ask. */}
-              {pollStatus === 'acknowledged'
+              {pollStatus === "acknowledged"
                 ? `${centralBankName()} has accepted this return. The obligation for this reporting date is discharged.`
                 : `${centralBankName()} has the return and has not yet decided. Status does not arrive on its own — press Check ${regShort()} status to pull it.`}
             </p>
@@ -220,42 +231,57 @@ export default function FiledRecord({
           <table className="w-full text-caption">
             <thead>
               <tr className="border-b border-border">
-                <th scope="col" className="py-1.5 text-left font-medium text-slate">
+                <th
+                  scope="col"
+                  className="py-1.5 text-left font-medium text-slate"
+                >
                   File
                 </th>
-                <th scope="col" className="py-1.5 text-left font-medium text-slate">
+                <th
+                  scope="col"
+                  className="py-1.5 text-left font-medium text-slate"
+                >
                   Role in the filing
                 </th>
-                <th scope="col" className="w-40 py-1.5 text-left font-medium text-slate">
+                <th
+                  scope="col"
+                  className="w-40 py-1.5 text-left font-medium text-slate"
+                >
                   Digest
                 </th>
-                <th scope="col" className="w-24 py-1.5 text-right font-medium text-slate">
+                <th
+                  scope="col"
+                  className="w-24 py-1.5 text-right font-medium text-slate"
+                >
                   Size
                 </th>
               </tr>
             </thead>
             <tbody>
               {(showAllFiles ? files : files.slice(0, 3)).map((file) => (
-                <tr key={file.filename} className="border-b border-border-light">
+                <tr
+                  key={file.filename}
+                  className="border-b border-border-light"
+                >
                   <td className="py-2 pr-3 font-mono text-micro text-navy">
                     {file.filename}
                   </td>
                   <td
                     className={`py-2 pr-3 ${
-                      file.role === 'signed_record'
-                        ? 'text-positive'
-                        : file.role === 'formula_copy'
-                          ? 'text-warning'
-                          : 'text-slate'
+                      file.role === "signed_record"
+                        ? "text-positive"
+                        : file.role === "formula_copy"
+                          ? "text-warning"
+                          : "text-slate"
                     }`}
                   >
                     {FILED_ROLE_LABEL[file.role]}
                   </td>
                   <td className="py-2 pr-3 font-mono text-micro text-slate">
-                    {shortChecksum(file.checksum) ?? '—'}
+                    {shortChecksum(file.checksum) ?? "—"}
                   </td>
                   <td className="py-2 text-right text-slate">
-                    {file.sizeBytes === null ? '—' : fmtBytes(file.sizeBytes)}
+                    {file.sizeBytes === null ? "—" : fmtBytes(file.sizeBytes)}
                   </td>
                 </tr>
               ))}
@@ -268,7 +294,7 @@ export default function FiledRecord({
             onClick={() => setShowAllFiles((open) => !open)}
             className="mt-2 text-caption font-medium text-action hover:underline"
           >
-            {showAllFiles ? 'Show fewer' : `Show all ${files.length}`}
+            {showAllFiles ? "Show fewer" : `Show all ${files.length}`}
           </button>
         )}
       </SectionCard>
@@ -291,7 +317,9 @@ export default function FiledRecord({
                     </span>
                     <span className="text-slate">{stage.title}</span>
                     <span className="text-slate">round {decision.round}</span>
-                    <span>{decisionLabels[decision.decision] ?? decision.decision}</span>
+                    <span>
+                      {decisionLabels[decision.decision] ?? decision.decision}
+                    </span>
                     {decision.comment && (
                       <span className="text-slate">— {decision.comment}</span>
                     )}
@@ -307,8 +335,8 @@ export default function FiledRecord({
         <SectionCard title={`What ${regShort()} can come back with`}>
           <ul className="space-y-3 text-caption leading-relaxed text-navy/85">
             <li>
-              <StatusPill tone="success">Acknowledged</StatusPill>{' '}
-              accepted. The obligation for this reporting date is discharged.
+              <StatusPill tone="success">Acknowledged</StatusPill> accepted. The
+              obligation for this reporting date is discharged.
             </li>
             <li>
               <StatusPill tone="amber">Rejected</StatusPill> returned for
@@ -323,7 +351,7 @@ export default function FiledRecord({
           {onRequestResubmission && (
             <p className="mt-3 border-t border-border-light pt-3 text-caption text-slate">
               To change a return after it is filed you must ask {regShort()} for
-              a resubmission.{' '}
+              a resubmission.{" "}
               <button
                 type="button"
                 onClick={onRequestResubmission}
@@ -351,7 +379,7 @@ function Row({
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-slate">{label}</dt>
-      <dd className={`text-navy ${mono ? 'font-mono text-micro' : ''}`}>
+      <dd className={`text-navy ${mono ? "font-mono text-micro" : ""}`}>
         {children}
       </dd>
     </div>

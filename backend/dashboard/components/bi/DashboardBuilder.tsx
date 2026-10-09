@@ -251,7 +251,7 @@ export default function DashboardBuilder({
                       )
                     }
                     aria-label={`Width of ${widget.title} in columns`}
-                    className="w-14 rounded border border-border bg-white px-1 py-0.5 text-micro text-navy"
+                    className="w-14 rounded-sm border border-border bg-white px-1 py-0.5 text-micro text-navy"
                   />
                 </label>
                 <label className="inline-flex items-center gap-1">
@@ -269,7 +269,7 @@ export default function DashboardBuilder({
                       )
                     }
                     aria-label={`Height of ${widget.title} in rows`}
-                    className="w-14 rounded border border-border bg-white px-1 py-0.5 text-micro text-navy"
+                    className="w-14 rounded-sm border border-border bg-white px-1 py-0.5 text-micro text-navy"
                   />
                 </label>
               </div>
@@ -307,7 +307,7 @@ export default function DashboardBuilder({
                 }
                 maxLength={DASHBOARD_TITLE_MAX}
                 placeholder="Weekly funding review"
-                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -325,7 +325,7 @@ export default function DashboardBuilder({
                 }
                 maxLength={DASHBOARD_DESCRIPTION_MAX}
                 placeholder="Optional"
-                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
               />
             </label>
           </div>
@@ -345,7 +345,7 @@ export default function DashboardBuilder({
               {VISIBILITIES.map((option) => (
                 <label
                   key={option.value}
-                  className="flex items-start gap-2 rounded px-1 py-1 hover:bg-surface"
+                  className="flex items-start gap-2 rounded-sm px-1 py-1 hover:bg-surface"
                 >
                   <input
                     type="radio"
@@ -387,7 +387,7 @@ export default function DashboardBuilder({
                       visibilityRole: event.target.value,
                     }))
                   }
-                  className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+                  className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
                 >
                   {ADDRESSABLE_ROLES.map((role) => (
                     <option key={role} value={role}>
@@ -484,7 +484,7 @@ export default function DashboardBuilder({
                 onChange={(event) => setChangeNote(event.target.value)}
                 maxLength={CHANGE_NOTE_MAX}
                 placeholder="Optional — one line for the history"
-                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+                className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
               />
             </label>
           )}
