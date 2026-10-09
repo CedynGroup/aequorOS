@@ -87,24 +87,25 @@ def fx_position_refusal(
 ) -> OutcomeDetail | None:
     """The reason this currency's net open position cannot be filed, or ``None``.
 
-    Four conditions, each a *contradiction* rather than a tolerance judgement —
-    no threshold is invented here, because a booked-rate-vs-period-end-spot
-    drift is legitimate and only the impossible states are refused:
+    Missing valuation evidence and contradictory conversions are refused;
+    no tolerance threshold is invented, because a booked-rate-vs-period-end-spot
+    drift is legitimate:
 
     1. A non-zero currency net carried at exactly zero in the reporting unit.
-       That is the D-21 signature — ``fact_derivation._position_row`` converts a
-       position with no ``balance_ghs`` to zero, and zero is a claim that the
-       exposure does not exist.
+       That is the D-21 signature — a position without ``balance_ghs`` still
+       contributes to the currency leg but not the reporting-currency leg.
+       Reporting zero would claim that the exposure does not exist.
     2. The currency net and its reporting-currency equivalent disagreeing in
        DIRECTION. No positive rate turns a long into a short; a whole book whose
        legs are converted inconsistently enough to flip the sign is not a
        revaluation difference, it is a broken conversion.
-    3. No rate at all for a currency that HAS an exposure. This is D-13 proper:
-       the run must refuse rather than count the position at par.
+    3. No rate for an exposure or a hedge delta requiring conversion, even if
+       netting makes both reported nets zero. The run must refuse rather than
+       count an unvalued hedge at zero or a foreign position at par.
     4. A non-positive rate. Zero or negative is not an exchange rate; a zero
        spot is what an all-unconverted book implies (0 / net_ccy).
 
-    A currency with no rate and no exposure on either leg is not listed here —
+    A currency with no rate, no exposure on either leg and no hedge delta is not listed here —
     the rate was genuinely not required, nothing is misstated, and refusing a
     filed run over an absent display rate on an empty position would be a false
     refusal. The FX reader counts those separately for disclosure.

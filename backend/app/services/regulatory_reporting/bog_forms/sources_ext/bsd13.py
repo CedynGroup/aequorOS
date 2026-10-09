@@ -46,14 +46,9 @@ Conventions (documented in docs/bog_returns/bsd13_line_map.md):
   TRADING POSITION reconciles to the fact's ``net_derivatives_ccy``.
 * Sales are returned NEGATIVE: the template's own formulas are
   ``Net Spot = Spot Purchase + Spot Sale`` with the caption "(L + or S −)".
-* **No rate is ever assumed.** Every cedi-equivalent aggregation on this form
-  (the *Other Currencies* column, everywhere it appears) goes through
-  :func:`_to_report_currency`, which counts what it cannot convert, and the
-  cell then refuses via :func:`_refuse_unconverted` — ``MISSING_REQUIRED_INPUT``
-  naming the currencies, blank cell, reason in the completion notes. Parity
-  with the reporting currency is not a fallback: it is a rate nobody governs,
-  and on a filed net open position it reports the foreign amount itself
-  (audit 2026-08-22 D-13 / D-21).
+* Reporting-currency conversion and NOP eligibility conventions are owned by
+  ``docs/bog_returns/bsd13_line_map.md``; NOP totals use
+  :func:`_require_valued_nop_facts` even when already carried in cedis.
 """
 
 from __future__ import annotations

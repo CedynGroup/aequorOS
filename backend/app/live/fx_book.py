@@ -2,10 +2,11 @@
 
 from collections.abc import Collection
 from datetime import date
-from typing import cast
+from typing import Protocol, cast
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.tenancy import TenantContext
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
@@ -19,6 +20,12 @@ from app.live.position_book import INCLUDED_VALIDATION_STATUSES
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_run import RegulatoryRun
 from app.policy.public import base_currency
+
+
+class _JsonStringExpression(Protocol):
+    """Type the dynamically exposed SQLAlchemy JSON string accessor."""
+
+    def as_string(self) -> ColumnElement[str]: ...
 
 
 def required_fx_currencies(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> set[str]:
@@ -39,8 +46,22 @@ def required_fx_currencies_by_date(
             CanonicalPositionSnapshot.as_of_date,
             CanonicalPosition.position_type,
             CanonicalPosition.currency,
-            case((hedge, CanonicalPositionSnapshot.attributes["sell_currency"].as_string())),
-            case((hedge, CanonicalPositionSnapshot.attributes["buy_currency"].as_string())),
+            case(
+                (
+                    hedge,
+                    cast(
+                        _JsonStringExpression, CanonicalPositionSnapshot.attributes["sell_currency"]
+                    ).as_string(),
+                )
+            ),
+            case(
+                (
+                    hedge,
+                    cast(
+                        _JsonStringExpression, CanonicalPositionSnapshot.attributes["buy_currency"]
+                    ).as_string(),
+                )
+            ),
         )
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
         .where(

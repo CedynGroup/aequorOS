@@ -316,18 +316,23 @@ on one canonical store — the live tier for intraday awareness, the official ti
   has fewer observations than the configured window, so a short upload still yields a best-effort
   stress instead of killing the whole FX module. On full history the window is used unchanged.
 - **NOP currency coverage.** Notice BG/FMD/2026/07 ¶1(a)–(b): derivation retains every
-  foreign currency independently of return history. A currency without history needs an
-  ingested current FX quote; full FX analysis refuses until its history is supplied.
+  foreign currency in the on-balance and FX-hedge NOP book independently of return history.
+  Valuing an exposure without history needs an ingested current FX quote; the implied
+  position-book fallback remains available only with history. Full FX analysis requires
+  history for every measured currency. Flat currencies needing no rate are disclosed
+  separately in `rate_not_required_currencies` and count toward stored-run coverage.
   `app/live/fx_book.py` checks facts and filing runs against accepted positions at the exact
-  source date, so older partial runs cannot supply DBK, FX-NOP or BSD13 totals. Dashboard
+  source date, and checks filing runs against official FX facts. Incomplete DBK and FX-NOP
+  evidence returns HTTP 409 naming the missing currency; BSD13 and BSD1B cells using an
+  incomplete run stay blank with a data-quality refusal. BSD13 also applies the shared
+  valuation refusals to NOP totals, including values already carried in cedis. Dashboard
   coverage uses one scoped, database-deduplicated currency projection for the whole window,
   including both FX-hedge legs without hydrating positions, balances, products or counterparties.
   Stored trend points are checked against each date's accepted currency universe and official
   FX facts; incomplete historical points are omitted while direct selection still names the
   missing currency in its refusal. A complete newer or current headline remains available.
-  The NOP-only workbench can compute
-  from complete valued positions without a VaR history. NOF, long-position and contingent
-  rules are separate from this coverage check.
+  The NOP-only workbench can compute from complete valued positions without a VaR history.
+  NOF, long-position and contingent rules are separate from this coverage check.
   Capital FX aggregation has its own writer and retains its existing basis;
   capital-side FX valuation refusal is tracked in
   [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).

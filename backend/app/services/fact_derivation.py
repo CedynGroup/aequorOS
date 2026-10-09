@@ -160,8 +160,8 @@ market_risk / fx_position
     different books and ``regulatory_fx`` refuses the run. LC_GUARANTEE is
     off-balance and excluded from the NOP.
     Every currency has an ``fx_position`` row regardless of return history.
-    NOP uses the current governed quote; absent quote or VaR history is a named
-    refusal rather than a partial currency book.
+    NOP quote and history requirements follow the currency coverage contract in
+    ``ARCHITECTURE.md`` §3b; missing evidence produces a named refusal.
     ``net_long_fx`` / ``net_short_fx`` retain the capital calculation's existing
     booked/implied-rate basis, computed separately from the Notice NOP facts.
     The stricter NOP quote requirement does not change that capital basis; its
@@ -3204,8 +3204,9 @@ def _resolve_spot(
     Audit §3: the pre-audit form returned ``1.0`` when neither an ingested spot
     nor an implied rate existed, and that 1.0 then converted hedge deltas — a
     foreign-currency exposure silently valued at par with the base currency.
-    A rate is never invented: absence returns ``None``. The currency remains
-    in the FX facts, with a missing-rate refusal when valuation needs a rate.
+    A rate is never invented: absence returns ``None``. The Notice NOP caller
+    retains the currency with a missing-rate refusal when valuation needs a rate;
+    the separate capital caller preserves its existing unconvertible-hedge exclusion.
 
     ``leg.leg_complete`` says whether EVERY position in this currency carried an
     ingested reporting-currency balance. When it did not, the implied fallback is
