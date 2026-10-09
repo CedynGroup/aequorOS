@@ -74,6 +74,7 @@ _NOTES_MAX = 2000
 
 _PURPOSE_FOR_KIND: dict[str, str] = {
     "annual": "annual",
+    "rehearsal": "annual",
     "material_change": "update",
     "regulator_request": "update",
 }
