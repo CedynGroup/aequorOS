@@ -114,11 +114,15 @@ def test_database_refuses_downgrade_options(production: None, query: str) -> Non
         database_connect_args(f"postgresql+psycopg://u@db.example/bank?{query}")
 
 
-def test_database_pins_verified_tls(production: None) -> None:
+def test_database_pins_verified_tls(
+    production: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cert, _key = certificate(tmp_path)
+    monkeypatch.setenv("TLS_CA_BUNDLE", str(cert))
     args = database_connect_args("postgresql+psycopg://u@db.example/bank?sslmode=verify-full")
     assert args["sslmode"] == "verify-full"
     assert args["ssl_min_protocol_version"] == "TLSv1.2"
-    assert args["sslrootcert"]
+    assert args["sslrootcert"] == str(cert)
     assert args["gssencmode"] == "disable"
 
 
@@ -460,11 +464,15 @@ def test_listener_runtime_requires_tls12(
     assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
 
-def test_postgres_plaintext_peer_cannot_receive_startup_credentials(production: None) -> None:
+def test_postgres_plaintext_peer_cannot_receive_startup_credentials(
+    production: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from sqlalchemy.exc import OperationalError  # noqa: PLC0415
 
     from app.db.session import get_engine  # noqa: PLC0415
 
+    cert, _key = certificate(tmp_path)
+    monkeypatch.setenv("TLS_CA_BUNDLE", str(cert))
     received: list[bytes] = []
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
