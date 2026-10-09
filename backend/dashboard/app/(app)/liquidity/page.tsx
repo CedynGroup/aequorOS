@@ -662,7 +662,7 @@ export default function LiquidityCockpit() {
             {/* Validations */}
             <SectionCard
               title="Validations"
-              subtitle="Regulatory rule evaluation for this period"
+              subtitle="Basel reference ratios assessed against governed monitoring thresholds"
               noPadding
               computedAt={computedAt}
               footer={provenance}

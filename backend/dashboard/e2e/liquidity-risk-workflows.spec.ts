@@ -167,6 +167,31 @@ test.describe("Liquidity functional workflow", () => {
     );
     await expectKpi(page, "CFP readiness", "No approved plan");
 
+    const validations = section(page, "Validations");
+    await expect(validations).toContainText(
+      "Basel reference ratios assessed against governed monitoring thresholds",
+    );
+    for (const ratio of ["LCR", "NSFR"]) {
+      const row = validations.getByRole("listitem").filter({
+        has: page.getByText(`${ratio} governed monitoring threshold`, {
+          exact: true,
+        }),
+      });
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText(
+        "100% governed monitoring threshold (Basel reference ratio)",
+      );
+      await expect(row.getByText("Pass", { exact: true })).toBeVisible();
+    }
+    await expect(validations).not.toContainText("regulatory minimum");
+    await expect(validations).not.toContainText("Above Minimum");
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-settled.png"),
+        fullPage: true,
+      });
+    }
+
     const outflows = section(page, "Cash outflows").getByRole("table");
     for (const line of OUTFLOWS) {
       await expectRow(outflows, line.label, lineCells(line));

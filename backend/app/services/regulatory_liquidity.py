@@ -1156,7 +1156,7 @@ def _validation_rows(
             "error",
             f"LCR of {lcr_pct}% is "
             + ("at or above" if lcr_above else "below")
-            + f" the {lcr_min}% regulatory minimum.",
+            + f" the {lcr_min}% governed monitoring threshold (Basel reference ratio).",
         ),
         (
             "lcr_amber_zone",
@@ -1172,7 +1172,7 @@ def _validation_rows(
             "error",
             f"NSFR of {nsfr_pct}% is "
             + ("at or above" if nsfr_above else "below")
-            + f" the {nsfr_min}% regulatory minimum.",
+            + f" the {nsfr_min}% governed monitoring threshold (Basel reference ratio).",
         ),
         ("inflow_cap_applied", True, "info", cap_message),
         ("hqla_all_level1", lcr.all_hqla_level1, "info", hqla_message),
@@ -1308,18 +1308,24 @@ def _stored_lines_by_section(
     return sections
 
 
-def _stored_validations(db: Session, run: RegulatoryRun) -> list[RegulatoryValidation]:
-    return list(
-        db.scalars(
-            select(RegulatoryValidation)
-            .where(
-                RegulatoryValidation.run_id == run.id,
-                RegulatoryValidation.organization_id == run.organization_id,
-                RegulatoryValidation.bank_id == run.bank_id,
-            )
-            .order_by(RegulatoryValidation.position)
+def _stored_validations(db: Session, run: RegulatoryRun) -> list[RegulatoryValidationRead]:
+    rows = db.scalars(
+        select(RegulatoryValidation)
+        .where(
+            RegulatoryValidation.run_id == run.id,
+            RegulatoryValidation.organization_id == run.organization_id,
+            RegulatoryValidation.bank_id == run.bank_id,
         )
+        .order_by(RegulatoryValidation.position)
     )
+    validations = [RegulatoryValidationRead.model_validate(row) for row in rows]
+    if run.module == MODULE_LIQUIDITY:
+        for item in validations:
+            if item.rule_code in ("lcr_above_minimum", "nsfr_above_minimum"):
+                item.message = item.message.replace(
+                    "regulatory minimum", "governed monitoring threshold (Basel reference ratio)"
+                )
+    return validations
 
 
 # Dashboard trends show a trailing window, not the bank's full period history. With
@@ -2020,7 +2026,7 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
         error=_error_read(run),
         metric_results=[RegulatoryMetricResultRead.model_validate(item) for item in metric_results],
         line_items=[RegulatoryLineItemRead.model_validate(item) for item in line_items],
-        validations=[RegulatoryValidationRead.model_validate(item) for item in validations],
+        validations=validations,
         evidence=_evidence_read(db, run),
         created_by=run.created_by,
         created_at=run.created_at,

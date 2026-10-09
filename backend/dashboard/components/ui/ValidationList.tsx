@@ -57,7 +57,11 @@ export default function ValidationList({
           <ValidationIcon item={v} />
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-navy">
-              {labelize(v.ruleCode)}
+              {v.ruleCode === 'lcr_above_minimum'
+                ? 'LCR governed monitoring threshold'
+                : v.ruleCode === 'nsfr_above_minimum'
+                ? 'NSFR governed monitoring threshold'
+                : labelize(v.ruleCode)}
             </p>
             <p className="mt-0.5 text-caption text-slate leading-relaxed">
               {v.message}

@@ -23,8 +23,12 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, User
-from app.services import authorization
+from app.models import AuditEvent, AuthorizationBinding, User
+from app.schemas.attestation import PolicyRead
+from app.schemas.regulatory_reporting import ReturnTemplateListRead
+from app.services import authorization, grant_administration
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, USER_1, headers
 
 POLICY_URL = "/api/v1/attestation/signing-policies"
@@ -154,3 +158,88 @@ def test_reason_validation_survives_the_gate(owner_client: TestClient) -> None:
     without_reason = {**POLICY_PAYLOAD, "reason": ""}
     response = owner_client.put(POLICY_URL, headers=_owner_headers(), json=without_reason)
     assert response.status_code == 422, response.text
+
+
+def test_owner_can_administer_icaap_codes_after_capital_read_is_revoked(
+    owner_client: TestClient,
+) -> None:
+    with _session() as db:
+        materialize_canonical_test_book(db)
+        for binding in db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == ORG_1,
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.module_scope == ModuleScope.ALL.value,
+                AuthorizationBinding.role_bundle == RoleBundle.VIEWER.value,
+                AuthorizationBinding.status == "active",
+            )
+        ):
+            grant_administration.revoke_scoped_grant(
+                db,
+                organization_id=ORG_1,
+                binding_id=binding.id,
+                actor_user_id=USER_1,
+                reason="Replace broad fixture reads with independently revocable module grants",
+                commit=False,
+            )
+        for module, sensitivity in (
+            (ModuleScope.REGULATORY, SensitivityScope.RESTRICTED),
+            (ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL),
+        ):
+            grant_institution_authority(
+                db,
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                user_id=USER_1,
+                bundle=RoleBundle.VIEWER,
+                module=module,
+                sensitivity=sensitivity,
+            )
+        db.commit()
+        capital = db.scalar(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.module_scope == ModuleScope.CAPITAL.value,
+            )
+        )
+        assert capital is not None
+        capital_id = capital.id
+
+    catalogue_url = "/api/v1/regulatory-reporting/templates"
+    before = owner_client.get(catalogue_url, params={"bank_id": SAMPLE_BANK_ID}, headers=headers())
+    assert before.status_code == 200, before.text
+    assert any(
+        t.family == "icaap"
+        for t in ReturnTemplateListRead.model_validate_json(before.text).templates
+    )
+
+    with _session() as db:
+        grant_administration.revoke_scoped_grant(
+            db,
+            organization_id=ORG_1,
+            binding_id=capital_id,
+            actor_user_id=USER_1,
+            reason="Owner retains policy administration but relinquishes Capital reads",
+        )
+        user = db.get(User, USER_1)
+        assert user is not None
+        auth = headers(authorization_version=user.authorization_version)
+
+    reporting = owner_client.get(catalogue_url, params={"bank_id": SAMPLE_BANK_ID}, headers=auth)
+    assert reporting.status_code == 200, reporting.text
+    assert all(
+        t.family != "icaap"
+        for t in ReturnTemplateListRead.model_validate_json(reporting.text).templates
+    )
+
+    registry = owner_client.get(catalogue_url, headers=auth)
+    assert registry.status_code == 200, registry.text
+    assert any(
+        t.code == "ICAAP-REPORT"
+        for t in ReturnTemplateListRead.model_validate_json(registry.text).templates
+    )
+    policy = owner_client.put(
+        POLICY_URL, headers=auth, json={**POLICY_PAYLOAD, "return_code": "ICAAP-REPORT"}
+    )
+    assert policy.status_code == 200, policy.text
+    assert PolicyRead.model_validate_json(policy.text).return_code == "ICAAP-REPORT"
