@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.regulatory_instruments import instrument_status_on
 from app.models import PackageWorkflowStage, RegulatoryPackage
 from app.schemas.regulatory_reporting import (
     RegulatoryPackageListRead,
@@ -123,7 +124,7 @@ def get_package(
     return read_package(db, package)
 
 
-def list_return_templates() -> ReturnTemplateListRead:
+def list_return_templates(*, as_of: date | None = None) -> ReturnTemplateListRead:
     return ReturnTemplateListRead(
         templates=[
             ReturnTemplateRead(
@@ -132,6 +133,10 @@ def list_return_templates() -> ReturnTemplateListRead:
                 title=definition.title,
                 regulator=definition.regulator,
                 directive_citation=definition.directive_citation,
+                instrument_status=instrument_status_on(
+                    definition.instrument_status, definition.effective_from, as_of or date.today()
+                ),
+                effective_from=definition.effective_from,
                 frequency=definition.frequency,
                 generator=definition.generator,
                 template_id=definition.template_id,

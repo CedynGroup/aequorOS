@@ -372,6 +372,10 @@ def test_engine_backed_package_records_the_full_run_provenance(db_session: Sessi
 
     prov = package.snapshot["provenance"]
     assert prov["authority"] == ReportAuthority.ENGINE_RUN.value
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    assert prov["instrument_status"] == "unpublished"
+    assert prov["instrument_effective_from"] is None
+    assert "Basel reference" in prov["instrument_label"]
     assert prov["source_runs_rationale"] is None
     assert prov["source_runs"]
     for entry in prov["source_runs"]:
@@ -805,13 +809,12 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
 
     obligations = calendar.list_obligations(db_session, ctx, sdi.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in obligations.obligations} == {
-        "SDI-LMT-MONTHLY",
-        "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
         "NPL-MONTHLY",
     }
-    assert obligations.coverage_note is None
+    assert obligations.coverage_note is not None
+    assert "SDI-LMT-MONTHLY" in obligations.coverage_note
 
     bank = _make_bank(db_session, institution_type="universal_bank")
     bank_view = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
@@ -854,7 +857,7 @@ def test_a_not_yet_effective_return_is_refused(db_session: Session) -> None:
     assert decision.eligible is False
     assert any(c.code == "effective_date" and not c.satisfied for c in decision.criteria)
     # ... and an unestablished effective date says so rather than passing mute.
-    live = resolved.decide(REGISTRY["LMT"], reporting_date=_AS_OF)
+    live = resolved.decide(REGISTRY["CAR-RWA"], reporting_date=_AS_OF)
     effective = next(c for c in live.criteria if c.code == "effective_date")
     assert effective.satisfied is True
     assert eligibility.NOT_ESTABLISHED in effective.detail
@@ -871,7 +874,7 @@ def test_cadence_is_advisory_and_never_refuses_generation(db_session: Session) -
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     resolved = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
     mid_month = date(2026, 6, 15)
-    decision = resolved.decide(REGISTRY["LMT"], reporting_date=mid_month)
+    decision = resolved.decide(REGISTRY["CAR-RWA"], reporting_date=mid_month)
     frequency = next(c for c in decision.criteria if c.code == "frequency")
     assert frequency.satisfied is False
     assert decision.eligible is True

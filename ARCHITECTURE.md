@@ -247,6 +247,14 @@ semantics follow the plane, never the other way round:
    ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
    ```
 
+   Return definitions carry publication status separately from commencement.
+   `domain/regulatory_instruments.py` resolves final instruments by date; a draft
+   never becomes final because its proposed date arrives. The calendar excludes
+   exposure drafts and unpublished instruments from obligations and penalties,
+   while preparation anchors retain package history with no deadline or RAG.
+   Status and commencement travel through return metadata and sealed provenance.
+   LCR/NSFR remain Basel references pending a published BoG instrument.
+
    `bank_reporting_periods` sits on plane 1, not here: a row is the key for one
    computed fact snapshot, created because a book arrived with an as-of date. It
    is **not** a filing calendar and must never again be offered as the user's

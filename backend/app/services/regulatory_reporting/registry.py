@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Literal
 
+from app.domain.regulatory_instruments import InstrumentStatus
+
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ReturnFamily = Literal[
     "liquidity",
@@ -212,6 +214,8 @@ class ReturnDefinition:
     # gates, because blocking generation on them would stop a bank preparing and
     # dry-running a return before its first live filing.
     effective_from: date | None = None
+    # A draft date is conditional: reaching it never makes the instrument final.
+    instrument_status: InstrumentStatus = "in_force"
     # Declarative prerequisites a package needs before it can be generated
     # ("run:liquidity:baseline", "template:pending"). Reported on the
     # eligibility decision as metadata and ENFORCED where the answer can be
@@ -292,20 +296,18 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # (alembic 202608150013). See docs/bog_returns/00_full_return_registry.md §3.
         ReturnDefinition(
             code="LCR-NSFR",
+            instrument_status="unpublished",
             family="liquidity",
-            title="Liquidity Returns (LCR & NSFR)",
+            title="Basel reference pack (LCR & NSFR)",
             directive_citation=(
-                "Liquidity Monitoring Tools Directive (LMTD), 2026 (exposure draft, "
-                "Feb 2026; effective 1 Jan 2027) read with the Liquidity Risk "
-                "Management Directive, 2026. The LCR Directive, 2026 (banks only) is "
-                "referenced by name in LMTD ¶4 but is not public; NSFR has no BoG "
-                "directive — both are Basel-default pending BoG calibration."
+                "BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm]. "
+                "NSFR has no published BoG instrument. Both ratios are Basel reference "
+                "analysis pending published BoG calibration, with no filing obligation."
             ),
             frequency="monthly",
-            # CONFIRMED: LMTD Part II ¶7 — monthly reports "not later than 9
-            # days after the last day of each month"; the LCR deadline is
-            # assumed to match the liquidity pack until the LCR Directive is
-            # published (research gap G1).
+            # Internal monthly preparation cadence, not a BoG filing deadline.
+            # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished)
+            # [confirm]; NSFR has no BoG instrument.
             deadline_rule=monthly_day(9),
             generator="liquidity",
             template_id="bog-bsd3-liquidity-v1",
@@ -337,12 +339,15 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="LMT",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="liquidity",
             title="Liquidity Monitoring Tools Return (LMTD Appendix Templates)",
             directive_citation=(
-                "Liquidity Monitoring Tools Directive (LMTD), 2026 (exposure draft, "
-                "Feb 2026; effective 1 Jan 2027) — Appendix Reporting Templates, "
-                "Tables 1–11 published (CONFIRMED); monthly per Part II ¶7."
+                "BoG LMTD (Exposure Draft, February 2026) Part I ¶8–9 — proposed "
+                "effective date 1 January 2027 if made final; Part II ¶7 — monthly "
+                "reporting; Appendix Reporting Templates, Tables 1–11 published. "
+                "Preparation only until a final instrument commences."
             ),
             frequency="monthly",
             # CONFIRMED: LMTD Part II ¶7 — within 9 days after month end.
@@ -368,11 +373,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-LMT-MONTHLY",
+            instrument_status="exposure_draft",
+            effective_from=date(2027, 1, 1),
             family="sdi",
             title="SDI Liquidity Monitoring Tools Return (LMTD Tables 1-10)",
             directive_citation=(
-                "Liquidity Monitoring Tools Directive (LMTD), 2026 — EXPOSURE DRAFT "
-                "posted 19 February 2026, effective 1 January 2027 — Part II ¶7 and "
+                "BoG LMTD (Exposure Draft, February 2026) Part I ¶8–9 — proposed "
+                "effective date 1 January 2027 if made final; Part II ¶7 and "
                 "Appendix Tables 1-10: applies to Savings and Loans and Finance "
                 "Houses. ¶9 would make the SDI Table 1 ratios binding compliance "
                 "ratios ON COMMENCEMENT; the directive is not in force, so they bind "
@@ -531,12 +538,14 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="LE-MONTHLY",
+            instrument_status="final_not_in_force",
+            effective_from=date(2027, 1, 1),
             family="large_exposures",
             title="Large Exposures Return (Templates 1/1a/2/3/4)",
             directive_citation=(
-                "Large Exposures Directive (exposure draft Dec 2024), Part VI "
-                "Templates 1/1a/2/3/4; the final directive (September 2025, "
-                "effective 1 Jan 2027) confirms the five appendix templates and "
+                "BoG Large Exposures Directive (Sept 2025) ¶12 (final; effective "
+                "1 Jan 2027), Part VI Templates 1/1a/2/3/4; "
+                "the final directive confirms the five appendix templates and "
                 "monthly reporting (¶57–58). Template STRUCTURE is CONFIRMED "
                 "from the published appendix; the exposure derivation basis "
                 "(canonical positions, Tier-1 Net-Own-Funds proxy, "
@@ -556,12 +565,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-LE-MONTHLY",
+            instrument_status="final_not_in_force",
+            effective_from=date(2027, 1, 1),
             family="sdi",
             title="SDI Large Exposures Return (Templates 1, 1a, 2, 3 and 4)",
             directive_citation=(
-                "Large Exposures Directive, September 2025 — FINAL but NOT YET IN "
-                "FORCE, effective 1 January 2027 (docs/bog_parameter_sources.md: "
-                '"All VERIFIED; none in force yet") — ¶¶11-12 and ¶¶57-58, Appendix '
+                "BoG Large Exposures Directive (Sept 2025) ¶11–12 (final; effective "
+                "1 January 2027), ¶57–58, Appendix "
                 "Templates 1, 1a, 2, 3 and 4: applies to Savings and Loans and Finance "
                 "Houses; monthly reporting; 15% of Net Own Funds limit on commencement."
             ),

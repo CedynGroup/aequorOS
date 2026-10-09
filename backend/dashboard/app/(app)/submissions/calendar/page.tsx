@@ -28,6 +28,7 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useReportingObligations } from "@/lib/api/hooks";
+import { instrumentStatusLabel } from "@/lib/api/returnAnchors";
 import { fmtDateUTC, isoDate } from "@/lib/api/values";
 import {
   FAMILY_LABELS,
@@ -94,6 +95,9 @@ export default function RegulatoryCalendarPage() {
             </p>
             <p className="text-caption text-slate truncate max-w-[320px]">
               {o.title}
+            </p>
+            <p className="text-micro text-slate">
+              {instrumentStatusLabel(o.instrumentStatus, o.effectiveFrom)}
             </p>
             {/*
             An annex is filed INSIDE its parent return, so it is not a separate

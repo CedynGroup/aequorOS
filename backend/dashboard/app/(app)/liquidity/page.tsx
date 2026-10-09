@@ -212,7 +212,7 @@ export default function LiquidityCockpit() {
 
             <SectionCard
               title="Liquidity posture"
-              subtitle="Current compliance headroom, buffer concentration, early-warning state, and contingency readiness."
+              subtitle="Basel reference ratios against governed monitoring thresholds, buffer concentration, early-warning state, and contingency readiness."
               computedAt={computedAt}
               footer={provenance}
             >
@@ -228,7 +228,7 @@ export default function LiquidityCockpit() {
                           ? "warn"
                           : "ok"
                     }
-                    hint={`${fmtCurrency(hqlaTotal - num(data.metrics.netOutflows30dGhs) * (lcrMin / 100))} above minimum requirement`}
+                    hint={`${fmtCurrency(hqlaTotal - num(data.metrics.netOutflows30dGhs) * (lcrMin / 100))} above monitoring threshold`}
                   />
                 )}
                 <KpiStat
@@ -237,7 +237,7 @@ export default function LiquidityCockpit() {
                   status={nsfrSurplus < 0 ? "crit" : "ok"}
                   hint={
                     nsfrMin !== null
-                      ? `${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above minimum`
+                      ? `${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above monitoring threshold`
                       : undefined
                   }
                 />
@@ -542,7 +542,7 @@ export default function LiquidityCockpit() {
                 actions={
                   lcrMin !== null ? (
                     <StatusPill tone="success">
-                      LCR compliant{" "}
+                      LCR above threshold{" "}
                       {data.trend.filter((p) => num(p.lcrPct) >= lcrMin).length}{" "}
                       of {data.trend.length}
                     </StatusPill>

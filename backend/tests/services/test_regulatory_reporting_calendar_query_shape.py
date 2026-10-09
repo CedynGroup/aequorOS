@@ -126,7 +126,7 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
     lcr = next(
         item
         for item in seed.obligations
-        if item.return_code == "LCR-NSFR" and item.reporting_date == date(2026, 3, 31)
+        if item.return_code == "CAR-RWA" and item.reporting_date == date(2026, 3, 31)
     )
     selected = [lcr, *(item for item in seed.obligations if item != lcr)][:20]
     packages = [_submitted_package(item) for item in selected]
@@ -175,13 +175,13 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
     short_anchors, short_anchor_sql = _measure(
         db_session,
         lambda: calendar.list_return_anchors(
-            db_session, _MAKER, SAMPLE_BANK_ID, "LCR-NSFR", 3, as_of=_AS_OF
+            db_session, _MAKER, SAMPLE_BANK_ID, "CAR-RWA", 3, as_of=_AS_OF
         ),
     )
     long_anchors, long_anchor_sql = _measure(
         db_session,
         lambda: calendar.list_return_anchors(
-            db_session, _MAKER, SAMPLE_BANK_ID, "LCR-NSFR", 12, as_of=_AS_OF
+            db_session, _MAKER, SAMPLE_BANK_ID, "CAR-RWA", 12, as_of=_AS_OF
         ),
     )
     assert len(long_anchors.anchors) > len(short_anchors.anchors)
@@ -233,7 +233,7 @@ def test_calendar_links_only_the_current_solo_package(
     target = next(
         item
         for item in seed.obligations
-        if item.return_code == "LCR-NSFR" and item.reporting_date == date(2026, 3, 31)
+        if item.return_code == "CAR-RWA" and item.reporting_date == date(2026, 3, 31)
     )
     solo = _submitted_package(target)
     consolidated = _submitted_package(target)

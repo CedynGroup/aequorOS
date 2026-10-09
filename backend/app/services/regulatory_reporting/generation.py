@@ -373,7 +373,13 @@ def _generate_package(
     # effective date — is named on the 403 rather than a single opaque refusal.
     eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
     bank_class = eligibility.institution_class
-    eligibility.require(definition, reporting_date=payload.reporting_date)
+    # Draft/reference packs and pre-commencement returns remain preparable;
+    # their instrument status is disclosed independently of a filing duty.
+    eligibility.require(
+        definition,
+        reporting_date=payload.reporting_date,
+        ignore={"effective_date"} if definition.instrument_status != "in_force" else (),
+    )
     # The figures are the figures AS OF the regulator's reporting date, for every
     # cadence — no "nearest earlier book" fallback (see the resolver's docstring
     # for the daily-return fail-open it replaces).

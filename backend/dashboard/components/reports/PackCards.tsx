@@ -88,9 +88,9 @@ export default function PackCards({
       ? [
           {
             form: "LCR-NSFR",
-            title: `${regShort()} Liquidity Return (LCR & NSFR)`,
+            title: "Basel reference pack (LCR & NSFR)",
             description:
-              "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
+              "Liquidity Coverage Ratio and Net Stable Funding Ratio — Basel reference analysis from the latest baseline liquidity run. No published BoG filing obligation.",
             href: "/submissions/returns?code=LCR-NSFR",
             status:
               liquidityAccess.state === "disabled"

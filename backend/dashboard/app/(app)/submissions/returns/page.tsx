@@ -112,6 +112,7 @@ import { hasAccountDirectoryAuthority } from '@/lib/api/accountAdministration';
 import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from '@/lib/api/values';
 import {
   defaultReportingDate,
+  instrumentStatusLabel,
   reportingDateOptionLabel,
   toReportingDateOptions,
 } from '@/lib/api/returnAnchors';
@@ -217,9 +218,9 @@ function ReturnsWorkspace() {
   const templates = useMemo(
     () =>
       (templatesQuery.data?.templates ?? []).filter((template) =>
-        isSdi ? template.family === 'sdi' : template.family !== 'sdi'
+        isSdi ? template.family === 'sdi' : template.family !== 'sdi',
       ),
-    [isSdi, templatesQuery.data]
+    [isSdi, templatesQuery.data],
   );
 
   const codeParam = searchParams.get('code');
@@ -239,27 +240,29 @@ function ReturnsWorkspace() {
   const anchorsQuery = useReturnAnchors(bankId, code);
   const anchors = useMemo<ReturnAnchorRead[]>(
     () => anchorsQuery.data?.anchors ?? [],
-    [anchorsQuery.data]
+    [anchorsQuery.data],
   );
   const dateOptions = useMemo(() => toReportingDateOptions(anchors), [anchors]);
   const snapshotDated =
     anchorsQuery.data?.reportingDateSource === 'computed_snapshot';
   const anchorDates = useMemo(
     () => dateOptions.map((option) => option.date),
-    [dateOptions]
+    [dateOptions],
   );
   const defaultDate = useMemo(
     () =>
       defaultReportingDate(
         dateOptions,
-        anchorsQuery.data?.asOf ? isoDate(anchorsQuery.data.asOf) : undefined
+        anchorsQuery.data?.asOf ? isoDate(anchorsQuery.data.asOf) : undefined,
       ),
-    [dateOptions, anchorsQuery.data]
+    [dateOptions, anchorsQuery.data],
   );
   const date =
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : defaultDate;
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+      ? dateParam
+      : defaultDate;
   const selectedAnchor = anchors.find(
-    (anchor) => isoDate(anchor.reportingDate) === date
+    (anchor) => isoDate(anchor.reportingDate) === date,
   );
   const awaitingData = selectedAnchor?.dataStatus === 'awaiting_data';
 
@@ -303,7 +306,7 @@ function ReturnsWorkspace() {
         onSuccess: (created) => {
           if (authority.mayRunChecks) runChecks.mutate(created.id);
         },
-      }
+      },
     );
 
   // An ICAAP return is NOT generated from this workspace. It is minted by
@@ -360,9 +363,9 @@ function ReturnsWorkspace() {
                 data-testid="reporting-date-source"
                 className="basis-full text-caption text-slate"
               >
-                Event-driven pack — the regulator sets no reporting date for
-                it. The dates offered are your computed position dates; the
-                pack reports your institution as of the one you choose.
+                Event-driven pack — the regulator sets no reporting date for it.
+                The dates offered are your computed position dates; the pack
+                reports your institution as of the one you choose.
               </p>
             )}
           </div>
@@ -574,8 +577,8 @@ function FirstVersionCard({
               </button>
             ) : (
               <p className="text-caption text-slate leading-relaxed max-w-sm">
-                Generating this return is the preparer&apos;s act. It will appear
-                here once they have built it.
+                Generating this return is the preparer&apos;s act. It will
+                appear here once they have built it.
               </p>
             )}
           </>
@@ -604,6 +607,12 @@ function FidelityBanner({ template }: { template: ReturnTemplateRead }) {
           {template.code} — {template.title}
         </p>
         <FidelityPill fidelity={template.fidelity} />
+        <span className="text-caption font-medium text-slate">
+          {instrumentStatusLabel(
+            template.instrumentStatus,
+            template.effectiveFrom,
+          )}
+        </span>
       </div>
       <details className="mt-1 pl-6">
         <summary className="cursor-pointer text-caption font-medium text-action hover:text-action-hover">
@@ -670,12 +679,12 @@ function PackageWorkspace({
   // roster, so this is asked for only when the projection says it is readable —
   // an unresolved actor reads as "not named", never as a raw identifier.
   const usersQuery = useOrganizationUsers(
-    hasAccountDirectoryAuthority(effectiveAuthority)
+    hasAccountDirectoryAuthority(effectiveAuthority),
   );
   const resolveOfficer = useCallback(
     (actorUserId: string) => {
       const user = usersQuery.data?.users.find(
-        (entry) => entry.id === actorUserId
+        (entry) => entry.id === actorUserId,
       );
       if (!user) return null;
       return {
@@ -683,7 +692,7 @@ function PackageWorkspace({
         title: user.jobTitle ?? null,
       };
     },
-    [usersQuery.data]
+    [usersQuery.data],
   );
 
   const defaultChannel = template?.defaultChannel ?? 'manual';
@@ -714,7 +723,8 @@ function PackageWorkspace({
   const checkErrors = report?.errorCount ?? 0;
   const checksClean = report !== null && report.passed && checkErrors === 0;
   const canRunChecks =
-    authority.mayRunChecks && (status === 'generated' || status === 'validated');
+    authority.mayRunChecks &&
+    (status === 'generated' || status === 'validated');
 
   const events = eventsQuery.data?.events ?? [];
   const latestSubmitted = events.find((event) => event.event === 'submitted');
@@ -733,7 +743,7 @@ function PackageWorkspace({
   const instructionsQuery = useEmailFallbackInstructions(
     bankId,
     summary.id,
-    authority.mayTransmit && (Boolean(filingRefusal) || channel === 'email')
+    authority.mayTransmit && (Boolean(filingRefusal) || channel === 'email'),
   );
 
   const attestation = attestationQuery.data ?? null;
@@ -745,11 +755,11 @@ function PackageWorkspace({
 
   const artifacts = useMemo(
     () => artifactsQuery.data?.artifacts ?? [],
-    [artifactsQuery.data]
+    [artifactsQuery.data],
   );
   const availableKinds = useMemo(
     () => new Set(artifacts.map((artifact) => artifact.kind as string)),
-    [artifacts]
+    [artifacts],
   );
   // At most one, and only once an officer has certified: the revision the last
   // signature pinned. It is what a filing sends, so it is what Download hands over.
@@ -818,7 +828,7 @@ function PackageWorkspace({
     bankId,
     summary.id,
     previousVersion?.id,
-    authority.mayApprove && previousVersion != null
+    authority.mayApprove && previousVersion != null,
   );
   const changedLineKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -836,7 +846,7 @@ function PackageWorkspace({
     setDownloadError(null);
     const fail = (error: unknown) =>
       setDownloadError(
-        error instanceof Error ? error.message : 'The download did not finish.'
+        error instanceof Error ? error.message : 'The download did not finish.',
       );
     if (kind === 'pdf' && filedVersion) {
       downloadArtifactVersion(bankId, filedVersion).catch(fail);
@@ -855,7 +865,7 @@ function PackageWorkspace({
           downloadArtifact(bankId, artifact).catch(fail);
         },
         onSettled: () => setTakingKind(null),
-      }
+      },
     );
   };
 
@@ -863,8 +873,8 @@ function PackageWorkspace({
     setEmlError(null);
     downloadEmailFallbackEml(bankId, summary.id).catch((error: unknown) =>
       setEmlError(
-        error instanceof Error ? error.message : 'The download did not finish.'
-      )
+        error instanceof Error ? error.message : 'The download did not finish.',
+      ),
     );
   };
 
@@ -1445,7 +1455,11 @@ function SentBackNotice({
       data-testid="sent-back-notice"
       className="flex items-start gap-2.5 rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5"
     >
-      <CornerUpLeft size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+      <CornerUpLeft
+        size={15}
+        className="mt-0.5 shrink-0 text-warning"
+        aria-hidden
+      />
       <div className="min-w-0 text-body">
         <p className="font-medium text-navy">
           Sent back for corrections by{' '}
