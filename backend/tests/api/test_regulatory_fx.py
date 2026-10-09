@@ -282,7 +282,7 @@ def test_run_all_fx_scenarios_persists_four_runs_with_consistent_metrics(  # noq
     assert [run["scenario_code"] for run in runs] == FX_SCENARIOS
     assert all(run["status"] == "succeeded" for run in runs)
     assert all(run["module"] == "fx" for run in runs)
-    assert all(run["engine_version"] == "regulatory-fx-v1.0.0" for run in runs)
+    assert all(run["engine_version"] == "regulatory-fx-v1.1.0" for run in runs)
     assert all(len(run["input_hash"]) == 64 for run in runs)
     # scenario_code is part of the snapshot, so each run gets a distinct hash.
     assert len({run["input_hash"] for run in runs}) == 4

@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -39,8 +39,6 @@ from app.core.errors import ModuleDataUnavailable
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
-    OutcomeState,
-    outcome,
 )
 from app.domain.capital.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
@@ -65,7 +63,21 @@ from app.domain.fx.engine import (
     run_fx_scenarios,
     stressed_var_line_item,
 )
+from app.domain.positions.fx import (
+    fx_position_refusal as _unstatable_position,
+)
+from app.domain.positions.fx import (
+    require_currency_coverage,
+)
+from app.domain.positions.fx import (
+    spot_or_none as _spot_or_none,
+)
 from app.domain.reporting import period_windows
+from app.live.public import (
+    require_fx_fact_coverage,
+    require_run_currency_coverage,
+    required_fx_currencies_by_date,
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -107,7 +119,7 @@ from app.services.live_types import (
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
-ENGINE_VERSION = "regulatory-fx-v1.0.0"
+ENGINE_VERSION = "regulatory-fx-v1.1.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "fx-metrics-v1"
 MODULE_FX = "fx"
@@ -179,6 +191,7 @@ class _FxDashboardBatch:
     facts: dict[UUID, list[BankFinancialFact]]
     thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
     shocks: PrefetchedActiveParams[ParamStressShock]
+    currencies: dict[date, set[str]]
 
 
 @dataclass(frozen=True)
@@ -238,6 +251,15 @@ def get_fx_dashboard(
     batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
     latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     if latest_run is not None:
+        try:
+            expected = batch.currencies[period.period_end] | {
+                str(fact.attributes.get("currency") or fact.category).strip().upper()
+                for fact in batch.facts.get(period.id, [])
+                if fact.fact_group == "fx_position"
+            }
+            require_run_currency_coverage(cast(dict[str, object], latest_run.metrics), expected)
+        except NotComputable as exc:
+            raise ModuleDataUnavailable(exc.state.value, str(exc)) from exc
         metrics = _metrics_from_run(latest_run)
         positions = _positions_from_run(latest_run)
         standalone_vars = _standalone_from_run(latest_run)
@@ -402,6 +424,8 @@ def _run_analysis(  # noqa: PLR0913
     facts: Sequence[FinancialFactRow],
     active: _FxParams | None,
     tier1: Decimal | None = None,
+    source_as_of: date | None = None,
+    expected_currencies: Collection[str] | None = None,
 ) -> _FxAnalysis:
     if not facts:
         raise FxRunError(
@@ -423,6 +447,15 @@ def _run_analysis(  # noqa: PLR0913
             "Tier 1 capital could not be derived from the capital-component facts.",
             None,
         )
+    currencies = {
+        str(fact.attributes.get("currency") or fact.category).strip().upper()
+        for fact in facts
+        if fact.fact_group == "fx_position"
+    }
+    if expected_currencies is None:
+        require_fx_fact_coverage(db, ctx, bank, source_as_of or period.period_end, currencies)
+    else:
+        require_currency_coverage(expected_currencies, currencies)
     read = _read_positions(facts)
     positions = list(read.positions)
     if not positions:
@@ -645,6 +678,7 @@ def _metrics_payload(analysis: _FxAnalysis) -> dict[str, Any]:
         "hedge_total_count": analysis.hedges.total_count,
         "hedge_aggregate_mtm_ghs": str(analysis.hedges.aggregate_mtm_ghs),
         "tier1_ghs": str(nop.tier1),
+        "rate_not_required_currencies": list(analysis.rate_not_required),
         "currencies": [
             {
                 "currency": currency.currency,
@@ -1003,6 +1037,7 @@ def _prefetch_dashboard_batch(
         shocks=prefetch_active_params(
             db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, dates
         ),
+        currencies=required_fx_currencies_by_date(db, ctx, bank, dates),
     )
 
 
@@ -1067,6 +1102,7 @@ def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus o
         facts,
         active,
         tier1=_tier1_from_facts(period_facts),
+        expected_currencies=batch.currencies[period.period_end],
     )
 
 
@@ -1111,6 +1147,17 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
             None,
         )
     try:
+        require_fx_fact_coverage(
+            db,
+            ctx,
+            bank,
+            period.period_end,
+            {
+                str(fact.attributes.get("currency") or fact.category).strip().upper()
+                for fact in facts
+                if fact.fact_group == "fx_position"
+            },
+        )
         positions = _positions_from_facts(facts)
     except NotComputable as exc:
         # The workbench treats domain failures as per-scenario data, and its
@@ -1198,6 +1245,7 @@ def compute_live(
         facts,
         active,
         tier1=_tier1_from_facts(current.facts),
+        source_as_of=current.source_as_of_date,
     )
     snapshot = current_snapshot(
         _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active),
@@ -1221,109 +1269,6 @@ def compute_live(
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )
-
-
-def _spot_or_none(raw: Any) -> Decimal | None:
-    """The fact's revaluation rate, or ``None`` when the row carries none.
-
-    ``fact_derivation._resolve_spot`` never invents a rate (audit 2026-08-22
-    D-13): with no ingested spot and none implied by the position book it
-    returns ``None``, and the writer stores an EMPTY ``spot_ghs``. Absence is
-    therefore a real state this reader must handle rather than a corrupt row —
-    but it is NOT, on its own, evidence that a position is unstated. See
-    :func:`_unstatable_position` for what absence does and does not license.
-    """
-    if raw is None or str(raw).strip() == "":
-        return None
-    try:
-        return Decimal(str(raw))
-    except ArithmeticError:
-        return None
-
-
-def _unstatable_position(
-    currency: str, net_ccy: Decimal, net_ghs: Decimal, spot: Decimal | None
-) -> OutcomeDetail | None:
-    """The reason this currency's net open position cannot be filed, or ``None``.
-
-    Four conditions, each a *contradiction* rather than a tolerance judgement —
-    no threshold is invented here, because a booked-rate-vs-period-end-spot
-    drift is legitimate and only the impossible states are refused:
-
-    1. A non-zero currency net carried at exactly zero in the reporting unit.
-       That is the D-21 signature — ``fact_derivation._position_row`` converts a
-       position with no ``balance_ghs`` to zero, and zero is a claim that the
-       exposure does not exist.
-    2. The currency net and its reporting-currency equivalent disagreeing in
-       DIRECTION. No positive rate turns a long into a short; a whole book whose
-       legs are converted inconsistently enough to flip the sign is not a
-       revaluation difference, it is a broken conversion.
-    3. No rate at all for a currency that HAS an exposure. This is D-13 proper:
-       the run must refuse rather than count the position at par.
-    4. A non-positive rate. Zero or negative is not an exchange rate; a zero
-       spot is what an all-unconverted book implies (0 / net_ccy).
-
-    A currency with no rate and no exposure on either leg is not listed here —
-    the rate was genuinely not required, nothing is misstated, and refusing a
-    filed run over an absent display rate on an empty position would be a false
-    refusal. :func:`_positions_from_facts` counts those separately.
-    """
-    item = f"fact:fx_position:{currency}"
-    context = {"currency": currency, "net_ccy": str(net_ccy), "net_ghs": str(net_ghs)}
-    if net_ccy != _ZERO and net_ghs == _ZERO:
-        return outcome(
-            OutcomeState.MISSING_REQUIRED_INPUT,
-            metric_id=_NOP_METRIC_ID,
-            reason=(
-                f"The {currency} book holds a net position of {net_ccy} {currency} but "
-                "carries zero value in the reporting currency, so no exchange rate was "
-                "applied to it. Zero would state that the position does not exist. "
-                f"Ingest the reporting-currency balance or a current rate for {currency}."
-            ),
-            items=(item,),
-            context=context,
-        )
-    if _ZERO not in (net_ccy, net_ghs) and (net_ccy > _ZERO) != (net_ghs > _ZERO):
-        return outcome(
-            OutcomeState.DATA_QUALITY_BLOCK,
-            metric_id=_NOP_METRIC_ID,
-            reason=(
-                f"The {currency} net position is {'long' if net_ccy > _ZERO else 'short'} "
-                f"in {currency} but {'long' if net_ghs > _ZERO else 'short'} in the "
-                "reporting currency. No exchange rate produces that reversal, so part of "
-                f"the {currency} book was converted and part of it was not. Reconcile the "
-                f"reporting-currency balances on the {currency} positions."
-            ),
-            items=(item,),
-            context=context,
-        )
-    if spot is None and (net_ccy != _ZERO or net_ghs != _ZERO):
-        return outcome(
-            OutcomeState.MISSING_REQUIRED_INPUT,
-            metric_id=_NOP_METRIC_ID,
-            reason=(
-                f"No exchange rate was established for {currency}, and none is implied by "
-                "its position book, so its open position cannot be stated in the reporting "
-                "currency. Counting it at par would misstate the net open position. "
-                f"Ingest a current rate for {currency}."
-            ),
-            items=(item,),
-            context=context,
-        )
-    if spot is not None and spot <= _ZERO:
-        return outcome(
-            OutcomeState.DATA_QUALITY_BLOCK,
-            metric_id=_NOP_METRIC_ID,
-            reason=(
-                f"The {currency} revaluation rate resolved to {spot}, which is not an "
-                "exchange rate. A zero rate is what a book implies when none of its "
-                f"positions carry a reporting-currency balance. Ingest a current rate for "
-                f"{currency} or the reporting-currency balances behind it."
-            ),
-            items=(item,),
-            context={**context, "spot": str(spot)},
-        )
-    return None
 
 
 @dataclass(frozen=True)
@@ -1359,7 +1304,13 @@ def _read_positions(facts: Sequence[FinancialFactRow]) -> _PositionRead:
         net_ghs = Decimal(str(fact.amount))
         net_ccy = Decimal(str(attributes["net_ccy"]))
         spot = _spot_or_none(attributes.get("spot_ghs"))
-        detail = _unstatable_position(currency, net_ccy, net_ghs, spot)
+        detail = _unstatable_position(
+            currency,
+            net_ccy,
+            net_ghs,
+            spot,
+            rate_required=Decimal(str(attributes.get("net_derivatives_ccy", "0"))) != _ZERO,
+        )
         if detail is not None:
             blocked.append(detail)
             continue

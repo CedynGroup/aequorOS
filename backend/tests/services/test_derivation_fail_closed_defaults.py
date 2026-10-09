@@ -135,8 +135,9 @@ def test_fx_spot_prefers_ingested_then_implied() -> None:
     assert any("implied rate" in warning for warning in warnings)
 
 
-def test_unconvertible_hedge_leg_excludes_the_currency_instead_of_valuing_it_at_par() -> None:
-    """A hedge delta with no resolvable spot removes the currency, not the risk."""
+@pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
+def test_unconvertible_hedge_leg_retains_the_currency_and_refuses() -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): missing quotes retain the currency and block NOP."""
     canonical = _Canonical(
         as_of=AS_OF,
         base_currency="GHS",
@@ -159,26 +160,31 @@ def test_unconvertible_hedge_leg_excludes_the_currency_instead_of_valuing_it_at_
     groups: list[GroupResult] = []
     specs, included = _derive_fx_positions(canonical, groups)
 
-    assert included == set()
-    assert not [spec for spec in specs if spec.fact_group == "fx_position"]
+    assert included == {"USD"}
+    position = next(spec for spec in specs if spec.fact_group == "fx_position")
+    assert position.attributes["spot_ghs"] == ""
+    assert position.attributes["net_ccy"] == "-500.0000"
     fx_group = next(group for group in groups if group.group == "fx_position")
     assert any("missing_required_input" in warning for warning in fx_group.warnings)
 
 
-def test_currency_without_return_history_still_carries_the_capital_charge() -> None:
-    """Audit §3: it used to vanish from the book, understating the FX charge."""
+@pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
+def test_currency_without_return_history_carries_both_nop_and_capital_exposure() -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): currency coverage is independent of VaR history."""
     canonical = _canonical(
         _row("A/1", "LOAN", currency="USD", balance="1000", balance_ghs="12850"),
     )
     groups: list[GroupResult] = []
     specs, included = _derive_fx_positions(canonical, groups)
 
-    assert included == set()  # no VaR row without a return history
+    assert included == {"USD"}
+    position = next(spec for spec in specs if spec.fact_group == "fx_position")
+    assert position.amount == Decimal("12850")
     market = {spec.category: spec.amount for spec in specs if spec.fact_group == "market_risk"}
     assert market["net_long_fx"] == Decimal("12850")
     assert market["net_short_fx"] == Decimal("0")
     fx_group = next(group for group in groups if group.group == "fx_position")
-    assert any("IS included in the net open position" in w for w in fx_group.warnings)
+    assert any("retained for NOP limits" in w for w in fx_group.warnings)
 
 
 # ---------------------------------------------------------------------------

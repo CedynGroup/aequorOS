@@ -61,12 +61,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, select
 
-from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState, outcome
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.domain.positions.fx import fx_position_refusal, spot_or_none
+from app.live.public import require_fx_fact_coverage, require_fx_run_coverage
 from app.models import RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
@@ -121,7 +123,7 @@ def _dec(value: Any) -> Decimal | None:
 def _fx_run(rc: ResolveContext) -> RegulatoryRun | None:
     key = "bsd13:fx_run"
     if key not in rc.cache:
-        rc.cache[key] = rc.db.scalar(
+        run = rc.db.scalar(
             select(RegulatoryRun)
             .where(
                 RegulatoryRun.organization_id == rc.ctx.organization_id,
@@ -134,7 +136,17 @@ def _fx_run(rc: ResolveContext) -> RegulatoryRun | None:
             .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
             .limit(1)
         )
-    return rc.cache[key]
+        if run is not None:
+            try:
+                require_fx_run_coverage(rc.db, rc.ctx, rc.bank, rc.period, run)
+            except NotComputable as exc:
+                rc.cache[key] = exc
+                raise
+        rc.cache[key] = run
+    cached = cast(object, rc.cache[key])
+    if isinstance(cached, NotComputable):
+        raise cached
+    return cached if isinstance(cached, RegulatoryRun) else None
 
 
 def _run_currencies(rc: ResolveContext) -> dict[str, dict[str, Any]]:
@@ -165,8 +177,16 @@ def _fx_facts(rc: ResolveContext) -> dict[str, dict[str, Any]]:
             currency = str(attrs.get("currency") or fact.category).upper()
             attrs["amount"] = str(fact.amount)
             facts[currency] = attrs
+        try:
+            require_fx_fact_coverage(rc.db, rc.ctx, rc.bank, rc.period.period_end, set(facts))
+        except NotComputable as exc:
+            rc.cache[key] = exc
+            raise
         rc.cache[key] = facts
-    return rc.cache[key]
+    cached = cast(object, rc.cache[key])
+    if isinstance(cached, NotComputable):
+        raise cached
+    return cast(dict[str, dict[str, Any]], cached)
 
 
 def spot_rate(rc: ResolveContext, currency: str) -> Decimal | None:
@@ -461,6 +481,23 @@ def _contract_measure(
 # ---------------------------------------------------------------------------
 
 
+def _require_valued_nop_facts(rc: ResolveContext) -> None:
+    """Refuse NOP totals whose currency facts cannot be revalued."""
+    blocked: list[OutcomeDetail] = []
+    for ccy, attrs in _fx_facts(rc).items():
+        detail = fx_position_refusal(
+            ccy,
+            _dec(attrs.get("net_ccy")) or _ZERO,
+            _dec(attrs.get("net_ghs", attrs.get("amount"))) or _ZERO,
+            spot_or_none(attrs.get("spot_ghs")),
+            rate_required=(_dec(attrs.get("net_derivatives_ccy")) or _ZERO) != _ZERO,
+        )
+        if detail is not None:
+            blocked.append(detail)
+    if blocked:
+        raise NotComputable(*blocked)
+
+
 @resolver("bsd13.nop")
 def _nop(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:  # noqa: PLR0911
     """Params: ``currency`` ("USD" | "GBP" | "DEM" | "other" | any ISO code;
@@ -493,6 +530,8 @@ def _nop(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:  # noqa:
     if measure == "spot":
         return None if currency == OTHER else spot_rate(rc, currency)
     facts = _fx_facts(rc)
+    if measure in ("net", "net_ghs"):
+        _require_valued_nop_facts(rc)
     run_ccy = _run_currencies(rc)
     if currency != OTHER:
         return _currency_measure(currency, measure, facts.get(currency), run_ccy.get(currency))

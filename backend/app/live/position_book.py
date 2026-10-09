@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import cast
@@ -40,7 +40,7 @@ def load_position_records(
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    as_of: date,
+    as_of: date | Collection[date],
     position_types: tuple[str, ...] | None = None,
 ) -> list[SourceRecord]:
     return cast(
@@ -67,7 +67,9 @@ def load_position_records(
                 .where(
                     CanonicalPositionSnapshot.organization_id == ctx.organization_id,
                     CanonicalPositionSnapshot.bank_id == bank.id,
-                    CanonicalPositionSnapshot.as_of_date == as_of,
+                    CanonicalPositionSnapshot.as_of_date.in_(
+                        (as_of,) if isinstance(as_of, date) else as_of
+                    ),
                     CanonicalPositionSnapshot.superseded_by.is_(None),
                     CanonicalPositionSnapshot.withdrawn_at.is_(None),
                     CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),

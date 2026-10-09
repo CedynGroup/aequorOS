@@ -533,10 +533,13 @@ def _seed_unrateable_currency(session: Any, as_of: date, period_id: str) -> None
     session.flush()
 
 
+@pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
 def test_a_currency_with_no_governed_rate_refuses_instead_of_reporting_at_parity(
     db_client: TestClient,
 ) -> None:
-    """Audit D-13 / D-21: the Other Currencies column may not assume a rate.
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): the Other Currencies NOP requires a quote.
+
+    Audit D-13 / D-21: the Other Currencies column may not assume a rate.
 
     Before this fix each cell below reported the JPY amount ITSELF as a
     reporting-currency figure — ``F20`` = 500,000,000, ``F16`` = 500,000,000,
@@ -577,9 +580,9 @@ def test_a_currency_with_no_governed_rate_refuses_instead_of_reporting_at_parity
     # the reporting currency is the bank's own, never a literal
     assert "stated in GHS" in joined, joined
 
-    # a currency that IS rateable still reports: the cedi-equivalent NOP cells
-    # that need no conversion are untouched by the refusal
-    assert _statuses(snapshot, MAIN)["N29"] == "mapped"
+    # Notice BG/FMD/2026/07 ¶1(a)–(b): an already-carried cedi total cannot
+    # bypass the missing quote and present a partial Other Currencies NOP.
+    assert _statuses(snapshot, MAIN)["N29"] == "input_required"
 
 
 def test_unconverted_amounts_are_counted_by_currency_not_dropped() -> None:

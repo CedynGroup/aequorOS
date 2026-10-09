@@ -315,6 +315,17 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `compute_stressed_var` clamps the cedi-crisis window to the available return history when a bank
   has fewer observations than the configured window, so a short upload still yields a best-effort
   stress instead of killing the whole FX module. On full history the window is used unchanged.
+- **NOP currency coverage.** Notice BG/FMD/2026/07 ¶1(a)–(b): derivation retains every
+  foreign currency independently of return history. A currency without history needs an
+  ingested current FX quote; full FX analysis refuses until its history is supplied.
+  `app/live/fx_book.py` checks facts and filing runs against accepted positions at the exact
+  source date, so older partial runs cannot supply DBK, FX-NOP or BSD13 totals. Dashboard
+  coverage uses one scoped query for the whole window. The NOP-only workbench can compute
+  from complete valued positions without a VaR history. NOF, long-position and contingent
+  rules are separate from this coverage check.
+  Capital FX aggregation has its own writer and retains its existing basis;
+  capital-side FX valuation refusal is tracked in
+  [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).
 
 The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
 stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or

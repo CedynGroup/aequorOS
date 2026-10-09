@@ -1398,7 +1398,7 @@
   "reportPrivateUsage": 2
  },
  "app.services.fact_derivation": {
-  "reportAny": 36,
+  "reportAny": 35,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 4
@@ -1904,7 +1904,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_fx": {
-  "reportAny": 46,
+  "reportAny": 44,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr": {
@@ -2012,7 +2012,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd13": {
-  "reportAny": 57,
+  "reportAny": 55,
   "reportUnknownArgumentType": 3,
   "reportUnknownVariableType": 8,
   "reportUnusedFunction": 3
