@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -448,9 +449,9 @@ def test_unavailable_kms_refuses_provisioning_and_rolls_back(
         "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
     )
     assert response.status_code == 200
-    body = response.json()
+    body = cast(dict[str, object], response.json())
     assert body["succeeded"] is False
-    steps = _steps_by_name(body)
+    steps = cast(dict[str, dict[str, str]], _steps_by_name(body))
     assert steps["kms"]["status"] == "failed"
     assert "no KMS client is available" in steps["kms"]["detail"]
     assert operator_db.scalar(select(Organization)) is None

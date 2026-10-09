@@ -398,8 +398,12 @@ const { backendRequest } = require(process.argv[1]);
     try:
         result = subprocess.run(
             [
-                "node", "-e", script, str(helper),
-                f"https://localhost:{secure.server_port}", json.dumps(targets),
+                "node",
+                "-e",
+                script,
+                str(helper),
+                f"https://localhost:{secure.server_port}",
+                json.dumps(targets),
             ],
             env={**os.environ, "NODE_EXTRA_CA_CERTS": str(cert)},
             capture_output=True,

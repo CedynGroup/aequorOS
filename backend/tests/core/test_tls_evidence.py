@@ -51,9 +51,14 @@ def test_cli_probes_all_configured_roles_and_reports_database_failures(
             raise TransportSecurityError(f"sensitive error: {url}")
         return {"negotiated_version": "TLSv1.3"}
 
+    def probe_https(_url: str) -> dict[str, str]:
+        return {"negotiated_version": "TLSv1.3"}
+
     monkeypatch.setattr(tls_evidence, "probe_database", probe_database)
-    monkeypatch.setattr(tls_evidence, "probe_https", lambda _url: {"negotiated_version": "TLSv1.3"})
-    monkeypatch.setattr(sys, "argv", ["tls_evidence", "--https", "https://edge.example", "--databases"])
+    monkeypatch.setattr(tls_evidence, "probe_https", probe_https)
+    monkeypatch.setattr(
+        sys, "argv", ["tls_evidence", "--https", "https://edge.example", "--databases"]
+    )
     try:
         if failed_role is None:
             tls_evidence.main()
@@ -68,7 +73,9 @@ def test_cli_probes_all_configured_roles_and_reports_database_failures(
         assert [result["target"] for result in results] == ["https-1", *DATABASE_NAMES]
         failures = [result for result in results if "error" in result]
         assert failures == (
-            [] if failed_role is None else [{"target": failed_role, "error": "TransportSecurityError"}]
+            []
+            if failed_role is None
+            else [{"target": failed_role, "error": "TransportSecurityError"}]
         )
         assert "secret" not in output
         assert "postgresql" not in output
