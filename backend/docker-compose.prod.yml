@@ -51,7 +51,11 @@ services:
     # containers, so a dependency outage marks this unhealthy without putting it
     # into a restart loop.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=8).status==200 else 1)\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(''http://127.0.0.1:8000/api/health/ready'', timeout=8).status==200 else 1)"',
+        ]
       interval: 30s
       timeout: 12s
       retries: 5
@@ -81,7 +85,11 @@ services:
     # asserts the role can claim AND that the poll loop wrote a heartbeat within
     # WORKER_STALE_JOB_SECONDS.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "from app.worker import healthcheck; healthcheck()"',
+        ]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -128,7 +136,11 @@ services:
     # has THIS worker's poll loop written a heartbeat recently. WORKER_ID is
     # pinned below so the check reads its own heartbeat rather than a peer's.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "from app.worker import healthcheck; healthcheck()"',
+        ]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -146,12 +158,20 @@ services:
   # Staff control plane (operator API): the app behind console.aequoros.com.
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated
   # domain to container port 8100 (e.g. op.aequoros.com); the console app's
-  # OPERATOR_API_URL points at it. Auth is workforce-OIDC-only in production
-  # (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
+  # OPERATOR_API_URL points at it. Auth accepts password sessions and workforce
+  # OIDC (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
   # WORKER_DATABASE_URL from the shared .env when unset.
   risk-operator:
     build: .
-    command: ["uvicorn", "app.operator.main:app", "--host", "0.0.0.0", "--port", "8100"]
+    command:
+      [
+        "uvicorn",
+        "app.operator.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8100",
+      ]
     restart: unless-stopped
     depends_on:
       risk-migrate:
@@ -159,7 +179,11 @@ services:
     expose:
       - "8100"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/operator/health', timeout=4).status==200 else 1)\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(''http://127.0.0.1:8100/operator/health'', timeout=4).status==200 else 1)"',
+        ]
       interval: 30s
       timeout: 6s
       retries: 3

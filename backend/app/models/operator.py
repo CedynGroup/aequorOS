@@ -39,10 +39,9 @@ OPERATOR_ROLES: tuple[str, ...] = ("developer", "operator_admin", "super_admin")
 #: touch super_admin or operator_admin rows' credentials/status).
 OPERATOR_ROLE_RANK: dict[str, int] = {role: rank for rank, role in enumerate(OPERATOR_ROLES)}
 TENANT_STORAGE_PROVIDERS: tuple[str, ...] = ("minio", "aws")
-#: Tenant-inspector session modes. ``consent`` is the routine path (the tenant
-#: asked for support); ``break_glass`` is the emergency, admin-gated path. Both
-#: are READ-ONLY session tracking this wave — the row + audit + UI banner are the
-#: control; no act-as-user token is ever minted.
+#: Tenant-inspector mode labels: ``consent`` does not verify bank approval;
+#: ``break_glass`` requires an admin at session creation. Enforcement lives in
+#: ``app.operator.inspection`` and the inspector feature endpoints.
 OPERATOR_INSPECTOR_MODES: tuple[str, ...] = ("consent", "break_glass")
 
 
@@ -160,15 +159,13 @@ class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class OperatorInspectorSession(UuidV4PrimaryKeyMixin, Base):
-    """One READ-ONLY tenant-inspector session (staff_UI.md tenant inspector).
+    """Track who inspected which tenant, when, why and under which mode.
 
-    Append-only session TRACKING, not an access grant: opening a session mints
-    NO tenant token and no act-as-user claim — the console renders tenant data
-    through the operator read endpoints, and this row (plus its
-    ``operator_audit_log`` entries and the UI banner) is the diligence control
-    that says WHO looked at WHICH tenant, WHEN, WHY, and under which mode. True
-    act-as-user sign-in is deliberately out of scope (separate security review),
-    so ``read_only`` is always true this wave.
+    Opening a session does not itself mint a tenant token or prove bank consent.
+    The ``read_only`` flag is descriptive, not a restriction on operator fixes.
+    Session enforcement is owned by ``app.operator.inspection``; the fix and
+    act-as-examiner contracts live in ``app.operator.features.inspector_fix``
+    and ``app.operator.features.inspector`` respectively.
 
     GLOBAL table, deliberately NOT RLS-forced (the operator-control-plane
     precedent): these are staff records owned by the operator role.

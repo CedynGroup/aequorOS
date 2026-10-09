@@ -627,17 +627,21 @@ After acceptance, every attempted identity-field change produces a non-configura
 
 ### 8.4 Audit Log
 
-Separate from the lineage graph, a linear audit log records every user action:
+Separate from the lineage graph, `audit_events` records selected business and
+authorization actions. Database triggers prohibit UPDATE and DELETE
+(`backend/alembic/versions/202607250027_attestation_foundation.py:95`); this is
+an append-only control, not a hash chain over every user action. The storage
+access recorder has a separate hash chain
+(`backend/app/storage/access_log.py:75`, `backend/app/storage/factory.py:20`).
+Neither proves complete login history, a bank SIEM feed, or seven years of
+operational retention.
 
-- Login and logout
-- Report generation
-- Configuration changes (mapping, validation rules, assumptions)
-- Manual overrides
-- Data acceptance decisions (accepting a batch with warnings, forcing through an error, etc.)
-- Model retraining events
-- Any change to a canonical record
-
-The audit log is append-only, tamper-evident (hash-chained records), and retained per regulatory requirement (7+ years).
+**Planned:** login history and account audit visibility under
+[#297](https://github.com/CedynGroup/aequorOS/issues/297) and
+[#131](https://github.com/CedynGroup/aequorOS/issues/131); bank-visible staff
+access under [#351](https://github.com/CedynGroup/aequorOS/issues/351).
+**To confirm:** the security owner must provide the log coverage, SIEM delivery
+plan and retention schedule. See the [BoG evidence pack](compliance/bog-evidence-pack.md).
 
 ---
 
@@ -969,45 +973,49 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Every canonical record is stamped with `institution_id`.
-- Every database query is scoped to `institution_id`.
-- Row-level security enforced at the database level, not just the application.
-- Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
+[Architecture §2](../ARCHITECTURE.md#2-tenancy-model) owns the organization RLS
+boundary and bank query scope. Staff access is not an aggregated-only interface;
+current privileges and planned bank-visible controls are recorded in the
+[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access).
 
 ### 14.2 Encryption
 
-- At rest: AES-256 via AWS KMS or GCP KMS with customer-managed keys.
-- In transit: TLS 1.3 for all connections.
-- Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
-- PII masking in non-production environments; synthetic data only for development and testing.
+The [BoG evidence pack §5](compliance/bog-evidence-pack.md#5-encryption-and-key-custody)
+owns the asset-by-asset encryption and key-custody evidence and planned delivery
+issues. Optional SSE-KMS support does not establish customer-managed keys or
+TLS 1.3 on every connection. Environment isolation and masking remain planned;
+see [§9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents).
 
 ### 14.3 Access Control
 
-- SSO integration with bank Active Directory / LDAP.
-- MFA required for all users.
-- Role-based access control with defined roles: CRO, Treasurer, ALCO member, risk analyst, IT admin, external auditor (read-only).
-- Segregation of duties: maker/checker workflow for sensitive operations (mapping changes, validation rule changes, manual overrides above threshold).
+The [SSO onboarding guide](sso-onboarding.md#security-notes-your-reviewers-will-ask-about)
+owns bank sign-in guidance, including local password fallback and IdP MFA.
+Universal MFA is not established. The
+[authorization foundation](../backend/docs/authorization_foundation.md#standing-rules-at-a-glance)
+owns scoped authority; the
+[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access)
+records staff access gaps and planned controls.
 
 ### 14.4 Data Residency
 
-- AWS Cape Town region for African customers requiring in-country residency.
-- Configurable per-institution.
-- Analytical/aggregated data may reside elsewhere if permitted; transactional data respects residency requirements.
+Ghana residency and per-bank region selection are not established. Deployment
+locations, transfer questions and planned residency work are owned by the
+[BoG evidence pack §2](compliance/bog-evidence-pack.md#2-hosting-backups-and-sub-processors).
 
 ### 14.5 Compliance Certifications
 
-- SOC 2 Type II: target Year 2.
-- ISO 27001: follow SOC 2.
-- Ghana Data Protection Act compliance from day one.
-- Banking secrecy compliance: no cross-institution data visibility, no data reuse without consent.
+[README, “License & security”](../README.md#license--security) owns the public
+certification status. The
+[BoG evidence pack §9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents)
+records planned independent assessment, privacy and counsel work and the
+outstanding registration and assurance evidence. Compliance is not asserted.
 
 ### 14.6 Business Continuity
 
-- RPO ≤ 1 hour (backup frequency).
-- RTO ≤ 4 hours (DR failover).
-- Uptime SLA: 99.9%.
-- Multi-AZ deployment with automatic failover.
-- Quarterly DR drills with documented results.
+The [BoG evidence pack §8](compliance/bog-evidence-pack.md#8-recovery-evidence-and-service-objectives)
+owns recovery evidence, its limits and the planned restore, backup and failover
+issues. A one-hour RPO, four-hour service RTO, 99.9% SLA, Multi-AZ failover and
+quarterly drills are not achieved guarantees.
 
 ---
 

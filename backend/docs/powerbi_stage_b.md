@@ -192,28 +192,29 @@ reason the feed exists in preference to a database login.
 
 ## 5. Where the data is allowed to go — the CISD caveat
 
-**What CISD is, in this repository's context.** The Bank of Ghana's **Cyber and
-Information Security Directive**; the 2025 exposure draft is cited in
-`docs/research/bog_orass_submission_channels.md` (comments to
-`information.security@bog.gov.gh`, exposure draft published September 2025). This
-platform's product documentation (`docs/bi.md`) records the operative expectation
-as: **critical data is expected to stay in Ghana**, with the definition of
-"critical data" to be confirmed by counsel. Nothing in this document is legal
-advice, and AequorOS does not determine which of your data is critical — your
-institution does.
+**What CISD is.** Use the Bank of Ghana's
+[Cyber and Information Security Directive, March 2026](https://www.bog.gov.gh/wp-content/uploads/2020/06/Cyber-Information-Security-Directive-2026.pdf),
+which supersedes the 2025 exposure draft. Annexure G 3(i) addresses safeguards
+and BoG approval for transfers outside Ghana. The bank and counsel must assess
+the deployment and proposed BI flows before approval; AequorOS does not decide
+the bank's legal classification of its data.
 
-**Why it matters to a BI project at all.** Microsoft Power BI's nearest data
-region is South Africa. A Power BI _Service_ (cloud) dataset therefore holds a
-copy of whatever it imports, outside Ghana, on infrastructure your institution
-does not control. That is true of any cloud BI service; Power BI is named because
-it is the tool this feed most often replaces or feeds.
+**To confirm:** the bank's BI owner must establish the actual workspace,
+gateway, model and processing locations. No Power BI region is inferred from
+geographic proximity. Operations must also establish AequorOS' own locations;
+the built-in dashboard is not proof that hosting is in Ghana. Sources:
+`backend/docker-compose.prod.yml:6`, `backend/app/models/operator.py:127`.
+See the [BoG evidence draft](../../docs/compliance/bog-evidence-pack.md),
+especially questions Q02–Q07. **Planned:** residency arrangements under
+[#209](https://github.com/CedynGroup/aequorOS/issues/209).
 
 ### What is recommended
 
 1. **Preferred — keep the data in country.** Use the AequorOS analytics
    surfaces (dashboards, Explore, governed exports, scheduled report packs) and
-   pull nothing out. Then no copy of the bank's data leaves the deployment, and
-   the residency question does not arise.
+   pull nothing out. This avoids a BI export copy; operations must first confirm
+   that the AequorOS deployment and all its processing paths are in Ghana or
+   covered by the required approvals.
 2. **Recommended, if you want your own BI tool — Power BI Report Server**, or an
    equivalent on-premises deployment, hosted on infrastructure inside Ghana. The
    feed is pulled into a model that never leaves the country. This is the
@@ -221,14 +222,16 @@ it is the tool this feed most often replaces or feeds.
 3. **Acceptable with sign-off — a gateway with the model kept on-premises.** An
    on-premises data gateway lets a cloud workspace query an in-country source.
    Note precisely what this does and does not achieve: a _DirectQuery_ model
-   leaves the rows in country and sends only query results; an _Import_ model
+   keeps source rows at the source and sends query results, which can still be
+   bank data requiring transfer approval; an _Import_ model
    through a gateway **copies the rows into the cloud region**, and is
    configuration 4 wearing the clothes of configuration 3. Confirm which one your
    dataset uses before you sign anything.
 4. **Requires an explicit institutional decision — a cloud import model.** The
    bank's data is copied to a region outside Ghana. AequorOS does not prevent
    this; the credential is yours. But it is your institution's decision, not your
-   BI team's, and it should be recorded as one.
+   BI team's, and it should be recorded with the applicable safeguards and
+   approvals. Institutional sign-off alone does not establish BoG approval.
 
 ### The residual risk, stated plainly
 

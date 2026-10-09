@@ -1285,8 +1285,8 @@ class OperatorSettings(BaseSettings):
     """Operator control-plane API settings (docs/internal/developer.md §4).
 
     The operator app (``app.operator.main``) is a SEPARATE ASGI app — never
-    mounted on the tenant API — deployed behind an allowlist/VPN with
-    workforce OIDC login. These settings are deliberately kept out of the
+    mounted on the tenant API — supporting password sessions and workforce
+    OIDC login. These settings are deliberately kept out of the
     tenant :class:`Settings` aggregate: tenant-plane code has no reason to
     read them, and the operator entrypoint resolves them independently via
     :func:`get_operator_settings`.

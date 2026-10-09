@@ -37,7 +37,7 @@ find here is held privately — ask for it.
 
 | App                 | Production build                                                                                                                             | Domain                                |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `frontend`          | Vercel (see `frontend/README.md`)                                                                                                            | `aequoros.com`                        |
+| `frontend`          | Self-hosted Coolify deployment documented in `frontend/README.md`; confirm the active provider and country before procurement                | `aequoros.com`                        |
 | `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
 | `backend`           | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
 | `console`           | none committed yet — no Dockerfile or compose file in this repo                                                                              | intended `console.aequoros.com`       |
@@ -175,4 +175,4 @@ but has never been restored, so filed-artifact recoverability is untested; there
 is no point-in-time recovery, and the timings come from a local cluster rather
 than production hardware. The full disclosure register lives in
 `docs/audit/15_known_limitations.md`, which is **not tracked in this repository**
-(`.gitignore:42`) — ask for it directly.
+([publication allow-list](.gitignore)) — ask for it directly.

@@ -53,7 +53,7 @@ router = APIRouter(prefix="/inspector", tags=["operator-inspector"])
 def start_inspector_session(
     payload: InspectorSessionCreate, db: OperatorDb, operator: Operator
 ) -> InspectorSessionRead:
-    """Open a READ-ONLY inspection window (404 if the org is unknown).
+    """Open a tracked inspection window (404 if the org is unknown).
 
     ``break_glass`` is the admin-gated emergency path; enforce the stricter role
     here rather than in the shared dependency so ``consent`` stays open to any
@@ -164,9 +164,7 @@ def mint_inspector_act_token(
     # arithmetic below never trips over a naive/aware comparison (Postgres rows
     # are already aware — the guard is a no-op there).
     session_expires_at = (
-        row.expires_at
-        if row.expires_at.tzinfo is not None
-        else row.expires_at.replace(tzinfo=UTC)
+        row.expires_at if row.expires_at.tzinfo is not None else row.expires_at.replace(tzinfo=UTC)
     )
     if row.ended_at is not None:
         raise HTTPException(

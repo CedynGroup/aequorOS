@@ -8,14 +8,14 @@ execution pass)**
 > ## READ FIRST — the execution pass, and what it changed
 >
 > The first verification pass over this package **ran no tests**: every `VERIFIED` in it meant
-> *"the fix is in the source at the line cited"*, never *"a test proves it"*. A second pass
+> _"the fix is in the source at the line cited"_, never _"a test proves it"_. A second pass
 > (`remediation_master_register.md` **§WS-A12-R2**) ran the suites. Results:
 >
-> | | of the 50 claimed-closed findings | of all 56 verified |
-> |---|---:|---:|
-> | **Confirmed by a test executed** | **41** | **44** |
-> | **No test pins it** | **9** | **12** |
-> | **Failed** | **0** | **0** |
+> |                                  | of the 50 claimed-closed findings | of all 56 verified |
+> | -------------------------------- | --------------------------------: | -----------------: |
+> | **Confirmed by a test executed** |                            **41** |             **44** |
+> | **No test pins it**              |                             **9** |             **12** |
+> | **Failed**                       |                             **0** |              **0** |
 >
 > **Three things a reader must carry into every document below:**
 >
@@ -49,14 +49,11 @@ execution pass)**
 > **No certification of any kind is held or claimed** — no SOC 2, no ISO, no regulatory
 > approval.
 
-> ## ⚠ This package is UNTRACKED and does not ship with the repository
+> ## Publication and private attachments
 >
-> `.gitignore:42` is `/docs/`. Verified: `git ls-files docs/` → **0 files**. **An examiner who
-> clones this repository receives none of these documents, and every link below is dead
-> outside this checkout.** The exclusion is deliberate — the rule is "local documentation and
-> client collateral" — so it is a founder decision, recorded as `NEW-47` and restated at the
-> head of `remediation_master_register.md`. **An evidence package that does not ship is not
-> evidence.**
+> [`.gitignore`](../../.gitignore) owns the publication allow-list. This index and
+> selected evidence documents are tracked; the remaining private attachments
+> must be requested from aequorOS. A repository clone is not the complete package.
 
 ---
 
@@ -82,12 +79,14 @@ Production measurements were taken **read-only** against the primary database un
 `options=-c default_transaction_read_only=on`, verified by a probe write being refused with
 `ReadOnlySqlTransaction` before any query ran. Nothing in production was modified.
 
-## What is deliberately *not* claimed
+## What is deliberately _not_ claimed
 
 - **No certification of any kind.** No SOC 2, no ISO, no regulatory approval, no
   "audit-proof", no "compliant". The strongest formulation used anywhere in this package is:
-  *all repository-verifiable controls identified by the audits have been implemented and
-  verified; the system is ready for independent regulatory/compliance assessment.*
+  _the cited evidence describes selected implemented controls and their verification;
+  completeness and regulatory compliance require independent assessment._ The current
+  [BoG evidence draft](../compliance/bog-evidence-pack.md) distinguishes built controls,
+  planned work and deployment facts still awaiting owner confirmation.
 - **No live regulatory filing.** No return has ever been submitted to the Bank of Ghana.
   Measured: 53 packages, exactly **2** certified (both `LCR-NSFR`, carrying no capital
   figures), and all 7 submission events against a simulation channel. See §06 and §15.
@@ -111,40 +110,40 @@ Production measurements were taken **read-only** against the primary database un
 
 ## Contents
 
-| # | Document | Subject |
-|---|---|---|
-| 01 | [System architecture](01_system_architecture.md) | Entrypoints, calculation planes, deployment topology, boundaries and the guards that hold them |
-| 02 | [Calculation authority registry](02_calculation_authority_registry.md) | The single authority per (metric, regime, methodology); 78 registered, 47 filable, 40 needing external verification |
-| 03 | [Metric lineage](03_metric_lineage.md) | Filing → package → approval → run → engine → policy → parameter → fact → batch, traced end to end on a real certified return |
-| 04 | [Policy and parameter governance](04_policy_governance.md) | Control plane, four-eyes, tightening clamp, citation discipline, and where `confirmed` is not justified |
-| 05 | [Data lineage](05_data_lineage.md) | Ingestion → canonical → fact derivation → official plane, with a worked example and the GL-loader defects |
-| 06 | [Regulatory reporting lineage](06_regulatory_reporting_lineage.md) | Return registry, template authority, eligibility, export artifacts, submission channels |
-| 07 | [Security controls](07_security_controls.md) | Authentication, session revocation, throttling, egress control, secrets, e-signature trust chain |
-| 08 | [Tenant isolation](08_tenant_isolation.md) | RLS posture measured on the primary, dependency boundary, impersonation invariant, operator plane |
-| 09 | [Maker-checker](09_maker_checker.md) | Separation of duties across filings, signing, parameters and exceptions |
-| 10 | [Calculation versioning](10_calculation_versioning.md) | Engine/schema versions, value-based hashing, immutability, the BIA correction, restatement position |
-| 11 | [Reconciliation controls](11_reconciliation_controls.md) | Balance-sheet identity, source-book overlap, governed exceptions, and the hole that remains |
-| 12 | [Test evidence](12_test_evidence.md) | What the suite proves, measured; what it does not; CI coverage gaps |
-| 13 | [Backup and restore evidence](13_backup_restore_evidence.md) | The executed drill, its result, and everything it does not cover |
-| 14 | [Production readiness](14_production_readiness.md) | Gate-by-gate status against measured evidence |
-| 15 | [Known limitations](15_known_limitations.md) | Complete disclosure register, including withdrawn claims and unresolved items |
-| 16 | [External verification schedule](16_external_verification_schedule.md) | The 40 calculation authorities requiring external regulatory verification, itemised: value in question, what Bank of Ghana source would settle it, and which 14 can reach a filed return today |
-| — | [Claims audit](claims_audit.md) | Every customer-facing and internal claim, its location, verdict and evidence |
-| — | [Remediation master register](remediation_master_register.md) | The programme's living ledger, including its own corrections |
+| #   | Document                                                               | Subject                                                                                                                                                                                        |
+| --- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01  | [System architecture](01_system_architecture.md)                       | Entrypoints, calculation planes, deployment topology, boundaries and the guards that hold them                                                                                                 |
+| 02  | [Calculation authority registry](02_calculation_authority_registry.md) | The single authority per (metric, regime, methodology); 78 registered, 47 filable, 40 needing external verification                                                                            |
+| 03  | [Metric lineage](03_metric_lineage.md)                                 | Filing → package → approval → run → engine → policy → parameter → fact → batch, traced end to end on a real certified return                                                                   |
+| 04  | [Policy and parameter governance](04_policy_governance.md)             | Control plane, four-eyes, tightening clamp, citation discipline, and where `confirmed` is not justified                                                                                        |
+| 05  | [Data lineage](05_data_lineage.md)                                     | Ingestion → canonical → fact derivation → official plane, with a worked example and the GL-loader defects                                                                                      |
+| 06  | [Regulatory reporting lineage](06_regulatory_reporting_lineage.md)     | Return registry, template authority, eligibility, export artifacts, submission channels                                                                                                        |
+| 07  | [Security controls](07_security_controls.md)                           | Authentication, session revocation, throttling, egress control, secrets, e-signature trust chain                                                                                               |
+| 08  | [Tenant isolation](08_tenant_isolation.md)                             | RLS posture measured on the primary, dependency boundary, impersonation invariant, operator plane                                                                                              |
+| 09  | [Maker-checker](09_maker_checker.md)                                   | Separation of duties across filings, signing, parameters and exceptions                                                                                                                        |
+| 10  | [Calculation versioning](10_calculation_versioning.md)                 | Engine/schema versions, value-based hashing, immutability, the BIA correction, restatement position                                                                                            |
+| 11  | [Reconciliation controls](11_reconciliation_controls.md)               | Balance-sheet identity, source-book overlap, governed exceptions, and the hole that remains                                                                                                    |
+| 12  | [Test evidence](12_test_evidence.md)                                   | What the suite proves, measured; what it does not; CI coverage gaps                                                                                                                            |
+| 13  | [Backup and restore evidence](13_backup_restore_evidence.md)           | The executed drill, its result, and everything it does not cover                                                                                                                               |
+| 14  | [Production readiness](14_production_readiness.md)                     | Gate-by-gate status against measured evidence                                                                                                                                                  |
+| 15  | [Known limitations](15_known_limitations.md)                           | Complete disclosure register, including withdrawn claims and unresolved items                                                                                                                  |
+| 16  | [External verification schedule](16_external_verification_schedule.md) | The 40 calculation authorities requiring external regulatory verification, itemised: value in question, what Bank of Ghana source would settle it, and which 14 can reach a filed return today |
+| —   | [Claims audit](claims_audit.md)                                        | Every customer-facing and internal claim, its location, verdict and evidence                                                                                                                   |
+| —   | [Remediation master register](remediation_master_register.md)          | The programme's living ledger, including its own corrections                                                                                                                                   |
 
 The lineage pair — **§03 and §05** — is the heart of the package. Together they trace one
 reported number from a signed filing back to the ingestion batch that produced its inputs.
 
 ## Source audits referenced
 
-| Document | Finding ID prefix |
-|---|---|
-| `backend/docs/AEQUOROS_ENTERPRISE_PLATFORM_AUDIT_2026-08-20.md` | `P0-n` |
-| `backend/docs/forensic_calculation_audit_2026-08-21.md` | narrative |
-| `backend/docs/FORENSIC_CALCULATION_ARCHITECTURE_AUDIT_2026-08-21.md` | `CF-n` |
-| `backend/docs/INDEPENDENT_FORENSIC_REAUDIT_2026-08-22.md` | `D-n` |
-| `backend/docs/bog_parameter_sources.md` | citation dossier |
-| `docs/audit/remediation_master_register.md` | `ARCH-n`, `NEW-n`, `INF-n`, `OPS-n`, `AUD-n`, `S-n`, `L-n`, `D-n` |
+| Document                                                             | Finding ID prefix                                                 |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `backend/docs/AEQUOROS_ENTERPRISE_PLATFORM_AUDIT_2026-08-20.md`      | `P0-n`                                                            |
+| `backend/docs/forensic_calculation_audit_2026-08-21.md`              | narrative                                                         |
+| `backend/docs/FORENSIC_CALCULATION_ARCHITECTURE_AUDIT_2026-08-21.md` | `CF-n`                                                            |
+| `backend/docs/INDEPENDENT_FORENSIC_REAUDIT_2026-08-22.md`            | `D-n`                                                             |
+| `backend/docs/bog_parameter_sources.md`                              | citation dossier                                                  |
+| `docs/audit/remediation_master_register.md`                          | `ARCH-n`, `NEW-n`, `INF-n`, `OPS-n`, `AUD-n`, `S-n`, `L-n`, `D-n` |
 
 ## Measurement corrections made during preparation
 
@@ -153,29 +152,29 @@ for this package. The measured values are used throughout; the earlier ones are 
 so the difference is not silent. **These are counting differences, not disagreements about
 substance.**
 
-| Claim in the source material | Measured for this package | Command |
-|---|---|---|
-| 41 authorities require external regulatory verification | **40** | `REGISTRY.requiring_external_verification()` |
-| 57 seeded regulatory parameters | **70** at runtime (54 literal rows + 16 generated LMTD floors). The "57" counts textual `ParamSpec(` occurrences: 54 data rows + 2 loop-body constructions + 1 class statement | `len(SEED_PARAMETERS)` |
-| 54 parameters, 40 confirmed / 14 pending (citation dossier §6) | **70**, **56 confirmed / 14 pending** — the dossier counted the literal rows only; all 16 generated LMTD rows are `confirmed` | as above |
-| ~93 outstanding Ruff findings | **60** in `backend/` (the register's figure was measured mid-programme with several workstreams editing concurrently) | `uv run ruff check .` |
-| 24 BoG workbooks | **23** — the 24th file is a Word guide, not a workbook | file count under `docs/reporting/` |
+| Claim in the source material                                   | Measured for this package                                                                                                                                                      | Command                                      |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| 41 authorities require external regulatory verification        | **40**                                                                                                                                                                         | `REGISTRY.requiring_external_verification()` |
+| 57 seeded regulatory parameters                                | **70** at runtime (54 literal rows + 16 generated LMTD floors). The "57" counts textual `ParamSpec(` occurrences: 54 data rows + 2 loop-body constructions + 1 class statement | `len(SEED_PARAMETERS)`                       |
+| 54 parameters, 40 confirmed / 14 pending (citation dossier §6) | **70**, **56 confirmed / 14 pending** — the dossier counted the literal rows only; all 16 generated LMTD rows are `confirmed`                                                  | as above                                     |
+| ~93 outstanding Ruff findings                                  | **60** in `backend/` (the register's figure was measured mid-programme with several workstreams editing concurrently)                                                          | `uv run ruff check .`                        |
+| 24 BoG workbooks                                               | **23** — the 24th file is a Word guide, not a workbook                                                                                                                         | file count under `docs/reporting/`           |
 
 ## Substantive corrections to earlier findings
 
 Recorded because acting on the withdrawn version would cause harm. Each is documented in full
 where it belongs.
 
-| Withdrawn claim | Corrected position | Where |
-|---|---|---|
-| *"The `LCR-NSFR` return applies no inflow cap."* | **False.** Both LCR methodologies cap inflows; the divergence is aggregate-vs-per-currency and governed-vs-hardcoded | §02 §5.2 |
-| *"There is no `car_min` seeded for `institution_class / bank`."* | The row exists. The finding came from a regex over source that dropped multi-line calls | §04 §5 |
-| *"Act 930 s.29 is an enabling provision only."* | **Refuted** — s.29(2) states a 10% statutory floor | §04 §5 |
-| *"A current 2026-06-30 GL row of 0.00 was overridden by a stale value."* | There is no `0.00` row. The **entire** current generation carried NULL balances and May's ledger was served as June's | §05 §6.2 |
-| *"The live books do not balance; the bank should reconcile its general ledger."* | **Withdrawn.** The control's output was validated without validating its inputs. On the one provably clean book it reported 16.5% | §05 §6.6, §11 §2 |
-| *"Sample Bank's GL balances to one pesewa."* | Arithmetically true, analytically wrong — it balanced by ignoring impairment | §11 §3 |
-| *"Per-source-system supersession is a platform defect."* | **Deliberate design.** Cross-source supersession would delete a legitimate second source's book | §11 §5 |
-| *"`CanonicalPosition.superseded_by` is never assigned anywhere."* | It is assigned by same-source replacement. The accurate gap is that **no withdrawal path exists** | §11 §6, §15 §5.2 |
-| *"DB-direct is non-functional in the shipped image."* | Too broad. **Oracle thin mode ships**; SQL Server, JDBC and Snowflake do not | §05 §4.1, §15 §1.1 |
-| *"The ML test failure means the ML story needs re-examination."* | **Withdrawn** — a stale expected constant; the substantive assertions pass | §12 §4.5 |
-| *"There is no tested backup or restore anywhere."* | Superseded by an executed drill on 2026-08-22. What remains absent is schedule, retention, PITR and object-storage restore | §13, §14 §3.7 |
+| Withdrawn claim                                                                  | Corrected position                                                                                                                | Where              |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| _"The `LCR-NSFR` return applies no inflow cap."_                                 | **False.** Both LCR methodologies cap inflows; the divergence is aggregate-vs-per-currency and governed-vs-hardcoded              | §02 §5.2           |
+| _"There is no `car_min` seeded for `institution_class / bank`."_                 | The row exists. The finding came from a regex over source that dropped multi-line calls                                           | §04 §5             |
+| _"Act 930 s.29 is an enabling provision only."_                                  | **Refuted** — s.29(2) states a 10% statutory floor                                                                                | §04 §5             |
+| _"A current 2026-06-30 GL row of 0.00 was overridden by a stale value."_         | There is no `0.00` row. The **entire** current generation carried NULL balances and May's ledger was served as June's             | §05 §6.2           |
+| _"The live books do not balance; the bank should reconcile its general ledger."_ | **Withdrawn.** The control's output was validated without validating its inputs. On the one provably clean book it reported 16.5% | §05 §6.6, §11 §2   |
+| _"Sample Bank's GL balances to one pesewa."_                                     | Arithmetically true, analytically wrong — it balanced by ignoring impairment                                                      | §11 §3             |
+| _"Per-source-system supersession is a platform defect."_                         | **Deliberate design.** Cross-source supersession would delete a legitimate second source's book                                   | §11 §5             |
+| _"`CanonicalPosition.superseded_by` is never assigned anywhere."_                | It is assigned by same-source replacement. The accurate gap is that **no withdrawal path exists**                                 | §11 §6, §15 §5.2   |
+| _"DB-direct is non-functional in the shipped image."_                            | Too broad. **Oracle thin mode ships**; SQL Server, JDBC and Snowflake do not                                                      | §05 §4.1, §15 §1.1 |
+| _"The ML test failure means the ML story needs re-examination."_                 | **Withdrawn** — a stale expected constant; the substantive assertions pass                                                        | §12 §4.5           |
+| _"There is no tested backup or restore anywhere."_                               | Superseded by an executed drill on 2026-08-22. What remains absent is schedule, retention, PITR and object-storage restore        | §13, §14 §3.7      |

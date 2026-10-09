@@ -2,7 +2,7 @@
 
 **Audience:** the bank's IT / identity administrator · **Time:** ~20 minutes ·
 **Protocol:** OpenID Connect (OIDC) · **No AequorOS software is installed on
-your side, and your users' passwords never leave your identity provider.**
+your side, and OIDC sign-ins keep IdP passwords at your identity provider.**
 
 AequorOS connects directly to the identity provider (IdP) your institution
 already runs — Google Workspace, Microsoft Entra ID, Okta, or any
@@ -96,8 +96,8 @@ separate AequorOS decision.
   it. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
   Org Owner is never assigned through this flow. This option cannot
   be enabled without at least one allowed domain, so it never opens requests to
-  the public. Offboarding still works at your IdP: disable the Google/Entra
-  account and sign-in stops.
+  the public. For offboarding, follow the pre-provisioning gate in
+  [Security notes](#security-notes-your-reviewers-will-ask-about).
 
 ## Testing
 
@@ -137,11 +137,20 @@ specific refusal reason.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in _your_ IdP.
-- **No password custody:** AequorOS never sees or stores your users' passwords;
-  authentication happens entirely on your IdP, including your MFA policy.
+- **SSO password custody:** during an OIDC sign-in, authentication and MFA
+  happen at your IdP; AequorOS does not receive that IdP password. AequorOS also
+  supports local password sign-in. Staff provisioning generates an initial
+  administrator password and can reveal it once in the console
+  (`backend/app/operator/services/tenant_provisioning.py:306`,
+  `console/app/(shell)/(developer)/onboard/page.tsx:508`). Accounts with a local
+  password retain that fallback after linking SSO
+  (`backend/app/services/authentication.py:284`). **Planned:** enforced SSO and
+  removal of that fallback under [#130](https://github.com/CedynGroup/aequorOS/issues/130).
+  SSO support alone does not mean MFA is required for every user.
 - **Pre-provisioning gate:** a valid corporate identity alone is not enough;
   the user must also exist in AequorOS with a role. Offboard by disabling the
-  user in your IdP (blocks sign-in) and deactivating them in AequorOS.
+  user in your IdP (blocks OIDC sign-in) and deactivating them in AequorOS
+  (also blocks local password sign-in).
 - **Domain allow-list:** tokens from any email domain you have not listed are
   rejected before account matching.
 
