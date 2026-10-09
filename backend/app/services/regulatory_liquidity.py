@@ -36,7 +36,6 @@ from app.domain.liquidity.engine import (
     SHOCK_NMD_RUNOFF_PREFIX,
     CurrencyGapResult,
     LcrResult,
-    LiquidityComputationError,
     LiquidityFact,
     LiquidityParams,
     NsfrResult,
@@ -44,7 +43,6 @@ from app.domain.liquidity.engine import (
     UnsupportedShockError,
     apply_liquidity_stress,
     compute_currency_gaps,
-    compute_lcr,
     compute_liquidity,
     compute_stressed_ladder,
 )
@@ -237,7 +235,6 @@ def preview_note(regulator: str) -> str:
 
 
 _ZERO = Decimal("0")
-_REQUIRED_THRESHOLDS = ("lcr_min", "lcr_amber_floor", "nsfr_min", "lcr_inflow_cap_pct")
 # Only these fact groups participate in LCR/NSFR; keeping the snapshot scoped to
 # them makes the input hash insensitive to unrelated (capital/market) fact edits.
 _LIQUIDITY_FACT_GROUPS = (
@@ -714,7 +711,7 @@ class LiquidityScenarioAnalysis:
 
     lcr: FigureResult[LcrResult]
     nsfr: FigureResult[NsfrResult]
-    params: LiquidityParams
+    params: LiquidityParams[Decimal | None]
     currency_gaps: CurrencyGapResult
     mismatch_limit: Decimal | None
     stressed_ladder: tuple[StressedLadder, ...]
@@ -875,7 +872,15 @@ def _create_and_execute(
                 {"scenario_code": scenario_code},
             )
         analysis = _execute_scenario_compute(
-            db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
+            db,
+            ctx,
+            bank,
+            period,
+            sorted(facts, key=lambda fact: json.dumps(_snapshot_fact(fact), sort_keys=True)),
+            active,
+            currency_ladders,
+            shocks,
+            scenario_code,
         )
         _persist_success(
             db,
@@ -929,7 +934,7 @@ def _persist_success(  # noqa: PLR0913, PLR0915
     run: RegulatoryRun,
     lcr: LcrResult,
     nsfr: NsfrResult,
-    params: LiquidityParams,
+    params: LiquidityParams[Decimal | None],
     currency: str,
     currency_gaps: CurrencyGapResult,
     mismatch_limit: Decimal | None,
@@ -1089,12 +1094,15 @@ def _persist_failure(
 def _validation_rows(
     lcr_result: FigureResult[LcrResult],
     nsfr_result: FigureResult[NsfrResult],
-    params: LiquidityParams,
+    params: LiquidityParams[Decimal | None],
     currency: str,
 ) -> tuple[tuple[str, bool, str, str], ...]:
     rows: list[tuple[str, bool, str, str]] = []
     if isinstance(lcr_result, Computed):
         lcr = lcr_result.value
+        assert params.lcr_min_pct is not None
+        assert params.lcr_amber_floor_pct is not None
+        assert params.inflow_cap_pct is not None
         lcr_min = _pct_text(params.lcr_min_pct)
         amber_floor = _pct_text(params.lcr_amber_floor_pct)
         lcr_pct = _pct_text(lcr.lcr_pct)
@@ -1136,36 +1144,6 @@ def _validation_rows(
                 + ("; ".join(bound) + "." if bound else "Neither Level-2 cap bound.")
             )
 
-<<<<<<< HEAD
-    return (
-        (
-            "lcr_above_minimum",
-            lcr_above,
-            "error",
-            f"LCR of {lcr_pct}% is "
-            + ("at or above" if lcr_above else "below")
-            + f" the {lcr_min}% governed monitoring threshold (Basel reference ratio).",
-        ),
-        (
-            "lcr_amber_zone",
-            not lcr_amber,
-            "warning",
-            f"LCR of {lcr_pct}% is "
-            + ("inside" if lcr_amber else "outside")
-            + f" the amber zone between {amber_floor}% and {lcr_min}%.",
-        ),
-        (
-            "nsfr_above_minimum",
-            nsfr_above,
-            "error",
-            f"NSFR of {nsfr_pct}% is "
-            + ("at or above" if nsfr_above else "below")
-            + f" the {nsfr_min}% governed monitoring threshold (Basel reference ratio).",
-        ),
-        ("inflow_cap_applied", True, "info", cap_message),
-        ("hqla_all_level1", lcr.all_hqla_level1, "info", hqla_message),
-    )
-=======
         rows.extend(
             (
                 (
@@ -1174,7 +1152,7 @@ def _validation_rows(
                     "error",
                     f"LCR of {lcr_pct}% is "
                     + ("at or above" if lcr_above else "below")
-                    + f" the {lcr_min}% regulatory minimum.",
+                    + f" the {lcr_min}% governed monitoring threshold (Basel reference ratio).",
                 ),
                 (
                     "lcr_amber_zone",
@@ -1190,6 +1168,7 @@ def _validation_rows(
         )
     if isinstance(nsfr_result, Computed):
         nsfr = nsfr_result.value
+        assert params.nsfr_min_pct is not None
         nsfr_min = _pct_text(params.nsfr_min_pct)
         nsfr_pct = _pct_text(nsfr.nsfr_pct)
         nsfr_above = nsfr.nsfr_pct >= params.nsfr_min_pct
@@ -1201,7 +1180,7 @@ def _validation_rows(
                 "error",
                 f"NSFR of {nsfr_pct}% is "
                 + ("at or above" if nsfr_above else "below")
-                + f" the {nsfr_min}% regulatory minimum.",
+                + f" the {nsfr_min}% governed monitoring threshold (Basel reference ratio).",
             ),
         )
     for figure_id, result in (("lcr_pct", lcr_result), ("nsfr_pct", nsfr_result)):
@@ -1215,7 +1194,6 @@ def _validation_rows(
                 )
             )
     return tuple(rows)
->>>>>>> c11368e2 (no-mistakes(review): Preserve partial liquidity results and privacy-safe stderr logging)
 
 
 def _currency_gap_validations(
@@ -1512,7 +1490,7 @@ def _compute_inline_from_batch(
     batch: _LiquidityDashboardBatch,
     *,
     facts: Sequence[FinancialFactRow] | None = None,
-) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     # ``facts`` overrides the batch's official rows for the period: current mode
     # passes the live plane, which the official spine may not carry yet.
     if facts is None:
@@ -1532,7 +1510,7 @@ def _compute_inline_from_batch(
 
 def _compute_inline(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     facts = _load_facts(db, ctx, bank, period)
     if not facts:
         raise LiquidityRunError(
@@ -1555,7 +1533,7 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
     *,
     batch: _LiquidityDashboardBatch | None = None,
     facts: Sequence[FinancialFactRow] | None = None,
-) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     try:
         return (
             _compute_inline_from_batch(bank, period, batch, facts=facts)
@@ -1584,7 +1562,7 @@ def current_input_hash(
 
 
 def compute_liquidity_results(
-    facts: Sequence[LiquidityFact], params: LiquidityParams, tenant_id: str
+    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None], tenant_id: str
 ) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult]]:
     """Return independent figures and emit privacy-safe operational diagnostics."""
     token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
@@ -1754,28 +1732,17 @@ def _load_active_params(
     )
 
 
-def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
-    missing = [code for code in _REQUIRED_THRESHOLDS if code not in active.thresholds]
-    if missing:
-        raise LiquidityRunError(
-            "missing_parameter",
-            "Required liquidity threshold parameters are not configured: "
-            + ", ".join(missing)
-            + ".",
-            {"threshold_codes": missing},
-        )
-    # The BoG MVP parameter set defines one amber floor; it applies to both ratios.
-    amber_floor = active.thresholds["lcr_amber_floor"]
+def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams[Decimal | None]:
     return LiquidityParams(
         outflow_rates=active.outflow_rates,
         inflow_rates=active.inflow_rates,
         asf_weights=active.asf_weights,
         rsf_weights=active.rsf_weights,
-        inflow_cap_pct=active.thresholds["lcr_inflow_cap_pct"],
-        lcr_min_pct=active.thresholds["lcr_min"],
-        lcr_amber_floor_pct=amber_floor,
-        nsfr_min_pct=active.thresholds["nsfr_min"],
-        nsfr_amber_floor_pct=amber_floor,
+        inflow_cap_pct=active.thresholds.get("lcr_inflow_cap_pct"),
+        lcr_min_pct=active.thresholds.get("lcr_min"),
+        lcr_amber_floor_pct=active.thresholds.get("lcr_amber_floor"),
+        nsfr_min_pct=active.thresholds.get("nsfr_min"),
+        nsfr_amber_floor_pct=active.thresholds.get("lcr_amber_floor"),
         # HQLA haircuts + Level-2 caps come from the control plane, never from a
         # literal in the engine (enterprise audit P0-8). They are passed through
         # as resolved: an absent rate stays absent, and ``compute_lcr`` refuses
@@ -1902,6 +1869,17 @@ def _load_shocks(
     }
 
 
+def _snapshot_fact(fact: FinancialFactRow) -> dict[str, object]:
+    return {
+        "fact_group": fact.fact_group,
+        "category": fact.category,
+        "amount": str(fact.amount),
+        "hqla_level": fact.hqla_level,
+        "side": fact.attributes.get("side"),
+        "cash_derived": fact.attributes.get("source") == "cash",
+    }
+
+
 def _build_snapshot(  # noqa: PLR0913
     bank: Bank,
     period: BankReportingPeriod,
@@ -1926,17 +1904,7 @@ def _build_snapshot(  # noqa: PLR0913
         },
         "as_of_date": period.period_end.isoformat(),
         "facts": sorted(
-            (
-                {
-                    "fact_group": fact.fact_group,
-                    "category": fact.category,
-                    "amount": str(fact.amount),
-                    "hqla_level": fact.hqla_level,
-                    "side": fact.attributes.get("side"),
-                    "cash_derived": fact.attributes.get("source") == "cash",
-                }
-                for fact in facts
-            ),
+            (_snapshot_fact(fact) for fact in facts),
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
         "parameters": _snapshot_parameters(active, facts),
@@ -2268,12 +2236,14 @@ def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
         stressed_facts, stressed_params = apply_liquidity_stress(
             scenario_code, engine_facts, engine_params, scaled_shocks(k)
         )
-        try:
-            return compute_lcr(stressed_facts, stressed_params).lcr_pct
-        except LiquidityComputationError:
-            return None  # degenerate (net outflow <= 0): treated as no breach
+        result, _ = compute_liquidity_results(stressed_facts, stressed_params, bank.organization_id)
+        if isinstance(result, Refused) and result.reason_code == "non_positive_denominator":
+            return None
+        return _require_figure(result).lcr_pct
 
     minimum = engine_params.lcr_min_pct
+    if minimum is None:
+        raise LiquidityRunError("missing_parameter", "The LCR minimum is not configured.")
     k_max = Decimal("5")
     precision = Decimal("0.05")
     lcr_max = lcr_at(k_max)

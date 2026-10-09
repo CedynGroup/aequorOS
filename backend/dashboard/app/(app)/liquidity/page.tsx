@@ -31,7 +31,7 @@ import {
   useLiquidityDashboard,
   useRegulatoryRun,
 } from "@/lib/api/hooks";
-import { num, statusTone } from "@/lib/api/values";
+import { num, statusTone, numOrNull, formatFigure } from "@/lib/api/values";
 import {
   currencyCode,
   fmtCurrency,
@@ -137,23 +137,33 @@ export default function LiquidityCockpit() {
 
   const outflowRows = (data?.outflows ?? []).map(toRow);
   const inflowRows = (data?.inflows ?? []).map(toRow);
-  const totalOutflows = outflowRows.reduce((s, r) => s + r.weightedGHS, 0);
+  const lcrValue = numOrNull(data?.metrics.lcrPct);
+  const nsfrValue = numOrNull(data?.metrics.nsfrPct);
+  const netOutflows = numOrNull(data?.metrics.netOutflows30dGhs);
+  const asfTotal = numOrNull(data?.metrics.asfTotalGhs);
+  const rsfTotal = numOrNull(data?.metrics.rsfTotalGhs);
+  const totalOutflows =
+    netOutflows === null
+      ? null
+      : outflowRows.reduce((s, r) => s + r.weightedGHS, 0);
   // Identity: net outflows = total outflows − capped inflows.
-  const cappedInflows = data
-    ? totalOutflows - num(data.metrics.netOutflows30dGhs)
-    : 0;
+  const cappedInflows =
+    totalOutflows === null || netOutflows === null
+      ? null
+      : totalOutflows - netOutflows;
   const capNote = data?.validations.find(
     (v) => v.ruleCode === "inflow_cap_applied",
   );
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
 
-  const hqlaTotal = num(data?.metrics.hqlaTotalGhs);
-  const lcrTrend = (data?.trend ?? []).map((p) => num(p.lcrPct));
-  const nsfrTrend = (data?.trend ?? []).map((p) => num(p.nsfrPct));
-  const periodDelta = (series: number[]): number | undefined =>
-    series.length >= 2
-      ? series[series.length - 1] - series[series.length - 2]
-      : undefined;
+  const hqlaTotal = numOrNull(data?.metrics.hqlaTotalGhs);
+  const lcrTrend = (data?.trend ?? []).map((p) => numOrNull(p.lcrPct));
+  const nsfrTrend = (data?.trend ?? []).map((p) => numOrNull(p.nsfrPct));
+  const periodDelta = (series: (number | null)[]): number | undefined => {
+    const current = series.at(-1);
+    const previous = series.at(-2);
+    return current == null || previous == null ? undefined : current - previous;
+  };
   const lcrDelta = periodDelta(lcrTrend);
   const nsfrDelta = periodDelta(nsfrTrend);
   const hqlaRows = data?.hqlaComposition ?? [];
@@ -165,12 +175,12 @@ export default function LiquidityCockpit() {
     null,
   );
   const largestHqlaShare =
-    largestHqla && hqlaTotal > 0
+    largestHqla && hqlaTotal !== null && hqlaTotal > 0
       ? (num(largestHqla.weightedAmount) / hqlaTotal) * 100
       : null;
 
   const nsfrSurplus =
-    num(data?.metrics.asfTotalGhs) - num(data?.metrics.rsfTotalGhs);
+    asfTotal === null || rsfTotal === null ? null : asfTotal - rsfTotal;
   const ewi = ewis.data;
   const actionIndicators =
     ewi?.indicators.filter((item) => item.status === "action") ?? [];
@@ -220,24 +230,39 @@ export default function LiquidityCockpit() {
                 {lcrMin !== null && (
                   <KpiStat
                     label="LCR headroom"
-                    value={`${(num(data.metrics.lcrPct) - lcrMin).toFixed(1)} pp`}
+                    value={formatFigure(
+                      lcrValue,
+                      (value) => `${(value - lcrMin).toFixed(1)} pp`,
+                    )}
                     status={
                       data.metrics.lcrStatus === "red"
                         ? "crit"
                         : data.metrics.lcrStatus === "amber"
                           ? "warn"
-                          : "ok"
+                          : data.metrics.lcrStatus === "green"
+                            ? "ok"
+                            : undefined
                     }
-                    hint={`${fmtCurrency(hqlaTotal - num(data.metrics.netOutflows30dGhs) * (lcrMin / 100))} above monitoring threshold`}
+                    hint={
+                      hqlaTotal === null || netOutflows === null
+                        ? "Unavailable"
+                        : `${fmtCurrency(hqlaTotal - netOutflows * (lcrMin / 100))} above monitoring threshold`
+                    }
                   />
                 )}
                 <KpiStat
                   label="NSFR funding surplus"
-                  value={fmtCurrency(nsfrSurplus)}
-                  status={nsfrSurplus < 0 ? "crit" : "ok"}
+                  value={formatFigure(nsfrSurplus, fmtCurrency)}
+                  status={
+                    nsfrSurplus === null
+                      ? undefined
+                      : nsfrSurplus < 0
+                        ? "crit"
+                        : "ok"
+                  }
                   hint={
-                    nsfrMin !== null
-                      ? `${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above monitoring threshold`
+                    nsfrMin !== null && nsfrValue !== null
+                      ? `${(nsfrValue - nsfrMin).toFixed(1)} pp above monitoring threshold`
                       : undefined
                   }
                 />
@@ -249,9 +274,11 @@ export default function LiquidityCockpit() {
                       : fmtPct(largestHqlaShare, 1)
                   }
                   status={
-                    largestHqlaShare !== null && largestHqlaShare >= 75
-                      ? "warn"
-                      : "ok"
+                    largestHqlaShare === null
+                      ? undefined
+                      : largestHqlaShare >= 75
+                        ? "warn"
+                        : "ok"
                   }
                   hint={largestHqla?.description ?? "No HQLA instruments"}
                 />
@@ -410,7 +437,7 @@ export default function LiquidityCockpit() {
                 {lcrMin !== null ? (
                   <RatioGauge
                     label="Liquidity Coverage Ratio"
-                    value={num(data.metrics.lcrPct)}
+                    value={lcrValue}
                     threshold={lcrMin}
                     internalBuffer={lcrRedFloor}
                     bufferLabel="Red floor"
@@ -420,20 +447,24 @@ export default function LiquidityCockpit() {
                 ) : (
                   <KpiStat
                     label="Liquidity Coverage Ratio"
-                    value={fmtPct(num(data.metrics.lcrPct), 2)}
+                    value={formatFigure(data.metrics.lcrPct, (value) =>
+                      fmtPct(value, 2),
+                    )}
                     explain={explain.explainFor("lcr_pct")}
                   />
                 )}
               </div>
               <KpiStat
                 label="HQLA stock"
-                value={fmtCurrency(hqlaTotal)}
+                value={formatFigure(hqlaTotal, fmtCurrency)}
                 status={
                   data.metrics.lcrStatus === "red"
                     ? "crit"
                     : data.metrics.lcrStatus === "amber"
                       ? "warn"
-                      : "ok"
+                      : data.metrics.lcrStatus === "green"
+                        ? "ok"
+                        : undefined
                 }
                 delta={lcrDelta}
                 deltaSuffix=" pts LCR"
@@ -442,7 +473,10 @@ export default function LiquidityCockpit() {
               />
               <KpiStat
                 label="30-day net outflows"
-                value={fmtCurrency(num(data.metrics.netOutflows30dGhs))}
+                value={formatFigure(
+                  data.metrics.netOutflows30dGhs,
+                  fmtCurrency,
+                )}
                 hint="Outflows − capped inflows"
                 explain={explain.explainFor("net_outflows_30d_ghs")}
               />
@@ -453,7 +487,7 @@ export default function LiquidityCockpit() {
                 {nsfrMin !== null ? (
                   <RatioGauge
                     label="Net Stable Funding Ratio"
-                    value={num(data.metrics.nsfrPct)}
+                    value={nsfrValue}
                     threshold={nsfrMin}
                     status={statusTone(data.metrics.nsfrStatus)}
                     decimals={2}
@@ -461,14 +495,16 @@ export default function LiquidityCockpit() {
                 ) : (
                   <KpiStat
                     label="Net Stable Funding Ratio"
-                    value={fmtPct(num(data.metrics.nsfrPct), 2)}
+                    value={formatFigure(data.metrics.nsfrPct, (value) =>
+                      fmtPct(value, 2),
+                    )}
                     explain={explain.explainFor("nsfr_pct")}
                   />
                 )}
               </div>
               <KpiStat
                 label="Available stable funding"
-                value={fmtCurrency(num(data.metrics.asfTotalGhs))}
+                value={formatFigure(data.metrics.asfTotalGhs, fmtCurrency)}
                 delta={nsfrDelta}
                 deltaSuffix=" pts NSFR"
                 hint="Liability-side weighting"
@@ -476,7 +512,7 @@ export default function LiquidityCockpit() {
               />
               <KpiStat
                 label="Required stable funding"
-                value={fmtCurrency(num(data.metrics.rsfTotalGhs))}
+                value={formatFigure(data.metrics.rsfTotalGhs, fmtCurrency)}
                 hint="Asset-side weighting"
                 explain={explain.explainFor("rsf_total_ghs")}
               />
@@ -501,7 +537,7 @@ export default function LiquidityCockpit() {
                           <Sparkline data={lcrTrend} width={64} height={16} />
                         </span>
                       }
-                      value={num(data.metrics.lcrPct)}
+                      value={lcrValue}
                       limit={lcrRedFloor}
                       warnAt={lcrMin}
                       direction="above"
@@ -517,7 +553,7 @@ export default function LiquidityCockpit() {
                           <Sparkline data={nsfrTrend} width={64} height={16} />
                         </span>
                       }
-                      value={num(data.metrics.nsfrPct)}
+                      value={nsfrValue}
                       limit={nsfrRedFloor}
                       warnAt={nsfrMin}
                       direction="above"
@@ -543,7 +579,12 @@ export default function LiquidityCockpit() {
                   lcrMin !== null ? (
                     <StatusPill tone="success">
                       LCR above threshold{" "}
-                      {data.trend.filter((p) => num(p.lcrPct) >= lcrMin).length}{" "}
+                      {
+                        data.trend.filter((p) => {
+                          const value = numOrNull(p.lcrPct);
+                          return value !== null && value >= lcrMin;
+                        }).length
+                      }{" "}
                       of {data.trend.length}
                     </StatusPill>
                   ) : undefined
@@ -562,8 +603,8 @@ export default function LiquidityCockpit() {
                 <RatioTrendChart
                   data={data.trend.map((p) => ({
                     label: p.label,
-                    primary: num(p.lcrPct),
-                    secondary: num(p.nsfrPct),
+                    primary: numOrNull(p.lcrPct),
+                    secondary: numOrNull(p.nsfrPct),
                     stored: p.stored,
                   }))}
                   threshold={lcrMin}
@@ -588,7 +629,7 @@ export default function LiquidityCockpit() {
                     weighted: r.weightedGHS,
                   }))}
                   cappedInflows={cappedInflows}
-                  netOutflows={num(data.metrics.netOutflows30dGhs)}
+                  netOutflows={netOutflows}
                   height={260}
                 />
               </ChartFrame>
@@ -607,16 +648,20 @@ export default function LiquidityCockpit() {
                   columns={lineColumns("Runoff %", "Stressed outflow")}
                   rows={[
                     ...outflowRows,
-                    {
-                      item: "TOTAL CASH OUTFLOWS",
-                      balanceGHS: outflowRows.reduce(
-                        (s, r) => s + (r.balanceGHS ?? 0),
-                        0,
-                      ),
-                      ratePct: null,
-                      weightedGHS: totalOutflows,
-                      isTotal: true,
-                    },
+                    ...(totalOutflows === null
+                      ? []
+                      : [
+                          {
+                            item: "TOTAL CASH OUTFLOWS",
+                            balanceGHS: outflowRows.reduce(
+                              (s, r) => s + (r.balanceGHS ?? 0),
+                              0,
+                            ),
+                            ratePct: null,
+                            weightedGHS: totalOutflows,
+                            isTotal: true,
+                          },
+                        ]),
                   ]}
                   totalsRowMatcher={(r) => Boolean(r.isTotal)}
                 />
@@ -633,26 +678,34 @@ export default function LiquidityCockpit() {
                   columns={lineColumns("Inflow %", "Weighted inflow")}
                   rows={[
                     ...inflowRows,
-                    {
-                      item: "GROSS INFLOWS",
-                      balanceGHS: inflowRows.reduce(
-                        (s, r) => s + (r.balanceGHS ?? 0),
-                        0,
-                      ),
-                      ratePct: null,
-                      weightedGHS: inflowRows.reduce(
-                        (s, r) => s + r.weightedGHS,
-                        0,
-                      ),
-                      isTotal: true,
-                    },
-                    {
-                      item: "CAPPED INFLOWS (min of gross, 75% of outflows)",
-                      balanceGHS: null,
-                      ratePct: null,
-                      weightedGHS: cappedInflows,
-                      isTotal: true,
-                    },
+                    ...(netOutflows === null
+                      ? []
+                      : [
+                          {
+                            item: "GROSS INFLOWS",
+                            balanceGHS: inflowRows.reduce(
+                              (s, r) => s + (r.balanceGHS ?? 0),
+                              0,
+                            ),
+                            ratePct: null,
+                            weightedGHS: inflowRows.reduce(
+                              (s, r) => s + r.weightedGHS,
+                              0,
+                            ),
+                            isTotal: true,
+                          },
+                        ]),
+                    ...(cappedInflows === null
+                      ? []
+                      : [
+                          {
+                            item: "CAPPED INFLOWS (min of gross, 75% of outflows)",
+                            balanceGHS: null,
+                            ratePct: null,
+                            weightedGHS: cappedInflows,
+                            isTotal: true,
+                          },
+                        ]),
                   ]}
                   totalsRowMatcher={(r) => Boolean(r.isTotal)}
                 />
@@ -674,23 +727,23 @@ export default function LiquidityCockpit() {
             <p className="text-caption text-slate flex items-center gap-2 flex-wrap">
               Net outflows = Outflows{" "}
               <span className="font-mono text-navy">
-                {fmtCurrency(totalOutflows)}
+                {formatFigure(totalOutflows, fmtCurrency)}
               </span>{" "}
               − min(Gross inflows, 75% × Outflows){" "}
               <span className="font-mono text-navy">
-                {fmtCurrency(cappedInflows)}
+                {formatFigure(cappedInflows, fmtCurrency)}
               </span>{" "}
               ={" "}
               <span className="font-mono font-medium text-navy">
-                {fmtCurrency(num(data.metrics.netOutflows30dGhs))}
+                {formatFigure(data.metrics.netOutflows30dGhs, fmtCurrency)}
               </span>
               . LCR = HQLA{" "}
               <span className="font-mono text-navy">
-                {fmtCurrency(hqlaTotal)}
+                {formatFigure(hqlaTotal, fmtCurrency)}
               </span>{" "}
               / Net outflows ={" "}
-              <span className="font-mono font-medium text-success">
-                {fmtPct(num(data.metrics.lcrPct), 2)}
+              <span className="font-mono font-medium text-navy">
+                {formatFigure(data.metrics.lcrPct, (value) => fmtPct(value, 2))}
               </span>
               .
             </p>

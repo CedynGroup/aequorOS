@@ -110,10 +110,7 @@ export type ModuleStatus = 'green' | 'amber' | 'red' | 'na';
  * and "some things were measured" cannot collapse into `compliant`.
  */
 export type ComplianceVerdict =
-  | 'breach'
-  | 'partial'
-  | 'compliant'
-  | 'not_assessed';
+  'breach' | 'partial' | 'compliant' | 'not_assessed';
 
 /**
  * Summarise a set of in-scope module statuses, FAILING CLOSED.
@@ -217,9 +214,7 @@ export function fmtTimestamp(d: Date): string {
  * stale figure never masquerades as recent. Accepts a Date or ISO string;
  * returns "—" for missing input.
  */
-export function fmtRelative(
-  value: Date | string | null | undefined
-): string {
+export function fmtRelative(value: Date | string | null | undefined): string {
   if (value === null || value === undefined) return '—';
   const then = typeof value === 'string' ? new Date(value) : value;
   const ms = then.getTime();
@@ -253,4 +248,12 @@ export function fmtDateUTC(d: Date): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+export function formatFigure(
+  value: string | number | null | undefined,
+  format: (value: number) => string
+): string {
+  const parsed = numOrNull(value);
+  return parsed === null ? 'Unavailable' : format(parsed);
 }

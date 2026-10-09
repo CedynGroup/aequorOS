@@ -5,7 +5,6 @@ import logging
 import sys
 from contextvars import ContextVar, Token
 from types import FrameType
-from uuid import UUID
 
 from loguru import logger
 
@@ -29,10 +28,7 @@ def get_request_id() -> str:
 def safe_request_id(request_id: str) -> str:
     if request_id == "-":
         return request_id
-    try:
-        return str(UUID(request_id))
-    except ValueError:
-        return "sha256:" + hashlib.sha256(request_id.encode()).hexdigest()
+    return "sha256:" + hashlib.sha256(request_id.encode()).hexdigest()
 
 
 def configure_logging(log_level: str) -> None:

@@ -13,7 +13,7 @@ import HQLAStackChart from "@/components/charts/HQLAStackChart";
 import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLiquidityDashboard, useRegulatoryRun } from "@/lib/api/hooks";
-import { num } from "@/lib/api/values";
+import { num, numOrNull, formatFigure } from "@/lib/api/values";
 import { CSS_CHART_SERIES, cssSeriesColor } from "@/lib/svgChartPalette";
 import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
@@ -76,8 +76,8 @@ export default function LiquidityBuffer() {
 
   const data = dashboard.data;
   const run = latestRun.data;
-  const hqlaTotal = num(data?.metrics.hqlaTotalGhs);
-  const netOutflows = num(data?.metrics.netOutflows30dGhs);
+  const hqlaTotal = numOrNull(data?.metrics.hqlaTotalGhs);
+  const netOutflows = numOrNull(data?.metrics.netOutflows30dGhs);
 
   const rows: BufferRow[] = (data?.hqlaComposition ?? []).map((line) => {
     const exposure =
@@ -92,7 +92,10 @@ export default function LiquidityBuffer() {
           ? (1 - weighted / exposure) * 100
           : null,
       weightedGHS: weighted,
-      sharePct: hqlaTotal > 0 ? (weighted / hqlaTotal) * 100 : null,
+      sharePct:
+        hqlaTotal !== null && hqlaTotal > 0
+          ? (weighted / hqlaTotal) * 100
+          : null,
     };
   });
 
@@ -135,13 +138,13 @@ export default function LiquidityBuffer() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
                 label="HQLA stock"
-                value={fmtCurrency(hqlaTotal)}
+                value={formatFigure(hqlaTotal, fmtCurrency)}
                 hint="Post-haircut weighted"
               />
               <KpiStat
                 label="Coverage of net outflows"
                 value={
-                  netOutflows > 0
+                  hqlaTotal !== null && netOutflows !== null && netOutflows > 0
                     ? fmtPct((hqlaTotal / netOutflows) * 100, 1)
                     : "—"
                 }
@@ -193,7 +196,7 @@ export default function LiquidityBuffer() {
 
               <SectionCard
                 title="Share of buffer"
-                subtitle={`Total ${fmtCurrency(hqlaTotal)}`}
+                subtitle={`Total ${formatFigure(hqlaTotal, fmtCurrency)}`}
               >
                 <ul className="space-y-2.5 text-caption">
                   {stackData.map((h) => (
@@ -242,18 +245,22 @@ export default function LiquidityBuffer() {
                 columns={bufferColumns()}
                 rows={[
                   ...rows,
-                  {
-                    code: "TOTAL",
-                    instrument: "TOTAL HQLA",
-                    marketValueGHS: rows.reduce(
-                      (s, r) => s + (r.marketValueGHS ?? 0),
-                      0,
-                    ),
-                    haircutPct: null,
-                    weightedGHS: hqlaTotal,
-                    sharePct: rows.length ? 100 : null,
-                    isTotal: true,
-                  },
+                  ...(hqlaTotal === null
+                    ? []
+                    : [
+                        {
+                          code: "TOTAL",
+                          instrument: "TOTAL HQLA",
+                          marketValueGHS: rows.reduce(
+                            (s, r) => s + (r.marketValueGHS ?? 0),
+                            0,
+                          ),
+                          haircutPct: null,
+                          weightedGHS: hqlaTotal,
+                          sharePct: rows.length ? 100 : null,
+                          isTotal: true,
+                        },
+                      ]),
                 ]}
                 totalsRowMatcher={(r) => Boolean(r.isTotal)}
               />

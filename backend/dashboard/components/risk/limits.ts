@@ -17,19 +17,20 @@ import type {
   IrrDashboardRead,
   LiquidityDashboardRead,
 } from '@aequoros/risk-service-api';
-import { labelize, num } from '@/lib/api/values';
+import { labelize, num, numOrNull } from '@/lib/api/values';
 import { runThresholds } from '@/components/liquidity/runData';
 import { fmtCurrencySigned } from '@/lib/format';
 
-export type LimitModule = 'liquidity' | 'capital' | 'exposures' | 'irr' | 'fx' | 'ftp';
-export type LimitStatus = 'ok' | 'warn' | 'crit';
+export type LimitModule =
+  'liquidity' | 'capital' | 'exposures' | 'irr' | 'fx' | 'ftp';
+export type LimitStatus = 'ok' | 'warn' | 'crit' | 'na';
 export type LimitDirection = 'above' | 'below';
 
 export type LimitRow = {
   module: LimitModule;
   /** Human label of the limit. */
   limit: string;
-  value: number;
+  value: number | null;
   /** Numeric threshold taken verbatim from the payload — never invented. */
   threshold: number;
   /** Amber threshold, only when the payload carries one. */
@@ -74,7 +75,9 @@ function fromTrafficLight(status: string): LimitStatus {
   return 'ok';
 }
 
-export function capitalLimits(data: CapitalDashboardRead | undefined): LimitRow[] {
+export function capitalLimits(
+  data: CapitalDashboardRead | undefined
+): LimitRow[] {
   if (!data) return [];
   const buffers = data.buffers;
   return [
@@ -144,8 +147,8 @@ export function fxLimits(data: FxDashboardRead | undefined): LimitRow[] {
       status: isLargest
         ? fromTrafficLight(metrics.singleCcyStatus)
         : position.withinSingleLimit
-        ? 'ok'
-        : 'crit',
+          ? 'ok'
+          : 'crit',
       unit: '%',
       computedAt,
       detail: `${position.side === 'long' ? 'Long' : 'Short'} ${fmtCurrencySigned(num(position.netGhs))}`,
@@ -212,6 +215,7 @@ const RATIO_STATUS: Record<string, LimitStatus> = {
   green: 'ok',
   amber: 'warn',
   red: 'crit',
+  na: 'na',
 };
 
 export function liquidityLimits(
@@ -227,11 +231,14 @@ export function liquidityLimits(
     rows.push({
       module: 'liquidity',
       limit: 'Liquidity Coverage Ratio',
-      value: num(data.metrics.lcrPct),
+      value: numOrNull(data.metrics.lcrPct),
       threshold: lcrMin,
       warnAt: thresholds['lcr_amber_floor'],
       direction: 'above',
-      status: RATIO_STATUS[data.metrics.lcrStatus] ?? 'ok',
+      status:
+        numOrNull(data.metrics.lcrPct) === null
+          ? 'na'
+          : (RATIO_STATUS[data.metrics.lcrStatus] ?? 'na'),
       unit: '%',
       computedAt,
       detail: '30-day stressed horizon',
@@ -242,11 +249,14 @@ export function liquidityLimits(
     rows.push({
       module: 'liquidity',
       limit: 'Net Stable Funding Ratio',
-      value: num(data.metrics.nsfrPct),
+      value: numOrNull(data.metrics.nsfrPct),
       threshold: nsfrMin,
       warnAt: thresholds['nsfr_amber_floor'],
       direction: 'above',
-      status: RATIO_STATUS[data.metrics.nsfrStatus] ?? 'ok',
+      status:
+        numOrNull(data.metrics.nsfrPct) === null
+          ? 'na'
+          : (RATIO_STATUS[data.metrics.nsfrStatus] ?? 'na'),
       unit: '%',
       computedAt,
       detail: '1-year stable funding horizon',

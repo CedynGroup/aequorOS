@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from loguru import logger
 
 from app.core.errors import UnhandledExceptionMiddleware, register_exception_handlers
-from app.core.logging import configure_logging, reset_request_id, set_request_id
+from app.core.logging import configure_logging, reset_request_id, safe_request_id, set_request_id
 from app.core.observability import Condition, emit
 from app.core.request_id import RequestIdMiddleware
 
@@ -55,7 +55,7 @@ def test_calculation_events_allow_only_codes_and_safe_context(
         "condition": condition.value,
         "severity": "warning",
         "tenant_id": "OR-1234ABCD",
-        "request_id": _REQUEST_ID,
+        "request_id": safe_request_id(_REQUEST_ID),
         "reason_code": "missing_parameter",
         "rule_citation": "BCBS 238",
         "figure_id": "lcr_pct",
@@ -65,10 +65,12 @@ def test_calculation_events_allow_only_codes_and_safe_context(
         assert secret not in captured.err
 
 
+@pytest.mark.parametrize("caller_id", [_CUSTOMER_DATA, "00000000-0000-4000-8000-123456789012"])
 def test_allowlisted_field_names_cannot_smuggle_free_text(
     capsys: pytest.CaptureFixture[str],
+    caller_id: str,
 ) -> None:
-    token = set_request_id(_CUSTOMER_DATA)
+    token = set_request_id(caller_id)
     try:
         emit(
             Condition.CALCULATION_FAILED,
@@ -108,8 +110,13 @@ def test_calculation_logging_failure_does_not_raise(monkeypatch: pytest.MonkeyPa
     emit(Condition.CALCULATION_FAILED, "failure", reason_code="unexpected_error")
 
 
+@pytest.mark.parametrize("caller_id", [_CUSTOMER_DATA, "00000000-0000-4000-8000-123456789012"])
+@pytest.mark.parametrize("emit_first", [False, True])
 def test_http_boundary_does_not_relog_a_sensitive_propagated_exception(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    caller_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+    emit_first: bool,
 ) -> None:
     monkeypatch.setattr(logging.root, "handlers", list(logging.root.handlers))
     configure_logging("INFO")
@@ -119,13 +126,14 @@ def test_http_boundary_does_not_relog_a_sensitive_propagated_exception(
     register_exception_handlers(app)
 
     def broken() -> None:
-        emit(Condition.CALCULATION_FAILED, "failure", reason_code="unexpected_error")
+        if emit_first:
+            emit(Condition.CALCULATION_FAILED, "failure", reason_code="unexpected_error")
         raise RuntimeError(_CUSTOMER_DATA)
 
     app.add_api_route("/banks/BK-PRIVATE1", broken)
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            response = client.get("/banks/BK-PRIVATE1", headers={"X-Request-ID": _CUSTOMER_DATA})
+            response = client.get("/banks/BK-PRIVATE1", headers={"X-Request-ID": caller_id})
     finally:
         logger.remove()
         logger.configure(patcher=None)
@@ -133,7 +141,8 @@ def test_http_boundary_does_not_relog_a_sensitive_propagated_exception(
     captured = capsys.readouterr()
     assert captured.out == ""
     payloads = [cast(dict[str, object], json.loads(line)) for line in captured.err.splitlines()]
-    calculation = next(payload for payload in payloads if "condition" in payload)
+    calculations = [payload for payload in payloads if "condition" in payload]
+    assert len(calculations) == int(emit_first)
     log_records = [
         cast(dict[str, object], payload["record"])
         for payload in payloads
@@ -143,35 +152,31 @@ def test_http_boundary_does_not_relog_a_sensitive_propagated_exception(
     ]
     extras = [record["extra"] for record in log_records]
     assert len(log_records) == 2
-    request_id = calculation["request_id"]
+    request_id = safe_request_id(caller_id)
     assert isinstance(request_id, str)
     assert request_id.startswith("sha256:")
-    assert all(
-        cast(dict[str, object], extra)["request_id"] == calculation["request_id"]
-        for extra in extras
-    )
-    assert any(
-        record["message"] == "Request completed" for record in log_records
-    )
+    assert all(cast(dict[str, object], extra)["request_id"] == request_id for extra in extras)
+    assert any(record["message"] == "Request completed" for record in log_records)
     for secret in ("Jane Private", "123456789012", "9876543.21", "13.75", "BK-PRIVATE1"):
         error_records = [
-            record
-            for record in log_records
-            if record["message"] != "Request completed"
+            record for record in log_records if record["message"] != "Request completed"
         ]
         assert secret not in json.dumps(error_records)
         if secret != "BK-PRIVATE1":
             assert secret not in captured.err
 
 
+@pytest.mark.parametrize("caller_id", [_CUSTOMER_DATA, "00000000-0000-4000-8000-123456789012"])
 def test_bound_and_intercepted_correlation_ids_use_the_shared_safe_representation(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    caller_id: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(logging.root, "handlers", list(logging.root.handlers))
     configure_logging("INFO")
-    token = set_request_id(_CUSTOMER_DATA)
+    token = set_request_id(caller_id)
     try:
-        logger.bind(request_id=_CUSTOMER_DATA).error("Safe error code")
+        logger.bind(request_id=caller_id).error("Safe error code")
         logging.getLogger("correlation-test").error("Safe error code")
     finally:
         reset_request_id(token)

@@ -19,11 +19,19 @@ import {
   type LimitRow,
 } from './limits';
 
-const MODULE_ORDER: LimitModule[] = ['capital', 'liquidity', 'exposures', 'irr', 'fx', 'ftp'];
+const MODULE_ORDER: LimitModule[] = [
+  'capital',
+  'liquidity',
+  'exposures',
+  'irr',
+  'fx',
+  'ftp',
+];
 
 function moduleTone(rows: LimitRow[]) {
   if (rows.some((row) => row.status === 'crit')) return 'breach' as const;
   if (rows.some((row) => row.status === 'warn')) return 'approaching' as const;
+  if (rows.some((row) => row.status === 'na')) return 'pending' as const;
   return 'compliant' as const;
 }
 
@@ -46,14 +54,17 @@ export default function LimitWall({
       {MODULE_ORDER.map((module) => {
         const moduleRows = rows.filter((row) => row.module === module);
         const unavailable = unavailableModules.includes(module);
-        if (moduleRows.length === 0 && !unavailable && !showEmptyModules) return null;
+        if (moduleRows.length === 0 && !unavailable && !showEmptyModules)
+          return null;
         return (
           <SectionCard
             key={module}
             title={
               <span className="inline-flex items-center gap-2.5">
                 {MODULE_LABELS[module]}
-                {moduleRows.length > 0 && <StatusPill tone={moduleTone(moduleRows)} />}
+                {moduleRows.length > 0 && (
+                  <StatusPill tone={moduleTone(moduleRows)} />
+                )}
               </span>
             }
             actions={

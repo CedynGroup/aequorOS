@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
+from decimal import Decimal
 from typing import cast
 
 import pytest
@@ -20,8 +21,14 @@ from app.core.authorization import (
 )
 from app.domain.authority.results import FigureResult
 from app.domain.liquidity.engine import LcrResult, LiquidityFact, LiquidityParams, NsfrResult
-from app.models import Bank, BankFinancialFact, BankReportingPeriod, CurrentFinancialFact
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
+    CurrentFinancialFact,
+    ParamCapitalThreshold,
+)
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate, RegulatoryScenarioCode
 from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
 from app.services import analysis_workbench, authorization, regulatory_liquidity, window_analytics
 from tests.fixtures.canonical_bank_fixture import (
@@ -32,9 +39,26 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 
-@pytest.mark.parametrize("refused", [("lcr_pct",), ("nsfr_pct",), ("lcr_pct", "nsfr_pct")])
+@pytest.mark.parametrize(
+    "refused, threshold",
+    [
+        (("lcr_pct",), None),
+        (("nsfr_pct",), None),
+        (("lcr_pct", "nsfr_pct"), None),
+        (("lcr_pct",), "lcr_inflow_cap_pct"),
+        (("lcr_pct",), "lcr_min"),
+        (("nsfr_pct",), "nsfr_min"),
+        (("lcr_pct", "nsfr_pct"), "lcr_amber_floor"),
+        (("lcr_pct",), "unclassified"),
+    ],
+)
+@pytest.mark.parametrize("scenario", ["baseline", "combined"])
 def test_partial_results_survive_every_reader_and_block_official_runs(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, refused: tuple[str, ...]
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    refused: tuple[str, ...],
+    threshold: str | None,
+    scenario: RegulatoryScenarioCode,
 ) -> None:
     materialize_canonical_test_book(db_session)
     ctx = TenantContext(
@@ -98,7 +122,7 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
     original_compute = regulatory_liquidity.compute_liquidity_results
 
     def missing_rates(
-        facts: Sequence[LiquidityFact], params: LiquidityParams, tenant_id: str
+        facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None], tenant_id: str
     ) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult]]:
         return original_compute(
             facts,
@@ -110,7 +134,29 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
             tenant_id,
         )
 
-    monkeypatch.setattr(regulatory_liquidity, "compute_liquidity_results", missing_rates)
+    if threshold is None:
+        monkeypatch.setattr(regulatory_liquidity, "compute_liquidity_results", missing_rates)
+    elif threshold == "unclassified":
+        for fact in facts:
+            if fact.fact_group == "securities" and fact.hqla_level is not None:
+                fact.hqla_level = "unknown"
+        for fact in db_session.scalars(
+            select(CurrentFinancialFact).where(
+                CurrentFinancialFact.bank_id == bank.id,
+                CurrentFinancialFact.fact_group == "securities",
+                CurrentFinancialFact.hqla_level.is_not(None),
+            )
+        ):
+            fact.hqla_level = "unknown"
+        db_session.flush()
+    else:
+        for row in db_session.scalars(
+            select(ParamCapitalThreshold).where(
+                ParamCapitalThreshold.threshold_code == threshold,
+            )
+        ):
+            db_session.delete(row)
+        db_session.flush()
     dashboard = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id, period.id)
     payload = dashboard.model_dump(mode="json")
     metrics = cast(dict[str, object], payload["metrics"])
@@ -145,14 +191,24 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
     ):
         if metric in refused:
             refusal = dashboard.metrics.refusals[metric]
-            assert refusal.reason_code == "missing_parameter"
+            assert refusal.reason_code == (
+                "unclassified_hqla" if threshold == "unclassified" else "missing_parameter"
+            )
             assert refusal.rule_citation in {"BCBS 238", "BCBS 295"}
-            assert refusal.reason and refusal.row_ref
+            assert refusal.reason
+            if threshold in (None, "unclassified"):
+                assert refusal.row_ref
             assert metrics[metric] is None
             assert all(metrics[total] is None for total in totals)
             assert metric not in live.metrics and metric not in analysis.metrics
             assert all(not section for section in sections)
-            assert all(metric in point.refusals for point in dashboard.trend)
+            affected_trend = [
+                point
+                for point in dashboard.trend
+                if threshold != "unclassified" or point.reporting_period_id == period.id
+            ]
+            assert affected_trend
+            assert all(metric in point.refusals for point in affected_trend)
             assert not any(stat.ratio == metric for stat in window.ratios)
         else:
             assert (
@@ -169,11 +225,40 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
         ctx,
         bank.id,
         RegulatoryRunCreate(
-            module="liquidity", reporting_period_id=period.id, scenario_code="baseline"
+            module="liquidity", reporting_period_id=period.id, scenario_code=scenario
         ),
     )
     assert run.status == "failed" and run.error is not None
-    assert run.error.code == "missing_parameter"
+    assert run.error.code == (
+        "unclassified_hqla" if threshold == "unclassified" else "missing_parameter"
+    )
     details = cast(dict[str, object], run.error.details)
-    assert details["row_ref"]
+    if threshold in (None, "unclassified"):
+        assert details["row_ref"]
+        loaded = sorted(
+            [
+                fact
+                for fact in facts
+                if fact.fact_group
+                in ("balance_sheet", "loan_exposure", "securities", "off_balance", "lcr_inflow")
+            ],
+            key=lambda fact: (fact.fact_group, fact.category),
+        )
+        figure = "lcr_pct" if "lcr_pct" in refused else "nsfr_pct"
+        affected = [
+            {
+                "fact_group": loaded[index - 1].fact_group,
+                "category": loaded[index - 1].category,
+                "amount": str(loaded[index - 1].amount),
+                "hqla_level": loaded[index - 1].hqla_level,
+                "side": cast(object, loaded[index - 1].attributes.get("side")),
+                "cash_derived": loaded[index - 1].attributes.get("source") == "cash",
+            }
+            for index in dashboard.metrics.refusals[figure].row_ref
+        ]
+        snapshot = cast(list[dict[str, object]], run.inputs["facts"])
+        indices = cast(list[int], details["row_ref"])
+        assert sorted([snapshot[index - 1] for index in indices], key=str) == sorted(
+            affected, key=str
+        )
     assert not run.metric_results and not run.line_items

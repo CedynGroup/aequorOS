@@ -236,7 +236,7 @@ workbench carries the same refusal map, and window analytics retains computed
 sibling points while leaving gaps for refused ratios. Only official run persistence
 requires both ratios, so filing remains fail-closed. Successful arithmetic, rounding
 and value-based input hashes are unchanged; API schemas and the generated client
-carry nullable figures and refusal metadata. Dashboard refusal rendering and the
+carry nullable figures and refusal metadata. Detailed dashboard refusal rendering (reasons and affected rows) and the
 remaining engines are follow-ups for issue #409.
 
 `app/core/observability.py::emit` writes calculation/refusal and regulatory-run
@@ -245,7 +245,7 @@ rule citations, figure identifiers and engine versions. Add each migrated engine
 static vocabulary to that allowlist. Only the platform tenant id and correlation
 id travel with these events; no row ids, bank ids, financial data, exception text,
 tracebacks or bound logging extras do. The shared logging boundary hashes
-caller-supplied non-UUID request ids for
+all caller-supplied request ids for
 calculation, HTTP error, access and intercepted logs alike; the Loguru sink also
 writes to stderr. Background boundaries mint an id when no request exists.
 The HTTP error boundary does not re-log propagated exception text or tracebacks.

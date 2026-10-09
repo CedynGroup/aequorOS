@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from app.core.logging import get_request_id, reset_request_id, set_request_id
+from app.core.logging import get_request_id, reset_request_id, safe_request_id, set_request_id
 from app.domain.authority.results import Computed, Refused
 from app.services import regulatory_liquidity
 from tests.liquidity.helpers import inputs
@@ -43,7 +43,9 @@ def test_boundary_returns_and_logs_both_refusals(
         assert all(
             payload["engine_version"] == regulatory_liquidity.ENGINE_VERSION for payload in payloads
         )
-        assert {payload["request_id"] for payload in payloads} == {get_request_id()}
+        assert {payload["request_id"] for payload in payloads} == {
+            safe_request_id(get_request_id())
+        }
     finally:
         reset_request_id(token)
 

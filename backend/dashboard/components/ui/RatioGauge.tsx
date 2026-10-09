@@ -18,7 +18,7 @@ export default function RatioGauge({
   higherIsBetter = true,
 }: {
   label: string;
-  value: number;
+  value: number | null;
   threshold: number;
   internalBuffer?: number;
   bufferLabel?: string;
@@ -34,6 +34,15 @@ export default function RatioGauge({
    */
   higherIsBetter?: boolean;
 }) {
+  if (value === null) {
+    return (
+      <div className="card p-6">
+        <p className="text-caption font-medium text-slate">{label}</p>
+        <p className="mt-1 text-body text-slate">Unavailable</p>
+      </div>
+    );
+  }
+
   // Scale: the threshold sits at ~55% of the sweep so headroom reads as arc.
   const max = Math.max(Math.abs(value), Math.abs(threshold)) * 1.4 || 1;
   const fracValue = Math.min(1, Math.max(0, Math.abs(value) / max));
@@ -54,8 +63,8 @@ export default function RatioGauge({
     status === 'breach' || status === 'critical'
       ? 'rgb(var(--crit))'
       : status === 'approaching' || status === 'amber'
-      ? 'rgb(var(--warn))'
-      : 'rgb(var(--ok))';
+        ? 'rgb(var(--warn))'
+        : 'rgb(var(--ok))';
 
   const variance = value - threshold;
   const varianceSign = variance >= 0 ? '+' : '';

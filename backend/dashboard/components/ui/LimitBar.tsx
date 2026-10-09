@@ -54,7 +54,7 @@ export default function LimitBar({
 }: {
   label?: ReactNode;
   /** Measured value. */
-  value: number;
+  value: number | null;
   /** Hard (red) limit. */
   limit: number;
   /** Amber threshold. Defaults to 80% of the way to the limit. */
@@ -71,6 +71,15 @@ export default function LimitBar({
   meta?: ReactNode;
   className?: string;
 }) {
+  if (value === null) {
+    return (
+      <div className="card p-6">
+        <p className="text-caption font-medium text-slate">{label}</p>
+        <p className="mt-1 text-body text-slate">Unavailable</p>
+      </div>
+    );
+  }
+
   const isBelow = direction === 'below';
   const amber = warnAt ?? (isBelow ? limit * 0.8 : limit * 1.2);
 
@@ -78,18 +87,17 @@ export default function LimitBar({
     ? value >= limit
       ? 'crit'
       : value >= amber
-      ? 'warn'
-      : 'ok'
+        ? 'warn'
+        : 'ok'
     : value <= limit
-    ? 'crit'
-    : value <= amber
-    ? 'warn'
-    : 'ok';
+      ? 'crit'
+      : value <= amber
+        ? 'warn'
+        : 'ok';
 
   const scaleMax =
     max ?? Math.max(value, limit, amber) * (isBelow ? 1.15 : 1.25);
-  const pct = (v: number) =>
-    Math.max(0, Math.min(100, (v / scaleMax) * 100));
+  const pct = (v: number) => Math.max(0, Math.min(100, (v / scaleMax) * 100));
 
   const pctValue = pct(value);
   const pctLimit = pct(limit);
