@@ -527,7 +527,7 @@ test.describe("IRRBB functional workflow", () => {
       "analyst",
       `/banks/${SAMPLE_BANK_ID}/regulatory-runs/${run.run_id}`,
     );
-    expect(storedRun.engine_version).toBe("enterprise-stress-v2.0.0");
+    expect(storedRun.engine_version).toBe("enterprise-stress-v4.2.0");
     expect(storedRun.metrics.outcome.engine_version).toBe(
       storedRun.engine_version,
     );

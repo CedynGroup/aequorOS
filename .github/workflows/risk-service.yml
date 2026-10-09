@@ -237,7 +237,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh backend
-          '^(backend/|mise\.toml$|\.github/workflows/risk-service\.yml$|\.github/scripts/|\.github/actions/setup-postgres/)'
+          '^(backend/|mise\.toml$|\.github/workflows/risk-service\.yml$|\.github/scripts/|\.github/actions/(setup-postgres|setup-minio|setup-openbao)/)'
       - name: Detect whether this pull request touches what the CI guards read
         id: guards
         env:
@@ -445,29 +445,9 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
     timeout-minutes: 120
-    services:
-      # The attestation signing backend. Without a real server the OpenBao tests
-      # skip themselves, and "written but never executed" is exactly the state
-      # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
-      # known root token, which is what the suite provisions its AppRole with;
-      # it is in-memory and dies with the job.
-      openbao:
-        image: openbao/openbao:2.6.1
-        env:
-          BAO_DEV_ROOT_TOKEN_ID: aequoros-ci-root
-          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-          BAO_ADDR: http://127.0.0.1:8200
-        ports:
-          - "8200:8200"
-        options: >-
-          --cap-add=IPC_LOCK
-          --health-cmd "bao status -address=http://127.0.0.1:8200 || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      # Ungates tests/services/test_attestation_openbao.py against the service
-      # container above. Absent (a developer's machine), those tests skip and the
+      # Ungates tests/services/test_attestation_openbao.py against native OpenBao
+      # started below. Absent (a developer's machine), those tests skip and the
       # rest of the suite is unaffected.
       OPENBAO_TEST_ADDR: http://127.0.0.1:8200
       OPENBAO_TEST_TOKEN: aequoros-ci-root
@@ -492,6 +472,9 @@ jobs:
             NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
           SQL
+      - name: Start OpenBao
+        id: openbao
+        uses: ./.github/actions/setup-openbao
       - name: Full suite against Postgres
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
@@ -527,6 +510,11 @@ jobs:
           if skipped or failed or errored:
               raise SystemExit("OpenBao attestation tests did not execute cleanly")
           PY
+      - name: Stop OpenBao
+        if: always() && steps.openbao.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.openbao.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
 
   storage:
     name: Storage contract
@@ -543,36 +531,9 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
-      # Started as a step rather than a `services:` entry on purpose: a service
-      # container cannot supply the `server /data` COMMAND the MinIO image needs
-      # (GitHub only forwards `options`, which are `docker create` flags), so as a
-      # service it starts, prints its help text and exits.
-      #
-      # MINIO_KMS_SECRET_KEY turns on MinIO's built-in KMS, which is what makes
-      # this suite reachable at all — without it every write fails
-      # `PutBucketEncryption ... Server side encryption specified but KMS is not
-      # configured`. The key NAME is load-bearing: the at-rest assertion pins the
-      # literal `aequoros-key` against the returned SSEKMSKeyId. The key MATERIAL
-      # is a throwaway generated per run and encrypts nothing that outlives the job.
-      # Every public image in CI comes from Amazon ECR Public, pinned by digest.
-      # MinIO stopped serving anonymous pulls of its own images (2026-09), so this
-      # is Chainguard's build of it.
       - name: Start MinIO with built-in KMS
-        run: |
-          set -euo pipefail
-          docker run -d --name aequoros-ci-minio \
-            -e MINIO_ROOT_USER=ciminio \
-            -e MINIO_ROOT_PASSWORD=ciminio123 \
-            -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
-            -p 9000:9000 \
-            public.ecr.aws/chainguard/minio:latest@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285 server /data
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
-              echo "MinIO is live"; exit 0
-            fi
-            sleep 1
-          done
-          echo "MinIO did not become live"; docker logs aequoros-ci-minio; exit 1
+        id: minio
+        uses: ./.github/actions/setup-minio
       # STORAGE_RETIRE_AFTER is REQUIRED: enforce_retirement refuses to build a
       # client for env=mvp without one, so every contract test errors in its
       # fixture without it. It used to be omitted because the process env leaked
@@ -597,13 +558,15 @@ jobs:
       # unset the suite reports `27 passed, 18 skipped` and exits 0 — green, and
       # blind to SSE-KMS at rest, the hash-chained access log and per-institution
       # provisioning. Against the MinIO started above it is `45 passed`, so any
-      # skip here means the container or the credentials stopped working and the
+      # skip here means the server or the credentials stopped working and the
       # job is asserting nothing.
       - name: The storage contract must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage.xml" --max-skipped 0
       - name: Stop MinIO
-        if: always()
-        run: docker rm -f aequoros-ci-minio || true
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
 
   api-fresh:
     name: Generated API client freshness

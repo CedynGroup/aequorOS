@@ -1,0 +1,47 @@
+name: Set up CI OpenBao
+description: Start the pinned official OpenBao binary for the signing contract tests.
+outputs:
+  pid:
+    description: Process to stop at the end of the job.
+    value: ${{ steps.start.outputs.pid }}
+runs:
+  using: composite
+  steps:
+    - name: Download and verify OpenBao
+      shell: bash
+      run: |
+        set -euo pipefail
+        directory="$RUNNER_TEMP/aequoros-ci-openbao"
+        mkdir -p "$directory"
+        curl --fail --silent --show-error --location --retry 3 \
+          https://github.com/openbao/openbao/releases/download/v2.6.1/openbao_2.6.1_linux_amd64.tar.gz \
+          --output "$directory/openbao.tar.gz"
+        # SHA256 from the official v2.6.1 release's checksums.txt.
+        echo "ca8d836eb3a5c80407e45e762300b64e7138c419e78826955f2e4ba4ce6d8a6b  $directory/openbao.tar.gz" | sha256sum --check --strict
+        tar --extract --gzip --file "$directory/openbao.tar.gz" --directory "$directory" bao
+    - name: Start OpenBao in dev mode
+      id: start
+      shell: bash
+      env:
+        BAO_DEV_ROOT_TOKEN_ID: aequoros-ci-root
+        BAO_ADDR: http://127.0.0.1:8200
+      run: |
+        set -euo pipefail
+        directory="$RUNNER_TEMP/aequoros-ci-openbao"
+        "$directory/bao" --version
+        # Dev mode is unsealed, in-memory, and exposes only the loopback listener.
+        nohup "$directory/bao" server -dev -dev-listen-address=127.0.0.1:8200 \
+          >"$directory/openbao.log" 2>&1 </dev/null &
+        pid=$!
+        echo "pid=$pid" >> "$GITHUB_OUTPUT"
+        for _ in $(seq 1 30); do
+          if "$directory/bao" status >/dev/null 2>&1; then
+            echo "OpenBao is live"
+            exit 0
+          fi
+          if ! kill -0 "$pid" 2>/dev/null; then break; fi
+          sleep 1
+        done
+        cat "$directory/openbao.log"
+        kill "$pid" 2>/dev/null || true
+        exit 1
