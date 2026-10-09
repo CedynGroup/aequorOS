@@ -10,11 +10,9 @@ calculations" is a query rather than a grep through prose messages.
 
 This module supplies that, and nothing else. Deliberately:
 
-* **No new dependency.** The logger is the existing loguru instance configured
-  in :mod:`app.core.logging`, already JSON-serialised to stdout with the
-  request id patched onto every record. There is no metrics library in this
-  project and this module does not introduce one — it emits fields a log
-  pipeline can aggregate.
+* **No new dependency.** General events use the existing loguru instance.
+  Calculation failures and refusals use a closed JSON schema written to stderr
+  for CloudWatch collection, independent of bound logging context.
 * **No parallel store.** Where an authoritative signal already exists (an audit
   event, a DB row, a readiness check), :data:`CONDITION_SOURCES` records where
   it lives instead of duplicating it. A second, divergent copy of "did this
@@ -24,8 +22,9 @@ This module supplies that, and nothing else. Deliberately:
   never convert a clean 403 into a 500.
 * **Never carries a secret.** Call sites pass identifiers and reason codes.
   Passwords, tokens, credential material, full request bodies and raw vendor
-  payloads must not be passed; :func:`emit` drops a small set of obviously
-  dangerous field names as a backstop, but the real control is the call site.
+  payloads must not be passed. Calculation errors allow only registered codes,
+  citations, figures and versions, a platform tenant id and a safe correlation
+  id. Other events retain their credential-field backstop.
 
 Every record carries ``condition`` (a :class:`Condition` value) and
 ``severity``, alongside ``request_id`` from the logging patcher.
@@ -34,10 +33,18 @@ Every record carries ``condition`` (a :class:`Condition` value) and
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import json
+import re
+import sys
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Final
+from uuid import UUID, uuid4
 
 from loguru import logger
+
+from app.core.logging import get_request_id
 
 # Field names never worth writing to a log, whatever a caller passes.
 _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
@@ -58,6 +65,22 @@ _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
 )
 
 _MAX_VALUE_CHARS: Final[int] = 512
+
+# Calculation events use a closed vocabulary, not a field-name denylist. In
+# particular, bank-facing refusal prose and exception messages are never copied.
+_CALCULATION_CODES: Final = frozenset(
+    {
+        "missing_parameter",
+        "unclassified_hqla",
+        "non_positive_denominator",
+        "unexpected_error",
+        "data_quality_block:run_evidence",
+    }
+)
+_CALCULATION_RULES: Final = frozenset({"BCBS 238", "BCBS 295"})
+_CALCULATION_FIGURES: Final = frozenset({"lcr_pct", "nsfr_pct"})
+_CALCULATION_VERSIONS: Final = frozenset({"regulatory-liquidity-v2.0.0"})
+_TENANT_ID: Final = re.compile(r"OR-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{8}")
 
 
 class Condition(StrEnum):
@@ -96,10 +119,12 @@ _LEVELS: Final[dict[str, str]] = {"info": "INFO", "warning": "WARNING", "error":
 #: conditions that name a table below, the table is the evidence.
 CONDITION_SOURCES: Final[dict[Condition, str]] = {
     Condition.CALCULATION_FAILED: (
+        "this log line from migrated calculation boundaries; legacy persisted attempts use "
         "audit_events(event_type='calculation_run.failed') + calculation_runs.status"
     ),
     Condition.CALCULATION_BLOCKED: (
-        "app.domain.authority.outcomes.OutcomeDetail.code, returned on the module payload"
+        "app.domain.authority.results.Refused at migrated boundaries; existing module "
+        "payloads use app.domain.authority.outcomes.OutcomeDetail.code"
     ),
     Condition.RECONCILIATION_FAILED: (
         "audit_events(event_type='reconciliation.balance_sheet_identity'), written by the "
@@ -174,9 +199,57 @@ def emit(
     # Suppressed on purpose: these calls sit inside authorization denials and
     # exception handlers, where a logging failure must not become a 500.
     with contextlib.suppress(Exception):
+        if condition in (
+            Condition.CALCULATION_FAILED,
+            Condition.CALCULATION_BLOCKED,
+            Condition.REGULATORY_RUN_FAILED,
+        ):
+            _emit_calculation(condition, severity, fields)
+            return
         logger.bind(condition=condition.value, severity=severity, **_scrub(fields)).log(
             _LEVELS.get(severity, "WARNING"), summary
         )
+
+
+def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, object]) -> None:
+    """Write allowlisted aequorOS calculation events directly to stderr.
+
+    Bypassing loguru's contextual extras keeps arbitrary bound customer data and
+    active exception tracebacks out of this stream. No exception or request body
+    is inspected, rendered or serialized. Unknown codes fail closed.
+    """
+    request_id = get_request_id()
+    if request_id == "-":
+        request_id = str(uuid4())
+    else:
+        try:
+            request_id = str(UUID(request_id))
+        except ValueError:
+            # X-Request-ID is caller-controlled; preserve correlation without
+            # allowing a name, account number or financial value into the log.
+            request_id = "sha256:" + hashlib.sha256(request_id.encode()).hexdigest()
+    payload: dict[str, str] = {
+        "condition": condition.value,
+        "severity": severity if severity in _LEVELS else "warning",
+        "request_id": request_id,
+    }
+    tenant = fields.get("tenant_id", fields.get("organization_id"))
+    payload["tenant_id"] = (
+        tenant if isinstance(tenant, str) and _TENANT_ID.fullmatch(tenant) else "unknown"
+    )
+    code = fields.get("reason_code", fields.get("code"))
+    payload["reason_code"] = (
+        code if isinstance(code, str) and code in _CALCULATION_CODES else "unspecified"
+    )
+    for key, allowed in (
+        ("rule_citation", _CALCULATION_RULES),
+        ("figure_id", _CALCULATION_FIGURES),
+        ("engine_version", _CALCULATION_VERSIONS),
+    ):
+        value = fields.get(key)
+        if isinstance(value, str) and value in allowed:
+            payload[key] = value
+    _ = sys.stderr.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
 
 def authorization_denied(*, reason: str, **fields: Any) -> None:

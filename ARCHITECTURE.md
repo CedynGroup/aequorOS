@@ -214,6 +214,34 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
   publication per `(org, case, scenario)` (`liquidity.lock_finding_publication` /
   `serialize_finding_publication`; both no-op on SQLite).
 
+### Per-figure results and calculation logs
+
+The incremental aequorOS calculation boundary uses
+`app/domain/authority/results.py::FigureResult[T]`: a plain Python union of
+`Computed[T]` and `Refused(reason_code, rule_citation, row_ref)`, consumed with
+`match`. Refused rows are one-based positions in the input sequence. They and
+the optional `OutcomeDetail` are bank-facing data, never operator log fields.
+Unexpected bugs and infrastructure failures still raise.
+
+`app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
+LCR and NSFR are evaluated independently. Existing single-ratio entry points keep
+their exception contracts. The service adapter evaluates both results, then requires
+both to be computed before returning the existing complete read model or sealing
+a successful official run. Arithmetic, input hashes, displayed figures and API
+schemas are unchanged. Independent dashboard rendering, persistence of partial
+results and migration of the remaining engines are follow-up work for issue #409.
+
+`app/core/observability.py::emit` writes calculation/refusal and regulatory-run
+failure events as JSON to stderr for CloudWatch, with a closed allowlist of codes,
+rule citations, figure identifiers and engine versions. Add each migrated engine's
+static vocabulary to that allowlist. Only the platform tenant id and correlation
+id travel with these events; no row ids, bank ids, financial data, exception text,
+tracebacks or bound logging extras do. Caller-supplied non-UUID request ids are
+hashed for correlation; background boundaries mint an id when no request exists.
+The HTTP error boundary does not re-log propagated exception text or tracebacks.
+Behavioral/redaction tests live in `backend/tests/liquidity/` and
+`backend/tests/core/test_calculation_logging.py`.
+
 ---
 
 ## 3a-bis. The three time planes (adopted 2026-08-09)

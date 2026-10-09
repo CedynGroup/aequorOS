@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -25,6 +25,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
+from app.core.logging import get_request_id, reset_request_id, set_request_id
+from app.core.observability import Condition, emit
+from app.domain.authority.results import Computed, FigureResult, Refused
 from app.domain.liquidity.engine import (
     FACT_GROUP_SECURITIES,
     HQLA_LEVEL_1,
@@ -39,11 +42,12 @@ from app.domain.liquidity.engine import (
     MissingParameterError,
     NsfrResult,
     StressedLadder,
+    UnclassifiedHqlaError,
     UnsupportedShockError,
     apply_liquidity_stress,
     compute_currency_gaps,
     compute_lcr,
-    compute_nsfr,
+    compute_liquidity,
     compute_stressed_ladder,
 )
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS as _LADDER_HORIZON_DAYS
@@ -742,8 +746,7 @@ def _execute_scenario_compute(  # noqa: PLR0913 - the official path hands over i
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
-    lcr = compute_lcr(engine_facts, engine_params)
-    nsfr = compute_nsfr(engine_facts, engine_params)
+    lcr, nsfr = compute_required_liquidity(engine_facts, engine_params, bank.organization_id)
     ladder_inputs = {
         currency: {
             "assets": _ladder_lists(ladder, "assets"),
@@ -1475,11 +1478,8 @@ def _compute_inline_from_batch(
     active = _active_params_from_batch(batch, period.period_end)
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    return (
-        compute_lcr(engine_facts, engine_params),
-        compute_nsfr(engine_facts, engine_params),
-        engine_params,
-    )
+    lcr, nsfr = compute_required_liquidity(engine_facts, engine_params, bank.organization_id)
+    return lcr, nsfr, engine_params
 
 
 def _compute_inline(
@@ -1495,11 +1495,8 @@ def _compute_inline(
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    return (
-        compute_lcr(engine_facts, engine_params),
-        compute_nsfr(engine_facts, engine_params),
-        engine_params,
-    )
+    lcr, nsfr = compute_required_liquidity(engine_facts, engine_params, bank.organization_id)
+    return lcr, nsfr, engine_params
 
 
 def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
@@ -1542,6 +1539,65 @@ def current_input_hash(
     return _snapshot_hash(snapshot)
 
 
+def compute_required_liquidity(
+    facts: Sequence[LiquidityFact], params: LiquidityParams, tenant_id: str
+) -> tuple[LcrResult, NsfrResult]:
+    """Compatibility adapter until readers support independent refused figures.
+
+    Both figures are evaluated and refusals logged before requiring the complete
+    result. Official runs keep their existing fail-closed filing contract and
+    existing read models keep their successful figures unchanged.
+    """
+    token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
+    try:
+        try:
+            figures = compute_liquidity(facts, params)
+        except Exception:
+            emit(
+                Condition.CALCULATION_FAILED,
+                "Calculation failed",
+                severity="error",
+                tenant_id=tenant_id,
+                reason_code="unexpected_error",
+                engine_version=ENGINE_VERSION,
+            )
+            raise
+        for figure_id, result in (("lcr_pct", figures.lcr), ("nsfr_pct", figures.nsfr)):
+            match result:
+                case Refused(reason_code=code, rule_citation=citation):
+                    emit(
+                        Condition.CALCULATION_BLOCKED,
+                        "Calculation refused",
+                        tenant_id=tenant_id,
+                        reason_code=code,
+                        rule_citation=citation,
+                        figure_id=figure_id,
+                        engine_version=ENGINE_VERSION,
+                    )
+                case Computed():
+                    pass
+        return _require_figure(figures.lcr, facts), _require_figure(figures.nsfr, facts)
+    finally:
+        if token is not None:
+            reset_request_id(token)
+
+
+def _require_figure[ValueT](result: FigureResult[ValueT], facts: Sequence[LiquidityFact]) -> ValueT:
+    """Translate only known refusals back to the legacy service exceptions."""
+    match result:
+        case Computed(value=value):
+            return value
+        case Refused(reason_code="missing_parameter", detail=detail) if detail is not None:
+            raise MissingParameterError(detail.items[0].removeprefix("param:"), detail.reason)
+        case Refused(reason_code="unclassified_hqla", row_ref=rows) if rows:
+            fact = facts[rows[0] - 1]
+            raise UnclassifiedHqlaError(fact.category, fact.hqla_level)
+        case Refused(reason_code="non_positive_denominator", detail=detail) if detail is not None:
+            raise LiquidityComputationError(detail.reason)
+        case Refused():
+            raise RuntimeError("Unsupported liquidity refusal at the compatibility boundary.")
+
+
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
@@ -1551,8 +1607,7 @@ def compute_live(
     active = _load_active_params(db, ctx, bank, current.source_as_of_date)
     params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    lcr = compute_lcr(engine_facts, params)
-    nsfr = compute_nsfr(engine_facts, params)
+    lcr, nsfr = compute_required_liquidity(engine_facts, params, bank.organization_id)
     snapshot = current_snapshot(
         _build_snapshot(
             bank,

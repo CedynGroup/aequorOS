@@ -10,10 +10,13 @@ happens AFTER quantization so stored and displayed values agree.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
+
+from app.domain.authority.outcomes import OutcomeState, outcome
+from app.domain.authority.results import Computed, FigureResult, Refused
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -93,6 +96,7 @@ def hqla_haircut_param_code(level: str) -> str:
     """The control-plane parameter code carrying one Basel level's haircut."""
     return PARAM_HQLA_HAIRCUT_TEMPLATE.format(level=level.strip().lower())
 
+
 #: Synthetic HQLA line codes carrying the cap deductions, so the stock of HQLA
 #: is always the sum of its own line items and the deduction is auditable.
 LINE_CODE_LEVEL2_CAP = "hqla_level2_cap_adjustment"
@@ -103,9 +107,7 @@ class MissingParameterError(Exception):
     """A category with a non-zero balance has no active rate/weight parameter."""
 
     def __init__(self, category: str, message: str | None = None) -> None:
-        super().__init__(
-            message or f"No active liquidity parameter covers category '{category}'."
-        )
+        super().__init__(message or f"No active liquidity parameter covers category '{category}'.")
         self.category = category
 
 
@@ -239,6 +241,94 @@ class NsfrResult:
     nsfr_pct: Decimal
     status: LiquidityStatus
     line_items: tuple[LiquidityLineItem, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LiquidityFigures:
+    """Independent ratio results; a refused LCR never suppresses the NSFR."""
+
+    lcr: FigureResult[LcrResult]
+    nsfr: FigureResult[NsfrResult]
+
+
+def compute_liquidity(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LiquidityFigures:
+    """The aequorOS liquidity boundary: expected refusals are per-figure data.
+
+    Legacy single-ratio entry points retain their exception contracts while
+    callers migrate. Arithmetic, rounding and successful values are identical.
+    Unexpected exceptions propagate to the service boundary.
+    """
+    return LiquidityFigures(
+        lcr=_compute_figure(facts, params, compute_lcr, "lcr_pct", "BCBS 238"),
+        nsfr=_compute_figure(facts, params, compute_nsfr, "nsfr_pct", "BCBS 295"),
+    )
+
+
+def _compute_figure[ValueT](  # noqa: PLR0913 - explicit figure and authority
+    facts: Sequence[LiquidityFact],
+    params: LiquidityParams,
+    compute: Callable[[Sequence[LiquidityFact], LiquidityParams], ValueT],
+    metric_id: str,
+    rule_citation: str,
+) -> FigureResult[ValueT]:
+    try:
+        return Computed(compute(facts, params))
+    except MissingParameterError as exc:
+        return Refused(
+            reason_code="missing_parameter",
+            rule_citation=rule_citation,
+            row_ref=_parameter_rows(facts, exc.category),
+            detail=outcome(
+                OutcomeState.POLICY_UNRESOLVED,
+                metric_id=metric_id,
+                reason=str(exc),
+                items=(f"param:{exc.category}",),
+            ),
+        )
+    except UnclassifiedHqlaError as exc:
+        return Refused(
+            reason_code="unclassified_hqla",
+            rule_citation=rule_citation,
+            row_ref=tuple(
+                index
+                for index, fact in enumerate(facts, start=1)
+                if fact.fact_group == FACT_GROUP_SECURITIES
+                and fact.category == exc.category
+                and fact.hqla_level == exc.level
+            ),
+            detail=outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=metric_id,
+                reason=str(exc),
+            ),
+        )
+    except LiquidityComputationError as exc:
+        return Refused(
+            reason_code="non_positive_denominator",
+            rule_citation=rule_citation,
+            detail=outcome(OutcomeState.NOT_COMPUTABLE, metric_id=metric_id, reason=str(exc)),
+        )
+
+
+def _parameter_rows(facts: Sequence[LiquidityFact], code: str) -> tuple[int, ...]:
+    """Locate affected input rows without putting volatile IDs in a snapshot."""
+    return tuple(
+        index
+        for index, fact in enumerate(facts, start=1)
+        if fact.category == code
+        or (
+            fact.fact_group == FACT_GROUP_SECURITIES
+            and fact.hqla_level is not None
+            and (
+                hqla_haircut_param_code(fact.hqla_level) == code
+                or (
+                    code in (PARAM_HQLA_LEVEL2_CAP, PARAM_HQLA_LEVEL2B_CAP)
+                    and fact.hqla_level.strip().upper() in HQLA_LEVEL_2_LEVELS
+                )
+            )
+        )
+        or (code == OFF_BALANCE_RSF_CATEGORY and fact.fact_group == FACT_GROUP_OFF_BALANCE)
+    )
 
 
 def money(value: Decimal) -> Decimal:
@@ -406,9 +496,7 @@ def apply_liquidity_stress(
         elif shock_key == SHOCK_RSF_SECURITIES_OVERRIDE:
             for category in RSF_SECURITIES_CATEGORIES:
                 rsf_weights[category] = shock_value
-        elif shock_key == SHOCK_FX_DEPRECIATION or shock_key.startswith(
-            SHOCK_NMD_RUNOFF_PREFIX
-        ):
+        elif shock_key == SHOCK_FX_DEPRECIATION or shock_key.startswith(SHOCK_NMD_RUNOFF_PREFIX):
             continue  # applied by the currency-gap / stressed-ladder layer
         else:
             raise UnsupportedShockError(scenario_code, shock_key)
@@ -609,9 +697,7 @@ def _hqla_stock(
                 _ZERO,
             )
         )
-        adjustment_2 = money(
-            max((level2a + level2b - adjustment_2b) - ratio_2 * level1, _ZERO)
-        )
+        adjustment_2 = money(max((level2a + level2b - adjustment_2b) - ratio_2 * level1, _ZERO))
 
     if adjustment_2b > _ZERO:
         items.append(
