@@ -313,7 +313,8 @@ def test_postgres_plaintext_peer_cannot_receive_startup_credentials(production: 
     assert received == [b"\x00\x00\x00\x08\x04\xd2\x16\x2f", b""]
 
 
-def test_next_container_gateway_terminates_verified_tls(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["dashboard", "console"])
+def test_next_container_gateway_terminates_verified_tls(tmp_path: Path, kind: str) -> None:
     import os  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
     import time  # noqa: PLC0415
@@ -321,10 +322,26 @@ def test_next_container_gateway_terminates_verified_tls(tmp_path: Path) -> None:
     import httpx  # noqa: PLC0415
 
     cert, key = certificate(tmp_path)
-    upstream = tmp_path / "upstream.cjs"
+    upstream = tmp_path / kind / "upstream.cjs"
+    upstream.parent.mkdir()
     upstream.write_text(
-        "require('node:http').createServer((req,res)=>{res.end(req.url + ':' + "
-        "req.headers['x-forwarded-proto']);}).listen(Number(process.env.PORT),process.env.HOSTNAME);"
+        r"""
+const server = require('node:http').createServer((req, res) => {
+  if (req.url === '/fail-before-headers') {
+    res.destroy();
+  } else if (req.url === '/stream' || req.url === '/fail-during-stream') {
+    res.writeHead(200, {'content-length': '12'});
+    res.write('first:');
+    setTimeout(() => {
+      if (req.url === '/stream') res.end('second');
+      else res.destroy();
+    }, 50);
+  } else {
+    res.end(req.url + ':' + req.headers['x-forwarded-proto']);
+  }
+});
+server.listen(Number(process.env.PORT), process.env.HOSTNAME);
+"""
     )
     with socket.socket() as outer, socket.socket() as inner:
         outer.bind(("127.0.0.1", 0))
@@ -340,6 +357,7 @@ def test_next_container_gateway_terminates_verified_tls(tmp_path: Path) -> None:
             "TLS_CERT_FILE": str(cert),
             "TLS_KEY_FILE": str(key),
             "NEXT_PUBLIC_RISK_API_BASE_URL": "https://api.example",
+            "OPERATOR_API_URL": "https://operator.example",
             "PORT": str(port),
             "NEXT_LOOPBACK_PORT": str(loopback_port),
         },
@@ -362,6 +380,15 @@ def test_next_container_gateway_terminates_verified_tls(tmp_path: Path) -> None:
                 time.sleep(0.05)
             assert response is not None and response.status_code == 200
             assert response.text == "/synthetic?proof=1:https"
+            with pytest.raises(httpx.RemoteProtocolError):
+                client.get(f"https://localhost:{port}/fail-during-stream", timeout=2)
+            for path, status, body in (
+                ("/stream", 200, "first:second"),
+                ("/fail-before-headers", 502, ""),
+                ("/healthy", 200, "/healthy:https"),
+            ):
+                response = client.get(f"https://localhost:{port}{path}")
+                assert (response.status_code, response.text) == (status, body)
         with (
             httpx.Client(trust_env=False) as untrusted,
             pytest.raises(httpx.ConnectError, match="CERTIFICATE_VERIFY_FAILED"),

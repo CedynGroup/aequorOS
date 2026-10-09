@@ -120,7 +120,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'bao status >/dev/null; result=$?; test "$result" = 0 || test "$result" = 2',
+          'bao status >/dev/null; result=$?; test "$$result" = 0 || test "$$result" = 2',
         ]
       interval: 30s
       timeout: 5s

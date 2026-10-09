@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const https = require("node:https");
 const http = require("node:http");
-const net = require("node:net");
 const { spawn } = require("node:child_process");
 
 function validateEnvironment(env, kind) {
@@ -63,32 +62,23 @@ function main() {
           headers,
         },
         (response) => {
+          response.on("aborted", () => res.destroy());
+          response.on("error", () => res.destroy());
           res.writeHead(response.statusCode || 502, response.headers);
           response.pipe(res);
         },
       );
       upstream.on("error", () => {
+        if (res.headersSent) {
+          res.destroy();
+          return;
+        }
         res.writeHead(502);
         res.end();
       });
       req.pipe(upstream);
     },
   );
-  server.on("upgrade", (req, socket, head) => {
-    const upstream = net.connect(upstreamPort, "127.0.0.1", () => {
-      upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`);
-      for (let i = 0; i < req.rawHeaders.length; i += 2) {
-        if (req.rawHeaders[i].toLowerCase() !== "x-forwarded-proto") {
-          upstream.write(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`);
-        }
-      }
-      upstream.write("X-Forwarded-Proto: https\r\n\r\n");
-      upstream.write(head);
-      socket.pipe(upstream).pipe(socket);
-    });
-    upstream.on("error", () => socket.destroy());
-    socket.on("error", () => upstream.destroy());
-  });
   const child = spawn(process.execPath, process.argv.slice(2), {
     stdio: "inherit",
     env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: String(upstreamPort) },

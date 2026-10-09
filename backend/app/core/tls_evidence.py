@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import socket
 from datetime import UTC, datetime
 from typing import cast
@@ -13,15 +12,8 @@ from urllib.parse import urlsplit
 
 from sqlalchemy import create_engine, text
 
-from app.core.config import get_settings
+from app.core.config import get_operator_settings, get_settings
 from app.core.tls import TransportSecurityError, client_context, database_connect_args
-
-DATABASE_ENV_NAMES = (
-    "DATABASE_URL",
-    "WORKER_DATABASE_URL",
-    "BI_DATABASE_URL",
-    "OPERATOR_DATABASE_URL",
-)
 
 
 def probe_https(url: str) -> dict[str, str | int | bool | None]:
@@ -95,8 +87,14 @@ def main() -> None:
             results.append({"target": f"https-{index + 1}", "error": type(exc).__name__})
             failed = True
     if cast(bool, args.databases):
-        for name in DATABASE_ENV_NAMES:
-            url = os.getenv(name)
+        settings = get_settings()
+        databases = (
+            ("DATABASE_URL", settings.database.database_url),
+            ("WORKER_DATABASE_URL", settings.worker.worker_database_url),
+            ("BI_DATABASE_URL", settings.bi.database_url),
+            ("OPERATOR_DATABASE_URL", get_operator_settings().operator_database_url),
+        )
+        for name, url in databases:
             if not url:
                 continue
             try:
