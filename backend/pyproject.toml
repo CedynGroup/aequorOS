@@ -93,6 +93,7 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
+  "requirement(citation): behavioral regression against a cited external requirement",
   "committing_db: use real commits and independent connections in a shared schema reset before each test",
 ]
 

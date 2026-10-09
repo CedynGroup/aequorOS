@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
 )
@@ -52,6 +53,7 @@ class BankReportingPeriod(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     label: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    credit_source_basis: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
@@ -63,7 +65,7 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
             "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', "
-            "'provision_held', 'cashflow')",
+            "'provision_held', 'cashflow', 'credit_exposure')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(

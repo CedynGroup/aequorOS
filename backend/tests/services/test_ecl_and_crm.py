@@ -621,7 +621,7 @@ def test_new_capital_version_preserves_historical_runs(db_session: Session) -> N
     db_session.commit()
     snapshot, metrics, input_hash = stored.inputs, stored.metrics, stored.input_hash
     current = _run_capital(db_session, period.id, "baseline")
-    assert current.engine_version == "regulatory-capital-v4.0.0"
+    assert current.engine_version == "regulatory-capital-v5.0.0"
     db_session.refresh(stored)
     assert stored.engine_version == "regulatory-capital-v3.0.0"
     assert (stored.inputs, stored.metrics, stored.input_hash) == (snapshot, metrics, input_hash)
@@ -658,10 +658,15 @@ def test_capital_run_accepts_an_unpriced_zero_ead_bucket(db_session: Session) ->
 
 
 @pytest.mark.parametrize("scenario", ["baseline", "severe"])
-def test_unconverted_unstaged_loan_keeps_booked_provisions(
+@pytest.mark.requirement("BoG CRD (June 2018) ¶98")
+def test_unconverted_unstaged_loan_refuses_capital_even_with_ecl_register(
     db_session: Session, scenario: str
 ) -> None:
-    """IFRS 9 ¶5.5.17: excluded unconverted loans still make model coverage partial."""
+    """BoG CRD (June 2018) ¶98: an unconverted claim cannot disappear from RWA.
+
+    IFRS 9 ¶5.5.17: the omitted unstaged loan still makes ECL coverage partial.
+    Adopting ECL assumptions does not establish its capital exposure amount.
+    """
     materialize_canonical_test_book(db_session)
     seeder = _CanonicalSeeder(db_session)
     product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
@@ -741,14 +746,17 @@ def test_unconverted_unstaged_loan_keeps_booked_provisions(
     attributes = cast(dict[str, object], fact.attributes)
     assert attributes["ecl_coverage_complete"] is False
     booked = _run_capital(db_session, derived.reporting_period_id, scenario)
-    assert booked.status == "succeeded", booked
+    assert booked.status == "failed", booked
+    assert booked.error is not None and booked.error.code == "missing_parameter"
+    assert booked.error.details == {"parameter": "risk_weight_code:unconverted_USD:unclassified"}
     _adopt_register(db_session, ("CORPORATE_UNRATED", 1, "2", "45"))
     modelled = _run_capital(db_session, derived.reporting_period_id, scenario)
-    assert modelled.status == "succeeded", modelled
+    assert modelled.status == "failed", modelled
+    assert modelled.error == booked.error
     stored = db_session.get(RegulatoryRun, modelled.id)
     stored_booked = db_session.get(RegulatoryRun, booked.id)
     assert stored is not None and stored_booked is not None
-    assert stored.metrics["total_capital_ghs"] == stored_booked.metrics["total_capital_ghs"]
+    assert stored.metrics == stored_booked.metrics == {}
     inputs = cast(dict[str, object], stored.inputs)
     facts = cast(list[dict[str, object]], inputs["facts"])
     ecl_input = next(row for row in facts if row["fact_group"] == "ecl_exposure")

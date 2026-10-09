@@ -43,14 +43,15 @@ from app.domain.capital.engine import (
     TIER_T2,
     CapitalFact,
     CapitalParams,
-    CapitalRegisterRefused,
     RiskWeightUnavailable,
     assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
+    require_credit_exposure_basis,
     resolve_risk_weight,
     tier1_capital,
 )
+from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.domain.fx.engine import FxPosition
 from app.domain.liquidity.engine import (
@@ -59,6 +60,7 @@ from app.domain.liquidity.engine import (
     LiquidityParams,
     consumed_hqla_levels,
 )
+from app.domain.positions.credit import capital_credit_class, specific_deductions
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -73,6 +75,7 @@ from app.domain.stress.contingent_leverage import (
 from app.domain.stress.credit_bottom_up import (
     BottomUpCreditInputs,
     CreditExposure,
+    apply_credit_collateral,
     result_for_year,
 )
 from app.domain.stress.management_actions import (
@@ -138,7 +141,7 @@ from app.services import (
 )
 from app.services.audit import record_event
 from app.services.params import get_active_params
-from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
+from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL, DEFAULT_CRM_HAIRCUTS
 
 #: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap
 #: hedges decomposed into their legs, positions at their contractual rates —
@@ -149,7 +152,8 @@ from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 #: and an incomplete source book cannot supply a whole-book modelled allowance.
 #: v4 keeps the booked general provisions in Tier 2 on both legs: modelled ECL,
 #: stage 3 included, no longer stands in for them.
-ENGINE_VERSION = "enterprise-stress-v4.2.0"
+#: v5 uses the net CRD on-balance credit exposure basis on every capital leg.
+ENGINE_VERSION = "enterprise-stress-v5.0.0"
 #: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
 #: block — every governed control-plane number the run consumed. The bump is not
 #: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
@@ -170,6 +174,7 @@ _HUNDRED = Decimal("100")
 _CAPITAL_GROUPS = (
     "balance_sheet",
     "loan_exposure",
+    "credit_exposure",
     "off_balance",
     "market_risk",
     "operational_income",
@@ -187,6 +192,7 @@ _LIQUIDITY_GROUPS = (
 _FORECAST_GROUPS = (
     "balance_sheet",
     "loan_exposure",
+    "credit_exposure",
     "securities",
     "off_balance",
     "lcr_inflow",
@@ -194,6 +200,7 @@ _FORECAST_GROUPS = (
     "operational_income",
     "capital_component",
     "ecl_exposure",
+    "crm_collateral",
 )
 _FX_GROUPS = ("fx_position",)
 
@@ -426,7 +433,8 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         as_of=as_of,
     ).values
     risk_weights = {row.risk_weight_code: _dec(row.weight_pct) for row in weight_rows}
-    crm_haircuts = {row.collateral_class: _dec(row.haircut_pct) for row in crm_rows}
+    crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
+    crm_haircuts.update({row.collateral_class: _dec(row.haircut_pct) for row in crm_rows})
     # SDI simplified s.29 solvency (docs/sdi.md §4.6, Phase H): only the CAR floor
     # is a required regulatory value; market/operational/tier/leverage take the
     # s.29 structural settings and `basel_applicable=False` so the projection's
@@ -794,7 +802,6 @@ def _fx_positions(rows: Sequence[FinancialFactRow]) -> list[FxPosition]:
 # its sealed runs and their input hashes are reproduced from that reading, so it
 # keeps it: ``_reported`` is the adapter, and the only place the two meet.
 
-_CREDIT_POSITION_TYPES = credit_exposure_book.CREDIT_POSITION_TYPES
 _CONCENTRATION_POSITION_TYPES = credit_exposure_book.CONCENTRATION_POSITION_TYPES
 _FUNDING_POSITION_TYPES = credit_exposure_book.FUNDING_POSITION_TYPES
 _DERIVATIVE_POSITION_TYPES = credit_exposure_book.DERIVATIVE_POSITION_TYPES
@@ -829,55 +836,23 @@ _ZERO_PD_CLASSES = frozenset(
 )
 
 
-def _crd_class_for(row: _ExposureRow) -> str:  # noqa: PLR0911 - a flat CRD classifier
-    """Map a flattened exposure onto a CRD exposure class (documented; ¶45).
-
-    Impaired exposures (IFRS-9 stage 3) are ``past_due``; ``HIGH_RISK`` products
-    are ``high_risk``; the rest key off the counterparty type, with
-    counterparty-less securities keying off the product's regulatory category.
-    """
-    category = (row.regulatory_category or "").upper()
-    if "HIGH_RISK" in category or "HIGH RISK" in category:
-        return "high_risk"
-    if row.ifrs9_stage == 3:  # noqa: PLR2004 - IFRS-9 stage 3 = credit-impaired
+def _crd_class_for(row: _ExposureRow, credit_category: str) -> str:  # noqa: PLR0911 - a flat CRD classifier
+    """BoG CRD (June 2018) Part 2: loss classes follow the resolved credit category."""
+    if credit_category == "past_due_90":
         return "past_due"
-    cp_type = row.counterparty_type
-    if cp_type == "CENTRAL_BANK":
-        return "bog"
-    if cp_type == "SOVEREIGN":
-        return "gog" if row.counterparty_resident is not False else "other_sovereigns_central_banks"
-    if cp_type == "GOVERNMENT_ENTITY":
+    if "domestic_sovereign" in credit_category:
+        return "bog" if credit_category.endswith(":bog") else "gog"
+    if "pse_" in credit_category:
         return "public_sector_entities"
-    if cp_type == "MULTILATERAL_DEV_BANK":
-        return "multilateral_development_banks"
-    if cp_type in ("BANK_OECD", "BANK_NON_OECD"):
+    if credit_category in ("interbank", "loans:banks", "securities:banks"):
         return "banks"
-    if cp_type == "NBFI":
-        return "other_financial_institutions"
-    if cp_type == "CORPORATE":
-        return "corporates"
-    if cp_type in ("SME", "RETAIL_INDIVIDUAL"):
+    if credit_category in ("sme_retail", "retail_other", "residential_mortgage"):
         return "retail_sme"
-    if category.startswith("SOVEREIGN"):
-        return "gog"
+    if row.counterparty_type == "NBFI":
+        return "other_financial_institutions"
+    if credit_category in ("corporate_unrated", "commercial_real_estate"):
+        return "corporates"
     return "other"
-
-
-def _exposure_risk_weight(row: _ExposureRow, capital_params: CapitalParams) -> Decimal:
-    """Resolve through the REGISTERED capital authority (audit 2026-08-22 D-8a).
-
-    This used to read ``risk_weights.get(code, 100)`` and return a flat 100% for a
-    row with no code at all — so a book the parameter register does not cover
-    produced a complete, plausible stressed CAR built entirely on an assumed
-    weight, while ``capital.engine`` refused the identical input one module away.
-    Two authorities, one of them fail-open. There is now one, and it refuses.
-    """
-    code = row.attributes.get("risk_weight_code") or row.product_risk_weight_code
-    return resolve_risk_weight(
-        capital_params,
-        str(code) if code is not None else None,
-        row.source_reference,
-    )
 
 
 def _exposure_pd_lgd(row: _ExposureRow, crd_class: str) -> tuple[Decimal, Decimal]:
@@ -895,8 +870,14 @@ def _exposure_pd_lgd(row: _ExposureRow, crd_class: str) -> tuple[Decimal, Decima
 _MAX_REPORTED_UNRESOLVED = 20
 
 
-def _build_credit_exposures(
-    rows: list[_ExposureRow], capital_params: CapitalParams
+def _build_credit_exposures(  # noqa: PLR0913
+    rows: list[_ExposureRow],
+    capital_params: CapitalParams,
+    *,
+    sovereign_names: tuple[str, ...] = (),
+    domestic_country: str | None = None,
+    central_bank_names: tuple[str, ...] = (),
+    capital_facts: Sequence[CapitalFact],
 ) -> list[CreditExposure]:
     """The exposure book for the bottom-up credit stress — or a refusal.
 
@@ -910,23 +891,41 @@ def _build_credit_exposures(
     unresolved_codes: set[str] = set()
     missing_code_only = True
     for row in rows:
-        if _reported(row.balance_rep) <= _ZERO:
-            continue
-        crd_class = _crd_class_for(row)
-        pd_pct, lgd_pct = _exposure_pd_lgd(row, crd_class)
         try:
-            risk_weight_pct = _exposure_risk_weight(row, capital_params)
+            credit_category, code = capital_credit_class(
+                row,
+                foreign=row.is_foreign_currency,
+                sovereign_names=sovereign_names,
+                central_bank_names=central_bank_names,
+                domestic_country=domestic_country,
+            )
+            risk_weight_pct = resolve_risk_weight(capital_params, code, row.source_reference)
         except RiskWeightUnavailable as exc:
             unresolved_exposures.append(row.source_reference)
             if exc.details[0].state is OutcomeState.POLICY_UNRESOLVED:
                 missing_code_only = False
                 unresolved_codes.add(exc.name)
             continue
+        crd_class = _crd_class_for(row, credit_category)
+        pd_pct, lgd_pct = _exposure_pd_lgd(row, crd_class)
+        attributes: Mapping[str, object] = row.attributes
+        grade = normalise_bog_classification(attributes.get("bog_classification"))
+        non_performing = grade in NPL_GRADES if grade is not None else row.ifrs9_stage == 3
+        try:
+            deduction = specific_deductions(attributes, non_performing=non_performing)
+        except ValueError as exc:
+            raise EnterpriseStressError("invalid_specific_provision", str(exc)) from exc
+        category = f"{credit_category}:{code}"
+        credit_amount = max(_reported(row.balance_rep) - deduction, _ZERO)
+        if _reported(row.balance_rep) <= _ZERO:
+            continue
         exposures.append(
             CreditExposure(
                 exposure_id=row.source_reference,
                 crd_class=crd_class,
                 ead=_reported(row.balance_rep),
+                credit_amount=credit_amount,
+                credit_category=category,
                 pd_pct=pd_pct,
                 lgd_pct=lgd_pct,
                 risk_weight_pct=risk_weight_pct,
@@ -937,7 +936,7 @@ def _build_credit_exposures(
         raise _unresolved_risk_weight_error(
             unresolved_exposures, sorted(unresolved_codes), missing_code_only
         )
-    return exposures
+    return list(apply_credit_collateral(exposures, capital_facts, capital_params))
 
 
 def _unresolved_risk_weight_error(
@@ -951,8 +950,8 @@ def _unresolved_risk_weight_error(
         f"{len(exposures)} credit exposures cannot be risk weighted, so the stressed "
         "risk-weighted assets and the capital ratios built on them are not numbers. "
         "A risk weight is a regulatory determination about the exposure — it is never "
-        "assumed. Ingest a risk-weight code for each position, and configure every code "
-        "it uses in the regulatory-parameter control plane."
+        "assumed. Establish each position’s CRD classification and configure every "
+        "resulting risk-weight code in the regulatory-parameter control plane."
     )
     detail = OutcomeDetail(
         state=state,
@@ -1072,20 +1071,16 @@ def _credit_overlays(
     exposures: list[CreditExposure],
     paths: list[MacroPathPoint],
     horizon_years: int,
-) -> tuple[dict[int, Decimal], dict[int, dict[str, Decimal]]]:
-    """Per-stress-year credit-RWA uplift factor + real exposure-class decomposition.
+) -> dict[int, dict[str, Decimal]]:
+    """Per-stress-year gross expected-loss decomposition for Appendix II Table 1.
 
-    Perfect-foresight: each year is conditioned by its own macro (¶48). The
-    uplift feeds the projection's stress-leg credit RWA (rating migration + FX
-    revaluation); the decomposition feeds Table 1's "Impact of Adverse".
+    BoG Stress Testing Guideline (Exposure Draft, February 2026) ¶48:
+    each year is conditioned by its own macro path. Projection RWA uses the exposure book.
     """
-    uplift: dict[int, Decimal] = {}
-    decomposition: dict[int, dict[str, Decimal]] = {}
-    for year in range(1, horizon_years + 1):
-        result = result_for_year(exposures, paths, year)
-        uplift[year] = result.credit_rwa_uplift_factor
-        decomposition[year] = result.incremental_loss_by_class()
-    return uplift, decomposition
+    return {
+        year: result_for_year(exposures, paths, year).incremental_loss_by_class()
+        for year in range(1, horizon_years + 1)
+    }
 
 
 def _pillar2_overlay(
@@ -1143,6 +1138,9 @@ def _credit_exposure_snapshot(exposures: list[CreditExposure]) -> list[dict[str,
             "exposure_id": exposure.exposure_id,
             "crd_class": exposure.crd_class,
             "ead": str(exposure.ead),
+            "credit_amount": str(exposure.credit_amount),
+            "credit_category": exposure.credit_category,
+            "collateral_amount": str(exposure.collateral_amount),
             "pd_pct": str(exposure.pd_pct),
             "lgd_pct": str(exposure.lgd_pct),
             "risk_weight_pct": str(exposure.risk_weight_pct),
@@ -1564,7 +1562,17 @@ def _require_complete_scenario(
         )
 
 
-def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
+def run_enterprise_stress_test(
+    db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
+) -> EnterpriseStressRead:
+    """Run enterprise stress, translating declared calculation refusals before persistence."""
+    try:
+        return _run_enterprise_stress_test(db, ctx, bank_id, payload)
+    except NotComputable as exc:
+        raise EnterpriseStressError(exc.code, str(exc), {"outcome": exc.to_dict()}) from exc
+
+
+def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestration of the run
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
@@ -1623,10 +1631,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     _require_complete_scenario(scenario.code, paths, payload)
 
     capital_rows = _load_facts(db, ctx, bank, period, _CAPITAL_GROUPS)
-    try:
-        assert_capital_register_usable(capital_rows)
-    except CapitalRegisterRefused as exc:
-        raise EnterpriseStressError(exc.code, str(exc)) from exc
+    assert_capital_register_usable(capital_rows)
     liquidity_rows = _load_facts(db, ctx, bank, period, _LIQUIDITY_GROUPS)
     forecast_rows = _load_facts(db, ctx, bank, period, _FORECAST_GROUPS)
     if not capital_rows or not forecast_rows:
@@ -1634,6 +1639,12 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
             "financial_facts_missing", "The reporting period has no financial facts to analyze."
         )
 
+    require_credit_exposure_basis(capital_rows)
+    require_credit_exposure_basis(forecast_rows)
+    credit_rows, current_credit_basis = credit_exposure_book.load_credit_book(db, ctx, bank, as_of)
+    credit_exposure_book.require_credit_source_basis(
+        period.credit_source_basis, current_credit_basis
+    )
     capital_facts = [_capital_fact(fact) for fact in capital_rows]
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
@@ -1657,18 +1668,43 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     base_ratios = compute_capital_ratios(capital_facts, base_rwa, capital_params)
 
     # --- Phase 4: exposure-level per-risk inputs (canonical book; graceful) --
-    credit_rows = _load_exposure_rows(db, ctx, bank, as_of, _CREDIT_POSITION_TYPES)
     concentration_rows = _load_exposure_rows(db, ctx, bank, as_of, _CONCENTRATION_POSITION_TYPES)
     funding_rows = _load_exposure_rows(db, ctx, bank, as_of, _FUNDING_POSITION_TYPES)
     derivative_rows = _load_exposure_rows(db, ctx, bank, as_of, _DERIVATIVE_POSITION_TYPES)
 
-    credit_exposures = _build_credit_exposures(credit_rows, capital_params)
-    credit_rwa_uplift: dict[int, Decimal] | None = None
+    jurisdiction = jurisdictions.get_jurisdiction(db, bank)
+    sovereign_names = (
+        tuple(
+            name.strip().lower()
+            for name in (
+                jurisdiction.country_name,
+                jurisdiction.central_bank_name,
+                jurisdiction.sovereign_rating_issuer,
+            )
+            if name and name.strip()
+        )
+        if jurisdiction is not None
+        else ()
+    )
+    credit_exposures = _build_credit_exposures(
+        credit_rows,
+        capital_params,
+        sovereign_names=sovereign_names,
+        central_bank_names=(
+            (jurisdiction.central_bank_name.strip().lower(),)
+            if jurisdiction is not None and jurisdiction.central_bank_name.strip()
+            else ()
+        ),
+        domestic_country=bank.jurisdiction_code,
+        capital_facts=capital_facts,
+    )
     exposure_class_losses: dict[int, dict[str, Decimal]] | None = None
     bottom_up_inputs: BottomUpCreditInputs | None = None
     if credit_exposures:
-        credit_rwa_uplift, exposure_class_losses = _credit_overlays(
-            credit_exposures, paths, payload.horizon_years
+        exposure_class_losses = _credit_overlays(
+            credit_exposures,
+            paths,
+            payload.horizon_years,
         )
         bottom_up_inputs = BottomUpCreditInputs(exposures=tuple(credit_exposures))
     concentration_inputs = _build_concentration_inputs(
@@ -1689,8 +1725,8 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
     paid_up_min = _resolve_paid_up_min(db, ctx, bank, as_of, payload)
 
     # 3-year projection (base + stress) → Appendix II tables. The stress leg's
-    # credit RWA rises with the bottom-up rating-migration + FX-revaluation
-    # uplift (Phase 4), so the stressed capital ratios erode from RWA, not just
+    # credit RWA rises with the grown bottom-up rating-migration + FX-revaluation
+    # exposures (Phase 4), so the stressed capital ratios erode from RWA, not just
     # P&L (closing the Phase-2 limitation).
     try:
         projection = project_enterprise(
@@ -1703,7 +1739,7 @@ def run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestra
                 plan=plan,
                 horizon_years=payload.horizon_years,
                 paid_up_min=paid_up_min,
-                credit_rwa_uplift=credit_rwa_uplift,
+                credit_exposures=tuple(credit_exposures),
                 # SDI: exclude Basel LCR/NSFR from the projection (docs/sdi.md §4.6);
                 # the SDI liquidity stress is the standalone LMTD Table-1 + ladder.
                 basel_liquidity=capital_params.basel_applicable,

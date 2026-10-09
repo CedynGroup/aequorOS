@@ -20,10 +20,11 @@ zero.** That distinction is the reason this module exists as a separate shape
 rather than a straight lift: a foreign-currency position whose conversion was
 never ingested and a position that genuinely holds nothing are not the same
 fact, and a reader that cannot tell them apart either silently drops real
-exposure or counts an unknown as an empty one. The enterprise stress test has
-always treated both as zero and must keep doing so byte for byte, so it adapts
-``None`` at its own call sites; the granularity adjustment instead EXCLUDES the
-unconverted rows and discloses how many it excluded.
+exposure or counts an unknown as an empty one. Enterprise credit stress requires
+official facts with an established net credit basis before using these rows;
+an unconverted credit exposure carries no risk weight and refuses calculation.
+The granularity adjustment instead EXCLUDES unconverted rows and discloses how
+many it excluded.
 
 The conversion itself is read, never performed: an ingested
 ``attributes.balance_ghs`` wins, otherwise a position already denominated in the
@@ -37,31 +38,27 @@ own reporting currency, whichever that is.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import (
-    Bank,
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
+from app.domain.positions.credit import credit_classification_attributes
+from app.identity.public import Bank
+from app.live.public import (
+    CREDIT_POSITION_TYPES,
+    INCLUDED_VALIDATION_STATUSES,
+    SourceRecord,
+    credit_source_basis,
+    load_position_records,
 )
 from app.services import jurisdictions
 
-#: The validation statuses a filed figure may rest on. ``warning`` is included
-#: because a warning is a flag on a row that was still accepted, not a rejection.
-INCLUDED_VALIDATION_STATUSES: tuple[str, ...] = ("accepted", "warning")
-
-#: The migrating credit book: loans plus interbank placements — the counterparty
-#: credit exposures a downgrade moves.
-CREDIT_POSITION_TYPES: tuple[str, ...] = ("LOAN", "INTERBANK_PLACEMENT")
 #: Adds the securities book, because issuer and sovereign concentration is real
 #: concentration even where the holding is not a counterparty credit exposure.
 CONCENTRATION_POSITION_TYPES: tuple[str, ...] = (
@@ -114,6 +111,7 @@ class ExposureRow:
     #: maturity in years: converting one into the other is a day-count and an
     #: IRB definition, both of which belong to the engine that needs them.
     contractual_maturity: date | None = None
+    origination_date: date | None = None
 
     @property
     def unconverted(self) -> bool:
@@ -189,6 +187,23 @@ def _reporting_notional(
     return None
 
 
+def require_credit_source_basis(official: str | None, current: str) -> None:
+    """BoG CRD (June 2018) ¶98, ¶123–124: stress only the officially derived source book."""
+    if official != current:
+        raise NotComputable(
+            OutcomeDetail(
+                state=OutcomeState.RECONCILIATION_FAILED,
+                metric_id="stressed_credit_rwa",
+                reason=(
+                    "The official facts are stale: their accepted loan and placement source "
+                    "versions differ from the current book. Re-derive the official facts for "
+                    "this reporting period before running enterprise stress."
+                ),
+                items=("source:credit_book",),
+            )
+        )
+
+
 def load_exposure_rows(
     db: Session,
     ctx: TenantContext,
@@ -201,42 +216,26 @@ def load_exposure_rows(
     The single place a SQLAlchemy ``Row`` from this query is unpacked. Ordered
     by source reference, so the list a caller receives is stable.
     """
-    # ``jurisdictions.base_currency`` deliberately raises rather than substituting
-    # (enterprise audit 2026-08-20 §6): ``banks.currency`` is NOT NULL with no
-    # default, so an unset value is a skipped decision at the creation site, not a
-    # Ghanaian bank.
-    base_currency = jurisdictions.base_currency(bank)
-    records = db.execute(
-        select(
-            CanonicalPositionSnapshot,
-            CanonicalPosition,
-            CanonicalCounterparty,
-            CanonicalProduct,
-        )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .outerjoin(
-            CanonicalProduct,
-            CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
-        )
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-            CanonicalPosition.position_type.in_(position_types),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
+    return _exposure_rows(load_position_records(db, ctx, bank, as_of, position_types), bank)
 
+
+def load_credit_book(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[list[ExposureRow], str]:
+    """Load stress exposures and source versions from the same accepted record set."""
+    records = load_position_records(db, ctx, bank, as_of, CREDIT_POSITION_TYPES)
+    return _exposure_rows(records, bank), credit_source_basis(records)
+
+
+def _exposure_rows(records: Sequence[SourceRecord], bank: Bank) -> list[ExposureRow]:
+    base_currency = jurisdictions.base_currency(bank)
     rows: list[ExposureRow] = []
-    for snapshot, position, counterparty, product in records:
-        attributes = dict(snapshot.attributes or {})
+    for record in records:
+        snapshot, position, counterparty, product = record
+        attributes: dict[str, Any] = credit_classification_attributes(
+            snapshot.attributes or {},
+            counterparty.attributes or {} if counterparty is not None else {},
+        )
         currency = str(position.currency).strip().upper()
         is_base_currency = currency == base_currency
         balance_rep = _reporting_balance(
@@ -277,6 +276,7 @@ def load_exposure_rows(
                 ),
                 product_code=(product.product_code if product is not None else None),
                 contractual_maturity=snapshot.contractual_maturity,
+                origination_date=position.origination_date,
             )
         )
     return rows
@@ -293,5 +293,9 @@ __all__ = [
     "STAGE_CREDIT_IMPAIRED",
     "ExposureRow",
     "canonical_group_key",
+    "credit_source_basis",
+    "load_credit_book",
+    "load_position_records",
+    "require_credit_source_basis",
     "load_exposure_rows",
 ]

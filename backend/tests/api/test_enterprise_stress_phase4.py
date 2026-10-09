@@ -11,19 +11,29 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.db.session import get_sessionmaker
 from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     IngestionBatch,
     LineageRecord,
+)
+from app.services.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_enterprise_stress import (
     RUNS_URL,
@@ -33,6 +43,7 @@ from tests.api.test_enterprise_stress import (
     _seed_checker,
 )
 from tests.api.test_ingestion import seed_bank
+from tests.fixtures.capital_structure import MAKER
 from tests.support.helpers import ORG_1, headers
 
 pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
@@ -43,7 +54,7 @@ _AS_OF = date(2026, 3, 31)
 def _seed_canonical_positions(bank_id: str) -> None:
     """A compact canonical book: a connected corporate group, a bank placement,
     a foreign-currency loan, a deposit funder and a derivative."""
-    session = get_sessionmaker()()
+    session = cast(Session, get_sessionmaker()())
     try:
         batch = IngestionBatch(
             organization_id=ORG_1,
@@ -216,6 +227,40 @@ def _seed_canonical_positions(bank_id: str) -> None:
             balance="0",
             notional="50000000",
             extra={"notional_ghs": "50000000"},
+        )
+        bank = session.get(Bank, bank_id)
+        period = session.scalar(
+            select(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == bank_id, BankReportingPeriod.period_end == _AS_OF
+            )
+        )
+        assert bank is not None and period is not None
+        canonical = _load_canonical(session, MAKER, bank, _AS_OF)
+        specs, _, _ = _derive_specs(canonical, live=True)
+        period.credit_source_basis = canonical.credit_source_basis
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == bank_id,
+                BankFinancialFact.reporting_period_id == period.id,
+                BankFinancialFact.fact_group == "credit_exposure",
+            )
+        )
+        session.add_all(
+            [
+                BankFinancialFact(
+                    organization_id=ORG_1,
+                    bank_id=bank_id,
+                    reporting_period_id=period.id,
+                    fact_group=spec.fact_group,
+                    category=spec.category,
+                    amount=spec.amount,
+                    currency=bank.currency,
+                    risk_weight_code=spec.risk_weight_code,
+                    attributes={},
+                )
+                for spec in specs
+                if spec.fact_group == "credit_exposure"
+            ]
         )
         session.commit()
     finally:

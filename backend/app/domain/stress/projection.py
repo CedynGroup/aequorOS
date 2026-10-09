@@ -61,6 +61,8 @@ from app.domain.capital.engine import (
     TIER_AT1,
     TIER_CET1,
     TIER_T2,
+    CapitalFact,
+    CapitalLineItem,
     CapitalParams,
     CapitalRatiosResult,
     RwaResult,
@@ -81,8 +83,14 @@ from app.domain.forecasting.engine import (
     _state_facts,
     _to_capital_facts,
     _to_liquidity_facts,
+    scale_credit_exposures,
 )
 from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.domain.stress.credit_bottom_up import (
+    CreditExposure,
+    apply_credit_collateral,
+    result_for_year,
+)
 from app.domain.stress.translation import (
     MacroPathPoint,
     ShockMapping,
@@ -151,13 +159,7 @@ class EnterpriseProjectionInputs:
     horizon_years: int = HORIZON_DEFAULT
     paid_up_min: Decimal = _ZERO
     overrides: Mapping[str, Sequence[ShockMapping]] | None = None
-    # Phase 4: per-stress-year credit-RWA uplift factor (≥ 1.0) from the
-    # exposure-level bottom-up credit stress — rating migration + FX-loan
-    # revaluation. Applied ONLY to the stress leg's credit RWA, so the stressed
-    # capital ratios erode from RWA growth, not just from P&L losses (closing
-    # the Phase-2 limitation). ``None`` (or a factor of 1.0) leaves the stress
-    # leg byte-identical to Phase 2 — the base leg is never touched.
-    credit_rwa_uplift: Mapping[int, Decimal] | None = None
+    credit_exposures: Sequence[CreditExposure] = ()
     # Whether Basel LCR/NSFR apply to the liquidity leg. True for a bank; False
     # under the SDI regime (docs/sdi.md §4.6), where LCR/NSFR are excluded — the
     # SDI liquidity stress is assessed via the standalone LMTD Table-1 + behavioural
@@ -465,12 +467,10 @@ def _run_leg(inputs: EnterpriseProjectionInputs, leg: str) -> list[ProjectedYear
             pd_mult = lgd_mult = _ONE
             fx_pct = inputs.plan.fx_depreciation_pct if year == 1 else _ZERO
             mtm_pct = _ZERO
-            credit_rwa_factor = _ONE
         else:
             assumptions, pd_mult, lgd_mult = _stress_assumptions_for_year(inputs, year)
             fx_pct = _stress_fx_year1(inputs) if year == 1 else _ZERO
             mtm_pct = _stress_mtm_year1(inputs) if year == 1 else _ZERO
-            credit_rwa_factor = _credit_rwa_factor(inputs, year)
         earning_prev, assets_prev, equity_prev, row = _project_one_year(
             inputs,
             state,
@@ -485,7 +485,6 @@ def _run_leg(inputs: EnterpriseProjectionInputs, leg: str) -> list[ProjectedYear
             earning_prev,
             assets_prev,
             equity_prev,
-            credit_rwa_factor,
         )
         rows.append(row)
     return rows
@@ -509,58 +508,63 @@ def _stress_fx_year1(inputs: EnterpriseProjectionInputs) -> Decimal:
     return inputs.plan.fx_depreciation_pct + peak * _HUNDRED
 
 
-def _credit_rwa_factor(inputs: EnterpriseProjectionInputs, year: int) -> Decimal:
-    """The stress leg's credit-RWA uplift for one year (1.0 when unmodelled).
-
-    ``None`` means the bottom-up overlay was not run at all — a documented
-    Phase-2 position, not a substitution. A SUPPLIED map that does not cover a
-    projected year is different: the year silently fell back to 1.0, so the
-    rating-migration and FX-revaluation uplift applied to years 1–2 and not to
-    year 3, mixing two methodologies inside one projection (audit 2026-08-22
-    D-8).
-    """
-    if inputs.credit_rwa_uplift is None:
-        return _ONE
-    factor = inputs.credit_rwa_uplift.get(year)
-    if factor is None:
-        raise NotComputable(
-            outcome(
-                OutcomeState.MISSING_REQUIRED_INPUT,
-                metric_id="stressed_credit_rwa",
-                reason=(
-                    "The bottom-up credit-RWA uplift was supplied but does not cover "
-                    f"projected year {year}, so that year's stressed credit RWA would "
-                    "carry no rating-migration or FX-revaluation uplift while the other "
-                    "years do. Compute the uplift for every projected year."
-                ),
-                items=(f"input:credit_rwa_uplift@y{year}",),
-                context={"year": year, "covered": sorted(inputs.credit_rwa_uplift)},
+def _apply_credit_stress(
+    inputs: EnterpriseProjectionInputs, rwa: RwaResult, facts: Sequence[CapitalFact], year: int
+) -> RwaResult:
+    """BoG CRD (June 2018) ¶98, ¶139: stress only each year's affected net claims."""
+    if not inputs.credit_exposures:
+        return rwa
+    original: dict[str, Decimal] = {}
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None:
+            raise ProjectionInputError(
+                "credit_category_missing", "Stress exposures need a capital bucket."
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        original[category] = original.get(category, _ZERO) + amount
+    projected = {
+        fact.category: fact.amount for fact in facts if fact.fact_group == "credit_exposure"
+    }
+    grown: list[CreditExposure] = []
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None or category not in projected:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="stressed_credit_rwa",
+                    reason="A stress exposure has no corresponding projected capital bucket.",
+                    items=(f"fact:credit_exposure:{category}",),
+                )
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        factor = projected[category] / original[category] if original[category] > _ZERO else _ONE
+        grown.append(
+            replace(
+                exposure, ead=money(exposure.ead * factor), credit_amount=money(amount * factor)
             )
         )
-    return factor
-
-
-def _apply_credit_rwa_uplift(rwa: RwaResult, factor: Decimal) -> RwaResult:
-    """Scale a year's credit RWA (and total, and the credit line items) by ``factor``.
-
-    The uplift is the bottom-up rating-migration + FX-loan revaluation overlay.
-    Market and operational RWA are untouched (their stresses live elsewhere), so
-    the higher total RWA erodes the capital ratios computed downstream.
-    """
-    if factor == _ONE:
-        return rwa
-    scaled_credit = money(rwa.credit_rwa * factor)
-    line_items = tuple(
-        replace(item, weighted_amount=money(item.weighted_amount * factor))
-        if item.section == "credit_rwa"
-        else item
-        for item in rwa.line_items
-    )
+    grown = list(apply_credit_collateral(grown, facts, inputs.params.capital))
+    result = result_for_year(grown, inputs.scenario_paths, year, overrides=inputs.overrides)
+    deltas = result.rwa_delta_by_category
+    items: list[CapitalLineItem] = []
+    for item in rwa.line_items:
+        if item.section != "credit_rwa" or item.line_code not in deltas:
+            items.append(item)
+            continue
+        weighted = money(item.weighted_amount + deltas[item.line_code])
+        amount = result.stressed_amount_by_category[item.line_code]
+        weight = ratio_pct(weighted / amount * _HUNDRED) if amount > _ZERO else item.rate_pct
+        items.append(
+            replace(item, exposure_amount=amount, rate_pct=weight, weighted_amount=weighted)
+        )
+    credit = money(rwa.credit_rwa + sum(deltas.values(), _ZERO))
     return replace(
         rwa,
-        credit_rwa=scaled_credit,
-        total_rwa=money(scaled_credit + rwa.market_rwa + rwa.operational_rwa),
-        line_items=line_items,
+        credit_rwa=credit,
+        total_rwa=money(credit + rwa.market_rwa + rwa.operational_rwa),
+        line_items=tuple(items),
     )
 
 
@@ -588,7 +592,6 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     earning_prev: Decimal,
     assets_prev: Decimal,
     equity_prev: Decimal,
-    credit_rwa_factor: Decimal = _ONE,
 ) -> tuple[Decimal, Decimal, Decimal, ProjectedYear]:
     """Roll forward the book, charging only general EAD for incremental macro losses.
 
@@ -599,6 +602,12 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
     securities_factor = (
         _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
+    )
+    scale_credit_exposures(
+        state,
+        loan_factor,
+        deposit_factor,
+        securities_factor * ((_HUNDRED - mtm_pct) / _HUNDRED if year == 1 else _ONE),
     )
     _scale_in_place(state.loans, loan_factor)
     _scale_in_place(state.ecl_exposures, loan_factor)
@@ -699,7 +708,6 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         pd_mult,
         lgd_mult,
         pnl=pnl,
-        credit_rwa_factor=credit_rwa_factor,
     )
     return earning_assets, state.assets_total(), state.equity, row
 
@@ -714,14 +722,13 @@ def _snapshot_year(  # noqa: PLR0913 - the snapshot names its full scope
     lgd_mult: Decimal,
     *,
     pnl: Pnl | None = None,
-    credit_rwa_factor: Decimal = _ONE,
 ) -> ProjectedYear:
     rows = _state_facts(state, meta)
     capital_facts = _to_capital_facts(rows)
     liquidity_facts = _to_liquidity_facts(rows)
-    rwa = _apply_credit_rwa_uplift(
-        compute_rwa(capital_facts, inputs.params.capital), credit_rwa_factor
-    )
+    rwa = compute_rwa(capital_facts, inputs.params.capital)
+    if leg == "stress":
+        rwa = _apply_credit_stress(inputs, rwa, capital_facts, year)
     ratios = compute_capital_ratios(capital_facts, rwa, inputs.params.capital)
     # Basel LCR/NSFR apply to banks only; under the SDI regime they are excluded
     # (docs/sdi.md §4.6) — the SDI liquidity stress is the LMTD Table-1 + stressed

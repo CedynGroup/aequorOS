@@ -50,6 +50,7 @@ from app.domain.capital.engine import (
     CapitalRatiosResult,
     CapitalRegisterRefused,
     CapitalStressResult,
+    CreditExposureBasisUnavailable,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
@@ -58,6 +59,7 @@ from app.domain.capital.engine import (
     compute_rwa,
     money,
     ratio_pct,
+    require_credit_exposure_basis,
     run_capital_stress,
     unstaged_loan_ead,
 )
@@ -141,7 +143,8 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v4.0.0"
+#: v5 separates CRD net credit exposures from gross accounting and HQLA facts.
+ENGINE_VERSION = "regulatory-capital-v5.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -176,6 +179,7 @@ _CAPITAL_FACT_GROUPS = (
     "crm_collateral",
     "ecl_exposure",
     "loan_exposure",
+    "credit_exposure",
     "market_risk",
     "off_balance",
     "operational_income",
@@ -301,7 +305,7 @@ def _execute_scenario_compute(
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     engine_params = _engine_params(active)
     # ECL conditioning keys are the ECL engine's, never the stress engine's
     # (which rejects unknown shocks).
@@ -782,7 +786,9 @@ def _create_and_execute(
             ctx,
             run_id,
             CapitalRunError(
-                exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error",
+                exc.code
+                if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+                else "calculation_error",
                 str(exc),
                 None,
             ),
@@ -1564,7 +1570,7 @@ def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus o
         )
     active = active or _active_params_from_batch(db, ctx, bank, period.period_end, batch)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1582,7 +1588,7 @@ def _compute_inline(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1610,7 +1616,10 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
         raise ModuleDataUnavailable(
-            exc.code if isinstance(exc, CapitalRegisterRefused) else "calculation_error", str(exc)
+            exc.code
+            if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+            else "calculation_error",
+            str(exc),
         ) from exc
 
 
@@ -1649,7 +1658,7 @@ def compute_live(
     if active.institution_class == "sdi":
         return _sdi_compute_live(db, ctx, bank, period, current, active, facts)
     params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, params)
     ratios = compute_capital_ratios(engine_facts, rwa, params)
     snapshot = current_snapshot(
@@ -1941,6 +1950,11 @@ def _load_facts(
             .order_by(BankFinancialFact.fact_group, BankFinancialFact.category)
         )
     )
+
+
+def _fresh_engine_facts(facts: Sequence[FinancialFactRow]) -> tuple[CapitalFact, ...]:
+    require_credit_exposure_basis(facts)
+    return tuple(_to_engine_fact(fact) for fact in facts)
 
 
 def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
@@ -2377,11 +2391,11 @@ def capital_breach_multiplier(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
     try:
+        engine_facts = _fresh_engine_facts(facts)
         assert_capital_register_usable(engine_facts)
-    except CapitalRegisterRefused as exc:
+    except (CapitalRegisterRefused, CreditExposureBasisUnavailable) as exc:
         raise CapitalRunError(exc.code, str(exc)) from exc
     if not shocks:
         raise CapitalRunError(

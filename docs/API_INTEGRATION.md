@@ -747,3 +747,48 @@ never present with zeros.
 **Every pull is recorded** — the credential, the dataset, the cursor in and out,
 the reporting dates, the row count and whether it was allowed or refused. Ask
 your AequorOS administrator for that record whenever you need it.
+
+### Capital credit exposure attributes
+
+The capital derivation uses an internal `credit_exposure` basis under BoG CRD
+(June 2018) Part 2, separate from gross accounting loans and IFRS 9 EAD.
+`issuer_class` is a closed classification: `public_institution`,
+`public_enterprise`, `soe`, or `private`. Neither `private` nor an unknown value
+establishes sovereign status. The documented `tor_bond` and `cocoa_bill`
+instruments identify PSE enterprise and institution paper respectively.
+Loan public-sector classification reads `borrower_class`; securities and placements
+read `issuer_class`. These two fields may come from counterparty attributes;
+a position attribute takes precedence, including an explicit empty or invalid
+value. Domestic PSE treatment also requires counterparty domicile
+evidence: `country_code` matching the bank's jurisdiction, or `resident=true`
+when no country is supplied. The established Annex 2D instrument labels can
+establish domestic classification when no domicile is supplied. Explicit foreign
+country or non-residency overrides instrument labels and class attributes.
+Foreign PSEs without an established sovereign assessment refuse credit risk
+measurement under BoG CRD (June 2018) ¶120–122.
+
+`external_rating_grade` on an `INTERBANK_PLACEMENT`, loan to a bank, or bank-issued
+debt security is the bank's ECAI
+assessment mapped to CRD ERG `1`–`6`, or `unrated`; it is not a raw agency rating.
+An absent grade is unrated, and an unknown grade refuses capital. The 20%
+short-term unrated-bank weight requires domestic currency and an original term
+of at most three calendar months, established by `origination_date` and
+`contractual_maturity`. A short remaining maturity alone grants no preference.
+
+Bank-issued securities enter this assessment only with a `BOND` or
+`CORPORATE_BOND` product category or a documented debt instrument (`bill`,
+`certificate_of_deposit`, `bond_issued`, `finsap_bond`,
+`ssnit_educational_bond`). Equity categories override a debt instrument label.
+Other non-debt and unknown holdings retain the securities fallback.
+
+Calculation prerequisites and enterprise-stress refusals follow the
+[calculation basis and refusal contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract).
+
+`specific_provision_ghs` explicitly states the
+specific provision on a loan, security or interbank claim. If absent, the
+bank's `ecl_provision_ghs` is specific only for an NPL classified by
+`bog_classification`, or IFRS 9 stage 3 when no BoG classification exists.
+Capital deducts this specific provision and `interest_in_suspense_ghs` per
+exposure, floored at zero (CRD ¶98). Missing amounts grant no deduction;
+malformed or negative amounts refuse derivation. General allowances on
+performing loans remain outside this deduction.

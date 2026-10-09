@@ -15,11 +15,11 @@ import pytest
 from app.domain.capital.ecl import EclAssumption
 from app.domain.forecasting.engine import ForecastFact, project
 from app.domain.stress.appendix_ii import build_appendix_ii
+from app.domain.stress.credit_bottom_up import CreditExposure
 from app.domain.stress.management_actions import RecognitionCaps
 from app.domain.stress.projection import (
     EnterpriseProjectionInputs,
     ProjectionInputError,
-    money,
     project_enterprise,
 )
 from app.domain.stress.translation import MacroPathPoint
@@ -27,6 +27,7 @@ from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     base_paths,
     bog_forecast_params,
+    credit_basis_facts,
     sample_bank_latest_facts,
     severe_paths,
 )
@@ -153,38 +154,42 @@ def test_projection_spans_the_full_horizon() -> None:
     assert [year.year for year in projection.stress] == [1, 2, 3, 4]
 
 
-def test_credit_rwa_uplift_erodes_car_from_rwa_not_only_pnl() -> None:
-    """Phase 4: the bottom-up migration + FX uplift raises stress RWA → lower CAR."""
-    baseline = project_enterprise(_inputs(severe_paths()))
-    uplifted = project_enterprise(
-        _inputs(
-            severe_paths(),
-            credit_rwa_uplift={1: Decimal("1.2"), 2: Decimal("1.2"), 3: Decimal("1.2")},
+def _overlay_book() -> tuple[CreditExposure, ...]:
+    return tuple(
+        CreditExposure(
+            fact.category,
+            "corporates",
+            fact.amount,
+            Decimal("2"),
+            Decimal("45"),
+            Decimal("100"),
+            credit_category=f"{fact.category}:{fact.risk_weight_code}",
         )
+        for fact in sample_bank_latest_facts()
+        if fact.fact_group == "loan_exposure" and fact.category == "corporate_unrated"
+    )
+
+
+def test_credit_migration_erodes_car_from_rwa_not_only_pnl() -> None:
+    """BoG CRD (June 2018) ¶98: migration raises affected credit RWA independently of P&L."""
+    baseline = project_enterprise(_inputs(severe_paths(), facts=credit_basis_facts()))
+    uplifted = project_enterprise(
+        _inputs(severe_paths(), facts=credit_basis_facts(), credit_exposures=_overlay_book())
     )
     for base_year, up_year in zip(baseline.stress, uplifted.stress, strict=True):
-        # Stress-leg credit RWA scales by the uplift factor; total RWA follows.
-        assert up_year.rwa.credit_rwa == money(base_year.rwa.credit_rwa * Decimal("1.2"))
-        assert up_year.rwa.total_rwa > base_year.rwa.total_rwa
-        # Higher RWA with unchanged capital ⇒ a strictly lower CAR (RWA erosion).
+        assert up_year.rwa.credit_rwa > base_year.rwa.credit_rwa
         assert up_year.ratios.car_pct < base_year.ratios.car_pct
-    # The base leg and the as-of snapshot are never touched by the overlay.
-    for base_year, up_year in zip(baseline.base, uplifted.base, strict=True):
-        assert up_year.rwa.total_rwa == base_year.rwa.total_rwa
-        assert up_year.ratios.car_pct == base_year.ratios.car_pct
-    assert uplifted.current.rwa.total_rwa == baseline.current.rwa.total_rwa
+    assert uplifted.base == baseline.base
+    assert uplifted.current == baseline.current
 
 
-def test_unit_credit_rwa_uplift_is_a_no_op() -> None:
-    baseline = project_enterprise(_inputs(severe_paths()))
+def test_flat_credit_scenario_is_a_no_op() -> None:
+    """BoG CRD (June 2018) ¶98: neutral exposure stress preserves every capital line."""
+    baseline = project_enterprise(_inputs(base_paths(), facts=credit_basis_facts()))
     unit = project_enterprise(
-        _inputs(
-            severe_paths(), credit_rwa_uplift={1: Decimal("1"), 2: Decimal("1"), 3: Decimal("1")}
-        )
+        _inputs(base_paths(), facts=credit_basis_facts(), credit_exposures=_overlay_book())
     )
-    for base_year, unit_year in zip(baseline.stress, unit.stress, strict=True):
-        assert unit_year.rwa.total_rwa == base_year.rwa.total_rwa
-        assert unit_year.ratios.car_pct == base_year.ratios.car_pct
+    assert unit == baseline
 
 
 def _staged_loss_inputs(
@@ -528,3 +533,62 @@ def test_annual_benign_macro_never_credits_lower_ecl_to_capital() -> None:
         assert stress.pnl.incremental_credit_losses == Decimal("0")
         assert stress.pnl == base.pnl
         assert stress.ratios.cet1_capital == base.ratios.cet1_capital
+
+
+@pytest.mark.parametrize("rate_shock", [False, True])
+def test_net_credit_basis_tracks_growth_and_year_one_haircut_on_both_legs(rate_shock: bool) -> None:
+    """BoG CRD (June 2018) ¶98, ¶107: projected credit follows the matching asset book."""
+    facts = list(sample_bank_latest_facts())
+    for fact in tuple(facts):
+        if fact.fact_group == "loan_exposure":
+            code = "RW100" if fact.category == "sme_retail" else fact.risk_weight_code
+            amount = (
+                fact.amount - Decimal("60000000")
+                if fact.category == "corporate_unrated"
+                else fact.amount
+            )
+            facts.append(
+                ForecastFact(
+                    "credit_exposure", f"{fact.category}:{code}", amount, risk_weight_code=code
+                )
+            )
+    facts.append(
+        ForecastFact(
+            "credit_exposure", "other_assets:RW100", Decimal("90000000"), risk_weight_code="RW100"
+        )
+    )
+    facts.append(
+        ForecastFact(
+            "credit_exposure",
+            "securities:domestic_sovereign:gog:RW20",
+            Decimal("620000000"),
+            risk_weight_code="RW20",
+        )
+    )
+    plan = replace(
+        BASE_ASSUMPTIONS,
+        loan_growth_pct=Decimal("10"),
+        deposit_growth_pct=Decimal("20"),
+        securities_shift_pp=Decimal("0"),
+    )
+    paths = tuple(
+        replace(point, stress_value=point.base_value + Decimal("0.05"))
+        if rate_shock and point.variable == "interest_rate" and point.year_index > 0
+        else point
+        for point in base_paths()
+    )
+    projection = project_enterprise(_inputs(paths, facts=facts, plan=plan))
+    loan_rwa = Decimal("1172500000")
+    off_balance_rwa = Decimal("150000000")
+    for leg, haircut in (
+        (projection.base, Decimal("1")),
+        (projection.stress, Decimal("0.825") if rate_shock else Decimal("1")),
+    ):
+        for year in leg:
+            expected = (
+                (loan_rwa + off_balance_rwa) * Decimal("1.1") ** year.year
+                + Decimal("124000000") * Decimal("1.2") ** year.year * haircut
+                + Decimal("90000000")
+            )
+            assert year.rwa.credit_rwa == expected.quantize(Decimal("0.0001"))
+    assert projection.current.rwa.credit_rwa == loan_rwa + off_balance_rwa + Decimal("214000000")

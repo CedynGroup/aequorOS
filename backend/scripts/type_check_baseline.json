@@ -1349,7 +1349,7 @@
   "reportUnknownVariableType": 4
  },
  "app.services.credit_exposure_book": {
-  "reportAny": 37,
+  "reportAny": 12,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
  },
@@ -1398,7 +1398,7 @@
   "reportPrivateUsage": 2
  },
  "app.services.fact_derivation": {
-  "reportAny": 44,
+  "reportAny": 36,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 4
@@ -2769,9 +2769,9 @@
   "reportMissingTypeArgument": 1,
   "reportPrivateUsage": 4,
   "reportUnknownArgumentType": 11,
-  "reportUnknownMemberType": 13,
+  "reportUnknownMemberType": 1,
   "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 14
+  "reportUnknownVariableType": 13
  },
  "tests.api.test_enterprise_stress_signoff": {
   "reportAny": 2,
@@ -4712,7 +4712,7 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_derivation_fail_closed_defaults": {
-  "reportPrivateUsage": 17,
+  "reportPrivateUsage": 16,
   "reportUnknownMemberType": 1
  },
  "tests.services.test_desk_capture_job": {
@@ -4738,9 +4738,9 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_enterprise_stress_controls": {
-  "reportAny": 10,
+  "reportAny": 4,
   "reportMissingParameterType": 1,
-  "reportPrivateUsage": 13,
+  "reportPrivateUsage": 12,
   "reportUnknownArgumentType": 7,
   "reportUnknownParameterType": 1
  },

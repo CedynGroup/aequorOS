@@ -419,6 +419,7 @@ def test_phase4_sections_populate_under_a_severe_scenario() -> None:
     outcome = run_enterprise_stress(_inputs(severe_paths(), **_phase4_overrides()))
     assert outcome.bottom_up_credit is not None
     assert outcome.bottom_up_credit.stressed_credit_rwa > outcome.bottom_up_credit.base_credit_rwa
+    assert outcome.bottom_up_credit.credit_rwa_uplift_factor is not None
     assert outcome.bottom_up_credit.credit_rwa_uplift_factor > Decimal("1")
     assert outcome.concentration is not None
     assert outcome.concentration.total_incremental_loss > Decimal("0")
@@ -676,7 +677,7 @@ def test_enterprise_stress_prices_a_fully_staged_book() -> None:
     assert result.capital.composition.ecl_source == "ecl_engine"
     assert result.capital.composition.ecl_base == Decimal("12600000.0000")
     assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
-    assert result.engine_version == "enterprise-stress-v4.2.0"
+    assert result.engine_version == "enterprise-stress-v5.0.0"
 
 
 def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:
