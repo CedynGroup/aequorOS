@@ -257,8 +257,16 @@ logging boundary hashes all caller-supplied request ids for
 calculation, HTTP error, access and intercepted logs alike; the Loguru sink also
 writes to stderr. Background boundaries mint an id when no request exists.
 The HTTP error boundary does not re-log propagated exception text or tracebacks.
+Worker job failures use the same closed stderr schema (`worker.job_failed`),
+without job identifiers or exception content; authoritative retry diagnostics
+remain in the tenant-scoped job row. A job keeps one correlation id through the
+calculation boundary and worker retry handler, then restores its caller's context.
+The shared Loguru patcher also replaces unexpected exception messages and removes
+serialized exception values, tracebacks and bound customer context before sinks
+receive a record. Such fallback records retain only a validated tenant id, safe
+correlation id and the `unexpected_error` code.
 Behavioral/redaction tests live in `backend/tests/liquidity/` and
-`backend/tests/core/test_calculation_logging.py`.
+`backend/tests/core/test_calculation_logging.py` and `test_worker_error_logging.py`.
 
 ---
 

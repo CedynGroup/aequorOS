@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.figure_results import FigureRefusalRead
+from app.schemas.common import FigureRefusalRead
 
 
 class ClosedModel(BaseModel):

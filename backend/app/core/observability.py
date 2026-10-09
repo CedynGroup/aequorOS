@@ -11,7 +11,7 @@ calculations" is a query rather than a grep through prose messages.
 This module supplies that, and nothing else. Deliberately:
 
 * **No new dependency.** General events use the existing loguru instance.
-  Calculation failures and refusals use a closed JSON schema written to stderr
+  Calculation and worker failures and refusals use a closed JSON schema written to stderr
   for CloudWatch collection, independent of bound logging context.
 * **No parallel store.** Where an authoritative signal already exists (an audit
   event, a DB row, a readiness check), :data:`CONDITION_SOURCES` records where
@@ -24,7 +24,8 @@ This module supplies that, and nothing else. Deliberately:
   Passwords, tokens, credential material, full request bodies and raw vendor
   payloads must not be passed. Calculation errors allow only registered codes,
   citations, figures and versions, validated input row positions, a platform
-  tenant id and a safe correlation id. Other events retain their credential-field backstop.
+  tenant id and a safe correlation id. Worker job failures use the same closed
+  schema. Other events retain their credential-field backstop.
 
 Every record carries ``condition`` (a :class:`Condition` value),
 ``severity`` and ``request_id``.
@@ -34,7 +35,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import re
 import sys
 from collections.abc import Mapping
 from enum import StrEnum
@@ -43,7 +43,7 @@ from uuid import uuid4
 
 from loguru import logger
 
-from app.core.logging import get_request_id, safe_request_id
+from app.core.logging import get_request_id, safe_request_id, safe_tenant_id
 
 # Field names never worth writing to a log, whatever a caller passes.
 _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
@@ -79,7 +79,6 @@ _CALCULATION_CODES: Final = frozenset(
 _CALCULATION_RULES: Final = frozenset({"BCBS 238", "BCBS 295"})
 _CALCULATION_FIGURES: Final = frozenset({"lcr_pct", "nsfr_pct"})
 _CALCULATION_VERSIONS: Final = frozenset({"regulatory-liquidity-v2.0.0"})
-_TENANT_ID: Final = re.compile(r"OR-[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{8}")
 
 
 class Condition(StrEnum):
@@ -98,6 +97,7 @@ class Condition(StrEnum):
     PACKAGE_FAILED = "reporting.package_failed"
     SUBMISSION_FAILED = "reporting.submission_failed"
     WORKER_STARVED = "worker.starved"
+    WORKER_JOB_FAILED = "worker.job_failed"
     STORAGE_FAILED = "storage.failed"
     AUTH_ANOMALY = "auth.anomaly"
     SSRF_BLOCKED = "egress.blocked"
@@ -152,6 +152,7 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "a transport/network failure on the channel is NOT recorded as a submission event"
     ),
     Condition.WORKER_STARVED: "worker_heartbeats + jobs; /operator/v1/worker-health; /health/ready",
+    Condition.WORKER_JOB_FAILED: "app.worker.run_once failure log + jobs.status/error/attempts",
     Condition.STORAGE_FAILED: "storage hash-chained access log; /health/ready checks.storage",
     Condition.AUTH_ANOMALY: (
         "failed_login_attempts / locked_until on the principal's table — 'users' for a "
@@ -192,9 +193,9 @@ def emit(
     """Record an operational condition as a structured log event.
 
     General events use ``summary`` as prose and ``fields`` for queryable data.
-    Calculation events discard the summary and use the closed allowlist in
-    :func:`_emit_calculation`. Never raises: an observability failure must not change the
-    behaviour of the code path that reported the condition.
+    Calculation and worker failure events discard the summary and use the closed
+    allowlist in :func:`_emit_private_event`. Never raises: an observability failure
+    must not change the behaviour of the code path that reported the condition.
     """
     # Suppressed on purpose: these calls sit inside authorization denials and
     # exception handlers, where a logging failure must not become a 500.
@@ -203,16 +204,17 @@ def emit(
             Condition.CALCULATION_FAILED,
             Condition.CALCULATION_BLOCKED,
             Condition.REGULATORY_RUN_FAILED,
+            Condition.WORKER_JOB_FAILED,
         ):
-            _emit_calculation(condition, severity, fields)
+            _emit_private_event(condition, severity, fields)
             return
         logger.bind(condition=condition.value, severity=severity, **_scrub(fields)).log(
             _LEVELS.get(severity, "WARNING"), summary
         )
 
 
-def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, object]) -> None:
-    """Write allowlisted aequorOS calculation events directly to stderr.
+def _emit_private_event(condition: Condition, severity: str, fields: Mapping[str, object]) -> None:
+    """Write allowlisted aequorOS failure and refusal events directly to stderr.
 
     Bypassing loguru's contextual extras keeps arbitrary bound customer data and
     active exception tracebacks out of this stream. No exception or request body
@@ -226,9 +228,7 @@ def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, 
         "request_id": request_id,
     }
     tenant = fields.get("tenant_id", fields.get("organization_id"))
-    payload["tenant_id"] = (
-        tenant if isinstance(tenant, str) and _TENANT_ID.fullmatch(tenant) else "unknown"
-    )
+    payload["tenant_id"] = safe_tenant_id(tenant)
     code = fields.get("reason_code", fields.get("code"))
     payload["reason_code"] = (
         code if isinstance(code, str) and code in _CALCULATION_CODES else "unspecified"

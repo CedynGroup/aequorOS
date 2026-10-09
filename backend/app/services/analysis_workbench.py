@@ -56,7 +56,7 @@ from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
 from app.models import Bank, BankReportingPeriod, SavedScenarioAnalysis, StressScenario
-from app.schemas.figure_results import FigureRefusalRead
+from app.schemas.common import FigureRefusalRead
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,
     AnalysisRunRead,

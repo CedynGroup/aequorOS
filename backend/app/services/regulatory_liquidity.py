@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
@@ -68,7 +68,7 @@ from app.models import (
     RegulatoryValidation,
 )
 from app.schemas.banks import BankRead, BankReportingPeriodRead
-from app.schemas.figure_results import FigureRefusalRead
+from app.schemas.common import FigureRefusalRead, JsonObject
 from app.schemas.regulatory_liquidity import (
     Bsd3HeaderRead,
     Bsd3NsfrSectionRead,
@@ -1656,7 +1656,23 @@ def compute_live(
         current.source_as_of_date,
     )
     view = _metrics_from_results(lcr, nsfr)
-    metrics = view.model_dump(mode="json", exclude_none=True)
+    serialized = cast(JsonObject, view.model_dump(mode="json"))
+    # Explicit publication fields keep every live figure in the authority inventory.
+    metrics: JsonObject = {
+        "lcr_pct": serialized["lcr_pct"],
+        "lcr_status": serialized["lcr_status"],
+        "nsfr_pct": serialized["nsfr_pct"],
+        "nsfr_status": serialized["nsfr_status"],
+        "hqla_total_ghs": serialized["hqla_total_ghs"],
+        "net_outflows_30d_ghs": serialized["net_outflows_30d_ghs"],
+        "asf_total_ghs": serialized["asf_total_ghs"],
+        "rsf_total_ghs": serialized["rsf_total_ghs"],
+        "refusals": serialized["refusals"],
+        "fx_funding_gap_ghs": serialized["fx_funding_gap_ghs"],
+        "fx_share_of_liabilities_pct": serialized["fx_share_of_liabilities_pct"],
+        "stressed_fx_funding_gap_ghs": serialized["stressed_fx_funding_gap_ghs"],
+    }
+    metrics = {key: value for key, value in metrics.items() if value is not None}
     status = "red" if view.refusals else worst_status(view.lcr_status, view.nsfr_status)
     findings = findings_from_validations(
         _validation_rows(lcr, nsfr, params, base_currency(bank)), status
