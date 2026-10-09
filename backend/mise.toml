@@ -91,10 +91,10 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 #
 # Ownership of the Postgres-only suites: `tests/db` belongs to
 # `risk-service:test-postgres-schema` and the three lock files to
-# `risk-service:test-postgres-locks`, both run by CI's "Postgres schema, RLS
-# and locks" job against the same PostgreSQL version and restricted role as this
-# task. `tests/architecture` belongs to `risk-service:test-architecture`; it
-# never opens a database, so running it here only repeated it on Postgres. They
+# `risk-service:test-postgres-locks`; CI execution and aggregation are documented
+# in README.md#run-tests. `tests/architecture` belongs to
+# `risk-service:test-architecture`; it never opens a database, so running it here
+# only repeated it on Postgres. They
 # are ignored here so a failure surfaces once, in the job named for it, rather
 # than repeating the same checks here.
 # The hermetic `risk-service:test` still collects everything.

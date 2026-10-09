@@ -378,12 +378,31 @@ CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
 release binaries and verify pinned SHA256 digests before execution. MinIO runs
 only for the storage contract and manual dashboard journeys, with a disposable
-built-in KMS key named `aequoros-key`. OpenBao runs only for the full-suite job's
+built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
 live signing tests. Both listen on loopback and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
 credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
+
+CI runs the remaining PostgreSQL suite in two parallel module shards, and the
+schema/RLS suite in two more; lock tests retain their own job. Module hashing
+keeps each file together, including OpenBao's shared AppRole fixtures. The
+existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
+**Risk service gate** check names stay stable. Shards upload their complete
+collection manifests and JUnit reports; the aggregates verify that their union
+contains every expected test exactly once, preserve the full-suite execution
+floor, and reject any skipped schema/RLS or live OpenBao test.
+
+Main always runs the full suite. On pull requests, only changes confined to the
+bodies of existing, unreferenced `tests/domain/test_*.py` tests (including nested
+domain directories), or comments and formatting in those modules, select their
+affected modules. Changes to fixtures, decorators, production code, new/deleted
+tests, configuration or an uncertain diff select the full suite. Schema/RLS,
+locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
+[`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
+[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py), so local mise
+commands continue to run their complete suites.
 
 ### Test databases and the primary database
 
