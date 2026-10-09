@@ -28,7 +28,12 @@ from app.models import (
     CurrentFinancialFact,
     ParamCapitalThreshold,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate, RegulatoryScenarioCode
+from app.schemas.regulatory_liquidity import (
+    LiquidityDashboardRead,
+    RegulatoryRunCreate,
+    RegulatoryRunRead,
+    RegulatoryScenarioCode,
+)
 from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
 from app.services import analysis_workbench, authorization, regulatory_liquidity, window_analytics
 from tests.fixtures.canonical_bank_fixture import (
@@ -136,27 +141,8 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
 
     if threshold is None:
         monkeypatch.setattr(regulatory_liquidity, "compute_liquidity_results", missing_rates)
-    elif threshold == "unclassified":
-        for fact in facts:
-            if fact.fact_group == "securities" and fact.hqla_level is not None:
-                fact.hqla_level = "unknown"
-        for fact in db_session.scalars(
-            select(CurrentFinancialFact).where(
-                CurrentFinancialFact.bank_id == bank.id,
-                CurrentFinancialFact.fact_group == "securities",
-                CurrentFinancialFact.hqla_level.is_not(None),
-            )
-        ):
-            fact.hqla_level = "unknown"
-        db_session.flush()
     else:
-        for row in db_session.scalars(
-            select(ParamCapitalThreshold).where(
-                ParamCapitalThreshold.threshold_code == threshold,
-            )
-        ):
-            db_session.delete(row)
-        db_session.flush()
+        _refuse_parameter(db_session, facts, bank.id, threshold)
     dashboard = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id, period.id)
     payload = dashboard.model_dump(mode="json")
     metrics = cast(dict[str, object], payload["metrics"])
@@ -228,6 +214,41 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
             module="liquidity", reporting_period_id=period.id, scenario_code=scenario
         ),
     )
+    _assert_official_refusal(run, facts, dashboard, threshold)
+
+
+def _refuse_parameter(
+    db_session: Session, facts: Sequence[BankFinancialFact], bank_id: str, threshold: str
+) -> None:
+    if threshold != "unclassified":
+        for row in db_session.scalars(
+            select(ParamCapitalThreshold).where(
+                ParamCapitalThreshold.threshold_code == threshold,
+            )
+        ):
+            db_session.delete(row)
+        db_session.flush()
+        return
+    for fact in facts:
+        if fact.fact_group == "securities" and fact.hqla_level is not None:
+            fact.hqla_level = "unknown"
+    for fact in db_session.scalars(
+        select(CurrentFinancialFact).where(
+            CurrentFinancialFact.bank_id == bank_id,
+            CurrentFinancialFact.fact_group == "securities",
+            CurrentFinancialFact.hqla_level.is_not(None),
+        )
+    ):
+        fact.hqla_level = "unknown"
+    db_session.flush()
+
+
+def _assert_official_refusal(
+    run: RegulatoryRunRead,
+    facts: Sequence[BankFinancialFact],
+    dashboard: LiquidityDashboardRead,
+    threshold: str | None,
+) -> None:
     assert run.status == "failed" and run.error is not None
     assert run.error.code == (
         "unclassified_hqla" if threshold == "unclassified" else "missing_parameter"
@@ -244,7 +265,7 @@ def test_partial_results_survive_every_reader_and_block_official_runs(
             ],
             key=lambda fact: (fact.fact_group, fact.category),
         )
-        figure = "lcr_pct" if "lcr_pct" in refused else "nsfr_pct"
+        figure = "lcr_pct" if "lcr_pct" in dashboard.metrics.refusals else "nsfr_pct"
         affected = [
             {
                 "fact_group": loaded[index - 1].fact_group,

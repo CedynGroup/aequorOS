@@ -87,6 +87,18 @@ const { liquidityLimits } =
   require("../risk/limits") as typeof import("../risk/limits");
 const { usePulseCards } =
   require("../home/pulse") as typeof import("../home/pulse");
+
+function readLiquidityPulse() {
+  let pulse: ReturnType<typeof usePulseCards>["cards"]["liquidity"] | undefined;
+  function PulseHarness() {
+    pulse = usePulseCards("fixture", true).cards.liquidity;
+    return null;
+  }
+  renderToStaticMarkup(<PulseHarness />);
+  assert.ok(pulse);
+  return pulse;
+}
+
 const PulseWall = require("../home/PulseWall")
   .default as typeof import("../home/PulseWall").default;
 const BreachBanner = require("../home/BreachBanner")
@@ -166,7 +178,7 @@ try {
   assert.match(wall, /Pending/);
   assert.match(wall, /Unavailable/);
   assert.doesNotMatch(wall, /Compliant/);
-  const refusedPulse = usePulseCards("fixture", true).cards.liquidity;
+  const refusedPulse = readLiquidityPulse();
   assert.equal(refusedPulse.value, "Unavailable");
   assert.equal(refusedPulse.delta, undefined);
   assert.deepEqual(refusedPulse.spark, [123, null]);
@@ -179,7 +191,7 @@ try {
       [0, "crit"],
     ],
   );
-  assert.equal(usePulseCards("fixture", true).cards.liquidity.value, "0.00");
+  assert.equal(readLiquidityPulse().value, "0.00");
   for (const refusedFigure of ["lcr", "nsfr"] as const) {
     for (const staleLive of [false, true]) {
       dashboard = fixture("125");
@@ -203,7 +215,7 @@ try {
           sourceAsOfDate: new Date("2026-09-29"),
           sourceFactPeriodId: "previous",
         };
-      const pulse = usePulseCards("fixture", true).cards.liquidity;
+      const pulse = readLiquidityPulse();
       assert.equal(pulse.status, "na");
       assert.equal(
         pulse.value,
@@ -229,7 +241,7 @@ try {
     /Limit compliance not assessed/,
   );
   dashboard = fixture("0");
-  assert.equal(usePulseCards("fixture", true).cards.liquidity.status, "red");
+  assert.equal(readLiquidityPulse().status, "red");
   assert.match(
     renderToStaticMarkup(
       <PulseWall bankId="fixture" moduleOrder={["liquidity"]} />,

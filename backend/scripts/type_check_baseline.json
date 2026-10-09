@@ -3742,7 +3742,7 @@
  },
  "tests.equivalence.test_declared_divergences": {
   "reportConstantRedefinition": 1,
-  "reportPrivateUsage": 2
+  "reportPrivateUsage": 1
  },
  "tests.equivalence.test_forecast_capital_parity": {
   "reportMissingParameterType": 1,
