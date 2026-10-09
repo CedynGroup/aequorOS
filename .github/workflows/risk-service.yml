@@ -36,13 +36,11 @@ name: Risk Service CI
 #   static      — ruff, basedpyright, production image build
 #   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
 #                 dependency boundaries
-#   postgres    — aggregate of two schema shards and the lock job: migration chain, RLS policies, schema defaults, row/advisory
-#                 locks. `risk-service:test-postgres-schema` runs ALL of tests/db,
-#                 which is the only job that reaches
-#                 tests/db/test_tenant_rls_completeness.py — the single structural
-#                 guard on tenant isolation. main currently runs
-#                 test-postgres-migrations instead, i.e. one file of tests/db, so
-#                 that guard is gated NOWHERE until this file is merged.
+#   postgres    — aggregate of schema shards and the lock job: migration chain,
+#                 RLS policies, schema defaults, row/advisory locks.
+#                 `risk-service:test-postgres-schema` covers ALL of tests/db,
+#                 including tests/db/test_tenant_rls_completeness.py — the structural
+#                 guard on tenant isolation.
 #   postgres-suite — the remaining backend suite against Postgres, including
 #                 OpenBao signing. Suite ownership is defined in backend/mise.toml
 #                 and pinned by tests/architecture/test_ci_task_wiring.py.
@@ -187,9 +185,9 @@ permissions:
   contents: read
 
 # A gate that never gets a runner is as unenforced as a gate nobody wrote. This
-# file went from one job to nine, three of which stand up Postgres and run for
-# tens of minutes, and the repository is worked by many concurrent branches — so
-# without this every intermediate push kept a full matrix alive and the queue,
+# workflow has several jobs that stand up Postgres and run for tens of minutes,
+# and the repository is worked by many concurrent branches — so without this
+# every intermediate push kept a full matrix alive and the queue,
 # not the tests, decided what ran. Superseded PR runs are cancelled; runs on
 # `main` are never cancelled, because that is the history being recorded.
 concurrency:
