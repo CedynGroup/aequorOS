@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Permission, Sensitivity
 from app.db.base import utc_now
+from app.domain.authority.results import Computed, Refused
 from app.domain.capital.engine import (
     CapitalComputationError,
 )
@@ -52,12 +53,10 @@ from app.domain.irr.engine import (
     UnsupportedShockError as IrrUnsupportedShock,
 )
 from app.domain.liquidity.engine import (
-    LiquidityComputationError,
-)
-from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
 from app.models import Bank, BankReportingPeriod, SavedScenarioAnalysis, StressScenario
+from app.schemas.figure_results import FigureRefusalRead
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,
     AnalysisRunRead,
@@ -97,7 +96,6 @@ _DOMAIN_ERRORS: tuple[type[Exception], ...] = (
     regulatory_irr.IrrRunError,
     regulatory_fx.FxRunError,
     regulatory_ftp.FtpRunError,
-    LiquidityComputationError,
     LiquidityUnsupportedShock,
     CapitalComputationError,
     CapitalMissingParameter,
@@ -199,14 +197,21 @@ def _stringified(values: dict[str, Decimal]) -> dict[str, str]:
 def _liquidity_result(analysis: regulatory_liquidity.LiquidityScenarioAnalysis):
     gaps = analysis.currency_gaps
     metrics = {
-        "lcr_pct": str(analysis.lcr.lcr_pct),
-        "nsfr_pct": str(analysis.nsfr.nsfr_pct),
-        "hqla_total_ghs": str(analysis.lcr.hqla_total),
-        "net_outflows_30d_ghs": str(analysis.lcr.net_outflows_total),
         "fx_funding_gap_ghs": str(gaps.fx_funding_gap),
         "fx_share_of_liabilities_pct": str(gaps.fx_share_of_liabilities_pct),
     }
-    statuses = {"lcr_pct": analysis.lcr.status, "nsfr_pct": analysis.nsfr.status}
+    statuses: dict[str, str] = {}
+    if isinstance(analysis.lcr, Computed):
+        lcr = analysis.lcr.value
+        metrics.update(
+            lcr_pct=str(lcr.lcr_pct),
+            hqla_total_ghs=str(lcr.hqla_total),
+            net_outflows_30d_ghs=str(lcr.net_outflows_total),
+        )
+        statuses["lcr_pct"] = lcr.status
+    if isinstance(analysis.nsfr, Computed):
+        metrics["nsfr_pct"] = str(analysis.nsfr.value.nsfr_pct)
+        statuses["nsfr_pct"] = analysis.nsfr.value.status
     return metrics, statuses
 
 
@@ -292,13 +297,18 @@ def _compute_one(  # noqa: PLR0913 - dispatch needs the full scoping
     module: WorkbenchModule,
     resolved: _ResolvedRef,
 ) -> ScenarioResultRead:
+    refusals: dict[str, FigureRefusalRead] = {}
     try:
         if module == "liquidity":
-            metrics, statuses = _liquidity_result(
-                regulatory_liquidity.compute_scenario_analysis(
-                    db, ctx, bank, period, resolved.shocks, resolved.code
-                )
+            analysis = regulatory_liquidity.compute_scenario_analysis(
+                db, ctx, bank, period, resolved.shocks, resolved.code
             )
+            metrics, statuses = _liquidity_result(analysis)
+            refusals = {
+                figure_id: regulatory_liquidity.refusal_payload(result)
+                for figure_id, result in (("lcr_pct", analysis.lcr), ("nsfr_pct", analysis.nsfr))
+                if isinstance(result, Refused)
+            }
         elif module == "capital":
             metrics, statuses = _capital_result(
                 regulatory_capital.compute_scenario_analysis(
@@ -345,6 +355,7 @@ def _compute_one(  # noqa: PLR0913 - dispatch needs the full scoping
         status="succeeded",
         metrics=metrics,
         metric_statuses={key: str(value) for key, value in statuses.items()},
+        refusals=refusals,
     )
 
 

@@ -47,7 +47,7 @@ export const STATUS_RANK: Record<CardStatus, number> = {
   na: 3,
 };
 
-export function worstOf(...statuses: Traffic[]): Traffic {
+export function worstOf(...statuses: CardStatus[]): CardStatus {
   return statuses.reduce((worst, s) =>
     STATUS_RANK[s] < STATUS_RANK[worst] ? s : worst,
   );

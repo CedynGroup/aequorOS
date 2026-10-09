@@ -20313,6 +20313,44 @@
         ],
         "type": "string"
       },
+      "FigureRefusalRead": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "row_ref": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Row Ref",
+            "type": "array"
+          },
+          "rule_citation": {
+            "title": "Rule Citation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason_code",
+          "rule_citation",
+          "row_ref"
+        ],
+        "title": "FigureRefusalRead",
+        "type": "object"
+      },
       "FilingDecisionRequest": {
         "enum": [
           "approved",
@@ -42130,9 +42168,16 @@
         "additionalProperties": false,
         "properties": {
           "asf_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Asf Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asf Total Ghs"
           },
           "fx_funding_gap_ghs": {
             "anyOf": [
@@ -42159,35 +42204,77 @@
             "title": "Fx Share Of Liabilities Pct"
           },
           "hqla_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Hqla Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hqla Total Ghs"
           },
           "lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lcr Pct"
           },
           "lcr_status": {
             "$ref": "#/components/schemas/LiquidityRatioStatus"
           },
           "net_outflows_30d_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Net Outflows 30D Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Outflows 30D Ghs"
           },
           "nsfr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Nsfr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfr Pct"
           },
           "nsfr_status": {
             "$ref": "#/components/schemas/LiquidityRatioStatus"
           },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
+            "type": "object"
+          },
           "rsf_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Rsf Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsf Total Ghs"
           },
           "stressed_fx_funding_gap_ghs": {
             "anyOf": [
@@ -42270,7 +42357,8 @@
         "enum": [
           "green",
           "amber",
-          "red"
+          "red",
+          "na"
         ],
         "type": "string"
       },
@@ -42716,19 +42804,40 @@
             "type": "string"
           },
           "lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lcr Pct"
           },
           "nsfr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Nsfr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfr Pct"
           },
           "period_end": {
             "format": "date",
             "title": "Period End",
             "type": "string"
+          },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
+            "type": "object"
           },
           "reporting_period_id": {
             "format": "uuid",
@@ -54590,6 +54699,13 @@
               "type": "string"
             },
             "title": "Metrics",
+            "type": "object"
+          },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
             "type": "object"
           },
           "scenario_id": {

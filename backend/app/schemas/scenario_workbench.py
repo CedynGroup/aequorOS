@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.figure_results import FigureRefusalRead
+
 
 class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -125,6 +127,7 @@ class ScenarioResultRead(ClosedModel):
     error_message: str | None = None
     metrics: dict[str, str] = Field(default_factory=dict)
     metric_statuses: dict[str, str] = Field(default_factory=dict)
+    refusals: dict[str, FigureRefusalRead] = Field(default_factory=dict)
     validations: list[AnalysisValidationRead] = Field(default_factory=list)
 
 

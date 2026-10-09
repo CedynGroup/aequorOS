@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FigureRefusalRead } from "./FigureRefusalRead";
+import {
+  FigureRefusalReadFromJSON,
+  FigureRefusalReadFromJSONTyped,
+  FigureRefusalReadToJSON,
+  FigureRefusalReadToJSONTyped,
+} from "./FigureRefusalRead";
 import type { ScenarioId } from "./ScenarioId";
 import {
   ScenarioIdFromJSON,
@@ -97,6 +104,12 @@ export interface ScenarioResultRead {
   metrics?: { [key: string]: string };
   /**
    *
+   * @type {{ [key: string]: FigureRefusalRead; }}
+   * @memberof ScenarioResultRead
+   */
+  refusals?: { [key: string]: FigureRefusalRead };
+  /**
+   *
    * @type {ScenarioId}
    * @memberof ScenarioResultRead
    */
@@ -173,6 +186,10 @@ export function ScenarioResultReadFromJSONTyped(
     metricStatuses:
       json["metric_statuses"] == null ? undefined : json["metric_statuses"],
     metrics: json["metrics"] == null ? undefined : json["metrics"],
+    refusals:
+      json["refusals"] == null
+        ? undefined
+        : mapValues(json["refusals"], FigureRefusalReadFromJSON),
     scenarioId:
       json["scenario_id"] == null
         ? undefined
@@ -208,6 +225,10 @@ export function ScenarioResultReadToJSONTyped(
     label: value["label"],
     metric_statuses: value["metricStatuses"],
     metrics: value["metrics"],
+    refusals:
+      value["refusals"] == null
+        ? undefined
+        : mapValues(value["refusals"], FigureRefusalReadToJSON),
     scenario_id: ScenarioIdToJSON(value["scenarioId"]),
     shocks_applied: value["shocksApplied"],
     status: value["status"],

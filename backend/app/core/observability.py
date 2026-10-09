@@ -33,18 +33,17 @@ Every record carries ``condition`` (a :class:`Condition` value) and
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import re
 import sys
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Final
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from loguru import logger
 
-from app.core.logging import get_request_id
+from app.core.logging import get_request_id, safe_request_id
 
 # Field names never worth writing to a log, whatever a caller passes.
 _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
@@ -222,12 +221,7 @@ def _emit_calculation(condition: Condition, severity: str, fields: Mapping[str, 
     if request_id == "-":
         request_id = str(uuid4())
     else:
-        try:
-            request_id = str(UUID(request_id))
-        except ValueError:
-            # X-Request-ID is caller-controlled; preserve correlation without
-            # allowing a name, account number or financial value into the log.
-            request_id = "sha256:" + hashlib.sha256(request_id.encode()).hexdigest()
+        request_id = safe_request_id(request_id)
     payload: dict[str, str] = {
         "condition": condition.value,
         "severity": severity if severity in _LEVELS else "warning",

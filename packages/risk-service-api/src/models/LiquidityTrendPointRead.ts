@@ -11,6 +11,28 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FigureRefusalRead } from "./FigureRefusalRead";
+import {
+  FigureRefusalReadFromJSON,
+  FigureRefusalReadFromJSONTyped,
+  FigureRefusalReadToJSON,
+  FigureRefusalReadToJSONTyped,
+} from "./FigureRefusalRead";
+import type { NsfrPct } from "./NsfrPct";
+import {
+  NsfrPctFromJSON,
+  NsfrPctFromJSONTyped,
+  NsfrPctToJSON,
+  NsfrPctToJSONTyped,
+} from "./NsfrPct";
+import type { LcrPct } from "./LcrPct";
+import {
+  LcrPctFromJSON,
+  LcrPctFromJSONTyped,
+  LcrPctToJSON,
+  LcrPctToJSONTyped,
+} from "./LcrPct";
+
 /**
  *
  * @export
@@ -25,22 +47,28 @@ export interface LiquidityTrendPointRead {
   label: string;
   /**
    *
-   * @type {string}
+   * @type {LcrPct}
    * @memberof LiquidityTrendPointRead
    */
-  lcrPct: string;
+  lcrPct: LcrPct;
   /**
    *
-   * @type {string}
+   * @type {NsfrPct}
    * @memberof LiquidityTrendPointRead
    */
-  nsfrPct: string;
+  nsfrPct: NsfrPct;
   /**
    *
    * @type {Date}
    * @memberof LiquidityTrendPointRead
    */
   periodEnd: Date;
+  /**
+   *
+   * @type {{ [key: string]: FigureRefusalRead; }}
+   * @memberof LiquidityTrendPointRead
+   */
+  refusals?: { [key: string]: FigureRefusalRead };
   /**
    *
    * @type {string}
@@ -90,9 +118,13 @@ export function LiquidityTrendPointReadFromJSONTyped(
   return {
     ...json,
     label: json["label"],
-    lcrPct: json["lcr_pct"],
-    nsfrPct: json["nsfr_pct"],
+    lcrPct: LcrPctFromJSON(json["lcr_pct"]),
+    nsfrPct: NsfrPctFromJSON(json["nsfr_pct"]),
     periodEnd: new Date(json["period_end"]),
+    refusals:
+      json["refusals"] == null
+        ? undefined
+        : mapValues(json["refusals"], FigureRefusalReadFromJSON),
     reportingPeriodId: json["reporting_period_id"],
     stored: json["stored"],
   };
@@ -114,9 +146,13 @@ export function LiquidityTrendPointReadToJSONTyped(
 
   return {
     label: value["label"],
-    lcr_pct: value["lcrPct"],
-    nsfr_pct: value["nsfrPct"],
+    lcr_pct: LcrPctToJSON(value["lcrPct"]),
+    nsfr_pct: NsfrPctToJSON(value["nsfrPct"]),
     period_end: value["periodEnd"].toISOString().substring(0, 10),
+    refusals:
+      value["refusals"] == null
+        ? undefined
+        : mapValues(value["refusals"], FigureRefusalReadToJSON),
     reporting_period_id: value["reportingPeriodId"],
     stored: value["stored"],
   };

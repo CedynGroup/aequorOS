@@ -225,19 +225,29 @@ Unexpected bugs and infrastructure failures still raise.
 
 `app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
 LCR and NSFR are evaluated independently. Existing single-ratio entry points keep
-their exception contracts. The service adapter evaluates both results, then requires
-both to be computed before returning the existing complete read model or sealing
-a successful official run. Arithmetic, input hashes, displayed figures and API
-schemas are unchanged. Independent dashboard rendering, persistence of partial
-results and migration of the remaining engines are follow-up work for issue #409.
+their exception contracts. The service adapter preserves both outcomes for inline
+dashboard reads, trends,
+live metrics and scenario analysis. Refused ratios and dependent totals are null
+in dashboard payloads, with `na` ratio status and a `refusals` map carrying reason
+code, rule citation, reason and one-based input row references. Computed siblings
+retain their values, lines and validations. Live metrics persist refusals and omit
+unavailable numeric keys; a refused figure makes module health red. The scenario
+workbench carries the same refusal map, and window analytics retains computed
+sibling points while leaving gaps for refused ratios. Only official run persistence
+requires both ratios, so filing remains fail-closed. Successful arithmetic, rounding
+and value-based input hashes are unchanged; API schemas and the generated client
+carry nullable figures and refusal metadata. Dashboard refusal rendering and the
+remaining engines are follow-ups for issue #409.
 
 `app/core/observability.py::emit` writes calculation/refusal and regulatory-run
 failure events as JSON to stderr for CloudWatch, with a closed allowlist of codes,
 rule citations, figure identifiers and engine versions. Add each migrated engine's
 static vocabulary to that allowlist. Only the platform tenant id and correlation
 id travel with these events; no row ids, bank ids, financial data, exception text,
-tracebacks or bound logging extras do. Caller-supplied non-UUID request ids are
-hashed for correlation; background boundaries mint an id when no request exists.
+tracebacks or bound logging extras do. The shared logging boundary hashes
+caller-supplied non-UUID request ids for
+calculation, HTTP error, access and intercepted logs alike; the Loguru sink also
+writes to stderr. Background boundaries mint an id when no request exists.
 The HTTP error boundary does not re-log propagated exception text or tracebacks.
 Behavioral/redaction tests live in `backend/tests/liquidity/` and
 `backend/tests/core/test_calculation_logging.py`.
