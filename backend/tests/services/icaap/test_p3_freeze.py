@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import pytest
 from fastapi import HTTPException
@@ -333,7 +333,9 @@ class TestTheTransaction:
     def test_a_precommencement_rehearsal_freezes_but_cannot_be_filed(
         self, canonical_book: Session, extra_frameworks: None
     ) -> None:
-        from app.services.regulatory_reporting import workflow as reporting_workflow  # noqa: PLC0415
+        from app.services.regulatory_reporting import (  # noqa: PLC0415
+            workflow as reporting_workflow,
+        )
 
         db = canonical_book
         first_as_of = date(2028, 12, 31)
@@ -341,7 +343,10 @@ class TestTheTransaction:
         access, _r, _a, cycle = _build(db, effective=False, cycle_kind="rehearsal")
         digest = workflow.get_stages(db, access, cycle.id).review_digest
         out = freeze.freeze_cycle(
-            db, access, cycle.id, IcaapFreezeCreate(review_digest=digest, reason="Seal the dry run.")
+            db,
+            access,
+            cycle.id,
+            IcaapFreezeCreate(review_digest=digest, reason="Seal the dry run."),
         )
         assert out.cycle.status == "frozen"
         assert out.package.return_code == "ICAAP-REPORT"
@@ -349,11 +354,11 @@ class TestTheTransaction:
         assert package is not None
         assert package.is_rehearsal
         assert package.snapshot["metadata"]["icaap"]["cycle"]["kind"] == "rehearsal"
-        filing = package.snapshot["metadata"]["filing"]
+        filing = cast(dict[str, object], package.snapshot["metadata"]["filing"])
         assert filing["is_rehearsal"]
         assert filing["pre_effective"]
         assert filing["effective_from"] == first_as_of.isoformat()
-        provenance = package.snapshot["provenance"]
+        provenance = cast(dict[str, object], package.snapshot["provenance"])
         assert provenance["instrument_status"] == "exposure_draft"
         assert provenance["instrument_effective_from"] == first_as_of.isoformat()
         with pytest.raises(HTTPException) as caught:
