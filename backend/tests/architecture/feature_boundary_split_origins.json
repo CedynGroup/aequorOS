@@ -54,7 +54,6 @@
       "app.services.cashflow_forecast",
       "app.services.cashflow_window",
       "app.services.credit_concentration",
-      "app.services.credit_exposure_book",
       "app.services.credit_params",
       "app.services.data_activation",
       "app.services.database_connections",

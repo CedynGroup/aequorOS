@@ -38,35 +38,27 @@ own reporting currency, whichever that is.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.positions.credit import credit_classification_attributes
-from app.models import (
-    Bank,
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
+from app.identity.public import Bank
+from app.live.public import (
+    CREDIT_POSITION_TYPES,
+    INCLUDED_VALIDATION_STATUSES,
+    SourceRecord,
+    credit_source_basis,
+    load_position_records,
 )
 from app.services import jurisdictions
 
-#: The validation statuses a filed figure may rest on. ``warning`` is included
-#: because a warning is a flag on a row that was still accepted, not a rejection.
-INCLUDED_VALIDATION_STATUSES: tuple[str, ...] = ("accepted", "warning")
-
-#: The migrating credit book: loans plus interbank placements — the counterparty
-#: credit exposures a downgrade moves.
-CREDIT_POSITION_TYPES: tuple[str, ...] = ("LOAN", "INTERBANK_PLACEMENT")
 #: Adds the securities book, because issuer and sovereign concentration is real
 #: concentration even where the holding is not a counterparty credit exposure.
 CONCENTRATION_POSITION_TYPES: tuple[str, ...] = (
@@ -195,100 +187,6 @@ def _reporting_notional(
     return None
 
 
-_SourceRecord = tuple[
-    CanonicalPositionSnapshot,
-    CanonicalPosition,
-    CanonicalCounterparty | None,
-    CanonicalProduct | None,
-]
-
-
-def load_position_records(
-    db: Session,
-    ctx: TenantContext,
-    bank: Bank,
-    as_of: date,
-    position_types: tuple[str, ...] | None = None,
-) -> list[_SourceRecord]:
-    return cast(
-        list[_SourceRecord],
-        (
-            db.execute(
-                select(
-                    CanonicalPositionSnapshot,
-                    CanonicalPosition,
-                    CanonicalCounterparty,
-                    CanonicalProduct,
-                )
-                .join(
-                    CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id
-                )
-                .outerjoin(
-                    CanonicalCounterparty,
-                    CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-                )
-                .outerjoin(
-                    CanonicalProduct,
-                    CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
-                )
-                .where(
-                    CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-                    CanonicalPositionSnapshot.bank_id == bank.id,
-                    CanonicalPositionSnapshot.as_of_date == as_of,
-                    CanonicalPositionSnapshot.superseded_by.is_(None),
-                    CanonicalPositionSnapshot.withdrawn_at.is_(None),
-                    CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-                    *(
-                        (CanonicalPosition.position_type.in_(position_types),)
-                        if position_types is not None
-                        else ()
-                    ),
-                )
-                .order_by(CanonicalPositionSnapshot.source_reference)
-            )
-            .tuples()
-            .all()
-        ),
-    )
-
-
-def _source_value(value: object) -> str:
-    if isinstance(value, Decimal):
-        return format(value.normalize(), "f")
-    if isinstance(value, datetime):
-        return (
-            value.replace(tzinfo=UTC).isoformat()
-            if value.tzinfo is None
-            else value.astimezone(UTC).isoformat()
-        )
-    return str(value)
-
-
-def credit_source_basis(records: Sequence[_SourceRecord]) -> str:
-    """Serialize the exact accepted credit source records, including an empty book."""
-    versions = [
-        [
-            None
-            if model is None
-            else {
-                column.key: cast(object, getattr(model, column.key))
-                for column in model.__table__.columns
-                if column.key not in ("created_at", "updated_at", "ingested_at")
-            }
-            for model in record
-        ]
-        for record in records
-        if record[1].position_type in CREDIT_POSITION_TYPES
-    ]
-    return json.dumps(
-        sorted(
-            versions, key=lambda version: json.dumps(version, sort_keys=True, default=_source_value)
-        ),
-        sort_keys=True,
-        default=_source_value,
-    )
-
-
 def require_credit_source_basis(official: str | None, current: str) -> None:
     """BoG CRD (June 2018) ¶98, ¶123–124: stress only the officially derived source book."""
     if official != current:
@@ -329,7 +227,7 @@ def load_credit_book(
     return _exposure_rows(records, bank), credit_source_basis(records)
 
 
-def _exposure_rows(records: Sequence[_SourceRecord], bank: Bank) -> list[ExposureRow]:
+def _exposure_rows(records: Sequence[SourceRecord], bank: Bank) -> list[ExposureRow]:
     base_currency = jurisdictions.base_currency(bank)
     rows: list[ExposureRow] = []
     for record in records:

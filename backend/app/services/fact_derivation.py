@@ -289,6 +289,7 @@ from app.domain.positions.families import PAST_DUE_CATEGORY as _PAST_DUE_CATEGOR
 from app.domain.positions.families import RETAIL_LOAN_CATEGORIES as _RETAIL_LOAN_CATEGORIES
 from app.domain.positions.families import loan_family as _loan_family
 from app.domain.positions.families import unclassified_category as _unclassified_category
+from app.live import position_book
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -302,7 +303,7 @@ from app.models import (
     CurrentFinancialFact,
     IngestionBatch,
 )
-from app.services import credit_exposure_book, jurisdictions, market_data_sources, reconciliation
+from app.services import jurisdictions, market_data_sources, reconciliation
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,
@@ -877,7 +878,7 @@ def _load_position_rows(
     """
     return [
         _position_row(snapshot, position, product, counterparty, base_currency)
-        for snapshot, position, counterparty, product in credit_exposure_book.load_position_records(
+        for snapshot, position, counterparty, product in position_book.load_position_records(
             db, ctx, bank, as_of
         )
     ]
@@ -975,7 +976,7 @@ def current_reconciliation_record(
 
 def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Canonical:
     base_currency = jurisdictions.base_currency(bank)
-    records = credit_exposure_book.load_position_records(db, ctx, bank, as_of)
+    records = position_book.load_position_records(db, ctx, bank, as_of)
     positions = [
         _position_row(snapshot, position, product, counterparty, base_currency)
         for snapshot, position, counterparty, product in records
@@ -1045,7 +1046,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         as_of=as_of,
         base_currency=base_currency,
         positions=positions,
-        credit_source_basis=credit_exposure_book.credit_source_basis(records),
+        credit_source_basis=position_book.credit_source_basis(records),
         gl_accounts=gl_accounts,
         gl_chart_as_of=gl_chart_as_of,
         gl_retired=gl_retired,
