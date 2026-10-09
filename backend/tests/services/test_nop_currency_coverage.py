@@ -1,5 +1,6 @@
 """Notice BG/FMD/2026/07 ¶1(a)–(b): every currency enters the NOP basis."""
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import cast
@@ -314,20 +315,21 @@ def test_currency_projection_is_compact_scoped_and_covers_both_hedge_legs(
             db_session, organization_id=peer.organization_id, bank_id=peer.id, as_of=as_of
         )
 
-    def add(
-        ref: str,
-        currency: str,
-        position_type: str = "LOAN",
-        *,
-        day: date = as_of,
-        owner: Bank = bank,
-        attrs: dict[str, object] | None = None,
-        validation: str = "accepted",
-        retired: bool = False,
-        withdrawn: bool = False,
-    ) -> None:
+    @dataclass(frozen=True)
+    class PositionRow:
+        ref: str
+        currency: str
+        position_type: str = "LOAN"
+        day: date = as_of
+        owner: Bank = bank
+        attrs: dict[str, object] | None = None
+        validation: str = "accepted"
+        retired: bool = False
+        withdrawn: bool = False
+
+    def add(row: PositionRow) -> None:
         owner_batch = db_session.scalars(
-            select(IngestionBatch).where(IngestionBatch.bank_id == owner.id)
+            select(IngestionBatch).where(IngestionBatch.bank_id == row.owner.id)
         ).first()
         assert owner_batch is not None
         owner_lineage = db_session.scalars(
@@ -335,56 +337,62 @@ def test_currency_projection_is_compact_scoped_and_covers_both_hedge_legs(
         ).first()
         assert owner_lineage is not None
         position = CanonicalPosition(
-            organization_id=owner.organization_id,
-            bank_id=owner.id,
-            as_of_date=day,
-            source_reference=ref,
+            organization_id=row.owner.organization_id,
+            bank_id=row.owner.id,
+            as_of_date=row.day,
+            source_reference=row.ref,
             source_system="API_PUSH",
             ingestion_batch_id=owner_batch.id,
             lineage_id=owner_lineage.id,
-            currency=currency,
-            position_type=position_type,
+            currency=row.currency,
+            position_type=row.position_type,
             validation_status="accepted",
         )
         db_session.add(position)
         db_session.flush()
         db_session.add(
             CanonicalPositionSnapshot(
-                organization_id=owner.organization_id,
-                bank_id=owner.id,
-                as_of_date=day,
-                source_reference=ref,
+                organization_id=row.owner.organization_id,
+                bank_id=row.owner.id,
+                as_of_date=row.day,
+                source_reference=row.ref,
                 source_system="API_PUSH",
                 ingestion_batch_id=owner_batch.id,
                 lineage_id=owner_lineage.id,
                 position_id=position.id,
                 balance=Decimal("1000"),
-                attributes=attrs or {},
-                validation_status=validation,
-                superseded_by=uuid4() if retired else None,
-                withdrawn_at=datetime.now(UTC) if withdrawn else None,
+                attributes=row.attrs or {},
+                validation_status=row.validation,
+                superseded_by=uuid4() if row.retired else None,
+                withdrawn_at=datetime.now(UTC) if row.withdrawn else None,
             )
         )
 
     for position_type in (*FX_ASSET_TYPES, *FX_LIABILITY_TYPES):
         for index in range(10):
-            add(f"{position_type}/DOMESTIC/{index}", "GHS", position_type)
+            add(PositionRow(f"{position_type}/DOMESTIC/{index}", "GHS", position_type))
             add(
-                f"{position_type}/FOREIGN/{index}",
-                "USD",
-                position_type,
-                attrs={"balance_ghs": str(index)},
+                PositionRow(
+                    f"{position_type}/FOREIGN/{index}",
+                    "USD",
+                    position_type,
+                    attrs={"balance_ghs": str(index)},
+                )
             )
-    add("HEDGE/LEGS", "GHS", "FX_HEDGE", attrs={"sell_currency": "CHF", "buy_currency": "JPY"})
-    add("HEDGE/DEFAULTS", "EUR", "FX_HEDGE", validation="warning")
-    add("OTHER/DATE", "NOK", day=other_date)
-    add("OUTSIDE/DATE", "CAD", day=as_of + timedelta(days=1))
-    add("PENDING", "AUD", validation="pending")
-    add("SUPERSEDED", "GBP", retired=True)
-    add("WITHDRAWN", "CNY", withdrawn=True)
-    add("OTHER/BANK", "SEK", owner=peers[0])
-    add("OTHER/ORG", "DKK", owner=peers[1])
-    add("OTHER/TYPE", "ZAR", "INTEREST_RATE_SWAP")
+    add(
+        PositionRow(
+            "HEDGE/LEGS", "GHS", "FX_HEDGE", attrs={"sell_currency": "CHF", "buy_currency": "JPY"}
+        )
+    )
+    add(PositionRow("HEDGE/DEFAULTS", "EUR", "FX_HEDGE", validation="warning"))
+    add(PositionRow("OTHER/DATE", "NOK", day=other_date))
+    add(PositionRow("OUTSIDE/DATE", "CAD", day=as_of + timedelta(days=1)))
+    add(PositionRow("PENDING", "AUD", validation="pending"))
+    add(PositionRow("SUPERSEDED", "GBP", retired=True))
+    add(PositionRow("WITHDRAWN", "CNY", withdrawn=True))
+    add(PositionRow("OTHER/BANK", "SEK", owner=peers[0]))
+    add(PositionRow("OTHER/ORG", "DKK", owner=peers[1]))
+    add(PositionRow("OTHER/TYPE", "ZAR", "INTEREST_RATE_SWAP"))
     db_session.flush()
     bank_id = bank.id
     db_session.expunge_all()
