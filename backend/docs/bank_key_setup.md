@@ -70,7 +70,10 @@ region and a reason. Rotation verifies the replacement key and atomically rewrap
 all bank object envelopes while updating the connected key. Ciphertext and historic
 object versions stay unchanged. Readers hold a shared registry-row lock through
 wrapper selection and unwrap; rotation and writers take the exclusive lock.
-After commit the source key is barred from new application encryption, but remains
+After commit the rotated bank uses the replacement key for new encryption. Other
+banks still connected to the source key continue reading and writing with it. Each
+bank retains its own source-key backup hold; reusing a key and rotating away again
+extends that bank's hold without shortening prior retention. The source key remains
 KMS-enabled and decrypt-capable for archived envelopes.
 Failure leaves the source reference and envelopes intact. Existing provisioned
 banks can connect their key using `PUT` on the same encryption-key resource.

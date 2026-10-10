@@ -465,8 +465,6 @@ def test_rotation_preserves_archived_envelopes_until_retention_expires(
             )
             == original.plaintext
         )
-        with pytest.raises(KeyUnavailableError, match="new encryption"):
-            registry.rotate(db_session, row, KEY, lambda _name: bank_storage.provider)
         assert store.open(SLUG, original.envelope_id, context).plaintext == original.plaintext
         held = db_session.scalar(select(RetainedBankKey))
         assert held is not None and held.decrypt_until is not None
@@ -504,10 +502,75 @@ def test_unconfigured_backup_retention_refuses_source_retirement(
         get_key_settings.cache_clear()
 
 
+@pytest.mark.parametrize("repeat_retention, deadline_days", [(1, 7), (7, 10), (None, 100)])
+def test_reusing_rotation_destinations_preserves_per_bank_backup_holds(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    repeat_retention: int | None,
+    deadline_days: int,
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "7")
+    get_key_settings.cache_clear()
+    try:
+        now = utc_now()
+        monkeypatch.setattr(registry, "utc_now", lambda: now)
+        location = StorageLocation(SLUG, "outputs", "fixture/reused-key.csv")
+        content = b"synthetic reusable key content"
+        bank_storage.storage.write(
+            location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+        )
+        row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 1
+        db_session.commit()
+        monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=1))
+        row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+        assert registry.rotate(db_session, row, KEY, lambda _name: bank_storage.provider) == 1
+        db_session.commit()
+        row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+        with pytest.raises(KeyUnavailableError, match="still connected"):
+            registry.authorize_retirement(db_session, row, KEY)
+        bank_storage.storage.write(
+            StorageLocation(SLUG, "temp", "fixture/reused-key.csv"),
+            io.BytesIO(content),
+            metadata_for(SLUG, "temp", content),
+        )
+        if repeat_retention is None:
+            monkeypatch.delenv("ENCRYPTION_BACKUP_RETENTION_DAYS")
+        else:
+            monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", str(repeat_retention))
+        get_key_settings.cache_clear()
+        monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=3))
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 2
+        db_session.commit()
+        holds = list(db_session.scalars(select(RetainedBankKey)))
+        assert len(holds) == 2
+        _, body = bank_storage.storage.read(location)
+        assert body.read() == content
+        body.close()
+        row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+        if repeat_retention is None:
+            monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
+            get_key_settings.cache_clear()
+        monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=deadline_days - 1))
+        with pytest.raises(KeyUnavailableError, match="retention expires|indefinite"):
+            registry.authorize_retirement(db_session, row, KEY)
+        monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=deadline_days + 1))
+        if repeat_retention is None:
+            with pytest.raises(KeyUnavailableError, match="indefinite"):
+                registry.authorize_retirement(db_session, row, KEY)
+        else:
+            registry.authorize_retirement(db_session, row, KEY)
+    finally:
+        get_key_settings.cache_clear()
+
+
+@pytest.mark.parametrize("register_before_rotation", [True, False])
 def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
+    register_before_rotation: bool,
 ) -> None:
     monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "7")
     get_key_settings.cache_clear()
@@ -528,6 +591,10 @@ def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
             )
         )
         db_session.flush()
+        if not register_before_rotation:
+            first = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+            registry.rotate(db_session, first, NEXT_KEY, lambda _name: bank_storage.provider)
+            db_session.commit()
         registry.register(
             db_session,
             bank_id="BK-SAMP0002",
@@ -542,11 +609,22 @@ def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
         )
         context = {"purpose": "shared-key-fixture"}
         archived = store.prepare("bk-samp0002", context)
-        first = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-        registry.rotate(db_session, first, NEXT_KEY, lambda _name: bank_storage.provider)
+        if register_before_rotation:
+            first = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+            registry.rotate(db_session, first, NEXT_KEY, lambda _name: bank_storage.provider)
         db_session.commit()
-        with pytest.raises(KeyUnavailableError, match="new encryption"):
-            store.prepare("bk-samp0002", context)
+        bank_storage.storage.ensure_institution("bk-samp0002")
+        tiers: tuple[Tier, ...] = ("raw", "canonical", "outputs", "temp")
+        for tier in tiers:
+            location = StorageLocation("bk-samp0002", tier, "fixture/shared-key.csv")
+            content = b"synthetic sibling content"
+            bank_storage.storage.write(
+                location, io.BytesIO(content), metadata_for("bk-samp0002", tier, content)
+            )
+            _, body = bank_storage.storage.read(location)
+            assert body.read() == content
+            body.close()
+        assert store.prepare("bk-samp0002", context).key_id == KEY.key_id
         assert (
             store.open("bk-samp0002", archived.envelope_id, context).plaintext == archived.plaintext
         )

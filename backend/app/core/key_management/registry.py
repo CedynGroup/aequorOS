@@ -53,7 +53,6 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
     _lock_keys(db, key)
-    _require_new_encryption_key(db, key)
     resolved = require_active(providers(key.provider).describe(key))
     context = {"bank_id": bank_id, "purpose": "onboarding-key-probe"}
     provider = providers(resolved.provider)
@@ -101,7 +100,6 @@ def rotate(
     _lock_keys(db, source, destination)
     if source == destination:
         raise KeyUnavailableError("Rotation requires a different key.")
-    _require_new_encryption_key(db, destination)
     if destination.owner_account != source.owner_account:
         raise KeyUnavailableError("Rotation must retain the bank's key ownership account.")
     target = require_active(providers(destination.provider).describe(destination))
@@ -130,18 +128,37 @@ def rotate(
         count += 1
     rotated_at = utc_now()
     retention = get_key_settings().backup_retention_days
-    db.add(
-        RetainedBankKey(
-            bank_id=row.bank_id,
-            organization_id=row.organization_id,
-            provider=source.provider,
-            key_id=source.key_id,
-            region=source.region,
-            owner_account=source.owner_account,
-            rotated_at=rotated_at,
-            decrypt_until=rotated_at + timedelta(days=retention) if retention is not None else None,
+    decrypt_until = rotated_at + timedelta(days=retention) if retention is not None else None
+    held = db.scalar(
+        select(RetainedBankKey)
+        .where(
+            RetainedBankKey.bank_id == row.bank_id,
+            RetainedBankKey.organization_id == row.organization_id,
+            RetainedBankKey.provider == source.provider,
+            RetainedBankKey.key_id == source.key_id,
         )
+        .execution_options(populate_existing=True)
     )
+    if held is None:
+        db.add(
+            RetainedBankKey(
+                bank_id=row.bank_id,
+                organization_id=row.organization_id,
+                provider=source.provider,
+                key_id=source.key_id,
+                region=source.region,
+                owner_account=source.owner_account,
+                rotated_at=rotated_at,
+                decrypt_until=decrypt_until,
+            )
+        )
+    else:
+        held.rotated_at = rotated_at
+        held.decrypt_until = (
+            max(_utc(held.decrypt_until), decrypt_until)
+            if held.decrypt_until is not None and decrypt_until is not None
+            else None
+        )
     row.key_id = target.key_id
     row.region = target.region
     row.status = KeyStatus.ACTIVE.value
@@ -194,7 +211,6 @@ class DatabaseEnvelopeStore:
         with self._sessions() as db, db.begin():
             row = self._bank(db, slug)
             _lock_keys(db, reference(row))
-            _require_new_encryption_key(db, reference(row))
             _scope_envelopes(db, row.organization_id)
             digest = context_digest(context)
             data_key = self._providers(row.provider).generate_data_key(
@@ -254,21 +270,6 @@ def _lock_keys(db: Session, *keys: KeyReference) -> None:
                 hashlib.sha256(json.dumps(identity).encode()).digest()[:8], signed=True
             )
             _ = db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": value})
-
-
-def _require_new_encryption_key(db: Session, key: KeyReference) -> None:
-    if (
-        db.scalar(
-            select(RetainedBankKey.id)
-            .where(
-                RetainedBankKey.provider == key.provider,
-                RetainedBankKey.key_id == key.key_id,
-            )
-            .limit(1)
-        )
-        is not None
-    ):
-        raise KeyUnavailableError("A rotated-out key cannot be used for new encryption.")
 
 
 def authorize_retirement(db: Session, row: BankEncryptionKey, key: KeyReference) -> None:
