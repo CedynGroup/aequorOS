@@ -80,7 +80,6 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
     }
     expected_indexes = {
         "uq_authorization_bindings_active_org_owner",
-        "ix_organization_owner_assignments_status",
         "uq_authorization_access_requests_pending_scope",
         "uq_authorization_access_requests_pending_organization_scope",
     }

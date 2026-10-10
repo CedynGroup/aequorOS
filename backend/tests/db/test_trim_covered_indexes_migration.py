@@ -40,6 +40,7 @@ _ = app.models  # Registers every table on Base.metadata.
 
 class _TrimMigration(Protocol):
     COVERED_INDEXES: tuple[tuple[str, str, tuple[str, ...], str], ...]
+    DROPPED_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...]
 
 
 def _load_migration() -> _TrimMigration:
@@ -56,8 +57,9 @@ def _load_migration() -> _TrimMigration:
     return cast(_TrimMigration, module)
 
 
-COVERED = _load_migration().COVERED_INDEXES
-DROPPED = tuple((table, index, columns) for table, index, columns, _covering in COVERED)
+MIGRATION = _load_migration()
+COVERED = MIGRATION.COVERED_INDEXES
+DROPPED = MIGRATION.DROPPED_INDEXES
 
 
 def _indexes(schema: MigratedPostgresSchema) -> dict[str, tuple[str, tuple[str, ...]]]:

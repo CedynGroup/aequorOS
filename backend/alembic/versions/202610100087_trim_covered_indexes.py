@@ -1,4 +1,8 @@
-"""Remove non-unique indexes covered by retained uniqueness indexes.
+"""Remove redundant indexes and an unused low-selectivity status index.
+
+The ownership status has only two allowed values and no runtime status query.
+Ownership lookups use the organization primary key, so its status-leading index
+adds no access path and is also removed.
 
 Only ordinary B-tree indexes with the same leading keys as an unconditional
 unique constraint are removed. Tenant filters, parent joins and FK checks retain
@@ -13,6 +17,16 @@ stress_scenarios.py (bank/module list), system_of_record.py (effective declarati
 temenos_connections.py (bank connections), bi/content.py (dashboard versions),
 manage_bi_notifications.py (alert evaluations) and identity/api/list_organization_users.py
 (tenant directory). None needs a key absent from the retained covering index.
+
+The complete 665-index audit is in index_audits/202610100087.csv beside this
+revision directory. It records exact leading/complete-key distinct ratios and
+maximum leading-value frequency from scripts/e2e_bootstrap.py's fixture, plus
+schema and query evidence. These are whole-table SQLite fixture counts: empty
+fixtures are unknown, a two-organization fixture cannot establish production
+tenant selectivity, and no production pg_stats claim is made. Remaining bounded
+prefixes lead required date/hash/scope composites; job status + run_after remains
+for due-work and operator queries, whose real distribution is unknown. No bare
+boolean or bounded enum/type index remains outside correctness exceptions.
 
 Production usage statistics were unavailable: uncertain standalone, differently
 ordered and partitioned indexes are deliberately retained.
@@ -181,15 +195,29 @@ COVERED_INDEXES: tuple[tuple[str, str, tuple[str, ...], str], ...] = (
 )
 
 
+# Status has two CHECK-constrained values; ownership reads use the organization PK.
+LOW_SELECTIVITY_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "organization_owner_assignments",
+        "ix_organization_owner_assignments_status",
+        ("status", "organization_id"),
+    ),
+)
+DROPPED_INDEXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    tuple((table, index, columns) for table, index, columns, _covering in COVERED_INDEXES)
+    + LOW_SELECTIVITY_INDEXES
+)
+
+
 def upgrade() -> None:
     with op.get_context().autocommit_block():
-        for table, index, _columns, _covering in COVERED_INDEXES:
+        for table, index, _columns in DROPPED_INDEXES:
             op.drop_index(index, table_name=table, postgresql_concurrently=True, if_exists=True)
 
 
 def downgrade() -> None:
     with op.get_context().autocommit_block():
-        for table, index, columns, _covering in COVERED_INDEXES:
+        for table, index, columns in DROPPED_INDEXES:
             op.create_index(
                 index, table, list(columns), postgresql_concurrently=True, if_not_exists=True
             )
