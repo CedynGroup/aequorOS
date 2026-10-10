@@ -57,9 +57,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.identity.public import Bank, RelatedParty
 from app.market_data import public as market_data_sources
 from app.models import (
-    Bank,
     BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalPosition,
@@ -68,7 +68,6 @@ from app.models import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
     RegulatoryRun,
-    RelatedParty,
 )
 from app.services import (
     jurisdictions,

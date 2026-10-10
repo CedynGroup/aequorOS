@@ -104,8 +104,8 @@ from app.domain.ingestion.reference_schemas import (
     performance_targets,
 )
 from app.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
+from app.identity.public import Bank, Outlet
 from app.models import (
-    Bank,
     BankReportingPeriod,
     BiAggPositionDaily,
     BiDimBranch,
@@ -128,7 +128,6 @@ from app.models import (
     CanonicalProduct,
     CanonicalReferenceRow,
     LiveMetric,
-    Outlet,
     RegulatoryRun,
 )
 from app.models.bi import (

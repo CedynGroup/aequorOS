@@ -40,16 +40,15 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import OperatorSettings, get_operator_settings
 from app.db.base import utc_now
-from app.identity.service import membership, organization_ownership
+from app.identity import public as membership
+from app.identity import public as organization_ownership
+from app.identity.public import Bank, SsoConnection, User
 from app.models import (
-    Bank,
     BankReportingPeriod,
     InstitutionType,
     Jurisdiction,
     Organization,
-    SsoConnection,
     TenantStorage,
-    User,
 )
 from app.operator.deps import OperatorContext, record_operator_action
 from app.schemas.operator import (

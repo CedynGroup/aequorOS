@@ -39,8 +39,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     RegulatoryPackage,
     RegulatoryPackageAttachment,
     RegulatoryPackageAttachmentWithdrawal,
@@ -126,18 +126,14 @@ def active_attachments(
     return [row for row in _rows(db, ctx, package) if row.id not in withdrawn]
 
 
-def active_counts(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage
-) -> dict[str, int]:
+def active_counts(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> dict[str, int]:
     counts: dict[str, int] = {}
     for row in active_attachments(db, ctx, package):
         counts[row.kind] = counts.get(row.kind, 0) + 1
     return counts
 
 
-def manifest(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage
-) -> list[dict[str, Any]]:
+def manifest(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> list[dict[str, Any]]:
     """What accompanied this filing, for the submission event's own record.
 
     Channels transmit ARTIFACTS; an attachment manifest records which documents
@@ -247,9 +243,7 @@ def ensure_required_attachments(
     counts = active_counts(db, ctx, package)
     missing = [
         {"kind": kind, "required": needed, "present": counts.get(kind, 0), "origin": origin}
-        for kind, (needed, origin) in sorted(
-            required_attachments(db, ctx, package, policy).items()
-        )
+        for kind, (needed, origin) in sorted(required_attachments(db, ctx, package, policy).items())
         if counts.get(kind, 0) < needed
     ]
     if not missing:
@@ -285,9 +279,7 @@ def _allowed_kinds(
     document. A kind nobody asked for is refused rather than stored under a
     name no requirement will ever count.
     """
-    allowed = {
-        kind: "submission" for kind in required_attachments(db, ctx, package, policy)
-    }
+    allowed = {kind: "submission" for kind in required_attachments(db, ctx, package, policy)}
     allowed.setdefault(SUPPORTING_DOCUMENT, "optional")
     return allowed
 

@@ -89,7 +89,8 @@ from app.core.authorization import Permission
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import Catalogue, MeasureDef, catalogue
-from app.models import Bank, Job, User
+from app.identity.public import Bank, User
+from app.models import Job
 from app.models.bi_notifications import BiAlert, BiAlertEvent
 from app.schemas.bi import BiFilter, BiQuery, BiTime
 from app.services import job_queue

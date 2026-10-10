@@ -52,8 +52,8 @@ from sqlalchemy.orm import Session, aliased
 from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalCounterparty,
     CanonicalGlAccount,
     CanonicalPosition,

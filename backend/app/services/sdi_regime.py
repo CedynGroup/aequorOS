@@ -39,7 +39,7 @@ from app.domain.authority.outcomes import (
     outcome,
 )
 from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFamily
-from app.models import Bank
+from app.identity.public import Bank
 from app.services import institution_types, jurisdictions
 
 __all__ = [

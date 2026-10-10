@@ -292,9 +292,9 @@ from app.domain.positions.families import RETAIL_LOAN_CATEGORIES as _RETAIL_LOAN
 from app.domain.positions.families import loan_family as _loan_family
 from app.domain.positions.families import unclassified_category as _unclassified_category
 from app.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
+from app.identity.public import Bank
 from app.live import position_book
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalCounterparty,

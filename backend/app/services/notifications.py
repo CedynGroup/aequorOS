@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.security import ROLES
-from app.models import Bank, Notification, RegulatoryPackage, User
+from app.identity.public import Bank, User
+from app.models import Notification, RegulatoryPackage
 from app.models.regulatory_reporting import RETURN_FAMILIES
 from app.services.regulatory_reporting import family_access
 from app.services.regulatory_reporting.registry import REGISTRY

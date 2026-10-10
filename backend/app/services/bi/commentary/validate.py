@@ -29,7 +29,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.ai import grounding as grounding_domain
-from app.models import Bank
+from app.identity.public import Bank
 from app.services.ai import grounding as grounding_service
 
 __all__ = ["error_entries", "validate_draft"]

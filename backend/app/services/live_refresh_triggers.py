@@ -19,7 +19,8 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Bank, CurrentFinancialFact, InstitutionType, Job, RegulatoryParameter
+from app.identity.public import Bank
+from app.models import CurrentFinancialFact, InstitutionType, Job, RegulatoryParameter
 from app.services import job_queue
 from app.services.bi.enqueue import enqueue_mart_refresh
 

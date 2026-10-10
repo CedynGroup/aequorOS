@@ -30,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.service import institution_profile
+from app.identity import public as institution_profile
 from app.models import (
     RegulatoryPackage,
     RegulatoryPackageApproval,

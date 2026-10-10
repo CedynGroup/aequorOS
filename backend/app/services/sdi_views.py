@@ -14,7 +14,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank
+from app.identity.public import Bank
 from app.services import regulatory_parameters, sdi_capital
 from app.services.regulatory_reporting.le_generation import (
     _BUCKET_CODES,
@@ -248,9 +248,7 @@ def _counterbalancing_capacity(
 ) -> CounterbalancingCapacity:
     schedule = _haircut_schedule(db, ctx, bank, as_of)
     securities = [
-        row
-        for row in rows
-        if row.position_type == "SECURITY_HOLDING" and _unencumbered(row)
+        row for row in rows if row.position_type == "SECURITY_HOLDING" and _unencumbered(row)
     ]
     gross = sum((row.balance_ghs for row in securities), _ZERO)
     monetized = _ZERO
@@ -298,9 +296,7 @@ def get_liquidity_monitoring(
     return LiquidityMonitoring(
         as_of=as_of,
         maturity_ladder=_maturity_ladder(rows, as_of),
-        funding_concentration=_funding_concentration(
-            db, ctx, bank, rows, inputs["total_deposits"]
-        ),
+        funding_concentration=_funding_concentration(db, ctx, bank, rows, inputs["total_deposits"]),
         counterbalancing_capacity=_counterbalancing_capacity(db, ctx, bank, as_of, rows),
     )
 
@@ -362,8 +358,7 @@ def get_sdi_large_exposures(
             "not_computable"
             if pct is None
             else "above_limit"
-            if not entity.exempt
-            and (pct > single_obligor.decimal or pct > large_exposure.decimal)
+            if not entity.exempt and (pct > single_obligor.decimal or pct > large_exposure.decimal)
             else "ok"
         )
         exposures.append(

@@ -1,32 +1,20 @@
 from __future__ import annotations
 
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter
 
 from app.api.deps import DbSession, Tenant
 from app.identity.schemas.banks import (
     BankFactsRead,
     BankListRead,
     BankRead,
+    BankReference,
     BankReportingPeriodListRead,
 )
 from app.identity.service import banks
 
 router = APIRouter(tags=["banks"])
-
-# The institution ID (BK-XXXXXXXX) — the banks primary key; resolution is
-# tenant-scoped and tolerates lowercase input (services/banks.py).
-BankReference = Annotated[
-    str,
-    Path(
-        description="Institution ID (BK-XXXXXXXX).",
-        # Generous bound: unknown/legacy-shaped references fall through to a
-        # clean 404 from the lookup rather than a 422 format error.
-        max_length=64,
-    ),
-]
 
 
 @router.get("/banks", response_model=BankListRead, operation_id="listBanks")

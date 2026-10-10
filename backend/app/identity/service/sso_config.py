@@ -18,13 +18,6 @@ from typing import TYPE_CHECKING, cast
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
-from app.adapters.market_data.credential_manager import (
-    CredentialVaultError,
-    credential_fingerprint,
-    decrypt_credential_envelope,
-    derive_master_key,
-    encrypt_credential_envelope,
-)
 from app.core.config import get_settings
 from app.core.security import is_loopback_issuer_allowed
 from app.db.base import utc_now
@@ -50,6 +43,10 @@ class SsoClientConfig:
 
 
 def _master_key() -> bytes:
+    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+        derive_master_key,
+    )
+
     key_material = get_settings().market_data.credential_vault_master_key
     if not key_material:
         raise HTTPException(
@@ -92,6 +89,11 @@ def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
 ) -> SsoConnection:
     """Create or update the org's SSO connection. ``client_secret=None`` keeps
     the stored secret; a non-empty value replaces it (write-only semantics)."""
+    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+        credential_fingerprint,
+        encrypt_credential_envelope,
+    )
+
     issuer = issuer.strip().rstrip("/")
     # The same carve-out the request schema and the verifier honour: a plain-http
     # issuer is a local stub IdP, accepted on loopback and on an undeployed
@@ -142,6 +144,11 @@ def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
 
 
 def _open_secret(connection: SsoConnection) -> str:
+    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+        CredentialVaultError,
+        decrypt_credential_envelope,
+    )
+
     if not connection.client_secret_ciphertext:
         return ""
     try:

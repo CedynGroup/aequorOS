@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext, get_mutation_tenant_context
 from app.core.authorization import ConditionCheck, Module, Permission, Sensitivity
-from app.identity.service import scoped_authorization
-from app.models import Bank
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.schemas.scenario_workbench import WorkbenchModule
 
 

@@ -91,8 +91,8 @@ from app.core.config import get_settings
 from app.core.observability import cross_tenant_attempt
 from app.db.session import get_sessionmaker
 from app.domain.bi.catalogue import CATALOGUE_VERSION, catalogue
-from app.identity.service import integration_keys
-from app.models import Bank
+from app.identity import public as integration_keys
+from app.identity.public import Bank
 from app.services.audit import record_event
 from app.services.bi import feeds, query_log
 from app.services.bi.errors import BiQueryError

@@ -83,7 +83,8 @@ from app.domain.authority.outcomes import NotComputable
 from app.domain.bi.catalogue import MeasureDef
 from app.domain.bi.catalogue.members import NUMERIC_VALUE_TYPES, ValueType
 from app.domain.bi.catalogue.targets import ACTUAL_SUFFIX, is_target_variant
-from app.models import Bank, ParamCapitalThreshold
+from app.identity.public import Bank
+from app.models import ParamCapitalThreshold
 from app.services import params, regulatory_parameters
 from app.services.params import PrefetchedActiveParams
 

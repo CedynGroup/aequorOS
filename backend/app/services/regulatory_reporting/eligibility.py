@@ -58,7 +58,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
-from app.models import Bank
+from app.identity.public import Bank
 from app.services.institution_types import institution_class as resolve_institution_class
 from app.services.jurisdictions import get_jurisdiction, regulator_short
 from app.services.jurisdictions import jurisdiction_code as resolve_jurisdiction_code

@@ -54,7 +54,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.domain.bi.catalogue import CATALOGUE_VERSION, catalogue
-from app.models import Bank, Job, User
+from app.identity.public import Bank, User
+from app.models import Job
 from app.schemas.bi import BiQuery
 from app.services import job_queue
 from app.services.bi import data_scope, exports, query_log

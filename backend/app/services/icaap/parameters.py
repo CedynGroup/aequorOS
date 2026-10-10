@@ -46,7 +46,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models import Bank
+from app.identity.public import Bank
 from app.services import regulatory_parameters
 
 #: How long a report may be filed after the financial year end, in months.

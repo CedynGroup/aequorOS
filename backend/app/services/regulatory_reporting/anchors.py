@@ -78,7 +78,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod
+from app.identity.public import Bank
+from app.models import BankReportingPeriod
 from app.services.regulatory_reporting.registry import ReturnDefinition
 
 #: Months per cycle for the period-end frequencies (daily and weekly do not

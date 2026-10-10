@@ -38,16 +38,9 @@ from app.api.deps import TenantContext
 from app.core import observability
 from app.domain.authority.outcomes import NotComputable
 from app.domain.policy import Direction, direction_for
+from app.identity.public import Bank, InstitutionProfile, User
 from app.live.public import require_fx_run_coverage
-from app.models import (
-    Bank,
-    BankReportingPeriod,
-    InstitutionProfile,
-    RegulatoryMetricResult,
-    RegulatoryPackage,
-    RegulatoryRun,
-    User,
-)
+from app.models import BankReportingPeriod, RegulatoryMetricResult, RegulatoryPackage, RegulatoryRun
 from app.schemas.regulatory_liquidity import Bsd3SummaryRowRead
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.services import (

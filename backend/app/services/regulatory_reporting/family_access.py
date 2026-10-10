@@ -24,7 +24,8 @@ from app.core.authorization import (
     ResourceLocator,
     Sensitivity,
 )
-from app.models import AuthorizationBinding, Bank, RegulatoryPackage
+from app.identity.public import AuthorizationBinding, Bank
+from app.models import RegulatoryPackage
 from app.models.regulatory_reporting import RETURN_FAMILIES
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -119,7 +120,7 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     Any evaluator failure denies (the enforcement rule everywhere else in the
     codebase): a binding engine that cannot answer has not said yes.
     """
-    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity import public as authorization_service  # noqa: PLC0415
 
     if ctx.actor_user_id is None:
         return False
@@ -240,7 +241,7 @@ def prefetch_view_authority(
     db: Session, ctx: TenantContext, bank: Bank
 ) -> tuple[bool, list[AuthorizationBinding]] | None:
     """Load policy rows once for a calendar/list over a tenant-resolved bank."""
-    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity import public as authorization_service  # noqa: PLC0415
 
     if bank.organization_id != ctx.organization_id or ctx.actor_user_id is None:
         return False, []
@@ -451,7 +452,7 @@ def chain_decision_verdict(  # noqa: PLR0913 - the complete decision tuple is ex
     miss — a better error message must never become the disclosure that an
     ICAAP package exists for a date.
     """
-    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity import public as authorization_service  # noqa: PLC0415
 
     if ctx.impersonation_context is not None:
         return ChainDecisionVerdict(allowed=False)

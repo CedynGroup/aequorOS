@@ -89,7 +89,7 @@ if TYPE_CHECKING:
         ExtractionResult,
         MappingConfig,
     )
-    from app.models import Bank
+    from app.identity.public import Bank
 
 ADAPTER_NAME = "bloomberg_market_data"
 ADAPTER_VERSION = "1.0"

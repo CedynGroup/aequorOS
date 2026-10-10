@@ -27,12 +27,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import (
-    AuditEvent,
-    Bank,
-    RegulatoryPackage,
-    RegulatoryRun,
-)
+from app.identity.public import Bank
+from app.models import AuditEvent, RegulatoryPackage, RegulatoryRun
 from app.schemas.examiner import (
     ExaminerDocumentationRead,
     ExaminerIcaapCycleRead,
@@ -210,11 +206,7 @@ def documentation_package(
             f"/api/v1/banks/{bank.id}/crm-haircuts",
             f"/api/v1/banks/{bank.id}/liquidity/ewis",
             f"/api/v1/banks/{bank.id}/capital-plan",
-            *(
-                [f"/api/v1/banks/{bank.id}/icaap/cycles"]
-                if icaap_cycles
-                else []
-            ),
+            *([f"/api/v1/banks/{bank.id}/icaap/cycles"] if icaap_cycles else []),
         ],
         icaap_cycles=icaap_cycles,
     )

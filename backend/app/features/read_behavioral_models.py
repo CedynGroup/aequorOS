@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
 from app.ml.behavioral.config import ModelResult
 from app.schemas.behavioral_models import (
     BehavioralAccuracyRead,

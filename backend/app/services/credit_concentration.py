@@ -31,8 +31,8 @@ from app.domain.credit.concentration_monitor import (
     monitor_concentration,
 )
 from app.domain.stress.concentration import ConcentrationExposure
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,

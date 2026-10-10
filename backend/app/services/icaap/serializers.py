@@ -24,7 +24,7 @@ from app.domain.icaap.frameworks.schema import (
     RequirementItem,
     SectionDef,
 )
-from app.models import Bank
+from app.identity.public import Bank
 from app.schemas.icaap import (
     IcaapAttachmentRequirementRead,
     IcaapBlockTypeRead,

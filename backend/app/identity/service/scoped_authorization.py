@@ -15,7 +15,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.core.authorization import (
     AuthorizationDecision,
     ConditionCheck,
@@ -29,6 +28,7 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.core.observability import authorization_denied, cross_tenant_attempt
+from app.core.tenancy import TenantContext
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.user import User

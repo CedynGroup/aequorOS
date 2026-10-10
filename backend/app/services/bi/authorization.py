@@ -80,9 +80,9 @@ from app.domain.bi.authority import AUTHORIZATION_MODULE, ENTITLEMENT_SLUG
 from app.domain.bi.catalogue import Catalogue, HierarchyDef, MeasureDef, MemberDef
 from app.domain.bi.catalogue import UnknownMember as CatalogueUnknownMember
 from app.domain.bi.catalogue.measures import ENTITLEMENT_BY_MODULE
-from app.identity.service import authorization as account_authorization
-from app.identity.service import scoped_authorization
-from app.models import Bank
+from app.identity import public as account_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.schemas.bi import BiQuery
 from app.services import institution_types
 from app.services.bi.errors import UnknownMember

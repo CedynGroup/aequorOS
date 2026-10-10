@@ -69,9 +69,10 @@ from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, MeasureDef, Me
 from app.domain.bi.catalogue import UnknownMember as CatalogueUnknownMember
 from app.domain.bi.packs import PackError
 from app.domain.bi.packs import pack as certified_pack
-from app.identity.service import authorization as authorization_service
-from app.identity.service import grant_administration, scoped_authorization
-from app.models import AuthorizationBinding, Bank, User
+from app.identity import public as authorization_service
+from app.identity import public as grant_administration
+from app.identity import public as scoped_authorization
+from app.identity.public import AuthorizationBinding, Bank, User
 from app.models.bi_content import (
     BiDashboard,
     BiDashboardShare,

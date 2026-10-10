@@ -25,7 +25,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import ApproverTenant, DbSession, Tenant, TenantContext
-from app.models import Bank, ReconciliationException
+from app.identity.public import Bank
+from app.models import ReconciliationException
 from app.schemas.reconciliation import (
     ReconciliationExceptionCreate,
     ReconciliationExceptionListRead,

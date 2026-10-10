@@ -47,7 +47,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
     DataScope,
@@ -59,6 +58,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.security import utc_now
+from app.core.tenancy import TenantContext
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.integration_key import IntegrationKey

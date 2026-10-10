@@ -7,8 +7,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.core.tenancy import TenantContext
 from app.identity.models.bank import Bank
 from app.identity.schemas.authorization import EffectiveCapabilityRead
 from app.identity.schemas.banks import (
@@ -152,7 +152,7 @@ def _liquidity_monitoring_access(
 def _require_institution_coverage(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> tuple[Bank, list[EffectiveCapabilityRead]]:
-    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
+    bank = get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
     capabilities = next(
         (
             item.capabilities
@@ -274,7 +274,7 @@ def get_period_facts(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
+def get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -289,4 +289,4 @@ def resolve_bank_reference(db: Session, ctx: TenantContext, reference: str) -> B
     Canonical form is uppercase; lowercase input from integrations is
     tolerated. Lookup is tenant-scoped.
     """
-    return _get_bank_or_404(db, ctx, normalize_public_id(reference))
+    return get_bank_or_404(db, ctx, normalize_public_id(reference))

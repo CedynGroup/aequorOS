@@ -22,7 +22,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod
+from app.identity.public import Bank
+from app.models import BankReportingPeriod
 from app.services.jurisdictions import base_currency
 from app.services.regulatory_credit import (
     MODULE_CREDIT,
@@ -248,9 +249,7 @@ def _generate_npl_monthly(  # noqa: PLR0912, PLR0915 - one branch/statement per 
                 unit="ghs",
             ),
         ]
-        sections.append(
-            snapshot_section("recoveries", "Cash Recovery from NPLs", recovery_rows)
-        )
+        sections.append(snapshot_section("recoveries", "Cash Recovery from NPLs", recovery_rows))
     else:
         omissions.append(
             "Recovery section omitted: no RECOVERY loan events in the reporting month."

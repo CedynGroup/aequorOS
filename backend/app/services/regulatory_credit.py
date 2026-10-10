@@ -48,11 +48,9 @@ from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.domain.ingestion.reference_schemas import business_units
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
-from app.identity.service import scoped_authorization
-from app.identity.service.authorization import EffectiveDataScope
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, EffectiveDataScope
 from app.models import (
-    Bank,
     BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalLoanEvent,

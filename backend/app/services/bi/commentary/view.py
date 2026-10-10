@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.domain.ai import placeholders
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.bi_commentary import AiCommentaryDraft
 from app.services.ai import pseudonymise
 from app.services.bi.commentary.fallback import FALLBACK_SOURCE

@@ -12,7 +12,7 @@ from app.api.deps import (
     Tenant,
 )
 from app.core.authorization import Module, Permission, Sensitivity
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
 from app.schemas.regulatory_liquidity import (
     Bsd3PreviewRead,
     LiquidityDashboardRead,

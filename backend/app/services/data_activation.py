@@ -28,8 +28,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.identity.service import scoped_authorization
-from app.models import AuditEvent, Bank
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import AuditEvent
 from app.schemas.data_activation import (
     ActivationGroupRead,
     ActivationRunRead,

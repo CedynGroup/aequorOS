@@ -14,7 +14,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Bank, BankFinancialFact, RegulatoryRun
+from app.identity.public import Bank
+from app.models import BankFinancialFact, RegulatoryRun
 
 
 def latest_succeeded_baseline_runs(  # noqa: PLR0913 - full tenant/run identity is required

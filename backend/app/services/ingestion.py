@@ -61,9 +61,9 @@ from app.domain.ingestion.validation import (
     run_validation,
 )
 from app.etl import EtlConfig, etl_summary, model_loading, run_etl
+from app.identity.public import Bank
 from app.models import (
     AuditEvent,
-    Bank,
     CanonicalCounterparty,
     CanonicalGlAccount,
     CanonicalLoanEvent,

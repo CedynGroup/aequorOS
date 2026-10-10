@@ -25,7 +25,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Bank, Organization, User
+from app.identity.public import Bank, User
+from app.models import Organization
 from app.models.jurisdiction import Jurisdiction
 from app.services import jurisdictions as jurisdictions_service
 
@@ -128,7 +129,7 @@ def tenant_deny_terms(db: Session, organization_id: str, bank: Bank) -> frozense
 
 def _previous_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     try:
-        from app.identity.models.institution_profile import BankNameHistory  # noqa: PLC0415
+        from app.identity.public import BankNameHistory  # noqa: PLC0415
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(
@@ -142,7 +143,7 @@ def _previous_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
 
 def _party_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     try:
-        from app.identity.models.institution_profile import RelatedParty  # noqa: PLC0415
+        from app.identity.public import RelatedParty  # noqa: PLC0415
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(

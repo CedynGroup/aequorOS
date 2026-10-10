@@ -59,7 +59,7 @@ from app.domain.icaap.pillar2 import sovereign as sovereign_domain
 from app.domain.icaap.pillar2.types import MethodResult, MethodStatus, MissingParameter
 from app.domain.icaap.units import HUNDRED, Basis, UnitConversionError, from_amount
 from app.domain.irr import standardised_params as sf_params
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.icaap import IcaapAttachment, IcaapCycle
 from app.models.icaap_risk_capital import (
     ICAAP_DIVERSIFICATION_COMPONENT,
@@ -1074,9 +1074,7 @@ def _ga_book_statement(singular: str, plural: str, fix: str, tail: str) -> str:
     rather than written.
     """
     count, sample = _ga_sample(tail)
-    subject = (
-        f"one exposure {singular}" if count == "1" else f"{count} exposures {plural}"
-    )
+    subject = f"one exposure {singular}" if count == "1" else f"{count} exposures {plural}"
     lead = (
         f"The granularity adjustment was refused for this book: {subject}. "
         "A granularity adjustment computed over only the names that could be priced is a "
@@ -1110,9 +1108,7 @@ _GA_BOOK_REFUSALS: Mapping[str, tuple[str, str, str]] = {
 }
 
 
-def _granularity_statement(
-    reason: str, detail: Mapping[str, str | None]
-) -> str | None:
+def _granularity_statement(reason: str, detail: Mapping[str, str | None]) -> str | None:
     """The granularity adjustment's own states, said in full or not at all."""
     head, _, tail = reason.partition(_GA_FIELD)
     if head == granularity_credit.REASON_BELOW_MIN_EFFECTIVE_NAMES:

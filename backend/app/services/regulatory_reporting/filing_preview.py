@@ -30,8 +30,9 @@ from typing import Any, Literal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.service import institution_profile
-from app.models import Bank, RegulatoryPackage
+from app.identity import public as institution_profile
+from app.identity.public import Bank
+from app.models import RegulatoryPackage
 from app.services.regulatory_reporting import artifact_versions
 from app.services.regulatory_reporting.registry import get_definition
 

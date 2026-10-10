@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 from app.domain.icaap.pillar2 import bands as band_domain
 from app.domain.icaap.pillar2.types import MissingParameter, ParameterUse
 from app.domain.policy import parameter_shapes
-from app.models import Bank
+from app.identity.public import Bank
 from app.services import regulatory_parameters
 
 #: Rows whose citation begins with this marker are invented starting points,

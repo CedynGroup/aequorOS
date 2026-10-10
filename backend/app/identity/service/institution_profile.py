@@ -25,7 +25,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.bank import Bank
 from app.identity.models.institution_profile import (

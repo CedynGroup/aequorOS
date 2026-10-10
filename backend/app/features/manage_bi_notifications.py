@@ -74,7 +74,7 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, MeasureDef, catalogue
 from app.features.read_bi import BiRead, BiReadAccess
-from app.models import Bank, User
+from app.identity.public import Bank, User
 from app.models.bi_notifications import (
     BiAlert,
     BiAlertEvent,

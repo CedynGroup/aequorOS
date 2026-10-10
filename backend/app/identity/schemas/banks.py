@@ -2,12 +2,26 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
+from fastapi import Path
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.common import JsonObject
+
+# The institution ID (BK-XXXXXXXX) — the banks primary key; resolution is
+# tenant-scoped and tolerates lowercase input (app/identity/service/banks.py).
+BankReference = Annotated[
+    str,
+    Path(
+        description="Institution ID (BK-XXXXXXXX).",
+        # Generous bound: unknown/legacy-shaped references fall through to a
+        # clean 404 from the lookup rather than a 422 format error.
+        max_length=64,
+    ),
+]
+
 
 type BankReportingPeriodStatus = Literal["open", "closed"]
 type BankFactGroup = Literal[

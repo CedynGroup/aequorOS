@@ -38,12 +38,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import (
-    AttestationSignature,
-    PackageSignatureRecipient,
-    RegulatoryPackage,
-    User,
-)
+from app.identity.public import User
+from app.models import AttestationSignature, PackageSignatureRecipient, RegulatoryPackage
 from app.services import notifications
 from app.services.attestation import workflow
 from app.services.attestation.identity import ensure_signer_identity
@@ -266,7 +262,7 @@ def awaiting_signature(
         )
         .order_by(RegulatoryPackage.reporting_date.desc(), RegulatoryPackage.return_code)
     ).all()
-    from app.models import Bank  # noqa: PLC0415
+    from app.identity.public import Bank  # noqa: PLC0415
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
     visible: dict[tuple[str, str], bool] = {}
@@ -321,7 +317,7 @@ def _ensure_nominee_may_sign(
     signing_role: str,
 ) -> None:
     """Nominees need the same scoped authority as the certification ceremony."""
-    from app.models import Bank  # noqa: PLC0415
+    from app.identity.public import Bank  # noqa: PLC0415
     from app.services.regulatory_reporting import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)

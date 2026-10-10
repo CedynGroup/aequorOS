@@ -38,7 +38,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Bank, Job
+from app.identity.public import Bank
+from app.models import Job
 
 #: The module the handlers dispatch into. A dotted string, not an import, so
 #: the worker boots without it (see the module docstring).

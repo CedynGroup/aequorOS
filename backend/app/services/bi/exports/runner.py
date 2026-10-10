@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.bi.catalogue import Catalogue
-from app.models import Bank, User
+from app.identity.public import Bank, User
 from app.schemas.bi import BiFilter, BiQuery
 from app.services import jurisdictions
 from app.services.bi import provenance

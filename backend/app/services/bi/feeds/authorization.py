@@ -66,8 +66,8 @@ from app.core.authorization import (
 )
 from app.core.observability import authorization_denied
 from app.domain.bi.catalogue import Catalogue
-from app.identity.service import authorization as authorization_service
-from app.models import Bank
+from app.identity import public as authorization_service
+from app.identity.public import Bank
 from app.schemas.bi import BiFilter
 from app.services import institution_types
 from app.services.bi import data_scope as scope_resolver

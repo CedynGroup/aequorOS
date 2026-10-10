@@ -50,10 +50,9 @@ from app.domain.liquidity.engine import (
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS as _LADDER_HORIZON_DAYS
 from app.domain.liquidity.ladder import ladder_bucket_index as _ladder_bucket_index
 from app.domain.reporting import period_windows
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalPosition,

@@ -40,7 +40,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
-from app.models import Bank
+from app.identity.public import Bank
 from app.schemas.bi_nlq import QUESTION_MAX_CHARS
 from app.services.ai import pseudonymise
 from app.services.attestation.digests import canonical_json, sha256_hex

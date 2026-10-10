@@ -83,8 +83,8 @@ from app.etl.deduplication.cross_source_positions import (
     CrossSourcePositionMatcher,
     CrossSourceResult,
 )
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -172,7 +172,6 @@ _ITEM_LIMIT = 50
 
 class EtlDedupJobError(Exception):
     """An etl_dedup job could not run (missing batch, mapping, or artifact)."""
-
 
 
 @dataclass(frozen=True)
@@ -338,9 +337,7 @@ def _mark_dedup_failed(session: Session, batch_id: UUID, exc: BaseException) -> 
         report["dedup_error"] = f"{type(exc).__name__}: {exc}"[:2000]
         report["dedup_failed_at"] = utc_now().isoformat()
         batch.etl_report = report
-        ctx = TenantContext(
-            organization_id=batch.organization_id, actor_user_id=batch.created_by
-        )
+        ctx = TenantContext(organization_id=batch.organization_id, actor_user_id=batch.created_by)
         record_event(
             session,
             ctx,
@@ -407,9 +404,7 @@ class CrossSourceAssessment:
             "contested_position_types": list(self.contested_position_types),
             "linkage_count": len(self.result.linkages),
             "linkages_by_match": self.result.by_match() if self.result.linkages else {},
-            "coverage": (
-                self.result.coverage.to_dict() if self.contested_position_types else None
-            ),
+            "coverage": (self.result.coverage.to_dict() if self.contested_position_types else None),
             "sample_linkages": [
                 _link_sample(link) for link in self.result.linkages[:_SAMPLE_LIMIT]
             ],
@@ -567,45 +562,49 @@ def _load_cross_source_rows(
     contested: tuple[str, ...],
 ) -> list[CanonicalPositionRow]:
     """Flatten the contested types' current book into matcher rows."""
-    rows = session.execute(
-        select(
-            CanonicalPosition.id.label("position_id"),
-            CanonicalPosition.source_system.label("source_system"),
-            CanonicalPosition.source_reference.label("source_reference"),
-            CanonicalPosition.position_type.label("position_type"),
-            CanonicalPosition.currency.label("currency"),
-            CanonicalPosition.origination_date.label("origination_date"),
-            CanonicalPositionSnapshot.contractual_maturity.label("contractual_maturity"),
-            CanonicalPositionSnapshot.interest_rate.label("interest_rate"),
-            CanonicalPositionSnapshot.balance.label("balance"),
-            CanonicalProduct.product_code.label("product_code"),
-            CanonicalCounterparty.id.label("counterparty_id"),
-            CanonicalCounterparty.source_reference.label("counterparty_reference"),
-            CanonicalCounterparty.name.label("counterparty_name"),
-            CanonicalCounterparty.country_code.label("counterparty_country"),
-            CanonicalCounterparty.counterparty_type.label("counterparty_type"),
+    rows = (
+        session.execute(
+            select(
+                CanonicalPosition.id.label("position_id"),
+                CanonicalPosition.source_system.label("source_system"),
+                CanonicalPosition.source_reference.label("source_reference"),
+                CanonicalPosition.position_type.label("position_type"),
+                CanonicalPosition.currency.label("currency"),
+                CanonicalPosition.origination_date.label("origination_date"),
+                CanonicalPositionSnapshot.contractual_maturity.label("contractual_maturity"),
+                CanonicalPositionSnapshot.interest_rate.label("interest_rate"),
+                CanonicalPositionSnapshot.balance.label("balance"),
+                CanonicalProduct.product_code.label("product_code"),
+                CanonicalCounterparty.id.label("counterparty_id"),
+                CanonicalCounterparty.source_reference.label("counterparty_reference"),
+                CanonicalCounterparty.name.label("counterparty_name"),
+                CanonicalCounterparty.country_code.label("counterparty_country"),
+                CanonicalCounterparty.counterparty_type.label("counterparty_type"),
+            )
+            .join(
+                CanonicalPosition,
+                CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+            )
+            .outerjoin(
+                CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id
+            )
+            .outerjoin(
+                CanonicalCounterparty,
+                CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank_id,
+                CanonicalPositionSnapshot.as_of_date == as_of,
+                CanonicalPosition.position_type.in_(contested),
+                CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                *is_current_generation(CanonicalPositionSnapshot),
+                *is_current_generation(CanonicalPosition),
+            )
         )
-        .join(
-            CanonicalPosition,
-            CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
-        )
-        .outerjoin(
-            CanonicalProduct, CanonicalPositionSnapshot.product_id == CanonicalProduct.id
-        )
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank_id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPosition.position_type.in_(contested),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
-            *is_current_generation(CanonicalPositionSnapshot),
-            *is_current_generation(CanonicalPosition),
-        )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     keys = _counterparty_keys(rows)
     return [
         CanonicalPositionRow(
@@ -687,9 +686,7 @@ def _counterparty_keys(rows: Sequence[RowMapping]) -> dict[str, str]:
         for cid in unresolved
     ]
     for link in CounterpartyMatcher().link(records):
-        systems = {
-            identity[mid].source_system for mid in link.linked_source_ids if mid in identity
-        }
+        systems = {identity[mid].source_system for mid in link.linked_source_ids if mid in identity}
         if len(systems) < 2:
             continue  # a within-system name cluster is not a cross-source identity
         for member_id in link.linked_source_ids:

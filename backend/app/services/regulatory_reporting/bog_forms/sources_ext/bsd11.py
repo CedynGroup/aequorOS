@@ -36,7 +36,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
+from app.identity.public import RelatedParty, RelatedPartyRole, Shareholding
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,

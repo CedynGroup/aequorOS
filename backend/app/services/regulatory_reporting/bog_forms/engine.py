@@ -18,7 +18,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod
+from app.identity.public import Bank
+from app.models import BankReportingPeriod
 from app.services.regulatory_reporting.common import unvalidated_book_detail, unvalidated_book_rows
 
 from . import sources_ext  # noqa: F401 — registers per-form resolvers

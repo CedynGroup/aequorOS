@@ -24,8 +24,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.identity.service import scoped_authorization
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRead, ReverseStressRunCreate
 from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
 from app.services.audit import record_event

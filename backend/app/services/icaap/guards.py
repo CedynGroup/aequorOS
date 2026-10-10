@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import IcaapAccess, TenantContext
 from app.domain.icaap.frameworks import registry
 from app.domain.icaap.frameworks.schema import Framework
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.icaap import IcaapCycle
 from app.services import institution_types
 from app.services.filing_workflow.errors import conflict, not_found, unprocessable
@@ -71,7 +71,7 @@ def require_bank_class(db: Session, bank: Bank) -> None:
 
 def require_examiner(ctx: TenantContext) -> None:
     """The impersonated-read branch: staff provenance and no blocking condition."""
-    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity import public as authorization_service  # noqa: PLC0415
 
     if ctx.actor_operator is None:
         raise HTTPException(

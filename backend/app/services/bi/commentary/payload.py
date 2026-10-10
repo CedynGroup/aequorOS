@@ -52,7 +52,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.domain.bi.catalogue.members import VALUE_TYPES, ValueType
-from app.models import Bank
+from app.identity.public import Bank
 from app.services.ai import pseudonymise
 from app.services.attestation.digests import canonical_json, sha256_hex
 from app.services.bi.insights.drivers import RatioBridge

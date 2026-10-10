@@ -54,7 +54,8 @@ from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.domain.ai.grounding import GroundingError, GroundingResult
-from app.models import Bank, Job
+from app.identity.public import Bank
+from app.models import Job
 from app.models.bi_commentary import (
     AI_COMMENTARY_DRAFT_TERMINAL_STATUSES,
     AiCommentaryDraft,

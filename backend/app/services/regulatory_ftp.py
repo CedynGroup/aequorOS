@@ -60,10 +60,9 @@ from app.domain.ftp.engine import (
     validate_product_alignment,
 )
 from app.domain.reporting import period_windows
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,

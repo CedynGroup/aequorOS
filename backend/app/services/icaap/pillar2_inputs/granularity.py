@@ -73,7 +73,8 @@ from app.domain.icaap.pillar2.granularity_method import (
 )
 from app.domain.icaap.pillar2.types import MissingParameter, ParameterUse
 from app.domain.icaap.units import HUNDRED
-from app.models import Bank, ParamEclAssumption
+from app.identity.public import Bank
+from app.models import ParamEclAssumption
 from app.models.icaap import IcaapCycle
 from app.services import credit_exposure_book
 from app.services.icaap import params

@@ -62,8 +62,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
     ParamNsfrWeight,

@@ -58,7 +58,8 @@ from app.domain.policy import (
     tighten,
 )
 from app.domain.policy import clamp_overrides as _clamp_values
-from app.models import Bank, RegulatoryParameter
+from app.identity.public import Bank
+from app.models import RegulatoryParameter
 from app.services import institution_types, jurisdictions
 
 #: Re-exported from ``app/domain/policy`` so the historic

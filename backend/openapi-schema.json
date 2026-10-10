@@ -6297,7 +6297,7 @@
       },
       "BiMeasureDecisionRead": {
         "additionalProperties": false,
-        "description": "A promotion decision, with the separation-of-duties verdict behind it.\n\n``sod_decision`` is the platform's own assignment-time machinery\n(``app/services/grant_administration.py``), reused rather than reimplemented:\nproposer \u2260 approver is one policy in this codebase, and a promotion is judged\nby it like any other authority decision.",
+        "description": "A promotion decision, with the separation-of-duties verdict behind it.\n\n``sod_decision`` is the platform's own assignment-time machinery\n(``app/identity/service/grant_administration.py``), reused rather than reimplemented:\nproposer \u2260 approver is one policy in this codebase, and a promotion is judged\nby it like any other authority decision.",
         "properties": {
           "measure": {
             "$ref": "#/components/schemas/BiMeasureRead"

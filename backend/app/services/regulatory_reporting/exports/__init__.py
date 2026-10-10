@@ -39,9 +39,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.public import Bank
 from app.models import (
     AttestationSignature,
-    Bank,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
@@ -350,9 +350,7 @@ def export_package_version(
     family_payload = _family_render(db, ctx, package, kind, bank)
     if family_payload is not None:
         payload, extension, file_stem = family_payload
-        return _store_export(
-            db, ctx, package, bank, kind, payload, extension, file_stem, snapshot
-        )
+        return _store_export(db, ctx, package, bank, kind, payload, extension, file_stem, snapshot)
 
     rendered = build_rendered_return(
         template,
@@ -440,12 +438,8 @@ def export_package_version(
             officers=officers,
         )
 
-    file_stem = (
-        f"{package.return_code}.working" if kind == "xlsx_working" else package.return_code
-    )
-    return _store_export(
-        db, ctx, package, bank, kind, payload, extension, file_stem, snapshot
-    )
+    file_stem = f"{package.return_code}.working" if kind == "xlsx_working" else package.return_code
+    return _store_export(db, ctx, package, bank, kind, payload, extension, file_stem, snapshot)
 
 
 #: Export kinds a family admits, where the answer is narrower than "any kind".

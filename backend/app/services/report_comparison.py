@@ -44,7 +44,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, RegulatoryRun
 from app.schemas.report_comparison import (
     ComparisonGroupRead,
     ComparisonLineRead,

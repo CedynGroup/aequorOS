@@ -42,7 +42,8 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.outcomes import outcome as build_outcome
-from app.models import Bank, SystemOfRecordDeclaration
+from app.identity.public import Bank
+from app.models import SystemOfRecordDeclaration
 from app.services import reconciliation
 from app.services.audit import record_event
 

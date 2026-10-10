@@ -72,9 +72,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.public import Bank
 from app.models import (
     AttestationSignature,
-    Bank,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryRun,
@@ -401,13 +401,21 @@ def _verify_detached_value(
         # A PAdES method means the cryptographic proof lives inside the PDF's CMS
         # blob, which check 1 validates in full. Re-parsing it here would
         # duplicate pyHanko badly rather than add an independent check.
-        return False, None, (
-            f"signature_method {method!r} carries its cryptography inside the PDF; "
-            "the detached value cannot be verified standalone (see the pdf_signature check)"
+        return (
+            False,
+            None,
+            (
+                f"signature_method {method!r} carries its cryptography inside the PDF; "
+                "the detached value cannot be verified standalone (see the pdf_signature check)"
+            ),
         )
-    return False, None, (
-        f"signature_method is {method!r} but the certificate carries a "
-        f"{type(public_key).__name__} public key"
+    return (
+        False,
+        None,
+        (
+            f"signature_method is {method!r} but the certificate carries a "
+            f"{type(public_key).__name__} public key"
+        ),
     )
 
 
@@ -697,9 +705,7 @@ def _embedded_statuses(payload: bytes, context: Any) -> list[tuple[str, Any]]:
     return [
         (
             embedded.field_name,
-            validate_pdf_signature(
-                embedded, signer_validation_context=context, diff_policy=policy
-            ),
+            validate_pdf_signature(embedded, signer_validation_context=context, diff_policy=policy),
         )
         for embedded in reader.embedded_signatures
     ]
@@ -846,9 +852,7 @@ def _check_inter_signature_tamper(
                 artifact.payload, _validation_context(by_id.get(artifact.signature_id), roots)
             )
         except Exception as exc:
-            problems.append(
-                f"artifact version {artifact.version.id} could not be analysed: {exc}"
-            )
+            problems.append(f"artifact version {artifact.version.id} could not be analysed: {exc}")
             continue
 
         last_index = len(statuses) - 1

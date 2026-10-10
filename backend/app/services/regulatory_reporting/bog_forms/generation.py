@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod
+from app.identity.public import Bank
+from app.models import BankReportingPeriod
 from app.services.regulatory_reporting.common import unvalidated_book_finding
 from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.provenance import (

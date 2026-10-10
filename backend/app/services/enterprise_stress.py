@@ -105,9 +105,9 @@ from app.domain.stress.translation import (
     missing_variables,
     required_variables,
 )
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,

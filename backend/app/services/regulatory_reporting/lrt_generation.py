@@ -27,13 +27,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.schemas.institution_profile import (
+from app.identity import public as institution_profile
+from app.identity.public import (
+    Bank,
     InstitutionProfileFullRead,
     InstitutionProfileRead,
     RelatedPartyRead,
 )
-from app.identity.service import institution_profile
-from app.models import Bank, BankReportingPeriod
+from app.models import BankReportingPeriod
 from app.services.regulatory_reporting.generation import (
     GeneratedReturn,
     build_envelope,
