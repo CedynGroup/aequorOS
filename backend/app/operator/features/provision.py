@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from fastapi import APIRouter, Depends
 
-from app.core.config import get_operator_settings, get_settings
+from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
 from app.operator.deps import Operator, OperatorDb
 from app.operator.services import tenant_provisioning
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.schemas.operator import ProvisioningResultRead, TenantProvisionCreate
 from app.storage.config import StorageRetiredError, enforce_retirement, get_storage_settings
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tenants", tags=["operator-provisioning"])
 
@@ -59,23 +56,9 @@ def get_provisioning_clients() -> ProvisioningClients:
                 ),
             )
             require_boto_tls(cast(object, s3_client))
-    kms_client = None
-    if get_operator_settings().aws_kms_enabled:
-        try:
-            kms_client = boto3.client(
-                "kms",
-                region_name=storage_settings.region,
-                verify=get_settings().tls.ca_bundle or True,
-                use_ssl=True,
-            )
-            require_boto_tls(cast(object, kms_client))
-        except Exception:  # noqa: BLE001 - saga reports the gap; endpoint must not 500
-            kms_client = None
-            logger.exception("failed to construct the KMS client")
     return ProvisioningClients(
         s3_client=s3_client,
         storage_settings=storage_settings,
-        kms_client=kms_client,
         unavailable_reason=unavailable_reason,
     )
 

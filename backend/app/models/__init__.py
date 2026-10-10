@@ -1,3 +1,4 @@
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.forecasting.models import ForecastAssumptionVersion
 from app.identity.models.authorization import (
     AuthorizationAccessRequest,
@@ -247,6 +248,8 @@ from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
 
 __all__ = [
+    "BankEncryptionKey",
+    "ObjectKeyEnvelope",
     "AdoptedSignatureAppearance",
     "AiCommentarySettings",
     "AttestationSignature",

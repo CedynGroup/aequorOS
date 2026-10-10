@@ -8,12 +8,13 @@ from decimal import Decimal
 from typing import cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.config import get_operator_settings
+from app.core.key_management.local import LocalKeyProvider
 from app.forecasting.service import resolve_effective
 from app.models import (
     AuthorizationBinding,
@@ -32,7 +33,7 @@ from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.services import institution_types, parameter_register
 from tests.operator.conftest import (
-    FakeKmsClient,
+    BANK_KEY,
     FakeS3Client,
     fake_storage_settings,
     operator_headers,
@@ -59,10 +60,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert steps["organization"]["status"] == "succeeded"
     assert steps["bank"]["status"] == "succeeded"
     assert steps["storage"]["status"] == "succeeded"
-    assert steps["kms"]["status"] == "skipped"
-    assert steps["kms"]["detail"] == (
-        "KMS disabled (OPERATOR_AWS_KMS_ENABLED=0) — SSE-KMS not applied"
-    )
+    assert steps["kms"]["status"] == "succeeded"
     assert steps["sso_stub"]["status"] == "succeeded"
     assert steps["first_admin"]["status"] == "succeeded"
     assert steps["first_owner"]["status"] == "succeeded"
@@ -102,7 +100,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert registry is not None
     assert sorted(registry.bucket_names) == expected_buckets
     assert registry.provider == "minio"
-    assert registry.kms_key_arn is None
+    assert registry.kms_key_arn == BANK_KEY.key_id
     # Probe object was cleaned up.
     assert all(objects == {} for objects in fake_s3.buckets.values())
 
@@ -372,47 +370,24 @@ def test_duplicate_names_warn_but_do_not_block(operator_client: TestClient) -> N
     assert len(body["warnings"]) == 2  # duplicate org name + duplicate bank name
 
 
-def test_kms_step_applies_sse_kms_when_enabled(
-    operator_client: TestClient,
-    operator_db: Session,
-    fake_s3: FakeS3Client,
-    monkeypatch,  # noqa: ANN001 - pytest fixture
+def test_missing_bank_key_refuses_onboarding(
+    operator_client: TestClient, operator_db: Session
 ) -> None:
-    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
-    get_operator_settings.cache_clear()
-    fake_kms = FakeKmsClient()
-    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
-        lambda: ProvisioningClients(
-            s3_client=fake_s3,
-            storage_settings=fake_storage_settings(),
-            kms_client=fake_kms,
-        )
-    )
-
     response = operator_client.post(
-        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+        "/operator/v1/tenants",
+        json=provision_payload(encryption_key=None),
+        headers=operator_headers(),
     )
     body = response.json()
-    assert body["succeeded"] is True, body
-    steps = _steps_by_name(body)
-    assert steps["kms"]["status"] == "succeeded"
-
-    organization_id = body["organization_id"]
-    assert fake_kms.aliases == {f"alias/aequoros-{organization_id}": FakeKmsClient.KEY_ID}
-    # SSE-KMS default encryption set on all four tier buckets.
-    assert sorted(fake_s3.encryption) == sorted(fake_s3.buckets)
-    registry = operator_db.scalar(
-        select(TenantStorage).where(TenantStorage.organization_id == organization_id)
-    )
-    assert registry is not None
-    assert registry.provider == "aws"
-    assert registry.kms_key_arn == FakeKmsClient.ARN
+    assert body["succeeded"] is False
+    assert _steps_by_name(body)["kms"]["status"] == "failed"
+    assert operator_db.scalar(select(Organization)) is None
 
 
 def test_unconfigured_storage_fails_the_saga_honestly(
     operator_client: TestClient, operator_db: Session
 ) -> None:
-    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
+    cast(FastAPI, operator_client.app).dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
         lambda: ProvisioningClients(
             s3_client=None,
             storage_settings=fake_storage_settings(),
@@ -434,30 +409,24 @@ def test_unavailable_kms_refuses_provisioning_and_rolls_back(
     operator_client: TestClient,
     operator_db: Session,
     fake_s3: FakeS3Client,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
-    get_operator_settings.cache_clear()
-    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
-        lambda: ProvisioningClients(
+    keys = LocalKeyProvider()  # Bank key missing or grant revoked.
+    cast(FastAPI, operator_client.app).dependency_overrides[get_provisioning_clients] = lambda: (
+        ProvisioningClients(
             s3_client=fake_s3,
             storage_settings=fake_storage_settings(),
-            kms_client=None,
+            key_providers=lambda _name: keys,
         )
     )
     response = operator_client.post(
         "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
     )
-    assert response.status_code == 200
     body = cast(dict[str, object], response.json())
     assert body["succeeded"] is False
-    steps = cast(dict[str, dict[str, str]], _steps_by_name(body))
-    assert steps["kms"]["status"] == "failed"
-    assert "no KMS client is available" in steps["kms"]["detail"]
+    assert _steps_by_name(body)["kms"]["status"] == "failed"
     assert operator_db.scalar(select(Organization)) is None
     assert operator_db.scalar(select(Bank)) is None
     assert fake_s3.buckets == {}
-    assert fake_s3.encryption == {}
 
 
 @pytest.mark.parametrize("institution_type", ["universal_bank", "savings_and_loans"])

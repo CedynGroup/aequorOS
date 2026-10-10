@@ -29,6 +29,7 @@ from app.core.errors import (
 from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
 from app.core.tls import RequireTLSMiddleware, database_connect_args, validate_service_transports
+from app.operator.api.bank_encryption import router as bank_encryption_router
 from app.operator.features.activity import router as activity_router
 from app.operator.features.audit_log import router as audit_log_router
 from app.operator.features.auth import router as auth_router
@@ -118,6 +119,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(overview_router)
     operator_router.include_router(tenants_router)
     operator_router.include_router(provision_router)
+    operator_router.include_router(bank_encryption_router)
     operator_router.include_router(activity_router)
     operator_router.include_router(audit_log_router)
     operator_router.include_router(inspector_router)

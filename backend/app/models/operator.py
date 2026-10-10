@@ -129,9 +129,9 @@ class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """Per-organization storage provisioning registry (developer.md §2a).
 
     One row per tenant, written by the provisioning saga: the four tier
-    bucket names, the per-tenant KMS key ARN when AWS provisioning applied
-    SSE-KMS (the ARN is config, not a secret — access is IAM-governed), and
-    which provider the buckets live on.
+    bucket names, the onboarding bank's KMS key ARN (a non-secret custody
+    reference, synchronized on rotation), and which provider the buckets live
+    on. BankEncryptionKey owns the per-bank encryption configuration.
     """
 
     __tablename__ = "tenant_storage"
