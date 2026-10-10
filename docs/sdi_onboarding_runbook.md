@@ -70,8 +70,10 @@ Clients of every institution type sign in from the **same** universal login
    For a new licence this is **Microfinance Bank** or **Community Bank**; pick
    `Savings & Loans` or `Finance House` only for an institution that still holds
    that legacy licence and is transitioning by 31 December 2026. Set currency `GHS`, jurisdiction `GH`, the admin email.
+   Complete the bank-owned encryption key fields following the
+   [bank key setup guide](../backend/docs/bank_key_setup.md).
 2. Submit → the `provision_institution` saga creates the Organization (`OR-…`),
-   Bank (`BK-…`), storage bucket, KMS key, SSO stub, and the first account
+   Bank (`BK-…`), storage buckets, bank-key connection, SSO stub, and the first account
    administrator (one-time password shown once). In the same transaction it
    records that necessarily sole active human administrator as Org Owner through
    an organization-wide binding. Selecting the SDI type here is what scopes the

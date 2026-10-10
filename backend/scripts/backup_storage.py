@@ -1,30 +1,16 @@
-"""Inventory and optionally copy the AequorOS object store for recovery.
+"""Inventory, copy or restore the AequorOS object store.
 
-    cd backend
-    uv run python -m scripts.backup_storage --out-dir /var/backups/aequoros/objects
-    uv run python -m scripts.backup_storage --out-dir /var/backups/aequoros/objects --download
-
-Regulatory artifacts — sealed return PDFs, signed packages, ingestion source
-files — live in object storage, not in Postgres. A database backup alone
-therefore recovers the *ledger* of what was filed and loses the *artifacts*
-themselves, so this runs alongside :mod:`scripts.backup_database`.
-
-Two modes, because they answer different questions:
-
-* **inventory** (default) — every bucket, key, size, ETag and last-modified
-  time, written to a manifest. Cheap enough to run often, and it is what proves
-  after the fact that an object existed at a point in time.
-* **``--download``** — additionally streams each object to ``--out-dir`` and
-  records a SHA-256 per object. This is the copy an actual recovery needs.
+Backup and restore commands, encrypted-object recovery requirements and known
+limitations are owned by ``backend/docs/bank_key_setup.md``.
 
 **The HEAD problem.** This deployment's S3-compatible endpoint sits behind a
 WAF that 403s and, worse, sometimes *times out* ``HEAD`` requests. The obvious
 implementation — list keys, then ``head_object`` each for its metadata — stalls
-for minutes and then fails. Inventory and downloads never issue object ``HEAD``: size and ETag
-come from GET responses. Restore uses the provisioning module for bucket
+for minutes and then fails. Inventory and downloads never issue object ``HEAD``:
+size and ETag come from GET responses. Restore uses the provisioning module for bucket
 existence checks and configuration.
 
-Failures are recorded per bucket rather than aborting the run: a WAF that
+Inventory and download failures are recorded per bucket rather than aborting the run: a WAF that
 blocks one bucket must not cost you the inventory of the other twenty. The exit
 code is non-zero when anything failed, and the manifest names what.
 """

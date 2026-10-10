@@ -1346,9 +1346,6 @@ class OperatorSettings(BaseSettings):
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
     bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
-    #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
-    #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
-    #: the saga records the step as honestly skipped rather than pretending.
 
     @field_validator(
         "operator_database_url",

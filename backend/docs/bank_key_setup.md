@@ -17,10 +17,10 @@ its exact key ARN, bank AWS account ID and region, reviews those values, and sen
 
 The key must be a customer-managed symmetric encryption key, enabled for
 `ENCRYPT_DECRYPT`. Its ARN account and region must match the declared values.
-The bank account must differ from `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` in deployed
-environments. The workload uses its AWS role credentials; the bank must authorize
-that role for key description, data-key generation, encryption, decryption and
-re-encryption. Onboarding verifies key ownership, enabled state and a wrap/unwrap
+Configure `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` in deployed environments; the bank
+account must differ from it. The workload uses its AWS role credentials; the bank must authorize
+that role for key description, data-key generation, encryption and decryption.
+Onboarding verifies key ownership, enabled state and a wrap/unwrap
 probe; refusal rolls back tenant setup and removes buckets created by the attempt.
 Transport requirements are governed by [the transport contract](transport_security.md).
 
@@ -47,11 +47,22 @@ refused because they would bypass application encryption. Legacy organization/ca
 document transfer retains its existing signed S3 URLs; document transfer under bank
 keys is follow-up work. Configure `STORAGE_DOWNLOAD_BASE_URL` to the HTTPS tenant
 API origin in deployments. Backup copies must preserve ciphertext, object metadata
-and the corresponding database envelopes. `scripts.backup_storage --download` records
-all object metadata (including envelope UUID, format and plaintext checksum), content
-type and ciphertext SHA-256 in its version-2 manifest. Restore into the recovery
-object store using a distinct directory for each backup generation, with `scripts.backup_storage --out-dir <backup-directory>
---restore-manifest <manifest-path>` using recovery endpoint credentials; missing
+and the corresponding database envelopes. From `backend/`, download current objects
+into a distinct directory for each backup generation:
+
+```bash
+uv run python -m scripts.backup_storage --out-dir <backup-directory> --download
+```
+
+The version-2 manifest records all object metadata (including envelope UUID, format
+and plaintext checksum), content type and ciphertext SHA-256. Using recovery endpoint
+credentials, restore those objects into the recovery object store:
+
+```bash
+uv run python -m scripts.backup_storage --out-dir <backup-directory> --restore-manifest <manifest-path>
+```
+
+Use the `storage-inventory-<timestamp>.json` manifest reported by the download. Missing
 buckets are recreated using the provisioning rules for dialect, versioning, temp
 expiry and configured default SSE. Restore the matching database envelopes to read
 current objects without a version pin. Inventory-only or older manifests are not
@@ -74,7 +85,7 @@ After commit the rotated bank uses the replacement key for new encryption. Other
 banks still connected to the source key continue reading and writing with it. Each
 bank retains its own source-key backup hold; reusing a key and rotating away again
 extends that bank's hold without shortening prior retention. The source key remains
-KMS-enabled and decrypt-capable for archived envelopes.
+KMS-enabled and decrypt-capable for envelopes in retained database backups.
 Failure leaves the source reference and envelopes intact. Existing provisioned
 banks can connect their key using `PUT` on the same encryption-key resource.
 
