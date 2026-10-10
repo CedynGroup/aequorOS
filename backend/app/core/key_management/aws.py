@@ -60,12 +60,10 @@ class _KmsClient(Protocol):
 def validate_reference(key: KeyReference) -> None:
     match = _ARN.fullmatch(key.key_id)
     if match is None:
-        raise KeyUnavailableError("An exact AWS KMS key ARN is required; alias ARNs are not accepted.")
-    if (
-        key.provider != "aws_kms"
-        or match[2] != key.region
-        or match[3] != key.owner_account
-    ):
+        raise KeyUnavailableError(
+            "An exact AWS KMS key ARN is required; alias ARNs are not accepted."
+        )
+    if key.provider != "aws_kms" or match[2] != key.region or match[3] != key.owner_account:
         raise KeyUnavailableError("The key must be in the bank's declared AWS account and region.")
     platform = get_key_settings().platform_account
     if not is_undeployed_environment() and platform is None:

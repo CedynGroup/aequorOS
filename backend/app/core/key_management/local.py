@@ -1,4 +1,4 @@
-"""In-memory provider for development and conformance tests; never a fallback."""
+"""Development and conformance-test providers; never an AWS failure fallback."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ class LocalKeyProvider(KeyProvider):
 class FileTestKeyProvider(LocalKeyProvider):
     """Persistent fake for disposable SQLite fixtures across API processes.
 
-    Explicit ``local_test`` registry records select it. AWS failures never
+    Accepts only explicit ``local_test`` key references. AWS failures never
     select this provider, and deployed environments always refuse it.
     """
 

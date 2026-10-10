@@ -823,6 +823,7 @@ Database-direct is not one adapter. It is one framework with backend-specific co
 - **Microsoft SQL Server** — present at some Finacle deployments (Infosys supports SQL Server as a backing store option), at banks running proprietary Microsoft-shop core systems, and increasingly at fintech-adjacent banks. Authentication via SQL auth (with credentials in Vault per storage.md) or integrated Kerberos where the bank permits. CDC via SQL Server Change Data Capture or timestamp-based extraction.
 
 - **Snowflake** — present at banks with mature data warehousing practices, particularly at Tier 2 South African banks, data-forward Kenyan banks, and increasingly at Nigerian banks investing in analytics infrastructure. Snowflake is typically used differently than Oracle in bank environments: Oracle hosts operational core banking, Snowflake hosts the warehouse where historical position data, market data feeds, and analytical datasets are landed. AequorOS reads point-in-time positions from Oracle and historical time series or pre-aggregated feeds from Snowflake at banks that run both. Where a bank runs Snowflake as their primary bank data platform (rare but emerging), Snowflake becomes the primary source. Backend specifics:
+
   - **Authentication:** key-pair authentication. AequorOS generates an RSA key pair per institution, the bank uploads the public key to Snowflake for the AequorOS service user, and the private key lives in Vault per storage.md section 7. Username/password authentication is not sanctioned for Snowflake because key-pair is Snowflake's own recommended pattern and materially stronger.
   - **Warehouse selection:** Snowflake separates storage from compute. Every query runs against a **warehouse**, which is a sized compute cluster with per-second credit billing. The adapter's configuration specifies which warehouse to use per institution (typically X-Small or Small for ETL workloads; the bank chooses and pays). The adapter respects Snowflake's auto-suspend semantics and tolerates the 1-2 second warm-up on the first query after suspension.
   - **Change data capture:** Snowflake **Streams** are the CDC primitive. A stream on a table tracks change records (INSERT, UPDATE, DELETE) since the stream was last consumed. Consumption is transactional: reading the stream inside a committed transaction advances the stream cursor. Streams are meaningfully cleaner than LogMiner-style CDC and are the preferred incremental extraction path where the bank permits stream creation.
@@ -976,7 +977,9 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.2 Encryption
 
-- At rest: AES-256 via AWS KMS or GCP KMS with customer-managed keys.
+- At rest: AES-256 with customer-managed keys; bank-key requirements and the
+  implemented provider boundary are governed by
+  [the bank key setup guide](../backend/docs/bank_key_setup.md).
 - In transit: governed by
   [the transport control and evidence contract](../backend/docs/transport_security.md).
 - Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
