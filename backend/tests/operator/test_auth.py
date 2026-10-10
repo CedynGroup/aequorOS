@@ -88,7 +88,7 @@ def test_dev_auth_refuses_boot_on_every_deployed_environment(
 
 
 def test_an_unrecognised_app_env_never_reaches_the_guard_at_all(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The other half of "anything unrecognised is treated as deployed".
 
