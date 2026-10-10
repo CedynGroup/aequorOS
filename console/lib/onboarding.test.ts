@@ -151,7 +151,10 @@ test("cleanup cancels retries and ignores an in-flight health response", async (
         finish = resolve;
       }),
   );
-  const stop = watchBankKeyRequirement((value) => changes.push(value), recovery);
+  const stop = watchBankKeyRequirement(
+    (value) => changes.push(value),
+    recovery,
+  );
   stop();
   finish(healthResponse(true));
   await settle();
