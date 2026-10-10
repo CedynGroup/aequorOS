@@ -105,7 +105,7 @@ Order of evidence:
 2. Fix applied, quarantine still in place — `-k known_defects` on the coverage
    layer: **1 failed** (5.17s) on the promotion assertion, naming both routes
    (`documented object-reference defects are no longer reproduced; remove them
-   from KNOWN_DEFECTS`), as the layer is designed to force.
+from KNOWN_DEFECTS`), as the layer is designed to force.
 3. Fix applied, `KNOWN_DEFECTS` emptied — coverage layer: **400 passed**
    (34.63s; the two former skips now run in the strict parametrization, with
    the nested single-foreign-child cases included); generative layer against

@@ -142,8 +142,7 @@ def run_irrbb_standardised_framework(
         module=Module.IRRBB,
         sensitivity=Sensitivity.CONFIDENTIAL,
         surface="irrbb_sf_run",
-        denial_detail="Running the IRRBB Standardised Framework requires an active "
-        "scoped binding.",
+        denial_detail="Running the IRRBB Standardised Framework requires an active scoped binding.",
     )
     return regulatory_irr_sf.run_standardised_framework(db, ctx, bank_id, payload)
 

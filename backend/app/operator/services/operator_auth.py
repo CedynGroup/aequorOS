@@ -191,9 +191,7 @@ def clear_account_failures(user: OperatorUser) -> None:
     auth_throttle.clear_failures(user)
 
 
-def lockout_minutes_remaining(
-    expiry: dt.datetime, *, now: dt.datetime | None = None
-) -> int:
+def lockout_minutes_remaining(expiry: dt.datetime, *, now: dt.datetime | None = None) -> int:
     """Whole minutes until a lockout ends — copy for the sign-in screen."""
     return auth_throttle.minutes_remaining(expiry, now=now)
 
