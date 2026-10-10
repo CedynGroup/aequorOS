@@ -37,15 +37,19 @@ import json
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import TypeAdapter, ValidationError
 
 from app.storage.config import get_storage_settings
+from app.storage.encryption import ENCRYPTION_FORMAT
 from scripts.dr_common import DisasterRecoveryError, load_env_file
 from scripts.dr_manifest import utc_now_iso
+
+_OBJECT_HEADERS = TypeAdapter(dict[str, str])
 
 
 @dataclass
@@ -55,6 +59,8 @@ class ObjectRecord:
     etag: str
     last_modified: str
     sha256: str = ""
+    metadata: dict[str, str] = field(default_factory=dict)
+    content_type: str = "application/octet-stream"
 
 
 @dataclass
@@ -125,15 +131,31 @@ def list_buckets(client: Any, *, prefix: str) -> list[str]:
     return sorted(n for n in names if not prefix or n.startswith(prefix))
 
 
-def _download(client: Any, bucket: str, key: str, destination: Path) -> str:
+def _download(client: Any, bucket: str, key: str, destination: Path, entry: ObjectRecord) -> str:
     """Stream one object to disk and return its SHA-256 (GET, never HEAD)."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
-    body = client.get_object(Bucket=bucket, Key=key)["Body"]
-    with destination.open("wb") as handle:
-        for chunk in iter(lambda: body.read(1024 * 1024), b""):
-            digest.update(chunk)
-            handle.write(chunk)
+    response = cast(dict[str, object], client.get_object(Bucket=bucket, Key=key))
+    body = cast(BinaryIO, response["Body"])
+    # A raw S3 GET removes server-side encryption. SDK ciphertext, however,
+    # stays encrypted in the backup; never silently copy legacy bank plaintext.
+    try:
+        entry.metadata = {
+            name.lower(): value
+            for name, value in _OBJECT_HEADERS.validate_python(response.get("Metadata", {})).items()
+        }
+        entry.content_type = str(response.get("ContentType", "application/octet-stream"))
+        if not bucket.endswith("-audit-logs") and (
+            entry.metadata.get("encryption-format") != ENCRYPTION_FORMAT
+            or not entry.metadata.get("key-envelope-id")
+        ):
+            raise DisasterRecoveryError(f"Bank object {bucket}/{key} is not bank-key encrypted.")
+        with destination.open("wb") as handle:
+            for chunk in iter(lambda: body.read(1024 * 1024), b""):
+                digest.update(chunk)
+                handle.write(chunk)
+    finally:
+        body.close()
     return digest.hexdigest()
 
 
@@ -152,11 +174,14 @@ def inventory_bucket(client: Any, bucket: str, *, out_dir: Path | None) -> Bucke
                     last_modified=str(item.get("LastModified", "")),
                 )
                 if out_dir is not None:
-                    entry.sha256 = _download(client, bucket, key, out_dir / bucket / key)
+                    destination = (out_dir / bucket / key).resolve()
+                    if not destination.is_relative_to(out_dir.resolve()):
+                        raise DisasterRecoveryError("Object key escapes the backup directory.")
+                    entry.sha256 = _download(client, bucket, key, destination, entry)
                 record.keys.append(entry)
                 record.objects += 1
                 record.bytes += entry.size
-    except (ClientError, BotoCoreError) as exc:
+    except (ClientError, BotoCoreError, DisasterRecoveryError, ValidationError) as exc:
         # Recorded, not raised: one blocked bucket must not cost the whole run.
         record.error = f"{type(exc).__name__}: {str(exc)[:300]}"
     return record
@@ -167,9 +192,7 @@ def run_storage_backup(
 ) -> StorageBackupReport:
     client, endpoint = _client()
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = StorageBackupReport(
-        taken_at=utc_now_iso(), endpoint=endpoint, downloaded=download
-    )
+    report = StorageBackupReport(taken_at=utc_now_iso(), endpoint=endpoint, downloaded=download)
     try:
         buckets = list_buckets(client, prefix=bucket_prefix)
     except (ClientError, BotoCoreError) as exc:

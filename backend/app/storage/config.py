@@ -35,15 +35,15 @@ class StorageEngineSettings(BaseSettings):
     # or migrated to managed cloud (storage.md §5.2).
     retire_after: date | None = Field(default=None, alias="STORAGE_RETIRE_AFTER")
     presign_expires_seconds: int = Field(default=900, alias="STORAGE_PRESIGN_EXPIRES_SECONDS")
-    # KES/KMS key applied to every write and as bucket-default encryption.
-    # MVP uses one platform key; per-institution keys (storage.md §7.2) slot
-    # in once KES key provisioning is automated — the write path and object
-    # metadata are already keyed per institution.
+    download_base_url: str = Field(default="", alias="STORAGE_DOWNLOAD_BASE_URL")
+    # Additional bucket SSE and platform audit encryption. Bank objects also
+    # carry client-side SDK encryption under the bank-held master key.
     kms_key_id: str | None = Field(default=None, alias="STORAGE_KMS_KEY_ID")
 
     @property
     def configured(self) -> bool:
-        return bool(self.endpoint and self.access_key and self.secret_key)
+        # AWS deployments use the workload role and the AWS endpoint resolver.
+        return self.backend == "s3" or bool(self.endpoint and self.access_key and self.secret_key)
 
 
 class StorageRetiredError(RuntimeError):

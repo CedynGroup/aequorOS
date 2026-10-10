@@ -729,9 +729,9 @@
  },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 16,
-  "reportUnknownVariableType": 4
+  "reportUnknownArgumentType": 4,
+  "reportUnknownMemberType": 12,
+  "reportUnknownVariableType": 2
  },
  "app.jobs.bi_alerts": {
   "reportAny": 41
@@ -2209,11 +2209,11 @@
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 37,
+  "reportAny": 31,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
-  "reportUnknownLambdaType": 8,
-  "reportUnknownMemberType": 42,
+  "reportUnknownLambdaType": 7,
+  "reportUnknownMemberType": 40,
   "reportUnknownVariableType": 15
  },
  "app.worker": {
@@ -2245,7 +2245,7 @@
   "reportAny": 22
  },
  "scripts.backup_storage": {
-  "reportAny": 38,
+  "reportAny": 32,
   "reportMissingTypeStubs": 3,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
