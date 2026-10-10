@@ -32,6 +32,7 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -48,7 +49,6 @@ from app.models import (
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import (
-    authorization,
     data_activation,
     module_scope,
     pipeline,

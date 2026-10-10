@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
-from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.ask_bi import router as bi_ask_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
@@ -14,12 +13,9 @@ from app.features.export_icaap_drafts import router as icaap_draft_exports_route
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
-from app.features.list_organization_users import router as organization_users_router
 from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_attestation import router as attestation_router
-from app.features.manage_authorization import router as authorization_router
-from app.features.manage_banks import router as banks_router
 from app.features.manage_bi_commentary import router as bi_commentary_router
 from app.features.manage_bi_content import router as bi_content_router
 from app.features.manage_bi_notifications import router as bi_notifications_router
@@ -51,8 +47,6 @@ from app.features.manage_icaap_supervisory_addons import (
     router as icaap_supervisory_addons_router,
 )
 from app.features.manage_icaap_workflow import router as icaap_workflow_router
-from app.features.manage_institution_profile import router as institution_profile_router
-from app.features.manage_integration_keys import router as integration_keys_router
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
@@ -77,7 +71,6 @@ from app.features.read_bi import router as bi_read_router
 from app.features.read_bi_feeds import router as bi_feeds_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
-from app.features.read_feature_flags import router as feature_flags_router
 from app.features.read_financial_workspace import router as financial_workspace_router
 from app.features.read_liquidity_monitoring import router as liquidity_monitoring_router
 from app.features.read_market_data_views import router as market_data_views_router
@@ -103,6 +96,13 @@ from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,
 )
+from app.identity.api.auth import router as auth_router
+from app.identity.api.list_organization_users import router as organization_users_router
+from app.identity.api.manage_authorization import router as authorization_router
+from app.identity.api.manage_banks import router as banks_router
+from app.identity.api.manage_institution_profile import router as institution_profile_router
+from app.identity.api.manage_integration_keys import router as integration_keys_router
+from app.identity.api.read_feature_flags import router as feature_flags_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)

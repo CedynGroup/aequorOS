@@ -30,6 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.service import institution_profile
 from app.models import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
@@ -50,7 +51,7 @@ from app.schemas.regulatory_reporting import (
     SubmissionEventRead,
     SubmissionPollRead,
 )
-from app.services import filing_reconciliation, institution_profile, notifications
+from app.services import filing_reconciliation, notifications
 from app.services.audit import record_event
 from app.services.regulatory_reporting import artifact_versions, family_hooks
 from app.services.regulatory_reporting.channel_config import (

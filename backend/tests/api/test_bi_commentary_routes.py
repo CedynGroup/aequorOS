@@ -58,12 +58,12 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.features import manage_bi_commentary as surface
+from app.identity.service import authorization
 from app.jobs import bi_commentary
 from app.models import AuditEvent, AuthorizationBinding, Bank, Job, User
 from app.models.ai import AiCommentarySettings
 from app.models.bi import BiAggPositionDaily, BiFactEngineMetric, BiFactPositionDaily, BiMartBuild
 from app.models.bi_commentary import AiCommentaryDraft
-from app.services import authorization
 from app.services.ai import client as ai_client
 from app.services.bi import commentary
 from app.services.bi.commentary import CommentaryDraft, CommentaryParagraph

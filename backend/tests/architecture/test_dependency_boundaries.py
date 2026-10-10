@@ -153,7 +153,18 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
         stateful = {
             module
             for module in modules
-            if module.startswith(("app.services", "app.models", "app.api", "app.features"))
+            if module.startswith(
+                (
+                    "app.services",
+                    "app.models",
+                    "app.api",
+                    "app.features",
+                    "app.identity.api",
+                    "app.identity.models",
+                    "app.identity.service",
+                    "app.identity.public",
+                )
+            )
         }
         if stateful:
             impure[module] = stateful

@@ -50,6 +50,8 @@ from app.domain.liquidity.engine import (
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS as _LADDER_HORIZON_DAYS
 from app.domain.liquidity.ladder import ladder_bucket_index as _ladder_bucket_index
 from app.domain.reporting import period_windows
+from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -67,7 +69,6 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.common import FigureRefusalRead, JsonObject
 from app.schemas.regulatory_liquidity import (
     Bsd3HeaderRead,
@@ -98,7 +99,6 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
-    scoped_authorization,
     withdrawal_impact,
 )
 from app.services.audit import record_event

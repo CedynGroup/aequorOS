@@ -73,6 +73,8 @@ from app.domain.positions.fx import (
     spot_or_none as _spot_or_none,
 )
 from app.domain.reporting import period_windows
+from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
+from app.identity.service import scoped_authorization
 from app.live.public import (
     require_fx_fact_coverage,
     require_run_currency_coverage,
@@ -90,7 +92,6 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_fx import (
     FxCurrencyPositionRead,
     FxDashboardRead,
@@ -106,7 +107,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
-from app.services import filing_reconciliation, regulatory_dashboard_batching, scoped_authorization
+from app.services import filing_reconciliation, regulatory_dashboard_batching
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency
 from app.services.live_block import live_block

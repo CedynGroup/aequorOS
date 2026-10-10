@@ -12,8 +12,8 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.service import authorization
 from app.models import User
-from app.services import authorization
 
 
 def grant_institution_authority(  # noqa: PLR0913 - the fixture grant sentence is explicit

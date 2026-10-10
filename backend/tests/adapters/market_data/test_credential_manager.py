@@ -15,7 +15,7 @@ from app.adapters.market_data.credential_manager import (
     derive_status,
     encrypt_credential_envelope,
 )
-from app.models.bank import Bank
+from app.identity.models.bank import Bank
 from app.models.market_data import MarketDataConnection
 from tests.support.helpers import ORG_1
 

@@ -461,7 +461,7 @@ that touches bindings, the evaluator or the resolver. Its hermetic test does
 not yet assert the new column (owed).
 
 Pinned by: `tests/services/bi/test_data_scope.py`, `tests/api/test_bi_data_scope.py`,
-`tests/api/test_data_scope_grants.py`, the A10-01 cases in
+`tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
 `tests/services/bi/test_bi_authorization.py`, `tests/api/test_bi_feeds.py` and,
 for the credit blotter, `tests/api/test_credit_route_authorization.py`.
 

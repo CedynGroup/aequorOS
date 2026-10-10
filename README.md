@@ -104,13 +104,12 @@ cd backend && docker compose up -d      # Postgres :15432, MinIO :9000 (console 
 
 then point `DATABASE_URL` at `localhost:15432`.
 
-**There is no seed step, and no seed route.** Data enters only through the Data
-Engine — Excel/CSV upload, API push, or a read-only database extract — and a bank
-is created by its first ingestion. The old `POST /banks/seed-demo` endpoint was
-retired in 2026-08; `backend/tests/api/test_banks.py::test_seed_route_is_retired`
-pins that the path resolves to no handler, for any role and any tenant. The
-hermetic pytest suite builds its own tenants in `tests/conftest.py`; nothing
-seeds a real database.
+**There is no seed step.** Provision a bank through the staff operator console,
+then load its financial data through the Data Engine — Excel/CSV upload, API push,
+or a read-only database extract. See the
+[Data Engine's no-seeding contract](docs/data_engine.md#standing-order-no-seeded-bank-data).
+The hermetic pytest suite builds its own tenants in `backend/tests/conftest.py`;
+nothing seeds a real database.
 
 **Database-direct drivers.** The shipped image installs only the Oracle thin
 driver, which is a core dependency. SQL Server/ODBC, generic JDBC and Snowflake

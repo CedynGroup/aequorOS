@@ -69,6 +69,8 @@ from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, MeasureDef, Me
 from app.domain.bi.catalogue import UnknownMember as CatalogueUnknownMember
 from app.domain.bi.packs import PackError
 from app.domain.bi.packs import pack as certified_pack
+from app.identity.service import authorization as authorization_service
+from app.identity.service import grant_administration, scoped_authorization
 from app.models import AuthorizationBinding, Bank, User
 from app.models.bi_content import (
     BiDashboard,
@@ -79,8 +81,6 @@ from app.models.bi_content import (
 from app.schemas.bi import BiPackWidget, BiTime
 from app.schemas.bi import BiQuery as BiQuerySchema
 from app.schemas.bi_content import BiDashboardSpec
-from app.services import authorization as authorization_service
-from app.services import grant_administration, scoped_authorization
 from app.services.bi.authorization import authorize_query, query_members, scope_pairs
 from app.services.bi.compiler import expand_calculated_measures
 from app.services.bi.errors import UnknownMember
@@ -1353,7 +1353,7 @@ def promotion_sod_decision(
     """The separation-of-duties verdict for one promotion.
 
     Expressed in the platform's own policy types
-    (``app/services/grant_administration.py``) rather than as a boolean, because
+    (``app/identity/service/grant_administration.py``) rather than as a boolean, because
     this is the same control that governs every other authority decision here and
     the surfaces that display it already read this shape. The finding code is the
     one the tenant-facing SoD vocabulary uses for a maker/checker collision, and
@@ -1398,7 +1398,7 @@ def _authorize_certification(  # noqa: PLR0913 - the complete checker sentence
     * ``approve`` over every ``(module, sensitivity)`` pair the figures need,
       through ``scoped_authorization.evaluate_bank_permission`` — because
       ``Permission.APPROVE`` names MAKER/CHECKER as required runtime context
-      (``app/services/authorization.py::_REQUIRED_RUNTIME_CONDITIONS``), and a
+      (``app/identity/service/authorization.py::_REQUIRED_RUNTIME_CONDITIONS``), and a
       caller that does not establish it is DENIED by the evaluator. That is the
       platform's design and it is right: whoever approves must be named against
       whoever prepared. A promotion knows both, so the condition is supplied

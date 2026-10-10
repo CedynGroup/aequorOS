@@ -44,11 +44,12 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import catalogue
+from app.identity.service import authorization
 from app.jobs import bi_alerts as alert_job
 from app.models import Bank, Job, Notification, User
 from app.models.bi import BiMartBuild
 from app.models.bi_notifications import BiAlert, BiAlertEvent
-from app.services import authorization, job_queue
+from app.services import job_queue
 from app.services.bi import alerts, limits, provenance
 from app.services.bi.errors import BiQueryTimeout
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID

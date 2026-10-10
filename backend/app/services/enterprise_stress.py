@@ -105,6 +105,7 @@ from app.domain.stress.translation import (
     missing_variables,
     required_variables,
 )
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -136,7 +137,6 @@ from app.services import (
     management_action_plans,
     regulatory_irr,
     regulatory_parameters,
-    scoped_authorization,
     sdi_capital,
 )
 from app.services.audit import record_event

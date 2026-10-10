@@ -173,7 +173,7 @@ sole organization authority for lookup and issued tokens. Subject → user
 mapping is `organization_id=connection.organization_id AND
 auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
 fallback to exact email match on a pre-provisioned active account in that same
-organization (`app/services/authentication.py`). Opt-in JIT records a
+organization (`app/identity/service/authentication.py`). Opt-in JIT records a
 **deactivated** stub in that organization and returns 403 until an Org Owner
 approves one complete non-owner scoped grant through the
 [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
@@ -396,7 +396,7 @@ is called from every path that grants a person access:
 
 1. Org Owner approval of an SSO access request with one complete scoped grant
    (`approve_sso_access_request_with_grant`,
-   `app/services/grant_administration.py`);
+   `app/identity/service/grant_administration.py`);
 2. CLI provisioning (`scripts/create_user.py`, which must be repaired first — G15);
 3. a backfill migration for all existing active users.
 

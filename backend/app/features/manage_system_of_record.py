@@ -20,6 +20,7 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
 from app.domain.ingestion.constants import PositionType, SourceSystem
+from app.identity.service.banks import _get_bank_or_404
 from app.models import CanonicalWithdrawal, SystemOfRecordDeclaration
 from app.schemas.system_of_record import (
     CanonicalWithdrawalApproveRequest,
@@ -38,7 +39,6 @@ from app.schemas.system_of_record import (
     TypeFindingRead,
 )
 from app.services import canonical_withdrawal, fact_derivation, system_of_record
-from app.services.banks import _get_bank_or_404
 
 router = APIRouter(tags=["system-of-record"])
 

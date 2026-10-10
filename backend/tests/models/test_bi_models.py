@@ -53,6 +53,7 @@ from app.domain.positions.families import (
     UNCLASSIFIED_FAMILY,
     unclassified_category,
 )
+from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.models import bi
 from app.models.bi import (
     BI_TABLES,
@@ -84,7 +85,6 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.models.institution_type import InstitutionType
 from app.models.live import LIVE_MODULES, LiveMetric
 from app.models.regulatory_run import RegulatoryRun

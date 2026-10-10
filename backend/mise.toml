@@ -123,7 +123,7 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 # everything while implying a tier that does not exist.
 [tasks."risk-service:test-real-data"]
 description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
-run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/services"
+run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/identity tests/services"
 
 # The live S3-compatible backend contract: SSE-KMS at rest, the hash-chained
 # access log, and provisioning/deprovisioning of a per-institution bucket. The

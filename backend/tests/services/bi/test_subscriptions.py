@@ -46,11 +46,12 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.identity.service import authorization
 from app.jobs import bi_subscriptions as subscription_job
 from app.models import AuditEvent, Bank, Job, User
 from app.models.bi import BiMartBuild, BiQueryLog
 from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
-from app.services import authorization, job_queue, scheduler
+from app.services import job_queue, scheduler
 from app.services.bi import subscriptions
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import AS_OF, build, seed_book

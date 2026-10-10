@@ -57,11 +57,11 @@ const serverRequirements = JSON.parse(
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
-from app.features.manage_authorization import _PUBLIC_ACCESS_REQUEST_ROUTES, _route_requirement, _access_request_binding
+from app.identity.api.manage_authorization import _PUBLIC_ACCESS_REQUEST_ROUTES, _route_requirement, _access_request_binding
 binding_id = uuid4()
 request = SimpleNamespace(organization_id="OR-DEM00001", requester_user_id=uuid4(), institution_id="BK-SAMP0001", module_scope="credit", permission="view")
 db = Mock()
-with patch("app.features.manage_authorization.authorization.evaluate_permission", return_value=SimpleNamespace(allowed=True, matching_binding_ids=[binding_id])), patch("app.features.manage_authorization.authorization.effective_data_scope", return_value=SimpleNamespace(whole_institution=False)):
+with patch("app.identity.api.manage_authorization.authorization.evaluate_permission", return_value=SimpleNamespace(allowed=True, matching_binding_ids=[binding_id])), patch("app.identity.api.manage_authorization.authorization.effective_data_scope", return_value=SimpleNamespace(whole_institution=False)):
     for route, sensitivity, allowed in [
         ("/credit/book", "restricted", True),
         ("/credit/activity", "confidential", True),

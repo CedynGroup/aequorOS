@@ -77,7 +77,7 @@ These principles govern every implementation decision. Deviations require explic
   membership, SSO, storage, and required parameter register), but no bank financial
   data; every bank financial figure arrives through ingestion.
   There is **no seeding route and no `DEMO_SEED_ENABLED` flag**:
-  `tests/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
+  `tests/identity/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
   resolves to no handler for any role or tenant. Never add seeding paths to the UI, and
   never re-add seed CLI scripts. The live-data suite's provenance check (every canonical
   row ingestion-traced) is the executable form of this order.

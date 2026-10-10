@@ -131,29 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- staff operator console
     (r"^(models|schemas)/operator$", "operator"),
-    # ---- identity and access
-    (r"^api/v1/auth$", "identity"),
-    (
-        r"^services/(authentication|authorization|auth_throttle|scoped_authorization"
-        r"|grant_administration|membership|sso_config|integration_keys"
-        r"|organization_ownership|banks|institution_profile)$",
-        "identity",
-    ),
-    (
-        r"^models/(authorization|bank|user|refresh_token|sso_connection|integration_key"
-        r"|institution_profile)$",
-        "identity",
-    ),
-    (
-        r"^schemas/(auth|authorization|banks|integration_keys|institution_profile"
-        r"|feature_flags)$",
-        "identity",
-    ),
-    (
-        r"^features/(manage_authorization|manage_banks|manage_integration_keys"
-        r"|list_organization_users|manage_institution_profile|read_feature_flags)$",
-        "identity",
-    ),
     # ---- policy: jurisdiction, regime, parameter registers
     (
         r"^services/(regulatory_parameters|jurisdictions|institution_types|module_scope"
@@ -675,7 +652,9 @@ class _ModelSplitScenario:
 
     def check_new_sibling(self, path: Path, target: str, split: str) -> None:
         sibling = "parameter_register" if split == "bank" else "bank"
-        sibling_target = f"app.models.{sibling}"
+        sibling_target = (
+            "app.identity.models.bank" if sibling == "bank" else f"app.models.{sibling}"
+        )
         sibling_path = _write_synthetic_module(self.app, sibling_target, "class Authority: pass\n")
         path.write_text(
             _synthetic_import_content(self.app, self.source, target, self.import_style)
@@ -692,7 +671,7 @@ class _ModelSplitScenario:
         )
 
     def check_split(self, source_path: Path, split: str, feature: str) -> Path:
-        target = f"app.models.{split}"
+        target = f"app.{feature}.models.{split}"
         self.origins.write_text(
             json.dumps(
                 {
@@ -716,7 +695,7 @@ class _ModelSplitScenario:
         write_baseline()
         assert self.baseline.read_bytes() == self.baseline_bytes
 
-        moved = f"app.{feature}.models.{split}"
+        moved = f"app.{feature}.models.moved_{split}"
         moved_again = f"app.{feature}.models.authority"
         for destination in [moved, moved_again]:
             target_path.unlink()
@@ -807,11 +786,11 @@ def test_model_splits_preserve_historical_boundary_identities(
 @pytest.mark.parametrize(
     "edge",
     [
-        ("app.live.service", "app.models.bank", "private live->identity"),
+        ("app.live.service", "app.identity.models.bank", "private live->identity"),
         ("app.live.service", "app.models.parameter_register", "private live->policy"),
-        ("app.models.bank", "app.models.parameter_register", "layer identity->policy"),
-        ("app.models.parameter_register", "app.models.bank", "private policy->identity"),
-        ("app.models.bank", "app.live.service", "layer identity->live"),
+        ("app.identity.models.bank", "app.models.parameter_register", "layer identity->policy"),
+        ("app.models.parameter_register", "app.identity.models.bank", "private policy->identity"),
+        ("app.identity.models.bank", "app.live.service", "layer identity->live"),
         ("app.models.parameter_register", "app.live.service", "layer policy->live"),
     ],
 )
@@ -866,7 +845,7 @@ def test_recorded_moves_preserve_the_ratchet(
     monkeypatch.setattr(f"{__name__}.SPLIT_ORIGINS", origins)
     ledger.write_text("[]", encoding="utf-8")
     source = "app.services.bi.authorization"
-    target = "app.services.scoped_authorization"
+    target = "app.identity.service.original_authority"
 
     def import_content() -> str:
         return _synthetic_import_content(app, source, target, import_style)

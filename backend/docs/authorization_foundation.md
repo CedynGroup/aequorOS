@@ -40,7 +40,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   staff-plane work: a zero-owner tenant has no tenant authority that could authorize its
   own designation.
 - **Scoped grant administration.** Org Owners administer exactly one indivisible binding
-  per create/revoke through `app/features/manage_authorization.py`; sensitivity is
+  per create/revoke through `app/identity/api/manage_authorization.py`; sensitivity is
   mandatory, institution coverage is exact or explicitly organization-wide, and the server
   returns its authoritative assignment-time SoD allow/warn/block decision. Mutations audit
   the complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
@@ -61,7 +61,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   cannot isolate their child objects. See [Executable verification](#executable-verification)
   for refusal semantics and the regression coverage.
 - Preserve baseline membership as system-managed lifecycle evidence, never evaluator
-  fallback access. Activation/deactivation must use `app/services/membership.py`;
+  fallback access. Activation/deactivation must use `app/identity/service/membership.py`;
   [Baseline membership](#baseline-membership) owns its scope, migration, and regression
   coverage.
 - **Account administration.** SSO connection read/write, SSO request list/reject, and
@@ -183,7 +183,7 @@ evaluator permission set grants no institution, directory, or product authority;
 shell and own-profile access remain authenticated self-service. The dashboard
 behavior is owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
 
-`app/services/membership.py::ensure_baseline_membership` creates the binding and
+`app/identity/service/membership.py::ensure_baseline_membership` creates the binding and
 its grant audit atomically with activation in SSO request approval and operator
 tenant provisioning. The partial unique index enforces one active row per user
 and organization. Access → Members displays the row but cannot grant or revoke
@@ -200,7 +200,7 @@ each tenant mutation. Its `force_rls_suspended` contexts temporarily suspend FOR
 for the migration owner and restore it afterward. Downgrade invalidates sessions
 for users with membership rows before removing those rows and the added index.
 `tests/db/test_baseline_membership_migration.py` pins the multi-tenant backfill;
-`tests/api/test_baseline_membership.py` and
+`tests/identity/api/test_baseline_membership.py` and
 `tests/core/test_authorization_properties.py` pin lifecycle and non-authority.
 
 ## Decision semantics and conditions
@@ -467,7 +467,7 @@ approval creates authority.
 
 Grant preview/create, SSO approval, and route access requests use
 `reason_category`, `reason_detail`, `reference`, and `valid_until` from
-`app/schemas/authorization.py`. The category is required; detail and reference
+`app/identity/schemas/authorization.py`. The category is required; detail and reference
 are optional except that `other` requires non-empty detail. `temporary_cover`
 and `incident_break_glass` require an expiry. The generated OpenAPI schema and
 client own the complete enum and payload shapes. Migration `202609300082`
@@ -571,7 +571,7 @@ Generative suites add coverage beyond the fixed examples:
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
   matches, runtime conditions, and exact lifecycle boundaries;
-- `tests/api/test_authorization_state_machine.py` exercises arbitrary sequences
+- `tests/identity/api/test_authorization_state_machine.py` exercises arbitrary sequences
   of token-family issue, refresh rotation, authorization invalidation, scoped
   grant creation, and exact single-row revocation. It checks the effective union
   against an independent finite oracle, including sensitivity, after every
@@ -825,7 +825,7 @@ generation, legacy approval, signing inboxes and calendar links alongside a
 row-filtered Credit control;
 `tests/services/test_institution_data_scope_enforcement.py` exercises matching
 narrowed bindings through both shared gates and family visibility;
-`tests/api/test_data_scope_grants.py` refuses every unsupported module;
+`tests/identity/api/test_data_scope_grants.py` refuses every unsupported module;
 `tests/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
 and downgrade/re-upgrade on Postgres;
 `tests/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on

@@ -24,6 +24,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.db.base import utc_now
+from app.identity.service import authorization
 from app.models import (
     AuthorizationBinding,
     BankReportingPeriod,
@@ -36,7 +37,7 @@ from app.models import (
 )
 from app.models.bi import MART_BUILD_SCOPES
 from app.schemas.live import OfficialRunRequest
-from app.services import authorization, job_queue, live_view, pipeline, regulatory_fx, scheduler
+from app.services import job_queue, live_view, pipeline, regulatory_fx, scheduler
 from app.services.bi import enqueue as bi_enqueue
 from app.services.bi.versions import BUILDER_VERSION
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book

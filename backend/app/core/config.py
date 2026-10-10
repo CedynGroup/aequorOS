@@ -1286,7 +1286,7 @@ def is_undeployed_environment(app_env: str | None = None) -> bool:
     """True only on ``local``/``test`` — the environments a developer runs.
 
     The single authority for "may a never-in-production convenience apply
-    here?". ``app.core.security._is_loopback_issuer_allowed`` (plain-http OIDC
+    here?". ``app.core.security.is_loopback_issuer_allowed`` (plain-http OIDC
     discovery), the operator dev-token bearer and the operator app's boot
     refusal all read it, and ``dashboard/lib/outbound.ts`` mirrors it for the
     Next.js runtime.

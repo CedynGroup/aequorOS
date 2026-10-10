@@ -1,7 +1,7 @@
 """LRT corporate return-pack generators (docs/submission_pipeline_plan.md §W5).
 
 Five event-driven "corporate" family packs, each pre-filled EXCLUSIVELY from
-the W4 institution-profile register (``app/services/institution_profile.py``)
+the W4 institution-profile register (``app/identity/service/institution_profile.py``)
 — no engine recomputation, no external calls, ``source_runs = []`` because
 these are master-data packs, not run-derived returns.
 
@@ -27,13 +27,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod
-from app.schemas.institution_profile import (
+from app.identity.schemas.institution_profile import (
     InstitutionProfileFullRead,
     InstitutionProfileRead,
     RelatedPartyRead,
 )
-from app.services import institution_profile
+from app.identity.service import institution_profile
+from app.models import Bank, BankReportingPeriod
 from app.services.regulatory_reporting.generation import (
     GeneratedReturn,
     build_envelope,

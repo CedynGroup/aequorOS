@@ -112,7 +112,7 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Brute-force throttling — the SAME two columns tenant ``users`` carry, read
-    # and written by the SAME primitive (``app/services/auth_throttle.py``).
+    # and written by the SAME primitive (``app/identity/service/auth_throttle.py``).
     # Until migration 202608230041 the staff plane had none: its only control
     # was a per-process ``(email, ip)`` dict, so rotating source addresses gave
     # an unbounded budget against the account that yields a cross-tenant

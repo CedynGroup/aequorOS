@@ -728,7 +728,7 @@ def _seed_icaap_package(db: Session) -> tuple[RegulatoryPackage, TenantContext]:
         RoleBundle,
         SensitivityScope,
     )
-    from app.services import authorization  # noqa: PLC0415
+    from app.identity.service import authorization  # noqa: PLC0415
 
     materialize_canonical_test_book(db)
     authorization.create_role_binding(

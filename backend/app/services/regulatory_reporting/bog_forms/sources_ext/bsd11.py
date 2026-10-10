@@ -36,13 +36,13 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.policy.public import base_currency
 
 from ..sources import ResolveContext, reporting_currency_value, resolver

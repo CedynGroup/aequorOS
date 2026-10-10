@@ -71,7 +71,7 @@ def require_bank_class(db: Session, bank: Bank) -> None:
 
 def require_examiner(ctx: TenantContext) -> None:
     """The impersonated-read branch: staff provenance and no blocking condition."""
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if ctx.actor_operator is None:
         raise HTTPException(

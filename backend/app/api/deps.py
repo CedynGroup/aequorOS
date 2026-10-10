@@ -23,10 +23,10 @@ from app.core.config import get_settings
 from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.core.tenancy import TenantContext
 from app.db.session import get_sessionmaker
+from app.identity.service.authorization import EffectiveDataScope
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RegulatoryPackage, User
-from app.services.authorization import EffectiveDataScope
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -195,7 +195,7 @@ def _authenticate_principal(
     # middleware authenticates as its service account. Resolved pre-tenant
     # (global hash lookup), then validated like any principal downstream.
     # Local import: the service imports TenantContext from this module.
-    from app.services.integration_keys import (  # noqa: PLC0415 - break the deps<->service cycle
+    from app.identity.service.integration_keys import (  # noqa: PLC0415 - break the deps<->service cycle
         authenticate_key,
         looks_like_integration_key,
     )
@@ -613,7 +613,7 @@ def _require_organization_permission(  # noqa: PLR0913 - the complete policy tup
         PrincipalType,
         ResourceLocator,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     required_permission = Permission(permission)
     resource = ResourceLocator(
@@ -736,7 +736,7 @@ def require_grant_administration(
         RoleBundle,
         Sensitivity,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if ctx.actor_user_id is None:
         raise HTTPException(
@@ -800,7 +800,7 @@ def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     prefetch: bool = False,
 ) -> LiquidityMonitoringAccess:
     from app.core.authorization import Module, Permission  # noqa: PLC0415
-    from app.services import scoped_authorization  # noqa: PLC0415
+    from app.identity.service import scoped_authorization  # noqa: PLC0415
 
     require_permission = (
         scoped_authorization.require_bank_permission_prefetched
@@ -837,8 +837,8 @@ def require_integration_push_ingest(
         ResourceLocator,
         Sensitivity,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
-    from app.services import integration_keys  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import integration_keys  # noqa: PLC0415
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     requested_bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -962,7 +962,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     see behind the same 404 a cross-tenant probe receives.
     """
 
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if bank is None:  # pragma: no cover - institution permissions are bank-scoped
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")

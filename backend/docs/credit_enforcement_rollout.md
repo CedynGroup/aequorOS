@@ -533,7 +533,7 @@ binding row changed: the inventory SQL above reproduces it at any time.
 
 Access → Members, one indivisible sentence per row. Sensitivity is mandatory and
 institution coverage is exact or explicitly organization-wide
-(`app/features/manage_authorization.py`).
+(`app/identity/api/manage_authorization.py`).
 
 | Need                                              | `role_bundle`                                              | `module_scope` | `sensitivity_scope` | `data_scope_kind`           |
 | ------------------------------------------------- | ---------------------------------------------------------- | -------------- | ------------------- | --------------------------- |

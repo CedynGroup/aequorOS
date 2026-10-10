@@ -44,7 +44,17 @@ BACKEND = Path(__file__).parents[2]
 BI_DOMAIN = BACKEND / "app" / "domain" / "bi"
 
 #: What the pure BI domain may never import: the service plane, the ORM, SQL.
-FORBIDDEN_IMPORT_PREFIXES = ("app.services", "app.models", "app.api", "app.features", "sqlalchemy")
+FORBIDDEN_IMPORT_PREFIXES = (
+    "app.services",
+    "app.models",
+    "app.api",
+    "app.features",
+    "sqlalchemy",
+    "app.identity.api",
+    "app.identity.models",
+    "app.identity.service",
+    "app.identity.public",
+)
 
 
 @pytest.fixture(scope="module")

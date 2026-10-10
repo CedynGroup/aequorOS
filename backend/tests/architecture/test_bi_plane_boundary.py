@@ -1316,6 +1316,10 @@ def test_the_write_guard_admits_the_shapes_the_builder_uses(tmp_path: Path) -> N
 #: deliberately: a pure module that reads a setting is configurable behaviour,
 #: which the golden suites cannot pin.
 STATEFUL_PREFIXES: tuple[str, ...] = (
+    "app.identity.api",
+    "app.identity.models",
+    "app.identity.service",
+    "app.identity.public",
     "app.services",
     "app.models",
     "app.db",

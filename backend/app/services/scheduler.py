@@ -29,6 +29,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied
 from app.db.base import utc_now
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -38,7 +39,7 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, module_scope, scoped_authorization
+from app.services import job_queue, module_scope
 from app.services.bi.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
 from app.services.bi.versions import BUILDER_VERSION
 

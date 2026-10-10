@@ -45,6 +45,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core import security
 from app.core.config import get_settings
+from app.identity.service import auth_throttle
 from app.models import (
     AttestationSignature,
     SigningAuthorization,
@@ -52,7 +53,7 @@ from app.models import (
     User,
 )
 from app.schemas.attestation import CertifyRequest, StepUpRequest
-from app.services import attestation_api, auth_throttle
+from app.services import attestation_api
 from app.services.attestation import stepup
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService

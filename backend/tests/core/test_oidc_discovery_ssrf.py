@@ -30,7 +30,7 @@ from jwt.algorithms import RSAAlgorithm
 from app.core import security
 from app.core.config import get_settings
 from app.core.outbound import get_outbound_settings
-from app.schemas.auth import SsoConnectionUpdateRequest
+from app.identity.schemas.auth import SsoConnectionUpdateRequest
 from tests.support.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
 
 if TYPE_CHECKING:

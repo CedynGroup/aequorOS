@@ -35,7 +35,7 @@ the purity is enforced by
 
 The resolver keys on jurisdiction → regulator → institution type → regime → return family →
 parameter set → effective date. `resolve_class_value` **requires** a jurisdiction and is
-threaded through `app/services/banks.py`, so institution-type detail is keyed
+threaded through `app/identity/service/banks.py`, so institution-type detail is keyed
 `(type_code, jurisdiction)` — a Nigerian tenant resolves its own limits, not Ghana's.
 
 ---
@@ -44,16 +44,16 @@ threaded through `app/services/banks.py`, so institution-type detail is keyed
 
 `app/models/regulatory_parameter.py`:
 
-| Column | Constraint |
-|---|---|
-| `source_citation` | `String(240)`, **`nullable=False`** — a value physically cannot enter without a citation |
-| `confirmation_status` | `String(12)`, **default `"pending"`**, CHECK `IN ('confirmed','pending')` |
-| `status` | default `"draft"`, CHECK `IN ('draft','approved')` |
-| `effective_from` | `Date`, not null |
-| `effective_to` | nullable — set to the successor's `effective_from` on supersession |
-| `proposed_by` / `approved_by` | `approved_by` nullable until the checker acts |
-| value | CHECK `value_numeric IS NOT NULL OR value_json IS NOT NULL` |
-| uniqueness | one generation per `(scope, code, jurisdiction, effective_from)` |
+| Column                        | Constraint                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `source_citation`             | `String(240)`, **`nullable=False`** — a value physically cannot enter without a citation |
+| `confirmation_status`         | `String(12)`, **default `"pending"`**, CHECK `IN ('confirmed','pending')`                |
+| `status`                      | default `"draft"`, CHECK `IN ('draft','approved')`                                       |
+| `effective_from`              | `Date`, not null                                                                         |
+| `effective_to`                | nullable — set to the successor's `effective_from` on supersession                       |
+| `proposed_by` / `approved_by` | `approved_by` nullable until the checker acts                                            |
+| value                         | CHECK `value_numeric IS NOT NULL OR value_json IS NOT NULL`                              |
+| uniqueness                    | one generation per `(scope, code, jurisdiction, effective_from)`                         |
 
 The tenant-side resolver reads **only approved rows**
 (`app/services/regulatory_parameters.py:797`, filtering on `effective_from <= as_of` and
@@ -65,7 +65,7 @@ The tenant-side resolver reads **only approved rows**
 
 - `propose(...)` writes a `draft` row with `proposed_by`.
 - `approve(...)` refuses when `approved_by.strip().lower() == row.proposed_by.strip().lower()`
-  (`:144-149`) — *"four-eyes / dual control"*. The refusal is server-side; the console
+  (`:144-149`) — _"four-eyes / dual control"_. The refusal is server-side; the console
   surfaces it but never grants it.
 - Approval supersedes the prior open row by setting its `effective_to`.
 - Endpoints: `/operator/v1/regulatory-parameters` (list / propose / approve), mounted only
@@ -78,14 +78,14 @@ The console page (`console/app/(shell)/(admin)/admin/regulatory-parameters/page.
 `RegulatoryParametersView.tsx`) shipped with several defects that the parameter mechanism
 exists to prevent. All were corrected:
 
-| Defect found in committed code | Why it mattered |
-|---|---|
-| `placeholder="10"` on the value field | A suggested regulatory number in the one form whose purpose is that numbers come from a cited source |
-| Supersession prefilled the outgoing value **and** citation | The mechanism by which a stale value gets re-approved unchanged — the most dangerous defect on the page |
-| `jurisdiction_code: 'GH'` hardcoded as the new-proposal default | Jurisdiction is a decision, not a default |
-| `Number.isFinite(Number(value))` validation | Coerced a regulatory decimal through a float; also admitted `1e3` and `0x1f` |
-| `pending BoG` chip, `hint="e.g. pct, ratio, GHS_m."` | Hardcoded regulator and currency |
-| Raw enum values on screen (`institution_class (bank / sdi)`, `pending`, `(Track: maker)`) | Internal vocabulary in operator-facing copy |
+| Defect found in committed code                                                            | Why it mattered                                                                                         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `placeholder="10"` on the value field                                                     | A suggested regulatory number in the one form whose purpose is that numbers come from a cited source    |
+| Supersession prefilled the outgoing value **and** citation                                | The mechanism by which a stale value gets re-approved unchanged — the most dangerous defect on the page |
+| `jurisdiction_code: 'GH'` hardcoded as the new-proposal default                           | Jurisdiction is a decision, not a default                                                               |
+| `Number.isFinite(Number(value))` validation                                               | Coerced a regulatory decimal through a float; also admitted `1e3` and `0x1f`                            |
+| `pending BoG` chip, `hint="e.g. pct, ratio, GHS_m."`                                      | Hardcoded regulator and currency                                                                        |
+| Raw enum values on screen (`institution_class (bank / sdi)`, `pending`, `(Track: maker)`) | Internal vocabulary in operator-facing copy                                                             |
 
 Identity fields still carry over on supersession; **value and citation are now blank.** The
 proposer's own row renders no approve button ("Needs a second operator"); enforcement stays
@@ -94,17 +94,17 @@ server-side.
 Verified: `tsc --noEmit` clean, `npm run test` 27 pass / 0 fail, `next build` compiled.
 **Not verified:** ESLint never ran (the console workspace has no ESLint dependency or
 config, which is why `next build` prints "Skipping linting"); no real propose/approve POST
-was submitted, so the server's four-eyes refusal is unverified *from the console*; there are
+was submitted, so the server's four-eyes refusal is unverified _from the console_; there are
 no DOM or component tests.
 
 ### Open API gaps on this surface
 
-| ID | Gap |
-|---|---|
+| ID    | Gap                                                                                                                                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `L-2` | **Structured values cannot be proposed.** `RegulatoryParameterProposeRequest` has no `value_json` and `propose()` hardcodes `None` (`:115`), so the SDI risk-weight bucket maps are readable but unreachable from any UI. Needs a backend change. |
-| `L-3` | No reject/withdraw transition — a mistaken proposal sits in the queue permanently. |
-| `L-4` | No jurisdiction filter and no pagination on list. |
-| `L-5` | No `/operator/v1/me`, so four-eyes pre-emption degrades to "unknown viewer" under a dev-token session. |
+| `L-3` | No reject/withdraw transition — a mistaken proposal sits in the queue permanently.                                                                                                                                                                |
+| `L-4` | No jurisdiction filter and no pagination on list.                                                                                                                                                                                                 |
+| `L-5` | No `/operator/v1/me`, so four-eyes pre-emption degrades to "unknown viewer" under a dev-token session.                                                                                                                                            |
 
 ---
 
@@ -144,7 +144,7 @@ state is an explicit absence with a Basel-default label, not a number.
 `balance_identity_tolerance_pct` was seeded, and documented in the seed catalogue as
 tighten-only, but was **not** in `PARAMETER_DIRECTION` (measured at the time:
 `'balance_identity_tolerance_pct' in PARAMETER_DIRECTION → False`). It was therefore the one
-governed code a board override could *widen* — on the single control standing between a
+governed code a board override could _widen_ — on the single control standing between a
 broken book and a filed return.
 
 It is now declared **`ceiling`**: the tolerance is a percent of total assets, so a larger
@@ -196,16 +196,16 @@ scope_type: 63 institution_class, 7 institution_type
 `SEED_EFFECTIVE_FROM = date(2020, 1, 1)` for every row, with no `effective_to`. The minimum
 CAR alone changed four times in that window:
 
-| Date | Minimum CAR | Instrument |
-|---|---|---|
-| pre-Mar 2020 | 13% | CRD ¶71 minimum 10% **plus** the ¶75 CCB1 of 3% |
-| 20 Mar 2020 | 11.5% | MPC PR 18 Mar 2020 ¶9(ii) + Notice BG/GOV/SEC/2020/01 |
-| 1 Apr 2022 | 13% | MPC PR 21 Mar 2022 ¶30 |
-| Dec 2022 (DDEP) | 10% | CCB1 set to zero; the CRD text was never amended |
-| Jan 2026 | 13% | Relief expired; MPR March 2026 §6.3.2 p.33, MPR May 2026 §6.3.2 p.36 |
+| Date            | Minimum CAR | Instrument                                                           |
+| --------------- | ----------- | -------------------------------------------------------------------- |
+| pre-Mar 2020    | 13%         | CRD ¶71 minimum 10% **plus** the ¶75 CCB1 of 3%                      |
+| 20 Mar 2020     | 11.5%       | MPC PR 18 Mar 2020 ¶9(ii) + Notice BG/GOV/SEC/2020/01                |
+| 1 Apr 2022      | 13%         | MPC PR 21 Mar 2022 ¶30                                               |
+| Dec 2022 (DDEP) | 10%         | CCB1 set to zero; the CRD text was never amended                     |
+| Jan 2026        | 13%         | Relief expired; MPR March 2026 §6.3.2 p.33, MPR May 2026 §6.3.2 p.36 |
 
 **The mechanism matters more than the number:** BoG never amended the CRD. CAR must be
-modelled as *minimum + buffer*, not as one undated scalar. A single-dated seed cannot be
+modelled as _minimum + buffer_, not as one undated scalar. A single-dated seed cannot be
 correct.
 
 ### Findings withdrawn during the audit, recorded
@@ -219,9 +219,9 @@ so neither is acted on:
   which silently dropped multi-line calls with trailing-comma formatting. A balanced-paren
   re-parse found it immediately. Its real defect is a missing date and paragraph locator,
   not a missing row.
-- **`S-1` is partly withdrawn.** The hypothesis that "Act 930 s.29 is *enabling only*" is
+- **`S-1` is partly withdrawn.** The hypothesis that "Act 930 s.29 is _enabling only_" is
   refuted — **s.29(2) does state a 10% statutory floor.** The surviving concern is narrower:
-  it is *a floor standing in for a prescription that does not exist*, because the CRD
+  it is _a floor standing in for a prescription that does not exist_, because the CRD
   excludes SDIs by its own ¶2.
 
 ---
@@ -230,7 +230,7 @@ so neither is acted on:
 
 The recurring defect found across four independent research streams is **not a wrong number
 — it is a wrong `confirmation_status`.** Values are seeded `confirmed` while resting on an
-*enabling* statute, a **repealed** instrument, a **secondary** source, or an **exposure
+_enabling_ statute, a **repealed** instrument, a **secondary** source, or an **exposure
 draft**. The `pending` state exists precisely for these and is under-used.
 
 ### 6.1 Twelve rows cite a repealed instrument (`NEW-20`) — all marked `confirmed`
@@ -240,20 +240,20 @@ $ uv run python -c "... [s for s in SEED_PARAMETERS if 'NBFI' in s.source_citati
 rows citing an NBFI instrument: 12    all confirmed? {'confirmed'}
 ```
 
-| Rows | Citation |
-|---|---|
-| `statutory_reserve_fund_pct` (bank, sdi) | "Act 930 s.34; NBFI r.7" / "NBFI r.7; Act 930 s.34" |
-| `primary_liquidity_reserve_pct` 10, `secondary_liquidity_reserve_pct` 15 (sdi) | "NBFI Business Rules 2000 r.11" |
-| `prov_standard` 0, `prov_substandard` 20, `prov_doubtful` 50, `prov_loss` 100 (sdi) | "NBFI Rules 2000 r.19" |
-| `npl_dpd_threshold` 90, `dpd_substandard_min` 90, `dpd_doubtful_min` 180, `dpd_loss_min` 360 (sdi) | "NBFI Rules 2000 rr.17-19" |
+| Rows                                                                                               | Citation                                            |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `statutory_reserve_fund_pct` (bank, sdi)                                                           | "Act 930 s.34; NBFI r.7" / "NBFI r.7; Act 930 s.34" |
+| `primary_liquidity_reserve_pct` 10, `secondary_liquidity_reserve_pct` 15 (sdi)                     | "NBFI Business Rules 2000 r.11"                     |
+| `prov_standard` 0, `prov_substandard` 20, `prov_doubtful` 50, `prov_loss` 100 (sdi)                | "NBFI Rules 2000 r.19"                              |
+| `npl_dpd_threshold` 90, `dpd_substandard_min` 90, `dpd_doubtful_min` 180, `dpd_loss_min` 360 (sdi) | "NBFI Rules 2000 rr.17-19"                          |
 
-The *Non-Bank Financial Institutions (Bank of Ghana) Business Rules, 2000* were made under
+The _Non-Bank Financial Institutions (Bank of Ghana) Business Rules, 2000_ were made under
 **PNDCL 328** and repealed by **Act 774** and subsequently **Act 930**. They are no longer
 hosted on bog.gov.gh, appear in neither the 70-entry directives register nor the 917-entry
 notices register, and return nothing from the site's own search. Act 930 s.157(2) saves
 instruments made under the Banking Act 2004 and its amendment — **not** instruments made
-under PNDCL 328. Two independent research streams reached the same verdict: *historical
-context only.*
+under PNDCL 328. Two independent research streams reached the same verdict: _historical
+context only._
 
 **There is nothing to substitute.** No current BoG instrument gives SDIs a distinct
 five-band classification and provisioning schedule. The two current instruments —
@@ -267,29 +267,29 @@ a **three-band sliding scale**, and 50% is correct only in the first band.
 ### 6.2 The bank five-band table is secondary-sourced but marked `confirmed` (`NEW-21`)
 
 `prov_standard` 1 / `prov_olem` 10 / `prov_substandard` 25 / `prov_doubtful` 50 /
-`prov_loss` 100, cited *"BoG loan classification (5-grade)"* — a citation naming no
+`prov_loss` 100, cited _"BoG loan classification (5-grade)"_ — a citation naming no
 document. No BoG-published instrument sets out the table; the best available source is an
 audited annual report. Partial primary support exists: **OLEM 10%** is verified via MPC PR
-21 Mar 2022 ¶30, and **CRD ¶142 p.30** presupposes *"no less than 25%"* / *"no less than
-50%"* for past-due **risk weighting** — which is not a provisioning rate.
+21 Mar 2022 ¶30, and **CRD ¶142 p.30** presupposes _"no less than 25%"_ / _"no less than
+50%"_ for past-due **risk weighting** — which is not a provisioning rate.
 
 `NEW-22`: OLEM is also time-varying — 10% → 5% (Notice BG/GOV/SEC/2020/01, 20 Mar 2020,
 p.1 item (iii)) → 10% (MPC PR 21 Mar 2022 ¶30, effective 1 Apr 2022).
 
-`NEW-23`: **BoG contradicts itself on the OLEM band.** *FSR 2020* p.22 item 10 describes
-OLEM as *"1 to 30 days in default"*, contradicting the 30-to-<90-day band used elsewhere
+`NEW-23`: **BoG contradicts itself on the OLEM band.** _FSR 2020_ p.22 item 10 describes
+OLEM as _"1 to 30 days in default"_, contradicting the 30-to-<90-day band used elsewhere
 **and** Notice 2020/01 item (iv) (up to 30 days = Current). Flagged, not silently resolved.
 
 ### 6.3 Eight LMTD floors are an exposure draft presented as a floor (`NEW-24`)
 
 `app/services/liquidity_thresholds.py:47` holds `BANK_MINIMUM_PCT` = exactly the Liquidity
 Monitoring Tools Directive's bank column (80/100/50/70/60/80/30/50), and the surrounding
-comment calls them *"LMTD Table 1 published minimums for BANKS"*. The **Liquidity Monitoring
+comment calls them _"LMTD Table 1 published minimums for BANKS"_. The **Liquidity Monitoring
 Tools Directive (February 2026) is an exposure draft that does not take effect until
 1 January 2027.**
 
 Measured: `grep -rn "exposure draft" backend/app/` returns **10 hits — none in
-`liquidity_thresholds.py`.** The draft status *is* disclosed in
+`liquidity_thresholds.py`.** The draft status _is_ disclosed in
 `app/services/regulatory_reporting/templates.py` and `registry.py`; it is **not** disclosed
 where the numbers are used as the fallback regulatory floor. Mitigating: a board row
 overrides, and the board register is the primary mechanism — so the defect is the fallback
@@ -302,23 +302,23 @@ Directive on Stress Testing, and the ICAAP guideline (`NEW-28`). Comment windows
 
 ### 6.4 Other rows that cannot honestly stay `confirmed`
 
-| Row | Stored citation | Defect |
-|---|---|---|
-| `universal_bank` / `financial_holding_company` paid-up 400 | "BoG minimum capital (banks)" | Names no instrument. Correct citation is Notice BG/GOV/SEC/2017/19, 11 Sep 2017 — re-confirmable. The row also applies the bank figure to holding companies, for which Act 930 s.28(4) requires a separate prescription that was **not found**. |
-| `savings_and_loans` / `finance_house` paid-up 15 | "SDI Subsector ToR" | An internal terms-of-reference document is not a regulatory source. **Downgrade.** |
-| `microfinance_bank` paid-up 2 | "MFI Framework 2026" | The citation names the 2026 framework but the value is the 2015 figure. Notice BG/GOV/SEC/2026/03 §3.1.3 sets 50,000,000 transitioning / 100,000,000 for new entrants. **Value and citation disagree with each other.** |
-| `rural_community_bank` paid-up 1 | "SDI Subsector ToR" | Value correct per Notice BG/GOV/SEC/2015/08 ¶1.1, but the class becomes Community Bank at 5,000,000 from 31 Dec 2026. |
-| bank `car_min` 13 | "Basel CRD (10% + 3% CCB)" | **WRONG ISSUER, not just an undated citation.** Re-read at HEAD 2026-08-22 (`backend/app/services/regulatory_parameters.py:171`, inside the `ParamSpec` at `:165-173`): the string is still `"Basel CRD (10% + 3% CCB)"`. The CRD is the **Bank of Ghana**'s Capital Requirements Directive (June 2018) — ¶71's 10% minimum plus the ¶75 CCB1 — **not Basel's**. The arithmetic is right and matches the in-force figure; the attribution tells staff a Ghanaian requirement is an international one, which is the mirror image of the dashboard defect MILESTONE 13 corrected in the other direction. It is also undated across four regime changes (13 → 11.5 → 13 → 10 → 13) and cites no paragraph, and `ParamSpec` (`:109-118`) carries **no `effective_from` field at all**, so the row cannot be dated without a schema change. Ships `confirmed`. Raised as `WS-A12-2`; **still open at the close of the WS-A12 execution pass.** |
-| sdi `car_min` 10 | "Act 930 s.29" | Cite **s.29(2)** and record it as a statutory floor standing in for an absent SDI directive. |
-| `large_exposure_limit_pct` 20 / 15 | "Large Exposures Directive Sept 2025" | Values correct per ¶12, but the directive is **not in force until 1 Jan 2027**, and the 15% reaches only savings-and-loans and finance houses. |
-| `large_exposure_id_threshold_pct` 10 | "BoG LE return (BSD) 10% identification" | Correct value, **wrong authority** — it is LED ¶11 and Act 930 s.156, not a return. |
-| `aggregate_large_exposure_cap` 8 (both classes) | "LED aggregate cap (×NOF; value pending BoG)" | **Contradicted.** ¶13 gives 6× for banks, ¶14 gives 4× for S&L/finance houses. Neither class is 8. Correctly held `pending`. |
-| `related_party_limit_pct` 25 (both classes) | "Act 930 related-party (value pending BoG)" | **Contradicted.** Act 930 gives four figures for four relationships: s.67(2) 10%, s.67(3) 5% unsecured, s.67(5) 20% aggregate, s.64(2) 25% to affiliates. One code cannot carry four scopes. |
-| six sdi `risk_weight_*` | "SDI simplified risk weights (value pending BoG)" | No SDI schedule exists. The stored set matches the **superseded** Form BSD 5A bank column, so its resemblance to an official template is a trap. Correctly `pending`; **should stay `pending`.** |
-| `single_obligor_limit_pct` 25 | "Act 930 s.62(1)" | Correct and precisely located — one of the few rows that fully meets the bar. Needs an end date of 31 Dec 2026. |
-| `hqla_*` haircuts and caps | BCBS 238 ¶50/¶52/¶47 | Honest and precisely located. They are **Basel defaults filling the gap left by the unpublished BoG LCR directive** and should be labelled that way on bank-facing surfaces. |
-| `hqla_l2b_haircut_pct` 50 | declared modelling choice | Ships **`pending`** deliberately: Basel sets L2B by sub-class (25% RMBS ¶54(a), 50% corporate/equities ¶54(b),(c)) and the canonical fact model carries only an HQLA *level*, so 50% is a conservative bound, not a BoG number. |
-| `balance_identity_tolerance_pct` | internal data-integrity control | Not a regulatory parameter; correctly `pending`. |
+| Row                                                        | Stored citation                                   | Defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `universal_bank` / `financial_holding_company` paid-up 400 | "BoG minimum capital (banks)"                     | Names no instrument. Correct citation is Notice BG/GOV/SEC/2017/19, 11 Sep 2017 — re-confirmable. The row also applies the bank figure to holding companies, for which Act 930 s.28(4) requires a separate prescription that was **not found**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `savings_and_loans` / `finance_house` paid-up 15           | "SDI Subsector ToR"                               | An internal terms-of-reference document is not a regulatory source. **Downgrade.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `microfinance_bank` paid-up 2                              | "MFI Framework 2026"                              | The citation names the 2026 framework but the value is the 2015 figure. Notice BG/GOV/SEC/2026/03 §3.1.3 sets 50,000,000 transitioning / 100,000,000 for new entrants. **Value and citation disagree with each other.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `rural_community_bank` paid-up 1                           | "SDI Subsector ToR"                               | Value correct per Notice BG/GOV/SEC/2015/08 ¶1.1, but the class becomes Community Bank at 5,000,000 from 31 Dec 2026.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| bank `car_min` 13                                          | "Basel CRD (10% + 3% CCB)"                        | **WRONG ISSUER, not just an undated citation.** Re-read at HEAD 2026-08-22 (`backend/app/services/regulatory_parameters.py:171`, inside the `ParamSpec` at `:165-173`): the string is still `"Basel CRD (10% + 3% CCB)"`. The CRD is the **Bank of Ghana**'s Capital Requirements Directive (June 2018) — ¶71's 10% minimum plus the ¶75 CCB1 — **not Basel's**. The arithmetic is right and matches the in-force figure; the attribution tells staff a Ghanaian requirement is an international one, which is the mirror image of the dashboard defect MILESTONE 13 corrected in the other direction. It is also undated across four regime changes (13 → 11.5 → 13 → 10 → 13) and cites no paragraph, and `ParamSpec` (`:109-118`) carries **no `effective_from` field at all**, so the row cannot be dated without a schema change. Ships `confirmed`. Raised as `WS-A12-2`; **still open at the close of the WS-A12 execution pass.** |
+| sdi `car_min` 10                                           | "Act 930 s.29"                                    | Cite **s.29(2)** and record it as a statutory floor standing in for an absent SDI directive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `large_exposure_limit_pct` 20 / 15                         | "Large Exposures Directive Sept 2025"             | Values correct per ¶12, but the directive is **not in force until 1 Jan 2027**, and the 15% reaches only savings-and-loans and finance houses.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `large_exposure_id_threshold_pct` 10                       | "BoG LE return (BSD) 10% identification"          | Correct value, **wrong authority** — it is LED ¶11 and Act 930 s.156, not a return.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `aggregate_large_exposure_cap` 8 (both classes)            | "LED aggregate cap (×NOF; value pending BoG)"     | **Contradicted.** ¶13 gives 6× for banks, ¶14 gives 4× for S&L/finance houses. Neither class is 8. Correctly held `pending`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `related_party_limit_pct` 25 (both classes)                | "Act 930 related-party (value pending BoG)"       | **Contradicted.** Act 930 gives four figures for four relationships: s.67(2) 10%, s.67(3) 5% unsecured, s.67(5) 20% aggregate, s.64(2) 25% to affiliates. One code cannot carry four scopes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| six sdi `risk_weight_*`                                    | "SDI simplified risk weights (value pending BoG)" | No SDI schedule exists. The stored set matches the **superseded** Form BSD 5A bank column, so its resemblance to an official template is a trap. Correctly `pending`; **should stay `pending`.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `single_obligor_limit_pct` 25                              | "Act 930 s.62(1)"                                 | Correct and precisely located — one of the few rows that fully meets the bar. Needs an end date of 31 Dec 2026.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `hqla_*` haircuts and caps                                 | BCBS 238 ¶50/¶52/¶47                              | Honest and precisely located. They are **Basel defaults filling the gap left by the unpublished BoG LCR directive** and should be labelled that way on bank-facing surfaces.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `hqla_l2b_haircut_pct` 50                                  | declared modelling choice                         | Ships **`pending`** deliberately: Basel sets L2B by sub-class (25% RMBS ¶54(a), 50% corporate/equities ¶54(b),(c)) and the canonical fact model carries only an HQLA _level_, so 50% is a conservative bound, not a BoG number.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `balance_identity_tolerance_pct`                           | internal data-integrity control                   | Not a regulatory parameter; correctly `pending`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### 6.5 The single highest-value corrective action
 
@@ -335,7 +335,7 @@ duplicate-revision collision had already occurred once:
 1. `ALTER TABLE temenos_connections ALTER COLUMN default_currency DROP DEFAULT` — drops the
    `'GHS'` server default from `202607170007`. (Partly addressed by `202608220033`.)
 2. `ADD CONSTRAINT fk_regulatory_parameter_jurisdiction FOREIGN KEY (jurisdiction_code)
-   REFERENCES jurisdictions(code)` — **the control plane's jurisdiction is unconstrained
+REFERENCES jurisdictions(code)` — **the control plane's jurisdiction is unconstrained
    today**, so a typo creates an unreachable parameter scope.
 
 Per the repository's own operating rules, any data step runs under `WORKER_DATABASE_URL`,

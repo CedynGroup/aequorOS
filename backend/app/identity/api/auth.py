@@ -1,0 +1,383 @@
+"""Authentication routes: login, refresh, current user.
+
+``users``/``organizations`` are RLS-forced, so a login (which has only an email, no
+tenant context yet) resolves the user through the cross-tenant *system* session (the
+BYPASSRLS worker role). Every authenticated request thereafter carries a verified
+token whose ``org`` claim scopes an ordinary tenant session.
+"""
+
+from __future__ import annotations
+
+import hmac
+from collections.abc import Iterator
+from typing import Annotated, Literal, cast
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.deps import (
+    DbSession,
+    GrantAdminTenant,
+    TenantContext,
+    get_current_principal,
+    get_tenant_db_session,
+    require_account_administration,
+)
+from app.core.authorization import RoleBundle
+from app.core.config import get_settings
+from app.db.session import get_worker_sessionmaker
+from app.identity.api.manage_authorization import binding_response, binding_scope, grant_conflict
+from app.identity.models.bank import Bank
+from app.identity.models.user import User
+from app.identity.schemas.auth import (
+    LoginRequest,
+    MeResponse,
+    ProfileUpdateRequest,
+    SsoAccessRequestApprove,
+    SsoAccessRequestRead,
+    SsoClientConfigResponse,
+    SsoConnectionResponse,
+    SsoConnectionUpdateRequest,
+    SsoLoginRequest,
+    SsoStatusResponse,
+    TokenRefreshRequest,
+    TokenResponse,
+)
+from app.identity.schemas.authorization import BindingCreateResponse, EffectiveAuthorityRead
+from app.identity.service import authentication, authorization, grant_administration, sso_config
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _system_session() -> Iterator[Session]:
+    """Cross-tenant session for auth lookups (BYPASSRLS worker role)."""
+    session = get_worker_sessionmaker()()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+SystemDb = Annotated[Session, Depends(_system_session)]
+
+
+def _tokens(issued: authentication.IssuedTokens) -> TokenResponse:
+    return TokenResponse(
+        access_token=issued.access_token,
+        refresh_token=issued.refresh_token,
+        expires_in=issued.expires_in,
+    )
+
+
+def _me_response(db: Session, ctx: TenantContext, user: User) -> MeResponse:
+    effective_authority = _effective_authority_response(
+        db,
+        ctx,
+        failure_surface="auth_me_effective_authority",
+    )
+    return MeResponse(
+        user_id=user.id,
+        organization_id=user.organization_id,
+        email=user.email,
+        display_name=user.display_name,
+        job_title=user.job_title,
+        locale=user.locale,
+        timezone=user.timezone,
+        theme=cast(Literal["light", "dark", "system"] | None, user.theme),
+        role=user.role,
+        auth_provider=user.auth_provider,
+        effective_authority=effective_authority,
+    )
+
+
+def _effective_authority_response(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    failure_surface: str,
+) -> EffectiveAuthorityRead:
+    institutions = list(
+        db.scalars(
+            select(Bank)
+            .where(Bank.organization_id == ctx.organization_id)
+            .order_by(Bank.name, Bank.id)
+        )
+    )
+    try:
+        if ctx.impersonation_context is not None:
+            return authorization.project_examiner_authority(ctx, institutions)
+        return authorization.project_effective_authority(
+            db,
+            ctx,
+            institutions,
+            failure_surface=failure_surface,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Effective authority is temporarily unavailable.",
+        ) from exc
+
+
+def _current_user(db: Session, ctx: TenantContext) -> User:
+    user = db.scalar(
+        select(User).where(
+            User.id == ctx.actor_user_id,
+            User.organization_id == ctx.organization_id,
+        )
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+    return user
+
+
+@router.post("/login", response_model=TokenResponse, operation_id="authLogin")
+def login(payload: LoginRequest, db: SystemDb) -> TokenResponse:
+    return _tokens(
+        authentication.login_with_password(
+            db,
+            email=payload.email,
+            password=payload.password,
+            organization_id=payload.organization_id,
+        )
+    )
+
+
+@router.post("/sso", response_model=TokenResponse, operation_id="authSso")
+def sso_login(payload: SsoLoginRequest, db: SystemDb) -> TokenResponse:
+    """Exchange a verified OIDC id_token for AequorOS app tokens."""
+    return _tokens(
+        authentication.login_with_sso(
+            db, id_token=payload.id_token, organization_hint=payload.organization_id
+        )
+    )
+
+
+@router.get("/sso/status", response_model=SsoStatusResponse, operation_id="authSsoStatus")
+def sso_status(db: SystemDb) -> SsoStatusResponse:
+    """Public probe for the login page: is SSO sign-in available?
+
+    Runs on the system session because it is called before any tenant context
+    exists; it discloses only a boolean.
+    """
+    try:
+        config = sso_config.resolve_client_config(db)
+    except HTTPException:
+        # >1 enabled connection is a server misconfiguration; the login page
+        # just hides the button rather than erroring.
+        return SsoStatusResponse(enabled=False)
+    return SsoStatusResponse(enabled=config is not None)
+
+
+@router.get(
+    "/sso/connection",
+    response_model=SsoConnectionResponse | None,
+    operation_id="authGetSsoConnection",
+)
+def get_sso_connection(
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> SsoConnectionResponse | None:
+    """The org's OIDC connection. The secret is never returned."""
+    connection = sso_config.get_connection(db, ctx.organization_id)
+    if connection is None:
+        return None
+    return SsoConnectionResponse(
+        issuer=connection.issuer,
+        client_id=connection.client_id,
+        client_secret_set=bool(connection.client_secret_ciphertext),
+        allowed_email_domains=list(connection.allowed_email_domains),
+        enabled=connection.enabled,
+        jit_enabled=connection.jit_enabled,
+    )
+
+
+@router.put(
+    "/sso/connection",
+    response_model=SsoConnectionResponse,
+    operation_id="authPutSsoConnection",
+)
+def put_sso_connection(
+    payload: SsoConnectionUpdateRequest,
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> SsoConnectionResponse:
+    """Create or update the org's OIDC connection (secret write-only)."""
+    connection = sso_config.upsert_connection(
+        db,
+        organization_id=ctx.organization_id,
+        issuer=payload.issuer,
+        client_id=payload.client_id,
+        client_secret=payload.client_secret,
+        allowed_email_domains=payload.allowed_email_domains,
+        enabled=payload.enabled,
+        jit_enabled=payload.jit_enabled,
+        actor_user_id=ctx.actor_user_id,
+    )
+    return SsoConnectionResponse(
+        issuer=connection.issuer,
+        client_id=connection.client_id,
+        client_secret_set=bool(connection.client_secret_ciphertext),
+        allowed_email_domains=list(connection.allowed_email_domains),
+        enabled=connection.enabled,
+        jit_enabled=connection.jit_enabled,
+    )
+
+
+@router.get(
+    "/sso/access-requests",
+    response_model=list[SsoAccessRequestRead],
+    operation_id="authListSsoAccessRequests",
+)
+def list_sso_access_requests(
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> list[SsoAccessRequestRead]:
+    """JIT sign-ins awaiting approval (deactivated stubs)."""
+    return [
+        SsoAccessRequestRead(
+            user_id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            requested_at=user.created_at,
+        )
+        for user in authentication.list_sso_access_requests(db, ctx.organization_id)
+    ]
+
+
+@router.post(
+    "/sso/access-requests/{user_id}/approve",
+    response_model=BindingCreateResponse,
+    operation_id="authApproveSsoAccessRequest",
+)
+def approve_sso_access_request(
+    user_id: UUID,
+    payload: SsoAccessRequestApprove,
+    ctx: GrantAdminTenant,
+    db: DbSession,
+) -> BindingCreateResponse:
+    """Approve verified identity and atomically create one complete scoped grant."""
+    assert ctx.actor_user_id is not None  # guaranteed by GrantAdminTenant
+    try:
+        result = grant_administration.approve_sso_access_request_with_grant(
+            db,
+            organization_id=ctx.organization_id,
+            user_id=user_id,
+            role_bundle=RoleBundle(payload.role_bundle),
+            scope=binding_scope(payload),
+            actor_user_id=ctx.actor_user_id,
+            reason=payload.reason_detail or payload.reason_category.value.replace("_", " "),
+            reason_category=payload.reason_category,
+            reference=payload.reference,
+            valid_until=payload.valid_until,
+            expected_authority_sentence=payload.expected_authority_sentence,
+        )
+    except grant_administration.GrantAdministrationError as exc:
+        raise grant_conflict(exc) from exc
+    return binding_response(db, ctx.organization_id, result)
+
+
+@router.post(
+    "/sso/access-requests/{user_id}/reject",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="authRejectSsoAccessRequest",
+)
+def reject_sso_access_request(
+    user_id: UUID,
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> None:
+    """Reject a never-activated request stub."""
+    authentication.reject_sso_access_request(
+        db, organization_id=ctx.organization_id, user_id=user_id
+    )
+
+
+@router.get("/sso/client-config", include_in_schema=False)
+def sso_client_config(
+    db: SystemDb,
+    x_internal_auth: Annotated[str | None, Header(alias="X-Internal-Auth")] = None,
+) -> SsoClientConfigResponse:
+    """Server-to-server only: the dashboard's NextAuth fetches the full OIDC
+    client config (secret included) to run the sign-in flow. Gated by
+    ``SSO_INTERNAL_KEY`` — the one plaintext read path for the client secret;
+    excluded from the OpenAPI schema and never called from a browser.
+    """
+    internal_key = get_settings().auth.sso_internal_key
+    if not internal_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SSO is not configured.")
+    if not x_internal_auth or not hmac.compare_digest(x_internal_auth, internal_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal key."
+        )
+    config = sso_config.resolve_client_config(db)
+    if config is None:
+        return SsoClientConfigResponse(enabled=False)
+    return SsoClientConfigResponse(
+        enabled=True,
+        issuer=config.issuer,
+        client_id=config.client_id,
+        client_secret=config.client_secret,
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse, operation_id="authRefresh")
+def refresh(payload: TokenRefreshRequest, db: SystemDb) -> TokenResponse:
+    """Rotate a refresh token: the presented one is retired and a new pair issued.
+
+    The old token stops working immediately. Replaying it after the concurrency
+    grace window is treated as theft and revokes the whole session lineage.
+    """
+    return _tokens(authentication.refresh_tokens(db, refresh_token=payload.refresh_token))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="authLogout")
+def logout(payload: TokenRefreshRequest, db: SystemDb) -> None:
+    """Sign out: revoke the refresh token's whole session lineage.
+
+    Unauthenticated by design — the refresh token IS the credential, and signing
+    out has to work after the access token has already expired. Always 204, even
+    for an unknown or expired token, so it never reports whether one was valid.
+    """
+    authentication.logout(db, refresh_token=payload.refresh_token)
+
+
+@router.get("/me", response_model=MeResponse, operation_id="authMe")
+def me(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> MeResponse:
+    return _me_response(db, ctx, _current_user(db, ctx))
+
+
+@router.get(
+    "/effective-authority",
+    response_model=EffectiveAuthorityRead,
+    operation_id="authEffectiveAuthority",
+)
+def effective_authority(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> EffectiveAuthorityRead:
+    return _effective_authority_response(
+        db,
+        ctx,
+        failure_surface="auth_effective_authority",
+    )
+
+
+@router.patch("/me", response_model=MeResponse, operation_id="authUpdateMe")
+def update_me(
+    payload: ProfileUpdateRequest,
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> MeResponse:
+    user = _current_user(db, ctx)
+    updates: dict[str, object] = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(user, field, value)
+    response = _me_response(db, ctx, user)
+    db.commit()
+    return response

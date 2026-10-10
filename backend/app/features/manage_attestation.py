@@ -26,7 +26,7 @@ from app.api.deps import (
     ScopedMutationTenant,
     Tenant,
 )
-from app.features.manage_banks import BankReference
+from app.identity.api.manage_banks import BankReference
 from app.schemas.attestation import (
     AdoptedSignatureRead,
     AdoptSignatureRequest,

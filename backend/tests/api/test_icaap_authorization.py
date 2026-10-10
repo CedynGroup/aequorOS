@@ -31,9 +31,9 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.main import create_app
 from app.models import AuthorizationBinding, Bank, User
-from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

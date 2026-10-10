@@ -18,7 +18,7 @@ and replaced with durable columns. The staff plane guards cross-tenant
 BYPASSRLS access, so it cannot hold the weaker control. Two layers now:
 
 1. **The durable per-ACCOUNT lockout** is the real control, and it is the
-   tenant plane's own primitive (``app/services/auth_throttle.py``) running
+   tenant plane's own primitive (``app/identity/service/auth_throttle.py``) running
    over ``operator_users.failed_login_attempts`` / ``.locked_until``: one
    implementation, one progressive backoff curve, one ``auth_anomaly``
    emission, shared by every worker and replica and surviving a deploy. The IP
@@ -45,8 +45,8 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import AuthSettings, get_settings
 from app.db.base import utc_now
+from app.identity.service import auth_throttle
 from app.models import OperatorUser
-from app.services import auth_throttle
 
 #: Operator sessions live 8 hours — a staff work day, same order as tenant sessions.
 OPERATOR_TOKEN_TTL_SECONDS = 8 * 3600
@@ -191,9 +191,7 @@ def clear_account_failures(user: OperatorUser) -> None:
     auth_throttle.clear_failures(user)
 
 
-def lockout_minutes_remaining(
-    expiry: dt.datetime, *, now: dt.datetime | None = None
-) -> int:
+def lockout_minutes_remaining(expiry: dt.datetime, *, now: dt.datetime | None = None) -> int:
     """Whole minutes until a lockout ends — copy for the sign-in screen."""
     return auth_throttle.minutes_remaining(expiry, now=now)
 

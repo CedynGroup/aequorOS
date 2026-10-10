@@ -595,8 +595,8 @@ def _grant_bi_reader(session: Any) -> None:
         RoleBundle,
         SensitivityScope,
     )
+    from app.identity.service import authorization  # noqa: PLC0415
     from app.models import AuthorizationBinding  # noqa: PLC0415
-    from app.services import authorization  # noqa: PLC0415
     from tests.support.helpers import ORG_1, USER_1  # noqa: PLC0415
 
     existing = session.execute(

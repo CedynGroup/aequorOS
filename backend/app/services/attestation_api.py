@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Permission
 from app.core.config import get_settings
+from app.identity.service.banks import resolve_bank_reference
 from app.models import (
     AdoptedSignatureAppearance,
     AttestationSignature,
@@ -72,7 +73,6 @@ from app.services.attestation.identity import (
 from app.services.attestation.typed_fonts import available_face_keys
 from app.services.attestation.workflow import AttestationConflict
 from app.services.audit import record_event
-from app.services.banks import resolve_bank_reference
 from app.services.regulatory_reporting.registry import get_definition
 
 if TYPE_CHECKING:

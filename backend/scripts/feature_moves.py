@@ -585,12 +585,40 @@ def rewrite_text(
 ) -> str:
     """Every rewrite pass for one backend-relative file, leaving ``frozen`` strings alone."""
     module, is_package = _module_of(relative)
+    path = Path(relative)
+    if (
+        module is not None
+        and relative.startswith("app/")
+        and ("schemas" in path.parts or path.stem == "schemas")
+    ):
+        # Pydantic publishes class docstrings as OpenAPI descriptions. A file move
+        # must preserve those strings so generated clients do not change.
+        starts = _offsets(text)
+        descriptions: set[str] = set()
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.ClassDef) or not node.body:
+                continue
+            first = node.body[0]
+            if not isinstance(first, ast.Expr) or not isinstance(first.value, ast.Constant):
+                continue
+            value = first.value
+            if not isinstance(value.value, str):
+                continue
+            start = _char_offset(text, starts, value.lineno, value.col_offset)
+            end = _char_offset(
+                text, starts, value.end_lineno or value.lineno, value.end_col_offset or 0
+            )
+            literal = text[start:end]
+            opening = re.match(r"(?i)[ru]*('''|\"\"\"|'|\")", literal)
+            if opening is not None:
+                descriptions.add(literal[opening.end() : -len(opening.group(1))])
+        frozen = frozen | frozenset(description for description in descriptions if description)
+    text, restore = _mask(text, frozen)
     if module is not None:
         text = rewrite_imports(text, module, is_package, rename, backend)
         text = rewrite_python_strings(text, rename, backend)
     elif Path(relative).suffix in _SCRIPT_SUFFIXES:
         text = rewrite_embedded_python(text, rename, backend)
-    text, restore = _mask(text, frozen)
     text = rewrite_dotted(text, rename)
     text = rewrite_paths(text, rename, app_relative=relative.startswith(_ARCHITECTURE_DIR))
     return restore(text)

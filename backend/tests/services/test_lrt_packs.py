@@ -1,7 +1,7 @@
 """LRT corporate return-pack tests (plan W5).
 
 Register fixtures go through the W4 institution-profile service (mirroring
-tests/api/test_institution_profile.py data); per pack: generate → snapshot
+tests/identity/api/test_institution_profile.py data); per pack: generate → snapshot
 section/row assertions → validation passes → real xlsx/pdf export (same
 in-memory storage seam as test_regulatory_reporting_exports.py) →
 event-driven codes stay out of the calendar → 409s for missing master data.
@@ -21,8 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, RegulatoryPackage
-from app.schemas.institution_profile import (
+from app.identity.schemas.institution_profile import (
     BankLicenseCreate,
     BankNameHistoryCreate,
     BankProductCreate,
@@ -32,8 +31,9 @@ from app.schemas.institution_profile import (
     RelatedPartyRoleInput,
     ShareholdingCreate,
 )
+from app.identity.service import institution_profile
+from app.models import Bank, RegulatoryPackage
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import institution_profile
 from app.services.regulatory_reporting import calendar, generation, validation
 from app.services.regulatory_reporting import packages as packages_service
 from app.services.regulatory_reporting.exports import export_package
@@ -109,7 +109,7 @@ def _seed_profile(db: Session) -> None:
 
 
 def _seed_parties(db: Session) -> dict[str, Any]:
-    """Mirrors tests/api/test_institution_profile.py register data."""
+    """Mirrors tests/identity/api/test_institution_profile.py register data."""
     holdco = institution_profile.create_related_party(
         db,
         MAKER,

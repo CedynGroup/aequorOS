@@ -44,8 +44,8 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core import security  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
+from app.identity.models.user import USER_ROLES, User  # noqa: E402
 from app.models.organization import Organization  # noqa: E402
-from app.models.user import USER_ROLES, User  # noqa: E402
 from app.services.public_ids import (  # noqa: E402
     new_organization_public_id,
     normalize_public_id,
@@ -66,11 +66,7 @@ def _resolve_org(session: Session, args: argparse.Namespace) -> str:
     if args.create_org:
         # Platform IDs (OR-XXXXXXXX) are the organizations primary key since the
         # 2026-07-24 identity epoch; omitting --org-id lets the model default mint one.
-        org_id = (
-            normalize_public_id(args.org_id)
-            if args.org_id
-            else new_organization_public_id()
-        )
+        org_id = normalize_public_id(args.org_id) if args.org_id else new_organization_public_id()
         _set_tenant_context(session, org_id)
         if session.scalar(select(Organization.id).where(Organization.id == org_id)) is None:
             session.add(Organization(id=org_id, name=args.org_name))
@@ -123,8 +119,10 @@ def provision(session: Session, args: argparse.Namespace) -> tuple[User, str | N
     user.locked_until = None
 
     session.flush()
-    print(f"{'Created' if created else 'Updated'} user {args.email} "
-          f"(role={args.role}, auth={user.auth_provider}, org={org_id}).")
+    print(
+        f"{'Created' if created else 'Updated'} user {args.email} "
+        f"(role={args.role}, auth={user.auth_provider}, org={org_id})."
+    )
     return user, generated_password
 
 

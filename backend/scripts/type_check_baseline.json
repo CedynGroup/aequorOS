@@ -348,13 +348,7 @@
   "reportUnknownVariableType": 4
  },
  "app.api.health": {
-  "reportAny": 10,
-  "reportUnknownVariableType": 1
- },
- "app.api.v1.auth": {
-  "reportAny": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 10
  },
  "app.core.authorization": {
   "reportUnnecessaryIsInstance": 1
@@ -376,9 +370,9 @@
  "app.db.session": {
   "reportAny": 17,
   "reportDeprecated": 1,
-  "reportMissingTypeArgument": 3,
+  "reportMissingTypeArgument": 2,
   "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 3,
+  "reportUnknownParameterType": 2,
   "reportUnknownVariableType": 1
  },
  "app.domain.ai.lexicon": {
@@ -533,11 +527,11 @@
  },
  "app.domain.ingestion.reference_schemas.business_units": {
   "reportConstantRedefinition": 1,
-  "reportMissingTypeArgument": 3,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 5
+  "reportMissingTypeArgument": 1,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 3,
+  "reportUnknownParameterType": 1,
+  "reportUnknownVariableType": 2
  },
  "app.domain.ingestion.reference_schemas.capital_expenditure": {
   "reportMissingTypeArgument": 2,
@@ -684,12 +678,6 @@
  },
  "app.features.export_bi": {
   "reportUnnecessaryCast": 1
- },
- "app.features.manage_authorization": {
-  "reportAny": 9,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 1
  },
  "app.features.manage_bi_content": {
   "reportDeprecated": 1,
@@ -858,9 +846,6 @@
  "app.models.audit_event": {
   "reportAny": 1
  },
- "app.models.authorization": {
-  "reportAny": 3
- },
  "app.models.bi": {
   "reportAny": 33,
   "reportMissingTypeArgument": 1,
@@ -923,13 +908,7 @@
  "app.models.ingestion": {
   "reportAny": 4
  },
- "app.models.institution_profile": {
-  "reportAny": 8
- },
  "app.models.institution_type": {
-  "reportAny": 1
- },
- "app.models.integration_key": {
   "reportAny": 1
  },
  "app.models.liquidity_cfp": {
@@ -959,9 +938,6 @@
  "app.models.reconciliation": {
   "reportAny": 1
  },
- "app.models.refresh_token": {
-  "reportAny": 1
- },
  "app.models.regulatory": {
   "reportAny": 2
  },
@@ -984,9 +960,6 @@
  "app.models.scenario_workbench": {
   "reportAny": 2
  },
- "app.models.sso_connection": {
-  "reportAny": 1
- },
  "app.models.stress": {
   "reportAny": 5
  },
@@ -994,9 +967,6 @@
   "reportAny": 1
  },
  "app.models.temenos": {
-  "reportAny": 1
- },
- "app.models.user": {
   "reportAny": 1
  },
  "app.operator.deps": {
@@ -1064,9 +1034,6 @@
  "app.operator.services.tenant_provisioning": {
   "reportAny": 20,
   "reportUnknownVariableType": 1
- },
- "app.schemas.auth": {
-  "reportPrivateUsage": 1
  },
  "app.schemas.findings": {
   "reportAny": 1
@@ -1195,21 +1162,6 @@
  "app.services.attestation_api": {
   "reportAny": 2
  },
- "app.services.auth_throttle": {
-  "reportAny": 4
- },
- "app.services.authentication": {
-  "reportAny": 6,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1
- },
- "app.services.authorization": {
-  "reportAny": 3,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1
- },
  "app.services.behavioral_liquidity": {
   "reportAny": 10
  },
@@ -1281,9 +1233,9 @@
  },
  "app.services.bi.mart_builder": {
   "reportAny": 107,
-  "reportUnknownArgumentType": 22,
-  "reportUnknownMemberType": 19,
-  "reportUnknownVariableType": 5
+  "reportUnknownArgumentType": 20,
+  "reportUnknownMemberType": 18,
+  "reportUnknownVariableType": 4
  },
  "app.services.bi.nlq.candidates": {
   "reportAny": 8
@@ -1396,9 +1348,7 @@
  },
  "app.services.fact_derivation": {
   "reportAny": 35,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 4
+  "reportUnknownVariableType": 2
  },
  "app.services.filing_reconciliation": {
   "reportAny": 6,
@@ -1713,9 +1663,6 @@
   "reportUnknownVariableType": 2,
   "reportUnusedImport": 1
  },
- "app.services.integration_keys": {
-  "reportUnnecessaryComparison": 1
- },
  "app.services.job_queue": {
   "reportAny": 1
  },
@@ -1856,11 +1803,6 @@
   "reportUnknownMemberType": 3,
   "reportUnknownVariableType": 4
  },
- "app.services.organization_ownership": {
-  "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownParameterType": 1
- },
  "app.services.parameter_register": {
   "reportAny": 18
  },
@@ -1885,10 +1827,10 @@
   "reportAny": 59,
   "reportMissingTypeArgument": 1,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 18,
+  "reportUnknownArgumentType": 6,
+  "reportUnknownMemberType": 15,
   "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 5
+  "reportUnknownVariableType": 4
  },
  "app.services.regulatory_forecasting": {
   "reportAny": 78,
@@ -2203,9 +2145,6 @@
  "app.services.scenarios": {
   "reportAny": 8
  },
- "app.services.scoped_authorization": {
-  "reportAny": 15
- },
  "app.services.scoring": {
   "reportMissingParameterType": 1,
   "reportUnknownArgumentType": 5,
@@ -2240,12 +2179,6 @@
  "app.services.sdi_views": {
   "reportAny": 6,
   "reportPrivateUsage": 18
- },
- "app.services.sso_config": {
-  "reportAny": 2,
-  "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownVariableType": 2
  },
  "app.services.stress_scenarios": {
   "reportAny": 4
@@ -2290,9 +2223,8 @@
   "reportAny": 3,
   "reportMissingParameterType": 3,
   "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 9,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 3
+  "reportUnknownMemberType": 8,
+  "reportUnknownParameterType": 3
  },
  "scripts.ai_vendor_preflight": {
   "reportAny": 47,
@@ -2518,10 +2450,10 @@
   "reportAny": 1,
   "reportMissingParameterType": 11,
   "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 7,
-  "reportUnknownMemberType": 19,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 13,
   "reportUnknownParameterType": 11,
-  "reportUnknownVariableType": 8
+  "reportUnknownVariableType": 7
  },
  "tests.adapters.temenos_t24.iris.conftest": {
   "reportUnknownVariableType": 1
@@ -2588,7 +2520,7 @@
  "tests.api.test_authorization_state_machine": {
   "reportAny": 40,
   "reportDeprecated": 1,
-  "reportUnknownMemberType": 3,
+  "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 3
  },
  "tests.api.test_banks": {
@@ -3647,7 +3579,7 @@
  },
  "tests.domain.ingestion.test_reference_schemas": {
   "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 4
+  "reportUnknownVariableType": 3
  },
  "tests.domain.irr.test_buckets": {
   "reportPrivateUsage": 3
@@ -3912,7 +3844,7 @@
  },
  "tests.operator.test_auth": {
   "reportAny": 2,
-  "reportPrivateUsage": 5
+  "reportPrivateUsage": 4
  },
  "tests.operator.test_bi_backfill": {
   "reportAny": 2
@@ -4934,9 +4866,6 @@
  "tests.services.test_operating_environment": {
   "reportAny": 3
  },
- "tests.services.test_organization_ownership": {
-  "reportUnknownMemberType": 2
- },
  "tests.services.test_package_plane": {
   "reportAny": 4,
   "reportMissingParameterType": 10,
@@ -5229,6 +5158,6 @@
   "reportPrivateUsage": 2,
   "reportUnknownArgumentType": 2,
   "reportUnknownLambdaType": 10,
-  "reportUnknownMemberType": 2
+  "reportUnknownMemberType": 1
  }
 }

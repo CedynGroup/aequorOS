@@ -28,6 +28,7 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -45,13 +46,7 @@ from app.models import (
     User,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import (
-    authorization,
-    data_activation,
-    regulatory_capital,
-    regulatory_liquidity,
-    window_analytics,
-)
+from app.services import data_activation, regulatory_capital, regulatory_liquidity, window_analytics
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

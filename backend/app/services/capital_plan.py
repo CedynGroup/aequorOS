@@ -26,6 +26,7 @@ from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.policy import PolicyUnresolvedError
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     CapitalPlan,
@@ -50,12 +51,7 @@ from app.schemas.capital_plan import (
     IlaapSnapshotRead,
     ProjectionUnavailableRead,
 )
-from app.services import (
-    institution_types,
-    regulatory_forecasting,
-    regulatory_parameters,
-    scoped_authorization,
-)
+from app.services import institution_types, regulatory_forecasting, regulatory_parameters
 from app.services.audit import record_event
 from app.services.institution_types import InstitutionTypeUnresolved
 from app.services.liquidity_cfp import get_cfp

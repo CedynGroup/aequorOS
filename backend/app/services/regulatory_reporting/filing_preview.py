@@ -30,8 +30,8 @@ from typing import Any, Literal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.service import institution_profile
 from app.models import Bank, RegulatoryPackage
-from app.services import institution_profile
 from app.services.regulatory_reporting import artifact_versions
 from app.services.regulatory_reporting.registry import get_definition
 
@@ -111,9 +111,7 @@ def build_preview(
     filed, detail = _filing_set(db, ctx, package, mint_missing=False)
     signed = artifact_versions.latest_signed_version(db, ctx, package)
     signed_id = signed.version.id if signed is not None else None
-    signature_count = (
-        len(artifact_versions.signed_revisions(db, ctx, package)) if signed else 0
-    )
+    signature_count = len(artifact_versions.signed_revisions(db, ctx, package)) if signed else 0
 
     entries = [
         PreviewEntry(
@@ -219,9 +217,7 @@ def _omissions(
                 "filed document."
             )
         else:
-            notes.append(
-                "No signed record: this return has not been certified yet."
-            )
+            notes.append("No signed record: this return has not been certified yet.")
 
     admitted = WORKING_ARTIFACT_FILING_GENERATORS.get("xlsx_working", frozenset())
     if generator is not None and generator not in admitted:
