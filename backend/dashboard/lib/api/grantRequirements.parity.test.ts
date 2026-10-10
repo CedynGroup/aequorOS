@@ -104,7 +104,7 @@ from sqlalchemy import CheckConstraint
 
 from app.core.authorization import DataScope
 from app.models import AuthorizationBinding
-from app.schemas.authorization import (
+from app.identity.schemas.authorization import (
     BindingRead,
     BranchDirectoryEntryRead,
     BranchDirectoryRead,

@@ -35,7 +35,7 @@ the purity is enforced by
 
 The resolver keys on jurisdiction → regulator → institution type → regime → return family →
 parameter set → effective date. `resolve_class_value` **requires** a jurisdiction and is
-threaded through `app/services/banks.py`, so institution-type detail is keyed
+threaded through `app/identity/service/banks.py`, so institution-type detail is keyed
 `(type_code, jurisdiction)` — a Nigerian tenant resolves its own limits, not Ghana's.
 
 ---

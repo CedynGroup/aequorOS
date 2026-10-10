@@ -107,7 +107,7 @@ then point `DATABASE_URL` at `localhost:15432`.
 **There is no seed step, and no seed route.** Data enters only through the Data
 Engine — Excel/CSV upload, API push, or a read-only database extract — and a bank
 is created by its first ingestion. The old `POST /banks/seed-demo` endpoint was
-retired in 2026-08; `backend/tests/api/test_banks.py::test_seed_route_is_retired`
+retired in 2026-08; `backend/tests/identity/api/test_banks.py::test_seed_route_is_retired`
 pins that the path resolves to no handler, for any role and any tenant. The
 hermetic pytest suite builds its own tenants in `tests/conftest.py`; nothing
 seeds a real database.

@@ -27,6 +27,7 @@ from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -46,7 +47,6 @@ from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.schemas.scenario_workbench import ScenarioResultRead
 from app.services import (
     analysis_workbench,
-    authorization,
     data_activation,
     enterprise_stress,
     pipeline,

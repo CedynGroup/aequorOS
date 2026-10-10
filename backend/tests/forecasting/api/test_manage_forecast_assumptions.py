@@ -37,6 +37,7 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.forecasting import service
 from app.forecasting.schemas import ForecastAssumptionDecision, ForecastAssumptionVersionUpdate
+from app.identity.service import authorization, membership
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -48,7 +49,6 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import authorization, membership
 from tests.fixtures.canonical_bank_fixture import (
     FORECAST_APPROVER_ID,
     FORECAST_APPROVER_NAME,

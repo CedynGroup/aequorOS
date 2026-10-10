@@ -474,6 +474,34 @@ def test_the_repository_uses_no_old_module_name() -> None:
     assert feature_moves.check(feature_moves.BACKEND, echo=lambda _line: None) == 0
 
 
+@pytest.mark.parametrize("destination", ["app.fx.schemas", "app.fx.schemas.rates"])
+def test_schema_descriptions_stay_frozen_while_imports_follow_the_move(
+    repository: Path, destination: str
+) -> None:
+    schemas = repository / "backend/app/schemas"
+    schemas.mkdir()
+    (schemas / "__init__.py").write_text("")
+    (schemas / "rates.py").write_text(
+        "from pydantic import BaseModel\n"
+        "from app.services.regulatory_fx import run\n\n"
+        "class Rate(BaseModel):\n"
+        '    """Uses app.services.regulatory_fx (app/services/regulatory_fx.py)."""\n'
+        "    value: int\n"
+    )
+    _git(repository, "add", ".")
+    probe = (
+        "import json\nfrom app.schemas.rates import Rate, run\n"
+        "assert run() == 1\nprint(json.dumps(Rate.model_json_schema()))"
+    )
+    before = _python(repository, probe)
+    _run(repository, "move", [MOVES[0], ("app.schemas.rates", destination)])
+    assert _python(repository, probe.replace("app.schemas.rates", destination)) == before
+    moved = _read(repository, "backend/" + destination.replace(".", "/") + ".py")
+    assert "from app.fx.service import run" in moved
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
 @pytest.mark.parametrize("command", ["move", "rewrite"])
 @pytest.mark.parametrize("kind", ["quoted", "adjacent", "triple", "raw", "fstring", "format"])
 def test_python_hosted_program_imports_remain_executable(

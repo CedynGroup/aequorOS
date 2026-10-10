@@ -23,7 +23,7 @@ Four modules, one responsibility each, and nothing here writes a row:
 What is NOT here, deliberately: the route and its refusals
 (``app/features/read_bi_feeds.py``), the ``bi_query_log`` row and the audit event
 (the feature owns both — ``app/services/bi`` writes ``bi_*`` tables and nothing
-else), and the credential itself (``app/services/integration_keys.py`` issues the
+else), and the credential itself (``app/identity/service/integration_keys.py`` issues the
 ``bi_reader`` key through the existing integration-key flow).
 
 The bank-facing contract is ``docs/API_INTEGRATION.md`` §8; the deployment and

@@ -12,6 +12,7 @@ from app.api.deps import (
     Tenant,
 )
 from app.core.authorization import Module, Permission, Sensitivity
+from app.identity.service import scoped_authorization
 from app.schemas.regulatory_liquidity import (
     Bsd3PreviewRead,
     LiquidityDashboardRead,
@@ -22,7 +23,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunListRead,
     RegulatoryRunRead,
 )
-from app.services import regulatory_capital, regulatory_liquidity, scoped_authorization
+from app.services import regulatory_capital, regulatory_liquidity
 
 router = APIRouter(tags=["regulatory-liquidity"])
 

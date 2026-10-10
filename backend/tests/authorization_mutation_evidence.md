@@ -10,7 +10,7 @@ This document records the executed mutation-proof evidence.
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/api/test_authorization_state_machine.py \
+  tests/identity/api/test_authorization_state_machine.py \
   tests/db/test_authorization_tenant_isolation_properties.py -q
 ```
 
@@ -24,7 +24,7 @@ Focused correction verification:
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/api/test_authorization_state_machine.py -k ownership -q
+  tests/identity/api/test_authorization_state_machine.py -k ownership -q
 ```
 
 Result: **2 passed, 8 deselected** (7.76s), including

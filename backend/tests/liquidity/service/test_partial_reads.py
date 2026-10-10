@@ -21,6 +21,7 @@ from app.core.authorization import (
 )
 from app.domain.authority.results import FigureResult
 from app.domain.liquidity.engine import LcrResult, LiquidityFact, LiquidityParams, NsfrResult
+from app.identity.service import authorization
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -35,7 +36,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryScenarioCode,
 )
 from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
-from app.services import analysis_workbench, authorization, regulatory_liquidity, window_analytics
+from app.services import analysis_workbench, regulatory_liquidity, window_analytics
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

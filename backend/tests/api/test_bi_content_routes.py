@@ -50,9 +50,9 @@ from app.core.authorization import (
     principal_bundle_compatible,
 )
 from app.core.config import get_settings
+from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, Organization, User
 from app.models.bi import BiQueryLog
-from app.services import authorization
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 BANK_ID = "BK-BICAPI01"

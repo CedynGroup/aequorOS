@@ -28,6 +28,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.service import authorization
 from app.models import BankReportingPeriod, Notification, User
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
@@ -37,7 +38,7 @@ from app.schemas.liquidity_cfp import (
     EwiIndicatorUpdate,
     EwiRegisterPut,
 )
-from app.services import authorization, liquidity_cfp, liquidity_ewi
+from app.services import liquidity_cfp, liquidity_ewi
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

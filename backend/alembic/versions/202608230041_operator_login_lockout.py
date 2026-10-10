@@ -5,7 +5,7 @@ highest-privilege surface in the platform — and until now its login throttle
 was an in-process dict keyed on ``(email, client-ip)``
 (``app/operator/services/operator_auth.py``): 5 failures per pair, 5 minutes.
 That is the exact control the TENANT plane rejected as inadequate. The tenant
-design note is explicit about why (``app/services/auth_throttle.py``): a
+design note is explicit about why (``app/identity/service/auth_throttle.py``): a
 per-process counter yields ``max_failed × workers × replicas`` attempts and
 resets on every deploy, and an IP dimension hands the attacker a fresh budget
 for every source address they rotate through. Success on the operator endpoint

@@ -17,7 +17,7 @@ Two steps, deliberately separate:
    password accounts. Whatever the IdP asserts about assurance (``acr``/``amr``)
    is captured verbatim into the signature record — we do not invent it.
 
-   Password re-entry is throttled through :mod:`app.services.auth_throttle`,
+   Password re-entry is throttled through :mod:`app.identity.service.auth_throttle`,
    which shares ``users.failed_login_attempts`` / ``users.locked_until`` with
    the sign-in path. Until 2026-08-21 it was not: an authenticated analyst could
    guess an approver's password without limit against the one endpoint that
@@ -49,10 +49,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core import security
 from app.core.config import get_settings
+from app.identity.service import auth_throttle
+from app.identity.service.sso_config import find_enabled_by_issuer_audience
 from app.models import SigningAuthorization, SsoConnection, User
-from app.services import auth_throttle
 from app.services.audit import record_event
-from app.services.sso_config import find_enabled_by_issuer_audience
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
  * Integration keys: what a bank administrator issues, in the words they use.
  *
  * A key is issued for ONE purpose, and the two purposes are disjoint
- * authorities on the server (`app/schemas/integration_keys.py`): a data push
+ * authorities on the server (`app/identity/schemas/integration_keys.py`): a data push
  * key carries `ingest` and may read nothing; an analytics feed key carries
  * `view` and may write nothing. The feed's authorization
  * (`app/services/bi/feeds/authorization.py`) asks for `view`, so a key issued

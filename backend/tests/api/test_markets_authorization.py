@@ -34,6 +34,7 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -48,7 +49,7 @@ from app.models import (
     MarketDataSourcePreference,
     User,
 )
-from app.services import authorization, implied_rating, market_data_overlays
+from app.services import implied_rating, market_data_overlays
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.adapters.market_data.manual_upload.fixtures import (
     FIXTURE_AS_OF,

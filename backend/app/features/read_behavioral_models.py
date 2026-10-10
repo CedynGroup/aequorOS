@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
+from app.identity.service import scoped_authorization
 from app.ml.behavioral.config import ModelResult
 from app.schemas.behavioral_models import (
     BehavioralAccuracyRead,
@@ -19,7 +20,7 @@ from app.schemas.behavioral_models import (
     BehavioralProductEstimate,
     IncentivePoint,
 )
-from app.services import behavioral_liquidity, behavioral_models, scoped_authorization
+from app.services import behavioral_liquidity, behavioral_models
 
 router = APIRouter(tags=["behavioral-models"])
 

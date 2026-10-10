@@ -390,7 +390,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   imports, string patch targets, slash paths and doc references in the text files selected by
   `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
-  `packages/` files and the codemod's own source and tests are excluded. The boundary baseline
+  `packages/` files and the codemod's own source and tests are excluded. Schema class docstrings are
+  preserved because Pydantic publishes them as OpenAPI descriptions; a move must not churn
+  the generated client. The boundary baseline
   retains its historical names as described above.
   It validates a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight

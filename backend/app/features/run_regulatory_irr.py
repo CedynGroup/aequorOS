@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
+from app.identity.service import scoped_authorization
 from app.schemas.regulatory_irr import (
     IrrDashboardRead,
     IrrEarAnalysisRead,
@@ -18,7 +19,7 @@ from app.schemas.regulatory_irr_sf import (
     IrrbbSfRunCreate,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
-from app.services import regulatory_irr, regulatory_irr_sf, scoped_authorization
+from app.services import regulatory_irr, regulatory_irr_sf
 
 router = APIRouter(tags=["regulatory-irr"])
 

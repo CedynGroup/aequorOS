@@ -47,10 +47,11 @@ from app.domain.bi.catalogue import Catalogue, ColumnRef, DimensionDef, MeasureD
 from app.domain.bi.catalogue.dimensions import POSITION_DIMENSION_IDS, POSITION_TABLE
 from app.domain.bi.catalogue.measures import ENTITLEMENT_BY_MODULE
 from app.features import read_bi
+from app.identity.service import authorization, scoped_authorization
 from app.models import AuthorizationBinding, Bank, Job, User
 from app.models.bi_notifications import BiSubscription
 from app.schemas.bi import BI_MAX_MEASURES, BiFilter, BiPivot, BiQuery, BiSort, BiTime, BiTopN
-from app.services import authorization, institution_types, scoped_authorization
+from app.services import institution_types
 from app.services.bi import authorization as bi_authorization
 from app.services.bi import subscriptions
 from app.services.bi.authorization import (

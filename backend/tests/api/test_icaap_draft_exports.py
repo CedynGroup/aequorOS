@@ -47,9 +47,9 @@ from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.domain.icaap.frameworks import registry
 from app.features import export_icaap_drafts
+from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
 from app.models.icaap import IcaapBlockBinding, IcaapCycle, IcaapDataBlock, IcaapSection
-from app.services import authorization
 from app.services.icaap import parameters, readiness
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers

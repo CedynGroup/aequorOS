@@ -32,6 +32,7 @@ Docs: docs/API_INTEGRATION.md §3.5.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 
 from . import ReferenceSchema, register
 
@@ -68,7 +69,7 @@ SCHEMA = register(
 )
 
 
-def normalise_row(row: dict) -> dict:
+def normalise_row(row: Mapping[str, object]) -> dict[str, object]:
     """The row keyed by the canonical field names, each documented alias folded
     onto its canonical key when that key is absent.
 

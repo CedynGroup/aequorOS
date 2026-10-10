@@ -41,10 +41,10 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.domain.bi.catalogue import Catalogue, catalogue
+from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, User
 from app.models.bi import BiDimBranch
 from app.schemas.bi import BI_FILTER_IN_CAP, BiFilter, BiQuery
-from app.services import authorization
 from app.services.bi import data_scope
 from app.services.bi.authorization import (
     ALL_INSTITUTION_DATA,

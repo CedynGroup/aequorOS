@@ -1,6 +1,6 @@
 """POST /operator/auth/login — staff email+password sign-in (the primary path).
 
-Mirrors the client-side credential flow (`app/services/authentication.py`)
+Mirrors the client-side credential flow (`app/identity/service/authentication.py`)
 point for point, on the staff table:
 
 - lookup by lowercased email in ``operator_users`` (active, holding a hash);
@@ -10,7 +10,7 @@ point for point, on the staff table:
 - one GENERIC 401 for every failure mode — wrong password, unknown email,
   deactivated account, SSO-only account — no user enumeration, ever;
 - a DURABLE per-account lockout on the tenant plane's own primitive
-  (``app/services/auth_throttle.py`` over ``operator_users``' two throttle
+  (``app/identity/service/auth_throttle.py`` over ``operator_users``' two throttle
   columns), fronted by a process-local per-email guard so an address with no
   row is throttled identically and the 429 stays enumeration-safe. See
   ``services/operator_auth.py`` for why the old in-process ``(email, IP)``

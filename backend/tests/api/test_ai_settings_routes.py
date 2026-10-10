@@ -27,11 +27,11 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, User
 from app.models.ai import AiCommentarySettings
 from app.schemas import ai as schemas_ai
 from app.schemas.ai import AiCommentarySettingsUpdate
-from app.services import authorization
 from app.services.ai import features as ai_features
 from app.services.ai import gates
 from app.services.ai.features import (

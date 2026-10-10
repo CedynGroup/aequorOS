@@ -41,7 +41,7 @@ Nothing is backfilled
 ---------------------
 No existing row can become a ``bi_reader``: the bundle is minted only by
 issuing a feed key, which creates its own service identity in the same
-transaction (``app/services/integration_keys.py``). A tenant that has issued
+transaction (``app/identity/service/integration_keys.py``). A tenant that has issued
 no feed key has no ``bi_reader`` binding and therefore no feed access, which
 is the intended starting state.
 """

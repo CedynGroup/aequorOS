@@ -128,7 +128,7 @@ def tenant_deny_terms(db: Session, organization_id: str, bank: Bank) -> frozense
 
 def _previous_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     try:
-        from app.models.institution_profile import BankNameHistory  # noqa: PLC0415
+        from app.identity.models.institution_profile import BankNameHistory  # noqa: PLC0415
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(
@@ -142,7 +142,7 @@ def _previous_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
 
 def _party_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     try:
-        from app.models.institution_profile import RelatedParty  # noqa: PLC0415
+        from app.identity.models.institution_profile import RelatedParty  # noqa: PLC0415
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(

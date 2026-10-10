@@ -266,7 +266,7 @@ blocking the backend deploy:
   a gated family still hides before it refuses; a rehearsal is refused past both
   grants; an impersonated examiner is refused; cross-tenant is `404`; `poll` carries
   the same authority.
-- `tests/api/test_grant_administration.py::test_approving_and_filing_cannot_land_on_one_identity`
+- `tests/identity/api/test_grant_administration.py::test_approving_and_filing_cannot_land_on_one_identity`
   and `::test_a_validator_grant_is_accepted_for_an_identity_that_does_not_approve`.
 - `tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_transmit_a_return`.
 - `tests/api/test_regulatory_reporting.py` (opt-in, `REAL_DATA_DATABASE_URL`) — the

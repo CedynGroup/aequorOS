@@ -40,6 +40,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import RoleBundle
+from app.identity.schemas.institution_profile import OutletCreate, OutletUpdate
+from app.identity.service import institution_profile
 from app.models import (
     AttestationSignature,
     Bank,
@@ -58,10 +60,9 @@ from app.models import (
     RelatedPartyRole,
     Shareholding,
 )
-from app.schemas.institution_profile import OutletCreate, OutletUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import institution_profile, regulatory_liquidity
+from app.services import regulatory_liquidity
 from app.services.attestation import digests, register_state
 from app.services.regulatory_reporting import exports as reporting_exports
 from app.services.regulatory_reporting import generation, workflow

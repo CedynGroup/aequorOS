@@ -22,7 +22,7 @@ second copy of the data. ``bi_query_log`` is append-only three ways on Postgres
 so nothing here ever updates a row: everything a row says is known at the moment
 it is written, which is why it is written after the statement has run.
 
-**The budget (D-010).** ``app/services/auth_throttle.py`` states the rule this
+**The budget (D-010).** ``app/identity/service/auth_throttle.py`` states the rule this
 follows: the API runs several uvicorn workers behind a load balancer, so an
 in-process token bucket hands out ``budget × workers × replicas`` and forgets
 everything on deploy. Its own store is the durable one that already exists for

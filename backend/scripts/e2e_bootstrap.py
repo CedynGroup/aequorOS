@@ -79,6 +79,8 @@ from app.core.authorization import (
 )
 from app.core.security import hash_password
 from app.db.base import Base
+from app.identity.service import authorization, membership, sso_config
+from app.identity.service.organization_ownership import assign_initial_owner
 from app.models import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
@@ -87,10 +89,8 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
-from app.services import authorization, membership, sso_config
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
-from app.services.organization_ownership import assign_initial_owner
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

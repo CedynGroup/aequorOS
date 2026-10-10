@@ -46,9 +46,9 @@ from app.core.authorization import (
 )
 from app.domain.bi.catalogue import Catalogue, ColumnRef, MeasureDef, catalogue
 from app.domain.bi.catalogue.dimensions import POSITION_DIMENSION_IDS, POSITION_TABLE
+from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
 from app.schemas.bi import BiFilter, BiPivot, BiQuery, BiSort, BiTime, BiTopN
-from app.services import authorization
 from app.services.bi.authorization import (
     REASON_HUMAN_REQUIRED,
     REASON_NOT_ENTITLED,
@@ -695,7 +695,7 @@ def test_an_impersonated_operator_is_denied_before_any_binding_is_read(
     audits_before = db_session.scalar(select(func.count()).select_from(AuditEvent))
     calls: list[str] = []
     monkeypatch.setattr(
-        "app.services.scoped_authorization.evaluate_bank_permission",
+        "app.identity.service.scoped_authorization.evaluate_bank_permission",
         lambda *args, **kwargs: calls.append("called"),
     )
 

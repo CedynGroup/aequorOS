@@ -143,7 +143,7 @@ def get_bi_sessionmaker() -> sessionmaker | None:
     )
 
 
-def get_worker_sessionmaker() -> sessionmaker:
+def get_worker_sessionmaker() -> sessionmaker[Session]:
     """Sessionmaker for the cross-tenant background worker.
 
     Production and staging workers require ``WORKER_DATABASE_URL``: accepting

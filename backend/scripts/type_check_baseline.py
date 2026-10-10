@@ -32,7 +32,7 @@ STRICT_MODULES: tuple[str, ...] = (
     "app.forecasting",
     "app.identity",
     "app.live",
-    "app.models.bank",
+    "app.identity.models.bank",
     "app.models.job",
     "app.models.parameter_register",
 )

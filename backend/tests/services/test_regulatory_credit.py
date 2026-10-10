@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.credit.dpd_bands import dpd_band
+from app.identity.service.authorization import ALL_INSTITUTION_DATA
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -27,7 +28,6 @@ from app.models import (
 from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import fact_derivation, regulatory_credit, reporting_periods
-from app.services.authorization import ALL_INSTITUTION_DATA
 from app.services.regulatory_reporting import generation as reporting_generation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture

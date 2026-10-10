@@ -38,11 +38,11 @@ from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
+from app.identity.service import authorization
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
-from app.services import authorization
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
 from tests.support.api_factories import ApiFactories

@@ -1,4 +1,24 @@
 from app.forecasting.models import ForecastAssumptionVersion
+from app.identity.models.authorization import (
+    AuthorizationAccessRequest,
+    AuthorizationBinding,
+    OrganizationOwnerAssignment,
+)
+from app.identity.models.bank import Bank
+from app.identity.models.institution_profile import (
+    BankLicense,
+    BankNameHistory,
+    BankProduct,
+    InstitutionProfile,
+    Outlet,
+    RelatedParty,
+    RelatedPartyRole,
+    Shareholding,
+)
+from app.identity.models.integration_key import IntegrationKey
+from app.identity.models.refresh_token import RefreshToken
+from app.identity.models.sso_connection import SsoConnection
+from app.identity.models.user import User
 from app.models.ai import AiCommentarySettings
 from app.models.attestation import (
     AdoptedSignatureAppearance,
@@ -13,12 +33,6 @@ from app.models.attestation import (
     SigningAuthorization,
 )
 from app.models.audit_event import AuditEvent
-from app.models.authorization import (
-    AuthorizationAccessRequest,
-    AuthorizationBinding,
-    OrganizationOwnerAssignment,
-)
-from app.models.bank import Bank
 from app.models.bi import (
     BiAggPositionDaily,
     BiDimBranch,
@@ -137,18 +151,7 @@ from app.models.ingestion import (
     MappingConfigRecord,
     TranslationFailure,
 )
-from app.models.institution_profile import (
-    BankLicense,
-    BankNameHistory,
-    BankProduct,
-    InstitutionProfile,
-    Outlet,
-    RelatedParty,
-    RelatedPartyRole,
-    Shareholding,
-)
 from app.models.institution_type import InstitutionType
-from app.models.integration_key import IntegrationKey
 from app.models.job import Job
 from app.models.jurisdiction import Jurisdiction
 from app.models.liquidity_cfp import (
@@ -199,7 +202,6 @@ from app.models.parameter_register import (
     ParamStressShock,
 )
 from app.models.reconciliation import ReconciliationException
-from app.models.refresh_token import RefreshToken
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_parameter import RegulatoryParameter
 from app.models.regulatory_reporting import (
@@ -234,7 +236,6 @@ from app.models.risk import (
 )
 from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.models.scenario_workbench import SavedScenarioAnalysis, StressScenario
-from app.models.sso_connection import SsoConnection
 from app.models.stress import (
     EnterpriseStressSignoff,
     MacroScenario,
@@ -244,7 +245,6 @@ from app.models.stress import (
 )
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
-from app.models.user import User
 
 __all__ = [
     "AdoptedSignatureAppearance",

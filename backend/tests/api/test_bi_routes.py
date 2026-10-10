@@ -46,6 +46,7 @@ from app.db.base import utc_now
 from app.domain.bi.catalogue import Catalogue, ColumnRef, DimensionDef, MeasureDef, catalogue
 from app.domain.bi.catalogue.dimensions import POSITION_TABLE
 from app.features import read_bi
+from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, User
 from app.models.bi import (
     BiAggPositionDaily,
@@ -59,7 +60,6 @@ from app.models.bi import (
     BiQueryLog,
 )
 from app.schemas.bi import BiDateRange, BiQuery, BiTime
-from app.services import authorization
 from app.services.bi import compiler, query_log
 from app.services.bi.compiler import compile_query
 from app.services.bi.errors import BiQueryError

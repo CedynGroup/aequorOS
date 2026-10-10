@@ -517,7 +517,7 @@ starts `backend/scripts/e2e_idp.py` — a small, spec-shaped OpenID Provider
 (discovery, a real credential form, PKCE, `client_secret_basic` and
 `client_secret_post`, RS256 JWKS, `auth_time`) bound on loopback — and the
 bootstrap registers it as the e2e tenant's `sso_connections` row through the
-same `app.services.sso_config` path the dashboard's
+same `app.identity.service.sso_config` path the dashboard's
 [Access authentication panel](../../docs/rbac.md#102-access-control-access-visible-to-every-active-member) uses, with
 `SSO_INTERNAL_KEY` set on both servers so the dashboard's server-to-server
 client-config read is live. A plain-http issuer is accepted only because the

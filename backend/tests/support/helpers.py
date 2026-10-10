@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.logging import REQUEST_ID_HEADER
 from app.core.security import create_token
 from app.db.session import get_sessionmaker
-from app.services.integration_keys import issue_key
+from app.identity.service.integration_keys import issue_key
 
 ORG_1 = "OR-DEM00001"  # sample_bank_seed.DEMO_ORG_ID
 ORG_2 = "OR-1S000002"  # sample_bank_seed.ISOLATED_ORG_ID

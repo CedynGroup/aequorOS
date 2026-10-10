@@ -48,6 +48,7 @@ from app.core.config import get_settings
 from app.domain.bi import expr
 from app.domain.bi.catalogue import Catalogue, catalogue
 from app.domain.bi.catalogue.members import VALUE_TYPES
+from app.identity.service import authorization as authorization_service
 from app.models import AuthorizationBinding, Bank, User
 from app.models.bi import (
     BiAggPositionDaily,
@@ -68,7 +69,6 @@ from app.schemas.bi import (
     BiSort,
 )
 from app.schemas.bi_content import BiDashboardSpec
-from app.services import authorization as authorization_service
 from app.services.bi import compiler, content
 from app.services.bi.compiler import compile_query, expand_calculated_measures
 from app.services.bi.errors import InvalidQuery, UnknownMember

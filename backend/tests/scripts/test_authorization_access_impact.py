@@ -13,8 +13,8 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.service import authorization
 from app.models import Bank, Organization, User
-from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from scripts.authorization_access_impact import (
     INSTITUTION_MODULES,

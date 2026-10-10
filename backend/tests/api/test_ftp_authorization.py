@@ -24,6 +24,7 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -43,7 +44,6 @@ from app.schemas.regulatory_ftp import FtpScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunCreate
 from app.services import (
     analysis_workbench,
-    authorization,
     data_activation,
     module_scope,
     pipeline,

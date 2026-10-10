@@ -62,7 +62,16 @@ FORBIDDEN_CALLS = frozenset(
 )
 FORBIDDEN_NAMES = frozenset({"LiveMetric", "LiveFinding"})
 #: Pure domain may not import application state at all.
-STATEFUL_PREFIXES = ("app.services", "app.models", "app.api", "app.features")
+STATEFUL_PREFIXES = (
+    "app.services",
+    "app.models",
+    "app.api",
+    "app.features",
+    "app.identity.api",
+    "app.identity.models",
+    "app.identity.service",
+    "app.identity.public",
+)
 
 
 def _python_files(relative: str) -> list[Path]:
@@ -243,8 +252,7 @@ def test_an_icaap_prefetched_resolver_declares_the_report_plane(path: Path) -> N
             continue
         record = next((kw for kw in node.keywords if kw.arg == "record"), None)
         assert record is not None, (
-            f"{path.relative_to(BACKEND)}:{node.lineno} loads a resolver without stating "
-            f"its plane."
+            f"{path.relative_to(BACKEND)}:{node.lineno} loads a resolver without stating its plane."
         )
         assert isinstance(record.value, ast.Constant) and record.value.value is False, (
             f"{path.relative_to(BACKEND)}:{node.lineno} loads a RECORDING resolver. The "

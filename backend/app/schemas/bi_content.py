@@ -32,6 +32,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
+from app.identity.schemas.authorization import SodDecisionRead
 from app.models.bi_content import (
     DASHBOARD_CHANGE_NOTE_MAX_LENGTH,
     DASHBOARD_DESCRIPTION_MAX_LENGTH,
@@ -41,7 +42,6 @@ from app.models.bi_content import (
     MEASURE_LABEL_MAX_LENGTH,
     MEASURE_REASON_MAX_LENGTH,
 )
-from app.schemas.authorization import SodDecisionRead
 from app.schemas.bi import (
     BI_PACK_MAX_WIDGETS,
     BiClosedModel,

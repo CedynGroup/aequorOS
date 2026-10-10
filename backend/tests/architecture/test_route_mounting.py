@@ -280,7 +280,7 @@ def test_the_subject_is_the_whole_application_and_not_a_handful() -> None:
         "decorator shape, making the mount check vacuous"
     )
     assert "app.features.read_bi" in _ROUTED
-    assert "app.api.v1.auth" in _ROUTED or any(m.startswith("app.api.v1.") for m in _ROUTED)
+    assert "app.identity.api.auth" in _ROUTED or any(m.startswith("app.api.v1.") for m in _ROUTED)
     # The census has a population too: every routed module constructs its router.
     assert set(_ROUTED) <= set(_CONSTRUCTED), sorted(set(_ROUTED) - set(_CONSTRUCTED))
 

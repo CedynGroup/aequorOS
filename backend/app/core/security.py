@@ -133,7 +133,7 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     if token_type == "refresh" and not jti:
         msg = (
             "a refresh token must carry a jti — its rotation/revocation state is "
-            "keyed by it (app.services.authentication.issue_tokens)."
+            "keyed by it (app.identity.service.authentication.issue_tokens)."
         )
         raise ValueError(msg)
     payload: dict[str, Any] = {
@@ -305,7 +305,7 @@ def _guard_oidc_target(url: str, *, field: str) -> None:
     field and nothing else, so this can never become an internal-topology
     oracle for whoever set the issuer.
     """
-    if _is_loopback_issuer_allowed(url):
+    if is_loopback_issuer_allowed(url):
         return
     from app.core.outbound import (  # noqa: PLC0415 - lazy; only the SSO path needs it
         OutboundTargetBlocked,
@@ -407,7 +407,7 @@ def _discover_jwks_uri(issuer: str) -> str:
     import urllib.request  # noqa: PLC0415
 
     url = issuer.rstrip("/") + "/.well-known/openid-configuration"
-    if not url.startswith("https://") and not _is_loopback_issuer_allowed(issuer):
+    if not url.startswith("https://") and not is_loopback_issuer_allowed(issuer):
         raise TokenInvalidError(f"OIDC issuer must be https, got {issuer!r}.")
     _guard_oidc_target(url, field="issuer")
     try:
@@ -420,7 +420,7 @@ def _discover_jwks_uri(issuer: str) -> str:
         raise TokenInvalidError(f"OIDC discovery failed for {issuer!r}: {exc}") from exc
     jwks_uri = document.get("jwks_uri")
     if not isinstance(jwks_uri, str) or not (
-        jwks_uri.startswith("https://") or _is_loopback_issuer_allowed(jwks_uri)
+        jwks_uri.startswith("https://") or is_loopback_issuer_allowed(jwks_uri)
     ):
         raise TokenInvalidError(f"OIDC discovery for {issuer!r} returned no usable jwks_uri.")
     _guard_oidc_target(jwks_uri, field="jwks_uri")
@@ -435,7 +435,7 @@ def _discover_jwks_uri(issuer: str) -> str:
 _UNDEPLOYED_ENVS: Final[frozenset[str]] = UNDEPLOYED_ENVS
 
 
-def _is_loopback_issuer_allowed(url: str) -> bool:
+def is_loopback_issuer_allowed(url: str) -> bool:
     """Plain-http OIDC endpoints are tolerated ONLY on loopback and ONLY on an
     UNDEPLOYED environment (``local``/``test``).
 

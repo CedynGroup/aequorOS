@@ -157,7 +157,7 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
     Condition.AUTH_ANOMALY: (
         "failed_login_attempts / locked_until on the principal's table — 'users' for a "
         "bank user, 'operator_users' for a staff account (the emission carries "
-        "plane='operator') — plus this log line on lockout (app/services/auth_throttle.py)"
+        "plane='operator') — plus this log line on lockout (app/identity/service/auth_throttle.py)"
     ),
     Condition.SSRF_BLOCKED: (
         "this log line only, emitted from OutboundTargetBlocked.__init__ so every block "
@@ -168,7 +168,7 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "historical Liquidity Monitoring rollout logs emitted before binding enforcement"
     ),
     Condition.AUTHORIZATION_BINDING_DECISION: (
-        "this log line only, from app/services/authorization.py::record_binding_decision"
+        "this log line only, from app/identity/service/authorization.py::record_binding_decision"
     ),
     Condition.CROSS_TENANT_ATTEMPT: "this log line only, from app/api/deps.py",
 }

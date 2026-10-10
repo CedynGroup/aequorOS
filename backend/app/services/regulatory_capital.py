@@ -64,6 +64,8 @@ from app.domain.capital.engine import (
     unstaged_loan_ead,
 )
 from app.domain.reporting import period_windows
+from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -79,7 +81,6 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_capital import (
     Bsd2HeaderRead,
     Bsd2PreviewRead,
@@ -108,7 +109,6 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
-    scoped_authorization,
     sdi_capital,
     sdi_capital_checks,
 )

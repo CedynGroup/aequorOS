@@ -60,7 +60,7 @@ Each rule is stated in full in the document the index names.
   creates tenant setup records (organization, bank, administrator, ownership,
   membership, SSO, storage, and required parameter register), but no bank financial
   data. There is no seeding route; never add one to the UI
-  or re-add seed CLI scripts. `tests/api/test_banks.py::test_seed_route_is_retired`
+  or re-add seed CLI scripts. `tests/identity/api/test_banks.py::test_seed_route_is_retired`
   pins it.
 - **Institution identity is the platform ID.** `organizations.id` (`OR-…`) and
   `banks.id` (`BK-…`) are the primary key, API path token, `org` claim, RLS GUC

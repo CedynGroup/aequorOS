@@ -41,11 +41,11 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.domain.bi.catalogue import catalogue
+from app.identity.service import authorization, grant_administration
 from app.models import AuthorizationBinding, Bank, Organization, User
 from app.models.bi_content import BiDashboardShare
 from app.schemas.bi import BiLayoutItem, BiPackQuery, BiPackWidget
 from app.schemas.bi_content import BiDashboardSpec
-from app.services import authorization, grant_administration
 from app.services.bi import content
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 

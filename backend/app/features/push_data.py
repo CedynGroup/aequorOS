@@ -22,7 +22,7 @@ from fastapi import APIRouter
 
 from app.api.deps import DbSession, IntegrationPushResource
 from app.features.ingest_data import IngestionStorage
-from app.features.manage_banks import BankReference
+from app.identity.api.manage_banks import BankReference
 from app.schemas.ingestion import IngestionBatchStartRead
 from app.schemas.push import PushBatchOpen, PushBatchStatusRead, PushRecordsPage
 from app.services import push_ingestion

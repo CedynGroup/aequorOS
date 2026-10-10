@@ -32,8 +32,7 @@ from app.core.authorization import (
     normalise_data_scope_values,
     principal_bundle_compatible,
 )
-from app.models.bi import BiDimBranch
-from app.services.authorization import (
+from app.identity.service.authorization import (
     ALL_INSTITUTION_DATA,
     NO_INSTITUTION_DATA,
     AuthorizationInvariantError,
@@ -42,6 +41,7 @@ from app.services.authorization import (
     data_scope_column_values,
     reduce_data_scope,
 )
+from app.models.bi import BiDimBranch
 
 _NOW = datetime(2026, 9, 27, 12, tzinfo=UTC)
 

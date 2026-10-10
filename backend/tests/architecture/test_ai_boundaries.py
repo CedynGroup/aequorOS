@@ -216,7 +216,18 @@ def test_the_model_id_default_lives_only_in_settings() -> None:
 
 def test_the_pure_ai_domain_touches_no_infrastructure() -> None:
     """``app/domain/ai`` must stay importable without a database or a network."""
-    forbidden = ("sqlalchemy", "fastapi", "httpx", "requests", "anthropic", "app.services")
+    forbidden = (
+        "sqlalchemy",
+        "fastapi",
+        "httpx",
+        "requests",
+        "anthropic",
+        "app.services",
+        "app.identity.api",
+        "app.identity.models",
+        "app.identity.service",
+        "app.identity.public",
+    )
     for path in sorted((_APP / "domain" / "ai").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         for token in forbidden:

@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.identity.service import authorization
 from app.models import (
     Bank,
     RegulatoryArtifactVersion,
@@ -46,7 +47,6 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import authorization
 from app.services.ingestion import bank_slug
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.regulatory_reporting.bog_forms.catalog import (

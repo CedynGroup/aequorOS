@@ -24,16 +24,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankReportingPeriod, RegulatoryPackage
-from app.schemas.institution_profile import (
+from app.identity.schemas.institution_profile import (
     BankProductCreate,
     InstitutionProfilePut,
     RelatedPartyCreate,
     RelatedPartyRoleInput,
 )
+from app.identity.service import institution_profile
+from app.models import BankReportingPeriod, RegulatoryPackage
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import data_activation, institution_profile, reverse_stress
+from app.services import data_activation, reverse_stress
 from app.services.regulatory_reporting import generation
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY

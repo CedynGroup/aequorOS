@@ -1,0 +1,433 @@
+"""Database models for tenant-scoped authorization bindings."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
+    Uuid,
+)
+from sqlalchemy import text as sql_text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.authorization import (
+    MACHINE_ROLE_BUNDLES,
+    BindingStatus,
+    DataScope,
+    GrantorType,
+    GrantReasonCategory,
+    InstitutionScope,
+    ModuleScope,
+    OwnerAssignmentBasis,
+    OwnerAssignmentStatus,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.db.base import Base, TableArgs, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
+
+
+def _values(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{value}'" for value in values)
+
+
+def _machine_bundles() -> str:
+    return _values(tuple(bundle.value for bundle in MACHINE_ROLE_BUNDLES))
+
+
+class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """One user, one role bundle, and one exact scope stored as a single row.
+
+    Multiple bindings for the same user combine with OR: if any one matches,
+    the permission is granted. But every scope field within a single binding
+    must match. There are no separate role or scope arrays that could widen
+    access in unexpected combinations.
+    """
+
+    __tablename__ = "authorization_bindings"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["principal_user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="CASCADE",
+            name="fk_authorization_bindings_principal_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["institution_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_authorization_bindings_institution_tenant",
+        ),
+        CheckConstraint(
+            f"principal_type IN ({_values(tuple(PrincipalType))})",
+            name="ck_authorization_bindings_principal_type",
+        ),
+        CheckConstraint(
+            f"role_bundle IN ({_values(tuple(RoleBundle))})",
+            name="ck_authorization_bindings_role_bundle",
+        ),
+        # Machine bundles are a SET on both sides, matching migration
+        # 202609270074 verbatim.  The load-bearing half is the second: a human
+        # identity holding a machine bundle would be a person authenticating
+        # with a long-lived bearer key against a route that logs every call as a
+        # machine call, so their reads would be attributed to an integration and
+        # their leaving the bank would not revoke them.
+        CheckConstraint(
+            f"(principal_type = 'machine' AND role_bundle IN ({_machine_bundles()})) OR "
+            f"(principal_type = 'human' AND role_bundle NOT IN ({_machine_bundles()}))",
+            name="ck_authorization_bindings_principal_bundle",
+        ),
+        CheckConstraint(
+            f"institution_scope IN ({_values(tuple(InstitutionScope))})",
+            name="ck_authorization_bindings_institution_scope",
+        ),
+        CheckConstraint(
+            "(institution_scope = 'organization' AND institution_id IS NULL) OR "
+            "(institution_scope = 'institution' AND institution_id IS NOT NULL)",
+            name="ck_authorization_bindings_institution_target",
+        ),
+        CheckConstraint(
+            f"module_scope IN ({_values(tuple(ModuleScope))})",
+            name="ck_authorization_bindings_module_scope",
+        ),
+        CheckConstraint(
+            f"sensitivity_scope IN ({_values(tuple(SensitivityScope))})",
+            name="ck_authorization_bindings_sensitivity_scope",
+        ),
+        CheckConstraint(
+            f"data_scope_kind IN ({_values(tuple(DataScope))})",
+            name="ck_authorization_bindings_data_scope_kind",
+        ),
+        # Verbatim from migration 202609270073, so a freshly created schema
+        # enforces the identical invariant a migrated one does.  Both halves
+        # matter and the second is the safety: without it a ``branch`` binding
+        # could store ``[]`` or NULL, and the natural way to write the reader
+        # (``if values: inject a filter``) would then serve that principal THE
+        # WHOLE BOOK.  A scope meaning "no branches" must be unstorable.
+        # ``json_array_length`` exists in both dialects.
+        CheckConstraint(
+            "(data_scope_kind = 'all' AND data_scope_values IS NULL) OR "
+            "(data_scope_kind <> 'all' AND data_scope_values IS NOT NULL AND "
+            "json_array_length(data_scope_values) > 0)",
+            name="ck_authorization_bindings_data_scope_values",
+        ),
+        CheckConstraint(
+            "data_scope_kind = 'all' OR module_scope = 'credit'",
+            name="ck_authorization_bindings_narrowed_module",
+        ),
+        CheckConstraint(
+            f"status IN ({_values(tuple(BindingStatus))})",
+            name="ck_authorization_bindings_status",
+        ),
+        CheckConstraint(
+            f"granted_by_type IN ({_values(tuple(GrantorType))})",
+            name="ck_authorization_bindings_grantor_type",
+        ),
+        CheckConstraint(
+            "length(trim(granted_by_id)) > 0",
+            name="ck_authorization_bindings_grantor",
+        ),
+        CheckConstraint(
+            "length(trim(grant_reason)) > 0",
+            name="ck_authorization_bindings_grant_reason",
+        ),
+        CheckConstraint(
+            f"grant_reason_category IN ({_values(tuple(GrantReasonCategory))})",
+            name="ck_authorization_bindings_grant_reason_category",
+        ),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_until > valid_from",
+            name="ck_authorization_bindings_validity_window",
+        ),
+        CheckConstraint(
+            "(status = 'revoked' AND revoked_at IS NOT NULL AND "
+            "revoked_by_type IS NOT NULL AND revoked_by_id IS NOT NULL AND "
+            "length(trim(revoked_by_id)) > 0 AND revoked_reason IS NOT NULL AND "
+            "length(trim(revoked_reason)) > 0) OR "
+            "(status <> 'revoked' AND revoked_at IS NULL AND revoked_by_type IS NULL AND "
+            "revoked_by_id IS NULL AND revoked_reason IS NULL)",
+            name="ck_authorization_bindings_revocation_state",
+        ),
+        CheckConstraint(
+            f"revoked_by_type IS NULL OR revoked_by_type IN ({_values(tuple(GrantorType))})",
+            name="ck_authorization_bindings_revoker_type",
+        ),
+        Index(
+            "ix_authorization_bindings_principal",
+            "organization_id",
+            "principal_user_id",
+            "status",
+        ),
+        Index(
+            "ix_authorization_bindings_institution",
+            "organization_id",
+            "institution_id",
+        ),
+        Index(
+            "uq_authorization_bindings_active_org_owner",
+            "organization_id",
+            unique=True,
+            postgresql_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
+            sqlite_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
+        ),
+        Index(
+            "uq_authorization_bindings_active_member",
+            "organization_id",
+            "principal_user_id",
+            unique=True,
+            postgresql_where=sql_text("role_bundle = 'member' AND status = 'active'"),
+            sqlite_where=sql_text("role_bundle = 'member' AND status = 'active'"),
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    principal_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    principal_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    role_bundle: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # Broad coverage is named, never inferred from a nullable column.  NULL is
+    # legal only when institution_scope explicitly says "organization".
+    institution_scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    institution_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    module_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    sensitivity_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # WHICH SLICE of the institution's book the sentence admits.  The server
+    # default is kept rather than dropped after backfill: a binding written by
+    # any path that has not been taught about data scopes must mean the whole
+    # institution, because the alternative — NULL — is a kind no evaluator
+    # recognises, and an unrecognised kind is exactly the ambiguity
+    # ``ResourceLocator`` already refuses elsewhere.
+    data_scope_kind: Mapped[str] = mapped_column(
+        String(16), default=DataScope.ALL.value, server_default="all", nullable=False
+    )
+    #: Untyped text deliberately: branch codes and region names are an OPEN
+    #: vocabulary with no enum to constrain against and no FK to hang on — a
+    #: binding may legitimately name a branch that has not been ingested yet,
+    #: which must scope the reader to nothing rather than fail their sign-in.
+    #:
+    #: ``none_as_null`` is LOAD-BEARING, not tidiness. By default SQLAlchemy
+    #: serialises ``None`` into this column as the JSON literal ``null``, which
+    #: is a value and not SQL NULL — so every whole-institution binding would
+    #: fail ``ck_authorization_bindings_data_scope_values`` (its first half
+    #: requires ``data_scope_values IS NULL``) in both dialects.
+    data_scope_values: Mapped[list[str] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+
+    granted_by_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    granted_by_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    grant_reason_category: Mapped[str] = mapped_column(
+        String(32), default=GrantReasonCategory.OTHER.value, nullable=False
+    )
+    grant_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    grant_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    status: Mapped[str] = mapped_column(String(16), default=BindingStatus.ACTIVE, nullable=False)
+    valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    revoked_by_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """A member's request for one exact route permission."""
+
+    __tablename__ = "authorization_access_requests"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["requester_user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="CASCADE",
+            name="fk_authorization_access_requests_requester_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["institution_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_authorization_access_requests_institution_tenant",
+        ),
+        CheckConstraint(
+            f"module_scope IN ({_values(tuple(ModuleScope))})",
+            name="ck_authorization_access_requests_module_scope",
+        ),
+        CheckConstraint(
+            "sensitivity_scope IN ('published', 'aggregated', 'confidential', 'restricted')",
+            name="ck_authorization_access_requests_sensitivity_scope",
+        ),
+        CheckConstraint(
+            "permission IN ('view', 'create', 'edit', 'run', 'review', 'approve', "
+            "'configure', 'export', 'validate', 'sign_off', 'submit', 'administer', 'ingest')",
+            name="ck_authorization_access_requests_permission",
+        ),
+        CheckConstraint(
+            f"reason_category IN ({_values(tuple(GrantReasonCategory))})",
+            name="ck_authorization_access_requests_reason_category",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="ck_authorization_access_requests_status",
+        ),
+        CheckConstraint(
+            "reason_category <> 'other' OR length(trim(reason_detail)) > 0",
+            name="ck_authorization_access_requests_other_detail",
+        ),
+        CheckConstraint(
+            "(module_scope = 'account' AND institution_id IS NULL) "
+            "OR (module_scope <> 'account' AND institution_id IS NOT NULL)",
+            name="ck_authorization_access_requests_institution_target",
+        ),
+        CheckConstraint(
+            "reason_category NOT IN ('temporary_cover', 'incident_break_glass') "
+            "OR valid_until IS NOT NULL",
+            name="ck_authorization_access_requests_temporary_expiry",
+        ),
+        Index(
+            "ix_authorization_access_requests_org_status",
+            "organization_id",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "uq_authorization_access_requests_pending_scope",
+            "organization_id",
+            "requester_user_id",
+            "route",
+            "institution_id",
+            "module_scope",
+            "sensitivity_scope",
+            "permission",
+            unique=True,
+            postgresql_where=sql_text("status = 'pending' AND institution_id IS NOT NULL"),
+            sqlite_where=sql_text("status = 'pending' AND institution_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_authorization_access_requests_pending_organization_scope",
+            "organization_id",
+            "requester_user_id",
+            "route",
+            "module_scope",
+            "sensitivity_scope",
+            "permission",
+            unique=True,
+            postgresql_where=sql_text("status = 'pending' AND institution_id IS NULL"),
+            sqlite_where=sql_text("status = 'pending' AND institution_id IS NULL"),
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    requester_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    institution_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    route: Mapped[str] = mapped_column(String(255), nullable=False)
+    page_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    module_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    sensitivity_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    permission: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_category: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    binding_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("authorization_bindings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+
+class OrganizationOwnerAssignment(TimestampMixin, Base):
+    """Records whether an organization has an owner and why.
+
+    The owner binding is the source of truth for ownership. This row is the
+    control record that makes every unresolved organization findable without
+    reading deploy logs: it says why designation is still needed and lists
+    the eligible candidates that staff must choose between.
+    """
+
+    __tablename__ = "organization_owner_assignments"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_organization_owner_assignments_owner_tenant",
+        ),
+        CheckConstraint(
+            f"status IN ({_values(tuple(OwnerAssignmentStatus))})",
+            name="ck_organization_owner_assignments_status",
+        ),
+        CheckConstraint(
+            f"basis IN ({_values(tuple(OwnerAssignmentBasis))})",
+            name="ck_organization_owner_assignments_basis",
+        ),
+        CheckConstraint(
+            "eligible_candidate_count >= 0",
+            name="ck_organization_owner_assignments_candidate_count",
+        ),
+        CheckConstraint(
+            "(status = 'assigned' AND owner_user_id IS NOT NULL AND "
+            "owner_binding_id IS NOT NULL) OR "
+            "(status = 'designation_required' AND owner_user_id IS NULL AND "
+            "owner_binding_id IS NULL)",
+            name="ck_organization_owner_assignments_resolution",
+        ),
+        CheckConstraint(
+            "(basis = 'exactly_one_eligible_active_human_administrator' AND "
+            "status = 'assigned' AND eligible_candidate_count = 1) OR "
+            "(basis = 'zero_eligible_active_human_administrators' AND "
+            "status = 'designation_required' AND eligible_candidate_count = 0) OR "
+            "(basis = 'multiple_eligible_active_human_administrators' AND "
+            "status = 'designation_required' AND eligible_candidate_count > 1) OR "
+            "(basis = 'explicit_designation' AND status = 'assigned')",
+            name="ck_organization_owner_assignments_basis_count",
+        ),
+        Index(
+            "ix_organization_owner_assignments_status",
+            "status",
+            "organization_id",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    basis: Mapped[str] = mapped_column(String(64), nullable=False)
+    eligible_candidate_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    eligible_candidates: Mapped[list[dict[str, str | None]]] = mapped_column(
+        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
+    )
+    owner_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    owner_binding_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("authorization_bindings.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )

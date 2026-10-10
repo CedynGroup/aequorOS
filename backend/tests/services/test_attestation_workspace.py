@@ -42,6 +42,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.identity.service import authorization
 from app.models import (
     AttestationSignature,
     BankReportingPeriod,
@@ -59,7 +60,7 @@ from app.schemas.regulatory_reporting import (
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
 )
-from app.services import attestation_api, authorization, regulatory_liquidity
+from app.services import attestation_api, regulatory_liquidity
 from app.services.attestation import (
     pdf_signing,
     placements,

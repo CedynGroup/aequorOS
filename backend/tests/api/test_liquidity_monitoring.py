@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization, grant_administration
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -33,7 +34,6 @@ from app.models import (
     LineageRecord,
     User,
 )
-from app.services import authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture

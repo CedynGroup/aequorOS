@@ -48,6 +48,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.features import manage_bi_notifications as feature
+from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, Organization, User
 from app.models.bi_notifications import (
     BiAlert,
@@ -55,7 +56,6 @@ from app.models.bi_notifications import (
     BiSubscription,
     BiSubscriptionDelivery,
 )
-from app.services import authorization
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 BANK_ID = "BK-BINOTI01"

@@ -44,8 +44,8 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core import security  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
+from app.identity.models.user import USER_ROLES, User  # noqa: E402
 from app.models.organization import Organization  # noqa: E402
-from app.models.user import USER_ROLES, User  # noqa: E402
 from app.services.public_ids import (  # noqa: E402
     new_organization_public_id,
     normalize_public_id,

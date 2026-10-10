@@ -58,6 +58,7 @@ from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.features import read_bi_feeds
 from app.features.read_bi import require_bi_enabled
+from app.identity.service import authorization, integration_keys
 from app.models import AuditEvent, AuthorizationBinding, Bank, IntegrationKey, User
 from app.models.bi import (
     BiDimBranch,
@@ -66,7 +67,6 @@ from app.models.bi import (
     BiMartBuild,
     BiQueryLog,
 )
-from app.services import authorization, integration_keys
 from app.services.bi.feeds import authorization as feed_authorization
 from app.services.bi.feeds import cursor as feed_cursor
 from app.services.bi.feeds import datasets, runner
@@ -1046,7 +1046,7 @@ def _account_admin_headers(db: Session) -> dict[str, str]:
         ModuleScope,
         SensitivityScope,
     )
-    from app.services import authorization  # noqa: PLC0415
+    from app.identity.service import authorization  # noqa: PLC0415
 
     authorization.create_role_binding(
         db,

@@ -26,6 +26,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.results import Computed
 from app.domain.capital.engine import CapitalComputationError
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
+from app.identity.service import scoped_authorization
 from app.models import Bank, BankReportingPeriod, LiveMetricSnapshot
 from app.schemas.window_analytics import (
     WindowAnalyticsRead,
@@ -35,7 +36,6 @@ from app.schemas.window_analytics import (
     WindowRatioPointRead,
     WindowRatioStatRead,
 )
-from app.services import scoped_authorization
 from app.services.regulatory_capital import (
     CapitalRunError,
 )

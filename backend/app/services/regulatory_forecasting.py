@@ -79,6 +79,7 @@ from app.domain.liquidity.engine import (
 )
 from app.forecasting import service as assumption_register
 from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -121,7 +122,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunErrorRead,
     RegulatoryValidationRead,
 )
-from app.services import regulatory_parameters, scoped_authorization, sdi_regime
+from app.services import regulatory_parameters, sdi_regime
 from app.services.audit import record_event
 from app.services.live_state import current_snapshot, load_current_facts
 from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status

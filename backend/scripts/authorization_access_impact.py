@@ -80,8 +80,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import Module, Permission
+from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
-from app.services import authorization
 
 ORGANIZATION_MODULES = frozenset({Module.ACCOUNT, Module.AUDIT})
 INSTITUTION_MODULES = tuple(module.value for module in Module if module not in ORGANIZATION_MODULES)

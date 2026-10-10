@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import OperatorSettings, get_operator_settings
 from app.db.base import utc_now
+from app.identity.service import membership, organization_ownership
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -56,12 +57,7 @@ from app.schemas.operator import (
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import (
-    institution_types,
-    membership,
-    organization_ownership,
-    parameter_register,
-)
+from app.services import institution_types, parameter_register
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings

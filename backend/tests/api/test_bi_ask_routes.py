@@ -62,11 +62,11 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import CATALOGUE_VERSION, catalogue
+from app.identity.service import authorization
 from app.jobs import bi_nlq
 from app.models import AuditEvent, AuthorizationBinding, Bank, Job, User
 from app.models.ai import AiCommentarySettings
 from app.models.bi import BiQueryLog
-from app.services import authorization
 from app.services.ai import client as ai_client
 from app.services.ai import features, gates
 from app.services.bi import nlq

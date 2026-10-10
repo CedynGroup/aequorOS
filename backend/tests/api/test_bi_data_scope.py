@@ -43,9 +43,9 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, User
 from app.models.bi import BiDimBranch, BiFactEngineMetric, BiQueryLog
-from app.services import authorization
 from app.services.bi.authorization import (
     REASON_BANK_WIDE_FIGURE,
     REASON_INSTITUTION_GRAIN,

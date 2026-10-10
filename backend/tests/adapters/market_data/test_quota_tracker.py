@@ -14,7 +14,7 @@ from app.adapters.market_data.quota_tracker import (
 )
 from app.adapters.market_data.scope_taxonomy import DataScope, PullFrequency
 from app.adapters.market_data.scope_translator import Catalog, CatalogEntry
-from app.models.bank import Bank
+from app.identity.models.bank import Bank
 from app.models.market_data import MarketDataQuotaUsage
 from tests.support.helpers import ORG_1
 
