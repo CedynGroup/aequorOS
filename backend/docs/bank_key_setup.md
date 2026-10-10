@@ -40,18 +40,49 @@ and require an explicit migration before use.
 
 Revoking or disabling the bank key refuses reads and writes, including duplicate
 writes and application download-link redemption. Downloads pass through
-`/api/v1/storage/download`; direct S3 uploads are refused because they would bypass
-application encryption. Configure `STORAGE_DOWNLOAD_BASE_URL` to the HTTPS tenant
+`/api/v1/storage/download`; direct uploads through the bank storage interface are
+refused because they would bypass application encryption. Legacy organization/case
+document transfer retains its existing signed S3 URLs; document transfer under bank
+keys is follow-up work. Configure `STORAGE_DOWNLOAD_BASE_URL` to the HTTPS tenant
 API origin in deployments. Backup copies must preserve ciphertext, object metadata
-and the corresponding database envelopes.
+and the corresponding database envelopes. `scripts.backup_storage --download` records
+all object metadata (including envelope UUID, format and plaintext checksum), content
+type and ciphertext SHA-256 in its version-2 manifest. Restore into the recovery
+object store using a distinct directory for each backup generation, with `scripts.backup_storage --out-dir <backup-directory>
+--restore-manifest <manifest-path>` using recovery endpoint credentials; missing
+buckets are recreated. Restore the matching database backup as well. Inventory-only
+or older manifests are not sufficient for encrypted-object recovery.
 
 To replace a key, use the operator-admin operation
 `POST /operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/rotate` during an
 active tenant inspection. Supply the replacement exact ARN, the same bank account,
 region and a reason. Rotation verifies the replacement key and atomically rewraps
 all bank object envelopes while updating the connected key. Ciphertext and historic
-object versions stay unchanged; retire the source key only after successful commit.
+object versions stay unchanged. Readers hold a shared registry-row lock through
+wrapper selection and unwrap; rotation and writers take the exclusive lock.
+After commit the source key is barred from new application encryption, but remains
+KMS-enabled and decrypt-capable for archived envelopes.
 Failure leaves the source reference and envelopes intact. Existing provisioned
 banks can connect their key using `PUT` on the same encryption-key resource.
+
+Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest retention window of
+any database or object backup before rotation. Rotation persists a source-key hold
+through that window. Without a configured window, the hold is indefinite. Retirement
+checks both the originally recorded window and the current setting; lowering the
+current setting cannot shorten the originally recorded hold. Every backup taken before the last rotation away from a shared source key must
+age out before disabling it. Keep the source key enabled and its decrypt grant intact;
+the bank must not disable, revoke or delete it while those backups are retained.
+
+After the window expires, an operator admin in an active tenant inspection can call
+`POST /operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/retire` with the source
+ARN, account, region and reason. This refuses current keys, keys outside the scoped
+bank's history, and keys with any unexpired or indefinite hold, including other banks
+that shared the source key. It authorizes retirement only after those checks and
+records an audit event.
+The bank then disables the key using its own AWS-account credentials. The workload
+cannot perform cross-account `DisableKey` ([AWS API contract](https://docs.aws.amazon.com/kms/latest/APIReference/API_DisableKey.html));
+no key-management operation here schedules deletion. The application cannot prevent
+the owning bank from changing AWS policy directly, so the bank must apply the same retention rule to
+its own AWS key administration and any longer-lived recovery copies.
 
 Bank key health monitoring is follow-up work; there is no separate `/check` endpoint.

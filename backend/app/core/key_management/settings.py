@@ -13,6 +13,10 @@ class KeyManagementSettings(BaseSettings):
         default=None, alias="ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID", pattern=r"^\d{12}$"
     )
 
+    backup_retention_days: int | None = Field(
+        default=None, alias="ENCRYPTION_BACKUP_RETENTION_DAYS", ge=1
+    )
+
 
 @lru_cache
 def get_key_settings() -> KeyManagementSettings:

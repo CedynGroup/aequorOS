@@ -156,6 +156,7 @@
   "ParamRiskWeight": "app.models.regulatory.ParamRiskWeight",
   "ParamStressShock": "app.models.regulatory.ParamStressShock",
   "ReconciliationException": "app.models.reconciliation.ReconciliationException",
+  "RetainedBankKey": "app.core.key_management.models.RetainedBankKey",
   "RefreshToken": "app.models.refresh_token.RefreshToken",
   "RegulatoryArtifactVersion": "app.models.attestation.RegulatoryArtifactVersion",
   "RegulatoryChannelConfig": "app.models.regulatory_reporting.RegulatoryChannelConfig",

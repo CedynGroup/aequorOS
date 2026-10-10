@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import cast
 
 import pytest
@@ -11,7 +12,9 @@ from sqlalchemy.orm import Session
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.types import KeyReference
+from app.core.key_management.settings import get_key_settings
+from app.core.key_management.types import KeyReference, KeyStatus
+from app.db.base import utc_now
 from app.models.operator import OperatorAuditLog
 from app.operator.deps import OperatorContext, get_operator_context
 from tests.operator.conftest import BANK_KEY, operator_headers, provision_payload, start_inspection
@@ -23,6 +26,7 @@ KEY_REFERENCE_CENSUS = (
     ("GET", _BASE),
     ("PUT", _BASE),
     ("POST", _BASE + "/rotate"),
+    ("POST", _BASE + "/retire"),
 )
 
 
@@ -70,13 +74,13 @@ def test_bank_key_routes_refuse_a_bank_under_another_organization(
         "region": BANK_KEY.region,
         "owner_account": BANK_KEY.owner_account,
     }
-    if path.endswith("/rotate"):
+    if method == "POST":
         payload["reason"] = "Bank's planned key rotation"
     response = operator_client.request(
         method,
         path.format(org_id=other_organization, bank_id=bank_id),
         headers=operator_headers(),
-        json=payload if method == "PUT" or path.endswith("/rotate") else None,
+        json=payload if method in {"PUT", "POST"} else None,
     )
     assert response.status_code == 404
 
@@ -153,3 +157,61 @@ def test_bank_key_routes_require_an_active_inspection(operator_client: TestClien
         headers=operator_headers(),
     )
     assert response.status_code == 403
+
+
+def test_retirement_http_refuses_retained_backups_then_authorizes_and_audits(
+    operator_client: TestClient,
+    operator_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "7")
+    get_key_settings.cache_clear()
+    try:
+        organization_id, bank_id = _provision(operator_client)
+        keys = LocalKeyProvider()
+        keys.add_key(BANK_KEY)
+        replacement = KeyReference(
+            "aws_kms", BANK_KEY.key_id + "-replacement", BANK_KEY.region, BANK_KEY.owner_account
+        )
+        keys.add_key(replacement)
+
+        def providers(_name: str) -> LocalKeyProvider:
+            return keys
+
+        monkeypatch.setattr(registry, "provider_for", providers)
+        now = utc_now()
+        monkeypatch.setattr(registry, "utc_now", lambda: now)
+        base = _BASE.format(org_id=organization_id, bank_id=bank_id)
+        payload = {
+            "key_id": replacement.key_id,
+            "region": replacement.region,
+            "owner_account": replacement.owner_account,
+            "reason": "Synthetic key lifecycle test",
+        }
+        assert (
+            operator_client.post(
+                base + "/rotate", json=payload, headers=operator_headers()
+            ).status_code
+            == 200
+        )
+        payload["key_id"] = BANK_KEY.key_id
+        assert (
+            operator_client.post(
+                base + "/retire", json=payload, headers=operator_headers()
+            ).status_code
+            == 409
+        )
+        assert keys.describe(BANK_KEY).status == KeyStatus.ACTIVE
+        monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=8))
+        assert (
+            operator_client.post(
+                base + "/retire", json=payload, headers=operator_headers()
+            ).status_code
+            == 204
+        )
+        assert keys.describe(BANK_KEY).status == KeyStatus.ACTIVE
+        assert "bank_key.retirement_authorized" in set(
+            operator_db.scalars(select(OperatorAuditLog.action))
+        )
+    finally:
+        get_key_settings.cache_clear()

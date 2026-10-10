@@ -94,3 +94,30 @@ def rotate_bank_encryption_key(
     )
     db.commit()
     return result
+
+
+@router.post("/retire", status_code=204)
+def authorize_bank_key_retirement(
+    org_id: str,
+    bank_id: str,
+    payload: BankKeyRotate,
+    db: OperatorDb,
+    operator: OperatorAdmin,
+) -> None:
+    org_id = normalize_public_id(org_id)
+    bank_id = normalize_public_id(bank_id)
+    inspection = require_active_inspection(db, operator, org_id)
+    bank_encryption.authorize_retirement(db, org_id, bank_id, payload)
+    record_operator_action(
+        db,
+        operator,
+        action="bank_key.retirement_authorized",
+        target_org=org_id,
+        detail={
+            "bank_id": bank_id,
+            "key_id": payload.key_id,
+            "reason": payload.reason,
+            "session_id": str(inspection.id),
+        },
+    )
+    db.commit()

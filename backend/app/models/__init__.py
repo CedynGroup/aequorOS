@@ -1,4 +1,4 @@
-from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.forecasting.models import ForecastAssumptionVersion
 from app.identity.models.authorization import (
     AuthorizationAccessRequest,
@@ -249,6 +249,7 @@ from app.models.temenos import TemenosConnection
 
 __all__ = [
     "BankEncryptionKey",
+    "RetainedBankKey",
     "ObjectKeyEnvelope",
     "AdoptedSignatureAppearance",
     "AiCommentarySettings",

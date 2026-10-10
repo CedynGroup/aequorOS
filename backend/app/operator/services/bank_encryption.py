@@ -114,3 +114,18 @@ def rotate_key(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
     return RotationResult(_read(row), old_key_id, count)
+
+
+def authorize_retirement(
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    payload: BankKeyRotate,
+) -> None:
+    _bank(db, organization_id, bank_id)
+    try:
+        row = registry.scoped_key(db, bank_id=bank_id, organization_id=organization_id)
+        registry.authorize_retirement(db, row, payload.reference())
+    except KeyUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

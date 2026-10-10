@@ -74,6 +74,11 @@ __all__ = ["migrated_postgres_schema"]  # re-exported fixture
 #:   definition and is never mounted on the tenant API;
 #: * a table the tenant plane cannot reach at all.
 CROSS_TENANT_BY_DESIGN: dict[str, str] = {
+    "retained_bank_keys": (
+        "Staff control-plane backup retention and key retirement references only. "
+        "Cross-bank reference checks prevent disabling a key still used by another bank. "
+        "Scoped operator mutations bind bank and organization; no financial values or keys."
+    ),
     "bank_encryption_keys": (
         "Pre-tenant storage-key resolution: authenticated object locations and signed "
         "download capabilities identify a bank slug before a tenant session exists. "

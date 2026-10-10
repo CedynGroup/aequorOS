@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import boto3
 from botocore.client import Config
@@ -10,7 +10,12 @@ from botocore.exceptions import ClientError
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
-from app.storage.client import StorageAccessError
+
+
+class _Signer(Protocol):
+    def generate_presigned_url(
+        self, operation: str, *, Params: dict[str, str], ExpiresIn: int, HttpMethod: str
+    ) -> str: ...
 
 
 class S3ObjectStorage:
@@ -50,8 +55,17 @@ class S3ObjectStorage:
         content_type: str,
         expires_seconds: int,
     ) -> PresignedUpload:
-        raise StorageAccessError(
-            "Legacy direct S3 transfers cannot enforce bank-held encryption; use bank storage."
+        url = cast(_Signer, cast(object, self._client)).generate_presigned_url(
+            "put_object",
+            Params={"Bucket": bucket, "Key": object_key, "ContentType": content_type},
+            ExpiresIn=expires_seconds,
+            HttpMethod="PUT",
+        )
+        return PresignedUpload(
+            url=url,
+            method="PUT",
+            headers={"Content-Type": content_type},
+            expires_in_seconds=expires_seconds,
         )
 
     def create_presigned_download_url(
@@ -61,8 +75,11 @@ class S3ObjectStorage:
         object_key: str,
         expires_seconds: int,
     ) -> str:
-        raise StorageAccessError(
-            "Legacy direct S3 transfers cannot enforce bank-held encryption; use bank storage."
+        return cast(_Signer, cast(object, self._client)).generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": object_key},
+            ExpiresIn=expires_seconds,
+            HttpMethod="GET",
         )
 
     def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:

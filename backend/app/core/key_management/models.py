@@ -63,3 +63,24 @@ class ObjectKeyEnvelope(UuidV4PrimaryKeyMixin, Base):
     context_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     wrapped_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class RetainedBankKey(UuidV4PrimaryKeyMixin, Base):
+    __tablename__ = "retained_bank_keys"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["bank_encryption_keys.bank_id", "bank_encryption_keys.organization_id"],
+        ),
+        UniqueConstraint("bank_id", "provider", "key_id", name="uq_retained_bank_keys_identity"),
+        CheckConstraint("provider = 'aws_kms'", name="ck_retained_bank_keys_provider"),
+    )
+
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(2048), nullable=False, index=True)
+    region: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_account: Mapped[str] = mapped_column(String(12), nullable=False)
+    rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decrypt_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
