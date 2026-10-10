@@ -517,8 +517,9 @@ def test_email_then_orass_reupload_clears_pending_flag(
         for item in late
         if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
-    assert bsd3 and bsd3[0].package_status == "submitted"
-    assert bsd3[0].rag == "overdue"
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    # A sandbox email submission does not create a statutory filing duty.
+    assert not bsd3
 
     # A second email submission is refused: ORASS re-upload is the only way out.
     with pytest.raises(HTTPException) as email_again:
@@ -548,7 +549,7 @@ def test_email_then_orass_reupload_clears_pending_flag(
         for item in complete
         if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
-    assert bsd3 and bsd3[0].rag == "on_track"
+    assert not bsd3
 
     # Once re-uploaded, another submit is refused and polling acknowledges.
     with pytest.raises(HTTPException):

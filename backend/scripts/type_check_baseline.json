@@ -1945,7 +1945,7 @@
   "reportUnusedImport": 1
  },
  "app.services.regulatory_reporting.bog_forms.generation": {
-  "reportAny": 16
+  "reportAny": 3
  },
  "app.services.regulatory_reporting.bog_forms.layout": {
   "reportAny": 27
@@ -2077,11 +2077,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.calendar": {
-  "reportAny": 20,
-  "reportMissingParameterType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 20
  },
  "app.services.regulatory_reporting.channel_config": {
   "reportUnknownVariableType": 1
@@ -2169,7 +2165,7 @@
   "reportAny": 4
  },
  "app.services.regulatory_reporting.provenance": {
-  "reportAny": 36
+  "reportAny": 16
  },
  "app.services.regulatory_reporting.registry": {
   "reportUnusedFunction": 1
@@ -5160,7 +5156,7 @@
   "reportUnknownVariableType": 2
  },
  "tests.services.test_stress_pack": {
-  "reportAny": 45,
+  "reportAny": 44,
   "reportPrivateUsage": 3
  },
  "tests.services.test_system_of_record": {

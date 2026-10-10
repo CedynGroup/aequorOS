@@ -393,38 +393,30 @@ def test_prior_period_movement_flags_large_swings_as_warning(db_session: Session
     assert "2026-02-28" in movements[0].detail
 
 
-def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> None:
+def test_reference_package_history_does_not_create_filing_duty(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
     package = _generate(db_session)
 
-    # As of 2026-04-05 the March month-end BSD3 filing (due April 9) is due soon
-    # and covered by the generated package.
-    obligations = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 5)
-    ).obligations
-    bsd3 = [
-        item
-        for item in obligations
-        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
-    ]
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    # Preparation dates track packages without implying a statutory duty.
+    obligations = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "LCR-NSFR", 1, as_of=date(2026, 4, 5)
+    ).anchors
+    bsd3 = [item for item in obligations if item.reporting_date == REPORTING_DATE]
     assert len(bsd3) == 1
-    assert bsd3[0].due_date == date(2026, 4, 9)
+    assert bsd3[0].due_date is None
     assert bsd3[0].package_id == package.id
     assert bsd3[0].package_status == "generated"
-    assert bsd3[0].rag == "due_soon"
+    assert bsd3[0].rag is None
 
-    # Past the deadline without a submission the same obligation is overdue.
-    late = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 20)
-    ).obligations
-    late_bsd3 = [
-        item
-        for item in late
-        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
-    ]
-    assert late_bsd3 and late_bsd3[0].rag == "overdue"
+    # Elapsed preparation dates never become overdue.
+    late = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "LCR-NSFR", 1, as_of=date(2026, 4, 20)
+    ).anchors
+    late_bsd3 = [item for item in late if item.reporting_date == REPORTING_DATE]
+    assert late_bsd3 and late_bsd3[0].rag is None
 
-    # Once submitted, the obligation is back on track.
+    # A sandbox submission remains outside statutory filing-state summaries.
     validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     workflow.request_approval(
         db_session, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
@@ -445,15 +437,11 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
         channel="manual",
         external_ref="BOG-RCPT-0002",
     )
-    submitted = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 20)
-    ).obligations
-    submitted_bsd3 = [
-        item
-        for item in submitted
-        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
-    ]
-    assert submitted_bsd3 and submitted_bsd3[0].rag == "on_track"
+    submitted = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "LCR-NSFR", 1, as_of=date(2026, 4, 20)
+    ).anchors
+    submitted_bsd3 = [item for item in submitted if item.reporting_date == REPORTING_DATE]
+    assert submitted_bsd3 and submitted_bsd3[0].rag is None
     assert submitted_bsd3[0].package_status == "submitted"
 
 

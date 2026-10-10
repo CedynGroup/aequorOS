@@ -43,7 +43,7 @@ CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=APPROVER_ID, authorization_version=1
 )
 REPORTING_DATE = date(2026, 3, 31)
-BSD3_DUE_DATE = date(2026, 4, 9)  # monthly_day(9) for the 2026-03-31 period
+BSD2_DUE_DATE = date(2026, 4, 14)  # monthly_day(14) for the 2026-03-31 period
 
 _ROLE_USERS: tuple[tuple[UUID, str, str, bool], ...] = (
     (ADMIN_ID, "account_admin", "demo.admin@example.test", True),
@@ -256,12 +256,12 @@ def _seed_with_baseline_run(db: Session) -> None:
     assert run.status == "succeeded"
 
 
-def _generate(db: Session):
+def _generate(db: Session, *, return_code: str = "LCR-NSFR"):
     return generation.generate_package(
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code=return_code, reporting_date=REPORTING_DATE),
     )
 
 
@@ -422,21 +422,21 @@ def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> No
 
 def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    scope = f"LCR-NSFR:{REPORTING_DATE.isoformat()}"
+    scope = f"BSD2:{REPORTING_DATE.isoformat()}"
 
     for days_before, threshold in ((7, 7), (3, 3), (1, 1)):
-        as_of = BSD3_DUE_DATE - timedelta(days=days_before)
+        as_of = BSD2_DUE_DATE - timedelta(days=days_before)
         reporting_deadline_scan.scan_reporting_deadlines(db_session, DEMO_ORG_ID, as_of=as_of)
         db_session.commit()
         rows = _notification_rows(db_session, f"reporting.deadline.due_soon_{threshold}:{scope}")
         assert len(rows) == 1
         assert rows[0].severity == "warning"
-        assert "LCR-NSFR" in rows[0].title and REPORTING_DATE.isoformat() in rows[0].title
+        assert "BSD2" in rows[0].title and REPORTING_DATE.isoformat() in rows[0].title
 
     # Re-running the T-1 scan emits nothing new anywhere.
     total = _total_notifications(db_session)
     rerun = reporting_deadline_scan.scan_reporting_deadlines(
-        db_session, DEMO_ORG_ID, as_of=BSD3_DUE_DATE - timedelta(days=1)
+        db_session, DEMO_ORG_ID, as_of=BSD2_DUE_DATE - timedelta(days=1)
     )
     db_session.commit()
     assert rerun["notifications_emitted"] == 0
@@ -444,7 +444,7 @@ def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session)
 
     # Past the due date the obligation escalates to a daily critical overdue.
     for days_after in (1, 2):
-        as_of = BSD3_DUE_DATE + timedelta(days=days_after)
+        as_of = BSD2_DUE_DATE + timedelta(days=days_after)
         reporting_deadline_scan.scan_reporting_deadlines(db_session, DEMO_ORG_ID, as_of=as_of)
         db_session.commit()
         key = f"reporting.deadline.overdue:{scope}:{as_of.isoformat()}"
@@ -455,7 +455,8 @@ def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session)
 
 def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
-    package = _generate(db_session)
+    relax_signing(db_session, organization_id=DEMO_ORG_ID, return_code="BSD2")
+    package = _generate(db_session, return_code="BSD2")
     validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     workflow.request_approval(
         db_session, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
@@ -477,11 +478,11 @@ def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -
         SAMPLE_BANK_ID,
         package.id,
         channel="email",
-        external_ref="EMAIL-BSD3-0001",
+        external_ref="EMAIL-BSD2-0001",
         detail={"pending_orass_reupload": True},
     )
 
-    scope = f"LCR-NSFR:{REPORTING_DATE.isoformat()}"
+    scope = f"BSD2:{REPORTING_DATE.isoformat()}"
     for day in (date(2026, 4, 20), date(2026, 4, 21)):
         reporting_deadline_scan.scan_reporting_deadlines(db_session, DEMO_ORG_ID, as_of=day)
         db_session.commit()

@@ -247,6 +247,9 @@ semantics follow the plane, never the other way round:
    ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
    ```
 
+   Publication status, commencement and preparation-only anchors follow the
+   [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
+
    `bank_reporting_periods` sits on plane 1, not here: a row is the key for one
    computed fact snapshot, created because a book arrived with an as-of date. It
    is **not** a filing calendar and must never again be offered as the user's
@@ -1214,8 +1217,10 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
   `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
   (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
-  it). LAS-QUARTERLY is registry+calendar REAL but generates `template_pending` until the
-  official form lands (never infer a BoG layout); the monthly balance-sheet + P&L pack is
+  it). LAS-QUARTERLY is registered for preparation under the
+  [instrument-status contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+  and generates `template_pending` until the official form lands (never infer a BoG layout);
+  the monthly balance-sheet + P&L pack is
   filed as the official BSD2 and BSD7A forms. The executable completion proof is
   `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.

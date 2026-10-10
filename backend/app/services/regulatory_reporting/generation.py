@@ -66,7 +66,10 @@ from app.services.regulatory_reporting.common import (
     read_package,
     require_actor,
 )
-from app.services.regulatory_reporting.eligibility import resolve_eligibility
+from app.services.regulatory_reporting.eligibility import (
+    InstitutionEligibility,
+    resolve_eligibility,
+)
 from app.services.regulatory_reporting.provenance import (
     UNCLASSIFIED_STATUS,
     ReportAuthority,
@@ -373,7 +376,13 @@ def _generate_package(
     # effective date — is named on the 403 rather than a single opaque refusal.
     eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
     bank_class = eligibility.institution_class
-    eligibility.require(definition, reporting_date=payload.reporting_date)
+    # Draft/reference packs and pre-commencement returns remain preparable;
+    # their instrument status is disclosed independently of a filing duty.
+    eligibility.require(
+        definition,
+        reporting_date=payload.reporting_date,
+        ignore={"effective_date"} if definition.instrument_status != "in_force" else (),
+    )
     # The figures are the figures AS OF the regulator's reporting date, for every
     # cadence — no "nearest earlier book" fallback (see the resolver's docstring
     # for the daily-return fail-open it replaces).
@@ -423,6 +432,7 @@ def _generate_package(
         ctx,
         bank,
         definition,
+        eligibility=eligibility,
         reporting_date=payload.reporting_date,
         snapshot=generated.snapshot,
         source_runs=generated.source_runs,
@@ -605,6 +615,7 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         ctx,
         bank,
         definition,
+        eligibility=eligibility,
         reporting_date=reporting_date,
         snapshot=snapshot,
         source_runs=built.source_runs,
@@ -920,6 +931,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     bank: Bank,
     definition: ReturnDefinition,
     *,
+    eligibility: InstitutionEligibility,
     reporting_date: date,
     snapshot: dict[str, Any],
     source_runs: list[dict[str, Any]],
@@ -963,6 +975,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
         )
         snapshot["provenance"] = build_engine_provenance(
             definition=definition,
+            eligibility=eligibility,
             bank=bank,
             effective_date=reporting_date,
             runs=runs,

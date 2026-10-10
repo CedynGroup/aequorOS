@@ -55,6 +55,7 @@ from app.services.regulatory_reporting.anchors import (
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.eligibility import (
     BLOCKING_CRITERIA,
+    InstitutionEligibility,
     resolve_eligibility,
 )
 from app.services.regulatory_reporting.registry import (
@@ -297,10 +298,15 @@ def _due_date(
     return definition.deadline_rule(reporting_date), None
 
 
-def _parent_in_force(eligibility, parent: ReturnDefinition, reporting_date: date) -> bool:
+def _parent_in_force(
+    eligibility: InstitutionEligibility, parent: ReturnDefinition, reporting_date: date
+) -> bool:
     """Is the parent return in force on this date, so the annex rides inside it?"""
     effective = eligibility.effective_from(parent)
-    return effective is not None and reporting_date >= effective
+    return (
+        effective is not None
+        and eligibility.instrument_status(parent, reporting_date) == "in_force"
+    )
 
 
 def _coverage_note(
@@ -332,6 +338,18 @@ def _coverage_note(
             "deadline is never assumed."
         )
     return " ".join(parts) if parts else None
+
+
+def _instrument_coverage_note(base: str | None, inactive: list[str]) -> str | None:
+    """Keep omitted draft/reference packs visible as preparation, without a filing duty."""
+    if not inactive:
+        return base
+    note = (
+        "Preparation only; no filing obligation or statutory penalty estimate: "
+        + ", ".join(sorted(inactive))
+        + ". Draft commencement dates apply only if made final."
+    )
+    return " ".join(part for part in (base, note) if part)
 
 
 def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page controls
@@ -428,8 +446,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         for definition in eligibility.eligible_definitions()
     }
     # Which returns are filed INSIDE another one's submission (D-011), and from
-    # which date. Before the parent is in force the annex keeps its own row, so
-    # the pre-commencement dry runs are untouched.
+    # which date. An in-force annex keeps its own row until its parent commences;
+    # preparation dates remain available through list_return_anchors.
     annex_parents = {
         definition.code: definition.annex_of
         for definition in eligibility.eligible_definitions()
@@ -446,7 +464,15 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
     deadline_gaps: set[str] = set()
     nested: dict[tuple[str, date], list[ObligationAnnexRead]] = {}
     effective_gaps: set[str] = set()
-    for definition in eligibility.eligible_definitions():
+    definitions = eligibility.eligible_definitions()
+    inactive_instruments = [
+        f"{definition.code} ({definition.instrument_status.replace('_', ' ')})"
+        for definition in definitions
+        if definition.instrument_status in ("exposure_draft", "unpublished")
+    ]
+    for definition in definitions:
+        if definition.instrument_status in ("exposure_draft", "unpublished"):
+            continue
         effective_from = eligibility.effective_from(definition)
         missing_effective = eligibility.missing_effective_parameter(definition)
         if missing_effective is not None:
@@ -466,7 +492,7 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
             # calendar to an "overdue" return nobody owes. The date itself stays
             # selectable in the Returns workspace (``list_return_anchors``), so
             # a dry run before the first live filing is unaffected. D-058.
-            if effective_from is not None and reporting_date < effective_from:
+            if eligibility.instrument_status(definition, reporting_date) != "in_force":
                 continue
             parent_definition = get_definition(parent_code) if parent_code else None
             family_hidden = definition.family in hidden
@@ -478,6 +504,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
             ):
                 nested.setdefault((parent_definition.code, reporting_date), []).append(
                     ObligationAnnexRead(
+                        instrument_status=eligibility.instrument_status(definition, reporting_date),
+                        effective_from=effective_from,
                         return_code=definition.code,
                         title=definition.title,
                         filing_role=definition.filing_role,  # type: ignore[arg-type]
@@ -503,6 +531,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
             pending_reupload = package is not None and package.id in pending_reuploads
             obligations.append(
                 ReportingObligationRead(
+                    instrument_status=eligibility.instrument_status(definition, reporting_date),
+                    effective_from=effective_from,
                     return_code=definition.code,
                     return_family=definition.family,
                     title=definition.title,
@@ -571,11 +601,12 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         limit=page_limit,
         offset=offset,
         has_more=offset + len(page) < total,
-        # The note the eligibility authority has always been able to write, now
-        # carried on the payload (audit 2026-08-22 D-20). It is None whenever the
-        # institution has an eligible return set, so this adds a sentence exactly
-        # where a reader would otherwise see an unexplained empty calendar.
-        coverage_note=_coverage_note(eligibility.coverage_note(), deadline_gaps, effective_gaps),
+        # Explain both missing coverage and omitted preparation packs so a
+        # reader cannot mistake the absence of obligations for missing returns.
+        coverage_note=_instrument_coverage_note(
+            _coverage_note(eligibility.coverage_note(), deadline_gaps, effective_gaps),
+            inactive_instruments,
+        ),
     )
 
 
@@ -652,6 +683,7 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
             anchors=[],
             ineligible_reason=" ".join(hard_failures),
             effective_from=effective_from,
+            instrument_status=eligibility.instrument_status(definition, today),
         )
 
     if definition.event_driven:
@@ -678,12 +710,13 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
     anchors: list[ReturnAnchorRead] = []
     deadline_note: str | None = None
     for reporting_date in reporting_dates:
+        in_force = eligibility.instrument_status(definition, reporting_date) == "in_force"
         # The registry's nominal deadline rule on an event-driven pack exists
         # only to satisfy the package row shape; surfacing it would claim a
         # remittance date the regulator never set.
         due_date, missing_parameter = (
             (None, None)
-            if definition.event_driven
+            if definition.event_driven or not in_force
             else _due_date(definition, reporting_date, overrides, governed)
         )
         if missing_parameter is not None:
@@ -714,10 +747,10 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
                         package.status if package is not None else None,
                         pending_orass_reupload=pending_reupload,
                     )
-                    if visible
+                    if visible and in_force
                     else None
                 ),
-                in_force=effective_from is None or reporting_date >= effective_from,
+                in_force=in_force,
             )
         )
     anchors.sort(key=lambda item: item.reporting_date, reverse=True)
@@ -731,5 +764,6 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + window bounds + cl
         reporting_date_source=reporting_date_source,
         anchors=anchors,
         effective_from=effective_from,
+        instrument_status=eligibility.instrument_status(definition, today),
         deadline_note=deadline_note,
     )

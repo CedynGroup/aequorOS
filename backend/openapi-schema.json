@@ -39531,6 +39531,15 @@
         "title": "InstitutionTypeRead",
         "type": "object"
       },
+      "InstrumentStatus": {
+        "enum": [
+          "in_force",
+          "final_not_in_force",
+          "exposure_draft",
+          "unpublished"
+        ],
+        "type": "string"
+      },
       "IntegrationKeyIssueRequest": {
         "additionalProperties": false,
         "properties": {
@@ -45975,6 +45984,18 @@
         "additionalProperties": false,
         "description": "A return that is filed INSIDE another one's submission (D-011).\n\nShown under its parent obligation rather than as a row of its own, because\nit is not a separate thing the bank owes the regulator.",
         "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "filing_role": {
             "enum": [
               "annex",
@@ -45982,6 +46003,10 @@
             ],
             "title": "Filing Role",
             "type": "string"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "package_id": {
             "anyOf": [
@@ -52571,11 +52596,27 @@
             ],
             "title": "Due Time"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "fidelity": {
             "$ref": "#/components/schemas/FidelityGrade"
           },
           "frequency": {
             "$ref": "#/components/schemas/ReturnFrequency"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "package_id": {
             "anyOf": [
@@ -53003,6 +53044,10 @@
             ],
             "title": "Ineligible Reason"
           },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
+          },
           "lookback_months": {
             "title": "Lookback Months",
             "type": "integer"
@@ -53199,6 +53244,18 @@
             "title": "Directive Citation",
             "type": "string"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "family": {
             "$ref": "#/components/schemas/ReturnFamily"
           },
@@ -53211,6 +53268,10 @@
           "generator": {
             "title": "Generator",
             "type": "string"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "regulator": {
             "title": "Regulator",
@@ -122464,6 +122525,24 @@
     "/api/v1/regulatory-reporting/templates": {
       "get": {
         "operationId": "listReturnTemplates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bank Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

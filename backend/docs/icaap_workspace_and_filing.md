@@ -89,13 +89,14 @@ the content and register digests, the audit event. That is what makes an ICAAP
 filing the same kind of object as every other return, read, exported, signed
 and submitted by exactly the same code.
 
-Two deliberate differences from `generate_package`, both recorded in
-`registry.py`:
+The mint-site contract:
 
 - **`effective_date` is not gated on this side.** A commencement date is not a
   generation gate: blocking on it would stop a bank preparing and dry-running a
   return before its first live filing. Every other blocking dimension — licence
-  class, jurisdiction, supervisor — still applies.
+  class, jurisdiction, supervisor — still applies. Draft and pre-commencement
+  preparation now also follows the shared
+  [instrument-status contract](../../docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
 - **The reporting period is resolved by the caller**, because a cycle's as-of
   date is the fiscal year end it was opened for, not a book that happened to
   arrive.

@@ -1033,7 +1033,8 @@ def test_official_run_rows_carry_the_run_identity_and_no_pipeline_state() -> Non
     assert lcr.input_hash == "def456"
     assert lcr.computed_at == run.completed_at
     assert lcr.status == "succeeded"
-    assert lcr.advisory_designation == "filed"
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    assert lcr.advisory_designation == "advisory_only"
     assert rows["hqla_total_ghs"].unit == "ccy"
 
 

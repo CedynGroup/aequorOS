@@ -232,10 +232,13 @@ def test_xlsx_round_trip_metadata_headers_and_totals(
 
     # Provenance footer sheet carries the source runs and input hashes.
     provenance = workbook["Fidelity & Provenance"]
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    assert package.snapshot["provenance"]["instrument_status"] == "unpublished"
     text = "\n".join(
         str(cell.value) for row in provenance.iter_rows() for cell in row if cell.value
     )
     assert f"package {package.id}" in text
+    assert "Unpublished instrument; Basel reference; no filing obligation" in text
     assert package.source_runs[0]["input_hash"] in text
     assert package.source_runs[0]["engine_version"] in text
 

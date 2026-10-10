@@ -30,7 +30,7 @@ from app.domain.authority.registry import (
 )
 from app.domain.authority.registry import AdvisoryDesignation as RegistryDesignation
 
-#: The registry's three designations plus the one the registry cannot express.
+#: BI designations; Basel references map to internal advisory analysis.
 AdvisoryDesignation = Literal["filed", "supervisory_monitoring", "advisory_only", "unregistered"]
 
 #: The live-engine module vocabulary (``app.models.live.LIVE_MODULES``), restated
@@ -112,6 +112,7 @@ UNREGISTERED: AdvisoryDesignation = "unregistered"
 _DESIGNATIONS: dict[RegistryDesignation, AdvisoryDesignation] = {
     RegistryDesignation.FILED: "filed",
     RegistryDesignation.SUPERVISORY_MONITORING: "supervisory_monitoring",
+    RegistryDesignation.BASEL_REFERENCE: "advisory_only",
     RegistryDesignation.ADVISORY_ONLY: "advisory_only",
 }
 

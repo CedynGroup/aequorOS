@@ -18,13 +18,14 @@ versions, lineage, signing policy, submission channels) applies unchanged:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod
 from app.services.regulatory_reporting.common import unvalidated_book_finding
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
 from app.services.regulatory_reporting.provenance import (
     ReportAuthority,
     build_template_provenance,
@@ -37,6 +38,10 @@ from .spec import FormSpec
 
 SNAPSHOT_SCHEMA_VERSION = "regulatory-package-v1"
 BOG_FORM_SCHEMA_VERSION = "bog-form-v1"
+
+
+if TYPE_CHECKING:
+    from app.services.regulatory_reporting.registry import ReturnDefinition
 
 
 def compute_with_dependencies(
@@ -273,7 +278,7 @@ def generate_bog_form(
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
-    definition: Any,
+    definition: ReturnDefinition,
 ) -> Any:
     """Generator entry used by the registry (``generator="bog_form"``)."""
     # Local import: generation.py imports this module's registry at import time.
@@ -283,6 +288,7 @@ def generate_bog_form(
     result = compute_with_dependencies(db, ctx, bank, period, spec.code)
     provenance = build_template_provenance(
         definition=definition,
+        eligibility=resolve_eligibility(db, ctx, bank, as_of=period.period_end),
         bank=bank,
         effective_date=period.period_end,
         form_code=spec.code,

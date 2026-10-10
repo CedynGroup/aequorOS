@@ -204,6 +204,9 @@ class AdvisoryDesignation(StrEnum):
     SUPERVISORY_MONITORING = "supervisory_monitoring"
     """Reviewed by the supervisor / board but not a filed return line today."""
 
+    BASEL_REFERENCE = "basel_reference"
+    """Basel analysis without an adopted BoG filing requirement."""
+
     ADVISORY_ONLY = "advisory_only"
     """Internal analysis. Must never reach a filing."""
 
@@ -1204,9 +1207,13 @@ def _liquidity_run(  # noqa: PLR0913 - keyword-only entry builder, not a call si
         expected_tolerance=Decimal("0"),
         approved_alternate_methodologies=tuple(alternates),
         forbidden_alternative_sources=_FORBID_CASE_PLANE + _FORBID_CLIENT,
-        advisory_designation=AdvisoryDesignation.FILED,
-        authority_reference="Basel III LCR/NSFR as adopted by BoG (LCR-NSFR return)",
-        notes=notes,
+        advisory_designation=AdvisoryDesignation.BASEL_REFERENCE,
+        instrument_in_force=False,
+        authority_reference=EXTERNAL_REGULATORY_VERIFICATION_REQUIRED,
+        notes=(
+            "Basel reference. BoG LCR Directive, 2026 (referenced, LMTD ¶4; "
+            "unpublished) [confirm]; NSFR has no published BoG instrument. " + notes
+        ),
     )
 
 

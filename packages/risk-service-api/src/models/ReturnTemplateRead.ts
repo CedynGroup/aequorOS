@@ -18,6 +18,13 @@ import {
   FidelityGradeToJSON,
   FidelityGradeToJSONTyped,
 } from "./FidelityGrade";
+import type { InstrumentStatus } from "./InstrumentStatus";
+import {
+  InstrumentStatusFromJSON,
+  InstrumentStatusFromJSONTyped,
+  InstrumentStatusToJSON,
+  InstrumentStatusToJSONTyped,
+} from "./InstrumentStatus";
 import type { ReturnFamily } from "./ReturnFamily";
 import {
   ReturnFamilyFromJSON,
@@ -32,6 +39,13 @@ import {
   ChannelCodeToJSON,
   ChannelCodeToJSONTyped,
 } from "./ChannelCode";
+import type { EffectiveFrom } from "./EffectiveFrom";
+import {
+  EffectiveFromFromJSON,
+  EffectiveFromFromJSONTyped,
+  EffectiveFromToJSON,
+  EffectiveFromToJSONTyped,
+} from "./EffectiveFrom";
 import type { ReturnFrequency } from "./ReturnFrequency";
 import {
   ReturnFrequencyFromJSON,
@@ -66,6 +80,12 @@ export interface ReturnTemplateRead {
   directiveCitation: string;
   /**
    *
+   * @type {EffectiveFrom}
+   * @memberof ReturnTemplateRead
+   */
+  effectiveFrom?: EffectiveFrom;
+  /**
+   *
    * @type {ReturnFamily}
    * @memberof ReturnTemplateRead
    */
@@ -88,6 +108,12 @@ export interface ReturnTemplateRead {
    * @memberof ReturnTemplateRead
    */
   generator: string;
+  /**
+   *
+   * @type {InstrumentStatus}
+   * @memberof ReturnTemplateRead
+   */
+  instrumentStatus?: InstrumentStatus;
   /**
    *
    * @type {string}
@@ -160,10 +186,18 @@ export function ReturnTemplateReadFromJSONTyped(
     code: json["code"],
     defaultChannel: ChannelCodeFromJSON(json["default_channel"]),
     directiveCitation: json["directive_citation"],
+    effectiveFrom:
+      json["effective_from"] == null
+        ? undefined
+        : EffectiveFromFromJSON(json["effective_from"]),
     family: ReturnFamilyFromJSON(json["family"]),
     fidelity: FidelityGradeFromJSON(json["fidelity"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generator: json["generator"],
+    instrumentStatus:
+      json["instrument_status"] == null
+        ? undefined
+        : InstrumentStatusFromJSON(json["instrument_status"]),
     regulator: json["regulator"],
     supportsWorkingCopy: json["supports_working_copy"],
     templateId: json["template_id"],
@@ -187,10 +221,12 @@ export function ReturnTemplateReadToJSONTyped(
     code: value["code"],
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
     directive_citation: value["directiveCitation"],
+    effective_from: EffectiveFromToJSON(value["effectiveFrom"]),
     family: ReturnFamilyToJSON(value["family"]),
     fidelity: FidelityGradeToJSON(value["fidelity"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generator: value["generator"],
+    instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     regulator: value["regulator"],
     supports_working_copy: value["supportsWorkingCopy"],
     template_id: value["templateId"],

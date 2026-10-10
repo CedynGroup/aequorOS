@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.regulatory_instruments import InstrumentStatus
+
 # The signing vocabulary is owned by the attestation contract; reusing the alias
 # keeps one enum on the wire rather than two that could drift apart.
 from app.schemas.attestation import SigningRole
@@ -253,6 +255,9 @@ class ObligationAnnexRead(ClosedModel):
     it is not a separate thing the bank owes the regulator.
     """
 
+    instrument_status: InstrumentStatus = "in_force"
+    effective_from: date | None = None
+
     return_code: str
     title: str
     filing_role: Literal["annex", "companion"]
@@ -262,6 +267,8 @@ class ObligationAnnexRead(ClosedModel):
 
 
 class ReportingObligationRead(ClosedModel):
+    instrument_status: InstrumentStatus = "in_force"
+    effective_from: date | None = None
     return_code: str
     return_family: ReturnFamily
     title: str
@@ -359,6 +366,7 @@ class ReturnAnchorRead(ClosedModel):
 
 
 class ReturnAnchorListRead(ClosedModel):
+    instrument_status: InstrumentStatus = "in_force"
     bank_id: str
     return_code: str
     frequency: ReturnFrequency
@@ -385,6 +393,8 @@ class ReturnAnchorListRead(ClosedModel):
 
 
 class ReturnTemplateRead(ClosedModel):
+    instrument_status: InstrumentStatus = "in_force"
+    effective_from: date | None = None
     code: str
     family: ReturnFamily
     title: str

@@ -13,8 +13,9 @@ This module is that rule, once. :func:`resolve_eligibility` returns an
 ``calendar.list_obligations`` builds its obligation list from
 :meth:`InstitutionEligibility.eligible_definitions`, and
 ``generation.generate_package`` gates on
-:meth:`InstitutionEligibility.require` before a package row can be minted. They
-cannot drift, because there is only one decision function.
+:meth:`InstitutionEligibility.require` before a package row can be minted.
+Preparation may ignore commencement; the calendar admits only instruments in
+force on their reporting dates. Both use this module's status resolution.
 
 The dimensions
 --------------
@@ -56,6 +57,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.models import Bank
 from app.services.institution_types import institution_class as resolve_institution_class
 from app.services.jurisdictions import get_jurisdiction, regulator_short
@@ -189,6 +191,11 @@ def _effective_date_detail(
             "a date the regulator sets, which is a governed value that has not been configured "
             "for this institution. The date is never substituted or assumed."
         )
+    if definition.instrument_status in ("exposure_draft", "unpublished"):
+        return (
+            f"Instrument is {definition.instrument_status.replace('_', ' ')}; "
+            "no current filing obligation. Preparation does not establish a filing duty."
+        )
     if effective is None:
         return (
             f"No effective date is established for this return in the registry "
@@ -321,7 +328,11 @@ class InstitutionEligibility:
         jurisdiction_ok = not jurisdictions or self.jurisdiction_code in jurisdictions
         regulator_ok = _regulator_matches(definition.regulator, self.regulator)
         effective, missing_parameter = self._effective_date(definition)
-        effective_ok = missing_parameter is None and (effective is None or when >= effective)
+        effective_ok = (
+            missing_parameter is None
+            and definition.instrument_status not in ("exposure_draft", "unpublished")
+            and (effective is None or when >= effective)
+        )
         criteria = (
             EligibilityCriterion(
                 "registered",
@@ -419,9 +430,7 @@ class InstitutionEligibility:
             and _regulator_matches(definition.regulator, self.regulator)
         )
 
-    def _effective_date(
-        self, definition: ReturnDefinition
-    ) -> tuple[date | None, str | None]:
+    def _effective_date(self, definition: ReturnDefinition) -> tuple[date | None, str | None]:
         """``(effective_from, missing_parameter_code)`` for one definition.
 
         The registry's own literal wins where it has one. Otherwise a named
@@ -484,15 +493,25 @@ class InstitutionEligibility:
         )
 
     def effective_from(self, definition: ReturnDefinition) -> date | None:
-        """The resolved first in-force date, or ``None`` when none is established.
+        """Resolved commencement, conditional for a draft, or ``None`` if unestablished.
 
-        The calendar reads this to decide which anchors are real obligations.
+        Publication status must also permit commencement; a draft date alone
+        cannot create an obligation.
         An unresolvable governed parameter answers ``None`` here and the
         ``effective_date`` criterion refuses separately, so a caller cannot
         mistake "not established" for "resolved as unrestricted".
         """
         effective, _missing = self._effective_date(definition)
         return effective
+
+    def instrument_status(
+        self, definition: ReturnDefinition, reporting_date: date
+    ) -> InstrumentStatus:
+        """Publication and commencement are independent; a draft never auto-commences."""
+        effective, missing = self._effective_date(definition)
+        if missing is not None and definition.instrument_status == "in_force":
+            return "final_not_in_force"
+        return instrument_status_on(definition.instrument_status, effective, reporting_date)
 
     def missing_effective_parameter(self, definition: ReturnDefinition) -> str | None:
         """The governed code this return's effective date needs and lacks."""
@@ -565,9 +584,7 @@ def governed_effective_parameter_codes(
 ) -> tuple[str, ...]:
     """Every distinct ``effective_from_parameter`` in the registry, sorted."""
     pool = definitions if definitions is not None else REGISTRY.values()
-    return tuple(
-        sorted({d.effective_from_parameter for d in pool if d.effective_from_parameter})
-    )
+    return tuple(sorted({d.effective_from_parameter for d in pool if d.effective_from_parameter}))
 
 
 def resolve_governed_effective_dates(
@@ -584,9 +601,7 @@ def resolve_governed_effective_dates(
     if not codes:
         return {}
     resolver = parameter_resolver(db, bank, as_of=as_of)
-    return {
-        code: _effective_date_value(resolver.try_resolve(code, as_of=as_of)) for code in codes
-    }
+    return {code: _effective_date_value(resolver.try_resolve(code, as_of=as_of)) for code in codes}
 
 
 def parameter_resolver(db: Session, bank: Bank, *, as_of: date) -> Any:

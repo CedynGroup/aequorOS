@@ -25,6 +25,8 @@ export type ReportingDateOption = {
   readonly hasComputedPosition: boolean;
   /** Whether its filing deadline has passed without a completed submission. */
   readonly isOverdue: boolean;
+  /** Date offered for preparation, without a filing duty. */
+  readonly isPreparation: boolean;
 };
 
 /** The `/return-anchors` fields the picker reads. Structural on purpose. */
@@ -32,6 +34,7 @@ type AnchorLike = {
   readonly reportingDate: Date;
   readonly dataStatus: string;
   readonly rag: string | null;
+  readonly inForce?: boolean;
 };
 
 export function toReportingDateOptions(
@@ -40,7 +43,8 @@ export function toReportingDateOptions(
   return anchors.map((anchor) => ({
     date: isoDate(anchor.reportingDate),
     hasComputedPosition: anchor.dataStatus === "computed",
-    isOverdue: anchor.rag === "overdue",
+    isOverdue: anchor.inForce !== false && anchor.rag === "overdue",
+    isPreparation: anchor.inForce === false,
   }));
 }
 
@@ -53,6 +57,7 @@ export function toReportingDateOptions(
  */
 export function reportingDateOptionLabel(option: ReportingDateOption): string {
   const notes: string[] = [];
+  if (option.isPreparation) notes.push("preparation only");
   if (option.isOverdue) notes.push("past due");
   if (!option.hasComputedPosition) notes.push("no figures yet");
   return notes.length > 0
@@ -78,4 +83,38 @@ export function defaultReportingDate(
   if (!asOf) return newest;
   const elapsed = dates.filter((date) => date <= asOf);
   return elapsed.length > 0 ? elapsed[elapsed.length - 1] : newest;
+}
+
+/** Publication status is separate from template fidelity and calculation readiness. */
+export function instrumentStatusLabel(
+  status:
+    | "in_force"
+    | "final_not_in_force"
+    | "exposure_draft"
+    | "unpublished"
+    | undefined,
+  effectiveFrom?: Date | string | null,
+): string {
+  const effective =
+    typeof effectiveFrom === "string"
+      ? effectiveFrom
+      : effectiveFrom
+        ? isoDate(effectiveFrom)
+        : null;
+  switch (status) {
+    case "exposure_draft":
+      return effective
+        ? `Exposure draft · effective ${effective} if final · preparation only`
+        : "Exposure draft · preparation only";
+    case "unpublished":
+      return "Unpublished instrument · Basel reference · no filing obligation";
+    case "final_not_in_force":
+      return effective
+        ? `Final · not yet in force · effective ${effective}`
+        : "Final · not yet in force";
+    case "in_force":
+      return effective ? `In force from ${effective}` : "In force";
+    default:
+      return "Instrument status unavailable";
+  }
 }

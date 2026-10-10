@@ -328,8 +328,8 @@ def test_deadline_override_changes_due_date(db_session: Session) -> None:
     assert bsd2_over.reporting_date == bsd2_default.reporting_date
     assert bsd2_over.due_date.day == 21
     # Returns without an override keep the registry default.
-    bsd3_over = next(item for item in overridden.obligations if item.return_code == "LCR-NSFR")
-    bsd3_default = next(item for item in baseline.obligations if item.return_code == "LCR-NSFR")
+    bsd3_over = next(item for item in overridden.obligations if item.return_code == "FX-NOP")
+    bsd3_default = next(item for item in baseline.obligations if item.return_code == "FX-NOP")
     assert bsd3_over.due_date == bsd3_default.due_date
 
 

@@ -2012,8 +2012,7 @@ _STRESS_PACK_CITATION = (
 )
 
 _NPL_MONTHLY_CITATION = (
-    "BoG Notice BG/GOV/SEC/2025/23 (Aug 2025), Appendix II — Monthly Regulatory "
-    "Reporting of NPL"
+    "BoG Notice BG/GOV/SEC/2025/23 (Aug 2025), Appendix II — Monthly Regulatory Reporting of NPL"
 )
 
 _NPL_MONTHLY_TEMPLATE = ReturnTemplate(
@@ -3122,6 +3121,8 @@ def _authority_lines(
                 "Source calculation runs below (module · run id · input hash · engine version)."
             )
         for label, key in (
+            ("Instrument status", "instrument_label"),
+            ("Instrument", "instrument_citation"),
             ("Official template digest", "template_hash"),
             ("Line-map version", "mapping_version"),
             ("Formula evaluator", "formula_evaluator_version"),

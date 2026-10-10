@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import pytest
 from fastapi import HTTPException
@@ -80,13 +80,15 @@ def _error(exc: HTTPException) -> str:
     return str(_detail(exc)["error_code"])
 
 
-def _build(db: Session, *, attachments: bool = True, effective: bool = True):  # noqa: ANN202
+def _build(
+    db: Session, *, attachments: bool = True, effective: bool = True, cycle_kind: str = "annual"
+):  # noqa: ANN202
     """A cycle that has passed its approval stage and is awaiting freeze."""
     access = access_for(db)
     if effective:
         govern_first_as_of(db, AS_OF)
     seal_capital_run(db, access)
-    cycle = cycles.create_cycle(db, access, annual_payload())
+    cycle = cycles.create_cycle(db, access, annual_payload(cycle_kind=cycle_kind))
     write_every_section(db, access, cycle.id)
     answer_every_requirement(db, access, cycle.id)
     make_p2_ready(db, access, cycle.id)
@@ -328,6 +330,44 @@ def test_freeze_refuses_invalid_filing_inputs_without_minting(
 
 
 class TestTheTransaction:
+    def test_a_precommencement_rehearsal_freezes_but_cannot_be_filed(
+        self, canonical_book: Session, extra_frameworks: None
+    ) -> None:
+        from app.services.regulatory_reporting import (  # noqa: PLC0415
+            workflow as reporting_workflow,
+        )
+
+        db = canonical_book
+        first_as_of = date(2028, 12, 31)
+        govern_first_as_of(db, first_as_of)
+        access, _r, _a, cycle = _build(db, effective=False, cycle_kind="rehearsal")
+        digest = workflow.get_stages(db, access, cycle.id).review_digest
+        out = freeze.freeze_cycle(
+            db,
+            access,
+            cycle.id,
+            IcaapFreezeCreate(review_digest=digest, reason="Seal the dry run."),
+        )
+        assert out.cycle.status == "frozen"
+        assert out.package.return_code == "ICAAP-REPORT"
+        package = db.get(RegulatoryPackage, out.package.id)
+        assert package is not None
+        assert package.is_rehearsal
+        assert package.snapshot["metadata"]["icaap"]["cycle"]["kind"] == "rehearsal"
+        filing = cast(dict[str, object], package.snapshot["metadata"]["filing"])
+        assert filing["is_rehearsal"]
+        assert filing["pre_effective"]
+        assert filing["effective_from"] == first_as_of.isoformat()
+        provenance = cast(dict[str, object], package.snapshot["provenance"])
+        assert provenance["instrument_status"] == "exposure_draft"
+        assert provenance["instrument_effective_from"] == first_as_of.isoformat()
+        with pytest.raises(HTTPException) as caught:
+            reporting_workflow.submit_package_via_channel(
+                db, access.ctx, access.bank.id, package.id, channel_override="orass_sandbox"
+            )
+        assert _error(caught.value) == "rehearsal_channel_not_permitted"
+        assert package.status == "generated"
+
     def test_a_freeze_seals_the_cycle_and_mints_one_package(
         self, canonical_book: Session, extra_frameworks: None
     ) -> None:

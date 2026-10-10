@@ -264,8 +264,9 @@ def test_lcr_has_two_declared_methodologies_and_no_equality_is_asserted() -> Non
     assert "75%" in capped.divergence.reason
     assert "_LCR_INFLOW_CAP" in capped.divergence.reason
     assert "39-43" in capped.authority_reference
-    # Both are filed: each is correct under its own return's authority.
-    assert uncapped.advisory_designation is AdvisoryDesignation.FILED
+    # BoG LCR Directive, 2026 (referenced, LMTD ¶4; unpublished) [confirm].
+    # The Basel reference is distinct from the draft Table 11 methodology.
+    assert uncapped.advisory_designation is AdvisoryDesignation.BASEL_REFERENCE
     assert capped.advisory_designation is AdvisoryDesignation.FILED
 
 
