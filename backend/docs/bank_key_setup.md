@@ -125,6 +125,16 @@ keys alone do not prevent startup or storage access. Local evaluation uses
 that same path and needs no AWS KMS account; no tenant-local provider mode or
 persistent fake master key is introduced. Configure local S3/MinIO as before.
 
+The onboarding form reads the requirement from `/operator/health`. Key fields
+stay optional while configuration is pending or unavailable. Failed requests
+retry with bounded backoff; refocusing the window or coming back online restarts
+retries if configuration is still unresolved. A confirmed requirement blocks
+Review and submission until the key fields are complete. Entering any key field
+also requires completing the whole key configuration, even during optional
+rollout. The provisioning API remains authoritative: when enforcement is enabled,
+a keyless submission fails the `kms` step, and the console displays that refusal
+in the provisioning result.
+
 A connected bank key always enables SDK envelope encryption for that bank's
 objects, exports, filings and object backups. Revocation or an outage refuses
 access even when `BANK_KEY_REQUIRED=false`; it never falls back to the

@@ -23,7 +23,7 @@ the read surface's own pipeline rather than a second copy of it:
    the artifact is rendered inline and streamed back. Over it, the request
    becomes a ``bi_export`` job in the ``bi`` worker lane which writes to the
    storage temp tier; the owner collects it from the second route as a
-   short-lived presigned link.
+   short-lived download link.
 
 **How "over the threshold" is known without a second query.** The statement runs
 once, asking the executor for the threshold as its row cap; the executor always
@@ -39,10 +39,10 @@ render is a second, separately authorized read that happened minutes later under
 possibly different authority. Both paths also write ``audit_events``, which
 ``docs/bi.md`` requires for every export.
 
-**The collection route is owner-only.** A presigned GET carries no identity, so
-whoever holds the link holds the file. The route therefore mints one only for
-the principal named in the job's own payload; for anyone else the job does not
-exist.
+**The collection route is owner-only.** A download capability carries no session
+identity, so whoever holds the link holds the file. The route therefore mints
+one only for the principal named in the job's own payload; for anyone else the
+job does not exist.
 """
 
 from __future__ import annotations
@@ -372,7 +372,7 @@ def get_bi_export(  # noqa: PLR0913 - FastAPI injects db/access/storage
 ) -> BiExportRead:
     """One queued export, and a short-lived download link once it is ready.
 
-    404 for anyone but the principal who asked for it: a presigned GET is a
+    404 for anyone but the principal who asked for it: the download link is a
     bearer credential, so the owner check IS the access control on the finished
     file, and the existence of another person's export is not this caller's
     business either.
