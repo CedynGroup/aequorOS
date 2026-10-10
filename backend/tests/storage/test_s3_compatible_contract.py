@@ -24,7 +24,11 @@ from app.storage.client import StorageClient, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
 from app.storage.factory import get_storage_client
-from app.storage.provisioning import deprovision_institution, provision_institution
+from app.storage.provisioning import (
+    ProvisioningClient,
+    deprovision_institution,
+    provision_institution,
+)
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from tests.storage.contract import StorageContractSuite, metadata_for
 from tests.support.key_envelopes import MemoryEnvelopeStore
@@ -66,7 +70,8 @@ class TestS3CompatibleStorageContract(StorageContractSuite):
             encryption=ObjectEncryption(MemoryEnvelopeStore(slug, key, provider)),
         )
         type(self)._live_client = storage
-        provision_institution(storage._s3, settings, slug)  # noqa: SLF001 - shares the connection
+        provisioning_client = cast("ProvisioningClient", storage._s3)  # noqa: SLF001
+        provision_institution(provisioning_client, settings, slug)
         yield storage
         deprovision_institution(storage._s3, settings, slug)  # noqa: SLF001
 
