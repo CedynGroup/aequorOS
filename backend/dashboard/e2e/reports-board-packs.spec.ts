@@ -6,13 +6,54 @@
  * module cockpits, the enterprise stress workbench, the official-runs
  * registry — and then requires the composed pack AND the PDF the reader saves
  * to restate exactly those figures. A pack that drifted from the app, lost a
- * section in print, or printed its own controls fails here.
+ * section in print, printed its own controls, or cited another period's
+ * official run fails here.
  */
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { mintBackendToken } from "./support/mint";
 import { printToPdf } from "./support/print";
+
+const SAMPLE_BANK_ID = "BK-SAMP0001";
+
+type ReportingPeriod = { id: string; label: string };
+
+/**
+ * Mint an official Liquidity run for an OLDER book, after the fixture's run
+ * for the current one: the newest Liquidity run on record then belongs to a
+ * period the board pack is not composed for, so a pack that cited "the latest
+ * run" instead of its own period's run would show it.
+ */
+async function mintOlderPeriodLiquidityRun(): Promise<{
+  current: ReportingPeriod;
+  olderRunHash: string;
+}> {
+  const token = await mintBackendToken("admin");
+  const call = async (method: string, route: string, body?: unknown) => {
+    const response = await fetch(`${E2E_API_ORIGIN}/api/v1${route}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    expect(response.ok, `${method} ${route}`).toBe(true);
+    return response.json();
+  };
+  const { periods } = (await call(
+    "GET",
+    `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
+  )) as { periods: ReportingPeriod[] };
+  const run = (await call("POST", `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
+    module: "liquidity",
+    reporting_period_id: periods[1].id,
+    scenario_code: "baseline",
+  })) as { input_hash: string };
+  return { current: periods[0], olderRunHash: run.input_hash };
+}
 
 /** The value span of the KPI tile whose label is exactly `label`. */
 function kpiValue(scope: Page | Locator, label: string): Locator {
@@ -50,6 +91,8 @@ test.describe("board and regulator reporting", () => {
   test("board pack restates the module figures and prints them to PDF", async ({
     page,
   }) => {
+    const { current, olderRunHash } = await mintOlderPeriodLiquidityRun();
+
     await page.goto("/liquidity");
     const hqla = await text(kpiValue(page, "HQLA stock"));
     const outflows = await text(kpiValue(page, "30-day net outflows"));
@@ -57,16 +100,8 @@ test.describe("board and regulator reporting", () => {
     await page.goto("/basel");
     const car = `${await text(kpiValue(page, "Capital Adequacy Ratio"))}%`;
 
-    const periodsLoaded = page.waitForResponse(
-      (response) =>
-        /\/reporting-periods$/.test(new URL(response.url()).pathname) &&
-        response.ok(),
-    );
+    const reportingPeriod = current.label;
     await page.goto("/reports");
-    const { periods } = (await (await periodsLoaded).json()) as {
-      periods: { label: string }[];
-    };
-    const reportingPeriod = periods[0].label;
     await page.getByRole("link", { name: "Open board pack" }).click();
 
     await expect(page).toHaveURL(/\/reports\/board-pack$/);
@@ -134,6 +169,7 @@ test.describe("board and regulator reporting", () => {
     const provenance = await runBadge.getAttribute("title");
     const [, inputHash] = / · input hash (\S+)$/.exec(provenance ?? "") ?? [];
     expect(inputHash).toMatch(/^[0-9a-f]{16,}$/);
+    expect(inputHash).not.toBe(olderRunHash);
     // The badge reads "<engine> · <input hash> · <minted at>".
     const [engine] = (await text(runBadge)).split(" · ");
     expect(engine).toMatch(/^regulatory-liquidity-v/);
@@ -165,6 +201,7 @@ test.describe("board and regulator reporting", () => {
       .filter({ hasText: inputHash.slice(0, 10) });
     await expect(registeredRun).toHaveCount(1);
     await expect(registeredRun).toContainText("Liquidity");
+    await expect(registeredRun).toContainText(reportingPeriod);
     await expect(registeredRun).toContainText(engine);
     await expect(registeredRun).toContainText("Succeeded");
   });

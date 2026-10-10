@@ -99,9 +99,16 @@ export function useOfficialRunsRegistry(
 /**
  * Latest successful run per module — provenance (engine version, input hash,
  * created-at) for board-pack module blocks and the Settings About panel.
+ *
+ * Pass `reportingPeriodId` when the provenance must belong to one book: the
+ * board pack cites only runs minted for its own reporting period, never a
+ * newer run of an older period.
  */
-export function useLatestRunsByModule(bankId: string | undefined) {
-  const query = useRegulatoryRuns(bankId, { limit: 100 });
+export function useLatestRunsByModule(
+  bankId: string | undefined,
+  reportingPeriodId?: string
+) {
+  const query = useRegulatoryRuns(bankId, { reportingPeriodId, limit: 100 });
   const byModule = useMemo(() => {
     const map = new Map<string, RegulatoryRunSummaryRead>();
     for (const run of query.data?.runs ?? []) {

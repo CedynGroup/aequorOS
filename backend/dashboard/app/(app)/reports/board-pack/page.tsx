@@ -96,7 +96,7 @@ export default function BoardPackPage() {
     isHrefVisible("/ftp/products", scope) ? bankId : undefined,
     periodId,
   );
-  const { byModule } = useLatestRunsByModule(bankId);
+  const { byModule } = useLatestRunsByModule(bankId, periodId);
 
   // Client-only timestamp — avoids an SSR/hydration mismatch on the cover.
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
