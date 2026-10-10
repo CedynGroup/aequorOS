@@ -109,6 +109,12 @@ const EMPTY_FORM: ProvisionTenantRequest = {
   currency: "GHS",
   admin_email: "",
   admin_full_name: "",
+  encryption_key: {
+    provider: "aws_kms",
+    key_id: "",
+    region: "",
+    owner_account: "",
+  },
 };
 
 const PHASE_INDEX: Record<Phase, number> = {
@@ -163,7 +169,10 @@ export default function OnboardPage() {
     form.jurisdiction_code !== "" &&
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
-    form.admin_full_name.trim() !== "";
+    form.admin_full_name.trim() !== "" &&
+    form.encryption_key.key_id.trim() !== "" &&
+    form.encryption_key.region.trim() !== "" &&
+    /^[0-9]{12}$/.test(form.encryption_key.owner_account);
 
   async function provision() {
     setPhase("submitting");
@@ -178,6 +187,11 @@ export default function OnboardPage() {
         license_type: form.license_type.trim(),
         admin_email: form.admin_email.trim(),
         admin_full_name: form.admin_full_name.trim(),
+        encryption_key: {
+          ...form.encryption_key,
+          key_id: form.encryption_key.key_id.trim(),
+          region: form.encryption_key.region.trim(),
+        },
       });
       setResult(res);
     } catch (err) {
@@ -358,6 +372,70 @@ export default function OnboardPage() {
               </Field>
             </div>
 
+            <div className="mt-5 border-t border-border-light pt-4">
+              <h2 className="text-body font-medium text-navy">
+                Bank-owned encryption key
+              </h2>
+              <p className="mt-1 text-caption text-slate">
+                The bank must authorize the platform&apos;s workload role to use
+                its enabled AWS KMS encryption key. Onboarding verifies access
+                before completing setup; revoking the key prevents access to
+                bank files.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="AWS KMS key ARN"
+                  required
+                  className="sm:col-span-2"
+                  hint="Use the exact key ARN. Aliases and bare key IDs are not accepted."
+                >
+                  <Input
+                    value={form.encryption_key.key_id}
+                    className="font-mono"
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        key_id: e.target.value,
+                      })
+                    }
+                    placeholder="arn:aws:kms:region:123456789012:key/key-id"
+                    pattern="arn:[^:]+:kms:[^:]+:[0-9]{12}:key/.+"
+                    required
+                  />
+                </Field>
+                <Field label="Bank AWS account ID" required>
+                  <Input
+                    value={form.encryption_key.owner_account}
+                    className="font-mono"
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        owner_account: e.target.value,
+                      })
+                    }
+                    placeholder="123456789012"
+                    inputMode="numeric"
+                    pattern="[0-9]{12}"
+                    maxLength={12}
+                    required
+                  />
+                </Field>
+                <Field label="AWS region" required>
+                  <Input
+                    value={form.encryption_key.region}
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        region: e.target.value,
+                      })
+                    }
+                    placeholder="Region from the key ARN"
+                    required
+                  />
+                </Field>
+              </div>
+            </div>
+
             <div className="mt-4 flex justify-end border-t border-border-light pt-4">
               <Button type="submit" disabled={!formComplete}>
                 Review
@@ -389,6 +467,17 @@ export default function OnboardPage() {
             <FieldRow label="Reporting currency">
               <span className="font-mono">{form.currency}</span>
             </FieldRow>
+            <FieldRow label="Bank-owned KMS key">
+              <span className="break-all font-mono">
+                {form.encryption_key.key_id}
+              </span>
+            </FieldRow>
+            <FieldRow label="Bank AWS account">
+              <span className="font-mono">
+                {form.encryption_key.owner_account}
+              </span>
+            </FieldRow>
+            <FieldRow label="AWS region">{form.encryption_key.region}</FieldRow>
             <FieldRow label="First admin">
               {form.admin_full_name} ·{" "}
               <span className="font-mono">{form.admin_email}</span>

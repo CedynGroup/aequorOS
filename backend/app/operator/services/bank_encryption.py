@@ -114,19 +114,3 @@ def rotate_key(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
     return RotationResult(_read(row), old_key_id, count)
-
-
-def check_key(  # noqa: PLR0913 - scoped operator mutation
-    db: Session,
-    organization_id: str,
-    bank_id: str,
-    providers: registry.ProviderFactory | None = None,
-) -> BankKeyRead:
-    providers = providers or registry.provider_for
-    _bank(db, organization_id, bank_id)
-    try:
-        row = registry.scoped_key(db, bank_id=bank_id, organization_id=organization_id)
-    except KeyUnavailableError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    registry.check_health(row, providers)
-    return _read(row)

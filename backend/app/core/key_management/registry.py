@@ -11,7 +11,6 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management.aws import AwsKmsKeyProvider
-from app.core.key_management.local import FileTestKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.types import (
     KeyDescription,
@@ -27,8 +26,6 @@ type ProviderFactory = Callable[[str], KeyProvider]
 
 
 def provider_for(provider: str) -> KeyProvider:
-    if provider == "local_test":
-        return FileTestKeyProvider()
     if provider != "aws_kms":
         raise KeyUnavailableError("The bank encryption key provider is not supported.")
     return AwsKmsKeyProvider()
@@ -87,24 +84,6 @@ def scoped_key(db: Session, *, bank_id: str, organization_id: str) -> BankEncryp
     if row is None:
         raise KeyUnavailableError("The bank encryption key is not connected.")
     return row
-
-
-def check_health(
-    row: BankEncryptionKey, providers: ProviderFactory = provider_for
-) -> KeyDescription:
-    try:
-        provider = providers(row.provider)
-        description = provider.describe(reference(row))
-        if description.status == KeyStatus.ACTIVE:
-            context = {"bank_id": row.bank_id, "purpose": "key-health-probe"}
-            probe = provider.generate_data_key(description.reference, context)
-            if provider.unwrap(description.reference, probe.wrapped, context) != probe.plaintext:
-                raise KeyIntegrityError("The bank key health probe failed.")
-    except KeyUnavailableError:
-        description = KeyDescription(reference(row), KeyStatus.UNAVAILABLE)
-    row.status = description.status.value
-    row.checked_at = utc_now()
-    return description
 
 
 def rotate(

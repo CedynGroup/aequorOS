@@ -52,6 +52,7 @@ export * from "./ReverseStressApi";
 export * from "./ScenarioWorkbenchApi";
 export * from "./ScenariosApi";
 export * from "./SdiDiagnosticsApi";
+export * from "./StorageApi";
 export * from "./SystemOfRecordApi";
 export * from "./TaxonomyApi";
 export * from "./TemenosApi";

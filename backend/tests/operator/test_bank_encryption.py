@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.types import KeyReference, KeyStatus
+from app.core.key_management.types import KeyReference
 from app.models.operator import OperatorAuditLog
 from app.operator.deps import OperatorContext, get_operator_context
 from tests.operator.conftest import BANK_KEY, operator_headers, provision_payload, start_inspection
@@ -23,7 +23,6 @@ KEY_REFERENCE_CENSUS = (
     ("GET", _BASE),
     ("PUT", _BASE),
     ("POST", _BASE + "/rotate"),
-    ("POST", _BASE + "/check"),
 )
 
 
@@ -99,7 +98,7 @@ def test_bank_key_configuration_requires_operator_administration(
     assert response.status_code == 403
 
 
-def test_rotation_and_health_are_audited_and_owner_account_cannot_change(
+def test_rotation_is_audited_and_owner_account_cannot_change(
     operator_client: TestClient,
     operator_db: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -129,10 +128,6 @@ def test_rotation_and_health_are_audited_and_owner_account_cannot_change(
     )
     assert response.status_code == 200, response.text
     assert cast(dict[str, object], response.json())["key_id"] == replacement.key_id
-    keys.set_status(replacement, KeyStatus.DISABLED)
-    response = operator_client.post(base + "/check", headers=operator_headers())
-    assert response.status_code == 200
-    assert cast(dict[str, object], response.json())["status"] == "disabled"
     response = operator_client.post(
         base + "/rotate",
         headers=operator_headers(),
@@ -145,7 +140,7 @@ def test_rotation_and_health_are_audited_and_owner_account_cannot_change(
     )
     assert response.status_code == 503
     actions = set(operator_db.scalars(select(OperatorAuditLog.action)))
-    assert {"bank_key.rotated", "bank_key.checked"} <= actions
+    assert "bank_key.rotated" in actions
 
 
 def test_bank_key_routes_require_an_active_inspection(operator_client: TestClient) -> None:

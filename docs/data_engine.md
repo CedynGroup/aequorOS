@@ -978,7 +978,7 @@ For banks with international operations, SWIFT message feeds provide interbank p
 ### 14.2 Encryption
 
 - At rest: AES-256 with customer-managed keys; bank-key requirements and the
-  implemented provider boundary are governed by
+  connected onboarding, encrypted S3 storage and explicit rotation are governed by
   [the bank key setup guide](../backend/docs/bank_key_setup.md).
 - In transit: governed by
   [the transport control and evidence contract](../backend/docs/transport_security.md).

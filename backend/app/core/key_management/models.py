@@ -28,9 +28,7 @@ class BankEncryptionKey(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __table_args__: TableArgs = (
         UniqueConstraint("bank_id", "organization_id", name="uq_bank_encryption_keys_bank_org"),
         ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
-        CheckConstraint(
-            "provider IN ('aws_kms', 'local_test')", name="ck_bank_encryption_keys_provider"
-        ),
+        CheckConstraint("provider = 'aws_kms'", name="ck_bank_encryption_keys_provider"),
         CheckConstraint(
             "status IN ('active', 'disabled', 'unavailable')", name="ck_bank_encryption_keys_status"
         ),

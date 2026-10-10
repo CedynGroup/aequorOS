@@ -40,7 +40,7 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("bank_id", "organization_id", name="uq_bank_encryption_keys_bank_org"),
         sa.CheckConstraint(
-            "provider IN ('aws_kms', 'local_test')", name="ck_bank_encryption_keys_provider"
+            "provider = 'aws_kms'", name="ck_bank_encryption_keys_provider"
         ),
         sa.CheckConstraint(
             "status IN ('active', 'disabled', 'unavailable')", name="ck_bank_encryption_keys_status"

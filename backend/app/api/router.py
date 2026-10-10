@@ -103,6 +103,7 @@ from app.identity.api.manage_banks import router as banks_router
 from app.identity.api.manage_institution_profile import router as institution_profile_router
 from app.identity.api.manage_integration_keys import router as integration_keys_router
 from app.identity.api.read_feature_flags import router as feature_flags_router
+from app.storage.api import router as storage_download_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -298,4 +299,5 @@ v1_router.include_router(
 # answer 404 for an SDI — the workspace is banks-only and its existence is not
 # advertised. The class check lives inside ``require_icaap_export``.
 v1_router.include_router(icaap_draft_exports_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(storage_download_router)
 api_router.include_router(v1_router)

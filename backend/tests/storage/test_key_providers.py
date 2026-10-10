@@ -3,9 +3,7 @@ from __future__ import annotations
 # pyright: reportMissingTypeStubs=false
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol, cast
-from uuid import uuid4
 
 import boto3
 import pytest
@@ -13,11 +11,12 @@ from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 from botocore.stub import Stubber
 from moto import mock_aws
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
-from app.core.config import get_settings
+from app.core.key_management import registry
 from app.core.key_management.aws import AwsKmsKeyProvider
-from app.core.key_management.local import FileTestKeyProvider, LocalKeyProvider
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.schemas import BankKeyConnect
 from app.core.key_management.types import (
     KeyIntegrityError,
     KeyProvider,
@@ -265,24 +264,16 @@ def test_aws_outage_reports_safe_failure() -> None:
     assert "private-provider-diagnostic" not in str(error.value)
 
 
-def test_persistent_fake_is_explicit_and_refuses_revoked_key(tmp_path: Path) -> None:
-    key = KeyReference("local_test", str(uuid4()), "local", "test-only")
-    provider = FileTestKeyProvider(tmp_path)
-    provider.add_key(key)
-    data = provider.generate_data_key(key, {"bank_id": "BK-SAMP0001"})
-    restarted = FileTestKeyProvider(tmp_path)
-    assert restarted.unwrap(key, data.wrapped, {"bank_id": "BK-SAMP0001"}) == data.plaintext
-    (tmp_path / key.key_id).unlink()
-    assert restarted.describe(key).status == KeyStatus.UNAVAILABLE
-    with pytest.raises(KeyUnavailableError):
-        restarted.unwrap(key, data.wrapped, {"bank_id": "BK-SAMP0001"})
-
-
-@pytest.mark.parametrize("environment", ["production", "staging", "preview", "unknown"])
-def test_persistent_fake_is_never_available_in_deployment(
-    environment: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("APP_ENV", environment)
-    get_settings.cache_clear()
-    with pytest.raises(KeyUnavailableError, match="forbidden"):
-        FileTestKeyProvider(tmp_path)
+@pytest.mark.parametrize("provider", ["local_test", "local", "unknown"])
+def test_runtime_key_configuration_refuses_test_providers(provider: str) -> None:
+    with pytest.raises(KeyUnavailableError, match="not supported"):
+        registry.provider_for(provider)
+    with pytest.raises(ValidationError):
+        BankKeyConnect.model_validate(
+            {
+                "provider": provider,
+                "key_id": "fixture",
+                "region": "us-east-1",
+                "owner_account": "123456789012",
+            }
+        )

@@ -137,7 +137,6 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/tenants/{org_id}/activity",
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key",
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key",
-        "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/check",
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/rotate",
         # BI mart history walk (session-gated, audited as bi.backfill). Operator-
         # initiated only: the product hooks build forward, nothing builds back,
