@@ -150,9 +150,7 @@ def _worker_health(settings: Settings) -> ComponentHealth:
     """
     visibility = worker_visibility()
     if visibility.blind:
-        logger.bind(
-            worker_role=visibility.role, worker_visibility_detail=visibility.detail
-        ).error(
+        logger.bind(worker_role=visibility.role, worker_visibility_detail=visibility.detail).error(
             "Readiness: the background worker cannot claim jobs. Every scheduled "
             "refresh, official run and vendor pull is stalled."
         )

@@ -32,11 +32,7 @@ import {
 
 /**
  * /onboard — tenant provisioning.
- * Source: POST /operator/v1/tenants (the saga endpoint). The saga logic is
- * unchanged from the original page — this refit only re-skins it onto the
- * Stepper / SectionCard / Form primitives. The step list is rendered exactly as
- * the API returns it (succeeded / failed / skipped / rolled_back) and the
- * handoff panel only appears when the API returned real identifiers.
+ * The handoff panel only appears when the API returned real identifiers.
  */
 
 // Hardcoded: the four codes seeded in the global `jurisdictions` registry

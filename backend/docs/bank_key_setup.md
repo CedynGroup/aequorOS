@@ -44,6 +44,8 @@ Revoking or disabling the bank key refuses reads and writes, including duplicate
 writes and application download-link redemption. Downloads pass through
 `/api/v1/storage/download`. Link issuance uses object metadata to pin the current
 version; decryption, authentication and key-access checks happen at redemption.
+A download link is a capability credential: redemption needs no bearer session,
+and the link must be kept private.
 Direct uploads through the bank storage interface are
 refused because they would bypass application encryption. Legacy organization/case
 document transfer retains its existing signed S3 URLs; document transfer under bank

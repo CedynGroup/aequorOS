@@ -1,13 +1,14 @@
 """Tenant provisioning saga (docs/internal/developer.md §2, §2a).
 
 ``provision_tenant`` creates everything a new bank tenant needs — org, bank,
-storage buckets, a connection to the bank-held master key, the disabled SSO stub,
+storage buckets, the disabled SSO stub,
 the first account administrator, and that user's Org Owner binding — as an
 explicit saga: every step records
 ``succeeded | failed | skipped | rolled_back`` so partial failure never
 leaves a half-tenant silently. On any failure the DB transaction rolls back
 and freshly-created buckets are deleted (they are empty at that point; when
 deletion itself fails the result says so — manual cleanup, named).
+Bank-key setup during onboarding follows ``backend/docs/bank_key_setup.md``.
 
 Rules this module enforces on purpose:
 
