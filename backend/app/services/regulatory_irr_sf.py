@@ -55,8 +55,8 @@ from app.domain.irr import IrrRunError
 from app.domain.irr import standardised as sf
 from app.domain.irr import standardised_cash_flows as sfcf
 from app.domain.irr import standardised_params as sfp
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalPosition,

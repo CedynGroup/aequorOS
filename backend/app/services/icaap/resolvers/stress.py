@@ -14,7 +14,8 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.domain.icaap.blocks import SourceProbe
-from app.models import RegulatoryPackage, RegulatoryRun, User
+from app.identity.public import User
+from app.models import RegulatoryPackage, RegulatoryRun
 from app.models.stress import EnterpriseStressSignoff
 from app.services import enterprise_stress_signoff, reverse_stress
 from app.services.icaap import resolvers

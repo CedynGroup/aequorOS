@@ -53,7 +53,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue
-from app.models import Bank
+from app.identity.public import Bank
 from app.schemas.bi import BiFilter
 from app.services import jurisdictions
 from app.services.bi import provenance

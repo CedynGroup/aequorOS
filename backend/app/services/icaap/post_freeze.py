@@ -43,7 +43,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind
-from app.models import Bank, RegulatoryPackage
+from app.identity.public import Bank
+from app.models import RegulatoryPackage
 from app.models.icaap import IcaapCycle
 from app.schemas.icaap import IcaapReturnCreate, IcaapStagesRead
 from app.services.audit import record_event
@@ -98,11 +99,7 @@ def return_authority(
         return ()
     access = IcaapAccess(ctx=ctx, bank=bank)
     cycle = db.get(IcaapCycle, cycle_id)
-    if (
-        cycle is None
-        or cycle.organization_id != ctx.organization_id
-        or cycle.bank_id != bank.id
-    ):
+    if cycle is None or cycle.organization_id != ctx.organization_id or cycle.bank_id != bank.id:
         return ()
     state = workflow.load_state(db, access, cycle)
     blocker = _return_blocker(state, str(ctx.actor_user_id) if ctx.actor_user_id else None)

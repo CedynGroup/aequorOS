@@ -32,7 +32,8 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.authority.outcomes import NotComputable
 from app.domain.stress.translation import MacroPathPoint, translate
-from app.models import Bank, MacroScenario, MacroScenarioPath
+from app.identity.public import Bank
+from app.models import MacroScenario, MacroScenarioPath
 from app.schemas.stress import (
     MacroModule,
     MacroPathIn,

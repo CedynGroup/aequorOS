@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankReportingPeriod,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -144,8 +144,7 @@ STARTER_INDICATORS: tuple[StarterIndicator, ...] = (
         code="funding_costs",
         name="Rising cost of funding",
         description=(
-            "Balance-weighted average interest rate across liabilities carrying "
-            "an ingested rate."
+            "Balance-weighted average interest rate across liabilities carrying an ingested rate."
         ),
         metric_basis="weighted-average liability rate (%)",
         unit="pct",
@@ -185,9 +184,7 @@ def _get_period_or_404(
 # --- register ---------------------------------------------------------------
 
 
-def _register_rows(
-    db: Session, ctx: TenantContext, bank: Bank
-) -> dict[str, LiquidityEwiIndicator]:
+def _register_rows(db: Session, ctx: TenantContext, bank: Bank) -> dict[str, LiquidityEwiIndicator]:
     rows = db.scalars(
         select(LiquidityEwiIndicator).where(
             LiquidityEwiIndicator.organization_id == ctx.organization_id,
@@ -197,9 +194,7 @@ def _register_rows(
     return {row.code: row for row in rows}
 
 
-def update_register(
-    db: Session, ctx: TenantContext, bank_id: str, payload: EwiRegisterPut
-) -> None:
+def update_register(db: Session, ctx: TenantContext, bank_id: str, payload: EwiRegisterPut) -> None:
     """Audited Board-evidence write of trigger levels / custom indicators."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     existing = _register_rows(db, ctx, bank)
@@ -229,10 +224,7 @@ def update_register(
         if entry.custom and not (entry.name and entry.direction and entry.unit):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    f"Custom indicator '{entry.code}' must carry name, direction "
-                    "and unit."
-                ),
+                detail=(f"Custom indicator '{entry.code}' must carry name, direction and unit."),
             )
         row = existing.get(entry.code)
         if row is None:
@@ -497,9 +489,7 @@ def evaluate_ewis(
     overrides = _register_rows(db, ctx, bank)
     rows = _load_rows(db, ctx, bank, period.period_end)
     prior = _prior_period(db, ctx, bank, period)
-    prior_rows = (
-        _load_rows(db, ctx, bank, prior.period_end) if prior is not None else None
-    )
+    prior_rows = _load_rows(db, ctx, bank, prior.period_end) if prior is not None else None
     base = base_currency(bank)
 
     evaluators: dict[str, Callable[[], tuple[Decimal | None, str | None]]] = {
@@ -549,9 +539,7 @@ def evaluate_ewis(
             EwiDirection,
             (row.direction if row else None) or (starter.direction if starter else "above"),
         )
-        unit = cast(
-            EwiUnit, (row.unit if row else None) or (starter.unit if starter else "pct")
-        )
+        unit = cast(EwiUnit, (row.unit if row else None) or (starter.unit if starter else "pct"))
         value, detail = compute(code)
         watch = row.watch_threshold if row else None
         action = row.action_threshold if row else None
@@ -578,9 +566,7 @@ def evaluate_ewis(
     return evaluations
 
 
-def escalation_state(
-    evaluations: list[EwiEvaluationRead], cfp_active: bool
-) -> EscalationState:
+def escalation_state(evaluations: list[EwiEvaluationRead], cfp_active: bool) -> EscalationState:
     if cfp_active:
         return "cfp_active"
     statuses = {evaluation.status for evaluation in evaluations}

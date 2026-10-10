@@ -34,7 +34,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
-from app.models import Bank, EnterpriseStressSignoff, RegulatoryRun
+from app.identity.public import Bank
+from app.models import EnterpriseStressSignoff, RegulatoryRun
 from app.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
     StressSignoffCreate,

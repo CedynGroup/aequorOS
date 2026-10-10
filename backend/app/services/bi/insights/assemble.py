@@ -65,7 +65,7 @@ from app.db.base import utc_now
 from app.domain.bi.authority import resolve_authority
 from app.domain.bi.catalogue import Catalogue, MeasureDef
 from app.domain.bi.catalogue.engine import engine_measure_id
-from app.models import Bank
+from app.identity.public import Bank
 from app.schemas.bi import (
     BI_MAX_MEASURES,
     BiDateRange,
@@ -594,7 +594,6 @@ def _scope_for(  # noqa: PLR0913 - the complete authorization sentence
 # ---------------------------------------------------------------------------
 # facts
 # ---------------------------------------------------------------------------
-
 
 
 def _movement_or_gap(  # noqa: PLR0913 - one measure, its two dates and its evidence

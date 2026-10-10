@@ -79,9 +79,9 @@ from app.domain.liquidity.engine import (
 )
 from app.forecasting import service as assumption_register
 from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,

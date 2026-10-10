@@ -39,7 +39,8 @@ from app.domain.stress.management_actions import (
 from app.domain.stress.management_actions import (
     ManagementActionPlan as DomainPlan,
 )
-from app.models import Bank, ManagementActionItem, ManagementActionPlan
+from app.identity.public import Bank
+from app.models import ManagementActionItem, ManagementActionPlan
 from app.schemas.management_actions import (
     ActionItemIn,
     ActionItemRead,

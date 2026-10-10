@@ -67,7 +67,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core import observability
-from app.models import Bank, BankFinancialFact, RegulatoryPackage
+from app.identity.public import Bank
+from app.models import BankFinancialFact, RegulatoryPackage
 from app.services import fact_derivation, reconciliation, withdrawal_impact
 
 #: The fact group carrying the balance sheet, and the ``attributes["side"]``

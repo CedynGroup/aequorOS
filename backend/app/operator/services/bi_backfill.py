@@ -25,7 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.models import Bank, CanonicalPositionSnapshot
+from app.identity.public import Bank
+from app.models import CanonicalPositionSnapshot
 from app.models.canonical import is_current_generation
 from app.schemas.operator import BiBackfillRead, BiBackfillRequest
 from app.services import job_queue

@@ -49,9 +49,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core import security
 from app.core.config import get_settings
-from app.identity.service import auth_throttle
-from app.identity.service.sso_config import find_enabled_by_issuer_audience
-from app.models import SigningAuthorization, SsoConnection, User
+from app.identity import public as auth_throttle
+from app.identity.public import SsoConnection, User, find_enabled_by_issuer_audience
+from app.models import SigningAuthorization
 from app.services.audit import record_event
 
 logger = logging.getLogger(__name__)

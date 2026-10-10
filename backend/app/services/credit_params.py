@@ -20,8 +20,8 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
 from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     ParamConcentrationLimit,
     ParamCreditThreshold,
     ParamCrmHaircut,

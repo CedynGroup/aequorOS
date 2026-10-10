@@ -11,7 +11,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.domain.icaap.blocks import SourceProbe
-from app.models import InstitutionProfile
+from app.identity.public import InstitutionProfile
 from app.services.attestation import register_state
 from app.services.attestation.digests import register_state_digest
 from app.services.icaap import resolvers

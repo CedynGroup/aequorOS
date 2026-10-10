@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.domain.ai.grounding import GroundingContext, Limits
 from app.domain.ai.lexicon import load_lexicon
-from app.models import Bank
+from app.identity.public import Bank
 from app.services.ai import pseudonymise
 
 

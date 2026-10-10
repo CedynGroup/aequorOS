@@ -31,8 +31,9 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.db.base import utc_now
-from app.identity.service import scoped_authorization
-from app.models import Bank, CfpActivationEvent, ContingencyFundingPlan
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import CfpActivationEvent, ContingencyFundingPlan
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,

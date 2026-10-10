@@ -35,7 +35,8 @@ from app.domain.icaap.blocks import BlockStatus
 from app.domain.icaap.frameworks.schema import Framework
 from app.domain.icaap.pillar2 import irrbb_sf_method as irrbb_sf_domain
 from app.domain.icaap.readiness import BlockState, IrrbbSfState
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, RegulatoryRun
 from app.models.icaap import IcaapCycle
 from app.models.icaap_risk_capital import IcaapPillar2Item
 from app.services import regulatory_irr_sf, regulatory_parameters
@@ -102,9 +103,7 @@ def method_mandates(
             for mandate in component.method_mandates:
                 key = (mandate.method, mandate.mandatory_from_param, mandate.replaces)
                 declared.setdefault(key, []).append(component.key)
-    rows = _mandate_rows(
-        db, bank, [param for _method, param, _replaces in declared], today=today
-    )
+    rows = _mandate_rows(db, bank, [param for _method, param, _replaces in declared], today=today)
     decisions: list[MandateDecision] = []
     for (method, param_code, replaces), components in sorted(declared.items()):
         mandatory_from, confirmation = rows.get(param_code, (None, ""))
@@ -174,12 +173,8 @@ def build(  # noqa: PLR0913 - the state is assembled from its named sources
     governed row on a read path is two chances for them to disagree, and this
     one decides whether a filing is refused.
     """
-    decisions = method_mandates(
-        db, access.bank, framework, as_of=cycle.as_of_date, today=today
-    )
-    decision = next(
-        (entry for entry in decisions if entry.method == irrbb_sf_domain.METHOD), None
-    )
+    decisions = method_mandates(db, access.bank, framework, as_of=cycle.as_of_date, today=today)
+    decision = next((entry for entry in decisions if entry.method == irrbb_sf_domain.METHOD), None)
     methods = item_methods(db, access, cycle)
     superseded = tuple(
         sorted(

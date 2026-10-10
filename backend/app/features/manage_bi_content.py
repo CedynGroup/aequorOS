@@ -75,9 +75,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, catalogue
 from app.features.read_bi import PACK_MESSAGES, BiRead, BiReadAccess
-from app.identity.schemas.authorization import SodDecisionRead, SodPolicyFindingRead
-from app.identity.service import grant_administration
-from app.models import User
+from app.identity import public as grant_administration
+from app.identity.public import SodDecisionRead, SodPolicyFindingRead, User
 from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
 from app.schemas.bi import BiLayoutItem, BiPackWidget, BiPackWidgetRead
 from app.schemas.bi_content import (

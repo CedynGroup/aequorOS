@@ -82,7 +82,8 @@ from app.domain.ingestion.contracts import (
     MappingConfig,
     SourceSchema,
 )
-from app.models import Bank, MarketDataQuotaUsage
+from app.identity.public import Bank
+from app.models import MarketDataQuotaUsage
 
 if TYPE_CHECKING:
     from uuid import UUID

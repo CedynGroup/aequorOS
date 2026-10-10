@@ -107,7 +107,8 @@ from app.domain.capital.engine import (
     RWA_CLASS_OPERATIONAL,
 )
 from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
-from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
+from app.identity.public import Bank
+from app.models import CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.services import institution_types
 from app.services import regulatory_parameters as rp
 from app.services.jurisdictions import base_currency, regulator_name

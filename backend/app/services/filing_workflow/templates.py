@@ -27,7 +27,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.filing import workflow as domain
-from app.models import Bank, FilingWorkflowTemplate
+from app.identity.public import Bank
+from app.models import FilingWorkflowTemplate
 from app.schemas.filing_workflow import (
     FilingStageInput,
     FilingWorkflowTemplateCreate,

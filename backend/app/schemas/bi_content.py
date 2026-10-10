@@ -32,7 +32,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
-from app.identity.schemas.authorization import SodDecisionRead
+from app.identity.public import SodDecisionRead
 from app.models.bi_content import (
     DASHBOARD_CHANGE_NOTE_MAX_LENGTH,
     DASHBOARD_DESCRIPTION_MAX_LENGTH,
@@ -424,7 +424,7 @@ class BiMeasureDecisionRead(BiClosedModel):
     """A promotion decision, with the separation-of-duties verdict behind it.
 
     ``sod_decision`` is the platform's own assignment-time machinery
-    (``app/services/grant_administration.py``), reused rather than reimplemented:
+    (``app/identity/service/grant_administration.py``), reused rather than reimplemented:
     proposer ≠ approver is one policy in this codebase, and a promotion is judged
     by it like any other authority decision.
     """

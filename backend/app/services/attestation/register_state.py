@@ -34,7 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import (
+from app.identity.public import (
     BankLicense,
     BankNameHistory,
     BankProduct,

@@ -39,7 +39,7 @@ from app.db.base import utc_now
 from app.domain.icaap import ai_convert
 from app.domain.icaap.blocks import BLOCK_CATALOGUE
 from app.domain.icaap.frameworks.schema import SectionDef
-from app.models import User
+from app.identity.public import User
 from app.models.icaap import IcaapBlockBinding, IcaapCycle, IcaapSection
 from app.models.icaap_ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
 from app.schemas.icaap import IcaapSectionRead

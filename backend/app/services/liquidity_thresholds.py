@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeState, outcome
-from app.models import Bank, ParamLiquidityHaircut, ParamLiquidityThreshold
+from app.identity.public import Bank
+from app.models import ParamLiquidityHaircut, ParamLiquidityThreshold
 from app.schemas.liquidity_thresholds import (
     InstitutionClass,
     LiquidityHaircutRead,

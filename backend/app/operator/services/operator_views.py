@@ -21,9 +21,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
+from app.identity.public import Bank, SsoConnection, User
 from app.models import (
     AuditEvent,
-    Bank,
     BankReportingPeriod,
     DatabaseDirectConnection,
     DeskDetermination,
@@ -35,10 +35,8 @@ from app.models import (
     Organization,
     RegulatoryPackage,
     RegulatoryRun,
-    SsoConnection,
     TemenosConnection,
     TenantStorage,
-    User,
     WorkerHeartbeat,
 )
 from app.schemas.market_desk import DeskEntitlementRead
@@ -102,9 +100,7 @@ def _tenant_rows_for_org(db: Session, organization: Organization) -> list[Tenant
     read discipline the whole operator security model rests on."""
     banks = list(
         db.scalars(
-            select(Bank)
-            .where(Bank.organization_id == organization.id)
-            .order_by(Bank.created_at)
+            select(Bank).where(Bank.organization_id == organization.id).order_by(Bank.created_at)
         )
     )
     storage_row = db.scalar(
@@ -151,9 +147,7 @@ def _tenant_rows_for_org(db: Session, organization: Organization) -> list[Tenant
 def _require_organization(db: Session, organization_id: str) -> Organization:
     organization = db.scalar(select(Organization).where(Organization.id == organization_id))
     if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
     return organization
 
 
@@ -170,9 +164,7 @@ def list_tenant_users(db: Session, organization_id: str) -> TenantUsersListRead:
     _require_organization(db, organization_id)
     rows = list(
         db.scalars(
-            select(User)
-            .where(User.organization_id == organization_id)
-            .order_by(User.created_at)
+            select(User).where(User.organization_id == organization_id).order_by(User.created_at)
         )
     )
     return TenantUsersListRead(
@@ -223,9 +215,7 @@ def get_tenant_storage(db: Session, organization_id: str) -> TenantStorageRead:
     quirks (Cloudflare WAF blocks HEAD; no KES): when a metric cannot be read it
     stays ``None`` and ``note`` explains why."""
     _require_organization(db, organization_id)
-    row = db.scalar(
-        select(TenantStorage).where(TenantStorage.organization_id == organization_id)
-    )
+    row = db.scalar(select(TenantStorage).where(TenantStorage.organization_id == organization_id))
     if row is None:
         return TenantStorageRead(
             note="No storage registry row for this tenant (provisioning saga writes it)."
@@ -308,9 +298,7 @@ def fleet_overview(db: Session) -> FleetOverviewRead:
     total_orgs = db.scalar(select(func.count()).select_from(Organization)) or 0
     banks_live = sum(1 for t in tenant_rows if t.bank_id is not None and t.period_count > 0)
     banks_empty = sum(1 for t in tenant_rows if t.bank_id is not None and t.period_count == 0)
-    stale_count = sum(
-        1 for t in tenant_rows if t.freshness is not None and t.freshness.is_stale
-    )
+    stale_count = sum(1 for t in tenant_rows if t.freshness is not None and t.freshness.is_stale)
     tenants = OverviewTenantsRead(
         total=total_orgs,
         banks_live=banks_live,
@@ -340,9 +328,7 @@ def fleet_overview(db: Session) -> FleetOverviewRead:
             )
         )
         or 0,
-        running=db.scalar(
-            select(func.count()).select_from(Job).where(Job.status == "running")
-        )
+        running=db.scalar(select(func.count()).select_from(Job).where(Job.status == "running"))
         or 0,
     )
 
@@ -353,9 +339,7 @@ def fleet_overview(db: Session) -> FleetOverviewRead:
     connections = OverviewConnectionsRead(ok=conn_ok, warn=conn_warn, crit=conn_crit)
 
     pending = list(
-        db.scalars(
-            select(DeskDetermination).where(DeskDetermination.status == "pending_review")
-        )
+        db.scalars(select(DeskDetermination).where(DeskDetermination.status == "pending_review"))
     )
     # Curve determinations carry no ``rates`` block in derived_values (only
     # ``curves``/``forward_grids``); rates determinations always do (they run the
@@ -508,9 +492,7 @@ def _freshness_summary(
         ctx = TenantContext(organization_id=organization_id)
         report = freshness_service.get_bank_freshness(db, ctx, bank_id)
     except Exception:  # noqa: BLE001 - one tenant's failure must not break the list
-        logger.exception(
-            "freshness summary failed for org %s bank %s", organization_id, bank_id
-        )
+        logger.exception("freshness summary failed for org %s bank %s", organization_id, bank_id)
         return None
     computed = [m.computed_at for m in report.modules if m.computed_at is not None]
     return TenantFreshnessSummaryRead(
@@ -546,13 +528,9 @@ def _last_ingestion(
 
 # -- activity feed --------------------------------------------------------------
 def get_tenant_activity(db: Session, organization_id: str, limit: int) -> TenantActivityRead:
-    organization = db.scalar(
-        select(Organization).where(Organization.id == organization_id)
-    )
+    organization = db.scalar(select(Organization).where(Organization.id == organization_id))
     if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
 
     items: list[ActivityItemRead] = []
 
@@ -604,9 +582,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=run.completed_at or run.created_at,
                 kind="official_run",
-                summary=(
-                    f"official {run.module} run ({run.scenario_code}) for {run.bank_id}"
-                ),
+                summary=(f"official {run.module} run ({run.scenario_code}) for {run.bank_id}"),
                 status=run.status,
             )
         )
@@ -658,9 +634,7 @@ def _activity_sort_key(item: ActivityItemRead) -> tuple[bool, datetime]:
 
 
 # -- jobs ------------------------------------------------------------------------
-def list_jobs(
-    db: Session, *, limit: int, status_filter: str | None = None
-) -> OperatorJobsRead:
+def list_jobs(db: Session, *, limit: int, status_filter: str | None = None) -> OperatorJobsRead:
     """Newest-first cross-tenant job board with durable claimant identity."""
     statement = select(Job).order_by(Job.queued_at.desc()).limit(limit)
     if status_filter is not None:
@@ -770,9 +744,7 @@ def worker_health(db: Session, *, stale_after_seconds: float) -> WorkerHealthRea
     for row in rows:
         last_seen_at = row.last_seen_at
         comparable_last_seen = (
-            last_seen_at.replace(tzinfo=UTC)
-            if last_seen_at.tzinfo is None
-            else last_seen_at
+            last_seen_at.replace(tzinfo=UTC) if last_seen_at.tzinfo is None else last_seen_at
         )
         is_stale = comparable_last_seen < stale_before
         workers.append(

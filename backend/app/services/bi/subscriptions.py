@@ -71,7 +71,8 @@ from app.core.authorization import Permission
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.bi.catalogue import CATALOGUE_VERSION, Catalogue, catalogue
-from app.models import Bank, BiMartBuild, Job, User
+from app.identity.public import Bank, User
+from app.models import BiMartBuild, Job
 from app.models.bi import MART_BUILD_SCOPES
 from app.models.bi_notifications import BiSubscription, BiSubscriptionDelivery
 from app.schemas.bi import BiQuery, BiTime

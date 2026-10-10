@@ -698,9 +698,6 @@
   "reportAny": 1,
   "reportUnknownVariableType": 1
  },
- "app.features.manage_system_of_record": {
-  "reportPrivateUsage": 1
- },
  "app.features.read_behavioral_models": {
   "reportAny": 18,
   "reportMissingParameterType": 1,

@@ -33,7 +33,8 @@ from app.api.deps import IcaapAccess
 from app.domain.icaap import prosemirror
 from app.domain.icaap.blocks import BLOCK_CATALOGUE
 from app.domain.icaap.frameworks.schema import Framework
-from app.models import Bank, RegulatoryPackage, RegulatoryRun
+from app.identity.public import Bank
+from app.models import RegulatoryPackage, RegulatoryRun
 from app.models.icaap import (
     IcaapAttachment,
     IcaapAttachmentWithdrawal,

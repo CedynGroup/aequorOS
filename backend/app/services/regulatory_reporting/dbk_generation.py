@@ -24,8 +24,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable
+from app.identity.public import Bank
 from app.live.public import require_fx_run_coverage
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.models import BankReportingPeriod, RegulatoryRun
 from app.services.regulatory_reporting.generation import (
     BASELINE_SCENARIO,
     MODULE_FX,

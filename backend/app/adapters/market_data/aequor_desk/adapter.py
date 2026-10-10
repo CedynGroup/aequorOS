@@ -81,7 +81,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm import Session
 
-    from app.models import Bank
+    from app.identity.public import Bank
 
 VENDOR = "aequor_desk"
 ADAPTER_VERSION = "1"
@@ -205,9 +205,9 @@ def _curve_records(determination: DeskDetermination, currency: str) -> MarketDat
 
 def _reference_rate_records(determination: DeskDetermination) -> MarketDataBundle:
     bundle = MarketDataBundle()
-    for index_code, value in (determination.derived_values or {}).get(
-        "reference_rates", {}
-    ).items():
+    for index_code, value in (
+        (determination.derived_values or {}).get("reference_rates", {}).items()
+    ):
         rate = _decimal(value, context=index_code)
         bundle.indices.append(
             IndexRecord(
@@ -458,9 +458,7 @@ class AequorDeskAdapter(MarketDataAdapter):
         try:
             determination_id = UUID(handle)
         except (ValueError, AttributeError, TypeError) as exc:
-            raise self._handle_error(
-                f"determination handle {handle!r} is not a UUID"
-            ) from exc
+            raise self._handle_error(f"determination handle {handle!r} is not a UUID") from exc
         determination = self._db.get(DeskDetermination, determination_id)
         if determination is None:
             raise self._handle_error(f"determination {handle} does not exist")

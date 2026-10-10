@@ -45,7 +45,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import AuthSettings, get_settings
 from app.db.base import utc_now
-from app.identity.service import auth_throttle
+from app.identity import public as auth_throttle
 from app.models import OperatorUser
 
 #: Operator sessions live 8 hours — a staff work day, same order as tenant sessions.

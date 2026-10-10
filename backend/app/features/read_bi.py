@@ -106,7 +106,7 @@ from app.domain.bi.catalogue import (
 from app.domain.bi.packs import PackError
 from app.domain.bi.packs import pack as certified_pack
 from app.domain.bi.packs import packs as certified_packs
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.bi import BiFactEngineMetric, BiMartBuild
 from app.schemas.bi import (
     BI_MAX_MEASURES,

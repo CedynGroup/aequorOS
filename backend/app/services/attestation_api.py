@@ -20,11 +20,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Permission
 from app.core.config import get_settings
-from app.identity.service.banks import resolve_bank_reference
+from app.identity.public import Bank, resolve_bank_reference
 from app.models import (
     AdoptedSignatureAppearance,
     AttestationSignature,
-    Bank,
     PackageSignatureRecipient,
     RegulatoryPackage,
     ReturnSignaturePlacement,

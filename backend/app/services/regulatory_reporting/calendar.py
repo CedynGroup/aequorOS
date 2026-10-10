@@ -27,12 +27,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import (
-    Bank,
-    RegulatoryPackage,
-    RegulatoryReportingSettings,
-    RegulatorySubmissionEvent,
-)
+from app.identity.public import Bank
+from app.models import RegulatoryPackage, RegulatoryReportingSettings, RegulatorySubmissionEvent
 from app.schemas.regulatory_reporting import (
     ObligationAnnexRead,
     ObligationRag,

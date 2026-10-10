@@ -29,8 +29,9 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.engine import assert_capital_register_usable
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.identity.public import Bank
 from app.market_data import public as market_data_sources
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.models import BankReportingPeriod, RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,

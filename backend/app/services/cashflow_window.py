@@ -31,7 +31,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
+from app.identity.public import Bank
+from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.schemas.cashflow_window import (
     CashflowWindowCurrencyTotalRead,
     CashflowWindowMonthRead,

@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryPackageApproval
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, RegulatoryPackage, RegulatoryPackageApproval
 from app.models.canonical import CanonicalGlAccount, CanonicalPositionSnapshot
 from app.schemas.regulatory_reporting import (
     DeclaredMethodologyRead,

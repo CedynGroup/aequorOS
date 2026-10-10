@@ -86,7 +86,8 @@ from app.domain.authority.outcomes import (
     OutcomeState,
 )
 from app.domain.authority.outcomes import outcome as build_outcome
-from app.models import Bank, ReconciliationException
+from app.identity.public import Bank
+from app.models import ReconciliationException
 from app.services import live_refresh_triggers, regulatory_parameters
 from app.services.audit import record_event
 

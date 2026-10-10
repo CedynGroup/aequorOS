@@ -50,7 +50,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.models import Bank, Job
+from app.identity.public import Bank
+from app.models import Job
 from app.services import audit, job_queue
 from app.services.ai import client as ai_client
 from app.services.ai import gates, observability, quota

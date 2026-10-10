@@ -54,8 +54,8 @@ from app.domain.rating.operating_environment import (
     compute_operating_environment,
     normalize_sovereign_category,
 )
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalCounterpartyRating,
     CanonicalMarketIndex,
     DeskObservation,
@@ -214,9 +214,7 @@ def _resolve_policy_rate(
             "series_code": POLICY_RATE_SERIES,
             "as_of_date": observation.as_of_date.isoformat(),
         }
-    raise _missing(
-        f"a published {POLICY_RATE_SERIES} policy rate (or an explicit policy_rate_pct)"
-    )
+    raise _missing(f"a published {POLICY_RATE_SERIES} policy rate (or an explicit policy_rate_pct)")
 
 
 def _resolve_inputs(

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Query
 from app.api.deps import DbSession, MarketsPublishedView
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
 from app.models import MarketDataOverlay
 from app.schemas.market_data_views import (
     CurveOverlayComponentRead,

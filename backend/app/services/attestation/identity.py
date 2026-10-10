@@ -38,7 +38,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.models import SignerIdentity, User
+from app.identity.public import User
+from app.models import SignerIdentity
 from app.services.audit import record_event
 from app.services.public_ids import (
     SIGNER_ID_LENGTH,
@@ -152,8 +153,7 @@ def ensure_signer_identity(
         return identity
 
     raise SignerIdentityError(
-        "Could not derive a unique signer identity after "
-        f"{_MAX_COLLISION_ATTEMPTS} attempts."
+        f"Could not derive a unique signer identity after {_MAX_COLLISION_ATTEMPTS} attempts."
     )
 
 

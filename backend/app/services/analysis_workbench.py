@@ -55,7 +55,8 @@ from app.domain.irr.engine import (
 from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
-from app.models import Bank, BankReportingPeriod, SavedScenarioAnalysis, StressScenario
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, SavedScenarioAnalysis, StressScenario
 from app.schemas.common import FigureRefusalRead
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,

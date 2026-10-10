@@ -41,7 +41,7 @@ from app.core.authorization import ConditionCheck, ConditionKind, Permission
 from app.domain.icaap import review_digest as digest_domain
 from app.domain.icaap import workflow as domain
 from app.domain.icaap.frameworks.schema import Framework
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.icaap import (
     IcaapBlockBinding,
     IcaapCycle,

@@ -26,9 +26,9 @@ from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.policy import PolicyUnresolvedError
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CapitalPlan,
     IlaapSnapshot,
     ParamCapitalThreshold,

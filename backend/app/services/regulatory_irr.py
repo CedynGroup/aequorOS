@@ -74,9 +74,8 @@ from app.domain.irr.engine import (
     scenario_shifts,
 )
 from app.domain.reporting import period_windows
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,

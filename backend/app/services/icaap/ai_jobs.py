@@ -41,7 +41,8 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.ai import grounding as grounding_domain
 from app.domain.icaap.frameworks import registry
-from app.models import Bank, Job
+from app.identity.public import Bank
+from app.models import Job
 from app.models.icaap import IcaapCycle
 from app.models.icaap_ai import ICAAP_AI_TERMINAL_STATUSES, IcaapAiSuggestion
 from app.services.ai import client as ai_client

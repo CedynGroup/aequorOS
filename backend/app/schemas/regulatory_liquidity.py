@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
+from app.identity.public import BankRead, BankReportingPeriodRead
 from app.schemas.common import FigureRefusalRead
 from app.schemas.live import LiveModuleView
 

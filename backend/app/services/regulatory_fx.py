@@ -73,15 +73,14 @@ from app.domain.positions.fx import (
     spot_or_none as _spot_or_none,
 )
 from app.domain.reporting import period_windows
-from app.identity.schemas.banks import BankRead, BankReportingPeriodRead
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.live.public import (
     require_fx_fact_coverage,
     require_run_currency_coverage,
     required_fx_currencies_by_date,
 )
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,

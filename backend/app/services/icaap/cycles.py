@@ -36,7 +36,7 @@ from app.domain.icaap.frameworks import rebase as rebase_domain
 from app.domain.icaap.frameworks import registry
 from app.domain.icaap.frameworks.schema import Framework
 from app.domain.icaap.prosemirror import EMPTY_DOC
-from app.models import InstitutionProfile
+from app.identity.public import InstitutionProfile
 from app.models.icaap import IcaapCycle, IcaapDataBlock, IcaapSection
 from app.schemas.icaap import (
     IcaapBlockTypeListRead,

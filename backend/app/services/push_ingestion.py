@@ -30,7 +30,8 @@ from app.adapters.api_push import identity_mapping_config
 from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
-from app.models import Bank, IngestionBatch, MappingConfigRecord
+from app.identity.public import Bank
+from app.models import IngestionBatch, MappingConfigRecord
 from app.schemas.ingestion import (
     IngestionBatchCreate,
     IngestionBatchRead,

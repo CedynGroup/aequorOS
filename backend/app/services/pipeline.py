@@ -34,16 +34,15 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.authority.registry import MetricFamily
-from app.identity.service import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, User
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     Job,
     LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
-    User,
 )
 from app.services import (
     data_activation,

@@ -42,7 +42,8 @@ from app.domain.capital import loan_classification as engine
 from app.domain.credit.dpd_bands import DPD_BANDS as _DPD_BANDS
 from app.domain.credit.restructure import restructure_holds_npl
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
+from app.identity.public import Bank
+from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.services import institution_types, jurisdictions
 from app.services import regulatory_parameters as rp
 

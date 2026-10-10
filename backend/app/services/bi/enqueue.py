@@ -54,7 +54,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.models import Bank, BiMartBuild, CurrentFinancialFact, Job
+from app.identity.public import Bank
+from app.models import BiMartBuild, CurrentFinancialFact, Job
 from app.models.bi import MART_BUILD_SCOPES
 from app.services import job_queue
 from app.services.bi.versions import BUILDER_VERSION
