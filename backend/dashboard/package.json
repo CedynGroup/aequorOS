@@ -27,7 +27,7 @@
     "pdfjs-dist": "6.3.289",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-grid-layout": "2.2.4"
+    "react-grid-layout": "2.3.0"
   },
   "devDependencies": {
     "@auth/core": "0.41.3",
