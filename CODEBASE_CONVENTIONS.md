@@ -52,6 +52,53 @@ New code is strict; legacy code may only get stricter.
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
 
+### Data truth in calculations
+
+Shared types live in the layer-0 kernel, `backend/app/core/data_truth/types.py`.
+Pure engines import that module; ingestion, database and API seams parse through
+`boundary.py` once before calling an engine. These conventions apply to migrated
+engines; migration proceeds through liquidity, capital, IRRBB, FX and reporting.
+The current foundation guards only the shared package; engine, API, dashboard and
+export adoption are follow-up migrations. Existing per-figure calculation contracts
+are described in [ARCHITECTURE.md](ARCHITECTURE.md#per-figure-results-and-calculation-logs).
+
+- A figure is `CalculationResult[T]`: `Value[T]`, `Unavailable(reason)` or
+  `NotApplicable(reason)`. A recorded zero is a value. Missing inputs and a zero
+  denominator produce `Unavailable` with a specific reason, never a numeric fallback,
+  bare `None` or `NaN`. Applicability comes from the governing rule, not missing data.
+- `Money(amount: Decimal, currency)` requires the currency resolved from the bank or
+  instrument; addition and subtraction require matching currencies. `Rate` and `Ratio`
+  hold fractions, `Percentage` holds percentage points, and `BasisPoints` holds basis
+  points. Convert scales with their named methods before arithmetic. These kinds are
+  distinct, immutable and finite; no float coercion, implicit currency conversion or
+  automatic quantization. Keep the owning engine's existing rounding rules.
+- `parse_optional` converts a nullable source field into an explicit result with a
+  required missing-input reason. Malformed input must fail boundary
+  validation, rather than be disguised as missing. Parsers accept decimal strings,
+  integers and database Decimals; reject floats, booleans and non-finite values. Resolve
+  source units explicitly before choosing `parse_rate`, `parse_percentage`, etc.
+- API/export seams use the discriminated `ResultRead` and `result_read` representation.
+  JSON serialization of a `value` result includes a numeric `kind`, decimal strings
+  and money currency; Python-mode model dumps retain `Decimal` values.
+  `unavailable` and `not_applicable` include only status and reason. Render every state;
+  never read an absent value through a default. Adopting this schema in a route requires
+  regenerating the API client and updating its dashboard/export consumers together.
+- Status handlers use closed enums (or tagged result unions) and end matches with
+  `case _: assert_never(subject)` from `typing`. Do not catch unmatched states with a
+  default value; `parse_status` rejects unknown recorded enum values at the boundary.
+  `map_result` applies a transformation only to `Value`, preserving
+  unavailable/inapplicable reasons without invoking arithmetic.
+- `backend/scripts/data_truth_guard.py` owns the new/migrated module scope. Add each
+  engine and its boundary modules to `MIGRATED_MODULES` in its migration change; keep
+  earlier coverage and update paths through the feature-move codemod. The architecture
+  suite runs the lint consumer and negative controls. It rejects float syntax, nullable
+  figure annotations, bare missing returns from figure functions, and matches without
+  a terminal `assert_never`; strict basedpyright verifies exhaustive narrowing and unit
+  compatibility. The guard does not infer units of arbitrary runtime expressions or
+  cover legacy modules outside that scope. Never widen the strict type baseline.
+- Each engine migration includes complete-data golden comparisons and missing-input
+  regression coverage through API responses, exports and dashboard rendering.
+
 ### SQLAlchemy models (`app/models/*.py`)
 
 - SQLAlchemy 2.0 declarative style only: `Mapped[...]` + `mapped_column(...)`. No legacy

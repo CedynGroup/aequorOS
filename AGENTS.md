@@ -90,6 +90,11 @@ Each rule is stated in full in the document the index names.
 - **Calculation hashes and digests are value-based.** Never put a row id
   (`fact.id`) or a volatile field into an `input_hash` snapshot or an attestation
   digest; the live engine re-derives facts with new UUIDs on every refresh.
+- **Migrated financial engines use explicit data-truth types.** Parse boundary values
+  into Decimal-backed numeric kinds; figures are `Value`, `Unavailable(reason)` or
+  `NotApplicable(reason)`. Keep status handling exhaustive and extend the scoped CI guard
+  with each engine migration. [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)
+  owns the contracts and migration gates.
 - **The bank's booked IFRS 9 allowance is the capital figure of record.** Modelled ECL
   (`app/domain/capital/ecl.py`) is a what-if and stress estimate: never substitute it for
   booked general provisions in Tier 2; a stressed increase is a CET1 charge.
@@ -147,6 +152,7 @@ new topic, add a row here.
 | Jurisdiction is data                                           | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
 | Feature layout and the boundary ratchet                        | [CODEBASE_CONVENTIONS.md §5](CODEBASE_CONVENTIONS.md#5-feature-layout)                                                                   |
 | Strict typing and the type-check baseline                      | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#type-check-baseline)                                                                |
+| Financial kinds, explicit result states and migration guard    | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)                                                         |
 | Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
