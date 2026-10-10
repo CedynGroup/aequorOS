@@ -72,7 +72,7 @@ jobs:
       # return). Uploaded even on failure: that is when they matter most.
       - name: Upload journey evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: dashboard-journey-evidence
           path: ${{ runner.temp }}/evidence

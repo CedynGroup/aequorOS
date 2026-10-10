@@ -430,7 +430,7 @@ jobs:
         run: mise run risk-service:test-postgres-schema
       - name: Upload schema shard evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pg-schema-${{ matrix.shard }}
           path: ${{ runner.temp }}/pg-schema/
@@ -529,7 +529,7 @@ jobs:
         run: mise run risk-service:test-postgres-suite
       - name: Upload suite shard evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pg-suite-${{ matrix.shard }}
           path: ${{ runner.temp }}/pg-suite/
