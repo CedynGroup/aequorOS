@@ -110,6 +110,10 @@ Each rule is stated in full in the document the index names.
 - **Market data has one writer.** Persist only through `pull_runner.execute_pull`,
   read only through `app/services/market_data.py`, keep vendor credentials only in
   `EncryptedDbVault`, and never let a raw vendor error reach a bank-facing surface.
+- **Bank objects require bank-held encryption keys.** Use `StorageClient` and
+  `app/core/key_management`; unavailable custody or legacy plaintext fails closed.
+  [The bank encryption contract](backend/docs/bank_encryption.md) owns onboarding,
+  rotation, recovery catalogues and the separate database-field follow-up.
 - **SSO is AequorOS' own OIDC relying party.** Never reintroduce `AUTH0_*`, and never
   let JIT auto-activate an account.
 - **A new job type ships with its enqueue site** and a test asserting the caller
@@ -157,6 +161,7 @@ new topic, add a row here.
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
 | TLS enforcement and bank-reviewable transport evidence         | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
+| Bank-held object keys, onboarding, rotation and backup recovery | [backend/docs/bank_encryption.md](backend/docs/bank_encryption.md)                                                                         |
 | Coolify deployment rules                                       | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                             | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
 

@@ -494,6 +494,13 @@ mise run risk-service:revision "describe change"
 
 ## Environment Variables
 
+Bank object storage requires a connected bank-held master key. Follow
+[bank encryption setup and recovery](docs/bank_encryption.md) for AWS policies,
+onboarding, rotation and backup catalogues. Deployed hosts require
+`ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` and `STORAGE_DOWNLOAD_BASE_URL`;
+`OPERATOR_AWS_KMS_ENABLED` is retired. Database field encryption remains a
+separate rollout.
+
 Copy [`.env.example`](.env.example) to `.env` for the current local settings,
 including the explicit plaintext opt-in. Document uploads, presigned URLs,
 storage health, and Data Engine canonical tiers share that one storage

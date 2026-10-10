@@ -64,7 +64,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-locks"]
 description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py tests/storage/test_key_rotation_concurrency.py"
 
 # The architecture guards: CI task wiring (P0-15), the RLS-blind data-migration
 # scanner (P0-18) and the case/regulatory dependency boundary (ARCH-5). Fast,
@@ -104,7 +104,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # README.md#test-databases-and-the-primary-database.
 [tasks."risk-service:test-postgres-suite"]
 description = "Run the full pytest suite against Postgres (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n auto --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n auto --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py --ignore=tests/storage/test_key_rotation_concurrency.py"
 
 # The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
 # REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
