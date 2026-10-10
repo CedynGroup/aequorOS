@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class KeyManagementSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    platform_account: str | None = Field(
+        default=None, alias="ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID", pattern=r"^\d{12}$"
+    )
+
+
+@lru_cache
+def get_key_settings() -> KeyManagementSettings:
+    return KeyManagementSettings()
