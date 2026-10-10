@@ -344,17 +344,19 @@ class S3CompatibleStorageClient(StorageClient):
         operation: Literal["read", "write"],
         expires_in_seconds: int = 900,
     ) -> str:
+        audit_operation = f"presigned_url.{operation}"
         try:
             bank_key_required = self._encryption.bank_key_required(location)
         except (RuntimeError, SQLAlchemyError) as exc:
+            self._log(audit_operation, location, result="configuration-refused")
             raise StorageAccessError("The bank key configuration could not be verified.") from exc
         if not bank_key_required:
             method = "get_object" if operation == "read" else "put_object"
             signer = cast(_S3ControlClient, cast(object, self._s3))
-            return cast(
+            url = cast(
                 str,
                 self._call(
-                    "presigned_url",
+                    audit_operation,
                     location,
                     lambda: signer.generate_presigned_url(
                         method,
@@ -366,22 +368,30 @@ class S3CompatibleStorageClient(StorageClient):
                     ),
                 ),
             )
+            self._log(audit_operation, location)
+            return url
         if operation != "read":
+            self._log(audit_operation, location, result="key-refused")
             raise StorageAccessError(
                 "Encrypted bank uploads must pass through application storage."
             )
         stat = cast(
             dict[str, object],
             self._call(
-                "presigned_url.read",
+                audit_operation,
                 location,
                 lambda: self._stat_object(location.bucket_name(self._env), location.object_path),
             ),
         )
         version = stat.get("VersionId")
         version_id = str(version) if version is not None else None
-        self._log("presigned_url.read", location, version_id=version_id)
-        return issue(location, version_id, expires_in_seconds)
+        try:
+            url = issue(location, version_id, expires_in_seconds)
+        except (StorageError, RuntimeError, ValueError):
+            self._log(audit_operation, location, result="signing-refused")
+            raise
+        self._log(audit_operation, location, version_id=version_id)
+        return url
 
     def health_check(self) -> StorageHealth:
         try:

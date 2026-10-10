@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 
 from app.api import health
 from app.core.config import get_settings
+from app.core.key_management.settings import get_key_settings
 from app.main import create_app
+from app.operator.main import create_operator_app
 from app.storage.client import StorageHealth
 
 # Readiness probes open independent database connections by design.
@@ -467,15 +469,30 @@ def test_startup_names_the_disabled_esign_requirement(
     assert not any("no regulatory return can be certified" in record for record in records)
 
 
-def test_live_health(client: TestClient) -> None:
-    response = client.get("/api/health/live")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "service": "risk-service",
-        "environment": "test",
-        "status": "ok",
-    }
+@pytest.mark.parametrize("required", [False, True])
+def test_live_health(client: TestClient, monkeypatch: pytest.MonkeyPatch, required: bool) -> None:
+    monkeypatch.setenv("BANK_KEY_REQUIRED", str(required).lower())
+    get_key_settings.cache_clear()
+    try:
+        response = client.get("/api/health/live")
+        assert response.status_code == 200
+        assert response.json() == {
+            "service": "risk-service",
+            "environment": "test",
+            "status": "ok",
+            "bank_key_required": required,
+        }
+        with TestClient(create_operator_app()) as operator_client:
+            response = operator_client.get("/operator/health")
+        assert response.status_code == 200
+        assert response.json() == {
+            "service": "aequoros-operator",
+            "environment": "test",
+            "status": "ok",
+            "bank_key_required": required,
+        }
+    finally:
+        get_key_settings.cache_clear()
 
 
 def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClient) -> None:

@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import BinaryIO, Protocol, cast
+from typing import BinaryIO, Literal, Protocol, cast
 
 import boto3
 import pytest
@@ -16,8 +16,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from moto import mock_aws
 from sqlalchemy import delete, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
@@ -36,7 +38,7 @@ from app.storage.client import (
     StorageNotFoundError,
     Tier,
 )
-from app.storage.config import StorageEngineSettings
+from app.storage.config import StorageEngineSettings, get_storage_settings
 from app.storage.downloads import verify
 from app.storage.encryption import ObjectEncryption
 from app.storage.factory import get_storage_client
@@ -688,3 +690,102 @@ def test_s3_read_failures_are_audited_without_download_credentials(
     ]
     assert "token=" not in bank_storage.log.export_jsonl()
     assert link.split("token=", 1)[1] not in bank_storage.log.export_jsonl()
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+@pytest.mark.parametrize("failure", ["AccessDenied", "transport"])
+def test_platform_presigned_failures_are_audited(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Literal["read", "write"],
+    failure: str,
+) -> None:
+    monkeypatch.setattr(ObjectEncryption, "bank_key_required", lambda _self, _location: False)
+    location = StorageLocation(SLUG, "outputs", "rollout/signing.bin")
+
+    def refuse(*_args: object, **_kwargs: object) -> str:
+        if failure == "transport":
+            raise EndpointConnectionError(endpoint_url="https://synthetic.test?token=secret")
+        raise ClientError({"Error": {"Code": failure, "Message": "token=secret"}}, "Sign")
+
+    monkeypatch.setattr(bank_storage.s3, "generate_presigned_url", refuse)
+    bank_storage.log.entries.clear()
+    with pytest.raises(StorageError):
+        bank_storage.storage.presigned_url(location, operation)
+    assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [
+        (f"presigned_url.{operation}", "backend_error" if failure == "transport" else failure),
+    ]
+    assert "secret" not in bank_storage.log.export_jsonl()
+    assert "token=" not in bank_storage.log.export_jsonl()
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+@pytest.mark.parametrize("failure", ["runtime", "database"])
+def test_presigned_configuration_refusals_are_audited(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Literal["read", "write"],
+    failure: str,
+) -> None:
+    def refuse(_self: ObjectEncryption, _location: StorageLocation) -> bool:
+        if failure == "runtime":
+            raise RuntimeError("token=secret")
+        raise SQLAlchemyError("token=secret")
+
+    monkeypatch.setattr(ObjectEncryption, "bank_key_required", refuse)
+    location = StorageLocation(SLUG, "outputs", "exports/audit.csv")
+    bank_storage.log.entries.clear()
+    with pytest.raises(StorageAccessError):
+        bank_storage.storage.presigned_url(location, operation)
+    assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [
+        (f"presigned_url.{operation}", "configuration-refused"),
+    ]
+    assert "secret" not in bank_storage.log.export_jsonl()
+
+
+@pytest.mark.parametrize("outcome", ["success", "upload", "expiry", "secret", "base-url", "metadata"])
+def test_bank_presigned_outcomes_are_audited(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    location = StorageLocation(SLUG, "outputs", "exports/audit.csv")
+    content = b"synthetic export"
+    original = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+    )
+    monkeypatch.setenv("STORAGE_DOWNLOAD_BASE_URL", "")
+    if outcome == "secret":
+        monkeypatch.setenv("AUTH_JWT_SECRET", "")
+    elif outcome == "base-url":
+        monkeypatch.setenv("STORAGE_DOWNLOAD_BASE_URL", "invalid")
+    elif outcome == "metadata":
+        location = StorageLocation(SLUG, "outputs", "exports/missing.csv")
+    get_settings.cache_clear()
+    get_storage_settings.cache_clear()
+    bank_storage.log.entries.clear()
+    try:
+        if outcome == "success":
+            url = bank_storage.storage.presigned_url(location, "read")
+            assert verify(url.split("token=", 1)[1]).version == original.version_id
+            assert url.split("token=", 1)[1] not in bank_storage.log.export_jsonl()
+            expected = ("presigned_url.read", "success")
+            assert bank_storage.log.entries[0].version_id == original.version_id
+        else:
+            with pytest.raises((StorageError, RuntimeError)):
+                bank_storage.storage.presigned_url(
+                    location,
+                    "write" if outcome == "upload" else "read",
+                    901 if outcome == "expiry" else 900,
+                )
+            result = "signing-refused"
+            if outcome == "upload":
+                result = "key-refused"
+            elif outcome == "metadata":
+                result = "404"
+            expected = ("presigned_url.write" if outcome == "upload" else "presigned_url.read", result)
+        assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [expected]
+        assert "token=" not in bank_storage.log.export_jsonl()
+    finally:
+        get_settings.cache_clear()
+        get_storage_settings.cache_clear()

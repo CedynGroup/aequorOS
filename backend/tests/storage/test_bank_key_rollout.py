@@ -49,7 +49,9 @@ def _storage(
         STORAGE_KMS_KEY_ID="platform-key",
     )  # type: ignore[call-arg] - pydantic-settings runtime constructor options
     return S3CompatibleStorageClient(
-        settings, client_factory=lambda *_args, **_kwargs: bank_storage.s3
+        settings,
+        client_factory=lambda *_args, **_kwargs: bank_storage.s3,
+        access_log=bank_storage.log,
     )
 
 
@@ -80,9 +82,19 @@ def test_optional_key_keeps_platform_storage_and_required_key_refuses_it(
     _, stream = storage.read(location)
     with stream:
         assert stream.read() == content
+    bank_storage.log.entries.clear()
     for operation in ("read", "write"):
-        query = parse_qs(urlparse(storage.presigned_url(location, operation)).query)
+        url = storage.presigned_url(location, operation)
+        query = parse_qs(urlparse(url).query)
         assert "Signature" in query or "X-Amz-Signature" in query
+        assert url not in bank_storage.log.export_jsonl()
+        for credential in ("Signature", "X-Amz-Signature", "AWSAccessKeyId", "X-Amz-Credential"):
+            for value in query.get(credential, []):
+                assert value not in bank_storage.log.export_jsonl()
+    assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [
+        ("presigned_url.read", "success"),
+        ("presigned_url.write", "success"),
+    ]
     monkeypatch.setenv("BANK_KEY_REQUIRED", "true")
     get_key_settings.cache_clear()
     with pytest.raises(StorageAccessError):
