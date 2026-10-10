@@ -18,7 +18,7 @@ and `python -m app.core.serve operator`. Certificate, trust-store, database URL,
 and local-development exceptions are governed by
 [the transport contract](docs/transport_security.md).
 
-Bank-owned encryption key requirements are in
+Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
 - Health and readiness under `/api/health`; readiness reports database, storage,
@@ -494,12 +494,15 @@ mise run risk-service:revision "describe change"
 
 ## Environment Variables
 
-Bank object storage requires a connected bank-held master key. Follow
+Bank keys are optional during rollout (`BANK_KEY_REQUIRED=false`). Connected
+keys govern bank objects and never fall back to platform storage. Follow
 [bank encryption setup and recovery](docs/bank_encryption.md) for AWS policies,
-onboarding, rotation and backup catalogues. Deployed hosts require
-`ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` and `STORAGE_DOWNLOAD_BASE_URL`;
-`OPERATOR_AWS_KMS_ENABLED` is retired. Database field encryption remains a
-separate rollout.
+onboarding, rotation and backup catalogues. Deployed bank-key integrations set
+`ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to verify custody and
+`STORAGE_DOWNLOAD_BASE_URL` for encrypted downloads. Local evaluation can use
+existing platform storage without an AWS KMS account. Enable required keys once
+the management UI ships. `OPERATOR_AWS_KMS_ENABLED` is retired; database field
+encryption remains a separate rollout.
 
 Copy [`.env.example`](.env.example) to `.env` for the current local settings,
 including the explicit plaintext opt-in. Document uploads, presigned URLs,
