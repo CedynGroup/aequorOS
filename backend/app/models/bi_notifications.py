@@ -284,9 +284,6 @@ class BiAlertEvent(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
             name="uq_bi_alert_events_alert_as_of_fingerprint",
         ),
         Index(
-            "ix_bi_alert_events_org_alert_evaluated", "organization_id", "alert_id", "as_of_date"
-        ),
-        Index(
             "ix_bi_alert_events_org_bank_evaluated", "organization_id", "bank_id", "evaluated_at"
         ),
     )

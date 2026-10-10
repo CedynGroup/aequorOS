@@ -59,7 +59,6 @@ class LiquidityEwiIndicator(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "organization_id", "bank_id", "code", name="uq_liquidity_ewi_indicators_scope"
         ),
-        Index("ix_liquidity_ewi_indicators_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(
@@ -97,7 +96,6 @@ class ContingencyFundingPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "organization_id", "bank_id", "version", name="uq_contingency_funding_plans_version"
         ),
-        Index("ix_contingency_funding_plans_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(
@@ -127,9 +125,7 @@ class CfpActivationEvent(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "cfp_activation_events"
     __table_args__ = (
-        CheckConstraint(
-            f"event_type IN {CFP_EVENT_TYPES!r}", name="ck_cfp_activation_events_type"
-        ),
+        CheckConstraint(f"event_type IN {CFP_EVENT_TYPES!r}", name="ck_cfp_activation_events_type"),
         Index("ix_cfp_activation_events_bank", "organization_id", "bank_id"),
     )
 

@@ -81,7 +81,6 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "module",
             name="uq_live_metrics_org_bank_module",
         ),
-        Index("ix_live_metrics_org_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -156,12 +155,6 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "fact_group",
             "category",
             name="uq_current_financial_facts_bank_group_category",
-        ),
-        Index(
-            "ix_current_financial_facts_org_bank_group",
-            "organization_id",
-            "bank_id",
-            "fact_group",
         ),
     )
 

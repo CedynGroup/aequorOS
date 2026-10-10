@@ -278,12 +278,6 @@ class BiDashboardVersion(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
             "version",
             name="uq_bi_dashboard_versions_dashboard_version",
         ),
-        Index(
-            "ix_bi_dashboard_versions_org_dashboard_version",
-            "organization_id",
-            "dashboard_id",
-            "version",
-        ),
     )
 
     dashboard_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)

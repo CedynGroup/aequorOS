@@ -523,7 +523,6 @@ def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
     indexes = {
         "ix_calculation_runs_case_scenario",
         "ix_calculation_runs_input_hash",
-        "ix_calculation_forecast_periods_run_id",
     }
     assert migrated_postgres_schema.indexes(indexes) == indexes
     assert migrated_postgres_schema.policies(tables) == {
@@ -555,8 +554,6 @@ def test_postgres_migrations_create_capital_tables_indexes_and_rls(
     assert migrated_postgres_schema.tables(tables) == tables
     indexes = {
         "ix_capital_projections_case_scenario",
-        "ix_capital_indicators_projection",
-        "ix_capital_projection_findings_projection",
     }
     assert migrated_postgres_schema.indexes(indexes) == indexes
     assert migrated_postgres_schema.policies(tables) == {

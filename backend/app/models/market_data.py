@@ -97,7 +97,6 @@ class MarketDataConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "display_name",
             name="uq_market_data_connections_scope_name",
         ),
-        Index("ix_market_data_connections_org_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -228,7 +227,6 @@ class MarketDataQuotaUsage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "month",
             name="uq_market_data_quota_usage_scope_month",
         ),
-        Index("ix_market_data_quota_usage_org_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
