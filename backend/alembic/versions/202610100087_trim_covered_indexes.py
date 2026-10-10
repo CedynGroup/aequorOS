@@ -4,9 +4,10 @@ The ownership status has only two allowed values and no runtime status query.
 Ownership lookups use the organization primary key, so its status-leading index
 adds no access path and is also removed.
 
-Only ordinary B-tree indexes with the same leading keys as an unconditional
-unique constraint are removed. Tenant filters, parent joins and FK checks retain
-that complete access path; primary keys and correctness constraints stay intact.
+Apart from that ownership exception, only ordinary B-tree indexes with the same
+leading keys as an unconditional unique constraint are removed. Tenant filters,
+parent joins and FK checks retain that complete access path; primary keys and
+correctness constraints stay intact.
 The served queries remain in capital.py (run/projection children), capital_plan.py
 and liquidity_cfp.py (bank/version lists), fact_derivation.py (bank/fact group),
 freshness.py (bank metrics), market_data_connections.py and market_data_sources.py
@@ -33,7 +34,10 @@ ordered and partitioned indexes are deliberately retained.
 
 Concurrent drops avoid blocking writers and are safe before the model changes.
 Each statement commits independently; IF EXISTS makes interrupted upgrades
-restartable. Downgrade recreates the original non-unique indexes concurrently.
+restartable. Downgrade preserves valid originals and recreates missing or invalid
+indexes concurrently, so retrying a failed build restores usable indexes. The
+Postgres regression in tests/db/test_trim_covered_indexes_migration.py exercises
+this recovery alongside the normal round-trip.
 """
 
 from __future__ import annotations
