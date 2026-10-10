@@ -116,6 +116,7 @@ def bank_storage(db_session: Session) -> Iterator[BankStorage]:
             _env_file=None,  # type: ignore[call-arg] - pydantic-settings runtime option
             STORAGE_BACKEND="s3",
             STORAGE_ENV="dev",
+            S3_ENDPOINT=None,  # Moto emulates AWS S3, even when CI exports a MinIO endpoint.
             S3_REGION="us-east-1",
         )  # type: ignore[call-arg] - pydantic-settings runtime constructor options
         log = HashChainedAccessLog(identity="synthetic-storage")
