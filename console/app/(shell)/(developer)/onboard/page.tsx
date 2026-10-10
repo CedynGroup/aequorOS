@@ -5,13 +5,13 @@ import Link from "next/link";
 import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import {
   ApiError,
-  getHealth,
   provisionTenant,
   toApiError,
   type ProvisionStepStatus,
   type ProvisionTenantRequest,
   type ProvisionTenantResponse,
 } from "@/lib/api";
+import { onboardingKeyState, watchBankKeyRequirement } from "@/lib/onboarding";
 import {
   Button,
   CopyButton,
@@ -135,13 +135,9 @@ const STEP_TONE: Record<ProvisionStepStatus, StatusTone> = {
 export default function OnboardPage() {
   const [phase, setPhase] = useState<Phase>("form");
   const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
-  const [bankKeyRequired, setBankKeyRequired] = useState(true);
+  const [bankKeyRequired, setBankKeyRequired] = useState(false);
 
-  useEffect(() => {
-    void getHealth()
-      .then((health) => setBankKeyRequired(health.bank_key_required))
-      .catch(() => setBankKeyRequired(true));
-  }, []);
+  useEffect(() => watchBankKeyRequirement(setBankKeyRequired, window), []);
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const [result, setResult] = useState<ProvisionTenantResponse | null>(null);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
@@ -169,11 +165,8 @@ export default function OnboardPage() {
   }
 
   const currencyValid = /^[A-Z]{3}$/.test(form.currency);
-  const keyFieldsRequired =
-    bankKeyRequired ||
-    form.encryption_key.key_id.trim() !== "" ||
-    form.encryption_key.region.trim() !== "" ||
-    form.encryption_key.owner_account.trim() !== "";
+  const keyState = onboardingKeyState(bankKeyRequired, form.encryption_key);
+  const keyFieldsRequired = keyState.required;
   const formComplete =
     form.organization_name.trim() !== "" &&
     form.bank_name.trim() !== "" &&
@@ -183,12 +176,10 @@ export default function OnboardPage() {
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
     form.admin_full_name.trim() !== "" &&
-    (!keyFieldsRequired ||
-      (form.encryption_key.key_id.trim() !== "" &&
-        form.encryption_key.region.trim() !== "" &&
-        /^[0-9]{12}$/.test(form.encryption_key.owner_account)));
+    keyState.complete;
 
   async function provision() {
+    if (!formComplete) return;
     setPhase("submitting");
     setSubmitError(null);
     setResult(null);
@@ -201,13 +192,7 @@ export default function OnboardPage() {
         license_type: form.license_type.trim(),
         admin_email: form.admin_email.trim(),
         admin_full_name: form.admin_full_name.trim(),
-        encryption_key: !keyFieldsRequired
-          ? null
-          : {
-              ...form.encryption_key,
-              key_id: form.encryption_key.key_id.trim(),
-              region: form.encryption_key.region.trim(),
-            },
+        encryption_key: keyState.encryptionKey,
       });
       setResult(res);
     } catch (err) {
@@ -516,7 +501,9 @@ export default function OnboardPage() {
             <Button variant="secondary" onClick={() => setPhase("form")}>
               Back
             </Button>
-            <Button onClick={() => void provision()}>Provision tenant</Button>
+            <Button disabled={!formComplete} onClick={() => void provision()}>
+              Provision tenant
+            </Button>
           </div>
         </SectionCard>
       )}
