@@ -2,9 +2,7 @@
   "app.models.bank": {
     "module": "app.models.regulatory",
     "feature": "live",
-    "importers": [
-      "app.api.deps"
-    ]
+    "importers": ["app.api.deps"]
   },
   "app.models.parameter_register": {
     "module": "app.models.regulatory",
