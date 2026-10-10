@@ -68031,7 +68031,7 @@
     },
     "/api/v1/banks/{bank_id}/bi/exports/{job_id}": {
       "get": {
-        "description": "One queued export, and a short-lived download link once it is ready.\n\n404 for anyone but the principal who asked for it: a presigned GET is a\nbearer credential, so the owner check IS the access control on the finished\nfile, and the existence of another person's export is not this caller's\nbusiness either.",
+        "description": "One queued export, and a short-lived download link once it is ready.\n\n404 for anyone but the principal who asked for it: the download link is a\nbearer credential, so the owner check IS the access control on the finished\nfile, and the existence of another person's export is not this caller's\nbusiness either.",
         "operationId": "getBiExport",
         "parameters": [
           {

@@ -605,6 +605,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Set up PostgreSQL
+        uses: ./.github/actions/setup-postgres
       - uses: jdx/mise-action@v5
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
@@ -612,6 +614,16 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
+      - name: Create restricted storage test role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE risk_service_test
+            LOGIN PASSWORD 'risk_service_test'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
+          SQL
       - name: Start MinIO with built-in KMS
         id: minio
         uses: ./.github/actions/setup-minio
@@ -625,6 +637,7 @@ jobs:
       # test_mvp_past_retirement_refuses_to_initialize covers on its own inputs.
       - name: Storage contract suite
         env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
           S3_ENDPOINT: http://127.0.0.1:9000
           S3_ACCESS_KEY: ciminio
           S3_SECRET_KEY: ciminio123
@@ -635,12 +648,9 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage.xml
         run: mise run risk-service:test-storage
-      # `--max-skipped 0` because this job exists to end the skipping. With S3_*
-      # unset the suite reports `27 passed, 18 skipped` and exits 0 — green, and
-      # blind to SSE-KMS at rest, the hash-chained access log and per-institution
-      # provisioning. Against the MinIO started above it is `45 passed`, so any
-      # skip here means the server or the credentials stopped working and the
-      # job is asserting nothing.
+      # `--max-skipped 0`: MinIO exercises the object-store contract, and
+      # Postgres exercises the key-rotation row locks and independent readers.
+      # Missing either dependency must not silently leave its tests unexercised.
       - name: The storage contract must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage.xml" --max-skipped 0
       - name: Stop MinIO

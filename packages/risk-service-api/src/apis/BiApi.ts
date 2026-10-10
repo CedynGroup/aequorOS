@@ -1651,7 +1651,7 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
-   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: a presigned GET is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
+   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: the download link is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
    * Get Bi Export
    */
   async getBiExportRaw(
@@ -1708,7 +1708,7 @@ export class BiApi extends runtime.BaseAPI {
   }
 
   /**
-   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: a presigned GET is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
+   * One queued export, and a short-lived download link once it is ready.  404 for anyone but the principal who asked for it: the download link is a bearer credential, so the owner check IS the access control on the finished file, and the existence of another person\'s export is not this caller\'s business either.
    * Get Bi Export
    */
   async getBiExport(

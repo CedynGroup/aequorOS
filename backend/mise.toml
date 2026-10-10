@@ -133,11 +133,12 @@ run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features t
 #   * export STORAGE_RETIRE_AFTER for the configured MVP client. The pure config
 #     test deletes it before asserting that a missing date is refused.
 #
-# The task wrapper supplies S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from
-# local MinIO when an endpoint is not already exported outside CI.
+# The task wrapper supplies a disposable Postgres database for key-rotation
+# concurrency, plus S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from local
+# MinIO when the corresponding test services are not already supplied outside CI.
 [tasks."risk-service:test-storage"]
-description = "Run the S3-compatible storage contract suite (local or supplied S3_* credentials)"
-run = "uv run python scripts/local_services.py run --storage -- uv run pytest tests/storage"
+description = "Run the storage contract suite against Postgres and S3-compatible storage"
+run = "uv run python scripts/local_services.py run --postgres --storage -- uv run pytest tests/storage"
 
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"
