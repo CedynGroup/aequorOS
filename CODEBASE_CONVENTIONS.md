@@ -58,6 +58,9 @@ Shared types live in the layer-0 kernel, `backend/app/core/data_truth/types.py`.
 Pure engines import that module; ingestion, database and API seams parse through
 `boundary.py` once before calling an engine. These conventions apply to migrated
 engines; migration proceeds through liquidity, capital, IRRBB, FX and reporting.
+The current foundation guards only the shared package; engine, API, dashboard and
+export adoption are follow-up migrations. Existing per-figure calculation contracts
+are described in [ARCHITECTURE.md](ARCHITECTURE.md#per-figure-results-and-calculation-logs).
 
 - A figure is `CalculationResult[T]`: `Value[T]`, `Unavailable(reason)` or
   `NotApplicable(reason)`. A recorded zero is a value. Missing inputs and a zero
@@ -75,7 +78,8 @@ engines; migration proceeds through liquidity, capital, IRRBB, FX and reporting.
   integers and database Decimals; reject floats, booleans and non-finite values. Resolve
   source units explicitly before choosing `parse_rate`, `parse_percentage`, etc.
 - API/export seams use the discriminated `ResultRead` and `result_read` representation.
-  A `value` result includes a numeric `kind`, decimal strings and money currency.
+  JSON serialization of a `value` result includes a numeric `kind`, decimal strings
+  and money currency; Python-mode model dumps retain `Decimal` values.
   `unavailable` and `not_applicable` include only status and reason. Render every state;
   never read an absent value through a default. Adopting this schema in a route requires
   regenerating the API client and updating its dashboard/export consumers together.
