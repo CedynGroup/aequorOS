@@ -700,7 +700,10 @@ def test_platform_presigned_failures_are_audited(
     operation: Literal["read", "write"],
     failure: str,
 ) -> None:
-    monkeypatch.setattr(ObjectEncryption, "bank_key_required", lambda _self, _location: False)
+    def bank_key_optional(_self: ObjectEncryption, _location: StorageLocation) -> bool:
+        return False
+
+    monkeypatch.setattr(ObjectEncryption, "bank_key_required", bank_key_optional)
     location = StorageLocation(SLUG, "outputs", "rollout/signing.bin")
 
     def refuse(*_args: object, **_kwargs: object) -> str:
@@ -743,7 +746,9 @@ def test_presigned_configuration_refusals_are_audited(
     assert "secret" not in bank_storage.log.export_jsonl()
 
 
-@pytest.mark.parametrize("outcome", ["success", "upload", "expiry", "secret", "base-url", "metadata"])
+@pytest.mark.parametrize(
+    "outcome", ["success", "upload", "expiry", "secret", "base-url", "metadata"]
+)
 def test_bank_presigned_outcomes_are_audited(
     bank_storage: BankStorage,
     monkeypatch: pytest.MonkeyPatch,
@@ -783,7 +788,10 @@ def test_bank_presigned_outcomes_are_audited(
                 result = "key-refused"
             elif outcome == "metadata":
                 result = "404"
-            expected = ("presigned_url.write" if outcome == "upload" else "presigned_url.read", result)
+            expected = (
+                "presigned_url.write" if outcome == "upload" else "presigned_url.read",
+                result,
+            )
         assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [expected]
         assert "token=" not in bank_storage.log.export_jsonl()
     finally:
