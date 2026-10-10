@@ -74,6 +74,12 @@ __all__ = ["migrated_postgres_schema"]  # re-exported fixture
 #:   definition and is never mounted on the tenant API;
 #: * a table the tenant plane cannot reach at all.
 CROSS_TENANT_BY_DESIGN: dict[str, str] = {
+    "bank_encryption_keys": (
+        "Pre-tenant storage-key resolution: authenticated object locations and signed "
+        "download capabilities identify a bank slug before a tenant session exists. "
+        "Contains key references and status only; bank/organization FKs bind ownership. "
+        "The object-key envelopes resolved through it enforce tenant RLS."
+    ),
     "integration_keys": (
         "Read PRE-AUTH: the bearer credential is resolved by a global SHA-256 hash "
         "lookup before any organization is known, so there is no app.organization_id "

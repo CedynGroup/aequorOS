@@ -1349,7 +1349,6 @@ class OperatorSettings(BaseSettings):
     #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
     #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
     #: the saga records the step as honestly skipped rather than pretending.
-    aws_kms_enabled: bool = Field(default=False, alias="OPERATOR_AWS_KMS_ENABLED")
 
     @field_validator(
         "operator_database_url",

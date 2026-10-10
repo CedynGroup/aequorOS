@@ -13,6 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.key_management.schemas import BankKeyConnect
 from app.schemas.common import JsonObject
 from app.schemas.market_desk import DeskEntitlementRead
 
@@ -67,6 +68,7 @@ class TenantProvisionCreate(ClosedModel):
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     admin_email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     admin_full_name: str = Field(min_length=1, max_length=255)
+    encryption_key: BankKeyConnect | None = None
 
 
 class ProvisioningStepRead(ClosedModel):
