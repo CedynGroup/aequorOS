@@ -1,7 +1,6 @@
 """Bank-owned AWS KMS keys, accessed using the workload's AWS role.
 
-Only key ARNs in the declared bank account are accepted. Alias ARNs are
-resolved at registration, so an alias change never silently changes ownership.
+Only exact key ARNs in the declared bank account are accepted.
 KMS calls and SDK keyrings stay inside this adapter.
 """
 
@@ -37,7 +36,7 @@ from app.core.key_management.types import (
 )
 from app.core.tls import require_boto_tls
 
-_ARN = re.compile(r"^arn:(aws(?:-us-gov|-cn)?):kms:([^:]+):(\d{12}):(key|alias)/(.+)$")
+_ARN = re.compile(r"^arn:(aws(?:-us-gov|-cn)?):kms:([^:]+):(\d{12}):key/(.+)$")
 
 
 class _Metadata(BaseModel):
@@ -60,9 +59,10 @@ class _KmsClient(Protocol):
 
 def validate_reference(key: KeyReference) -> None:
     match = _ARN.fullmatch(key.key_id)
+    if match is None:
+        raise KeyUnavailableError("An exact AWS KMS key ARN is required; alias ARNs are not accepted.")
     if (
         key.provider != "aws_kms"
-        or match is None
         or match[2] != key.region
         or match[3] != key.owner_account
     ):
@@ -102,8 +102,8 @@ class AwsKmsKeyProvider(KeyProvider):
             metadata = _Description.model_validate(
                 client.describe_key(KeyId=key.key_id)
             ).KeyMetadata
-            resolved = KeyReference("aws_kms", metadata.Arn, key.region, key.owner_account)
-            validate_reference(resolved)
+            if metadata.Arn != key.key_id:
+                raise KeyUnavailableError("The bank key service returned a different key ARN.")
             if (
                 metadata.KeyManager != "CUSTOMER"
                 or metadata.KeyUsage != "ENCRYPT_DECRYPT"
@@ -113,7 +113,7 @@ class AwsKmsKeyProvider(KeyProvider):
                     "A customer-managed symmetric encryption key is required."
                 )
             state = KeyStatus.ACTIVE if metadata.KeyState == "Enabled" else KeyStatus.DISABLED
-            return KeyDescription(resolved, state)
+            return KeyDescription(key, state)
         except KeyUnavailableError:
             raise
         except Exception as exc:
@@ -127,7 +127,7 @@ class AwsKmsKeyProvider(KeyProvider):
             raise KeyUnavailableError("The bank encryption key is disabled or pending deletion.")
         return sdk.materials().create_aws_kms_keyring(
             CreateAwsKmsKeyringInput(
-                kms_key_id=description.reference.key_id,
+                kms_key_id=key.key_id,
                 kms_client=self._factory(key.region),
             )
         )
