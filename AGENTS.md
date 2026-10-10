@@ -152,7 +152,7 @@ new topic, add a row here.
 | Jurisdiction is data                                           | [CODEBASE_CONVENTIONS.md §4](CODEBASE_CONVENTIONS.md#4-jurisdiction-is-data)                                                             |
 | Feature layout and the boundary ratchet                        | [CODEBASE_CONVENTIONS.md §5](CODEBASE_CONVENTIONS.md#5-feature-layout)                                                                   |
 | Strict typing and the type-check baseline                      | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#type-check-baseline)                                                                |
-| Financial kinds, explicit result states and migration guard    | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)                                                          |
+| Financial kinds, explicit result states and migration guard    | [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)                                                         |
 | Stale local processes                                          | [backend/README.md](backend/README.md#stale-local-processes)                                                                             |
 | Test databases, the primary database, live-data suite          | [backend/README.md](backend/README.md#test-databases-and-the-primary-database)                                                           |
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
