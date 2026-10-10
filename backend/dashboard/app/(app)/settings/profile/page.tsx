@@ -11,6 +11,7 @@ import { Check, Monitor, Moon, Sun } from "lucide-react";
 import type { ProfileUpdateRequest } from "@aequoros/risk-service-api";
 
 import { useUserProfile } from "@/components/profile/ProfileProvider";
+import AccessAdministrationLink from "@/components/settings/AccessAdministrationLink";
 import CurrentAccountPanel from "@/components/settings/CurrentAccountPanel";
 import {
   useTheme,
@@ -210,7 +211,10 @@ export default function ProfilePage() {
 
   return (
     <>
-      <PageHeader title="Profile & preferences" />
+      <PageHeader
+        title="Profile & preferences"
+        action={<AccessAdministrationLink />}
+      />
 
       <div className="px-4 md:px-8 py-6 max-w-5xl">
         {isLoading && !profile ? (
@@ -239,8 +243,8 @@ export default function ProfilePage() {
         ) : profile ? (
           <div className="space-y-6">
             {/* Who you are on the platform and the signer ID stamped on every
-                document you certify — personal, so it lives here for every
-                session, not only on the organization hub. */}
+                document you certify — personal, so it lives here, on the tab
+                every session can open. */}
             <CurrentAccountPanel />
             <form onSubmit={onSubmit} className="space-y-6">
               <Card>

@@ -39,7 +39,7 @@ test.describe("attestation surfaces", () => {
   test("the signer identity is provisioned and shown in Settings", async ({
     page,
   }) => {
-    await page.goto("/settings");
+    await page.goto("/settings/profile");
     await expect(
       page.getByRole("heading", { name: "Your account" }),
     ).toBeVisible();
