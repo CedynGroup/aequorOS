@@ -26,6 +26,7 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
+from app.core.key_management.settings import get_key_settings
 from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
 from app.core.tls import RequireTLSMiddleware, database_connect_args, validate_service_transports
@@ -109,6 +110,7 @@ def create_operator_app() -> FastAPI:
             service=OPERATOR_APP_NAME,
             environment=settings.app.app_env,
             status="ok",
+            bank_key_required=get_key_settings().bank_key_required,
         )
 
     # Session issuance sits beside /operator/health, not under /v1: it is the

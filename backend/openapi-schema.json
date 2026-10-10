@@ -26860,6 +26860,11 @@
       },
       "HealthResponse": {
         "properties": {
+          "bank_key_required": {
+            "default": false,
+            "title": "Bank Key Required",
+            "type": "boolean"
+          },
           "environment": {
             "enum": [
               "local",

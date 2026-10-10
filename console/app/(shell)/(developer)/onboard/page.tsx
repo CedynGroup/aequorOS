@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import {
   ApiError,
+  getHealth,
   provisionTenant,
   toApiError,
   type ProvisionStepStatus,
@@ -98,7 +99,11 @@ const INSTITUTION_TYPES = [
 
 type Phase = "form" | "review" | "submitting" | "done";
 
-const EMPTY_FORM: ProvisionTenantRequest = {
+type OnboardingForm = Omit<ProvisionTenantRequest, "encryption_key"> & {
+  encryption_key: NonNullable<ProvisionTenantRequest["encryption_key"]>;
+};
+
+const EMPTY_FORM: OnboardingForm = {
   organization_name: "",
   bank_name: "",
   license_type: "",
@@ -133,15 +138,22 @@ const STEP_TONE: Record<ProvisionStepStatus, StatusTone> = {
 
 export default function OnboardPage() {
   const [phase, setPhase] = useState<Phase>("form");
-  const [form, setForm] = useState<ProvisionTenantRequest>(EMPTY_FORM);
+  const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
+  const [bankKeyRequired, setBankKeyRequired] = useState(true);
+
+  useEffect(() => {
+    void getHealth()
+      .then((health) => setBankKeyRequired(health.bank_key_required))
+      .catch(() => setBankKeyRequired(true));
+  }, []);
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const [result, setResult] = useState<ProvisionTenantResponse | null>(null);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [otpRevealed, setOtpRevealed] = useState(false);
 
-  function set<K extends keyof ProvisionTenantRequest>(
+  function set<K extends keyof OnboardingForm>(
     key: K,
-    value: ProvisionTenantRequest[K],
+    value: OnboardingForm[K],
   ) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -161,6 +173,11 @@ export default function OnboardPage() {
   }
 
   const currencyValid = /^[A-Z]{3}$/.test(form.currency);
+  const keyFieldsRequired =
+    bankKeyRequired ||
+    form.encryption_key.key_id.trim() !== "" ||
+    form.encryption_key.region.trim() !== "" ||
+    form.encryption_key.owner_account.trim() !== "";
   const formComplete =
     form.organization_name.trim() !== "" &&
     form.bank_name.trim() !== "" &&
@@ -170,9 +187,10 @@ export default function OnboardPage() {
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
     form.admin_full_name.trim() !== "" &&
-    form.encryption_key.key_id.trim() !== "" &&
-    form.encryption_key.region.trim() !== "" &&
-    /^[0-9]{12}$/.test(form.encryption_key.owner_account);
+    (!keyFieldsRequired ||
+      (form.encryption_key.key_id.trim() !== "" &&
+        form.encryption_key.region.trim() !== "" &&
+        /^[0-9]{12}$/.test(form.encryption_key.owner_account)));
 
   async function provision() {
     setPhase("submitting");
@@ -187,11 +205,13 @@ export default function OnboardPage() {
         license_type: form.license_type.trim(),
         admin_email: form.admin_email.trim(),
         admin_full_name: form.admin_full_name.trim(),
-        encryption_key: {
-          ...form.encryption_key,
-          key_id: form.encryption_key.key_id.trim(),
-          region: form.encryption_key.region.trim(),
-        },
+        encryption_key: !keyFieldsRequired
+          ? null
+          : {
+              ...form.encryption_key,
+              key_id: form.encryption_key.key_id.trim(),
+              region: form.encryption_key.region.trim(),
+            },
       });
       setResult(res);
     } catch (err) {
@@ -377,15 +397,17 @@ export default function OnboardPage() {
                 Bank-owned encryption key
               </h2>
               <p className="mt-1 text-caption text-slate">
-                The bank must authorize the platform&apos;s workload role to use
-                its enabled AWS KMS encryption key. Onboarding verifies access
-                before completing setup; revoking the key prevents access to
-                bank files.
+                {bankKeyRequired
+                  ? "A bank-owned key is required."
+                  : "A bank-owned key is optional during rollout."}{" "}
+                To connect one, the bank authorizes the platform&apos;s workload
+                role to use its enabled AWS KMS key. Setup verifies access;
+                revoking a connected key prevents access to bank files.
               </p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field
                   label="AWS KMS key ARN"
-                  required
+                  required={keyFieldsRequired}
                   className="sm:col-span-2"
                   hint="Use the exact key ARN. Aliases and bare key IDs are not accepted."
                 >
@@ -400,10 +422,10 @@ export default function OnboardPage() {
                     }
                     placeholder="arn:aws:kms:region:123456789012:key/key-id"
                     pattern="arn:[^:]+:kms:[^:]+:[0-9]{12}:key/.+"
-                    required
+                    required={keyFieldsRequired}
                   />
                 </Field>
-                <Field label="Bank AWS account ID" required>
+                <Field label="Bank AWS account ID" required={keyFieldsRequired}>
                   <Input
                     value={form.encryption_key.owner_account}
                     className="font-mono"
@@ -417,10 +439,10 @@ export default function OnboardPage() {
                     inputMode="numeric"
                     pattern="[0-9]{12}"
                     maxLength={12}
-                    required
+                    required={keyFieldsRequired}
                   />
                 </Field>
-                <Field label="AWS region" required>
+                <Field label="AWS region" required={keyFieldsRequired}>
                   <Input
                     value={form.encryption_key.region}
                     onChange={(e) =>
@@ -430,7 +452,7 @@ export default function OnboardPage() {
                       })
                     }
                     placeholder="Region from the key ARN"
-                    required
+                    required={keyFieldsRequired}
                   />
                 </Field>
               </div>
@@ -467,17 +489,28 @@ export default function OnboardPage() {
             <FieldRow label="Reporting currency">
               <span className="font-mono">{form.currency}</span>
             </FieldRow>
-            <FieldRow label="Bank-owned KMS key">
+            <FieldRow
+              label={
+                keyFieldsRequired ? "Bank-owned KMS key" : "Storage encryption"
+              }
+            >
               <span className="break-all font-mono">
-                {form.encryption_key.key_id}
+                {form.encryption_key.key_id ||
+                  "Platform storage — no bank key connected"}
               </span>
             </FieldRow>
-            <FieldRow label="Bank AWS account">
-              <span className="font-mono">
-                {form.encryption_key.owner_account}
-              </span>
-            </FieldRow>
-            <FieldRow label="AWS region">{form.encryption_key.region}</FieldRow>
+            {keyFieldsRequired && (
+              <>
+                <FieldRow label="Bank AWS account">
+                  <span className="font-mono">
+                    {form.encryption_key.owner_account}
+                  </span>
+                </FieldRow>
+                <FieldRow label="AWS region">
+                  {form.encryption_key.region}
+                </FieldRow>
+              </>
+            )}
             <FieldRow label="First admin">
               {form.admin_full_name} ·{" "}
               <span className="font-mono">{form.admin_email}</span>

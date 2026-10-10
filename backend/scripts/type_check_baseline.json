@@ -2212,7 +2212,7 @@
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
   "reportUnknownLambdaType": 7,
-  "reportUnknownMemberType": 38,
+  "reportUnknownMemberType": 36,
   "reportUnknownVariableType": 13
  },
  "app.worker": {

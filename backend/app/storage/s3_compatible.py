@@ -7,9 +7,10 @@ applies: behavior differences (Object Lock, KES vs SSE-KMS) are handled here
 and never leak through the interface. GCS lands later as a true second
 implementation against the same contract suite.
 
-Bank objects are client-side encrypted with AWS Encryption SDK messages.
+Objects of banks with connected keys use AWS Encryption SDK messages.
 Their object keys are wrapped by bank-held master keys in the key registry.
-Optional bucket SSE is additional protection, including for platform audit logs.
+During optional rollout, banks without keys retain platform storage encryption.
+Bucket SSE also protects platform audit logs.
 
 """
 
@@ -19,7 +20,7 @@ import logging
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, BinaryIO, Literal, cast
+from typing import Any, BinaryIO, Literal, Protocol, cast
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -27,6 +28,7 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import TypeAdapter, ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
@@ -53,6 +55,15 @@ from app.storage.provisioning import ProvisioningClient, ensure_audit_bucket, pr
 
 logger = logging.getLogger(__name__)
 _OBJECT_HEADERS = TypeAdapter(dict[str, str])
+
+
+class _S3ControlClient(Protocol):
+    def generate_presigned_url(
+        self, operation: str, *, Params: dict[str, str], ExpiresIn: int
+    ) -> str: ...
+
+    def list_buckets(self) -> object: ...
+
 
 _ACCESS_DENIED_CODES = {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFound"}
@@ -145,16 +156,20 @@ class S3CompatibleStorageClient(StorageClient):
         except StorageAccessError:
             self._log("write", location, result="key-refused")
             raise
-        metadata = replace(metadata, kms_key_id=bank_key_id)
+        effective_sse_key = self._settings.kms_key_id
+        if envelope_id is None:
+            effective_sse_key = metadata.kms_key_id or effective_sse_key
+        metadata = replace(metadata, kms_key_id=bank_key_id or effective_sse_key)
         headers = metadata.to_object_metadata()
-        headers.update({"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": envelope_id})
+        if envelope_id is not None:
+            headers.update({"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": envelope_id})
         extra_args: dict[str, Any] = {
             "ContentType": content_type,
             "Metadata": headers,
         }
-        if self._settings.kms_key_id is not None:
+        if effective_sse_key is not None:
             extra_args["ServerSideEncryption"] = "aws:kms"
-            extra_args["SSEKMSKeyId"] = self._settings.kms_key_id
+            extra_args["SSEKMSKeyId"] = effective_sse_key
         # upload_fileobj auto-switches to a multipart upload above the threshold,
         # so a large staged bundle is sent in parts each under the backend/proxy
         # request-size limit; a single put_object would 413 on a >100 MB object.
@@ -329,6 +344,28 @@ class S3CompatibleStorageClient(StorageClient):
         operation: Literal["read", "write"],
         expires_in_seconds: int = 900,
     ) -> str:
+        try:
+            bank_key_required = self._encryption.bank_key_required(location)
+        except (RuntimeError, SQLAlchemyError) as exc:
+            raise StorageAccessError("The bank key configuration could not be verified.") from exc
+        if not bank_key_required:
+            method = "get_object" if operation == "read" else "put_object"
+            signer = cast(_S3ControlClient, cast(object, self._s3))
+            return cast(
+                str,
+                self._call(
+                    "presigned_url",
+                    location,
+                    lambda: signer.generate_presigned_url(
+                        method,
+                        Params={
+                            "Bucket": location.bucket_name(self._env),
+                            "Key": location.object_path,
+                        },
+                        ExpiresIn=expires_in_seconds,
+                    ),
+                ),
+            )
         if operation != "read":
             raise StorageAccessError(
                 "Encrypted bank uploads must pass through application storage."
@@ -348,7 +385,8 @@ class S3CompatibleStorageClient(StorageClient):
 
     def health_check(self) -> StorageHealth:
         try:
-            self._s3.list_buckets()
+            client = cast(_S3ControlClient, cast(object, self._s3))
+            _ = client.list_buckets()
         except (ClientError, BotoCoreError) as exc:
             return StorageHealth(healthy=False, backend=self._settings.backend, detail=str(exc))
         return StorageHealth(healthy=True, backend=self._settings.backend)

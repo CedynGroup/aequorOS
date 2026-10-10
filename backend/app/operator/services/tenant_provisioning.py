@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.key_management.registry import ProviderFactory, provider_for, register
+from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyUnavailableError
 from app.db.base import utc_now
 from app.identity import public as membership
@@ -224,6 +225,11 @@ def _step_kms(  # noqa: PLR0913 - explicit provisioning saga inputs
     state: _SagaState,
 ) -> None:
     if payload.encryption_key is None:
+        if not get_key_settings().bank_key_required:
+            state.record(
+                "kms", "skipped", "No bank key connected; existing platform storage remains active."
+            )
+            return
         raise state.fail("kms", "A bank-owned encryption key must be connected before onboarding.")
     try:
         row = register(

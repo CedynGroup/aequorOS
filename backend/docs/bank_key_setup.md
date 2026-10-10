@@ -1,8 +1,9 @@
 # Bank key setup
 
-Bank onboarding requires a bank-owned AWS KMS key. The operator console collects
-its exact key ARN, bank AWS account ID and region, reviews those values, and sends
-`encryption_key` in `POST /operator/v1/tenants`:
+Bank-held custody is optional during rollout (`BANK_KEY_REQUIRED=false` by
+default). When connecting a key, the operator console collects its exact key ARN,
+bank AWS account ID and region, reviews those values, and sends `encryption_key`
+in `POST /operator/v1/tenants`:
 
 ```json
 {
@@ -30,7 +31,8 @@ be repointed, so it cannot provide the fixed identity required for decryption
 and audit evidence. Only `aws_kms` is accepted in runtime configuration; local
 providers are injected test fixtures, never an AWS failure fallback.
 
-Every bank object in raw, canonical, outputs and temp S3 tiers is an AWS Encryption
+For banks with a connected key, every object in raw, canonical, outputs and temp
+S3 tiers is an AWS Encryption
 SDK message. Each object has an independent wrapping key held only as a bank-KMS
 wrapped envelope in the database. S3 metadata holds the envelope UUID and format;
 plaintext keys are never persisted or cached across operations. Optional bucket
@@ -110,3 +112,25 @@ the owning bank from changing AWS policy directly, so the bank must apply the sa
 its own AWS key administration and any longer-lived recovery copies.
 
 Bank key health monitoring is follow-up work; there is no separate `/check` endpoint.
+
+## Rollout: bank keys are optional until the management UI ships
+
+`BANK_KEY_REQUIRED` defaults to `false` in every environment. Enable it once
+the key-management UI ships. With the flag off, onboarding may omit
+`encryption_key`; tenants without a key retain the existing platform-key/S3
+storage path, including direct signed uploads and downloads. Missing bank
+keys alone do not prevent startup or storage access. Local evaluation uses
+that same path and needs no AWS KMS account; no tenant-local provider mode or
+persistent fake master key is introduced. Configure local S3/MinIO as before.
+
+A connected bank key always enables SDK envelope encryption for that bank's
+objects, exports, filings and object backups. Revocation or an outage refuses
+access even when `BANK_KEY_REQUIRED=false`; it never falls back to the
+platform path. Encrypted objects also refuse reads if their bank-key record
+is missing. Enabling the flag refuses onboarding and storage operations for
+all tenants without a verified bank-owned key. Existing platform-only files
+need a migration before connecting a key or enabling enforcement.
+
+This stack supplies optional custody scaffolding. Mandatory bank-held custody
+and full regulatory approval are deferred until the management UI and the
+related database-field work are complete.

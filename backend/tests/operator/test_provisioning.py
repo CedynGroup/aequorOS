@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.settings import get_key_settings
 from app.forecasting.service import resolve_effective
 from app.models import (
     AuthorizationBinding,
@@ -31,6 +33,7 @@ from app.models import (
 )
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
+from app.schemas.operator import ProvisioningResultRead
 from app.services import institution_types, parameter_register
 from tests.operator.conftest import (
     BANK_KEY,
@@ -371,8 +374,10 @@ def test_duplicate_names_warn_but_do_not_block(operator_client: TestClient) -> N
 
 
 def test_missing_bank_key_refuses_onboarding(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv("BANK_KEY_REQUIRED", "true")
+    get_key_settings.cache_clear()
     response = operator_client.post(
         "/operator/v1/tenants",
         json=provision_payload(encryption_key=None),
@@ -382,6 +387,24 @@ def test_missing_bank_key_refuses_onboarding(
     assert body["succeeded"] is False
     assert _steps_by_name(body)["kms"]["status"] == "failed"
     assert operator_db.scalar(select(Organization)) is None
+    get_key_settings.cache_clear()
+
+
+def test_optional_bank_key_preserves_onboarding_without_provider_record(
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BANK_KEY_REQUIRED", "false")
+    get_key_settings.cache_clear()
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(encryption_key=None),
+        headers=operator_headers(),
+    )
+    body = ProvisioningResultRead.model_validate_json(response.content)
+    assert body.succeeded is True
+    assert next(step for step in body.steps if step.step == "kms").status == "skipped"
+    assert operator_db.scalar(select(BankEncryptionKey)) is None
+    get_key_settings.cache_clear()
 
 
 def test_unconfigured_storage_fails_the_saga_honestly(
