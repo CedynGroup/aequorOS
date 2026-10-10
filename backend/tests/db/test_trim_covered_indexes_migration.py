@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Protocol, cast
 
 import pytest
+from psycopg.errors import LockNotAvailable
 from sqlalchemy import UniqueConstraint, text
+from sqlalchemy.exc import OperationalError
 
 import app.models
 from alembic import command
@@ -142,3 +144,70 @@ def test_indexes_are_dropped_at_head_and_restored_by_downgrade(
     command.upgrade(config, "head")
     clear_database_caches()
     assert _indexes(migrated_postgres_schema) == {}
+
+
+def _index_states(schema: MigratedPostgresSchema) -> dict[str, tuple[int, bool]]:
+    with schema.app_engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                """
+                SELECT i.relname, i.oid, x.indisvalid
+                FROM pg_index x
+                JOIN pg_class i ON i.oid = x.indexrelid
+                JOIN pg_namespace n ON n.oid = i.relnamespace
+                WHERE n.nspname = :schema AND i.relname = ANY(:names)
+                """
+            ),
+            {"schema": schema.schema_name, "names": [index for _table, index, _cols in DROPPED]},
+        )
+        entries = cast(list[tuple[str, int, bool]], rows.tuples().all())
+        return {index: (oid, valid) for index, oid, valid in entries}
+
+
+@pytest.mark.committing_db
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration tests.",
+)
+def test_downgrade_recovers_failed_concurrent_indexes_and_preserves_valid_indexes(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    with migrated_postgres_schema.app_engine.connect().execution_options(
+        isolation_level="AUTOCOMMIT"
+    ) as connection:
+        connection.execute(text("SET lock_timeout = '200ms'"))
+        for position, (table, index, columns) in enumerate(DROPPED):
+            create = text(f"CREATE INDEX CONCURRENTLY {index} ON {table} ({', '.join(columns)})")
+            if position % 3 == 0:
+                connection.execute(create)
+            elif position % 3 == 1:
+                with migrated_postgres_schema.app_engine.begin() as blocker:
+                    blocker.execute(text(f"LOCK TABLE {table} IN ROW EXCLUSIVE MODE"))
+                    with pytest.raises(OperationalError) as failure:
+                        connection.execute(create)
+                    assert isinstance(failure.value.orig, LockNotAvailable)
+
+    before = _index_states(migrated_postgres_schema)
+    for position, (_table, index, _columns) in enumerate(DROPPED):
+        if position % 3 == 2:
+            assert index not in before
+        else:
+            assert before[index][1] is (position % 3 == 0)
+
+    config = alembic_config_for_app()
+    command.downgrade(config, PREVIOUS_REVISION)
+    clear_database_caches()
+    assert _indexes(migrated_postgres_schema) == {
+        index: (table, columns) for table, index, columns in DROPPED
+    }
+    after = _index_states(migrated_postgres_schema)
+    for index, (oid, valid) in before.items():
+        if valid:
+            assert after[index] == (oid, True)
+        else:
+            assert after[index][0] != oid
+            assert after[index][1]
+
+    command.upgrade(config, "head")
+    clear_database_caches()
+    assert _index_states(migrated_postgres_schema) == {}

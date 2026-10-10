@@ -38,6 +38,10 @@ restartable. Downgrade recreates the original non-unique indexes concurrently.
 
 from __future__ import annotations
 
+from typing import cast
+
+from sqlalchemy import text
+
 from alembic import op
 
 revision = "202610100087"
@@ -218,6 +222,15 @@ def upgrade() -> None:
 def downgrade() -> None:
     with op.get_context().autocommit_block():
         for table, index, columns in DROPPED_INDEXES:
+            valid = cast(
+                bool | None,
+                op.get_bind().scalar(
+                    text("SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass(:index)"),
+                    {"index": index},
+                ),
+            )
+            if valid is False:
+                op.drop_index(index, table_name=table, postgresql_concurrently=True)
             op.create_index(
                 index, table, list(columns), postgresql_concurrently=True, if_not_exists=True
             )
