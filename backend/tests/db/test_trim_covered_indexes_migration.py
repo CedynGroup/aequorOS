@@ -17,12 +17,12 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from types import ModuleType
+from typing import Protocol, cast
 
 import pytest
 from sqlalchemy import UniqueConstraint, text
 
-import app.models  # noqa: F401 - registers every table on Base.metadata
+import app.models
 from alembic import command
 from app.db.base import Base
 from tests.db.test_postgres_migrations import (
@@ -35,9 +35,14 @@ from tests.db.test_postgres_migrations import (
 __all__ = ["migrated_postgres_schema"]
 
 PREVIOUS_REVISION = "202610080086"
+_ = app.models  # Registers every table on Base.metadata.
 
 
-def _load_migration() -> ModuleType:
+class _TrimMigration(Protocol):
+    COVERED_INDEXES: tuple[tuple[str, str, tuple[str, ...], str], ...]
+
+
+def _load_migration() -> _TrimMigration:
     """The migration module, by path: ``alembic/versions`` is not a package and
     the file name starts with a digit, so it cannot be imported by name."""
     path = (
@@ -48,7 +53,7 @@ def _load_migration() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    return module
+    return cast(_TrimMigration, module)
 
 
 COVERED = _load_migration().COVERED_INDEXES
@@ -75,7 +80,8 @@ def _indexes(schema: MigratedPostgresSchema) -> dict[str, tuple[str, tuple[str, 
             ),
             {"schema": schema.schema_name, "names": [index for _table, index, _cols in DROPPED]},
         )
-        return {index: (table, tuple(columns)) for index, table, columns in rows.tuples()}
+        entries = cast(list[tuple[str, str, list[str]]], rows.tuples().all())
+        return {index: (table, tuple(columns)) for index, table, columns in entries}
 
 
 def test_no_model_declares_a_dropped_index() -> None:
@@ -122,7 +128,7 @@ def test_indexes_are_dropped_at_head_and_restored_by_downgrade(
                 },
             ).one()
             assert row[0] and row[1] and row[2]
-            assert tuple(row[3])[: len(columns)] == columns
+            assert tuple(cast(list[str], row[3]))[: len(columns)] == columns
 
     config = alembic_config_for_app()
     command.downgrade(config, PREVIOUS_REVISION)
