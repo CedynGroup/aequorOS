@@ -11,20 +11,23 @@ for a connected bank, and corrupt objects refuse access without a platform-key
 fallback. Bank keys are optional during rollout: `BANK_KEY_REQUIRED=false`
 preserves the existing platform storage path for tenants without keys in every
 environment. Enable it once the key-management UI ships; then onboarding and
-storage require a bank key. Missing bank keys alone never prevent startup. Local
+storage require a bank key. Encrypted objects also refuse reads when their
+bank-key record is missing. Missing bank keys alone never prevent startup. Local
 evaluation uses the existing platform/MinIO path without an AWS KMS account. No
 persistent local provider mode is introduced.
 
 The bank creates and administers a customer-managed symmetric KMS key in its own
 AWS account. AequorOS uses its workload role to request cryptographic
 operations; it never creates, deletes, exports or administers that master key.
-Connecting a key requires its exact ARN; aliases are rejected. Changing a
-connected master key requires explicit rotation.
+Connecting a key requires its exact ARN; aliases are rejected because they can
+be repointed and cannot pin decryption or audit identity. Changing a connected
+master key requires explicit rotation.
 
 `app/core/key_management/types.py` owns the provider contract: describe,
 generate a data key, wrap, unwrap and rotate. AWS calls belong in `aws.py`.
 Storage and operator callers depend on this contract, not boto3 KMS operations.
-Azure, Google, Vault and HSM adapters can implement the same conformance suite.
+Runtime configuration currently accepts only `aws_kms`. Azure, Google, Vault
+and HSM adapters can implement the same conformance suite.
 
 Each object has a random wrapping secret, itself protected in a small Encryption
 SDK message using the bank's KMS keyring. The object SDK message uses that
@@ -129,8 +132,10 @@ Provisioning accepts an optional `encryption_key` object in
 ```
 
 When a key is supplied, provisioning verifies ownership, key state and a live
-wrap/unwrap round trip. Verification failure rolls back the attempted setup; it
-does not fall back to platform storage. Omitted keys are accepted while
+wrap/unwrap round trip. Verification failure rolls back the attempted setup and
+attempts to remove buckets created by the saga; cleanup failures are reported in
+its result. It does not fall back to platform storage. Omitted keys are accepted
+while
 `BANK_KEY_REQUIRED=false`. `OPERATOR_AWS_KMS_ENABLED` is retired. AequorOS no
 longer provisions its own per-bank KMS keys.
 
@@ -144,11 +149,25 @@ active inspector session uses these routes on the separate operator API:
 | POST   | same + `/rotate`                                   | Re-wrap all bank envelopes and atomically switch the key                  |
 | POST   | same + `/retire`                                   | Authorize retirement only after current references and backup holds clear |
 
-Rotation accepts the same key fields plus a meaningful `reason`. Routes verify
-the bank belongs to the organization, require staff inspection authority and
-write operator audit events in their transaction. The tenant API mounts none of
-these routes. Status observations do not authorize access: storage contacts the
+Rotation accepts the same key fields plus a meaningful `reason` and must retain
+the bank's ownership account. Changing providers requires an explicit migration.
+Routes verify the bank belongs to the organization, require staff inspection
+authority and write operator audit events in their transaction. The tenant API
+mounts none of these routes. Status observations do not authorize access: storage contacts the
 provider on every operation, and recovers after the bank restores permission.
+
+## Downloads
+
+Bank-encrypted downloads pass through `/api/v1/storage/download`. Link issuance
+uses object metadata to pin the current version; decryption, authentication and
+key-access checks happen at redemption. A download link is a capability
+credential: redemption needs no bearer session, and the link must be kept
+private. Revoking or disabling the connected key refuses reads and writes,
+including duplicate writes and download-link redemption. Direct signed uploads
+through the bank storage interface are refused because they bypass application
+encryption. Banks without keys retain direct signed transfers during optional
+rollout. Legacy organization/case document transfer retains its existing signed
+S3 URLs; document transfer under bank keys remains follow-up work.
 
 ## Rotation, backups and recovery
 
@@ -163,13 +182,20 @@ not change. KMS automatic material rotation within the same key ARN needs no
 application re-wrap.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
-aged out. Rotation records a per-bank retention hold; an unset
-`ENCRYPTION_BACKUP_RETENTION_DAYS` keeps that hold indefinitely. Reusing a key
+aged out. Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
+or object backup retention window before rotation. Rotation records a per-bank
+retention hold; an unset setting keeps that hold indefinitely. Reusing a key
 extends rather than shortens its hold, and a sibling bank still using it remains
 available. Retirement refuses while any bank currently references the key or a
-backup hold remains. The bank administers the actual grant and key state; the
-application neither disables nor schedules deletion of the bank key. Exercise an
-encrypted read and a recovery drill before removing old access.
+backup hold remains, including holds for other banks sharing the key. It checks
+both the recorded deadline and the current retention setting; lowering the
+setting cannot shorten the recorded hold. The bank administers the actual grant
+and key state; the application neither disables nor schedules deletion of the
+bank key. Cross-account `DisableKey` is unsupported by the
+[AWS API](https://docs.aws.amazon.com/kms/latest/APIReference/API_DisableKey.html),
+and the bank must apply these retention rules to its own AWS administration and
+any longer-lived recovery copies. Exercise an encrypted read and a recovery
+drill before removing old access.
 
 `scripts/backup_storage.py --download` copies SDK ciphertext through raw S3 GET;
 it never uses the application's decrypted read path. Its manifest records the
@@ -177,9 +203,11 @@ original user metadata and content type, including `key-envelope-id`, the
 encryption format, and plaintext and ciphertext checksums. The backup preserves
 existing platform-only objects during optional rollout as well as bank-encrypted
 objects; it does not unwrap either. The script copies current objects.
-Version-pinned backup and recovery remain a known pre-existing gap tracked in
-[issue 501](https://github.com/CedynGroup/aequorOS/issues/501); do not claim
-that these backups recover historical versions.
+Restore assigns new S3 version IDs and does not recover archived versions or
+reconcile database fields that pin original versions. Version-pinned ICAAP
+attachments and regulatory artifacts therefore are not recovered by this
+procedure. Version-addressed backup and restore remain a known pre-existing gap
+tracked in [issue 501](https://github.com/CedynGroup/aequorOS/issues/501).
 
 A recoverable object backup needs ciphertext, original bucket/key/metadata and
 the matching `bank_encryption_keys` and `object_key_envelopes` catalogue from
@@ -193,9 +221,6 @@ snapshot, however, contains old wrappers: restore and re-wrap that catalogue
 under bank-approved access before retiring its old key, or retain the old key
 for the snapshot's recovery lifetime. Physical historical database backups are
 immutable and are not rewritten by live rotation.
-
-The legacy organization/case document routes retain their previous behavior;
-**document transfer under bank keys** remains a follow-up.
 
 Existing platform-only/plaintext objects need an explicitly planned migration
 before connecting a bank key or enabling mandatory enforcement; the new reader
