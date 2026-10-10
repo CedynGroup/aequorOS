@@ -6,11 +6,12 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Protocol, cast
+from typing import BinaryIO, Protocol, cast
 
 import boto3
 import pytest
 from botocore.client import BaseClient
+from botocore.exceptions import ClientError, EndpointConnectionError
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from moto import mock_aws
@@ -26,11 +27,20 @@ from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailabl
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.operator.services.bank_encryption import rotate_key
+from app.storage.access_log import HashChainedAccessLog
 from app.storage.api import router
-from app.storage.client import StorageAccessError, StorageLocation, StorageNotFoundError, Tier
+from app.storage.client import (
+    StorageAccessError,
+    StorageError,
+    StorageLocation,
+    StorageNotFoundError,
+    Tier,
+)
 from app.storage.config import StorageEngineSettings
+from app.storage.downloads import verify
 from app.storage.encryption import ObjectEncryption
 from app.storage.factory import get_storage_client
+from app.storage.provisioning import ProvisioningClient
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from scripts.backup_storage import StorageBackupReport, inventory_bucket, restore_storage_backup
 from tests.storage.contract import metadata_for
@@ -49,10 +59,8 @@ class _Body(Protocol):
     def read(self) -> bytes: ...
 
 
-class _S3(Protocol):
+class _S3(ProvisioningClient, Protocol):
     def list_buckets(self) -> dict[str, object]: ...
-
-    def create_bucket(self, **kwargs: object) -> object: ...
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
 
@@ -66,6 +74,7 @@ class BankStorage:
     storage: S3CompatibleStorageClient
     s3: _S3
     provider: LocalKeyProvider
+    log: HashChainedAccessLog
 
 
 @pytest.fixture
@@ -109,13 +118,15 @@ def bank_storage(db_session: Session) -> Iterator[BankStorage]:
             STORAGE_ENV="dev",
             S3_REGION="us-east-1",
         )  # type: ignore[call-arg] - pydantic-settings runtime constructor options
+        log = HashChainedAccessLog(identity="synthetic-storage")
         storage = S3CompatibleStorageClient(
             settings,
             client_factory=lambda *_args, **_kwargs: s3,
             encryption=ObjectEncryption(store),
+            access_log=log,
         )
         storage.ensure_institution(SLUG)
-        yield BankStorage(storage, cast(_S3, cast(object, s3)), provider)
+        yield BankStorage(storage, cast(_S3, cast(object, s3)), provider, log)
 
 
 @pytest.mark.parametrize("tier", ["raw", "canonical", "outputs", "temp"])
@@ -208,14 +219,51 @@ def test_object_substitution_and_legacy_plaintext_are_refused(bank_storage: Bank
         bank_storage.storage.read(StorageLocation(SLUG, "raw", "legacy.csv"))
 
 
+@pytest.mark.parametrize("head_denied", [False, True])
 def test_download_link_checks_key_at_redemption_and_disallows_direct_upload(
     bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    head_denied: bool,
 ) -> None:
-    location = StorageLocation(SLUG, "temp", "exports/report.csv")
-    bank_storage.storage.write(
-        location, io.BytesIO(b"export"), metadata_for(SLUG, "temp", b"export")
+    location = StorageLocation(SLUG, "outputs", "exports/report.csv")
+    original = bank_storage.storage.write(
+        location, io.BytesIO(b"export"), metadata_for(SLUG, "outputs", b"export")
     )
-    link = bank_storage.storage.presigned_url(location, "read", 120)
+
+    def refuse_body_read(**_kwargs: object) -> dict[str, object]:
+        raise AssertionError("Issuing a capability must not read an object body.")
+
+    class UnreadBody(io.BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            raise AssertionError("Issuing a capability must not consume the object body.")
+
+    headers_body = UnreadBody(b"synthetic body")
+    get_object = bank_storage.s3.get_object
+
+    def denied_head(**_kwargs: object) -> dict[str, object]:
+        raise ClientError({"Error": {"Code": "AccessDenied"}}, "HeadObject")
+
+    def headers_only(**kwargs: object) -> dict[str, object]:
+        response = get_object(Bucket=str(kwargs["Bucket"]), Key=str(kwargs["Key"]))
+        cast(BinaryIO, response["Body"]).close()
+        response["Body"] = headers_body
+        return response
+
+    with monkeypatch.context() as issuing:
+        if head_denied:
+            issuing.setattr(bank_storage.s3, "head_object", denied_head)
+            issuing.setattr(bank_storage.s3, "get_object", headers_only)
+        else:
+            issuing.setattr(bank_storage.s3, "get_object", refuse_body_read)
+        link = bank_storage.storage.presigned_url(location, "read", 120)
+    if head_denied:
+        assert headers_body.closed
+    else:
+        headers_body.close()
+    assert verify(link.split("token=", 1)[1]).version == original.version_id
+    bank_storage.storage.write(
+        location, io.BytesIO(b"new export"), metadata_for(SLUG, "outputs", b"new export")
+    )
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     app.dependency_overrides[get_storage_client] = lambda: bank_storage.storage
@@ -519,3 +567,45 @@ def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
         assert bank_storage.provider.describe(KEY).status == KeyStatus.DISABLED
     finally:
         get_key_settings.cache_clear()
+
+
+@pytest.mark.parametrize("failure", ["AccessDenied", "NoSuchVersion", "transport"])
+@pytest.mark.parametrize("consumer", ["read", "versioned-read", "duplicate-write", "download"])
+def test_s3_read_failures_are_audited_without_download_credentials(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    consumer: str,
+) -> None:
+    location = StorageLocation(SLUG, "outputs", "exports/audit.csv")
+    content = b"synthetic export"
+    metadata = metadata_for(SLUG, "outputs", content)
+    original = bank_storage.storage.write(location, io.BytesIO(content), metadata)
+    link = bank_storage.storage.presigned_url(location, "read")
+
+    def refuse(**_kwargs: object) -> dict[str, object]:
+        if failure == "transport":
+            raise EndpointConnectionError(endpoint_url="https://synthetic.test?token=secret")
+        raise ClientError({"Error": {"Code": failure, "Message": "token=secret"}}, "GetObject")
+
+    monkeypatch.setattr(bank_storage.s3, "get_object", refuse)
+    bank_storage.log.entries.clear()
+    if consumer == "download":
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+        app.dependency_overrides[get_storage_client] = lambda: bank_storage.storage
+        with TestClient(app) as client:
+            assert client.get(link).status_code == 503
+    else:
+        with pytest.raises(StorageError):
+            if consumer == "duplicate-write":
+                bank_storage.storage.write(location, io.BytesIO(content), metadata)
+            else:
+                bank_storage.storage.read(
+                    location, original.version_id if consumer == "versioned-read" else None
+                )
+    assert [(entry.operation, entry.result) for entry in bank_storage.log.entries] == [
+        ("read", "backend_error" if failure == "transport" else failure),
+    ]
+    assert "token=" not in bank_storage.log.export_jsonl()
+    assert link.split("token=", 1)[1] not in bank_storage.log.export_jsonl()

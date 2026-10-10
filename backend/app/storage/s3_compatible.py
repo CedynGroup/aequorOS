@@ -49,7 +49,7 @@ from app.storage.client import (
 from app.storage.config import StorageEngineSettings, enforce_retirement
 from app.storage.downloads import issue
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
-from app.storage.provisioning import ensure_audit_bucket, provision_institution
+from app.storage.provisioning import ProvisioningClient, ensure_audit_bucket, provision_institution
 
 logger = logging.getLogger(__name__)
 _OBJECT_HEADERS = TypeAdapter(dict[str, str])
@@ -195,7 +195,7 @@ class S3CompatibleStorageClient(StorageClient):
             kwargs["VersionId"] = version_id
         response = cast(
             dict[str, object],
-            self._call("read", location, lambda: self._s3.get_object(**kwargs), log=False),
+            self._call("read", location, lambda: self._s3.get_object(**kwargs)),
         )
         body = cast(BinaryIO, response["Body"])
         try:
@@ -333,10 +333,18 @@ class S3CompatibleStorageClient(StorageClient):
             raise StorageAccessError(
                 "Encrypted bank uploads must pass through application storage."
             )
-        descriptor, verified = self.read(location)
-        verified.close()
-        self._log("presigned_url.read", location)
-        return issue(location, descriptor.version_id, expires_in_seconds)
+        stat = cast(
+            dict[str, object],
+            self._call(
+                "presigned_url.read",
+                location,
+                lambda: self._stat_object(location.bucket_name(self._env), location.object_path),
+            ),
+        )
+        version = stat.get("VersionId")
+        version_id = str(version) if version is not None else None
+        self._log("presigned_url.read", location, version_id=version_id)
+        return issue(location, version_id, expires_in_seconds)
 
     def health_check(self) -> StorageHealth:
         try:
@@ -346,7 +354,9 @@ class S3CompatibleStorageClient(StorageClient):
         return StorageHealth(healthy=True, backend=self._settings.backend)
 
     def ensure_institution(self, institution_slug: str) -> None:
-        provision_institution(self._s3, self._settings, institution_slug)
+        provision_institution(
+            cast(ProvisioningClient, cast(object, self._s3)), self._settings, institution_slug
+        )
 
     def flush_access_log(self) -> str | None:
         if not isinstance(self._log, HashChainedAccessLog):
@@ -356,7 +366,9 @@ class S3CompatibleStorageClient(StorageClient):
             return None
         jsonl, first, last = segment
         bucket = f"aequoros-{self._env}-audit-logs"
-        ensure_audit_bucket(self._s3, self._settings, bucket)
+        ensure_audit_bucket(
+            cast(ProvisioningClient, cast(object, self._s3)), self._settings, bucket
+        )
         stamp = datetime.now(UTC)
         key = (
             f"{self._log.identity}/{stamp:%Y-%m-%d}/{stamp:%H%M%S}-seq{first:08d}-{last:08d}.jsonl"

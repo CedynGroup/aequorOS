@@ -20,9 +20,9 @@ Two modes, because they answer different questions:
 **The HEAD problem.** This deployment's S3-compatible endpoint sits behind a
 WAF that 403s and, worse, sometimes *times out* ``HEAD`` requests. The obvious
 implementation — list keys, then ``head_object`` each for its metadata — stalls
-for minutes and then fails. So this script never issues ``HEAD``: size and ETag
-come from the ``ListObjectsV2`` response, which is a GET and passes. Downloads
-use ``GetObject`` for the same reason.
+for minutes and then fails. Inventory and downloads never issue object ``HEAD``: size and ETag
+come from GET responses. Restore uses the provisioning module for bucket
+existence checks and configuration.
 
 Failures are recorded per bucket rather than aborting the run: a WAF that
 blocks one bucket must not cost you the inventory of the other twenty. The exit
@@ -44,7 +44,9 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import TypeAdapter, ValidationError
 
+from app.storage.client import TIERS
 from app.storage.config import get_storage_settings
+from app.storage.provisioning import ProvisioningClient, provision_bucket
 from scripts.dr_common import DisasterRecoveryError, load_env_file
 from scripts.dr_manifest import utc_now_iso
 
@@ -129,11 +131,7 @@ def list_buckets(client: Any, *, prefix: str) -> list[str]:
     return sorted(n for n in names if not prefix or n.startswith(prefix))
 
 
-class _RecoveryClient(Protocol):
-    def list_buckets(self) -> dict[str, object]: ...
-
-    def create_bucket(self, **kwargs: object) -> object: ...
-
+class _RecoveryClient(ProvisioningClient, Protocol):
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
 
     def put_object(
@@ -193,16 +191,16 @@ def restore_storage_backup(client: _RecoveryClient, manifest: Path, *, out_dir: 
     if report.format_version != 2 or not report.downloaded or not report.ok:
         raise DisasterRecoveryError("Restore requires a complete version-2 downloaded backup.")
     count = 0
-    existing = set(list_buckets(client, prefix=""))
+    settings = get_storage_settings()
     for bucket in report.buckets:
-        if bucket.bucket not in existing:
-            region = get_storage_settings().region
-            if region == "us-east-1":
-                _ = client.create_bucket(Bucket=bucket.bucket)
-            else:
-                _ = client.create_bucket(
-                    Bucket=bucket.bucket, CreateBucketConfiguration={"LocationConstraint": region}
-                )
+        suffix = bucket.bucket.rsplit("-", 1)[-1]
+        tier = suffix if suffix in TIERS else None
+        _ = provision_bucket(
+            client,
+            settings,
+            bucket.bucket,
+            "audit-logs" if bucket.bucket.endswith("-audit-logs") else tier,
+        )
         for entry in bucket.keys:
             source = _object_path(out_dir, bucket.bucket, entry.key)
             with source.open("rb") as body:

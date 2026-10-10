@@ -40,7 +40,9 @@ and require an explicit migration before use.
 
 Revoking or disabling the bank key refuses reads and writes, including duplicate
 writes and application download-link redemption. Downloads pass through
-`/api/v1/storage/download`; direct uploads through the bank storage interface are
+`/api/v1/storage/download`. Link issuance uses object metadata to pin the current
+version; decryption, authentication and key-access checks happen at redemption.
+Direct uploads through the bank storage interface are
 refused because they would bypass application encryption. Legacy organization/case
 document transfer retains its existing signed S3 URLs; document transfer under bank
 keys is follow-up work. Configure `STORAGE_DOWNLOAD_BASE_URL` to the HTTPS tenant
@@ -50,8 +52,16 @@ all object metadata (including envelope UUID, format and plaintext checksum), co
 type and ciphertext SHA-256 in its version-2 manifest. Restore into the recovery
 object store using a distinct directory for each backup generation, with `scripts.backup_storage --out-dir <backup-directory>
 --restore-manifest <manifest-path>` using recovery endpoint credentials; missing
-buckets are recreated. Restore the matching database backup as well. Inventory-only
-or older manifests are not sufficient for encrypted-object recovery.
+buckets are recreated using the provisioning rules for dialect, versioning, temp
+expiry and configured default SSE. Restore the matching database envelopes to read
+current objects without a version pin. Inventory-only or older manifests are not
+sufficient for encrypted-object recovery.
+
+Known limitation: this backup inventories current objects only. Restore assigns new
+S3 version IDs and does not recover archived versions or reconcile database fields
+that pin the original version. Version-pinned ICAAP attachments and regulatory
+artifacts therefore are not recovered by this procedure. Version-addressed backup
+and restore is deferred to [issue #501](https://github.com/CedynGroup/aequorOS/issues/501).
 
 To replace a key, use the operator-admin operation
 `POST /operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/rotate` during an
