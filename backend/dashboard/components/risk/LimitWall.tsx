@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The limit wall: payload-backed limits grouped by module, each rendered as
@@ -6,25 +6,33 @@
  * module's page.
  */
 
-import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
-import LimitBar from '@/components/ui/LimitBar';
-import StatusPill from '@/components/ui/StatusPill';
-import SectionCard from '@/components/ui/SectionCard';
-import { fmtRelative } from '@/lib/api/values';
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import LimitBar from "@/components/ui/LimitBar";
+import StatusPill from "@/components/ui/StatusPill";
+import SectionCard from "@/components/ui/SectionCard";
+import { fmtRelative } from "@/lib/api/values";
 import {
   MODULE_HREFS,
   MODULE_LABELS,
   type LimitModule,
   type LimitRow,
-} from './limits';
+} from "./limits";
 
-const MODULE_ORDER: LimitModule[] = ['capital', 'liquidity', 'exposures', 'irr', 'fx', 'ftp'];
+const MODULE_ORDER: LimitModule[] = [
+  "capital",
+  "liquidity",
+  "exposures",
+  "irr",
+  "fx",
+  "ftp",
+];
 
 function moduleTone(rows: LimitRow[]) {
-  if (rows.some((row) => row.status === 'crit')) return 'breach' as const;
-  if (rows.some((row) => row.status === 'warn')) return 'approaching' as const;
-  return 'compliant' as const;
+  if (rows.some((row) => row.status === "crit")) return "breach" as const;
+  if (rows.some((row) => row.status === "warn")) return "approaching" as const;
+  if (rows.some((row) => row.status === "na")) return "pending" as const;
+  return "compliant" as const;
 }
 
 export default function LimitWall({
@@ -46,14 +54,17 @@ export default function LimitWall({
       {MODULE_ORDER.map((module) => {
         const moduleRows = rows.filter((row) => row.module === module);
         const unavailable = unavailableModules.includes(module);
-        if (moduleRows.length === 0 && !unavailable && !showEmptyModules) return null;
+        if (moduleRows.length === 0 && !unavailable && !showEmptyModules)
+          return null;
         return (
           <SectionCard
             key={module}
             title={
               <span className="inline-flex items-center gap-2.5">
                 {MODULE_LABELS[module]}
-                {moduleRows.length > 0 && <StatusPill tone={moduleTone(moduleRows)} />}
+                {moduleRows.length > 0 && (
+                  <StatusPill tone={moduleTone(moduleRows)} />
+                )}
               </span>
             }
             actions={
@@ -73,9 +84,9 @@ export default function LimitWall({
               </p>
             ) : moduleRows.length === 0 ? (
               <p className="px-5 py-4 text-body text-slate">
-                {module === 'liquidity'
-                  ? 'The liquidity payload exposes LCR/NSFR statuses without numeric thresholds, so no limit bars are rendered here — this page never invents a threshold. See the validation checks tab for its rule evaluations.'
-                  : 'This module exposes no payload-backed limit thresholds for the period.'}
+                {module === "liquidity"
+                  ? "The liquidity payload exposes LCR/NSFR statuses without numeric thresholds, so no limit bars are rendered here — this page never invents a threshold. See the validation checks tab for its rule evaluations."
+                  : "This module exposes no payload-backed limit thresholds for the period."}
               </p>
             ) : (
               <ul className="divide-y divide-border-light">
@@ -100,7 +111,7 @@ export default function LimitWall({
                           {row.detail}
                           {row.computedAt
                             ? ` · computed ${fmtRelative(row.computedAt)}`
-                            : ''}
+                            : ""}
                         </span>
                       }
                     />

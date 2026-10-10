@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
+from app.domain.authority.results import Computed, FigureResult
+from app.domain.liquidity.engine import LcrResult, NsfrResult
 from app.domain.reporting import period_windows
 from app.models import (
     Bank,
@@ -116,20 +118,25 @@ def _legacy_trend(  # noqa: PLR0912, PLR0915 - faithful five-module legacy oracl
                 )
                 continue
             try:
-                lcr, nsfr, _params = service._compute_inline(db, _CTX, bank, period)
+                lcr, nsfr, _params = cast(
+                    tuple[FigureResult[LcrResult], FigureResult[NsfrResult], object],
+                    service._compute_inline(db, _CTX, bank, period),
+                )
             except (
                 service.MissingParameterError,
                 service.LiquidityComputationError,
                 service.LiquidityRunError,
             ):
                 continue
+            assert isinstance(lcr, Computed)
+            assert isinstance(nsfr, Computed)
             points.append(
                 service.LiquidityTrendPointRead(
                     reporting_period_id=period.id,
                     label=period.label,
                     period_end=period.period_end,
-                    lcr_pct=lcr.lcr_pct,
-                    nsfr_pct=nsfr.nsfr_pct,
+                    lcr_pct=lcr.value.lcr_pct,
+                    nsfr_pct=nsfr.value.nsfr_pct,
                     stored=False,
                 )
             )

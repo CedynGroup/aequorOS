@@ -64,6 +64,8 @@ def _create_monitored_run(
     assert inline_response.status_code == 200, inline_response.text
     inline = LiquidityDashboardRead.model_validate_json(inline_response.text)
     assert not inline.stored
+    assert inline.metrics.lcr_pct is not None
+    assert inline.metrics.nsfr_pct is not None
     expected_pass = {
         "lcr_above_minimum": inline.metrics.lcr_pct >= threshold,
         "nsfr_above_minimum": inline.metrics.nsfr_pct >= threshold,

@@ -10,11 +10,9 @@ calculations" is a query rather than a grep through prose messages.
 
 This module supplies that, and nothing else. Deliberately:
 
-* **No new dependency.** The logger is the existing loguru instance configured
-  in :mod:`app.core.logging`, already JSON-serialised to stdout with the
-  request id patched onto every record. There is no metrics library in this
-  project and this module does not introduce one — it emits fields a log
-  pipeline can aggregate.
+* **No new dependency.** General events use the existing loguru instance.
+  Calculation and worker failures and refusals use a closed JSON schema written to stderr
+  for CloudWatch collection, independent of bound logging context.
 * **No parallel store.** Where an authoritative signal already exists (an audit
   event, a DB row, a readiness check), :data:`CONDITION_SOURCES` records where
   it lives instead of duplicating it. A second, divergent copy of "did this
@@ -24,20 +22,28 @@ This module supplies that, and nothing else. Deliberately:
   never convert a clean 403 into a 500.
 * **Never carries a secret.** Call sites pass identifiers and reason codes.
   Passwords, tokens, credential material, full request bodies and raw vendor
-  payloads must not be passed; :func:`emit` drops a small set of obviously
-  dangerous field names as a backstop, but the real control is the call site.
+  payloads must not be passed. Calculation errors allow only registered codes,
+  citations, figures and versions, validated input row positions, a platform
+  tenant id and a safe correlation id. Worker job failures use the same closed
+  schema. Other events retain their credential-field backstop.
 
-Every record carries ``condition`` (a :class:`Condition` value) and
-``severity``, alongside ``request_id`` from the logging patcher.
+Every record carries ``condition`` (a :class:`Condition` value),
+``severity`` and ``request_id``.
 """
 
 from __future__ import annotations
 
 import contextlib
+import json
+import sys
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any, Final
+from typing import Any, Final, cast
+from uuid import uuid4
 
 from loguru import logger
+
+from app.core.logging import get_request_id, safe_request_id, safe_tenant_id
 
 # Field names never worth writing to a log, whatever a caller passes.
 _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
@@ -59,6 +65,21 @@ _FORBIDDEN_FIELDS: Final[frozenset[str]] = frozenset(
 
 _MAX_VALUE_CHARS: Final[int] = 512
 
+# Calculation events use a closed vocabulary, not a field-name denylist. In
+# particular, bank-facing refusal prose and exception messages are never copied.
+_CALCULATION_CODES: Final = frozenset(
+    {
+        "missing_parameter",
+        "unclassified_hqla",
+        "non_positive_denominator",
+        "unexpected_error",
+        "data_quality_block:run_evidence",
+    }
+)
+_CALCULATION_RULES: Final = frozenset({"BCBS 238", "BCBS 295"})
+_CALCULATION_FIGURES: Final = frozenset({"lcr_pct", "nsfr_pct"})
+_CALCULATION_VERSIONS: Final = frozenset({"regulatory-liquidity-v2.0.0"})
+
 
 class Condition(StrEnum):
     """The operational conditions that must be visible in production.
@@ -76,6 +97,7 @@ class Condition(StrEnum):
     PACKAGE_FAILED = "reporting.package_failed"
     SUBMISSION_FAILED = "reporting.submission_failed"
     WORKER_STARVED = "worker.starved"
+    WORKER_JOB_FAILED = "worker.job_failed"
     STORAGE_FAILED = "storage.failed"
     AUTH_ANOMALY = "auth.anomaly"
     SSRF_BLOCKED = "egress.blocked"
@@ -96,10 +118,12 @@ _LEVELS: Final[dict[str, str]] = {"info": "INFO", "warning": "WARNING", "error":
 #: conditions that name a table below, the table is the evidence.
 CONDITION_SOURCES: Final[dict[Condition, str]] = {
     Condition.CALCULATION_FAILED: (
+        "this log line from migrated calculation boundaries; legacy persisted attempts use "
         "audit_events(event_type='calculation_run.failed') + calculation_runs.status"
     ),
     Condition.CALCULATION_BLOCKED: (
-        "app.domain.authority.outcomes.OutcomeDetail.code, returned on the module payload"
+        "app.domain.authority.results.Refused at migrated boundaries; existing module "
+        "payloads use app.domain.authority.outcomes.OutcomeDetail.code"
     ),
     Condition.RECONCILIATION_FAILED: (
         "audit_events(event_type='reconciliation.balance_sheet_identity'), written by the "
@@ -128,6 +152,7 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "a transport/network failure on the channel is NOT recorded as a submission event"
     ),
     Condition.WORKER_STARVED: "worker_heartbeats + jobs; /operator/v1/worker-health; /health/ready",
+    Condition.WORKER_JOB_FAILED: "app.worker.run_once failure log + jobs.status/error/attempts",
     Condition.STORAGE_FAILED: "storage hash-chained access log; /health/ready checks.storage",
     Condition.AUTH_ANOMALY: (
         "failed_login_attempts / locked_until on the principal's table — 'users' for a "
@@ -167,16 +192,62 @@ def emit(
 ) -> None:
     """Record an operational condition as a structured log event.
 
-    ``summary`` is a short human sentence; everything queryable belongs in
-    ``fields``. Never raises: an observability failure must not change the
-    behaviour of the code path that reported the condition.
+    General events use ``summary`` as prose and ``fields`` for queryable data.
+    Calculation and worker failure events discard the summary and use the closed
+    allowlist in :func:`_emit_private_event`. Never raises: an observability failure
+    must not change the behaviour of the code path that reported the condition.
     """
     # Suppressed on purpose: these calls sit inside authorization denials and
     # exception handlers, where a logging failure must not become a 500.
     with contextlib.suppress(Exception):
+        if condition in (
+            Condition.CALCULATION_FAILED,
+            Condition.CALCULATION_BLOCKED,
+            Condition.REGULATORY_RUN_FAILED,
+            Condition.WORKER_JOB_FAILED,
+        ):
+            _emit_private_event(condition, severity, fields)
+            return
         logger.bind(condition=condition.value, severity=severity, **_scrub(fields)).log(
             _LEVELS.get(severity, "WARNING"), summary
         )
+
+
+def _emit_private_event(condition: Condition, severity: str, fields: Mapping[str, object]) -> None:
+    """Write allowlisted aequorOS failure and refusal events directly to stderr.
+
+    Bypassing loguru's contextual extras keeps arbitrary bound customer data and
+    active exception tracebacks out of this stream. No exception or request body
+    is inspected, rendered or serialized. Unknown codes fail closed.
+    """
+    request_id = get_request_id()
+    request_id = str(uuid4()) if request_id == "-" else safe_request_id(request_id)
+    payload: dict[str, str | list[int]] = {
+        "condition": condition.value,
+        "severity": severity if severity in _LEVELS else "warning",
+        "request_id": request_id,
+    }
+    tenant = fields.get("tenant_id", fields.get("organization_id"))
+    payload["tenant_id"] = safe_tenant_id(tenant)
+    code = fields.get("reason_code", fields.get("code"))
+    payload["reason_code"] = (
+        code if isinstance(code, str) and code in _CALCULATION_CODES else "unspecified"
+    )
+    for key, allowed in (
+        ("rule_citation", _CALCULATION_RULES),
+        ("figure_id", _CALCULATION_FIGURES),
+        ("engine_version", _CALCULATION_VERSIONS),
+    ):
+        value = fields.get(key)
+        if isinstance(value, str) and value in allowed:
+            payload[key] = value
+    row_ref = fields.get("row_ref")
+    row_count = fields.get("row_count")
+    if type(row_count) is int and row_count >= 0 and isinstance(row_ref, tuple):
+        positions = cast(tuple[object, ...], row_ref)
+        if all(type(position) is int and 1 <= position <= row_count for position in positions):
+            payload["row_ref"] = list(cast(tuple[int, ...], positions))
+    _ = sys.stderr.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
 
 def authorization_denied(*, reason: str, **fields: Any) -> None:

@@ -19,8 +19,8 @@ import {
 
 export type TrendPoint = {
   label: string;
-  primary: number;
-  secondary?: number;
+  primary: number | null;
+  secondary?: number | null;
   /** false → computed inline (not persisted) — rendered as a hollow point. */
   stored?: boolean;
 };
@@ -61,11 +61,12 @@ export default function RatioTrendChart({
       ? [point.primary]
       : [point.primary, point.secondary],
   );
+  const measured = values.filter((value): value is number => value !== null);
   const floors = [
     ...(threshold === null ? [] : [threshold]),
     ...(redFloor === null || redFloor === undefined ? [] : [redFloor]),
   ];
-  const scale = [...values, ...floors];
+  const scale = [...measured, ...floors];
   const min =
     yMin ?? (scale.length > 0 ? Math.floor(Math.min(...scale) - 5) : 0);
   const max =

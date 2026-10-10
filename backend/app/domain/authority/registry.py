@@ -54,11 +54,9 @@ The divergences you must not "fix" by asserting equality
 
 ``lcr_pct`` and ``car_pct`` each exist more than once, deliberately:
 
-* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR. It DOES
-  cap inflows: ``lcr_inflow_cap_pct`` is a required threshold
-  (``regulatory_liquidity._REQUIRED_THRESHOLDS``) applied unconditionally at
-  ``app/domain/liquidity/engine.py:264``, and the preview row is labelled
-  "After Cap".
+* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR.
+  ``app.domain.liquidity.engine.compute_lcr`` owns its aggregate inflow cap;
+  ``ARCHITECTURE.md`` §3 owns its per-figure refusal contract.
 * ``lcr_pct`` / ``lmtd_table11_capped`` — the LMT Table 11 by-currency LCR.
   It caps too. The two divergences are (a) the cap SOURCE — a governed,
   effective-dated ``lcr_inflow_cap_pct`` parameter versus the hard-coded
@@ -1993,9 +1991,8 @@ REGISTRY.register(
                 "(le_generation._LCR_INFLOW_CAP = Decimal('0.75')) SEPARATELY FOR EACH "
                 "CURRENCY COLUMN at LMT generation time. The LCR-NSFR return applies one "
                 "AGGREGATE cap across the whole book, at the governed, effective-dated "
-                "lcr_inflow_cap_pct threshold (required by "
-                "regulatory_liquidity._REQUIRED_THRESHOLDS, applied unconditionally in "
-                "domain/liquidity/engine.compute_lcr). An earlier version of this entry "
+                "lcr_inflow_cap_pct threshold (required and applied locally by "
+                "app.domain.liquidity.engine:compute_lcr). An earlier version of this entry "
                 "said the LCR-NSFR return applies no cap. That was FALSE - do not act on it."
             ),
             direction="lower",
@@ -2006,11 +2003,10 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/app/services/regulatory_reporting/le_generation.py - "
-                "_LCR_INFLOW_CAP at L1323, applied per currency column at L1469 "
-                "(the audits cite L1318/L1464; those line numbers are stale)",
-                "backend/app/domain/liquidity/engine.py - the aggregate inflow cap at "
-                "L264, from the governed params.inflow_cap_pct",
+                "app.services.regulatory_reporting.le_generation:_table11_section - "
+                "_LCR_INFLOW_CAP applied per currency column",
+                "app.domain.liquidity.engine:compute_lcr - local threshold enforcement "
+                "and aggregate inflow cap from the governed params.inflow_cap_pct",
                 "backend/tests/services/test_le_and_lmt.py",
                 "forensic_calculation_audit_2026-08-21.md - CRITICAL AUDIT FINDINGS 1: "
                 "'BSD3 LCR != LMT Table 11 LCR (Documented Divergence)'",

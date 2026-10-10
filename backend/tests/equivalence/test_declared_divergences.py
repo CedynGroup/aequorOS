@@ -22,14 +22,19 @@ and nowhere in the test suite.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from enum import StrEnum
 
 import pytest
 
 from app.domain.authority.registry import REGISTRY
-from app.domain.liquidity.engine import LiquidityFact, compute_lcr
-from app.services.regulatory_liquidity import _REQUIRED_THRESHOLDS
+from app.domain.authority.results import Refused
+from app.domain.liquidity.engine import (
+    LiquidityFact,
+    compute_lcr,
+    compute_lcr_result,
+)
 from app.services.regulatory_reporting.le_generation import _LCR_INFLOW_CAP
 from tests.domain.test_forecasting_engine import bog_liquidity_params
 
@@ -89,21 +94,45 @@ def _rows(
 LEDGER: dict[Claim, tuple[Coverage, str]] = {
     # -- proved by this suite ------------------------------------------------
     **_rows(
-        Coverage.PROVEN_HERE, _HERE_CAPITAL, "CAR-RWA", _CAPITAL,
-        ("car_pct", "cet1_ratio_pct", "tier1_ratio_pct", "leverage_ratio_pct",
-         "total_capital_ghs", "total_rwa_ghs"),
+        Coverage.PROVEN_HERE,
+        _HERE_CAPITAL,
+        "CAR-RWA",
+        _CAPITAL,
+        (
+            "car_pct",
+            "cet1_ratio_pct",
+            "tier1_ratio_pct",
+            "leverage_ratio_pct",
+            "total_capital_ghs",
+            "total_rwa_ghs",
+        ),
     ),
     **_rows(
-        Coverage.PROVEN_HERE, _HERE_RWA, "CAR-RWA", _CAPITAL,
+        Coverage.PROVEN_HERE,
+        _HERE_RWA,
+        "CAR-RWA",
+        _CAPITAL,
         ("credit_rwa_ghs", "market_rwa_ghs", "operational_rwa_ghs"),
     ),
     **_rows(
-        Coverage.PROVEN_HERE, _HERE_CAPITAL, "LCR-NSFR", _LIQUIDITY,
-        ("hqla_total_ghs", "net_outflows_30d_ghs", "lcr_pct", "asf_total_ghs",
-         "rsf_total_ghs", "nsfr_pct"),
+        Coverage.PROVEN_HERE,
+        _HERE_CAPITAL,
+        "LCR-NSFR",
+        _LIQUIDITY,
+        (
+            "hqla_total_ghs",
+            "net_outflows_30d_ghs",
+            "lcr_pct",
+            "asf_total_ghs",
+            "rsf_total_ghs",
+            "nsfr_pct",
+        ),
     ),
     **_rows(
-        Coverage.PROVEN_HERE, _HERE_CAPITAL, "FX-NOP", _FX,
+        Coverage.PROVEN_HERE,
+        _HERE_CAPITAL,
+        "FX-NOP",
+        _FX,
         ("nop_ghs", "nop_pct_tier1", "var_99_1d_ghs"),
     ),
     # -- proved by a pre-existing test ---------------------------------------
@@ -111,7 +140,9 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         Coverage.PROVEN_ELSEWHERE,
         f"{_BSD13} (C50 / C53), and every BSD13 cell bound to an engine-backed "
         f"resolver by {_WSD_GATE}",
-        "BSD13", _FX, ("nop_ghs", "nop_pct_tier1"),
+        "BSD13",
+        _FX,
+        ("nop_ghs", "nop_pct_tier1"),
     ),
     # -- declared divergences: never equate ----------------------------------
     ("car_pct", "bog_bsd5a_form_ratio", "BSD5A!E70"): (
@@ -138,12 +169,16 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         Coverage.UNPROVEN,
         "The capital package prints these as section rows; no test ties them to the "
         "run's RegulatoryLineItem rows.",
-        "CAR-RWA", _CAPITAL, ("cet1_capital", "tier1_capital", "tier2_capital"),
+        "CAR-RWA",
+        _CAPITAL,
+        ("cet1_capital", "tier1_capital", "tier2_capital"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         f"BSD5A binds capital-run line items; {_BSD5} checks E25/E67/E68 but not these.",
-        "BSD5A", _CAPITAL, ("car_pct", "cet1_capital", "tier2_capital", "total_capital_ghs"),
+        "BSD5A",
+        _CAPITAL,
+        ("car_pct", "cet1_capital", "tier2_capital", "total_capital_ghs"),
     ),
     ("tier1_capital", _CAPITAL, "BSD5A!E10"): (
         Coverage.UNPROVEN,
@@ -163,13 +198,17 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         Coverage.UNPROVEN,
         "Loan-classification outputs reaching BoG forms are untested against the "
         "classification engine.",
-        "BSD5A", _GRADES, ("npl_ratio", "total_provision_required_ghs"),
+        "BSD5A",
+        _GRADES,
+        ("npl_ratio", "total_provision_required_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "BSD8 sums the position attribute ecl_provision_ghs directly; nothing reconciles "
         "it to the classification/ECL engines.",
-        "BSD8", _GRADES, ("npl_ratio", "total_provision_required_ghs"),
+        "BSD8",
+        _GRADES,
+        ("npl_ratio", "total_provision_required_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,
@@ -177,27 +216,40 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         f"binds them — {_WSD_GATE}'s classification test enumerates the measures the form "
         "actually binds and these are not among them. Either the form should bind them or "
         "the mapping should be dropped.",
-        "BSD13", _FX, ("single_ccy_max_pct", "stressed_var_ghs", "var_99_1d_ghs"),
+        "BSD13",
+        _FX,
+        ("single_ccy_max_pct", "stressed_var_ghs", "var_99_1d_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "DBK-DAILY renames the FX run's tier1_ghs to nof_ghs and copies NOP figures; no "
         "test compares any of it to the FX run.",
-        "DBK-DAILY", _FX, ("nop_ghs", "nop_pct_tier1", "single_ccy_max_pct",
-                           "stressed_var_ghs", "var_99_1d_ghs"),
+        "DBK-DAILY",
+        _FX,
+        ("nop_ghs", "nop_pct_tier1", "single_ccy_max_pct", "stressed_var_ghs", "var_99_1d_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "FX-NOP prints these in sections, not totals; untested against the run.",
-        "FX-NOP", _FX, ("single_ccy_max_pct", "stressed_var_ghs"),
+        "FX-NOP",
+        _FX,
+        ("single_ccy_max_pct", "stressed_var_ghs"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "The IRRBB package copies run.metrics wholesale; only the conditional GHS-450 "
         "rows have a test, and that one checks presence, not equality to the IRR engine.",
-        "IRRBB-PILOT", _IRRBB,
-        ("cumulative_12m_gap_ghs", "duration_gap", "ear_down_200_ghs", "ear_up_200_ghs",
-         "eve_base_ghs", "nii_base_ghs", "worst_eve_change_pct_tier1"),
+        "IRRBB-PILOT",
+        _IRRBB,
+        (
+            "cumulative_12m_gap_ghs",
+            "duration_gap",
+            "ear_down_200_ghs",
+            "ear_up_200_ghs",
+            "eve_base_ghs",
+            "nii_base_ghs",
+            "worst_eve_change_pct_tier1",
+        ),
     ),
     **_rows(
         Coverage.UNPROVEN,
@@ -207,46 +259,70 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         "liability_duration are the two terms of the duration_gap identity and no test "
         "compares them to the engine, and the GHS-450 EaR pair has only the presence "
         "test the note above describes.",
-        "IRRBB-PILOT", _IRRBB,
+        "IRRBB-PILOT",
+        _IRRBB,
         ("asset_duration", "ear_down_450_ghs", "ear_up_450_ghs", "liability_duration"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "The ICAAP pack copies the forecast run's summary; no test compares the two.",
-        "ICAAP-STRESS", _FORECAST,
-        ("avg_roe_pct", "cumulative_net_income", "min_car_pct", "min_lcr_pct",
-         "min_nsfr_pct", "year5_car_pct", "year5_lcr_pct", "year5_nsfr_pct"),
+        "ICAAP-STRESS",
+        _FORECAST,
+        (
+            "avg_roe_pct",
+            "cumulative_net_income",
+            "min_car_pct",
+            "min_lcr_pct",
+            "min_nsfr_pct",
+            "year5_car_pct",
+            "year5_lcr_pct",
+            "year5_nsfr_pct",
+        ),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "The stress pack's forecast columns are untested against the forecast run.",
-        "STRESS-PACK", _FORECAST,
-        ("avg_roe_pct", "cumulative_net_income", "min_car_pct", "min_lcr_pct",
-         "min_nsfr_pct", "year5_car_pct", "year5_lcr_pct", "year5_nsfr_pct"),
+        "STRESS-PACK",
+        _FORECAST,
+        (
+            "avg_roe_pct",
+            "cumulative_net_income",
+            "min_car_pct",
+            "min_lcr_pct",
+            "min_nsfr_pct",
+            "year5_car_pct",
+            "year5_lcr_pct",
+            "year5_nsfr_pct",
+        ),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "test_stress_pack.py proves the pack is internally consistent, not that its "
         "figures equal the enterprise-stress run's metrics.",
-        "STRESS-PACK", _STRESS,
+        "STRESS-PACK",
+        _STRESS,
         ("car_erosion_pp", "lcr_erosion_pp", "stressed_car_end_pct", "stressed_lcr_pct"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "Same for the reverse-stress frontier figures.",
-        "STRESS-PACK", _REVERSE, ("capital_breach_multiplier", "liquidity_breach_multiplier"),
+        "STRESS-PACK",
+        _REVERSE,
+        ("capital_breach_multiplier", "liquidity_breach_multiplier"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "Appendix II is board-attested and copied verbatim; no equality test against the "
         "enterprise-stress run.",
-        "ICAAP-STRESS-APPENDIX2", _STRESS,
+        "ICAAP-STRESS-APPENDIX2",
+        _STRESS,
         ("car_erosion_pp", "lcr_erosion_pp", "stressed_car_end_pct", "stressed_lcr_pct"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "Same for the reverse-stress frontier figures in Appendix II.",
-        "ICAAP-STRESS-APPENDIX2", _REVERSE,
+        "ICAAP-STRESS-APPENDIX2",
+        _REVERSE,
         ("capital_breach_multiplier", "liquidity_breach_multiplier"),
     ),
     # -- credit PR-6/PR-9: the NPL-MONTHLY levels table ----------------------
@@ -255,7 +331,8 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         f"{_NPL_MONTHLY_TEST} asserts the levels rows (total_gross_loans_ghs, "
         "npl_stock_ghs, npl_ratio_pct) EQUAL the sealed baseline credit run's "
         "metrics on the 5-grade fixture book.",
-        "NPL-MONTHLY", _GRADES,
+        "NPL-MONTHLY",
+        _GRADES,
         ("gross_loans_ghs", "npl_exposure_ghs", "npl_ratio_pct"),
     ),
     **_rows(
@@ -263,29 +340,47 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         "The return prints provision_specific_ghs - a COMPONENT of provisions held - "
         "and derives coverage/net-NPL in-form from it; the generation test asserts "
         "presence of the coverage row, not equality to the run's provision figures.",
-        "NPL-MONTHLY", _GRADES, ("provision_held_ghs", "provision_coverage_pct"),
+        "NPL-MONTHLY",
+        _GRADES,
+        ("provision_held_ghs", "provision_coverage_pct"),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "The NPL-MONTHLY generation test runs over the bank-class fixture book; no "
         "SDI-book generation asserts these equal a sealed 4-grade credit run yet.",
-        "NPL-MONTHLY", _GRADES4,
-        ("gross_loans_ghs", "npl_exposure_ghs", "npl_ratio_pct",
-         "provision_held_ghs", "provision_coverage_pct"),
+        "NPL-MONTHLY",
+        _GRADES4,
+        (
+            "gross_loans_ghs",
+            "npl_exposure_ghs",
+            "npl_ratio_pct",
+            "provision_held_ghs",
+            "provision_coverage_pct",
+        ),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "LMT Table 1 ratios are computed from canonical positions inside the generator; "
         "there is no engine to compare them to and no test pins the arithmetic.",
-        "LMT", _TABLE1,
-        ("broad_to_short_term", "broad_to_total_assets", "broad_to_total_deposits",
-         "broad_to_volatile", "narrow_to_short_term", "narrow_to_total_assets",
-         "narrow_to_total_deposits", "narrow_to_volatile"),
+        "LMT",
+        _TABLE1,
+        (
+            "broad_to_short_term",
+            "broad_to_total_assets",
+            "broad_to_total_deposits",
+            "broad_to_volatile",
+            "narrow_to_short_term",
+            "narrow_to_total_assets",
+            "narrow_to_total_deposits",
+            "narrow_to_volatile",
+        ),
     ),
     **_rows(
         Coverage.UNPROVEN,
         "The LMT pack's FX funding-gap figures are untested against the liquidity run.",
-        "LMT", _LIQUIDITY, ("fx_funding_gap_ghs", "stressed_fx_funding_gap_ghs"),
+        "LMT",
+        _LIQUIDITY,
+        ("fx_funding_gap_ghs", "stressed_fx_funding_gap_ghs"),
     ),
 }
 
@@ -339,9 +434,7 @@ def test_declared_divergences_are_exactly_the_registry_entries_without_a_toleran
         if entry.expected_tolerance is None
     }
     declared = {
-        claim
-        for claim, (coverage, _) in LEDGER.items()
-        if coverage is Coverage.DECLARED_DIVERGENCE
+        claim for claim, (coverage, _) in LEDGER.items() if coverage is Coverage.DECLARED_DIVERGENCE
     }
     assert declared == no_tolerance
 
@@ -421,7 +514,12 @@ def test_the_two_lcr_methodologies_diverge_in_mechanics_not_in_having_a_cap() ->
     This test pins both halves so nobody "fixes" either engine on the strength
     of the wrong reason.
     """
-    assert "lcr_inflow_cap_pct" in _REQUIRED_THRESHOLDS
+    params = replace(bog_liquidity_params(), inflow_cap_pct=None)
+    result = compute_lcr_result((), params)
+    assert isinstance(result, Refused)
+    assert result.reason_code == "missing_parameter"
+    assert result.detail is not None
+    assert result.detail.items == ("param:lcr_inflow_cap_pct",)
     table11_cap = _LCR_INFLOW_CAP
     assert table11_cap == Decimal("0.75")
 
@@ -435,9 +533,7 @@ def test_the_bsd3_engine_caps_inflows_in_aggregate() -> None:
 
     facts = (
         LiquidityFact("securities", "gog_bonds", Decimal("500"), hqla_level="L1"),
-        LiquidityFact(
-            "balance_sheet", "retail_deposits_stable", Decimal("2000"), side="liability"
-        ),
+        LiquidityFact("balance_sheet", "retail_deposits_stable", Decimal("2000"), side="liability"),
         # 100% inflow rate on a balance far above 75% of the weighted outflow.
         LiquidityFact("lcr_inflow", "interbank_maturing", Decimal("900")),
     )

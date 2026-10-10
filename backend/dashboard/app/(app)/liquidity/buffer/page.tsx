@@ -13,7 +13,7 @@ import HQLAStackChart from "@/components/charts/HQLAStackChart";
 import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useLiquidityDashboard, useRegulatoryRun } from "@/lib/api/hooks";
-import { num } from "@/lib/api/values";
+import { num, numOrNull, formatFigure } from "@/lib/api/values";
 import { CSS_CHART_SERIES, cssSeriesColor } from "@/lib/svgChartPalette";
 import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
@@ -76,8 +76,8 @@ export default function LiquidityBuffer() {
 
   const data = dashboard.data;
   const run = latestRun.data;
-  const hqlaTotal = num(data?.metrics.hqlaTotalGhs);
-  const netOutflows = num(data?.metrics.netOutflows30dGhs);
+  const hqlaTotal = numOrNull(data?.metrics.hqlaTotalGhs);
+  const netOutflows = numOrNull(data?.metrics.netOutflows30dGhs);
 
   const rows: BufferRow[] = (data?.hqlaComposition ?? []).map((line) => {
     const exposure =
@@ -92,7 +92,10 @@ export default function LiquidityBuffer() {
           ? (1 - weighted / exposure) * 100
           : null,
       weightedGHS: weighted,
-      sharePct: hqlaTotal > 0 ? (weighted / hqlaTotal) * 100 : null,
+      sharePct:
+        hqlaTotal !== null && hqlaTotal > 0
+          ? (weighted / hqlaTotal) * 100
+          : null,
     };
   });
 
@@ -135,13 +138,13 @@ export default function LiquidityBuffer() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
                 label="HQLA stock"
-                value={fmtCurrency(hqlaTotal)}
+                value={formatFigure(hqlaTotal, fmtCurrency)}
                 hint="Post-haircut weighted"
               />
               <KpiStat
                 label="Coverage of net outflows"
                 value={
-                  netOutflows > 0
+                  hqlaTotal !== null && netOutflows !== null && netOutflows > 0
                     ? fmtPct((hqlaTotal / netOutflows) * 100, 1)
                     : "—"
                 }
@@ -149,8 +152,14 @@ export default function LiquidityBuffer() {
               />
               <KpiStat
                 label="Asset classes held"
-                value={rows.length}
-                hint={largest ? `Largest: ${largest.instrument}` : undefined}
+                value={formatFigure(hqlaTotal, () => `${rows.length}`)}
+                hint={
+                  hqlaTotal === null
+                    ? "Unavailable"
+                    : largest
+                      ? `Largest: ${largest.instrument}`
+                      : undefined
+                }
               />
               <div className="card px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
                 <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
@@ -160,15 +169,31 @@ export default function LiquidityBuffer() {
                   <ShieldCheck
                     size={18}
                     className={
-                      allLevel1?.passed ? "text-success" : "text-warning"
+                      hqlaTotal === null
+                        ? "text-slate"
+                        : allLevel1?.passed
+                          ? "text-success"
+                          : "text-warning"
                     }
                     aria-hidden
                   />
-                  <StatusPill tone={allLevel1?.passed ? "success" : "amber"}>
-                    {allLevel1?.passed ? "All Level 1" : "Includes < Level 1"}
+                  <StatusPill
+                    tone={
+                      hqlaTotal === null
+                        ? "slate"
+                        : allLevel1?.passed
+                          ? "success"
+                          : "amber"
+                    }
+                  >
+                    {hqlaTotal === null
+                      ? "Unavailable"
+                      : allLevel1?.passed
+                        ? "All Level 1"
+                        : "Includes < Level 1"}
                   </StatusPill>
                 </div>
-                {allLevel1 && (
+                {hqlaTotal !== null && allLevel1 && (
                   <p className="text-caption text-slate leading-snug">
                     {allLevel1.message}
                   </p>
@@ -185,15 +210,19 @@ export default function LiquidityBuffer() {
                 height={Math.max(200, stackData.length * 44 + 40)}
                 footer={provenance}
               >
-                <HQLAStackChart
-                  data={stackData}
-                  height={Math.max(200, stackData.length * 44 + 40)}
-                />
+                {hqlaTotal === null ? (
+                  <p className="text-caption text-slate">Unavailable</p>
+                ) : (
+                  <HQLAStackChart
+                    data={stackData}
+                    height={Math.max(200, stackData.length * 44 + 40)}
+                  />
+                )}
               </ChartFrame>
 
               <SectionCard
                 title="Share of buffer"
-                subtitle={`Total ${fmtCurrency(hqlaTotal)}`}
+                subtitle={`Total ${formatFigure(hqlaTotal, fmtCurrency)}`}
               >
                 <ul className="space-y-2.5 text-caption">
                   {stackData.map((h) => (
@@ -242,18 +271,22 @@ export default function LiquidityBuffer() {
                 columns={bufferColumns()}
                 rows={[
                   ...rows,
-                  {
-                    code: "TOTAL",
-                    instrument: "TOTAL HQLA",
-                    marketValueGHS: rows.reduce(
-                      (s, r) => s + (r.marketValueGHS ?? 0),
-                      0,
-                    ),
-                    haircutPct: null,
-                    weightedGHS: hqlaTotal,
-                    sharePct: rows.length ? 100 : null,
-                    isTotal: true,
-                  },
+                  ...(hqlaTotal === null
+                    ? []
+                    : [
+                        {
+                          code: "TOTAL",
+                          instrument: "TOTAL HQLA",
+                          marketValueGHS: rows.reduce(
+                            (s, r) => s + (r.marketValueGHS ?? 0),
+                            0,
+                          ),
+                          haircutPct: null,
+                          weightedGHS: hqlaTotal,
+                          sharePct: rows.length ? 100 : null,
+                          isTotal: true,
+                        },
+                      ]),
                 ]}
                 totalsRowMatcher={(r) => Boolean(r.isTotal)}
               />

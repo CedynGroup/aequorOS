@@ -23,7 +23,7 @@ import {
   BAR_SERIES_BASE,
   itemTooltip,
 } from "@/lib/echartsOptions";
-import { num, numOrNull } from "@/lib/api/values";
+import { num, numOrNull, formatFigure } from "@/lib/api/values";
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from "@/lib/format";
 
 function ratioTone(status: SdiLiquidityRatio["status"]) {
@@ -255,7 +255,9 @@ export default function SdiLiquidityMonitoringView({
                       label="Liquidity Coverage Ratio"
                       value={
                         baselData
-                          ? fmtPct(num(baselData.metrics.lcrPct), 1)
+                          ? formatFigure(baselData.metrics.lcrPct, (value) =>
+                              fmtPct(value, 1),
+                            )
                           : "—"
                       }
                       status={
@@ -273,7 +275,9 @@ export default function SdiLiquidityMonitoringView({
                       label="Net Stable Funding Ratio"
                       value={
                         baselData
-                          ? fmtPct(num(baselData.metrics.nsfrPct), 1)
+                          ? formatFigure(baselData.metrics.nsfrPct, (value) =>
+                              fmtPct(value, 1),
+                            )
                           : "—"
                       }
                       status={
@@ -372,7 +376,10 @@ export default function SdiLiquidityMonitoringView({
                         <dt className="text-slate">HQLA stock</dt>
                         <dd className="mt-1 text-body font-medium text-navy">
                           {baselData
-                            ? fmtCurrency(num(baselData.metrics.hqlaTotalGhs))
+                            ? formatFigure(
+                                baselData.metrics.hqlaTotalGhs,
+                                fmtCurrency,
+                              )
                             : "—"}
                         </dd>
                       </div>
@@ -380,8 +387,9 @@ export default function SdiLiquidityMonitoringView({
                         <dt className="text-slate">30-day net outflows</dt>
                         <dd className="mt-1 text-body font-medium text-navy">
                           {baselData
-                            ? fmtCurrency(
-                                num(baselData.metrics.netOutflows30dGhs),
+                            ? formatFigure(
+                                baselData.metrics.netOutflows30dGhs,
+                                fmtCurrency,
                               )
                             : "—"}
                         </dd>
@@ -390,7 +398,10 @@ export default function SdiLiquidityMonitoringView({
                         <dt className="text-slate">Available stable funding</dt>
                         <dd className="mt-1 text-body font-medium text-navy">
                           {baselData
-                            ? fmtCurrency(num(baselData.metrics.asfTotalGhs))
+                            ? formatFigure(
+                                baselData.metrics.asfTotalGhs,
+                                fmtCurrency,
+                              )
                             : "—"}
                         </dd>
                       </div>
@@ -398,7 +409,10 @@ export default function SdiLiquidityMonitoringView({
                         <dt className="text-slate">Required stable funding</dt>
                         <dd className="mt-1 text-body font-medium text-navy">
                           {baselData
-                            ? fmtCurrency(num(baselData.metrics.rsfTotalGhs))
+                            ? formatFigure(
+                                baselData.metrics.rsfTotalGhs,
+                                fmtCurrency,
+                              )
                             : "—"}
                         </dd>
                       </div>

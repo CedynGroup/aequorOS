@@ -45,6 +45,22 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
 
+### Unavailable liquidity figures
+
+When LCR or NSFR cannot be computed, its figure and dependent totals show an
+unavailable state (**Unavailable** or **—**), and charts leave gaps for missing
+readings. The computed sibling remains visible; measured zero and genuinely empty
+holdings retain their meaning.
+HQLA holdings counts, quality assessments and empty-holdings messages also become
+unavailable when the HQLA total is unavailable. The overview liquidity card cannot
+claim compliance from a computed sibling or an earlier live result while a current
+ratio is unavailable; liquidity is excluded from its assessed-module count.
+Risk limits and board-pack figures preserve unavailable values as well.
+
+Detailed refusal reasons and affected-row rendering remain a follow-up for
+issue #409. The backend result, filing and operator logging contracts are owned by
+[Per-figure results and calculation logs](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
+
 ### Forecasting tools
 
 On **Forecasting → Assumptions**, choose **Propose new version**, enter an
@@ -206,8 +222,8 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
    they cannot disagree. The authority is the **governed parameter set on the
    module payload** (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f)
    coupling), which the backend resolves from the institution's register,
-   clamped tighten-only against the control plane, and refuses with 409
-   `missing_parameter` rather than guessing.
+   clamped tighten-only against the control plane. For calculation refusal
+   contracts, see [Per-figure results and calculation logs](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
 
    **A stored run's `threshold_min` is NOT that authority.** It records what
    was applied when that run executed — evidence about a filing, not the

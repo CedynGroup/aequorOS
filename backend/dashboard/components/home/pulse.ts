@@ -31,7 +31,7 @@ import {
   useLiquidityDashboard,
   useLiveSummary,
 } from "@/lib/api/hooks";
-import { num } from "@/lib/api/values";
+import { num, numOrNull, formatFigure, fmtPctOrNull } from "@/lib/api/values";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 
@@ -47,7 +47,7 @@ export const STATUS_RANK: Record<CardStatus, number> = {
   na: 3,
 };
 
-export function worstOf(...statuses: Traffic[]): Traffic {
+export function worstOf(...statuses: CardStatus[]): CardStatus {
   return statuses.reduce((worst, s) =>
     STATUS_RANK[s] < STATUS_RANK[worst] ? s : worst,
   );
@@ -69,7 +69,7 @@ export type PulseCardModel = {
    */
   delta?: LiveMetricChange;
   hint?: string;
-  spark?: number[];
+  spark?: (number | null)[];
   /** 'close' when delta/spark ride the daily EOD ladder, else monthly. */
   deltaBasis?: "close" | "period";
   computedAt?: Date | string | null;
@@ -90,17 +90,17 @@ type TrendPoint = { reportingPeriodId: string };
 function trendDelta<T extends TrendPoint>(
   trend: T[] | undefined,
   periodId: string | undefined,
-  pick: (p: T) => number,
+  pick: (p: T) => number | null,
   module: LiveModule,
 ): LiveMetricChange | undefined {
   if (!trend || !periodId) return undefined;
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx <= 0) return undefined;
-  return livePrimaryMetricChange(
-    module,
-    pick(trend[idx]),
-    pick(trend[idx - 1]),
-  );
+  const current = pick(trend[idx]);
+  const previous = pick(trend[idx - 1]);
+  return current === null || previous === null
+    ? undefined
+    : livePrimaryMetricChange(module, current, previous);
 }
 
 /**
@@ -111,19 +111,17 @@ function trendDelta<T extends TrendPoint>(
 function ladderOverlay(
   snapshots: { metrics: { [key: string]: any } }[] | undefined,
   module: LiveModule,
-): { delta: LiveMetricChange; spark: number[] } | null {
+): { delta?: LiveMetricChange; spark: (number | null)[] } | null {
   if (!snapshots || snapshots.length < 2) return null;
   const key = livePrimaryMetricKey(module);
-  const values = snapshots
-    .map((s) => Number(s.metrics?.[key]))
-    .filter((v) => Number.isFinite(v));
-  if (values.length < 2) return null;
+  const values = snapshots.map((s) => numOrNull(s.metrics?.[key]));
+  const current = values[values.length - 1];
+  const previous = values[values.length - 2];
   return {
-    delta: livePrimaryMetricChange(
-      module,
-      values[values.length - 1],
-      values[values.length - 2],
-    ),
+    delta:
+      current === null || previous === null
+        ? undefined
+        : livePrimaryMetricChange(module, current, previous),
     spark: values.slice(-31),
   };
 }
@@ -132,8 +130,8 @@ function ladderOverlay(
 function trendSpark<T extends TrendPoint>(
   trend: T[] | undefined,
   periodId: string | undefined,
-  pick: (p: T) => number,
-): number[] | undefined {
+  pick: (p: T) => number | null,
+): (number | null)[] | undefined {
   if (!trend || !periodId) return undefined;
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx < 1) return undefined;
@@ -207,25 +205,32 @@ export function usePulseCards(
       error: liq.error,
       ...(liq.data && {
         metricLabel: "Liquidity Coverage Ratio",
-        value: fixed(num(liq.data.metrics.lcrPct), 2),
-        unit: "%",
+        value: formatFigure(liq.data.metrics.lcrPct, (value) =>
+          fixed(value, 2),
+        ),
+        unit: numOrNull(liq.data.metrics.lcrPct) === null ? undefined : "%",
         delta: trendDelta(
           liq.data.trend,
           liq.data.period.id,
-          (p) => num(p.lcrPct),
+          (p) => numOrNull(p.lcrPct),
           "liquidity",
         ),
         spark: trendSpark(liq.data.trend, liq.data.period.id, (p) =>
-          num(p.lcrPct),
+          numOrNull(p.lcrPct),
         ),
-        hint: `NSFR ${fixed(num(liq.data.metrics.nsfrPct), 2)}%`,
+        hint: `NSFR ${fmtPctOrNull(numOrNull(liq.data.metrics.nsfrPct), 2, "Unavailable")}`,
         computedAt: liq.data.live?.computedAt ?? null,
         basisNote: "current live calculation",
       }),
-      status: liq.data
-        ? (liq.data.live?.status ??
-          worstOf(liq.data.metrics.lcrStatus, liq.data.metrics.nsfrStatus))
-        : "na",
+      status:
+        !liq.data ||
+        numOrNull(liq.data.metrics.lcrPct) === null ||
+        numOrNull(liq.data.metrics.nsfrPct) === null ||
+        liq.data.metrics.lcrStatus === "na" ||
+        liq.data.metrics.nsfrStatus === "na"
+          ? "na"
+          : (liq.data.live?.status ??
+            worstOf(liq.data.metrics.lcrStatus, liq.data.metrics.nsfrStatus)),
     },
     capital: {
       module: "capital",

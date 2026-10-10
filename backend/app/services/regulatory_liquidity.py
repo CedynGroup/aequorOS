@@ -15,8 +15,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
-from uuid import UUID
+from typing import Any, cast
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -25,6 +25,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
+from app.core.logging import get_request_id, reset_request_id, set_request_id
+from app.core.observability import Condition, emit
+from app.domain.authority.results import Computed, FigureResult, Refused
 from app.domain.liquidity.engine import (
     FACT_GROUP_SECURITIES,
     HQLA_LEVEL_1,
@@ -33,17 +36,15 @@ from app.domain.liquidity.engine import (
     SHOCK_NMD_RUNOFF_PREFIX,
     CurrencyGapResult,
     LcrResult,
-    LiquidityComputationError,
     LiquidityFact,
     LiquidityParams,
-    MissingParameterError,
     NsfrResult,
     StressedLadder,
     UnsupportedShockError,
     apply_liquidity_stress,
     compute_currency_gaps,
-    compute_lcr,
-    compute_nsfr,
+    compute_lcr_result,
+    compute_liquidity,
     compute_stressed_ladder,
 )
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS as _LADDER_HORIZON_DAYS
@@ -67,6 +68,7 @@ from app.models import (
     RegulatoryValidation,
 )
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.common import FigureRefusalRead, JsonObject
 from app.schemas.regulatory_liquidity import (
     Bsd3HeaderRead,
     Bsd3NsfrSectionRead,
@@ -234,7 +236,6 @@ def preview_note(regulator: str) -> str:
 
 
 _ZERO = Decimal("0")
-_REQUIRED_THRESHOLDS = ("lcr_min", "lcr_amber_floor", "nsfr_min", "lcr_inflow_cap_pct")
 # Only these fact groups participate in LCR/NSFR; keeping the snapshot scoped to
 # them makes the input hash insensitive to unrelated (capital/market) fact edits.
 _LIQUIDITY_FACT_GROUPS = (
@@ -516,7 +517,12 @@ def get_liquidity_dashboard(
         )
         metrics = _metrics_from_results(lcr, nsfr)
         sections = {}
-        for item in (*lcr.line_items, *nsfr.line_items):
+        for item in (
+            item
+            for result in (lcr, nsfr)
+            if isinstance(result, Computed)
+            for item in result.value.line_items
+        ):
             sections.setdefault(item.section, []).append(
                 LiquidityDashboardLineRead(
                     line_code=item.line_code,
@@ -704,9 +710,9 @@ def get_bsd3_preview(
 class LiquidityScenarioAnalysis:
     """One scenario's computed liquidity picture — engine outputs only."""
 
-    lcr: LcrResult
-    nsfr: NsfrResult
-    params: LiquidityParams
+    lcr: FigureResult[LcrResult]
+    nsfr: FigureResult[NsfrResult]
+    params: LiquidityParams[Decimal | None]
     currency_gaps: CurrencyGapResult
     mismatch_limit: Decimal | None
     stressed_ladder: tuple[StressedLadder, ...]
@@ -742,8 +748,7 @@ def _execute_scenario_compute(  # noqa: PLR0913 - the official path hands over i
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
-    lcr = compute_lcr(engine_facts, engine_params)
-    nsfr = compute_nsfr(engine_facts, engine_params)
+    lcr, nsfr = compute_liquidity_results(engine_facts, engine_params, bank.organization_id)
     ladder_inputs = {
         currency: {
             "assets": _ladder_lists(ladder, "assets"),
@@ -868,14 +873,22 @@ def _create_and_execute(
                 {"scenario_code": scenario_code},
             )
         analysis = _execute_scenario_compute(
-            db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
+            db,
+            ctx,
+            bank,
+            period,
+            sorted(facts, key=lambda fact: json.dumps(_snapshot_fact(fact), sort_keys=True)),
+            active,
+            currency_ladders,
+            shocks,
+            scenario_code,
         )
         _persist_success(
             db,
             ctx,
             run,
-            analysis.lcr,
-            analysis.nsfr,
+            _require_figure(analysis.lcr),
+            _require_figure(analysis.nsfr),
             analysis.params,
             base_currency(bank),
             analysis.currency_gaps,
@@ -884,17 +897,6 @@ def _create_and_execute(
         )
     except LiquidityRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
-    except MissingParameterError as exc:
-        _persist_failure(
-            db,
-            ctx,
-            run_id,
-            LiquidityRunError(
-                "missing_parameter",
-                f"No active liquidity parameter covers category '{exc.category}'.",
-                {"category": exc.category},
-            ),
-        )
     except UnsupportedShockError as exc:
         _persist_failure(
             db,
@@ -905,13 +907,6 @@ def _create_and_execute(
                 str(exc),
                 {"scenario_code": exc.scenario_code, "shock_key": exc.shock_key},
             ),
-        )
-    except LiquidityComputationError as exc:
-        _persist_failure(
-            db,
-            ctx,
-            run_id,
-            LiquidityRunError("calculation_error", str(exc), None),
         )
     except HTTPException:
         raise
@@ -940,7 +935,7 @@ def _persist_success(  # noqa: PLR0913, PLR0915
     run: RegulatoryRun,
     lcr: LcrResult,
     nsfr: NsfrResult,
-    params: LiquidityParams,
+    params: LiquidityParams[Decimal | None],
     currency: str,
     currency_gaps: CurrencyGapResult,
     mismatch_limit: Decimal | None,
@@ -1028,7 +1023,7 @@ def _persist_success(  # noqa: PLR0913, PLR0915
         )
     for position, (rule_code, passed, severity, message) in enumerate(
         (
-            *_validation_rows(lcr, nsfr, params, currency),
+            *_validation_rows(Computed(lcr), Computed(nsfr), params, currency),
             *_currency_gap_validations(currency_gaps, mismatch_limit),
         ),
         start=1,
@@ -1098,85 +1093,108 @@ def _persist_failure(
 
 
 def _validation_rows(
-    lcr: LcrResult, nsfr: NsfrResult, params: LiquidityParams, currency: str
+    lcr_result: FigureResult[LcrResult],
+    nsfr_result: FigureResult[NsfrResult],
+    params: LiquidityParams[Decimal | None],
+    currency: str,
 ) -> tuple[tuple[str, bool, str, str], ...]:
-    lcr_min = _pct_text(params.lcr_min_pct)
-    amber_floor = _pct_text(params.lcr_amber_floor_pct)
-    nsfr_min = _pct_text(params.nsfr_min_pct)
-    lcr_pct = _pct_text(lcr.lcr_pct)
-    nsfr_pct = _pct_text(nsfr.nsfr_pct)
-
-    lcr_above = lcr.lcr_pct >= params.lcr_min_pct
-    lcr_amber = params.lcr_amber_floor_pct <= lcr.lcr_pct < params.lcr_min_pct
-    nsfr_above = nsfr.nsfr_pct >= params.nsfr_min_pct
-    if lcr.inflow_cap_applied:
-        cap_message = (
-            f"The {_pct_text(params.inflow_cap_pct)}% inflow cap bound: gross inflows of "
-            f"{lcr.gross_inflows_total} {currency} were capped at "
-            f"{lcr.capped_inflows_total} {currency}."
-        )
-    else:
-        cap_message = (
-            f"The {_pct_text(params.inflow_cap_pct)}% inflow cap did not bind: gross inflows "
-            f"of {lcr.gross_inflows_total} {currency} are below the cap of "
-            f"{lcr.inflow_cap_amount} {currency}."
-        )
-    # The HQLA composition after the Basel haircuts and Level-2 caps (enterprise
-    # audit P0-8). Previously this row could only say "all Level 1" or "includes
-    # assets below Level 1" — it named neither the haircut charged nor whether a
-    # cap had bound, because neither existed.
-    composition = lcr.hqla_composition
-    if lcr.all_hqla_level1:
-        hqla_message = (
-            f"All high quality liquid assets are Level 1: {composition.level1} {currency}, "
-            "no haircut and no Level-2 cap applicable."
-        )
-    else:
-        bound: list[str] = []
-        if composition.level2_cap_applied:
-            bound.append(
-                f"the {_pct_text(params.hqla_level2_cap_pct or _ZERO)}% Level-2 cap deducted "
-                f"{composition.level2_cap_adjustment} {currency}"
+    rows: list[tuple[str, bool, str, str]] = []
+    if isinstance(lcr_result, Computed):
+        lcr = lcr_result.value
+        assert params.lcr_min_pct is not None
+        assert params.lcr_amber_floor_pct is not None
+        assert params.inflow_cap_pct is not None
+        lcr_min = _pct_text(params.lcr_min_pct)
+        amber_floor = _pct_text(params.lcr_amber_floor_pct)
+        lcr_pct = _pct_text(lcr.lcr_pct)
+        lcr_above = lcr.lcr_pct >= params.lcr_min_pct
+        lcr_amber = params.lcr_amber_floor_pct <= lcr.lcr_pct < params.lcr_min_pct
+        if lcr.inflow_cap_applied:
+            cap_message = (
+                f"The {_pct_text(params.inflow_cap_pct)}% inflow cap bound: gross inflows of "
+                f"{lcr.gross_inflows_total} {currency} were capped at "
+                f"{lcr.capped_inflows_total} {currency}."
             )
-        if composition.level2b_cap_applied:
-            bound.append(
-                f"the {_pct_text(params.hqla_level2b_cap_pct or _ZERO)}% Level-2B cap deducted "
-                f"{composition.level2b_cap_adjustment} {currency}"
+        else:
+            cap_message = (
+                f"The {_pct_text(params.inflow_cap_pct)}% inflow cap did not bind: gross inflows "
+                f"of {lcr.gross_inflows_total} {currency} are below the cap of "
+                f"{lcr.inflow_cap_amount} {currency}."
             )
-        hqla_message = (
-            f"HQLA after haircuts: Level 1 {composition.level1}, Level 2A "
-            f"{composition.level2a}, Level 2B {composition.level2b} {currency}. "
-            + ("; ".join(bound) + "." if bound else "Neither Level-2 cap bound.")
-        )
+        composition = lcr.hqla_composition
+        if lcr.all_hqla_level1:
+            hqla_message = (
+                f"All high quality liquid assets are Level 1: {composition.level1} {currency}, "
+                "no haircut and no Level-2 cap applicable."
+            )
+        else:
+            bound: list[str] = []
+            if composition.level2_cap_applied:
+                bound.append(
+                    f"the {_pct_text(params.hqla_level2_cap_pct or _ZERO)}% Level-2 cap deducted "
+                    f"{composition.level2_cap_adjustment} {currency}"
+                )
+            if composition.level2b_cap_applied:
+                bound.append(
+                    f"the {_pct_text(params.hqla_level2b_cap_pct or _ZERO)}% Level-2B cap deducted "
+                    f"{composition.level2b_cap_adjustment} {currency}"
+                )
+            hqla_message = (
+                f"HQLA after haircuts: Level 1 {composition.level1}, Level 2A "
+                f"{composition.level2a}, Level 2B {composition.level2b} {currency}. "
+                + ("; ".join(bound) + "." if bound else "Neither Level-2 cap bound.")
+            )
 
-    return (
-        (
-            "lcr_above_minimum",
-            lcr_above,
-            "error",
-            f"LCR of {lcr_pct}% is "
-            + ("at or above" if lcr_above else "below")
-            + f" the {lcr_min}% governed monitoring threshold (Basel reference ratio).",
-        ),
-        (
-            "lcr_amber_zone",
-            not lcr_amber,
-            "warning",
-            f"LCR of {lcr_pct}% is "
-            + ("inside" if lcr_amber else "outside")
-            + f" the amber zone between {amber_floor}% and {lcr_min}%.",
-        ),
-        (
-            "nsfr_above_minimum",
-            nsfr_above,
-            "error",
-            f"NSFR of {nsfr_pct}% is "
-            + ("at or above" if nsfr_above else "below")
-            + f" the {nsfr_min}% governed monitoring threshold (Basel reference ratio).",
-        ),
-        ("inflow_cap_applied", True, "info", cap_message),
-        ("hqla_all_level1", lcr.all_hqla_level1, "info", hqla_message),
-    )
+        rows.extend(
+            (
+                (
+                    "lcr_above_minimum",
+                    lcr_above,
+                    "error",
+                    f"LCR of {lcr_pct}% is "
+                    + ("at or above" if lcr_above else "below")
+                    + f" the {lcr_min}% governed monitoring threshold (Basel reference ratio).",
+                ),
+                (
+                    "lcr_amber_zone",
+                    not lcr_amber,
+                    "warning",
+                    f"LCR of {lcr_pct}% is "
+                    + ("inside" if lcr_amber else "outside")
+                    + f" the amber zone between {amber_floor}% and {lcr_min}%.",
+                ),
+                ("inflow_cap_applied", True, "info", cap_message),
+                ("hqla_all_level1", lcr.all_hqla_level1, "info", hqla_message),
+            )
+        )
+    if isinstance(nsfr_result, Computed):
+        nsfr = nsfr_result.value
+        assert params.nsfr_min_pct is not None
+        nsfr_min = _pct_text(params.nsfr_min_pct)
+        nsfr_pct = _pct_text(nsfr.nsfr_pct)
+        nsfr_above = nsfr.nsfr_pct >= params.nsfr_min_pct
+        rows.insert(
+            2,
+            (
+                "nsfr_above_minimum",
+                nsfr_above,
+                "error",
+                f"NSFR of {nsfr_pct}% is "
+                + ("at or above" if nsfr_above else "below")
+                + f" the {nsfr_min}% governed monitoring threshold (Basel reference ratio).",
+            ),
+        )
+    for figure_id, result in (("lcr_pct", lcr_result), ("nsfr_pct", nsfr_result)):
+        if isinstance(result, Refused):
+            rows.append(
+                (
+                    f"{figure_id}_refused",
+                    False,
+                    "error",
+                    result.detail.reason if result.detail else result.reason_code,
+                )
+            )
+    return tuple(rows)
 
 
 def _currency_gap_validations(
@@ -1234,17 +1252,27 @@ def _scalar_metrics(run: RegulatoryRun) -> dict[str, Decimal]:
 
 
 def _metrics_from_results(
-    lcr: LcrResult, nsfr: NsfrResult, currency_gaps: CurrencyGapResult | None = None
+    lcr: FigureResult[LcrResult],
+    nsfr: FigureResult[NsfrResult],
+    currency_gaps: CurrencyGapResult | None = None,
 ) -> LiquidityMetricsRead:
+    refusals = {
+        figure_id: refusal_payload(result)
+        for figure_id, result in (("lcr_pct", lcr), ("nsfr_pct", nsfr))
+        if isinstance(result, Refused)
+    }
+    lcr_value = lcr.value if isinstance(lcr, Computed) else None
+    nsfr_value = nsfr.value if isinstance(nsfr, Computed) else None
     return LiquidityMetricsRead(
-        lcr_pct=lcr.lcr_pct,
-        lcr_status=lcr.status,
-        nsfr_pct=nsfr.nsfr_pct,
-        nsfr_status=nsfr.status,
-        hqla_total_ghs=lcr.hqla_total,
-        net_outflows_30d_ghs=lcr.net_outflows_total,
-        asf_total_ghs=nsfr.asf_total,
-        rsf_total_ghs=nsfr.rsf_total,
+        lcr_pct=lcr_value.lcr_pct if lcr_value else None,
+        lcr_status=lcr_value.status if lcr_value else "na",
+        nsfr_pct=nsfr_value.nsfr_pct if nsfr_value else None,
+        nsfr_status=nsfr_value.status if nsfr_value else "na",
+        hqla_total_ghs=lcr_value.hqla_total if lcr_value else None,
+        net_outflows_30d_ghs=lcr_value.net_outflows_total if lcr_value else None,
+        asf_total_ghs=nsfr_value.asf_total if nsfr_value else None,
+        rsf_total_ghs=nsfr_value.rsf_total if nsfr_value else None,
+        refusals=refusals,
         fx_funding_gap_ghs=currency_gaps.fx_funding_gap if currency_gaps else None,
         fx_share_of_liabilities_pct=(
             currency_gaps.fx_share_of_liabilities_pct if currency_gaps else None
@@ -1364,15 +1392,17 @@ def _build_trend(
             continue
         try:
             lcr, nsfr, _params = _compute_inline_from_batch(bank, period, batch)
-        except (MissingParameterError, LiquidityComputationError, LiquidityRunError):
+        except LiquidityRunError:
             continue
+        metrics = _metrics_from_results(lcr, nsfr)
         points.append(
             LiquidityTrendPointRead(
                 reporting_period_id=period.id,
                 label=period.label,
                 period_end=period.period_end,
-                lcr_pct=lcr.lcr_pct,
-                nsfr_pct=nsfr.nsfr_pct,
+                lcr_pct=metrics.lcr_pct,
+                nsfr_pct=metrics.nsfr_pct,
+                refusals=metrics.refusals,
                 stored=False,
             )
         )
@@ -1461,7 +1491,7 @@ def _compute_inline_from_batch(
     batch: _LiquidityDashboardBatch,
     *,
     facts: Sequence[FinancialFactRow] | None = None,
-) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     # ``facts`` overrides the batch's official rows for the period: current mode
     # passes the live plane, which the official spine may not carry yet.
     if facts is None:
@@ -1475,16 +1505,13 @@ def _compute_inline_from_batch(
     active = _active_params_from_batch(batch, period.period_end)
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    return (
-        compute_lcr(engine_facts, engine_params),
-        compute_nsfr(engine_facts, engine_params),
-        engine_params,
-    )
+    lcr, nsfr = compute_liquidity_results(engine_facts, engine_params, bank.organization_id)
+    return lcr, nsfr, engine_params
 
 
 def _compute_inline(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     facts = _load_facts(db, ctx, bank, period)
     if not facts:
         raise LiquidityRunError(
@@ -1495,11 +1522,8 @@ def _compute_inline(
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    return (
-        compute_lcr(engine_facts, engine_params),
-        compute_nsfr(engine_facts, engine_params),
-        engine_params,
-    )
+    lcr, nsfr = compute_liquidity_results(engine_facts, engine_params, bank.organization_id)
+    return lcr, nsfr, engine_params
 
 
 def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
@@ -1510,19 +1534,15 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
     *,
     batch: _LiquidityDashboardBatch | None = None,
     facts: Sequence[FinancialFactRow] | None = None,
-) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult], LiquidityParams[Decimal | None]]:
     try:
         return (
             _compute_inline_from_batch(bank, period, batch, facts=facts)
             if batch is not None
             else _compute_inline(db, ctx, bank, period)
         )
-    except MissingParameterError as exc:
-        raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except LiquidityRunError as exc:
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
-    except LiquidityComputationError as exc:
-        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
 
 
 def current_input_hash(
@@ -1542,6 +1562,77 @@ def current_input_hash(
     return _snapshot_hash(snapshot)
 
 
+def compute_liquidity_results(
+    facts: Sequence[LiquidityFact], params: LiquidityParams[Decimal | None], tenant_id: str
+) -> tuple[FigureResult[LcrResult], FigureResult[NsfrResult]]:
+    """Return independent figures and emit privacy-safe operational diagnostics."""
+    token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
+    try:
+        try:
+            figures = compute_liquidity(facts, params)
+        except Exception:
+            emit(
+                Condition.CALCULATION_FAILED,
+                "Calculation failed",
+                severity="error",
+                tenant_id=tenant_id,
+                reason_code="unexpected_error",
+                engine_version=ENGINE_VERSION,
+            )
+            raise
+        for figure_id, result in (("lcr_pct", figures.lcr), ("nsfr_pct", figures.nsfr)):
+            _emit_liquidity_refusal(result, figure_id, tenant_id, len(facts))
+        return figures.lcr, figures.nsfr
+    finally:
+        if token is not None:
+            reset_request_id(token)
+
+
+def _emit_liquidity_refusal(
+    result: FigureResult[LcrResult] | FigureResult[NsfrResult],
+    figure_id: str,
+    tenant_id: str,
+    row_count: int,
+) -> None:
+    match result:
+        case Refused(reason_code=code, rule_citation=citation, row_ref=positions):
+            emit(
+                Condition.CALCULATION_BLOCKED,
+                "Calculation refused",
+                tenant_id=tenant_id,
+                reason_code=code,
+                rule_citation=citation,
+                row_ref=positions,
+                row_count=row_count,
+                figure_id=figure_id,
+                engine_version=ENGINE_VERSION,
+            )
+        case Computed():
+            pass
+
+
+def _require_figure[ValueT](result: FigureResult[ValueT]) -> ValueT:
+    """Only official runs require every filing figure to be computed."""
+    match result:
+        case Computed(value=value):
+            return value
+        case Refused(reason_code=code, detail=detail):
+            raise LiquidityRunError(
+                code,
+                detail.reason if detail is not None else "The required figure cannot be computed.",
+                refusal_payload(result).model_dump(mode="json"),
+            )
+
+
+def refusal_payload(result: Refused) -> FigureRefusalRead:
+    return FigureRefusalRead(
+        reason_code=result.reason_code,
+        rule_citation=result.rule_citation,
+        row_ref=result.row_ref,
+        reason=result.detail.reason if result.detail is not None else None,
+    )
+
+
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
@@ -1551,8 +1642,7 @@ def compute_live(
     active = _load_active_params(db, ctx, bank, current.source_as_of_date)
     params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-    lcr = compute_lcr(engine_facts, params)
-    nsfr = compute_nsfr(engine_facts, params)
+    lcr, nsfr = compute_liquidity_results(engine_facts, params, bank.organization_id)
     snapshot = current_snapshot(
         _build_snapshot(
             bank,
@@ -1565,15 +1655,25 @@ def compute_live(
         ),
         current.source_as_of_date,
     )
-    metrics = {
-        "lcr_pct": str(lcr.lcr_pct),
-        "nsfr_pct": str(nsfr.nsfr_pct),
-        "hqla_total_ghs": str(lcr.hqla_total),
-        "net_outflows_30d_ghs": str(lcr.net_outflows_total),
-        "asf_total_ghs": str(nsfr.asf_total),
-        "rsf_total_ghs": str(nsfr.rsf_total),
+    view = _metrics_from_results(lcr, nsfr)
+    serialized = cast(JsonObject, view.model_dump(mode="json"))
+    # Explicit publication fields keep every live figure in the authority inventory.
+    metrics: JsonObject = {
+        "lcr_pct": serialized["lcr_pct"],
+        "lcr_status": serialized["lcr_status"],
+        "nsfr_pct": serialized["nsfr_pct"],
+        "nsfr_status": serialized["nsfr_status"],
+        "hqla_total_ghs": serialized["hqla_total_ghs"],
+        "net_outflows_30d_ghs": serialized["net_outflows_30d_ghs"],
+        "asf_total_ghs": serialized["asf_total_ghs"],
+        "rsf_total_ghs": serialized["rsf_total_ghs"],
+        "refusals": serialized["refusals"],
+        "fx_funding_gap_ghs": serialized["fx_funding_gap_ghs"],
+        "fx_share_of_liabilities_pct": serialized["fx_share_of_liabilities_pct"],
+        "stressed_fx_funding_gap_ghs": serialized["stressed_fx_funding_gap_ghs"],
     }
-    status = worst_status(lcr.status, nsfr.status)
+    metrics = {key: value for key, value in metrics.items() if value is not None}
+    status = "red" if view.refusals else worst_status(view.lcr_status, view.nsfr_status)
     findings = findings_from_validations(
         _validation_rows(lcr, nsfr, params, base_currency(bank)), status
     )
@@ -1660,28 +1760,17 @@ def _load_active_params(
     )
 
 
-def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
-    missing = [code for code in _REQUIRED_THRESHOLDS if code not in active.thresholds]
-    if missing:
-        raise LiquidityRunError(
-            "missing_parameter",
-            "Required liquidity threshold parameters are not configured: "
-            + ", ".join(missing)
-            + ".",
-            {"threshold_codes": missing},
-        )
-    # The BoG MVP parameter set defines one amber floor; it applies to both ratios.
-    amber_floor = active.thresholds["lcr_amber_floor"]
+def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams[Decimal | None]:
     return LiquidityParams(
         outflow_rates=active.outflow_rates,
         inflow_rates=active.inflow_rates,
         asf_weights=active.asf_weights,
         rsf_weights=active.rsf_weights,
-        inflow_cap_pct=active.thresholds["lcr_inflow_cap_pct"],
-        lcr_min_pct=active.thresholds["lcr_min"],
-        lcr_amber_floor_pct=amber_floor,
-        nsfr_min_pct=active.thresholds["nsfr_min"],
-        nsfr_amber_floor_pct=amber_floor,
+        inflow_cap_pct=active.thresholds.get("lcr_inflow_cap_pct"),
+        lcr_min_pct=active.thresholds.get("lcr_min"),
+        lcr_amber_floor_pct=active.thresholds.get("lcr_amber_floor"),
+        nsfr_min_pct=active.thresholds.get("nsfr_min"),
+        nsfr_amber_floor_pct=active.thresholds.get("lcr_amber_floor"),
         # HQLA haircuts + Level-2 caps come from the control plane, never from a
         # literal in the engine (enterprise audit P0-8). They are passed through
         # as resolved: an absent rate stays absent, and ``compute_lcr`` refuses
@@ -1808,6 +1897,17 @@ def _load_shocks(
     }
 
 
+def _snapshot_fact(fact: FinancialFactRow) -> dict[str, object]:
+    return {
+        "fact_group": fact.fact_group,
+        "category": fact.category,
+        "amount": str(fact.amount),
+        "hqla_level": fact.hqla_level,
+        "side": fact.attributes.get("side"),
+        "cash_derived": fact.attributes.get("source") == "cash",
+    }
+
+
 def _build_snapshot(  # noqa: PLR0913
     bank: Bank,
     period: BankReportingPeriod,
@@ -1832,17 +1932,7 @@ def _build_snapshot(  # noqa: PLR0913
         },
         "as_of_date": period.period_end.isoformat(),
         "facts": sorted(
-            (
-                {
-                    "fact_group": fact.fact_group,
-                    "category": fact.category,
-                    "amount": str(fact.amount),
-                    "hqla_level": fact.hqla_level,
-                    "side": fact.attributes.get("side"),
-                    "cash_derived": fact.attributes.get("source") == "cash",
-                }
-                for fact in facts
-            ),
+            (_snapshot_fact(fact) for fact in facts),
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
         "parameters": _snapshot_parameters(active, facts),
@@ -2165,8 +2255,6 @@ def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
                 scaled[key] = max(_ZERO, one + (value - one) * k)
             elif key == "hqla_securities_haircut_pct":
                 scaled[key] = min(hundred, max(_ZERO, value * k))
-            elif key.startswith("asf:") or key == "rsf:securities_weight_override":
-                scaled[key] = value  # NSFR shocks do not move the LCR frontier
             # fx_depreciation_pct / nmd_runoff:* never reach the fact engine.
         return scaled
 
@@ -2175,11 +2263,25 @@ def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
             scenario_code, engine_facts, engine_params, scaled_shocks(k)
         )
         try:
-            return compute_lcr(stressed_facts, stressed_params).lcr_pct
-        except LiquidityComputationError:
-            return None  # degenerate (net outflow <= 0): treated as no breach
+            result = compute_lcr_result(stressed_facts, stressed_params)
+        except Exception:
+            emit(
+                Condition.CALCULATION_FAILED,
+                "Calculation failed",
+                severity="error",
+                tenant_id=bank.organization_id,
+                reason_code="unexpected_error",
+                engine_version=ENGINE_VERSION,
+            )
+            raise
+        _emit_liquidity_refusal(result, "lcr_pct", bank.organization_id, len(stressed_facts))
+        if isinstance(result, Refused) and result.reason_code == "non_positive_denominator":
+            return None
+        return _require_figure(result).lcr_pct
 
     minimum = engine_params.lcr_min_pct
+    if minimum is None:
+        raise LiquidityRunError("missing_parameter", "The LCR minimum is not configured.")
     k_max = Decimal("5")
     precision = Decimal("0.05")
     lcr_max = lcr_at(k_max)

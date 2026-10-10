@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.common import FigureRefusalRead
 from app.schemas.live import LiveModuleView
 
 type RegulatoryModule = Literal[
@@ -81,7 +82,7 @@ type RegulatoryScenarioCode = Literal[
 type RegulatoryRunStatus = Literal["queued", "running", "succeeded", "failed"]
 type RegulatoryMetricUnit = Literal["pct", "ghs", "years"]
 type RegulatoryMetricStatus = Literal["green", "amber", "red", "na"]
-type LiquidityRatioStatus = Literal["green", "amber", "red"]
+type LiquidityRatioStatus = Literal["green", "amber", "red", "na"]
 type RegulatoryLineSection = Literal[
     "hqla",
     "outflow",
@@ -295,14 +296,15 @@ class RegulatoryRunBatchRead(ClosedModel):
 
 
 class LiquidityMetricsRead(ClosedModel):
-    lcr_pct: Decimal
+    lcr_pct: Decimal | None
     lcr_status: LiquidityRatioStatus
-    nsfr_pct: Decimal
+    nsfr_pct: Decimal | None
     nsfr_status: LiquidityRatioStatus
-    hqla_total_ghs: Decimal
-    net_outflows_30d_ghs: Decimal
-    asf_total_ghs: Decimal
-    rsf_total_ghs: Decimal
+    hqla_total_ghs: Decimal | None
+    net_outflows_30d_ghs: Decimal | None
+    asf_total_ghs: Decimal | None
+    rsf_total_ghs: Decimal | None
+    refusals: dict[str, FigureRefusalRead] = Field(default_factory=dict)
     # Phase 2 item 2 (2026-08-07): FX funding-mismatch headlines; None on
     # runs stored before the currency-gap layer existed.
     fx_funding_gap_ghs: Decimal | None = None
@@ -329,8 +331,9 @@ class LiquidityTrendPointRead(ClosedModel):
     reporting_period_id: UUID
     label: str
     period_end: date
-    lcr_pct: Decimal
-    nsfr_pct: Decimal
+    lcr_pct: Decimal | None
+    nsfr_pct: Decimal | None
+    refusals: dict[str, FigureRefusalRead] = Field(default_factory=dict)
     stored: bool
 
 

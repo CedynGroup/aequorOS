@@ -18,6 +18,7 @@ export const LiquidityRatioStatus = {
   Green: "green",
   Amber: "amber",
   Red: "red",
+  Na: "na",
 } as const;
 export type LiquidityRatioStatus =
   (typeof LiquidityRatioStatus)[keyof typeof LiquidityRatioStatus];

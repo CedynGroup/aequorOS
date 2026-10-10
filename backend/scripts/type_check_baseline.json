@@ -364,9 +364,6 @@
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 4
  },
- "app.core.logging": {
-  "reportAny": 1
- },
  "app.core.observability": {
   "reportAny": 8
  },
@@ -3742,7 +3739,7 @@
  },
  "tests.equivalence.test_declared_divergences": {
   "reportConstantRedefinition": 1,
-  "reportPrivateUsage": 2
+  "reportPrivateUsage": 1
  },
  "tests.equivalence.test_forecast_capital_parity": {
   "reportMissingParameterType": 1,
@@ -4998,7 +4995,7 @@
   "reportUnknownVariableType": 3
  },
  "tests.services.test_regulatory_dashboard_query_shape": {
-  "reportAny": 149,
+  "reportAny": 144,
   "reportDeprecated": 1,
   "reportPrivateUsage": 2,
   "reportUnknownArgumentType": 6,

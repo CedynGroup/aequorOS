@@ -18,12 +18,14 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import timedelta
+from uuid import uuid4
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
+from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
@@ -216,21 +218,32 @@ def run_once(
         claimed = session.get(Job, job_id)
         if claimed is None:  # pragma: no cover - claimed row must exist
             return True
+        token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
         try:
-            HANDLERS[claimed.job_type](session, claimed)
-            job_queue.complete(session, claimed)
-        except Exception as exc:  # noqa: BLE001 - any handler failure retries
-            logger.exception("Job %s (%s) failed", job_id, claimed.job_type)
-            session.rollback()
-            job_queue.fail_with_retry(
-                session,
-                claimed,
-                str(exc) or type(exc).__name__,
-                commit=False,
-            )
-            if isinstance(exc, pipeline.TransientLiveRefreshError):
-                pipeline.persist_transient_retry_state(session, claimed, exc)
-            session.commit()
+            try:
+                HANDLERS[claimed.job_type](session, claimed)
+                job_queue.complete(session, claimed)
+            except Exception as exc:  # noqa: BLE001 - any handler failure retries
+                emit(
+                    Condition.WORKER_JOB_FAILED,
+                    "Worker job failed",
+                    severity="error",
+                    tenant_id=organization_id,
+                    reason_code="unexpected_error",
+                )
+                session.rollback()
+                job_queue.fail_with_retry(
+                    session,
+                    claimed,
+                    str(exc) or type(exc).__name__,
+                    commit=False,
+                )
+                if isinstance(exc, pipeline.TransientLiveRefreshError):
+                    pipeline.persist_transient_retry_state(session, claimed, exc)
+                session.commit()
+        finally:
+            if token is not None:
+                reset_request_id(token)
     return True
 
 

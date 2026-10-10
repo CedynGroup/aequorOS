@@ -116,12 +116,11 @@ mistaken for a licence to equate declared alternates.
 
 ### 5.2 `lcr_pct` via `lmtd_table11_capped` (`CF-1`)
 
-The registry text is explicit that **both** methodologies cap inflows and the divergence is
-in _how_: Table 11 applies a hard-coded 75% cap (`le_generation._LCR_INFLOW_CAP`)
-**per currency column**; the `LCR-NSFR` return applies one **aggregate** cap at the
-governed, effective-dated `lcr_inflow_cap_pct` threshold, required by
-`regulatory_liquidity._REQUIRED_THRESHOLDS` and applied unconditionally in
-`app/domain/liquidity/engine.py::compute_lcr`.
+The `lmtd_table11_capped` entry's `divergence` in
+[`registry.py`](../../backend/app/domain/authority/registry.py) owns the cap-source
+and cap-granularity distinction between these methodologies. For the LCR's
+per-figure refusal contract, see
+[ARCHITECTURE.md §3](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
 
 > **Withdrawn claim, recorded.** An earlier version of this registry entry — and the
 > forensic audit that prompted it — stated that the `LCR-NSFR` return applies _no_ inflow

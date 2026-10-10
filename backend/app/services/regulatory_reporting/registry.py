@@ -311,20 +311,10 @@ REGISTRY: dict[str, ReturnDefinition] = {
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
             prerequisites=("run:liquidity:baseline",),
-            # Audit CF-1: ``lcr_pct`` legitimately exists twice. BOTH cap
-            # inflows; the divergence is in HOW. THIS return applies ONE
-            # AGGREGATE cap across the whole book, at the governed,
-            # effective-dated ``lcr_inflow_cap_pct`` threshold (required by
-            # ``regulatory_liquidity._REQUIRED_THRESHOLDS``, applied
-            # unconditionally at ``domain/liquidity/engine.py``). The LMT return
-            # below caps SEPARATELY PER CURRENCY at a hard-coded 75%
-            # (``le_generation._LCR_INFLOW_CAP``). Both are correct under their
-            # own authority — never assert them equal.
-            # This comment used to say THIS return reports the "uncapped" LCR.
-            # That was FALSE and it contradicted the authority registry's own
-            # divergence entry, which warns that saying so invites an engineer
-            # to add a cap that is already there — or to remove one believing it
-            # was never intended. Do not restore it.
+            # Audit CF-1: never equate this LCR with LMT Table 11's LCR.
+            # The ``lmtd_table11_capped`` divergence in
+            # ``app.domain.authority.registry`` owns the cap distinction;
+            # neither methodology is uncapped.
             # The id is the AUTHORITY registry's own
             # (``app.domain.authority.registry``); a name that resolves nowhere
             # makes the declaration a no-op. Audit 2026-08-22 D-10: this read
