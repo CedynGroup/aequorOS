@@ -47,7 +47,6 @@ class StressScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "organization_id", "bank_id", "module", "code", name="uq_stress_scenarios_scope"
         ),
-        Index("ix_stress_scenarios_bank", "organization_id", "bank_id", "module"),
     )
 
     organization_id: Mapped[str] = mapped_column(

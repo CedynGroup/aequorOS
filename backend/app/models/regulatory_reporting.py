@@ -314,11 +314,6 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
             "kind",
             name="uq_regulatory_package_artifacts_pkg_kind",
         ),
-        Index(
-            "ix_regulatory_package_artifacts_org_package",
-            "organization_id",
-            "package_id",
-        ),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -599,11 +594,6 @@ class RegulatoryChannelConfig(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "channel",
             name="uq_regulatory_channel_configs_scope",
         ),
-        Index(
-            "ix_regulatory_channel_configs_org_bank",
-            "organization_id",
-            "bank_id",
-        ),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -636,11 +626,6 @@ class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "organization_id",
             "bank_id",
             name="uq_regulatory_reporting_settings_scope",
-        ),
-        Index(
-            "ix_regulatory_reporting_settings_org_bank",
-            "organization_id",
-            "bank_id",
         ),
     )
 

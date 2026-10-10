@@ -28,7 +28,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKeyConstraint,
-    Index,
     Integer,
     String,
     Text,
@@ -104,7 +103,6 @@ class DatabaseDirectConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "display_name",
             name="uq_database_direct_connections_scope_name",
         ),
-        Index("ix_database_direct_connections_org_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)

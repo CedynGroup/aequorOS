@@ -18,7 +18,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
-    Index,
     String,
     UniqueConstraint,
     Uuid,
@@ -52,7 +51,6 @@ class MarketDataSourcePreference(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "organization_id", "bank_id", name="uq_market_data_source_preferences_bank"
         ),
-        Index("ix_market_data_source_preferences_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(

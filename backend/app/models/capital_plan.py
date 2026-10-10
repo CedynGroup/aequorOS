@@ -42,13 +42,8 @@ CAPITAL_PLAN_STATUSES = ("draft", "approved", "superseded")
 class CapitalPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "capital_plans"
     __table_args__ = (
-        CheckConstraint(
-            f"status IN {CAPITAL_PLAN_STATUSES!r}", name="ck_capital_plans_status"
-        ),
-        UniqueConstraint(
-            "organization_id", "bank_id", "version", name="uq_capital_plans_version"
-        ),
-        Index("ix_capital_plans_bank", "organization_id", "bank_id"),
+        CheckConstraint(f"status IN {CAPITAL_PLAN_STATUSES!r}", name="ck_capital_plans_status"),
+        UniqueConstraint("organization_id", "bank_id", "version", name="uq_capital_plans_version"),
     )
 
     organization_id: Mapped[str] = mapped_column(

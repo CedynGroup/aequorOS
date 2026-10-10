@@ -406,11 +406,6 @@ class OrganizationOwnerAssignment(TimestampMixin, Base):
             "(basis = 'explicit_designation' AND status = 'assigned')",
             name="ck_organization_owner_assignments_basis_count",
         ),
-        Index(
-            "ix_organization_owner_assignments_status",
-            "status",
-            "organization_id",
-        ),
     )
 
     organization_id: Mapped[str] = mapped_column(

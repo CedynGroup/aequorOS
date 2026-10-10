@@ -15,7 +15,6 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
-    Index,
     String,
     Text,
     UniqueConstraint,
@@ -83,11 +82,6 @@ class MarketDataEntitlement(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "effective_to IS NULL OR effective_to >= effective_from",
             name="ck_market_data_entitlements_window",
-        ),
-        Index(
-            "ix_market_data_entitlements_org_dataset",
-            "organization_id",
-            "dataset_code",
         ),
         UniqueConstraint(
             "organization_id",

@@ -52,7 +52,6 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             f"auth_provider IN ({_values(AUTH_PROVIDERS)})", name="ck_users_auth_provider"
         ),
         CheckConstraint(f"theme IN ({_values(USER_THEMES)})", name="ck_users_theme"),
-        Index("ix_users_organization_id", "organization_id"),
         # OIDC subjects are tenant-scoped through the verified SSO connection.
         # Two IdPs may legitimately emit the same opaque subject string.
         Index(
