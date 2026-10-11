@@ -310,6 +310,7 @@ def test_platform_schedule_runs_once_hourly_without_banks(
         assert session.scalar(
             text("SELECT run_after FROM audit_integrity_schedule")
         ) == now.replace(hour=14, minute=0)
+        assert session.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule")) == 0
 
 
 def test_peer_worker_cannot_repeat_locked_platform_sweep(
@@ -355,3 +356,49 @@ def test_chain_rls_hides_rows_even_with_runtime_select(
     assert connection.scalar(text("SELECT count(*) FROM audit_chain_heads")) == 0
     assert connection.scalar(text("SELECT count(*) FROM audit_chain_entries")) == 0
     connection.execute(text("RESET ROLE"))
+
+
+@pytest.mark.parametrize("recovering_worker", [0, 1])
+def test_committed_recovery_epoch_resets_non_due_peer(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+    monkeypatch: pytest.MonkeyPatch,
+    recovering_worker: int,
+) -> None:
+    monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
+    get_settings.cache_clear()
+    workers = [AuditIntegrityTask(), AuditIntegrityTask()]
+    pages: list[str] = []
+    verifications: list[Session] = []
+    now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        pages.append(reason)
+        return True
+
+    def verify(session: Session) -> list[audit_integrity.ChainVerification]:
+        verifications.append(session)
+        return [
+            audit_integrity.ChainVerification(stream, 0, True) for stream in audit_integrity.STREAMS
+        ]
+
+    def unavailable_session() -> Session:
+        raise RuntimeError("database unavailable")
+
+    def new_session() -> Session:
+        return Session(forward_migrated_postgres_schema.app_engine)
+
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    monkeypatch.setattr(audit_integrity, "verify_chains", verify)
+    for _ in range(3):
+        for task in workers:
+            task.run(unavailable_session, now)
+    assert pages == ["verification_unavailable"] * 2
+    assert workers[recovering_worker].run(new_session, now)
+    assert workers[1 - recovering_worker].run(new_session, now) is None
+    assert len(verifications) == 1
+    with new_session() as session:
+        assert session.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule")) == 1
+    for _ in range(3):
+        for task in workers:
+            task.run(unavailable_session, now + timedelta(hours=1))
+    assert pages == ["verification_unavailable"] * 4

@@ -4,7 +4,8 @@ import threading
 from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from sqlalchemy import select
@@ -117,20 +118,32 @@ def run_audit_polls(
     stop = threading.Event()
     polls: list[tuple[str, ...]] = []
     attempts: list[TaskPoll] = []
+    scalar_calls = recovery_epoch = pending_epoch = 0
 
     def fail_at(stage: str) -> None:
         if attempts[len(polls)].failure == stage:
             raise RuntimeError("private database failure detail")
 
-    def acquire(*args: object, **kwargs: object) -> bool | None:
-        fail_at("acquisition")
-        return True if attempts[len(polls)].due else None
-
-    def advance(*args: object, **kwargs: object) -> None:
+    def scalar(
+        _statement: object, parameters: dict[str, object] | None = None
+    ) -> int | bool | None:
+        nonlocal scalar_calls, pending_epoch
+        scalar_calls += 1
+        if scalar_calls == 1:
+            fail_at("recovery")
+            return recovery_epoch
+        if scalar_calls == 2:
+            fail_at("acquisition")
+            return True if attempts[len(polls)].due else None
         fail_at("advance")
+        assert parameters is not None
+        pending_epoch = recovery_epoch + cast(int, parameters["healthy"])
+        return pending_epoch
 
     def commit() -> None:
+        nonlocal recovery_epoch
         fail_at("commit")
+        recovery_epoch = pending_epoch
 
     @contextmanager
     def session_context() -> Generator[Session]:
@@ -141,6 +154,8 @@ def run_audit_polls(
             fail_at("session_exit")
 
     def new_session() -> AbstractContextManager[Session]:
+        nonlocal scalar_calls
+        scalar_calls = 0
         fail_at("session_creation")
         return session_context()
 
@@ -162,15 +177,17 @@ def run_audit_polls(
     def ignore(*args: object, **kwargs: object) -> None:
         pass
 
-    monkeypatch.setattr(db_session, "scalar", acquire)
-    monkeypatch.setattr(db_session, "execute", advance)
-    monkeypatch.setattr(db_session, "commit", commit)
-    monkeypatch.setattr(audit_integrity, "verify_chains", verify)
-    monkeypatch.setattr(worker, "assert_worker_database_access", ignore)
-    monkeypatch.setattr(worker, "_heartbeat_safely", ignore)
-    monkeypatch.setattr(worker, "_reap_stale", ignore)
-    monkeypatch.setattr(worker, "_new_session", new_session)
-    monkeypatch.setattr(worker, "run_once", poll)
+    for target, name, replacement in (
+        (db_session, "scalar", scalar),
+        (db_session, "commit", commit),
+        (audit_integrity, "verify_chains", verify),
+        (worker, "assert_worker_database_access", ignore),
+        (worker, "_heartbeat_safely", ignore),
+        (worker, "_reap_stale", ignore),
+        (worker, "_new_session", new_session),
+        (worker, "run_once", poll),
+    ):
+        monkeypatch.setattr(target, name, replacement)
 
     def run(sequence: list[TaskPoll]) -> list[tuple[str, ...]]:
         attempts.extend(sequence)
@@ -182,7 +199,16 @@ def run_audit_polls(
 
 @pytest.mark.parametrize(
     "failure",
-    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+    [
+        None,
+        "recovery",
+        "acquisition",
+        "advance",
+        "commit",
+        "session_creation",
+        "session_entry",
+        "session_exit",
+    ],
 )
 @pytest.mark.parametrize("verification", ["healthy", "unavailable", "audit_events"])
 def test_repeated_platform_failures_page_once_and_preserve_job_dispatch(
@@ -191,10 +217,12 @@ def test_repeated_platform_failures_page_once_and_preserve_job_dispatch(
     verification: str,
     paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
 ) -> None:
-    sequence = [TaskPoll(failure, verification)] * 3
+    outage = TaskPoll(failure, verification)
+    repeat = TaskPoll(failure, verification, due=False) if failure == "session_exit" else outage
+    sequence = [outage, repeat, repeat]
     assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
     conditions, pages = paging_evidence
-    verified = failure in {None, "advance", "commit", "session_exit"}
+    verified = failure in {None, "session_exit"}
     if verified and verification == "audit_events":
         assert pages == [("chain_mismatch", "audit_events")]
         assert conditions == [
@@ -214,7 +242,16 @@ def test_repeated_platform_failures_page_once_and_preserve_job_dispatch(
 
 @pytest.mark.parametrize(
     "failure",
-    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+    [
+        None,
+        "recovery",
+        "acquisition",
+        "advance",
+        "commit",
+        "session_creation",
+        "session_entry",
+        "session_exit",
+    ],
 )
 @pytest.mark.parametrize("verification", ["unavailable", "audit_events"])
 def test_only_completed_healthy_sweep_resets_episode(
@@ -230,8 +267,6 @@ def test_only_completed_healthy_sweep_resets_episode(
         outage,
         TaskPoll("commit"),
         outage,
-        TaskPoll("session_exit"),
-        outage,
         TaskPoll(),
         outage,
         outage,
@@ -240,7 +275,7 @@ def test_only_completed_healthy_sweep_resets_episode(
     _, pages = paging_evidence
     page = (
         ("chain_mismatch", "audit_events")
-        if verification == "audit_events" and failure in {None, "advance", "commit", "session_exit"}
+        if verification == "audit_events" and failure in {None, "session_exit"}
         else ("verification_unavailable", None)
     )
     assert pages == [page, page]
@@ -253,8 +288,8 @@ def test_episode_escalates_to_each_new_broken_stream(
     sequence = [
         TaskPoll("acquisition"),
         TaskPoll("acquisition"),
-        TaskPoll("commit", "audit_events"),
-        TaskPoll("commit", "audit_events"),
+        TaskPoll(verification="audit_events"),
+        TaskPoll(verification="audit_events"),
         TaskPoll(verification="unavailable"),
         TaskPoll("session_exit", "both"),
         TaskPoll(verification="both"),
@@ -272,21 +307,26 @@ def test_episode_escalates_to_each_new_broken_stream(
     ]
 
 
-@pytest.mark.parametrize("verification", ["unavailable", "audit_events"])
-def test_failed_publication_does_not_restart_episode(
+@pytest.mark.parametrize(
+    ("verification", "failure"),
+    [("unavailable", None), ("healthy", "acquisition"), ("audit_events", None)],
+)
+def test_failed_publication_retries_at_bounded_rate_until_delivered(
     run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
     monkeypatch: pytest.MonkeyPatch,
     verification: str,
+    failure: str | None,
 ) -> None:
     attempts: list[tuple[str, str | None]] = []
+    ticks = iter([0.0, 2.0, 299.0, 300.0])
 
     def page(reason: str, stream: str | None = None) -> bool:
         attempts.append((reason, stream))
-        return False
+        return len(attempts) == 2
 
+    monkeypatch.setattr(audit_integrity, "monotonic", lambda: next(ticks))
     monkeypatch.setattr(audit_integrity, "publish_alert", page)
-    outage = TaskPoll("commit", verification)
-    sequence = [outage, outage, TaskPoll(), outage, outage]
+    sequence = [TaskPoll(failure, verification)] * 6
     assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
     expected = (
         ("chain_mismatch", "audit_events")
@@ -294,3 +334,107 @@ def test_failed_publication_does_not_restart_episode(
         else ("verification_unavailable", None)
     )
     assert attempts == [expected, expected]
+
+
+@pytest.mark.parametrize("recovering_worker", [0, 1])
+def test_peer_observes_shared_recovery_before_later_outage(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    recovering_worker: int,
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
+    monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
+    get_settings.cache_clear()
+    workers = [audit_integrity.AuditIntegrityTask(), audit_integrity.AuditIntegrityTask()]
+    epoch = 0
+    pending_epoch = 0
+    due = True
+    unavailable = True
+    scalar_calls = 0
+    verifications: list[Session] = []
+    now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
+
+    def scalar(
+        _statement: object, parameters: dict[str, object] | None = None
+    ) -> int | bool | None:
+        nonlocal scalar_calls, pending_epoch
+        if unavailable:
+            raise RuntimeError("database unavailable")
+        scalar_calls += 1
+        if scalar_calls == 1:
+            return epoch
+        if scalar_calls == 2:
+            return True if due else None
+        assert parameters is not None
+        pending_epoch = epoch + cast(int, parameters["healthy"])
+        return pending_epoch
+
+    def commit() -> None:
+        nonlocal epoch, due
+        epoch = pending_epoch
+        due = False
+
+    def verify(session: Session) -> list[ChainVerification]:
+        verifications.append(session)
+        return [ChainVerification(stream, 0, True) for stream in audit_integrity.STREAMS]
+
+    def new_session() -> AbstractContextManager[Session]:
+        nonlocal scalar_calls
+        scalar_calls = 0
+        return nullcontext(db_session)
+
+    monkeypatch.setattr(db_session, "scalar", scalar)
+    monkeypatch.setattr(db_session, "commit", commit)
+    monkeypatch.setattr(audit_integrity, "verify_chains", verify)
+    for _ in range(3):
+        for task in workers:
+            task.run(new_session, now)
+    _, pages = paging_evidence
+    assert pages == [("verification_unavailable", None)] * 2
+    unavailable = False
+    assert workers[recovering_worker].run(new_session, now)
+    peer = workers[1 - recovering_worker]
+    assert peer.run(new_session, now) is None
+    assert verifications == [db_session]
+    unavailable = True
+    for _ in range(3):
+        peer.run(new_session, now + timedelta(hours=1))
+    assert pages == [("verification_unavailable", None)] * 3
+
+
+def test_failed_commit_pages_unavailable_then_committed_mismatch_once(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
+    sequence = [TaskPoll("commit", "audit_events")] * 3 + [
+        TaskPoll(verification="audit_events")
+    ] * 3
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    _, pages = paging_evidence
+    assert pages == [("verification_unavailable", None), ("chain_mismatch", "audit_events")]
+
+
+@pytest.mark.parametrize("failed_stream", audit_integrity.STREAMS)
+def test_failed_stream_retry_preserves_successful_sibling_page(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    monkeypatch: pytest.MonkeyPatch,
+    failed_stream: str,
+) -> None:
+    attempts: list[str | None] = []
+    delivered: list[str | None] = []
+    ticks = iter([0.0, 0.0, 2.0, 300.0])
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        attempts.append(stream)
+        success = stream != failed_stream or attempts.count(stream) == 2
+        if success:
+            delivered.append(stream)
+        return success
+
+    monkeypatch.setattr(audit_integrity, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    sequence = [TaskPoll(verification="both")] * 5
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    assert attempts == [*sorted(audit_integrity.STREAMS), failed_stream]
+    assert set(delivered) == set(audit_integrity.STREAMS)
+    assert len(delivered) == len(audit_integrity.STREAMS)

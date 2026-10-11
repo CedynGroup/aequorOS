@@ -45,7 +45,7 @@ at migration time; it cannot certify what happened before the migration.
 Set `AUDIT_INTEGRITY_ENABLED=true` on the core worker. Starting with its first
 poll, it runs a single platform task independent of tenant ticks or bank
 provisioning. A singleton `audit_integrity_schedule` row records the next hour
-boundary; a row lock with SKIP LOCKED and a committed advance coordinates worker
+boundary and a recovery epoch; a row lock with SKIP LOCKED and a committed advance coordinates worker
 replicas and restarts. The worker requires SELECT/UPDATE on that schedule row.
 AI and BI workers do not run the task. The task checks both full streams using
 an all-tenant BYPASSRLS role and records successful counts in operational logs.
@@ -64,11 +64,23 @@ mismatches and unavailable verification, independently of the database transacti
 Each running worker retains its outage episode outside the database transaction:
 it pages on the first failure and on escalation to a newly broken stream.
 Acquisition, advancement, commit and session failures cannot reset suppression.
-Only a completed healthy sweep resets the episode; idle polls do not. This state
-is local to the worker lifetime, so each replica or restarted worker can send its
-initial page during an outage. The task also emits the structured ERROR condition `audit.chain_broken`. An absent topic or failed
-publication emits `paging_unconfigured` or `paging_failed`, without vendor error
-details. A broken chain continues to be checked on later hourly tasks.
+A healthy sweep increments `recovery_epoch` in the singleton row in the same
+commit as the schedule advance. Every worker reads that epoch on every poll,
+including non-due polls, and clears its local episode when it observes a newer
+committed epoch. Recovery by one replica therefore allows every replica to page
+a later outage. Mismatch pages require a successful schedule advance and commit.
+
+Only successful SNS publication latches a reported condition. Failed delivery
+remains eligible within the same episode, with attempts separated by at least
+five minutes; a successful page is suppressed until escalation or shared
+recovery. Mismatch retries occur when later scheduled sweeps reconfirm the
+mismatch. Paging state remains local to a worker lifetime: each replica or
+restarted worker can send its initial page during an outage. A worker must
+observe the committed recovery epoch before it can identify a later episode.
+The task also emits the structured ERROR condition `audit.chain_broken`.
+An absent topic or failed publication emits `paging_unconfigured` or
+`paging_failed`, without vendor error details. A broken chain continues to be
+checked on later hourly tasks.
 Before production acceptance,
 exercise the route in a disposable environment and attach the pager receipt to
 the BoG evidence pack. No pager credential or destination is stored in bank data.
@@ -95,8 +107,9 @@ platform task advances to the next hour even after a mismatch or refusal.
 The worker reports once per outage episode at the complete task boundary,
 including combined verifier and schedule acquisition, advance, commit or session
 failures, while ordinary job dispatch continues. Behavioral regressions cover
-repeated failures, mismatch-before-commit failures, escalation and recovery
-followed by a new outage. Migration regressions exercise
+repeated failures, committed mismatch paging, escalation, bounded failed-delivery
+retries, and two-replica recovery followed by a new outage. Native PostgreSQL
+regressions exercise the committed epoch and its visibility to non-due peers. Migration regressions exercise
 both forward and round-trip upgrades with superuser test credentials, using and
 cleaning up an ordinary restricted migration role. Administrator regressions use
 either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser

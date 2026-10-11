@@ -57,9 +57,10 @@ def upgrade() -> None:
         INSERT INTO audit_chain_heads(stream) VALUES ('audit_events'), ('operator_audit_log');
         CREATE TABLE audit_integrity_schedule (
             id boolean PRIMARY KEY DEFAULT true CHECK (id),
-            run_after timestamptz NOT NULL
+            run_after timestamptz NOT NULL,
+            recovery_epoch bigint NOT NULL DEFAULT 0 CHECK (recovery_epoch >= 0)
         );
-        INSERT INTO audit_integrity_schedule VALUES (true, '-infinity');
+        INSERT INTO audit_integrity_schedule (id, run_after) VALUES (true, '-infinity');
     """)
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quoted_schema = op.get_bind().dialect.identifier_preparer.quote_identifier(str(schema))

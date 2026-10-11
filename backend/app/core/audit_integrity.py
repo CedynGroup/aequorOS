@@ -9,6 +9,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import Protocol, cast
 
 import boto3
@@ -24,6 +25,7 @@ from app.core.observability import Condition, emit
 from app.core.tls import TransportSecurityError, require_boto_tls
 
 STREAMS = ("audit_events", "operator_audit_log")
+PAGING_RETRY_SECONDS = 300.0
 
 
 class AlertClient(Protocol):
@@ -171,6 +173,40 @@ def scheduled_verification(session: Session) -> list[ChainVerification]:
 class AuditIntegrityTask:
     unavailable_reported: bool = False
     broken_streams: set[str] = field(default_factory=set)
+    recovery_epoch: int = 0
+    retry_after: dict[tuple[str, str | None], float] = field(default_factory=dict)
+
+    def observe_recovery(self, epoch: int) -> None:
+        if epoch > self.recovery_epoch:
+            self.recovery_epoch = epoch
+            self.unavailable_reported = False
+            self.broken_streams.clear()
+            self.retry_after.clear()
+
+    def publish(self, reason: str, stream: str | None = None) -> bool:
+        key = (reason, stream)
+        now = monotonic()
+        if now < self.retry_after.get(key, 0):
+            return False
+        self.retry_after[key] = now + PAGING_RETRY_SECONDS
+        if stream is None:
+            emit(
+                Condition.AUDIT_CHAIN_BROKEN,
+                "Audit integrity verification unavailable",
+                severity="error",
+                reason="verification_unavailable",
+            )
+        else:
+            emit(
+                Condition.AUDIT_CHAIN_BROKEN,
+                "Audit chain verification failed",
+                severity="error",
+                stream=stream,
+            )
+        if not publish_alert(reason, stream):
+            return False
+        del self.retry_after[key]
+        return True
 
     def report(self, results: list[ChainVerification] | None, *, task_failed: bool = False) -> None:
         broken = {
@@ -179,30 +215,13 @@ class AuditIntegrityTask:
             if not result.valid and result.stream != "verification_unavailable"
         }
         for stream in sorted(broken - self.broken_streams):
-            emit(
-                Condition.AUDIT_CHAIN_BROKEN,
-                "Audit chain verification failed",
-                severity="error",
-                stream=stream,
-            )
-            self.broken_streams.add(stream)
-            publish_alert("chain_mismatch", stream)
+            if self.publish("chain_mismatch", stream):
+                self.broken_streams.add(stream)
         unavailable = task_failed or any(
             result.stream == "verification_unavailable" for result in results or []
         )
-        if unavailable:
-            if not self.unavailable_reported and not broken and not self.broken_streams:
-                emit(
-                    Condition.AUDIT_CHAIN_BROKEN,
-                    "Audit integrity verification unavailable",
-                    severity="error",
-                    reason="verification_unavailable",
-                )
-                self.unavailable_reported = True
-                publish_alert("verification_unavailable")
-        elif results and not broken:
-            self.unavailable_reported = False
-            self.broken_streams.clear()
+        if unavailable and not self.unavailable_reported and not broken and not self.broken_streams:
+            self.unavailable_reported = self.publish("verification_unavailable")
 
     def run(
         self, new_session: Callable[[], AbstractContextManager[Session]], now: datetime
@@ -212,8 +231,14 @@ class AuditIntegrityTask:
             return None
         results: list[ChainVerification] | None = None
         failed = False
+        committed = False
         try:
             with new_session() as session:
+                self.observe_recovery(
+                    TypeAdapter(int).validate_python(
+                        session.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule"))
+                    )
+                )
                 due = cast(
                     bool | None,
                     session.scalar(
@@ -226,18 +251,27 @@ class AuditIntegrityTask:
                 )
                 if due is not None:
                     results = scheduled_verification(session)
-                    session.execute(
-                        text(
-                            "UPDATE audit_integrity_schedule "
-                            "SET run_after = :next_hour WHERE id = true"
-                        ),
-                        {
-                            "next_hour": now.replace(minute=0, second=0, microsecond=0)
-                            + timedelta(hours=1)
-                        },
+                    epoch = TypeAdapter(int).validate_python(
+                        session.scalar(
+                            text(
+                                "UPDATE audit_integrity_schedule "
+                                "SET run_after = :next_hour, "
+                                "recovery_epoch = recovery_epoch + :healthy "
+                                "WHERE id = true RETURNING recovery_epoch"
+                            ),
+                            {
+                                "next_hour": now.replace(minute=0, second=0, microsecond=0)
+                                + timedelta(hours=1),
+                                "healthy": int(
+                                    bool(results) and all(result.valid for result in results)
+                                ),
+                            },
+                        )
                     )
                     session.commit()
+                    committed = True
+                    self.observe_recovery(epoch)
         except Exception:
             failed = True
-        self.report(results, task_failed=failed)
+        self.report(results if committed else None, task_failed=failed)
         return results
