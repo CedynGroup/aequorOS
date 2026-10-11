@@ -10,15 +10,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
-from app.schemas.notifications import NotificationRead
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import (
+from app.reporting.schemas.packages import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
 )
+from app.reporting.service import generation, validation, workflow
+from app.schemas.notifications import NotificationRead
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import notifications, regulatory_liquidity, reporting_deadline_scan
-from app.services.regulatory_reporting import generation, validation, workflow
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

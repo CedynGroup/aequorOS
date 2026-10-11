@@ -229,7 +229,7 @@ def test_the_registry_dispatch_scan_never_enters_the_run_ledger(
     without anyone remembering this file exists.
     """
     from app.api.deps import TenantContext  # noqa: PLC0415
-    from app.services.regulatory_reporting.eligibility import (  # noqa: PLC0415
+    from app.reporting.service.eligibility import (  # noqa: PLC0415
         governed_effective_parameter_codes,
         resolve_eligibility,
     )

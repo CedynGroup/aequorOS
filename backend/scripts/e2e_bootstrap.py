@@ -21,7 +21,7 @@ Playwright global setup and the journeys themselves: the same paths the product
 uses.
 
 Carry-forward is necessary because the Returns workspace requires an EXACT
-snapshot at the regulator's anchor (``services/regulatory_reporting/anchors.py``).
+snapshot at the regulator's anchor (``app/reporting/service/anchors.py``).
 Without it, an anchor beyond the fixture's fixed span correctly reads "no
 position has been computed" and leaves the generate journeys nothing to drive.
 The fixture's carry-forward and latest-period credit-basis replacement are

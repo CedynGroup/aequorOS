@@ -35,7 +35,7 @@ from app.domain.liquidity.engine import (
     compute_lcr,
     compute_lcr_result,
 )
-from app.services.regulatory_reporting.le_generation import _LCR_INFLOW_CAP
+from app.reporting.service.le_generation import _LCR_INFLOW_CAP
 from tests.domain.test_forecasting_engine import bog_liquidity_params
 
 #: ``(metric_id, methodology_id, reporting mapping)`` — one claim.
@@ -60,14 +60,14 @@ class Coverage(StrEnum):
 _HERE = "test_report_run_parity.py"
 _HERE_CAPITAL = f"{_HERE}::test_package_headline_figures_equal_the_bound_run"
 _HERE_RWA = f"{_HERE}::test_capital_package_rwa_sections_tie_to_the_runs_rwa_components"
-_FORMS = "tests/services/bog_forms"
+_FORMS = "tests/reporting/service/bog_forms"
 _BSD13 = f"{_FORMS}/test_bsd13.py::test_bsd13_reports_the_fx_engines_nop_and_bogs"
 _BSD13 += "_schedule_arithmetic"
 _BSD5 = f"{_FORMS}/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic"
 #: WS-D's sibling gate: every BoG form CELL bound to an engine-backed resolver,
 #: compared against the source run's persisted line items — the form-cell half
 #: of the equivalence problem, where this file covers the package half.
-_WSD_GATE = "tests/services/test_reporting_equivalence.py"
+_WSD_GATE = "tests/reporting/service/test_reporting_equivalence.py"
 
 _CAPITAL = "crd_basel_capital_run"
 _LIQUIDITY = "basel_bog_liquidity_run"

@@ -107,12 +107,10 @@ than engineered away.
 > charge × RWA multiplier. Credit is weighted by BoG's printed classes rather than the
 > standardised weights."_
 
-The inequality is proved, not assumed:
-`tests/services/bog_forms/test_bsd5.py:390` asserts `not _close(...)`
-_"by construction, not by accident"_, and the reporting-equivalence suite carries
-`test_the_bsd5a_car_inequality_is_left_alone`
-(`tests/services/test_reporting_equivalence.py`) so the equivalence gate can never be
-mistaken for a licence to equate declared alternates.
+The inequality is proved by
+`tests/reporting/service/bog_forms/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic`.
+The reporting-equivalence suite (`tests/reporting/service/test_reporting_equivalence.py`)
+checks engine-backed resolvers; it excludes this declared alternate methodology.
 
 ### 5.2 `lcr_pct` via `lmtd_table11_capped` (`CF-1`)
 
@@ -214,7 +212,7 @@ whose `confirmation_status` cannot honestly be `confirmed` — is §04 §5 and �
 ## 9. Reporting authority is stamped, not assumed (`ARCH-4`)
 
 Every generated package is stamped in one place
-(`app/services/regulatory_reporting/generation.py::_stamp_provenance`), so a new generator
+(`app/reporting/service/generation.py::_stamp_provenance`), so a new generator
 cannot ship without a stated authority. `ReportAuthority` distinguishes
 `template_formula` (the BoG workbook's own formula is the authority) from `engine_run`
 (a sealed `RegulatoryRun` is the authority) and `guide_instruction`.

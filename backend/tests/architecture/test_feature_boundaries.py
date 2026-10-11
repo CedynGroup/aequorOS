@@ -289,15 +289,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "attestation",
     ),
     (
-        r"^(services/(regulatory_reporting/.*|filing_workflow/.*|filing_reconciliation"
-        r"|report_comparison|examiner_mode)|domain/filing/.*"
-        r"|models/(regulatory_reporting|filing_workflow)"
-        r"|schemas/(regulatory_reporting|filing_workflow|report_comparison|examiner)"
-        r"|features/(manage_regulatory_reporting|manage_filing_workflow|examiner_surfaces"
-        r"|manage_package_attachments))$",
-        "reporting",
-    ),
-    (
         r"^(services/bi/.*|domain/bi/.*|models/bi.*|schemas/bi.*|jobs/bi.*"
         r"|features/(ask_bi|export_bi|manage_bi_.*|read_bi.*))$",
         "bi",

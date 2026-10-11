@@ -54,6 +54,17 @@ from pyhanko.sign.validation import (
 from pyhanko_certvalidator import ValidationContext
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 
+from app.reporting.service.exports.pdf import render_pdf
+from app.reporting.service.templates import (
+    STANDARD_ATTESTATION_LINES,
+    ColumnSpec,
+    RenderedCell,
+    RenderedReturn,
+    RenderedRow,
+    RenderedSection,
+    ReturnTemplate,
+    SectionLayout,
+)
 from app.services.attestation import layouts
 from app.services.attestation.pdf_signing import (
     APPROVER_FIELD_NAME,
@@ -73,17 +84,6 @@ from app.services.attestation.pdf_signing import (
     signing_rule_y,
 )
 from app.services.attestation.verify import attestation_diff_policy
-from app.services.regulatory_reporting.exports.pdf import render_pdf
-from app.services.regulatory_reporting.templates import (
-    STANDARD_ATTESTATION_LINES,
-    ColumnSpec,
-    RenderedCell,
-    RenderedReturn,
-    RenderedRow,
-    RenderedSection,
-    ReturnTemplate,
-    SectionLayout,
-)
 
 NOW = datetime(2026, 7, 31, 14, 2, 11, tzinfo=UTC)
 CLOCK_NOW = datetime.now(UTC)
@@ -208,9 +208,7 @@ def pki() -> _Pki:
         )
 
     tsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    tsa_cert = _issue(
-        tsa_key.public_key(), "AequorOS Test TSA", ca_key, ca_cert, timestamping=True
-    )
+    tsa_cert = _issue(tsa_key.public_key(), "AequorOS Test TSA", ca_key, ca_cert, timestamping=True)
     return _Pki(
         by_role={role: officer(OFFICERS[role][0]) for role in ICAAP_ORDER},
         timestamper=DummyTimeStamper(
@@ -354,9 +352,7 @@ def _form_values(pdf_bytes: bytes) -> dict[str, str]:
     reader = PdfFileReader(io.BytesIO(pdf_bytes))
     return {
         str(field["/T"]): str(field.get("/V", ""))
-        for field in (
-            _as_dict(ref.get_object()) for ref in reader.root["/AcroForm"]["/Fields"]
-        )
+        for field in (_as_dict(ref.get_object()) for ref in reader.root["/AcroForm"]["/Fields"])
         if str(field["/FT"]) == "/Tx"
     }
 
@@ -503,9 +499,7 @@ def test_the_board_cannot_sign_before_the_approver(pki: _Pki, prepared_pdf: byte
         )
 
 
-def test_signing_out_of_order_convicts_the_board_signature(
-    pki: _Pki, prepared_pdf: bytes
-) -> None:
+def test_signing_out_of_order_convicts_the_board_signature(pki: _Pki, prepared_pdf: bytes) -> None:
     """Why the order is a validity precondition, not a preference.
 
     ``prior_fields=()`` bypasses the module's own guard deliberately, to reach
@@ -571,9 +565,7 @@ def test_prepare_refuses_an_impossible_signing_order(
 ) -> None:
     """The order decides the locks, so an incoherent one can never reach a file."""
     with pytest.raises(PdfSigningError, match=message):
-        prepare_signature_fields(
-            unsigned_pdf, placements=icaap_placements, signing_order=order
-        )
+        prepare_signature_fields(unsigned_pdf, placements=icaap_placements, signing_order=order)
 
 
 def test_prepare_refuses_a_placement_for_a_role_outside_the_signing_order(
@@ -659,6 +651,5 @@ def test_the_standard_default_is_still_the_standard_default() -> None:
     """``default_placements()`` with no arguments IS ``DEFAULT_PLACEMENTS``."""
     assert default_placements() == DEFAULT_PLACEMENTS
     assert (
-        default_placements(layouts.STANDARD_SIGNING_ORDER, layout="standard")
-        == DEFAULT_PLACEMENTS
+        default_placements(layouts.STANDARD_SIGNING_ORDER, layout="standard") == DEFAULT_PLACEMENTS
     )

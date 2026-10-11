@@ -27,16 +27,19 @@ Also pinned here, because both are judgement calls rather than mechanics:
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 from collections import Counter
+from collections.abc import Callable
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 import pytest
-from sqlalchemy import select
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.domain.policy import parameter_shapes
@@ -213,21 +216,48 @@ def test_the_catalogue_and_the_migration_agree() -> None:
     assert module.down_revision == "202609190058"
 
 
-def test_the_migration_pins_its_own_rows_and_imports_no_catalogue() -> None:
-    """Security audit L-4: a later catalogue edit must not change what a
-    shipped revision seeded."""
-    body = ast.parse(MIGRATION.read_text(encoding="utf-8"))
-    imported = {
-        alias.name
-        for node in ast.walk(body)
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
-    assert "seed_rows" not in imported
-    assert "filing_seed_rows" not in imported
-    assert "regulatory_parameters" not in (
-        node.module or "" for node in ast.walk(body) if isinstance(node, ast.ImportFrom)
+def test_the_migration_pins_its_own_rows_and_imports_no_catalogue(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seeds = deepcopy(regulatory_parameters.filing_seed_rows())
+    codes = regulatory_parameters.FILING_PARAMETER_CODES
+
+    def refuse_catalogue() -> list[dict[str, object]]:
+        raise AssertionError("a shipped migration called the live catalogue")
+
+    monkeypatch.setattr(regulatory_parameters, "seed_rows", refuse_catalogue)
+    monkeypatch.setattr(regulatory_parameters, "filing_seed_rows", refuse_catalogue)
+    monkeypatch.setattr(regulatory_parameters, "ICAAP_FILING_SEED_PARAMETERS", ())
+    db_session.execute(delete(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(codes)))
+    module = _migration()
+    with Operations.context(MigrationContext.configure(db_session.connection())):
+        cast(Callable[[], None], module.upgrade)()
+    rows = list(
+        db_session.scalars(
+            select(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(codes))
+        )
     )
+    actual = {
+        row.param_code: (
+            row.value_numeric,
+            cast(dict[str, object] | None, row.value_json),
+            row.unit,
+            row.confirmation_status,
+            row.source_citation,
+        )
+        for row in rows
+    }
+    expected = {
+        str(row["param_code"]): (
+            row["value_numeric"],
+            row["value_json"],
+            row["unit"],
+            row["confirmation_status"],
+            row["source_citation"],
+        )
+        for row in seeds
+    }
+    assert actual == expected
 
 
 def test_the_migration_does_not_collide_with_the_earlier_icaap_seeds() -> None:
@@ -255,11 +285,11 @@ def test_every_artifact_kind_vocabulary_agrees() -> None:
     """
     from typing import get_args, get_type_hints  # noqa: PLC0415
 
-    from app.features import manage_regulatory_reporting as routes  # noqa: PLC0415
-    from app.models.regulatory_reporting import ARTIFACT_KINDS  # noqa: PLC0415
-    from app.schemas.regulatory_reporting import ArtifactKind  # noqa: PLC0415
-    from app.services.regulatory_reporting import exports  # noqa: PLC0415
-    from app.services.regulatory_reporting import workflow as reporting_workflow  # noqa: PLC0415
+    from app.reporting.api import manage_regulatory_reporting as routes  # noqa: PLC0415
+    from app.reporting.models.packages import ARTIFACT_KINDS  # noqa: PLC0415
+    from app.reporting.schemas.packages import ArtifactKind  # noqa: PLC0415
+    from app.reporting.service import exports  # noqa: PLC0415
+    from app.reporting.service import workflow as reporting_workflow  # noqa: PLC0415
 
     model = set(ARTIFACT_KINDS)
     assert model == set(get_args(ArtifactKind.__value__))

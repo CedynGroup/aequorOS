@@ -33,7 +33,7 @@ from app.models import (
     RegulatoryPackage,
     SignerKey,
 )
-from app.services import filing_reconciliation
+from app.reporting.service import filing_reconciliation
 from app.services.attestation import (
     appearance,
     digests,
@@ -123,7 +123,7 @@ def statement_for(role: str, package: RegulatoryPackage | None = None) -> str:
     platform's wording", which is every other return.
     """
     if package is not None:
-        from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks a cycle
+        from app.reporting.service import (  # noqa: PLC0415 - breaks a cycle
             family_hooks,
         )
 
@@ -174,11 +174,7 @@ def preview_certification(
     # Refusal layer 2 of 3 (P3-DESIGN §1.5): the dialog disables the action and
     # says who is outstanding, so nobody re-authenticates only to be refused.
     blocked_by = (
-        [
-            earlier
-            for earlier in order[: order.index(role)]
-            if earlier not in signed
-        ]
+        [earlier for earlier in order[: order.index(role)] if earlier not in signed]
         if policy.enforces_order(layout) and role in order
         else []
     )

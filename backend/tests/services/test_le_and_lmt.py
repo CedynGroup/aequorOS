@@ -48,14 +48,14 @@ from app.models import (
     RegulatoryRun,
     RelatedParty,
 )
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import calendar, generation, validation
+from app.reporting.service.common import UNVALIDATED_BOOK_RULE
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_capital, regulatory_irr, regulatory_liquidity
-from app.services.regulatory_reporting import calendar, generation, validation
-from app.services.regulatory_reporting.common import UNVALIDATED_BOOK_RULE
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -79,9 +79,7 @@ PCT = Decimal("0.0001")
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 
@@ -1590,7 +1588,7 @@ def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
 # balance sheet, because the omission has no subtotal to be short — a
 # concentration limit loses an entire counterparty row, and a maturity ladder
 # loses a bucket. ``bog_form`` returns already disclose
-# (``tests/services/bog_forms/test_unvalidated_book_disclosure.py``); these are
+# (``tests/reporting/service/bog_forms/test_unvalidated_book_disclosure.py``); these are
 # the other two families that read the canonical book directly.
 
 

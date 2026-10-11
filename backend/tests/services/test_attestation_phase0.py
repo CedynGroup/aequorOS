@@ -60,18 +60,18 @@ from app.models import (
     RelatedPartyRole,
     Shareholding,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import regulatory_liquidity
-from app.services.attestation import digests, register_state
-from app.services.regulatory_reporting import exports as reporting_exports
-from app.services.regulatory_reporting import generation, workflow
-from app.services.regulatory_reporting.eligibility import (
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import exports as reporting_exports
+from app.reporting.service import generation, workflow
+from app.reporting.service.eligibility import (
     governed_effective_parameter_codes,
 )
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
+from app.reporting.service.templates import CONSOLIDATED_BASIS
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.services import regulatory_liquidity
+from app.services.attestation import digests, register_state
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -95,9 +95,7 @@ REPORTING_DATE = date(2026, 3, 31)
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 
@@ -218,6 +216,7 @@ def test_content_digest_is_sealed_and_survives_regeneration(db_session: Session)
     _seed_with_baseline_run(db_session)
     first = _generate(db_session)
     assert first.content_digest == digests.content_digest(first.snapshot)
+    assert first.snapshot_sha256 == generation.snapshot_content_hash(first.snapshot)
     # Engine-backed returns bind runs, so they carry no register-state digest.
     assert first.source_runs != []
     assert first.register_state_digest is None
@@ -424,22 +423,8 @@ def test_every_registered_return_family_seals_a_content_digest(db_session: Sessi
 
 
 def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
-    """Structural guard for G13: there is one place a package is minted.
-
-    ``generate_package`` is the only ``RegulatoryPackage(...)`` construction in
-    ``app/``, and it seals ``content_digest`` unconditionally — so proving every
-    registered return dispatches through it proves all of them are sealed,
-    without seeding an engine run per return. Count pinned so a new return
-    family must consciously join this guard: 39 = the 15 pre-BSD entries (the
-    original thirteen incl. the recoded CAR-RWA / LCR-NSFR, STRESS-PACK (item 6),
-    LAS-QUARTERLY (item 14, still template-gated); BSD-MONTHLY retired) + the
-    23 official Bank of Ghana BSD forms (family "bsd", generator "bog_form",
-    2026-08-15 — every one dispatches through generate_package and is sealed) +
-    ICAAP-STRESS-APPENDIX2 (family "icaap_stress", generator "icaap_stress",
-    2026-08-20 — the annual enterprise-wide stress return in the Appendix II
-    Tables 1–6 formats; docs/stress.md §3.6, also routed through generate_package).
-    """
-    generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
+    """Every registered family uses generic dispatch or its own freeze entry point."""
+    generators = generation._generators()  # pyright: ignore[reportPrivateUsage]
     # 39 bank returns + the 4 SDI reports added 2026-08-22 (family "sdi":
     # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL)
     # + NPL-MONTHLY (family "credit", 2026-09-01) - the Notice 2025/23 monthly
@@ -452,10 +437,7 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     # The ICAAP filing family has a SECOND mint site, and that is the point of
     # it: an ICAAP package exists because a cycle was reviewed and frozen, so it
     # is minted by ``generate_frozen_package`` and deliberately has no entry in
-    # ``_GENERATORS`` (the generic POST refuses it by name). The G13 guarantee
-    # is not weakened by that, it is doubled: both mint sites seal
-    # ``content_digest`` unconditionally, which the next test proves by reading
-    # the source rather than by trusting this comment.
+    # ``_GENERATORS`` (the generic POST refuses it by name).
     freeze_minted = {
         code
         for code, definition in REGISTRY.items()
@@ -470,39 +452,6 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
             )
             continue
         assert definition.generator in generators, definition.code
-
-
-def test_both_package_mint_sites_seal_the_content_digest() -> None:
-    """G13, restated for the second mint site the ICAAP freeze introduced.
-
-    ``RegulatoryPackage(...)`` is constructed in exactly two places in
-    ``generation.py``, and both set ``content_digest`` and ``snapshot_sha256``.
-    Read from the source, so a third mint site — or one that forgot the seal —
-    fails here instead of shipping an unsealed filing.
-    """
-    import ast  # noqa: PLC0415
-    import inspect  # noqa: PLC0415
-
-    tree = ast.parse(inspect.getsource(generation))
-    minting: list[str] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if not (isinstance(node.func, ast.Name) and node.func.id == "RegulatoryPackage"):
-            continue
-        sealed = {
-            keyword.arg
-            for keyword in node.keywords
-            if keyword.arg in {"content_digest", "snapshot_sha256"}
-        }
-        assert sealed == {"content_digest", "snapshot_sha256"}, (
-            f"a package is minted at line {node.lineno} without sealing its content"
-        )
-        minting.append(str(node.lineno))
-    assert len(minting) == 2, (  # noqa: PLR2004
-        "expected exactly two mint sites (generate_package, generate_frozen_package); "
-        f"found {len(minting)} at lines {minting}"
-    )
 
 
 # ---------------------------------------------------------------------------

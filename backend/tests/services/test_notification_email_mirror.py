@@ -20,8 +20,8 @@ from app.services.notification_email_mirror import (
     enqueue_due_notification_mirror,
     run_notification_email_mirror,
 )
-from tests.api.test_package_authorization import _add_bank, _package
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.reporting.api.test_package_authorization import _add_bank, _package
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, USER_1
 

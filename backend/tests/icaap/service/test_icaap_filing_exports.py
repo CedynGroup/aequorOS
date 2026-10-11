@@ -31,13 +31,13 @@ from app.icaap.service.render.from_snapshot import (
     filing_from_snapshot,
 )
 from app.models import RegulatoryPackage
-from app.services.regulatory_reporting import family_hooks
-from app.services.regulatory_reporting.exports import (
+from app.reporting.service import family_hooks
+from app.reporting.service.exports import (
     FAMILY_EXPORT_KINDS,
     icaap_docx,
     icaap_pdf,
 )
-from app.services.regulatory_reporting.family_hooks import FamilyHooks
+from app.reporting.service.family_hooks import FamilyHooks
 from tests.icaap.service.filing_snapshot import CAPITAL_BLOCK_ID, FakePackage, snapshot
 
 TWO_SIGNERS = ("preparer", "approver")
@@ -155,8 +155,8 @@ def test_the_board_slot_decides_how_many_blocks_the_hook_draws(
 
 
 def test_the_word_kind_the_hook_answers_to_is_the_one_every_layer_uses() -> None:
-    from app.schemas.regulatory_reporting import ArtifactKind  # noqa: PLC0415
-    from app.services.regulatory_reporting.exports import ExportKind  # noqa: PLC0415
+    from app.reporting.schemas.packages import ArtifactKind  # noqa: PLC0415
+    from app.reporting.service.exports import ExportKind  # noqa: PLC0415
 
     assert icaap_docx.ARTIFACT_KIND in ArtifactKind.__value__.__args__
     assert icaap_docx.ARTIFACT_KIND in ExportKind.__value__.__args__

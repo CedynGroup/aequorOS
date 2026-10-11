@@ -25,10 +25,10 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation as reporting_generation
 from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import fact_derivation, regulatory_credit, reporting_periods
-from app.services.regulatory_reporting import generation as reporting_generation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

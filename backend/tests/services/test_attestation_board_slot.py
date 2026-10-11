@@ -470,10 +470,10 @@ def _seed_standard_package(db: Session) -> RegulatoryPackage:
     from sqlalchemy import select  # noqa: PLC0415
 
     from app.models import BankReportingPeriod  # noqa: PLC0415
+    from app.reporting.schemas.packages import RegulatoryPackageCreate  # noqa: PLC0415
+    from app.reporting.service import generation, validation  # noqa: PLC0415
     from app.schemas.regulatory_liquidity import RegulatoryRunCreate  # noqa: PLC0415
-    from app.schemas.regulatory_reporting import RegulatoryPackageCreate  # noqa: PLC0415
     from app.services import regulatory_liquidity  # noqa: PLC0415
-    from app.services.regulatory_reporting import generation, validation  # noqa: PLC0415
 
     materialize_canonical_test_book(db)
     db.add(

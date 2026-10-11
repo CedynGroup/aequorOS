@@ -292,18 +292,13 @@ semantics follow the plane, never the other way round:
    immutable `regulatory_runs`. Period-over-period trends, filings, and
    freshness-vs-last-official-run live here exclusively.
 
-   **The reporting date is BoG's, never ours (corrected 2026-08-23).** A return's
-   reporting dates come from its `ReturnDefinition` — cadence plus the BoG
-   anchor conventions — through the one authority
-   `services/regulatory_reporting/anchors.py`, which touches no tenant data. The
-   dependency runs one way:
+   The [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+   owns date resolution, publication status, commencement and preparation-only
+   anchors. The dependency runs one way:
 
    ```
    ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
    ```
-
-   Publication status, commencement and preparation-only anchors follow the
-   [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
 
    `bank_reporting_periods` sits on plane 1, not here: a row is the key for one
    computed fact snapshot, created because a book arrived with an as-of date. It

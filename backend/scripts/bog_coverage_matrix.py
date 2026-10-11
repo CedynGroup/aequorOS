@@ -11,7 +11,7 @@ build actually does:
             vs ``input_required``/``coa-mapping`` (bank must supply);
 - export  — the official layout is committed and the form is registered with
             the template-faithful ``bog_form`` generator;
-- test    — a per-form test module exists under tests/services/bog_forms/ (the
+- test    — a per-form test module exists under tests/reporting/service/bog_forms/ (the
             framework gate covers every form structurally regardless);
 - governance — the form is a registered return (immutable package lifecycle).
 """
@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.regulatory_reporting.bog_forms.catalog import all_form_specs
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
-from app.services.regulatory_reporting.registry import REGISTRY
+from app.reporting.service.bog_forms.catalog import all_form_specs
+from app.reporting.service.bog_forms.layout import load_layout
+from app.reporting.service.registry import REGISTRY
 
-TESTS = Path(__file__).resolve().parents[1] / "tests" / "services" / "bog_forms"
+TESTS = Path(__file__).resolve().parents[1] / "tests" / "reporting" / "service" / "bog_forms"
 
 
 def _test_files_for(code: str) -> list[str]:
@@ -99,7 +99,7 @@ def main() -> None:
         "\nLegend: map ✓ = every official leaf input cell is bound (source or explicit input_required); "
         "◐ = some official cells still unmapped. calc = % of bound cells fed from platform data today; the "
         "remainder is data the bank must supply (see each form's line-map doc, 'Residual unmapped lines'). "
-        "The framework gate (tests/services/test_bog_forms_framework.py) generates + exports EVERY form "
+        "The framework gate (tests/reporting/service/test_bog_forms_framework.py) generates + exports EVERY form "
         "template-faithfully and evaluates 100% of the templates' formulas regardless of map status."
     )
 

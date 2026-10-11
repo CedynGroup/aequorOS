@@ -19,10 +19,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation
+from app.reporting.service.exports import export_package
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import (
     regulatory_capital,
@@ -30,8 +32,6 @@ from app.services import (
     regulatory_liquidity,
     reverse_stress,
 )
-from app.services.regulatory_reporting import generation
-from app.services.regulatory_reporting.exports import export_package
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -55,9 +55,7 @@ REPORTING_DATE = date(2026, 3, 31)
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 

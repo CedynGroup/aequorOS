@@ -69,7 +69,7 @@ The divergences you must not "fix" by asserting equality
   engine.
 * ``car_pct`` / ``bog_bsd5a_form_ratio`` — BoG's own printed BSD5A ratio
   ``E70 = E25/E69``. Different add-on rules by design; the repository already
-  pins the inequality (``tests/services/bog_forms/test_bsd5.py``: *"by
+  pins the inequality (``tests/reporting/service/bog_forms/test_bsd5.py``: *"by
   construction, not by accident"*).
 * ``car_pct`` / ``act930_s29_nof_rwa`` — the SDI regime's NOF / simplified RWA.
 
@@ -1603,7 +1603,7 @@ REGISTRY.register(
             "cell:BSD5A!E25",
             "cell:BSD5A!E69",
         ),
-        policy_resolver="app.services.regulatory_reporting.bog_forms.formulas",
+        policy_resolver="app.reporting.service.bog_forms.formulas",
         calculation_engine="app.services.regulatory_reporting.bog_forms.engine:compute_form",
         calculation_version="bog_form/template-formula-evaluator",
         parameter_set=("bog_bsd5a_layout", "bog_bsd5a_linemap"),
@@ -1631,7 +1631,7 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/tests/services/bog_forms/test_bsd5.py - "
+                "backend/tests/reporting/service/bog_forms/test_bsd5.py - "
                 '\'assert not _close(e["E70"] * 100, car_pct, "0.5")  '
                 "# by construction, not by accident'",
             ),
@@ -2718,7 +2718,7 @@ _RATING_NO_AUTHORITY = (
 _RATING_NOTES = (
     "Published to the live plane only (app/services/implied_rating.py::compute_live) and "
     "sealed into ImpliedRatingRun, never into a RegulatoryRun. The module feeds no return: "
-    "nothing under app/services/regulatory_reporting/ reads it. ADVISORY_ONLY is therefore "
+    "nothing under app/reporting/service/ reads it. ADVISORY_ONLY is therefore "
     "the operative constraint as well as the honest label - these figures must not reach a "
     "filing, and today none of them can."
 )

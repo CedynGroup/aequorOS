@@ -56,6 +56,17 @@ from pyhanko_certvalidator import ValidationContext
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 
 from app.models import AttestationSignature
+from app.reporting.service.exports.pdf import render_pdf
+from app.reporting.service.templates import (
+    STANDARD_ATTESTATION_LINES,
+    ColumnSpec,
+    RenderedCell,
+    RenderedReturn,
+    RenderedRow,
+    RenderedSection,
+    ReturnTemplate,
+    SectionLayout,
+)
 from app.services.attestation.appearance import normalise_drawn_signature
 from app.services.attestation.pdf_signing import (
     APPROVER_BOX,
@@ -92,17 +103,6 @@ from app.services.attestation.signers import (
 )
 from app.services.attestation.typed_fonts import TYPED_FACES
 from app.services.attestation.verify import attestation_diff_policy
-from app.services.regulatory_reporting.exports.pdf import render_pdf
-from app.services.regulatory_reporting.templates import (
-    STANDARD_ATTESTATION_LINES,
-    ColumnSpec,
-    RenderedCell,
-    RenderedReturn,
-    RenderedRow,
-    RenderedSection,
-    ReturnTemplate,
-    SectionLayout,
-)
 
 #: The §2.5 worked example. Text on a page only — it never has to agree with
 #: the clock the test PKI runs on.
@@ -474,9 +474,7 @@ def _drawn_rules(pdf: bytes, page_index: int) -> set[tuple[float, float, float]]
             continue
         x1, y1, x2, y2 = (float(match.group(index)) for index in (3, 4, 5, 6))
         if y1 == y2:
-            rules.add(
-                (round(origin_y + y1, 2), round(origin_x + x1, 2), round(origin_x + x2, 2))
-            )
+            rules.add((round(origin_y + y1, 2), round(origin_x + x1, 2), round(origin_x + x2, 2)))
     return rules
 
 
@@ -597,9 +595,7 @@ def _placed(
     box: tuple[int, int, int, int],
     field_type: str = "signature",
 ) -> FieldPlacement:
-    return FieldPlacement(
-        signing_role=role, page_index=page_index, box=box, field_type=field_type
-    )
+    return FieldPlacement(signing_role=role, page_index=page_index, box=box, field_type=field_type)
 
 
 def _pair(
@@ -741,9 +737,7 @@ def _stamp_font_size(pdf: bytes, field_name: str, *, resource: str) -> float:
     """
     normal = _as_dict(_widget(pdf, field_name)["/AP"])["/N"].get_object()
     assert isinstance(normal, generic.StreamObject)
-    sizes = re.findall(
-        rb"%s ([\d.]+) Tf" % resource.encode("ascii"), _stamp_stream(normal)
-    )
+    sizes = re.findall(rb"%s ([\d.]+) Tf" % resource.encode("ascii"), _stamp_stream(normal))
     assert sizes, f"no {resource} text found in {field_name}'s appearance"
     return min(float(size) for size in sizes)
 
@@ -769,9 +763,7 @@ def _sign_into_box(
         unsigned_pdf,
         placements=_pair(preparer=_placed("preparer", ATTESTATION_PAGE_INDEX, box)),
     )
-    appearance = (
-        _appearance("preparer") if mark is None else _mark_appearance("preparer", mark)
-    )
+    appearance = _appearance("preparer") if mark is None else _mark_appearance("preparer", mark)
     return sign_as_preparer(
         prepared, signer=pki.signer, appearance=appearance, profile=pki.profile(lta=False)
     )
@@ -853,9 +845,7 @@ def test_a_form_sized_box_carries_the_stamp_but_not_the_detail_rows(
     its own labelled cells, which is where the placed ``name``/``title``/
     ``date_signed`` fields put them.
     """
-    signed = _sign_into_box(
-        pki, unsigned_pdf, (51, 400, 195, 435), mark=_drawn_mark()
-    )
+    signed = _sign_into_box(pki, unsigned_pdf, (51, 400, 195, 435), mark=_drawn_mark())
     assert _appearance_lines(signed, PREPARER_FIELD_NAME) == [
         "Prepared by",
         "SGN-7K4M9PQR2VWX3YZ8",
@@ -915,9 +905,7 @@ def test_prepare_refuses_a_role_with_no_field_on_the_document(
         )
 
 
-def test_a_field_cannot_be_added_after_certification(
-    pki: SigningPki, unsigned_pdf: bytes
-) -> None:
+def test_a_field_cannot_be_added_after_certification(pki: SigningPki, unsigned_pdf: bytes) -> None:
     """The constraint the whole placement design is shaped by.
 
     Once the preparer has certified at ``MDPPerm.FILL_FORMS``, adding a field is a

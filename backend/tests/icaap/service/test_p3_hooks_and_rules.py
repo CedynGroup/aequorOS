@@ -19,7 +19,7 @@ from app.icaap.schemas.workspace import (
 from app.icaap.service import cycles as cycles_service
 from app.icaap.service import filing, filing_hooks, validation_rules, workflow_templates
 from app.models import RegulatoryPackage
-from app.services.regulatory_reporting import family_hooks
+from app.reporting.service import family_hooks
 from tests.icaap.service.p3_support import (
     FRAMEWORK_ROOT,
     access_for,

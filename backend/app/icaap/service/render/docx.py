@@ -12,7 +12,7 @@ Two mechanics worth knowing:
 * **Determinism.** python-docx stamps every zip entry with wall-clock time at
   save, the same problem openpyxl has. The container is therefore re-written
   through the exporters' shared normaliser
-  (``regulatory_reporting/exports/xlsx.normalize_zip``) with fixed entry
+  (``app.reporting.service.exports.xlsx.normalize_zip``) with fixed entry
   timestamps and a pinned ``dcterms:modified``, and the core properties are set
   explicitly from the caller's ``generated_at``. Two renders of the same
   document produce the same bytes. (Cross-machine byte identity is not

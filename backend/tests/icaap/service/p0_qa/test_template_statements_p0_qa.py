@@ -21,8 +21,8 @@ from app.domain.irr.engine import (
 from app.domain.stress import appendix_ii
 from app.domain.stress.management_actions import RecognitionCaps
 from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
-from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.regulatory_reporting.templates import TEMPLATES, get_template
+from app.reporting.service.registry import REGISTRY
+from app.reporting.service.templates import TEMPLATES, get_template
 from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     bog_forecast_params,

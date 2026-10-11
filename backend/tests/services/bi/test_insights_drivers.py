@@ -6,7 +6,7 @@ Two properties are pinned here and nowhere else:
   values — no tolerance is used anywhere in this file, because a bridge that is
   only nearly additive is a bridge a reader cannot check;
 * :func:`app.services.bi.insights.drivers.favourability` returns the same
-  verdict ``app.services.report_comparison`` returns, for every metric key in
+  verdict ``app.reporting.service.report_comparison`` returns, for every metric key in
   its registries and in both directions. The BI catalogue restates the
   DIRECTIONS (``catalogue/directions.py``, already parity-tested); this pins
   that the verdict drawn FROM a direction has not drifted either — which is what
@@ -22,7 +22,7 @@ from fractions import Fraction
 import pytest
 
 from app.domain.bi.catalogue import catalogue
-from app.services import report_comparison
+from app.reporting.service import report_comparison
 from app.services.bi.insights import drivers
 
 _FAVOURABILITY_SPELLING = {

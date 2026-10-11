@@ -759,7 +759,7 @@ remain separate work.
 
 Corrected 2026-10-04. `scoped_authorization` defaults
 `require_whole_institution=True`, including its prefetched path, and
-`regulatory_reporting/family_access` applies the same rule to visibility,
+`app/reporting/service/family_access.py` applies the same rule to visibility,
 mutations and chain decisions. A matching binding is insufficient when its
 matched data scopes do not include the whole institution. The refusal reason
 is `institution_grain_requires_whole_institution`. A whole-book binding for a
@@ -818,7 +818,7 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
+Executable evidence: `tests/reporting/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
 regulatory figures, every registered return family's read/download paths,
 generation, legacy approval, signing inboxes and calendar links alongside a

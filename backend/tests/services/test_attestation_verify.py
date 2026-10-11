@@ -68,14 +68,14 @@ from app.models import (
     SignerKey,
     User,
 )
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation, validation
+from app.reporting.service.exports import export_package
 from app.schemas.attestation import VerificationReportRead
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_liquidity
 from app.services.attestation import digests, pdf_signing, signing, stepup, verify, workflow
 from app.services.attestation.identity import ensure_signer_identity
-from app.services.regulatory_reporting import generation, validation
-from app.services.regulatory_reporting.exports import export_package
 from app.storage.client import ObjectMetadata, StorageLocation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -210,9 +210,7 @@ def pki() -> _Pki:
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 

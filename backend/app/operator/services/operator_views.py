@@ -33,12 +33,12 @@ from app.models import (
     MarketDataConnection,
     OperatorAuditLog,
     Organization,
-    RegulatoryPackage,
     RegulatoryRun,
     TemenosConnection,
     TenantStorage,
     WorkerHeartbeat,
 )
+from app.reporting.public import RegulatoryPackage
 from app.schemas.market_desk import DeskEntitlementRead
 from app.schemas.operator import (
     ActivityItemRead,

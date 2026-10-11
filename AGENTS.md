@@ -99,7 +99,7 @@ Each rule is stated in full in the document the index names.
   (`app/domain/capital/ecl.py`) is a what-if and stress estimate: never substitute it for
   booked general provisions in Tier 2; a stressed increase is a CET1 charge.
 - **Periodic reporting dates are the regulator's.** They come from the `ReturnDefinition`
-  through `app/services/regulatory_reporting/anchors.py`, never from
+  through `app/reporting/service/anchors.py`, never from
   `bank_reporting_periods`, and the snapshot match is exact for every cadence.
 - **Read tenant health from what the platform computed** (`live_metrics`,
   `GET /banks/{id}/live-summary|freshness|alerts`); never call `derive_facts`

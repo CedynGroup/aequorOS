@@ -2,7 +2,9 @@
   "app.models.bank": {
     "module": "app.models.regulatory",
     "feature": "live",
-    "importers": ["app.api.deps"]
+    "importers": [
+      "app.api.deps"
+    ]
   },
   "app.models.parameter_register": {
     "module": "app.models.regulatory",
@@ -23,7 +25,6 @@
       "app.services.regulatory_fx",
       "app.services.regulatory_irr",
       "app.services.regulatory_liquidity",
-      "app.services.regulatory_reporting.le_generation",
       "app.services.scenario_catalog"
     ]
   }

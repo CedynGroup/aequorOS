@@ -53,21 +53,21 @@ from app.models import (
     SignerKey,
     User,
 )
-from app.schemas.filing_workflow import PackageStageDecisionCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import (
+from app.reporting.schemas.filing_workflow import PackageStageDecisionCreate
+from app.reporting.schemas.packages import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
 )
+from app.reporting.service import artifact_versions, generation, validation
+from app.reporting.service import workflow as reporting_workflow
+from app.reporting.service.filing_workflow import chain as filing_chain
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_liquidity
 from app.services.attestation import pdf_signing, placements, signing, stepup, workflow
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.attestation.signers import get_raw_signer
-from app.services.filing_workflow import chain as filing_chain
-from app.services.regulatory_reporting import artifact_versions, generation, validation
-from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -122,9 +122,7 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     reach through the export engine for its client), so both are redirected.
     """
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     monkeypatch.setattr(
         "app.services.attestation.artifact_signing.get_storage_client", lambda: client
     )

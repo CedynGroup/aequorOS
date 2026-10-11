@@ -54,6 +54,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.reporting.public import (
+    NAVY,
+    WATERMARK_GREY,
+    canvas_pagesize,
+    escape_text,
+    invariant_canvas,
+    printable,
+)
 from app.services.bi.exports.context import (
     EXPORT_TITLE,
     STANDING_NOTE,
@@ -61,14 +69,6 @@ from app.services.bi.exports.context import (
     ExportContext,
     ExportTable,
     display_cell,
-)
-from app.services.regulatory_reporting.exports.pdf_parts import (
-    NAVY,
-    WATERMARK_GREY,
-    canvas_pagesize,
-    escape_text,
-    invariant_canvas,
-    printable,
 )
 
 MEDIA_TYPE = "application/pdf"
@@ -112,8 +112,7 @@ class _Furniture:
     def __init__(self, ctx: ExportContext) -> None:
         self._watermark = ctx.watermark
         self._footer = (
-            f"{EXPORT_TITLE} · {ctx.institution_name} · as at {ctx.as_of_label} · "
-            f"{STANDING_NOTE}"
+            f"{EXPORT_TITLE} · {ctx.institution_name} · as at {ctx.as_of_label} · {STANDING_NOTE}"
         )
 
     def __call__(self, canvas: pdf_canvas.Canvas, _doc: BaseDocTemplate) -> None:

@@ -30,6 +30,7 @@ from app.models import (
     ReturnSigningPolicy,
     SignerKey,
 )
+from app.reporting.service.registry import get_definition
 from app.schemas.attestation import (
     AdoptedSignatureRead,
     AdoptSignatureRequest,
@@ -72,7 +73,6 @@ from app.services.attestation.identity import (
 from app.services.attestation.typed_fonts import available_face_keys
 from app.services.attestation.workflow import AttestationConflict
 from app.services.audit import record_event
-from app.services.regulatory_reporting.registry import get_definition
 
 if TYPE_CHECKING:
     from pyhanko.sign.timestamps import TimeStamper
@@ -104,7 +104,7 @@ def _ensure_certify_authority(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str
 ) -> None:
     """Certification requires the family's whole-institution scoped authority."""
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)
     if bank is None:  # pragma: no cover - the package's own FK guarantees it
@@ -115,7 +115,7 @@ def _ensure_certify_authority(
 def _require_package_action(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, permission: Permission
 ) -> None:
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)
     if bank is None:  # pragma: no cover - package FK
@@ -149,7 +149,7 @@ def _get_package(
     Every family requires whole-institution visibility before this lookup
     serves its figures or signing state.
     """
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank = resolve_bank_reference(db, ctx, bank_reference)
     package = db.scalar(
@@ -412,7 +412,7 @@ def send_back_for_corrections(
     ``pending_approval`` guards, so nothing is withdrawn on behalf of somebody
     who was never entitled to decide.
     """
-    from app.services.regulatory_reporting import workflow as reporting  # noqa: PLC0415
+    from app.reporting.service import workflow as reporting  # noqa: PLC0415
 
     actor = _require_actor(ctx)
     package = _get_package(db, ctx, bank_reference, package_id)

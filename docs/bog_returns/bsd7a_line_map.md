@@ -43,7 +43,7 @@ Generated from `bog_forms/linemaps/bsd7a.py` + `layouts/BSD7A.json` (row tables 
   [capital register refusal rule](00_full_return_registry.md#6-as-built-engine-rules).
 - On the primary database the GL panel carried ASSET/LIABILITY/EQUITY accounts only until 2026-08-16, so
   **every P&L line was blank (input_required) until a bank ingests its P&L ledger and maps it** — the honest
-  state; the hermetic proof (`tests/services/bog_forms/test_bsd7.py`) inserts a tagged ledger and shows the
+  state; the hermetic proof (`tests/reporting/service/bog_forms/test_bsd7.py`) inserts a tagged ledger and shows the
   full chain, and `tests/services/data_gaps/test_gl_mapping_bsd7.py` pushes the Sample Bank's P&L ledger + the
   `gl_mapping_bsd7` register through the real API (see _Data-gap closure_ below).
 

@@ -42,16 +42,16 @@ from app.models import (
     RegulatoryPackageApproval,
     ReturnSigningPolicy,
 )
-from app.schemas.attestation import CertifyRequest
-from app.schemas.regulatory_reporting import (
+from app.reporting.schemas.packages import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
 )
+from app.reporting.service import workflow as reporting_workflow
+from app.schemas.attestation import CertifyRequest
 from app.services import attestation_api
 from app.services.attestation import routing, workflow
 from app.services.attestation.policy import SignatureSlot, SigningPolicy
 from app.services.attestation.workflow import AttestationConflict
-from app.services.regulatory_reporting import workflow as reporting_workflow
 from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, DEMO_USER_ID, SAMPLE_BANK_ID
 from tests.services.test_attestation_workspace import (
     ANALYST_USER_ID,
@@ -404,7 +404,7 @@ def test_a_missing_policy_does_not_disable_the_control(
         lambda: storage_engine,
     )
     monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client",
+        "app.reporting.service.exports.get_storage_client",
         lambda: storage_engine,
     )
     package = _seed(db_session)
@@ -618,7 +618,7 @@ def test_a_voided_attestation_reopens_the_ceremony_without_reopening_the_rule(
     assert package.attestation_state == "unsigned"
     assert package.status == "generated"
 
-    from app.services.regulatory_reporting import validation  # noqa: PLC0415
+    from app.reporting.service import validation  # noqa: PLC0415
 
     validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     db_session.refresh(package)

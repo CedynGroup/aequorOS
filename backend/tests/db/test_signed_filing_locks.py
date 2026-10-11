@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.session import force_rls_suspended
 from app.models import AttestationSignature, RegulatoryPackage, User
+from app.reporting.service.generation import snapshot_content_hash
 from app.services.attestation import digests, verify, workflow
-from app.services.regulatory_reporting.generation import snapshot_content_hash
 from tests.db import test_governance_append_only as governance_fixtures
 from tests.db.test_postgres_migrations import MigratedPostgresSchema
 from tests.support.helpers import ORG_1

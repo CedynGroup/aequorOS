@@ -25,8 +25,8 @@ from app.core.authorization import (
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization, grant_administration
 from app.models import AuditEvent, AuthorizationBinding, User
+from app.reporting.schemas.packages import ReturnTemplateListRead
 from app.schemas.attestation import PolicyRead
-from app.schemas.regulatory_reporting import ReturnTemplateListRead
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, USER_1, headers

@@ -113,15 +113,24 @@ _FORWARD_DECISION = "decision IN ('submitted', 'reviewed', 'approved')"
 _ACTIVE_TEMPLATE = "status = 'approved'"
 
 #: The default chain, frozen here as the migration saw it. The live definition
-#: is ``app/domain/filing/workflow.DEFAULT_STAGES``; a migration that imported
+#: is ``app/reporting/domain/workflow.DEFAULT_STAGES``; a migration that imported
 #: it would change meaning whenever the product did.
 _DEFAULT_STAGES: tuple[dict[str, Any], ...] = (
-    {"seq": 1, "stage_key": "preparation", "title": "Preparer", "kind": "prepare",
-     "transmit": False},
-    {"seq": 2, "stage_key": "approval", "title": "Approver", "kind": "approve",
-     "transmit": False},
-    {"seq": 3, "stage_key": "validation", "title": "Validator", "kind": "approve",
-     "transmit": True},
+    {
+        "seq": 1,
+        "stage_key": "preparation",
+        "title": "Preparer",
+        "kind": "prepare",
+        "transmit": False,
+    },
+    {"seq": 2, "stage_key": "approval", "title": "Approver", "kind": "approve", "transmit": False},
+    {
+        "seq": 3,
+        "stage_key": "validation",
+        "title": "Validator",
+        "kind": "approve",
+        "transmit": True,
+    },
 )
 
 #: Statuses that are finished with. Never given a chain, never re-projected.
@@ -256,9 +265,7 @@ def _create_stages() -> None:
             name="ck_package_workflow_stages_decision_kind",
         ),
         sa.CheckConstraint("seq BETWEEN 1 AND 20", name="ck_package_workflow_stages_seq"),
-        sa.CheckConstraint(
-            f"source IN {_STAGE_SOURCES}", name="ck_package_workflow_stages_source"
-        ),
+        sa.CheckConstraint(f"source IN {_STAGE_SOURCES}", name="ck_package_workflow_stages_source"),
         sa.CheckConstraint(
             "(source = 'bank_template') = (template_id IS NOT NULL)",
             name="ck_package_workflow_stages_template",
@@ -305,9 +312,7 @@ def _create_decisions() -> None:
         sa.CheckConstraint(
             "stage_seq BETWEEN 1 AND 20", name="ck_package_stage_decisions_stage_seq"
         ),
-        sa.CheckConstraint(
-            "length(review_digest) = 64", name="ck_package_stage_decisions_digest"
-        ),
+        sa.CheckConstraint("length(review_digest) = 64", name="ck_package_stage_decisions_digest"),
         sa.CheckConstraint(
             "decision <> 'returned' OR (return_to_seq IS NOT NULL AND return_to_seq >= 1 "
             "AND return_to_seq < stage_seq AND comment IS NOT NULL)",
@@ -530,9 +535,7 @@ def _backfill_organization(bind: Any, organization_id: str) -> None:
             # Validator: its Approver approved it, and that is no longer
             # authority to file.
             bind.execute(
-                sa.text(
-                    "UPDATE regulatory_packages SET current_stage_seq = :seq WHERE id = :id"
-                ),
+                sa.text("UPDATE regulatory_packages SET current_stage_seq = :seq WHERE id = :id"),
                 {"seq": 3 if package.status == "approved" else 2, "id": package.id},
             )
             pinned = bind.execute(

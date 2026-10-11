@@ -13,18 +13,23 @@ from app.live.position_book import (
     credit_source_basis,
     load_position_records,
 )
-from app.models.regulatory import BankReportingPeriod
-from app.models.regulatory_run import RegulatoryRun
+from app.models.regulatory import BankFinancialFact, BankReportingPeriod
+from app.models.regulatory_run import RegulatoryLineItem, RegulatoryMetricResult, RegulatoryRun
+from app.services import fact_derivation
 from app.services.live_refresh_triggers import enqueue_bank_change
 
 __all__ = [
+    "BankFinancialFact",
     "BankReportingPeriod",
     "CREDIT_POSITION_TYPES",
     "INCLUDED_VALIDATION_STATUSES",
+    "RegulatoryLineItem",
+    "RegulatoryMetricResult",
     "RegulatoryRun",
     "SourceRecord",
     "credit_source_basis",
     "enqueue_bank_change",
+    "fact_derivation",
     "load_position_records",
     "require_fx_fact_coverage",
     "require_fx_run_coverage",

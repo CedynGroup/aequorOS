@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank
-from app.services import liquidity_thresholds
-from app.services.regulatory_reporting.le_generation import (
+from app.reporting.service.le_generation import (
     _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
 )
+from app.services import liquidity_thresholds
 from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)

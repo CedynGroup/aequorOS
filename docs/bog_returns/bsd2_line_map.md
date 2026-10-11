@@ -237,7 +237,7 @@ schedule's "Total" label or the last labelled item + its blank detail rows); not
   listed on the Completion-notes sheet.
 - **Schedule TOTAL rows** are bound only where the SAME declaration BSD2 uses for the line the annex analyses
   fills the total honestly, so _annex total = spine line by construction_ (proved by
-  `tests/services/bog_forms/test_bsd2_annexes.py`): Annex 6 ↔ line 11 other assets (`facts balance_sheet
+  `tests/reporting/service/bog_forms/test_bsd2_annexes.py`): Annex 6 ↔ line 11 other assets (`facts balance_sheet
 other_assets`, Domestic B / Foreign C), Annex 7 ↔ 15(e) other reserves, Annex 15 ↔ line 29 other liabilities
   (`positions OTHER_LIABILITY`, Domestic C / Foreign D), Annex 16 rows ↔ line 33 (`I11` = BSD2 `D282`).
   Where BSD2's own line is multi-source or itself input_required / coa-mapping (borrowings Annexes 8–11, Annex 12

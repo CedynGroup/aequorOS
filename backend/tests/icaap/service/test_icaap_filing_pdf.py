@@ -38,13 +38,13 @@ from app.icaap.service.render.from_snapshot import (
     SnapshotError,
     filing_from_snapshot,
 )
+from app.reporting.service.exports import icaap_pdf
 from app.services.attestation import pdf_signing
 from app.services.attestation.pdf_signing import (
     ATTESTATION_PAGE_INDEX,
     MIN_BOX_SIZES,
     SIGNATURE_FIELD_TYPE,
 )
-from app.services.regulatory_reporting.exports import icaap_pdf
 from tests.icaap.service.filing_snapshot import (
     AKAN_VOWELS,
     CEDI,
@@ -396,7 +396,7 @@ def test_the_draft_renderer_escapes_identically_under_the_default_font() -> None
     """
     from app.icaap.domain.document import IcaapDocument  # noqa: PLC0415
     from app.icaap.service.render.pdf import HELVETICA, IcaapPdfRenderer  # noqa: PLC0415
-    from app.services.regulatory_reporting.exports import pdf_parts  # noqa: PLC0415
+    from app.reporting.service.exports import pdf_parts  # noqa: PLC0415
 
     assert HELVETICA.printable is pdf_parts.printable
     blank = IcaapDocument(
@@ -434,8 +434,8 @@ def test_the_draft_renderer_escapes_identically_under_the_default_font() -> None
 
 
 def test_the_generic_tabular_renderer_never_sees_the_embedded_font() -> None:
-    from app.services.regulatory_reporting.exports import pdf as tabular  # noqa: PLC0415
-    from app.services.regulatory_reporting.templates import (  # noqa: PLC0415
+    from app.reporting.service.exports import pdf as tabular  # noqa: PLC0415
+    from app.reporting.service.templates import (  # noqa: PLC0415
         TEMPLATES,
         RenderedCell,
         RenderedReturn,

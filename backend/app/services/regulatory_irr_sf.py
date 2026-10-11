@@ -68,6 +68,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_irr_sf import (
     IrrbbSfAssumptionRead,
     IrrbbSfAttemptRead,
@@ -90,13 +91,7 @@ from app.schemas.regulatory_irr_sf import (
     IrrbbSfTable8RowRead,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunRead
-from app.services import (
-    filing_reconciliation,
-    jurisdictions,
-    market_data,
-    market_data_sources,
-    regulatory_parameters,
-)
+from app.services import jurisdictions, market_data, market_data_sources, regulatory_parameters
 from app.services.audit import record_event
 from app.services.regulatory_irr import tier1_for_period
 from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read

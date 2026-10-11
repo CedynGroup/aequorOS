@@ -80,6 +80,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_capital import (
     Bsd2HeaderRead,
     Bsd2PreviewRead,
@@ -105,7 +106,6 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services import (
-    filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
     sdi_capital,
@@ -976,7 +976,7 @@ def _persist_success(  # noqa: PLR0913
     # A stress run persists NO end-state capital ratio here, deliberately. A
     # RegulatoryMetricResult row carries a threshold and a compliance status, and
     # the STRESS-PACK used to copy both verbatim into a filed return
-    # (regulatory_reporting/generation.py::_stress_traffic_lights). No Bank of
+    # (app/reporting/service/generation.py::_stress_traffic_lights). No Bank of
     # Ghana instrument requires a POST-STRESS capital adequacy ratio to meet the
     # minimum: the stress-testing and ICAAP directives are February 2026 exposure
     # drafts, and the minimum the Capital Requirements Directive does set binds

@@ -52,7 +52,7 @@ and 2); this module's job is to produce a document those checks can convict.
 
 **Determinism (§3.2, gap G12).** Signing NEVER re-renders the document. The
 unsigned PDF is rendered once by
-``app/services/regulatory_reporting/exports/pdf.py``, archived as a
+``app/reporting/service/exports/pdf.py``, archived as a
 ``regulatory_artifact_versions`` row, and every function here takes those exact
 bytes and appends an incremental update to them. ``reportlab`` is pinned in
 ``pyproject.toml`` for the same reason: a re-render that shifted one byte would
@@ -372,8 +372,7 @@ def _text_field_minimum(reference: str) -> tuple[int, int]:
     that would have been fine or a filed document with text off its edge.
     """
     return (
-        ceil(len(reference) * _APPEARANCE_FONT_WIDTH * MIN_LEGIBLE_FONT_SIZE)
-        + 2 * _FIELD_PADDING,
+        ceil(len(reference) * _APPEARANCE_FONT_WIDTH * MIN_LEGIBLE_FONT_SIZE) + 2 * _FIELD_PADDING,
         ceil(MIN_LEGIBLE_FONT_SIZE * _LINE_BOX_RATIO) + 2 * _FIELD_PADDING,
     )
 
@@ -393,8 +392,7 @@ def _signature_minimum() -> tuple[int, int]:
     rule and therefore costing only half its height inside the box.
     """
     return (
-        ceil(SIGNER_ID_CHARS * _APPEARANCE_FONT_WIDTH * MIN_LEGIBLE_FONT_SIZE)
-        + 2 * _STAMP_PADDING,
+        ceil(SIGNER_ID_CHARS * _APPEARANCE_FONT_WIDTH * MIN_LEGIBLE_FONT_SIZE) + 2 * _STAMP_PADDING,
         ceil(
             _LABEL_MIN_SIZE * (_LABEL_ABOVE_RULE + _LABEL_BELOW_RULE)
             + _STAMP_ROW_GAP
@@ -643,8 +641,7 @@ class AdoptedMark:
         face = TYPED_FACES.get(self.typed_font or "")
         if face is None:
             raise PdfSigningError(
-                f"Typed signature font {self.typed_font!r} is not one of "
-                f"{sorted(TYPED_FACES)}."
+                f"Typed signature font {self.typed_font!r} is not one of {sorted(TYPED_FACES)}."
             )
         if not face.available():
             raise PdfSigningError(
@@ -929,10 +926,7 @@ def _stamp_layout(appearance: SignatureAppearance, *, width: int, height: int) -
         # The band starts below the label's descender, which hangs under the top
         # rule the label is centred on.
         mark_height=max(
-            height
-            - label_size * (_LABEL_ABOVE_RULE + _LABEL_BELOW_RULE)
-            - _STAMP_ROW_GAP
-            - cursor,
+            height - label_size * (_LABEL_ABOVE_RULE + _LABEL_BELOW_RULE) - _STAMP_ROW_GAP - cursor,
             0.0,
         ),
         id_size=id_size,
@@ -1044,9 +1038,7 @@ class _SignatureStampContent(content.PdfContent):
     def _detail_rows(self) -> list[bytes]:
         box = self._layout
         return [
-            self._text_row(
-                text, size=box.detail_size, baseline=baseline, subject="signature block"
-            )
+            self._text_row(text, size=box.detail_size, baseline=baseline, subject="signature block")
             for text, baseline in box.detail_rows
         ]
 
@@ -1056,9 +1048,7 @@ class _SignatureStampContent(content.PdfContent):
             size,
             _STAMP_PADDING,
             baseline,
-            self._declare(
-                _MONO_FONT_RESOURCE, _APPEARANCE_FONT_NAME, text, subject=subject
-            ),
+            self._declare(_MONO_FONT_RESOURCE, _APPEARANCE_FONT_NAME, text, subject=subject),
         )
 
     def _declare(self, resource: str, base_font: str, text: str, *, subject: str) -> bytes:
@@ -1148,9 +1138,7 @@ class _SignatureStampContent(content.PdfContent):
             name=generic.pdf_name(_STAMP_MARK_RESOURCE),
             value=engine.as_resource(),
         )
-        return self._draw_mark_text(
-            shaped.graphics_ops, advance_em=shaped.x_advance, face=face
-        )
+        return self._draw_mark_text(shaped.graphics_ops, advance_em=shaped.x_advance, face=face)
 
     def _draw_mark_text(self, show_ops: bytes, *, advance_em: float, face: TypedFace) -> bytes:
         """Size a shaped mark to its band and place it on the baseline.
@@ -1210,9 +1198,7 @@ def _stamp_style(
     """
     return stamp.StaticStampStyle(
         border_width=0,
-        background=_SignatureStampContent(
-            appearance, width=box_width, height=box_height
-        ),
+        background=_SignatureStampContent(appearance, width=box_width, height=box_height),
         background_layout=layout.SimpleBoxLayoutRule(
             x_align=layout.AxisAlignment.ALIGN_MIN,
             y_align=layout.AxisAlignment.ALIGN_MIN,
@@ -1629,9 +1615,7 @@ def _append_text_field(writer: IncrementalPdfFileWriter, placement: FieldPlaceme
     resources = _sub_dictionary(form, "/DR")
     fonts = _sub_dictionary(resources, "/Font")
     if _MONO_FONT_RESOURCE not in fonts:
-        fonts[generic.pdf_name(_MONO_FONT_RESOURCE)] = writer.add_object(
-            _mono_font_resource()
-        )
+        fonts[generic.pdf_name(_MONO_FONT_RESOURCE)] = writer.add_object(_mono_font_resource())
     writer.update_container(form)
 
     page = page_ref.get_object()
@@ -1646,9 +1630,7 @@ def _append_text_field(writer: IncrementalPdfFileWriter, placement: FieldPlaceme
     writer.update_container(annotations)
 
 
-def _sub_dictionary(
-    parent: generic.DictionaryObject, key: str
-) -> generic.DictionaryObject:
+def _sub_dictionary(parent: generic.DictionaryObject, key: str) -> generic.DictionaryObject:
     """``parent[key]`` as a mutable dictionary, created if absent.
 
     Resolved rather than taken raw: an AcroForm that arrived with an INDIRECT
@@ -1797,11 +1779,7 @@ def _fill_one(
     stream[generic.pdf_name("/Resources")] = generic.DictionaryObject(
         {
             generic.pdf_name("/Font"): generic.DictionaryObject(
-                {
-                    generic.pdf_name(_MONO_FONT_RESOURCE): writer.add_object(
-                        _mono_font_resource()
-                    )
-                }
+                {generic.pdf_name(_MONO_FONT_RESOURCE): writer.add_object(_mono_font_resource())}
             )
         }
     )
@@ -1818,8 +1796,7 @@ def _field_rect(field: generic.DictionaryObject, name: str) -> tuple[float, floa
         x1, y1, x2, y2 = (float(coord) for coord in raw)
     except (KeyError, TypeError, ValueError) as exc:
         raise PdfSigningError(
-            f"Form field {name!r} declares no readable /Rect, so its value cannot be "
-            f"drawn."
+            f"Form field {name!r} declares no readable /Rect, so its value cannot be drawn."
         ) from exc
     return (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
 
@@ -1984,9 +1961,7 @@ def sign_as_board(
 
 def _require_already_signed(reader: PdfFileReader, field_names: Sequence[str]) -> None:
     """Refuse until every named signature field carries a value."""
-    signed = {
-        name for name, value, _ in fields.enumerate_sig_fields(reader) if value is not None
-    }
+    signed = {name for name, value, _ in fields.enumerate_sig_fields(reader) if value is not None}
     missing = [name for name in field_names if name not in signed]
     if missing:
         raise PdfSigningError(
@@ -2042,9 +2017,7 @@ def _sign(
     writer = IncrementalPdfFileWriter(io.BytesIO(pdf_bytes))
     # Same update as the signature: see _fill_derived_fields on why the two
     # cannot be separate revisions.
-    _fill_derived_fields(
-        writer, signing_role=role.signing_role, values=appearance.derived_values()
-    )
+    _fill_derived_fields(writer, signing_role=role.signing_role, values=appearance.derived_values())
     out = io.BytesIO()
     try:
         pdf_signer.sign_pdf(

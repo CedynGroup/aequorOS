@@ -44,9 +44,9 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
 )
+from app.reporting.service import filing_reconciliation
 from app.services import (
     data_activation,
-    filing_reconciliation,
     implied_rating,
     module_scope,
     regulatory_capital,
