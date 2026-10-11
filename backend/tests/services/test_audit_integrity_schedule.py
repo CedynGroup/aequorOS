@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import threading
-from contextlib import nullcontext
+from collections.abc import Generator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app import worker
@@ -88,3 +89,92 @@ def test_unavailable_verification_emits_paging_condition(
         (Condition.AUDIT_CHAIN_BROKEN, {"severity": "error", "reason": "verification_unavailable"})
     ]
     assert pages == ["verification_unavailable"]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+)
+def test_platform_task_failure_pages_and_preserves_job_dispatch(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
+    get_settings.cache_clear()
+    stop = threading.Event()
+    conditions: list[tuple[Condition, dict[str, object]]] = []
+    pages: list[tuple[str, str | None]] = []
+    polls: list[tuple[str, ...]] = []
+    stages: list[str] = []
+    db_session.execute(text("CREATE TABLE audit_integrity_schedule (id boolean, run_after text)"))
+    db_session.execute(text("INSERT INTO audit_integrity_schedule VALUES (true, '-infinity')"))
+    db_session.commit()
+    original_execute = db_session.execute
+    original_commit = db_session.commit
+
+    def fail_at(stage: str) -> None:
+        stages.append(stage)
+        if failure == stage:
+            stop.set()
+            raise RuntimeError("private database failure detail")
+
+    def acquire(*args: object, **kwargs: object) -> bool:
+        fail_at("acquisition")
+        return True
+
+    def advance(*args: object, **kwargs: object) -> None:
+        fail_at("advance")
+        original_execute(text("UPDATE audit_integrity_schedule SET run_after = 'next hour'"))
+
+    def commit() -> None:
+        fail_at("commit")
+        original_commit()
+
+    @contextmanager
+    def session_context() -> Generator[Session]:
+        fail_at("session_entry")
+        try:
+            yield db_session
+        finally:
+            fail_at("session_exit")
+
+    def new_session() -> AbstractContextManager[Session]:
+        fail_at("session_creation")
+        return session_context()
+
+    def verify(_session: Session) -> list[ChainVerification]:
+        stages.append("verification")
+        return [ChainVerification("audit_events", 0, True)]
+
+    def poll(types: tuple[str, ...], *, worker_id: str) -> bool:
+        polls.append(types)
+        stop.set()
+        return True
+
+    def capture(condition: Condition, _message: str, **fields: object) -> None:
+        conditions.append((condition, fields))
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        pages.append((reason, stream))
+        return True
+
+    def ignore(*args: object, **kwargs: object) -> None:
+        pass
+
+    monkeypatch.setattr(db_session, "scalar", acquire)
+    monkeypatch.setattr(db_session, "execute", advance)
+    monkeypatch.setattr(db_session, "commit", commit)
+    monkeypatch.setattr(audit_integrity, "scheduled_verification", verify)
+    monkeypatch.setattr(audit_integrity, "emit", capture)
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    monkeypatch.setattr(worker, "assert_worker_database_access", ignore)
+    monkeypatch.setattr(worker, "_heartbeat_safely", ignore)
+    monkeypatch.setattr(worker, "_reap_stale", ignore)
+    monkeypatch.setattr(worker, "_new_session", new_session)
+    monkeypatch.setattr(worker, "run_once", poll)
+    worker.run_worker(job_types=("scheduled_tick",), stop_event=stop)
+    assert polls == [("scheduled_tick",)]
+    assert conditions == [
+        (Condition.AUDIT_CHAIN_BROKEN, {"severity": "error", "reason": "verification_unavailable"})
+    ]
+    assert pages == [("verification_unavailable", None)]
+    assert ("verification" in stages) == (failure in {"advance", "commit", "session_exit"})

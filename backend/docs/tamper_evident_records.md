@@ -84,6 +84,10 @@ runtime-role inserts, denied ALTER/UPDATE/DELETE/TRUNCATE and helper replacement
 forced chain RLS, a bank-free hourly cadence and concurrent worker exclusion.
 An unavailable verifier emits and publishes the same paging condition; the
 platform task advances to the next hour even after a mismatch or refusal.
+Schedule acquisition, advance, commit and session failures use that safe paging
+condition while ordinary job dispatch continues. Migration regressions exercise
+both forward and round-trip upgrades with superuser test credentials, using and
+cleaning up an ordinary restricted migration role.
 `tests/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role. `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe
 incident payload, and visible missing/failed delivery with a fake publisher.
@@ -92,9 +96,8 @@ PostgreSQL tests use disposable schemas, never the primary database.
 
 ## Required deployment follow-up
 
-The AXI driver will file the deployment follow-up issue after this fix is
-concrete; no issue number has been assigned here. Complete it before deploying
-this migration in production or staging:
+Complete [deployment follow-up #509](https://github.com/CedynGroup/aequorOS/issues/509)
+before deploying this migration in production or staging:
 
 - Give the migration container its own `MIGRATION_DATABASE_URL`, distinct from
   API `DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
