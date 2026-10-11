@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import date
 from typing import Protocol, cast
 from uuid import UUID, uuid4
@@ -20,11 +21,14 @@ from tests.db.test_bank_organization_integrity import (
     BANK,
     ORG,
     OTHER_BANK,
-    bank_integrity_schema,
     bank_scope_scenario,
     pytestmark,
 )
-from tests.db.test_postgres_migrations import MigratedPostgresSchema, alembic_config_for_app
+from tests.db.test_postgres_migrations import (
+    MigratedPostgresSchema,
+    alembic_config_for_app,
+    migrate_isolated_postgres_schema,
+)
 
 __all__ = ["bank_integrity_schema", "pytestmark"]
 SIBLING_BANK = "BK-INTEGRITY-A2"
@@ -38,10 +42,19 @@ REFERENCES = tuple(
     for name in (*CANONICAL_TABLES, "lineage_records")
     for fk in Base.metadata.tables[name].foreign_key_constraints
     if len(fk.elements) == 3
+    and fk.elements[0].parent.name not in ("superseded_by", "withdrawn_by_batch_id")
     # The independently shipped next layer repairs this pre-existing omission.
     and (name, fk.elements[0].parent.name) != ("canonical_loan_events", "lineage_id")
 )
 AS_OF = date(2026, 6, 30)
+
+
+@pytest.fixture(scope="module")
+def bank_integrity_schema() -> Iterator[MigratedPostgresSchema]:
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        yield from migrate_isolated_postgres_schema(
+            monkeypatch, downgrade=False, revision="202610110094"
+        )
 
 
 class CanonicalBankMigration(Protocol):
