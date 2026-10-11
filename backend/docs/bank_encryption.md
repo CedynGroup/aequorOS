@@ -182,7 +182,8 @@ not change. KMS automatic material rotation within the same key ARN needs no
 application re-wrap.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
-aged out. Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
+aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
+Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
 extends rather than shortens its hold, and a sibling bank still using it remains

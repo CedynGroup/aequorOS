@@ -2205,7 +2205,7 @@
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 31,
+  "reportAny": 28,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
   "reportUnknownLambdaType": 7,
@@ -3908,10 +3908,7 @@
   "reportAny": 15
  },
  "tests.operator.test_worker_health_api": {
-  "reportAny": 2,
-  "reportMissingParameterType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1
+  "reportAny": 2
  },
  "tests.scripts.test_authorization_access_impact": {
   "reportMissingParameterType": 1,

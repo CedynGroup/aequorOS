@@ -11,8 +11,8 @@ to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
 delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
 delivers the append-only sweep. Each layer is validated separately. The audit
-and filing layers alone do not certify all of issue #413. No user-visible change;
-screenshots are not applicable.
+and filing layers alone do not certify all of issue #413. The compliance-storage
+layer adds submission refusals described under [write-once objects and backups](#write-once-objects-and-backups).
 
 The compliance-storage layer must use the regulatory retention period confirmed
 by counsel (#246).
@@ -188,3 +188,90 @@ and content-digest changes under temporary-table shadowing and altered search pa
 Apply the [deployment role and grant requirements](#required-deployment-follow-up)
 to filing seals too. The worker's BYPASSRLS privilege does not grant permission
 to alter evidence.
+
+## Write-once objects and backups
+
+Set `STORAGE_OBJECT_LOCK_ENABLED=true` for the AWS deployment. Local MinIO and
+hermetic fixtures retain their existing behavior with this flag off. Provisioning
+creates lock-capable output buckets and refuses an existing output bucket without Object
+Lock or with `Rule.DefaultRetention` in any mode. Bucket defaults retain every new
+version, including working drafts. Provisioning, application writes, presigned uploads
+and filing retention refuse incompatible Object Lock configurations before writing
+objects or changing retention. Default-retention refusals name the bucket and rule.
+They never rewrite an existing Object Lock configuration.
+The enabled application and provisioning roles need `s3:GetBucketObjectLockConfiguration`
+on output buckets to verify this policy; inability to read it refuses the operation.
+Enable Object Lock/versioning without a default retention rule on existing output buckets through the
+infrastructure owner before switching on the flag. At the shared submission boundary,
+all artifacts admitted by `filing_admits_artifact()` receive confirmed `COMPLIANCE`
+retention on their exact archived object versions before channel delivery or a
+manual submission commits. This includes previously signed versions created with
+the flag off, canonical exports, and the official BoG formula workbook. Internal
+SDI working sheets, ICAAP Word drafts and unrelated outputs remain unlocked in the
+supported output-bucket configuration. Dedicated backup buckets may carry a default
+retention rule; each dump and manifest still receives explicit confirmed `COMPLIANCE`
+retention.
+Exports and signing archive bytes without automatically locking every output;
+read-only filing previews do not apply retention. Attachments are recorded as a
+manifest, not transmitted artifacts, and are outside this object retention set.
+Retention can be extended but is never shortened, including an existing longer
+governance interval. Required deadlines round up to whole seconds so storage
+timestamp precision cannot shorten the interval. A retention PUT is followed by
+a version-specific GET; submission refuses if compliance mode or the required
+date cannot be confirmed.
+The shared submission preparation boundary returns HTTP 409 with
+`error_code=filing_retention_unconfirmed` for storage failures during auto-export
+or exact-version retention, including output buckets without Object Lock or with
+`Rule.DefaultRetention`. Refusal precedes channel delivery and the submission
+event; package status and financial content stay unchanged. Resolve
+the storage capability, permissions or archived-version problem before retrying.
+The submission event records each retained `storage_version_id`.
+
+For historical filings, run the tenant- and bank-scoped inventory from `backend`:
+
+```bash
+uv run python -m scripts.retain_filed_objects --organization-id OR-XXXXXXXX --bank-id BK-XXXXXXXX
+```
+
+This is a dry-run by default: it reads submission manifests and archived version
+rows and prints bucket/key/version/date locators, without provisioning buckets or
+writing database or object-store state. Resolve missing manifests, missing version
+rows or nonconcrete versions before rollout; the command refuses those records.
+For older manifests without version IDs it resolves the latest matching archived
+kind/path/checksum at or before the submission, never the current object-store key.
+Review the inventory and counsel-approved period, enable Object Lock on the
+existing buckets, then explicitly pass `--apply` with the retention flag enabled
+to apply and verify retention. This is an irreversible deployment-time operator
+decision; never run it against real buckets during development or validation.
+Re-running only extends retention and never shortens existing compliance locks.
+Presigned writes keep normal encryption rules; they cannot bypass the shared
+filing boundary's exact-version retention requirement.
+
+A delete marker hides the current key but does not remove a
+locked version. Apply an IAM deny on DeleteObject for evidence buckets if hiding
+current keys must also be prevented.
+
+`STORAGE_OBJECT_LOCK_RETENTION_DAYS` sets the interval in days; its default in
+[`StorageEngineSettings`](../app/storage/config.py) is **an operational placeholder,
+confirm with counsel, #246**. This is not a statement of BoG law or legal sign-off.
+Counsel and the infrastructure owner must approve the production
+period before enabling compliance retention, which cannot be shortened on stored
+versions. In AWS, even account administrators cannot delete or shorten a locked
+version during that interval. See [AWS Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html).
+
+`backup_database.py` publishes both its dump and manifest when the flag is on.
+Configure `BACKUP_WORM_BUCKET` to an existing versioned Object Lock bucket and
+`STORAGE_KMS_KEY_ID` to the platform backup encryption key. Uploads use unique
+prefixes, SSE-KMS and compliance retention, verify concrete version IDs, and print
+those locators for the backup runner's evidence record. Publication errors fail
+rather than claiming a retained backup; local recovery artifacts remain available.
+Off-flag backup runs continue to write local files. The retained manifest includes
+the chain tables in its schema fingerprints. Object-store backups copy ciphertext
+and envelope metadata; keep the paired database backup for the envelopes.
+Keep the platform backup KMS key decrypt-capable for the full retained backup
+interval.
+
+Object Lock retains ciphertext; it does not grant permission to decrypt it or
+prevent cryptographic loss of access through key destruction. Bank-key enforcement,
+rotation and retained-key recovery are governed by
+[the bank encryption contract](bank_encryption.md#rotation-backups-and-recovery).

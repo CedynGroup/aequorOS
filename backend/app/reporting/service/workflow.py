@@ -73,6 +73,10 @@ from app.reporting.service.common import (
     read_package,
     require_actor,
 )
+from app.reporting.service.filing_retention import (
+    filing_retention_errors,
+    retain_filing,
+)
 from app.reporting.service.registry import ReturnDefinition, get_definition
 from app.services.audit import record_event
 
@@ -959,6 +963,17 @@ def _filing_set(
     return filed, detail
 
 
+def _submission_filing_set(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, *, mint_missing: bool = True
+) -> tuple[list[FiledArtifact], dict[str, Any]]:
+    with filing_retention_errors():
+        artifacts, detail = _filing_set(db, ctx, package, mint_missing=mint_missing)
+        retained = retain_filing(db, ctx, package, artifacts)
+    if retained is not None:
+        detail["filed_artifacts"] = retained
+    return artifacts, detail
+
+
 def _package_artifacts(db: Session, package: RegulatoryPackage) -> list[RegulatoryPackageArtifact]:
     return list(
         db.scalars(
@@ -1224,7 +1239,7 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
         # ``mint_missing=False``: recording a submission that happened outside
         # the platform must not have the side effect of minting an artifact
         # nobody filed. What the record says was filed is what already existed.
-        _filed, filing_detail = _filing_set(db, ctx, package, mint_missing=False)
+        _filed, filing_detail = _submission_filing_set(db, ctx, package, mint_missing=False)
         transition(db, ctx, package, "submitted", details={"channel": channel_code})
         add_submission_event(
             db,
@@ -1241,7 +1256,7 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
         db.commit()
         return read_package(db, package)
 
-    artifacts, filing_detail = _filing_set(db, ctx, package)
+    artifacts, filing_detail = _submission_filing_set(db, ctx, package)
 
     prior_events = _submission_events_asc(db, package)
     config, credentials = _load_channel_context(db, ctx, bank.id, channel_code)

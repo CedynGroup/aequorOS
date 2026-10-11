@@ -211,6 +211,9 @@ class StorageClient(ABC):
     @abstractmethod
     def health_check(self) -> StorageHealth: ...
 
+    def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
+        raise StorageBackendError("This storage backend cannot confirm compliance retention.")
+
     def ensure_institution(self, institution_slug: str) -> None:  # noqa: B027
         """Idempotently provision the institution's buckets if the backend
         provisions in-band (MinIO). Cloud backends provision via Terraform
