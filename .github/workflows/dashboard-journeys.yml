@@ -1,14 +1,14 @@
 name: Dashboard Playwright journeys
 
-# Deliberately manual-only. These browser journeys are an authoritative,
-# maintainer-invoked diagnostic run, not part of routine pull-request or push
-# CI. Do not add pull_request or push triggers here.
-#
+# Always report the gate; filter expensive shards inside the job graph.
 # The stack Playwright boots (backend/dashboard/playwright.config.ts) includes
 # the local OIDC issuer the SSO journeys sign in at (backend/scripts/e2e_idp.py).
 # It is a plain Python process started as a Playwright web server, so unlike
 # MinIO below it needs no step of its own here.
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,11 +16,37 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect journey changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      journeys: ${{ steps.areas.outputs.journeys }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: areas
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh journeys
+          '^([^/]+\.md$|LICENSE$|docs/|backend/docs/|(backend|backend/dashboard|console|frontend|deploy)/README\.md$|frontend/(app/|components/|lib/|public/))'
+          --ignore
+
   journeys:
-    name: Run dashboard Playwright journeys
+    name: Dashboard journeys shard ${{ matrix.shard }}/4
+    needs: changes
+    if: needs.changes.outputs.journeys == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # Each runner owns its disposable database, fixture bank and MinIO. Keep
+    # Playwright's single worker; shard files without sharing mutable fixtures.
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -66,7 +92,7 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
-        run: mise exec -- pnpm --filter @aequoros/dashboard e2e
+        run: mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
       # Reviewer-visible screenshots the authorization and SSO journeys write
       # (the issuer's form, the signed-in shell, the refusals, the step-up
       # return). Uploaded even on failure: that is when they matter most.
@@ -74,9 +100,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: dashboard-journey-evidence
+          name: dashboard-journey-evidence-${{ matrix.shard }}
           path: ${{ runner.temp }}/evidence
           if-no-files-found: ignore
+      - name: Upload journey report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dashboard-journey-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/journeys.json
+          if-no-files-found: error
       # The quarantine size (e2e/support/quarantine.ts) is pinned here on
       # purpose: parking or releasing a journey means editing this gate as well
       # as the list, so a quarantine is always a visible, reviewed decision
@@ -96,3 +129,29 @@ jobs:
         env:
           SERVICE_PID: ${{ steps.minio.outputs.pid }}
         run: kill "$SERVICE_PID" 2>/dev/null || true
+
+  gate:
+    name: Dashboard journeys gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [changes, journeys]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download shard reports
+        if: needs.changes.outputs.journeys == 'true'
+        uses: actions/download-artifact@v6
+        with:
+          pattern: dashboard-journey-report-*
+          path: ${{ runner.temp }}/journey-reports
+      - name: Summarize journey counts
+        if: needs.changes.outputs.journeys == 'true'
+        run: |
+          set -euo pipefail
+          jq -s '{shards: length, discovered: (map(.discovered) | add), executed: (map(.executed) | add), skipped: (map(.skipped) | add)}' \
+            "$RUNNER_TEMP"/journey-reports/*/journeys.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Require the journey shards or a verified irrelevant change
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: .github/scripts/dashboard_journeys_gate.sh

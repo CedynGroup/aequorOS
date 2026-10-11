@@ -574,17 +574,37 @@ cd backend && E2E_IDP_PORT=8120 uv run python scripts/e2e_idp.py
 ```
 
 The `Dashboard Playwright journeys` workflow in
-`.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
-pull requests and pushes do not enqueue it. A maintainer launches it from the
-Actions UI or with
-`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It restores or
-installs Chromium, installs its system dependencies on every run, starts MinIO
-with its built-in KMS, and runs this same command against
-real CI-local object storage; the local OIDC issuer needs no container because
-Playwright starts it as a process beside the API. Evidence screenshots are
-uploaded as the `dashboard-journey-evidence` artifact. The run requires at least
-20 journeys to execute and the quarantine in `e2e/support/quarantine.ts` to
-match the size the workflow pins. A journey may only be parked there by name,
+`.github/workflows/dashboard-journeys.yml` runs automatically on pull requests
+and pushes to main, and remains available through the Actions UI or
+`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`.
+Journeys run for every change except PRs whose entire diff is on this ignore list:
+
+- Root Markdown files and `LICENSE`.
+- `docs/` and `backend/docs/` documentation and their images.
+- `README.md` directly under `backend/`, `backend/dashboard/`, `console/`,
+  `frontend/` or `deploy/`.
+- Marketing source and images under `frontend/app/`, `frontend/components/`,
+  `frontend/lib/` and `frontend/public/`.
+
+These paths are not consumed by the journey stack. Other files, including every
+workspace manifest, lockfile, interpreter file, workflow, action and script,
+select the suite. Dashboard images and runtime Markdown also select it.
+The shared detector's ignore mode is used only by this workflow; other workflows
+keep their inclusion predicates. Renames consider both the old and new path.
+Main pushes and manual dispatch run every shard; unknown or empty change
+decisions fail closed. The **`Dashboard journeys gate`** is the stable check to
+require before merge: it always reports and accepts a skipped suite only after
+successful detection of an ignored-only PR.
+
+Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
+worker and its own disposable SQLite database, fixture bank, loopback MinIO
+with built-in KMS and local OIDC issuer. Tests in one spec stay together; no
+mutable bank or storage is shared between shards. Each runner restores or
+installs Chromium and installs its system dependencies. Evidence screenshots
+are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
+reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
+counts. Each shard requires at least 20 executed journeys and the quarantine
+in `e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
 declared with `test.fail` and a reason beside it, and with the workflow's gate
 edited to admit it; the custom reporter fails the run for any non-quarantined
 failure, unexpected quarantine pass, skipped or undiscovered quarantine entry,
