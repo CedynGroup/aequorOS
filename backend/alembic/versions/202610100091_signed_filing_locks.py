@@ -80,12 +80,14 @@ def upgrade() -> None:
         END $$;
         CREATE TRIGGER regulatory_runs_completed_lock BEFORE UPDATE OR DELETE
           ON regulatory_runs FOR EACH ROW EXECUTE FUNCTION aequoros_completed_run_guard();
+        CREATE TRIGGER attestation_signatures_no_delete BEFORE DELETE
+          ON attestation_signatures FOR EACH ROW EXECUTE FUNCTION aequoros_append_only_guard();
     """)
     # Revoke table UPDATE before granting only lifecycle columns. Merely
     # revoking column grants cannot override an existing table-level grant.
     op.execute(f"""
         REVOKE UPDATE, DELETE, TRUNCATE ON regulatory_packages FROM PUBLIC;
-        REVOKE DELETE, TRUNCATE ON regulatory_runs FROM PUBLIC;
+        REVOKE DELETE, TRUNCATE ON regulatory_runs, attestation_signatures FROM PUBLIC;
         DO $$ DECLARE r record; allowed text; BEGIN
             SELECT string_agg(quote_ident(column_name), ',') INTO allowed
               FROM information_schema.columns
@@ -101,7 +103,7 @@ def upgrade() -> None:
                                    allowed, r.rolname);
                 END IF;
                 EXECUTE format('REVOKE DELETE, TRUNCATE ON regulatory_packages, '
-                               'regulatory_runs FROM %I',
+                               'regulatory_runs, attestation_signatures FROM %I',
                                r.rolname);
             END LOOP;
         END $$;
@@ -113,6 +115,7 @@ def downgrade() -> None:
         return
     op.execute("DROP TRIGGER regulatory_packages_content_lock ON regulatory_packages")
     op.execute("DROP TRIGGER regulatory_runs_completed_lock ON regulatory_runs")
+    op.execute("DROP TRIGGER attestation_signatures_no_delete ON attestation_signatures")
     op.execute("DROP FUNCTION aequoros_signed_package_guard()")
     op.execute("DROP FUNCTION aequoros_completed_run_guard()")
     # Older data migrations must run as the trusted migration owner. This does
@@ -120,3 +123,4 @@ def downgrade() -> None:
     op.execute(
         "GRANT UPDATE, DELETE, TRUNCATE ON regulatory_packages, regulatory_runs TO CURRENT_USER"
     )
+    op.execute("GRANT DELETE ON attestation_signatures TO CURRENT_USER")

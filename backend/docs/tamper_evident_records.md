@@ -165,8 +165,10 @@ identity, version, source-run references, input snapshot and its hash, and the
 master-data `register_state_digest` used by LRT attestation and evidence exports. Application
 roles lose table UPDATE and receive only the lifecycle-column grants (including
 `id` for PostgreSQL foreign-key key-share locking; changing it is trigger-blocked).
-Application roles also lose DELETE/TRUNCATE on packages and regulatory runs,
-including unsigned packages and unfinished runs.
+Application roles also lose DELETE/TRUNCATE on packages, regulatory runs and
+attestation signatures, including unsigned packages and unfinished runs.
+Signature deletion is trigger-blocked alongside the existing update guard;
+new signatures can still be inserted.
 Signed packages cannot be deleted; their content digest is sealed. Existing
 signature evidence keeps the deletion seal active after a void. Lifecycle status,
 review bookkeeping and regulator outcomes continue to advance. A correction
@@ -178,7 +180,8 @@ inputs and metrics, cannot be updated or deleted. Queued/running work can finish
 `tests/db/test_signed_filing_locks.py` covers runtime column permissions and
 owner-trigger refusals, completed runs and versioned corrections. Its LRT
 regression retains the attestation/export binding through certification and
-voiding while refusing changes to the register-state digest.
+voiding while refusing changes to the register-state digest, signature deletion
+and content-digest changes under temporary-table shadowing and altered search paths.
 
 Apply the [deployment role and grant requirements](#required-deployment-follow-up)
 to filing seals too. The worker's BYPASSRLS privilege does not grant permission

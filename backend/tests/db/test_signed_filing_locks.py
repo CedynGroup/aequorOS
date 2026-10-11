@@ -39,6 +39,7 @@ def connection(tenant_connection: Connection) -> Iterator[Connection]:
                 "regulatory_runs TO CURRENT_USER"
             )
         )
+        tenant_connection.execute(text("GRANT DELETE ON attestation_signatures TO CURRENT_USER"))
         yield tenant_connection
 
 
@@ -225,7 +226,7 @@ def _assert_master_data_sealed(
     assert after["signatures"] == before["signatures"]
 
 
-def _assert_content_sealed_under_temp_shadow(
+def _assert_signatures_and_content_sealed_under_temp_shadow(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, *, runtime: bool
 ) -> None:
     binding = workflow.compute_binding(package)
@@ -245,6 +246,20 @@ def _assert_content_sealed_under_temp_shadow(
             ),
             {"id": package.id},
         )
+        savepoint = db.begin_nested()
+        with pytest.raises(
+            DatabaseError, match="permission denied" if runtime else "append-only table"
+        ):
+            db.execute(
+                text(f"DELETE FROM {quoted_schema}.attestation_signatures WHERE package_id = :id"),
+                {"id": package.id},
+            )
+        savepoint.rollback()
+        if runtime:
+            savepoint = db.begin_nested()
+            with pytest.raises(DatabaseError, match="permission denied"):
+                db.execute(text(f"TRUNCATE {quoted_schema}.attestation_signatures"))
+            savepoint.rollback()
         for assignment in ("content_digest = repeat('d', 64)", "content_digest = NULL"):
             savepoint = db.begin_nested()
             with pytest.raises(DatabaseError, match="signed filing is read-only"):
@@ -267,6 +282,14 @@ def _assert_content_sealed_under_temp_shadow(
     db.execute(text("SELECT set_config('search_path', :path, true)"), {"path": original_path})
     db.execute(text("DROP TABLE pg_temp.attestation_signatures"))
     db.refresh(package)
+    assert package.content_digest == binding.content_digest
+    assert (
+        db.scalar(
+            text("SELECT count(*) FROM attestation_signatures WHERE package_id = :id"),
+            {"id": package.id},
+        )
+        == 2
+    )
     assert workflow.compute_binding(package) == binding
     after = cast(dict[str, object], verify.export_verification_bundle(db, ctx, package))
     assert after["package"] == before["package"]
@@ -281,6 +304,16 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
     assert role is not None
     if runtime:
         connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+        for privilege in ("UPDATE", "DELETE", "TRUNCATE"):
+            assert not connection.scalar(
+                text(
+                    "SELECT has_table_privilege(current_user, 'attestation_signatures', :privilege)"
+                ),
+                {"privilege": privilege},
+            )
+        assert connection.scalar(
+            text("SELECT has_table_privilege(current_user, 'attestation_signatures', 'INSERT')")
+        )
     else:
         assert connection.scalar(
             text(
@@ -350,7 +383,9 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
             assert workflow.compute_binding(package) == binding
             _assert_master_data_sealed(db, ctx, package, runtime=runtime)
 
-            _assert_content_sealed_under_temp_shadow(db, ctx, package, runtime=runtime)
+            _assert_signatures_and_content_sealed_under_temp_shadow(
+                db, ctx, package, runtime=runtime
+            )
 
             package.status = "superseded"
             correction = _master_data_package(db, prior=package)
