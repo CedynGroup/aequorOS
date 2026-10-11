@@ -197,7 +197,11 @@ matching the API session boundary without discarding earlier committed actions.
   re-upload remains a separate channel operation.
 - ICAAP: freeze, return to preparation or an approval stage, complete the new
   round and freeze again. A return belongs to the round it closes; recording it
-  in the new round invalidated that round's fresh approvals.
+  in the new round invalidated that round's fresh approvals. Persisted legacy
+  returns are interpreted using their package's frozen decision at the shared
+  state-loading boundary. The compatibility regression completes fresh approvals,
+  refreezes, and performs another return/refreeze while preserving the original
+  decision row, its recorded round, and every sealed snapshot.
 - ICAAP: freeze, then return to the freeze stage itself. This is a legal governed
   return, but the database CHECK admitted only strictly earlier targets. The
   migrated constraint permits same-stage returns only when they name a sealed

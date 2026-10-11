@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import IcaapAccess, TenantContext
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.icaap.domain import prosemirror
-from app.icaap.models.workspace import IcaapCycle
+from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
 from app.icaap.schemas.workspace import (
     IcaapCycleArchive,
     IcaapFreezeCreate,
@@ -478,5 +478,87 @@ def test_frozen_version_survives_return_edit_and_refreeze(
         previous = machine.db.get(RegulatoryPackage, first_package)
         assert previous is not None and previous.status == "superseded"
         assert len(machine.frozen_contents) == 2
+    finally:
+        machine.teardown()
+
+
+@pytest.mark.parametrize("return_seq", [1, 2])
+def test_legacy_post_freeze_return_preserves_evidence_and_allows_refreeze(
+    canonical_book: Session, extra_frameworks: None, return_seq: int
+) -> None:
+    actors = prepare_officers(canonical_book)
+    machine = FreezeMachine(canonical_book, actors)
+    try:
+        machine.reach_checkpoint("frozen")
+        first_package = machine.package_id
+        assert first_package is not None
+        stages = workflow.get_stages(machine.db, machine.maker, machine.cycle_id)
+        freeze_stage = stages.stages[2]
+        cycle = machine.db.get(IcaapCycle, machine.cycle_id)
+        assert cycle is not None
+        cycle.status = "returned"
+        machine.db.flush()
+        cycle.package_id = None
+        cycle.frozen_at = cycle.board_approved_at = cycle.submitted_at = None
+        cycle.round = 2
+        cycle.current_stage_seq = return_seq
+        if return_seq > 1:
+            cycle.status = "in_review"
+        machine.db.flush()
+        returner = actors[2].ctx.actor_user_id
+        assert returner is not None
+        legacy_return = IcaapStageDecision(
+            organization_id=cycle.organization_id,
+            bank_id=cycle.bank_id,
+            cycle_id=cycle.id,
+            stage_seq=freeze_stage.seq,
+            stage_key=freeze_stage.stage_key,
+            round=2,
+            decision="returned",
+            return_to_seq=return_seq,
+            review_digest=stages.review_digest,
+            package_id=first_package,
+            comment="The Board requested a correction before the upgrade.",
+            decided_by=returner,
+            decided_by_name="BRC",
+        )
+        machine.db.add(legacy_return)
+        machine.db.commit()
+        machine.db.expire_all()
+        legacy_id = legacy_return.id
+        legacy_evidence = next(
+            decision
+            for stage in workflow.get_stages(machine.db, machine.maker, machine.cycle_id).stages
+            for decision in stage.decisions
+            if decision.id == legacy_id
+        ).model_dump()
+        machine.round, machine.stage = 2, return_seq
+        machine.status = "returned" if return_seq == 1 else "in_review"
+        machine.package_id, machine.freezer = None, None
+        machine.approvals = {
+            seq: who for seq, who in machine.approvals.items() if seq < return_seq
+        }
+        machine.cycle_and_frozen_versions_match_model()
+        for _ in range(5 - return_seq):
+            machine.advance()
+            machine.cycle_and_frozen_versions_match_model()
+        assert machine.status == "frozen" and machine.package_id != first_package
+        machine.reopen(2, 3, False, False)
+        for _ in range(2):
+            machine.advance()
+            machine.cycle_and_frozen_versions_match_model()
+        assert machine.status == "frozen" and len(machine.frozen_contents) == 3
+        previous = machine.db.get(RegulatoryPackage, first_package)
+        assert previous is not None and previous.status == "superseded"
+        persisted_return = machine.db.get(IcaapStageDecision, legacy_id)
+        assert persisted_return is not None and persisted_return.round == 2
+        returned = [
+            decision
+            for stage in workflow.get_stages(machine.db, machine.maker, machine.cycle_id).stages
+            for decision in stage.decisions
+            if decision.id == legacy_id
+        ]
+        assert len(returned) == 1 and returned[0].round == 2
+        assert returned[0].model_dump() == legacy_evidence
     finally:
         machine.teardown()
