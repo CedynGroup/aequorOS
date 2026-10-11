@@ -364,7 +364,14 @@ export default function EnterpriseStressWorkbench({
                 }}
               />
             ) : (
-              <SectionCard title="Run enterprise stress">
+              <SectionCard
+                title="Run enterprise stress"
+                subtitle={
+                  isSdiTenant
+                    ? "Run an approved scenario against the simplified Section 29 capital regime and material SDI risks"
+                    : "Drive an approved scenario through every engine into the immutable 3-year projection"
+                }
+              >
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label className="block">

@@ -92,6 +92,7 @@ export default function ScenarioLibrary({
   return (
     <SectionCard
       title="Scenario library"
+      subtitle="Governed, versioned macro scenarios — maker-checker status visible; select to run or compare"
       noPadding
       actions={
         <button

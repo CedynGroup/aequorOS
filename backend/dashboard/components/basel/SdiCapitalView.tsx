@@ -289,7 +289,10 @@ export default function SdiCapitalView({
         {cap ? (
           <PageContainer>
             <div className="grid gap-6 xl:grid-cols-2">
-              <SectionCard title="CAR against statutory minimum">
+              <SectionCard
+                title="CAR against statutory minimum"
+                subtitle="Current Section 29 capital adequacy ratio and the resolved minimum."
+              >
                 {/* The chart renders nothing when there is no ratio to plot, and this
                     card sits in a grid row sized by its taller sibling — so an
                     unresolved CAR left a card-height void with no word of

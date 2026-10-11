@@ -137,6 +137,7 @@ export default function RunRegistry({
   return (
     <SectionCard
       title="Run registry"
+      subtitle="Immutable enterprise-stress runs — re-openable, reproducible, quarter-diffable"
       noPadding
       actions={
         periods.length > 1 ? (

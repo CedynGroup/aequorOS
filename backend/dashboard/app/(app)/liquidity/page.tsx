@@ -222,6 +222,7 @@ export default function LiquidityCockpit() {
 
             <SectionCard
               title="Liquidity posture"
+              subtitle="Basel reference ratios against governed monitoring thresholds, buffer concentration, early-warning state, and contingency readiness."
               computedAt={computedAt}
               footer={provenance}
             >

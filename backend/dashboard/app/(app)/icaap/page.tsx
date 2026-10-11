@@ -24,6 +24,7 @@ export default function IcaapPage() {
       <PageHeader
         eyebrow="ICAAP"
         title="Internal Capital Adequacy Assessment"
+        subtitle={`The institution's own assessment of the capital it needs, and the evidence behind it, as filed with ${regShort()}.`}
       />
       <PageContainer className="py-6">
         {bank && (

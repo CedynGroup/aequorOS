@@ -197,7 +197,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
       {selectedSplit && selectedPosition && (
         <SectionCard
           title={`${selectedSplit.currency} position split`}
-          subtitle="Figures in original currency"
+          subtitle="From the stored run's fact snapshot — figures in original currency"
           actions={
             <button
               type="button"

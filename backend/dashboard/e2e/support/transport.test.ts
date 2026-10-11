@@ -105,6 +105,17 @@ for (const env of sqliteEnvs) {
       "database unless the undeployed-environment carve-out is explicit, so the journeys " +
       "would fail at startup before running (#492).",
   );
+  // The VALUE, not just the key. `TLS_ALLOW_PLAINTEXT: "0"` declares the
+  // variable and leaves `plaintext_allowed()` false, so the harness still
+  // fails at startup — a guard that accepted it would pass on exactly the
+  // broken configuration it exists to catch.
+  assert.ok(
+    ["\"1\"", "\"true\""].includes(propertyText(env, "TLS_ALLOW_PLAINTEXT") ?? ""),
+    `playwright.config.ts:${line} declares TLS_ALLOW_PLAINTEXT as ` +
+      `${propertyText(env, "TLS_ALLOW_PLAINTEXT")}, which does not enable the ` +
+      "carve-out. `plaintext_allowed()` needs it truthy; anything else leaves the " +
+      "journey backend refusing to start on SQLite (#492).",
+  );
   assert.ok(
     names.has("APP_ENV"),
     `playwright.config.ts:${line} declares TLS_ALLOW_PLAINTEXT without APP_ENV. The ` +

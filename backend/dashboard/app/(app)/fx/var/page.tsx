@@ -172,7 +172,10 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
         </div>
       </div>
 
-      <SectionCard title="Depreciation scenario NOP">
+      <SectionCard
+        title="Depreciation scenario NOP"
+        subtitle="Aggregate NOP under the persisted depreciation shocks"
+      >
         <ScenarioStrip
           scenarios={data.scenarios}
           aggregateLimitPct={num(m.nopAggregateLimitPct)}
