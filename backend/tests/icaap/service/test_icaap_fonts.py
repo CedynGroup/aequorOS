@@ -40,7 +40,9 @@ def test_every_committed_face_and_the_licence_are_present() -> None:
 def test_the_readme_checksums_match_the_committed_bytes() -> None:
     """The provenance table is the claim; the files are the fact."""
     readme = (icaap_fonts.FONT_DIR / "README.md").read_text(encoding="utf-8")
-    row = re.compile(r"`([A-Za-z0-9.\-]+\.(?:ttf|txt))` \| \d+ \| `([0-9a-f]{64})`")
+    row = re.compile(
+        r"`([A-Za-z0-9.\-]+\.(?:ttf|txt))`[ \t]*\|[ \t]*\d+[ \t]*\|[ \t]*`([0-9a-f]{64})`"
+    )
     stated = dict(row.findall(readme))
     assert stated, "the README's committed-file table could not be parsed"
     actual = icaap_fonts.file_digests()
