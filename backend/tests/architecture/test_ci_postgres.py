@@ -16,6 +16,7 @@ import yaml
 
 from scripts import ci_postgres
 from scripts.ci_postgres import BAO_MODULE, SHARDS, module_shards, plan, shard_for, verify
+from scripts.test_fast import run as run_fast
 
 BACKEND = Path(__file__).parents[2]
 REPO = BACKEND.parent
@@ -51,6 +52,50 @@ def test_leaf_body_change_selects_only_its_module(selection_repo: tuple[Path, st
     assert selected["matrix"] == {
         "include": [{"shard": shard_for("tests/domain/test_leaf_example.py"), "openbao": False}]
     }
+
+
+@pytest.mark.parametrize("state", ["unstaged", "staged", "committed", "untracked", "fixture"])
+def test_local_selection_includes_worktree_changes(
+    selection_repo: tuple[Path, str, Path], state: str
+) -> None:
+    root, base, test = selection_repo
+    test.write_text("def test_leaf():\n    assert 2 == 2\n")
+    if state in {"staged", "committed"}:
+        _ = run_git(root, "add", "-A")
+    if state == "committed":
+        _ = run_git(root, "commit", "-qm", "test change")
+    if state == "untracked":
+        (root / "backend/tests/domain/test_new.py").write_text("def test_new():\n    pass\n")
+    if state == "fixture":
+        test.write_text("VALUE = 2\ndef test_leaf():\n    assert VALUE == 2\n")
+    assert ci_postgres.affected_files(root, "pull_request", base, worktree=True) == (
+        [] if state in {"untracked", "fixture"} else ["tests/domain/test_leaf_example.py"]
+    )
+
+
+def test_local_profile_executes_selected_modules_and_full_fallback(
+    selection_repo: tuple[Path, str, Path], capfd: pytest.CaptureFixture[str]
+) -> None:
+    root, base, test = selection_repo
+    other = test.with_name("test_other.py")
+    other.write_text("def test_other():\n    assert True\n")
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "second module")
+    base = run_git(root, "rev-parse", "HEAD")
+    report = root / "result.xml"
+    test.write_text("def test_leaf():\n    assert 2 == 2\n")
+    assert run_fast(root, base, [f"--junitxml={report}"]) == 0
+    assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_leaf"]
+    assert "4 workers" in capfd.readouterr().out
+    report.unlink()
+    # A production change requires all modules; pytest failure must reach the caller.
+    (root / "backend/app.py").write_text("VALUE = 2\n")
+    other.write_text("def test_other():\n    assert False\n")
+    assert run_fast(root, base, [f"--junitxml={report}"]) == 1
+    cases = list(ET.parse(report).iter("testcase"))
+    assert {case.get("name") for case in cases} == {"test_leaf", "test_other"}
+    assert sum(case.find("failure") is not None for case in cases) == 1
+    assert "complete hermetic suite" in capfd.readouterr().out
 
 
 @pytest.mark.parametrize(

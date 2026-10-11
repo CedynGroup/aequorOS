@@ -356,6 +356,17 @@ mise run risk-service:test
 The default test run uses isolated SQLite databases and never touches Postgres —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
+For a local feedback loop, run `mise run risk-service:test-fast`. It compares the
+current branch and staged/unstaged edits with the merge base of `origin/main`;
+use `mise run risk-service:test-fast -- --base <ref>` to choose another base.
+It reuses CI's conservative affected-module rules described below: only body or
+formatting edits in existing, unreferenced domain test modules can narrow the run.
+Production, fixture, configuration, new/deleted or untracked files, a missing base,
+and an empty diff run the complete hermetic suite instead, with an explicit message.
+Both modes use four workers and `--dist loadfile` to keep each module's fixtures
+together. `--collect-only` previews collection and `--junitxml <path>` saves results.
+This profile is local and opt-in; the default test tasks and full main CI stay unchanged.
+
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
 provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
 Fixtures create disposable `risk_service_test_<hex>` schemas and drop them afterward.

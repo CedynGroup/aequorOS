@@ -45,6 +45,10 @@ run = "WORKER_JOB_TYPES=lane:bi RUN_INPROCESS_WORKER=0 uv run python -m app.work
 description = "Run pytest"
 run = "uv run pytest"
 
+[tasks."risk-service:test-fast"]
+description = "Run conservative affected-module tests locally with four workers"
+run = "uv run python -m scripts.test_fast"
+
 [tasks."risk-service:test-postgres"]
 description = "Run pytest against local Postgres (native fallback or Docker)"
 run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest"
