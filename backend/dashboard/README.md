@@ -414,6 +414,13 @@ normal development cache. Because every journey shares the disposable database
 and session files, a worktree-local lock rejects a second concurrent E2E run.
 The stack never touches the primary database.
 
+The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
+fixed CSS for all layout and login font families. Journeys and the visual tour
+render with Next's generated fallback fonts and never fetch Google CSS or font files.
+This avoids the extensionless font URL compiler bug
+([Next.js #99114](https://github.com/vercel/next.js/issues/99114)); production
+builds retain the real Google fonts.
+
 The backend server environment pins `APP_ENV=test` and
 `TLS_ALLOW_PLAINTEXT=1` because this disposable stack uses SQLite and loopback
 HTTP (including MinIO). Test mode alone does not relax the transport policy;
