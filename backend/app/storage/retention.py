@@ -50,7 +50,10 @@ def retention_errors() -> Generator[None]:
         raise StorageBackendError("Compliance retention could not be verified or applied.") from exc
 
 
-def require_object_lock(client: RetentionClient, bucket: str) -> None:
+def require_object_lock(
+    client: RetentionClient, bucket: str, *, allow_default_retention: bool = False
+) -> None:
+    """Verify output policy; dedicated backup buckets may retain all versions."""
     with retention_errors():
         config = TypeAdapter(dict[str, object]).validate_python(
             client.get_object_lock_configuration(Bucket=bucket).get("ObjectLockConfiguration", {})
@@ -58,6 +61,12 @@ def require_object_lock(client: RetentionClient, bucket: str) -> None:
         if config.get("ObjectLockEnabled") != "Enabled":
             raise StorageValidationError(
                 "Compliance retention requires an Object Lock enabled bucket."
+            )
+        rule = TypeAdapter(dict[str, object]).validate_python(config.get("Rule", {}))
+        if not allow_default_retention and "DefaultRetention" in rule:
+            raise StorageValidationError(
+                f"Output bucket {bucket!r} must not configure Rule.DefaultRetention; "
+                "working outputs require explicit per-object filing retention."
             )
 
 

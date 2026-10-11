@@ -23,8 +23,8 @@ from app.storage.client import (
     StorageValidationError,
 )
 from app.storage.config import get_storage_settings
-from app.storage.provisioning import ProvisioningClient, provision_institution
-from app.storage.retention import RetentionClient, retain_version
+from app.storage.provisioning import ProvisioningClient, provision_bucket, provision_institution
+from app.storage.retention import RetentionClient, require_object_lock, retain_version
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import (
     KEY,
@@ -39,7 +39,7 @@ from tests.storage.test_bank_encryption import (
 class LockClient(RetentionClient, Protocol):
     def get_bucket_versioning(self, *, Bucket: str) -> dict[str, object]: ...
     def put_object_lock_configuration(
-        self, *, Bucket: str, ObjectLockConfiguration: dict[str, str]
+        self, *, Bucket: str, ObjectLockConfiguration: dict[str, object]
     ) -> object: ...
 
     def delete_object(self, *, Bucket: str, Key: str, VersionId: str) -> object: ...
@@ -122,6 +122,112 @@ def test_output_lock_provisioning_preserves_unversioned_temp_cleanup(
     assert client.get_bucket_versioning(Bucket=temp).get("Status") is None
 
 
+def _set_default_retention(client: LockClient, bucket: str, mode: str) -> None:
+    _ = client.put_object_lock_configuration(
+        Bucket=bucket,
+        ObjectLockConfiguration={
+            "ObjectLockEnabled": "Enabled",
+            "Rule": {"DefaultRetention": {"Mode": mode, "Days": 2555}},
+        },
+    )
+
+
+@pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])
+def test_output_default_retention_refuses_validation_and_provisioning(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    client = _enable(bank_storage, monkeypatch)
+    bucket = StorageLocation(SLUG, "outputs", "").bucket_name("dev")
+    _set_default_retention(client, bucket, mode)
+    original = client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"]
+    settings = bank_storage.storage._settings  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(StorageValidationError, match=f"{bucket!r}.*Rule.DefaultRetention"):
+        require_object_lock(client, bucket)
+    with pytest.raises(StorageValidationError, match=f"{bucket!r}.*Rule.DefaultRetention"):
+        provision_bucket(cast(ProvisioningClient, bank_storage.s3), settings, bucket, "outputs")
+    assert (
+        client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"] == original
+    )
+
+
+@pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])
+def test_output_default_retention_refuses_working_uploads(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    client = _enable(bank_storage, monkeypatch)
+    location = StorageLocation(SLUG, "outputs", "icaap/working.docx")
+    bucket = location.bucket_name("dev")
+    _set_default_retention(client, bucket, mode)
+    original = client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"]
+    content = b"synthetic working output"
+    with pytest.raises(StorageValidationError, match="Rule.DefaultRetention"):
+        bank_storage.storage.write(
+            location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+        )
+    with pytest.raises(StorageValidationError, match="Rule.DefaultRetention"):
+        bank_storage.storage.presigned_url(location, "write")
+    assert not bank_storage.storage.exists(location)
+    assert (
+        client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"] == original
+    )
+
+
+@pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])
+def test_output_default_retention_refuses_filing_lock_without_mutating_version(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    client = _enable(bank_storage, monkeypatch)
+    location = StorageLocation(SLUG, "outputs", "bog_returns/synthetic/report.pdf")
+    content = b"synthetic signed output"
+    stored = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+    )
+    assert stored.version_id is not None
+    bucket = location.bucket_name("dev")
+    kwargs = {"Bucket": bucket, "Key": location.object_path, "VersionId": stored.version_id}
+    original = client.get_object_retention(**kwargs)
+
+    def default_configuration(**_kwargs: str) -> dict[str, object]:
+        return {
+            "ObjectLockConfiguration": {
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {"DefaultRetention": {"Mode": mode, "Days": 2555}},
+            }
+        }
+
+    # Moto refuses bucket-policy changes after any upload. Model that SDK
+    # response only; the archived version and its retention remain real objects.
+    monkeypatch.setattr(client, "get_object_lock_configuration", default_configuration)
+    with pytest.raises(StorageValidationError, match="Rule.DefaultRetention"):
+        bank_storage.storage.retain(
+            location, stored.version_id, datetime.now(UTC) + timedelta(days=7)
+        )
+    assert client.get_object_retention(**kwargs) == original
+    _, decrypted = bank_storage.storage.read(location, stored.version_id)
+    assert decrypted.read() == content
+    decrypted.close()
+
+
+def test_working_output_without_default_rule_remains_unretained(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _enable(bank_storage, monkeypatch)
+    location = StorageLocation(SLUG, "outputs", "icaap/working.docx")
+    content = b"synthetic working output"
+    stored = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+    )
+    assert stored.version_id is not None
+    retention = client.get_object_retention(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
+    )
+    assert retention["Retention"] == {"Mode": None, "RetainUntilDate": None}
+    client.delete_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
+    )
+    assert not bank_storage.storage.exists(location)
+
+
 def test_retention_never_shortens_existing_compliance_lock(
     bank_storage: BankStorage,
     monkeypatch: pytest.MonkeyPatch,
@@ -190,9 +296,11 @@ def test_retention_confirms_deadline_when_server_discards_subseconds(
     assert requested <= deadline < requested + timedelta(seconds=1)
 
 
+@pytest.mark.parametrize("default_mode", [None, "COMPLIANCE", "GOVERNANCE"])
 def test_backup_pair_is_published_with_compliance_versions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    default_mode: str | None,
 ) -> None:
     for name, value in {
         "STORAGE_OBJECT_LOCK_ENABLED": "true",
@@ -211,6 +319,10 @@ def test_backup_pair_is_published_with_compliance_versions(
             Bucket="synthetic-backups", ObjectLockEnabledForBucket=True
         )
         client = cast(BackupClient, cast(object, s3))
+        if default_mode is not None:
+            _set_default_retention(
+                cast(LockClient, cast(object, s3)), "synthetic-backups", default_mode
+            )
         _moto_retention(cast(LockClient, cast(object, s3)), monkeypatch)
 
         def backup_factory(*_args: object, **_kwargs: object) -> BackupClient:

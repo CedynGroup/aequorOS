@@ -72,7 +72,7 @@ def publish_backup(
             ),
         )
         require_boto_tls(client)
-    require_object_lock(client, bucket)
+    require_object_lock(client, bucket, allow_default_retention=True)
     until = retention_until(settings)
     prefix = f"database-backups/{uuid4()}"
     versions: dict[str, str] = {}

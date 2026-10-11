@@ -52,7 +52,7 @@ from app.storage.config import StorageEngineSettings, enforce_retirement
 from app.storage.downloads import issue
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
 from app.storage.provisioning import ProvisioningClient, ensure_audit_bucket, provision_institution
-from app.storage.retention import RetentionClient, retain_version
+from app.storage.retention import RetentionClient, require_object_lock, retain_version
 
 logger = logging.getLogger(__name__)
 _OBJECT_HEADERS = TypeAdapter(dict[str, str])
@@ -140,6 +140,7 @@ class S3CompatibleStorageClient(StorageClient):
         content_type: str = "application/octet-stream",
     ) -> StorageObject:
         self._validate_metadata(location, metadata)
+        self._require_output_retention_policy(location)
         bucket = location.bucket_name(self._env)
 
         existing = self._stat_or_none(bucket, location.object_path)
@@ -202,6 +203,7 @@ class S3CompatibleStorageClient(StorageClient):
         return self._to_storage_object(location, stat, version_id=version_id)
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
+        self._require_output_retention_policy(location)
         if location.tier != "outputs":
             raise StorageValidationError("Filing retention requires an output object.")
         retain_version(
@@ -359,6 +361,8 @@ class S3CompatibleStorageClient(StorageClient):
         expires_in_seconds: int = 900,
     ) -> str:
         audit_operation = f"presigned_url.{operation}"
+        if operation == "write":
+            self._require_output_retention_policy(location)
         try:
             bank_key_required = self._encryption.bank_key_required(location)
         except (RuntimeError, SQLAlchemyError) as exc:
@@ -453,6 +457,12 @@ class S3CompatibleStorageClient(StorageClient):
         return f"{bucket}/{key}"
 
     # -- internals ------------------------------------------------------------
+
+    def _require_output_retention_policy(self, location: StorageLocation) -> None:
+        if self._settings.object_lock_enabled and location.tier == "outputs":
+            require_object_lock(
+                cast(RetentionClient, cast(object, self._s3)), location.bucket_name(self._env)
+            )
 
     def _validate_metadata(self, location: StorageLocation, metadata: ObjectMetadata) -> None:
         problems: list[str] = []

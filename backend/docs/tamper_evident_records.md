@@ -194,13 +194,22 @@ to alter evidence.
 Set `STORAGE_OBJECT_LOCK_ENABLED=true` for the AWS deployment. Local MinIO and
 hermetic fixtures retain their existing behavior with this flag off. Provisioning
 creates lock-capable output buckets and refuses an existing output bucket without Object
-Lock. Enable Object Lock/versioning on existing cloud buckets through the
+Lock or with `Rule.DefaultRetention` in any mode. Bucket defaults retain every new
+version, including working drafts. Provisioning, application writes, presigned uploads
+and filing retention refuse that configuration, naming the bucket and rule, before
+writing objects or changing retention. They never rewrite an existing bucket policy.
+The enabled application and provisioning roles need `s3:GetBucketObjectLockConfiguration`
+on output buckets to verify this policy; inability to read it refuses the operation.
+Enable Object Lock/versioning without a default retention rule on existing output buckets through the
 infrastructure owner before switching on the flag. At the shared submission boundary,
 all artifacts admitted by `filing_admits_artifact()` receive confirmed `COMPLIANCE`
 retention on their exact archived object versions before channel delivery or a
 manual submission commits. This includes previously signed versions created with
 the flag off, canonical exports, and the official BoG formula workbook. Internal
-SDI working sheets, ICAAP Word drafts and unrelated outputs remain unlocked.
+SDI working sheets, ICAAP Word drafts and unrelated outputs remain unlocked in the
+supported output-bucket configuration. Dedicated backup buckets may carry a default
+retention rule; each dump and manifest still receives explicit confirmed `COMPLIANCE`
+retention.
 Exports and signing archive bytes without automatically locking every output;
 read-only filing previews do not apply retention. Attachments are recorded as a
 manifest, not transmitted artifacts, and are outside this object retention set.

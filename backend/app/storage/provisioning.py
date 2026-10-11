@@ -169,12 +169,12 @@ def provision_bucket(
             object_lock=settings.object_lock_enabled and tier == "outputs",
         )
         logger.info("provisioned bucket %s", bucket)
+    if settings.object_lock_enabled and tier == "outputs":
+        require_object_lock(cast(RetentionClient, s3_client), bucket)
     if tier in (*RETAINED_TIERS, "audit-logs"):
         _ = s3_client.put_bucket_versioning(
             Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
         )
-    if settings.object_lock_enabled and tier == "outputs":
-        require_object_lock(cast(RetentionClient, s3_client), bucket)
     if tier == "temp":
         _ensure_temp_lifecycle(s3_client, bucket)
     if settings.kms_key_id is not None:
