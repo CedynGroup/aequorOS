@@ -29,7 +29,7 @@ def test_retirement_revokes_readers_across_tenants_and_retains_history(  # noqa:
 ) -> None:
     schema = forward_migrated_postgres_schema
     config = alembic_config_for_app()
-    command.downgrade(config, "202610100089")
+    command.downgrade(config, "202610100090")
     clear_database_caches()
     now = datetime.now(UTC)
     prior_revocation = now - timedelta(days=1)
@@ -140,7 +140,7 @@ def test_retirement_revokes_readers_across_tenants_and_retains_history(  # noqa:
                         assert binding.revoked_by_id == "migration:202610110090"
 
     # Rolling back code/schema must not reactivate any credential or session.
-    command.downgrade(config, "202610100089")
+    command.downgrade(config, "202610100090")
     clear_database_caches()
     with schema.app_engine.begin() as connection:
         assert (
