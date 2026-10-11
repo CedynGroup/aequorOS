@@ -60,7 +60,7 @@ import type { FigureAddresses, ScopePair } from "@/lib/api/dataScope";
 
 /**
  * `MAX_EXPRESSION_LENGTH`. Also the column width
- * (`bi_content.MEASURE_EXPRESSION_MAX_LENGTH`) and the request field's
+ * (`app/bi/models/content.py::MEASURE_EXPRESSION_MAX_LENGTH`) and the request field's
  * `max_length`, all three pinned equal by the parity test.
  */
 export const EXPRESSION_MAX_LENGTH = 2_000;
@@ -71,7 +71,7 @@ export const MAX_FIGURE_REFERENCES = 25;
 /** `MAX_LAG_PERIODS` — the language's structural ceiling on `LAG`'s reach. */
 export const MAX_LAG_PERIODS = 60;
 
-/** `bi_content.MEASURE_KEY_MAX_LENGTH` / `LABEL` / `REASON`, and the description. */
+/** `app/bi/models/content.py` owns the key, label, reason and description bounds. */
 export const MEASURE_KEY_MAX_LENGTH = 64;
 export const MEASURE_LABEL_MAX_LENGTH = 120;
 export const MEASURE_DESCRIPTION_MAX_LENGTH = 400;
@@ -184,7 +184,7 @@ export { DigestUnavailable, expressionDigest } from "./expressionDigest";
 // Standing
 // ---------------------------------------------------------------------------
 
-/** `bi_content.MEASURE_STATES`. */
+/** `app/bi/models/content.py::MEASURE_STATES`. */
 export type MeasureState = BiMeasureRead["state"];
 
 export type MeasureStanding = Readonly<{
@@ -590,7 +590,7 @@ export function draftFromMeasure(measure: BiMeasureRead): MeasureDraft {
   };
 }
 
-/** What a measure's number IS (`bi_content.MEASURE_VALUE_TYPES`), in words. */
+/** What a measure's number IS (`app/bi/models/content.py::MEASURE_VALUE_TYPES`), in words. */
 export const MEASURE_VALUE_TYPES = [
   { code: "amount", label: "An amount of money" },
   { code: "pct", label: "A percentage" },

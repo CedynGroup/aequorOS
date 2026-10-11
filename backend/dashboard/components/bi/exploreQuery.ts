@@ -50,7 +50,7 @@ import type {
 // --- the request caps, mirrored from app/bi/schemas/query.py ----------------------
 //
 // The server is the authority on every one of these; `exploreQuery.test.ts`
-// reads `app/bi/schemas/query.py` and fails if a value here has drifted. They are
+// exercises `app/bi/schemas/query.py` validators and fails if a bound here has drifted. They are
 // mirrored rather than fetched because a control has to know its bounds before
 // it renders, and a cap the client guessed low would hide a legal question.
 

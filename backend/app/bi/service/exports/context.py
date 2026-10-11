@@ -51,9 +51,9 @@ from app.bi.schemas.query import BiFilter, BiQuery
 from app.bi.service.compiler import ColumnSpec
 from app.bi.service.exports.policy import CLASS_LABELS, ExportClass
 
-#: The six provenance fields ``docs/bi.md`` §Exports requires on every export,
+#: The provenance fields ``docs/bi.md`` §Exports requires on every export,
 #: in its order. A renderer emits these before anything else, and a test asserts
-#: all six reach the spreadsheet's metadata sheet.
+#: every field reaches the spreadsheet's metadata sheet.
 METADATA_FIELDS: tuple[str, ...] = (
     "Query",
     "As at",

@@ -411,7 +411,7 @@ rather than annotation:
    combines the pairs narrowest-wins. Reducing the ids of DIFFERENT pairs in
    one pass was audit blocker A10-01 (an `all` on liquidity would have erased a
    branch restriction on credit). The machine feed's authorizer
-   (`services/bi/feeds/authorization.py`) carried the same union until audit
+   (`app/bi/service/feeds/authorization.py`) carried the same union until audit
    A360 H8 (latent — no tenant route mints a second `view` binding on a machine
    principal); the 2026-09-29 remediation moves it onto the shared
    `authorization.combine_pair_scopes`, the helper `authorize_query` uses, so
@@ -427,9 +427,9 @@ rather than annotation:
    (`read_bi.injected_filters`), so the compiler ANDs it with the client's own
    predicates and no request can reach, remove or widen it; a request filtering
    `branch.code = 'B2'` under a `B1` grant is served the intersection. Seven
-   modules call `resolve`: `features/read_bi.py` (the read routes and packs),
-   `services/bi/insights/assemble.py`, `exports/runner.py` and `exports/jobs.py`,
-   `alerts.py`, `subscriptions.py` and `feeds/authorization.py`. An
+   modules call `resolve`: `app/bi/api/read_bi.py` (the read routes and packs),
+   and, under `app/bi/service/`, `insights/assemble.py`, `exports/runner.py`,
+   `exports/jobs.py`, `alerts.py`, `subscriptions.py` and `feeds/authorization.py`. An
    institution-grain measure (a capital ratio, a bank-wide figure) is refused to
    a scoped principal outright (`REASON_INSTITUTION_GRAIN`,
    `REASON_BANK_WIDE_FIGURE`) rather than served as a wrong number with a
@@ -467,7 +467,7 @@ recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).
 
 ## Release record
 
-Before the deployment that mounts the BI routes, attach:
+Before the deployment that enables the BI routes, attach:
 
 1. The dated `authorization_access_impact.py` output BEFORE and AFTER, for every
    organization, with confirmation that the two are identical.

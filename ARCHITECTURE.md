@@ -679,7 +679,7 @@ these boundaries and prevents BI from calling `derive_facts`.
 - **BI carries NO reconciliation to the regulatory returns — founder decision
   2026-09-29.** Until that date this bullet read "Reconciliation R1–R12 drives a
   trust badge (`green | amber | red | grey`)": twelve checks in
-  the former `app/services/bi/reconciliation.py` compared the marts with "the figures the
+  the retired BI reconciliation module compared the marts with "the figures the
   platform already files" (R4 against BSD7A, a BoG return, line by line), and
   the verdict was rendered as a "Does not reconcile" chip on every dashboard
   card, treasury ones included. The founder rejected the premise — _"we are
@@ -936,14 +936,9 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   not in `refresh_bank_as_of`**: the backfill calls the builder once per date, so a hook
   inside it would mail a bank a thousand board packs, and the builder's `skipped` outcome is
   what makes both triggers idempotent.
-- **A binding is a five-dimension sentence.** Data scope is REAL:
-  `authorization_bindings.data_scope_kind/values`, reduced PER CAPABILITY by
-  `authorization.reduce_data_scope` — never union ids matched against different resources
-  (`services/bi/authorization.py` and `services/bi/feeds/authorization.py` both go through
-  the shared `combine_pair_scopes`) — resolved by `services/bi/data_scope.py` and injected
-  BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py`
-  reports it (`data scope` column, `scoped_reader` flag) and is the gate for any change that
-  touches it. Power BI integration contracts:
+- **BI data-scope reduction, resolution and injection** are owned by the
+  [enforcement contract](backend/docs/bi_enforcement_rollout.md#branch-and-region-scope-is-enforced-desk-and-currency-are-not).
+  Its access-impact gate applies to changes to those rules. Power BI integration contracts:
   [Stage B](backend/docs/powerbi_stage_b.md) and
   [Stage A](backend/docs/powerbi_stage_a.md).
 - **BI carries NO reconciliation to the regulatory returns:** treasury/ALM and the
