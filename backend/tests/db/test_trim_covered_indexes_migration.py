@@ -175,7 +175,6 @@ def test_downgrade_recovers_failed_concurrent_indexes_and_preserves_valid_indexe
     with migrated_postgres_schema.app_engine.connect().execution_options(
         isolation_level="AUTOCOMMIT"
     ) as connection:
-        connection.execute(text("SET lock_timeout = '200ms'"))
         for position, (table, index, columns) in enumerate(DROPPED):
             create = text(f"CREATE INDEX CONCURRENTLY {index} ON {table} ({', '.join(columns)})")
             if position % 3 == 0:
@@ -183,8 +182,12 @@ def test_downgrade_recovers_failed_concurrent_indexes_and_preserves_valid_indexe
             elif position % 3 == 1:
                 with migrated_postgres_schema.app_engine.begin() as blocker:
                     blocker.execute(text(f"LOCK TABLE {table} IN ROW EXCLUSIVE MODE"))
-                    with pytest.raises(OperationalError) as failure:
-                        connection.execute(create)
+                    connection.execute(text("SET lock_timeout = '200ms'"))
+                    try:
+                        with pytest.raises(OperationalError) as failure:
+                            connection.execute(create)
+                    finally:
+                        connection.execute(text("SET lock_timeout = DEFAULT"))
                     assert isinstance(failure.value.orig, LockNotAvailable)
 
     before = _index_states(migrated_postgres_schema)
