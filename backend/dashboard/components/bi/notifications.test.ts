@@ -8,7 +8,7 @@
  * an error message, so both pairings are rebuilt as a whole rather than patched,
  * and the tests below are about the impossibility rather than about the message.
  *
- * The cadence rule is checked against `app/models/bi_notifications.py` itself —
+ * The cadence rule is checked against `app/bi/models/notifications.py` itself —
  * the CHECK constraint is parsed out of it — because a client that believed a
  * daily report may carry a weekday would send one the database refuses, and a
  * client that believed a weekly one may not would hide a legal schedule.

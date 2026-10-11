@@ -10,7 +10,7 @@
  * enforced here first, and the offending combination is explained in words the
  * reader can act on instead of being sent.
  *
- * The rules mirrored here, each from `app/services/bi/compiler.py`:
+ * The rules mirrored here, each from `app/bi/service/compiler.py`:
  *
  * * measures must share one time behaviour (a point-in-time balance and a
  *   period flow cannot be measured in one answer);
@@ -25,7 +25,7 @@
  * * Top-N names one of the chosen row fields;
  * * a sort names a chosen measure or row field, and a pivoted answer cannot be
  *   sorted by a measure;
- * * every list obeys the request cap `app/schemas/bi.py` declares.
+ * * every list obeys the request cap `app/bi/schemas/query.py` declares.
  *
  * TWO RULES STAY SERVER-SIDE, deliberately. The compiler also refuses measures
  * that read from different fact tables, and two concentration measures taken
@@ -47,10 +47,10 @@ import type {
   BiTime,
 } from "@aequoros/risk-service-api";
 
-// --- the request caps, mirrored from app/schemas/bi.py ----------------------
+// --- the request caps, mirrored from app/bi/schemas/query.py ----------------------
 //
 // The server is the authority on every one of these; `exploreQuery.test.ts`
-// reads `app/schemas/bi.py` and fails if a value here has drifted. They are
+// reads `app/bi/schemas/query.py` and fails if a value here has drifted. They are
 // mirrored rather than fetched because a control has to know its bounds before
 // it renders, and a cap the client guessed low would hide a legal question.
 

@@ -2,8 +2,8 @@
 
 Two guards, one static and one generative.
 
-The static guard walks the AST of every module under ``app/services/bi`` and
-``app/domain/bi`` and forbids every construct through which a string can reach
+The static guard walks the AST of every module under ``app/bi/service`` and
+``app/bi/domain`` and forbids every construct through which a string can reach
 the database as SQL. Stated exactly, because a guard's docstring that promises
 more than its rules cover is how the uncovered shape gets written (audit
 A360-1):
@@ -34,7 +34,7 @@ outside SQLAlchemy, which no BI module has a reason to hold; the executor's
 read-only, statement-timed session is the runtime half of the same rule.
 
 Exactly one module is allow-listed for exactly two names:
-``app/services/bi/execution.py`` may call ``exec_driver_sql`` with
+``app/bi/service/execution.py`` may call ``exec_driver_sql`` with
 ``_SET_STATEMENT_TIMEOUT_SQL`` or ``_SET_READ_ONLY_SQL``, each of which must
 be a module-level string CONSTANT — ``SET`` cannot take a bound parameter,
 so the timeout travels through ``set_config`` as a driver parameter and the
@@ -71,14 +71,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
+from app.bi.domain.catalogue import Catalogue, catalogue
+from app.bi.schemas.query import BiFilterOp, BiQuery
+from app.bi.service.compiler import CompiledQuery, compile_query
+from app.bi.service.errors import BiQueryError
 from app.db.base import Base
-from app.domain.bi.catalogue import Catalogue, catalogue
-from app.schemas.bi import BiFilterOp, BiQuery
-from app.services.bi.compiler import CompiledQuery, compile_query
-from app.services.bi.errors import BiQueryError
 
 BACKEND = Path(__file__).parents[2]
-BI_ROOTS = (BACKEND / "app" / "services" / "bi", BACKEND / "app" / "domain" / "bi")
+BI_ROOTS = (BACKEND / "app" / "bi" / "service", BACKEND / "app" / "bi" / "domain")
 
 FORBIDDEN_CALLS: frozenset[str] = frozenset(
     {
@@ -96,7 +96,7 @@ FORBIDDEN_CALLS: frozenset[str] = frozenset(
 )
 #: module (relative to backend) → the ONLY names it may hand to ``exec_driver_sql``.
 ALLOWED_LITERAL_SQL: dict[str, frozenset[str]] = {
-    "app/services/bi/execution.py": frozenset({"_SET_STATEMENT_TIMEOUT_SQL", "_SET_READ_ONLY_SQL"}),
+    "app/bi/service/execution.py": frozenset({"_SET_STATEMENT_TIMEOUT_SQL", "_SET_READ_ONLY_SQL"}),
 }
 SQL_KEYWORD = re.compile(
     r"\b(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|DROP|ALTER|CREATE|TRUNCATE|GRANT|SET)\b"
@@ -341,10 +341,10 @@ def test_bi_modules_build_no_sql_from_strings(path: Path) -> None:
 
 
 def test_the_allow_list_names_exactly_the_two_settings_statements() -> None:
-    path = BACKEND / "app/services/bi/execution.py"
+    path = BACKEND / "app/bi/service/execution.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     constants = _module_constants(tree)
-    allowed = ALLOWED_LITERAL_SQL["app/services/bi/execution.py"]
+    allowed = ALLOWED_LITERAL_SQL["app/bi/service/execution.py"]
     for name in allowed:
         value = constants[name]
         assert isinstance(value, ast.Constant)

@@ -56,6 +56,7 @@ CASE_PLANE_MODULES: frozenset[str] = CASE_PLANE_MEMBERS
 #: Everything that produces or seals a filed regulatory number.
 REGULATORY_PLANE: tuple[str, ...] = (
     "domain",
+    "bi/domain",
     "icaap/domain",
     "reporting/domain",
     "reporting/service",
@@ -148,7 +149,10 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
     suites pin and what a second product segment will reuse."""
     impure: dict[str, set[str]] = {}
     for path in (
-        _python_files("domain") + _python_files("icaap/domain") + _python_files("reporting/domain")
+        _python_files("domain")
+        + _python_files("bi/domain")
+        + _python_files("icaap/domain")
+        + _python_files("reporting/domain")
     ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
@@ -159,6 +163,11 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
             for module in modules
             if module.startswith(
                 (
+                    "app.bi.service",
+                    "app.bi.models",
+                    "app.bi.api",
+                    "app.bi.jobs",
+                    "app.bi.public",
                     "app.services",
                     "app.models",
                     "app.api",

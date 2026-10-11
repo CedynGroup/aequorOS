@@ -837,7 +837,7 @@ assert.ok(
 // (a) the surface could name the measure instead of the figures — unactionable,
 //     and untrue about what was refused;
 // (b) the editor could decide validity itself, which is a second implementation
-//     of `app/domain/bi/expr.py` and is worse than no preview the moment the two
+//     of `app/bi/domain/expr.py` and is worse than no preview the moment the two
 //     disagree;
 // (c) the surface could show a REFUSED measure as restricted. It cannot: a
 //     measure whose figures a reader's access does not cover is ABSENT from the

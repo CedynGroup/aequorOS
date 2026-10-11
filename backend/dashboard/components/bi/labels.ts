@@ -77,7 +77,7 @@ export function designationLabel(designation: string | null): string | null {
 /**
  * How a measure is computed, in words (`BiMeasureRead.aggregation`).
  *
- * The vocabulary is the catalogue's (`app/domain/bi/catalogue/*.py`); the
+ * The vocabulary is the catalogue's (`app/bi/domain/catalogue/*.py`); the
  * drawer printed the token itself — "Aggregation ratio_of_sums" — and a
  * reviewer opening Explain on the net interest margin was handed an identifier
  * where the one sentence that explains the figure belongs.

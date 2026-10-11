@@ -481,7 +481,7 @@ official reads must be explicit.
   **When you add a job type, the same change must add its enqueue site, and a test must
   assert the caller calls it** — `tests/architecture/test_job_enqueue_reachability.py`
   requires a reachable enqueue site for every registered type, and
-  `tests/services/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
+  `tests/bi/jobs/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
   build asks, a skipped build does not). Enqueue counts ride on the job's progress record so
   "queued nothing" is distinguishable from "was never asked".
   The same class hides elsewhere in a green suite: a guard whose rules were never proven
@@ -648,16 +648,16 @@ canonical rows (through `is_current_generation` only), `live_metrics`,
 guard derives the writable set from the model registry by prefix, so a new mart
 is covered on the day it is written) **plus `ai_commentary_drafts`** — the one
 non-`bi_` table a BI-owned module writes, by decision D-191, from
-`app/jobs/bi_commentary.py`. Stated precisely because audit A360-1 M1 found the
-older "nothing else" wording false: the write scan then covered `app/services/bi`
-and `app/domain/bi` only, while `app/jobs/bi_*.py` and `app/features/*bi*.py`
+`app/bi/jobs/bi_commentary.py`. Stated precisely because audit A360-1 M1 found the
+older "nothing else" wording false: the write scan then covered `app/bi/service`
+and `app/bi/domain` only, while `app/jobs/bi_*.py` and `app/features/*bi*.py`
 were exempt from the import rule and unscanned. The 2026-09-29 remediation makes
 the exemption set and the scan set the SAME set and names `ai_commentary_drafts`
 as the one permitted non-`bi_` write
 (`test_every_bi_owned_module_is_in_the_write_scan`; in the working tree at the
 time of writing). The regulatory plane never imports BI, with exactly two
 exceptions —
-`app/services/bi/enqueue.py` and `app/services/bi/versions.py`, the enqueue
+`app/bi/service/enqueue.py` and `app/bi/service/versions.py`, the enqueue
 seam the hook sites call, which themselves import no BI model, builder,
 catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins all
 of it, including that BI never calls `derive_facts`.
@@ -683,7 +683,7 @@ of it, including that BI never calls `derive_facts`.
 - **BI carries NO reconciliation to the regulatory returns — founder decision
   2026-09-29.** Until that date this bullet read "Reconciliation R1–R12 drives a
   trust badge (`green | amber | red | grey`)": twelve checks in
-  `app/services/bi/reconciliation.py` compared the marts with "the figures the
+  `app/bi/service/reconciliation.py` compared the marts with "the figures the
   platform already files" (R4 against BSD7A, a BoG return, line by line), and
   the verdict was rendered as a "Does not reconcile" chip on every dashboard
   card, treasury ones included. The founder rejected the premise — _"we are
@@ -716,8 +716,8 @@ and zero with no GUC set.
 **The compiler never assembles SQL.** `BiQuery` is a closed pydantic schema;
 every member resolves to a mapped column; filters become bound parameters under
 a whitelisted operator set; grouping, pivot and subtotals are computed
-server-side. There is no `text()` anywhere in `app/services/bi` or
-`app/domain/bi`. The executor alone may call `exec_driver_sql` with two named
+server-side. There is no `text()` anywhere in `app/bi/service` or
+`app/bi/domain`. The executor alone may call `exec_driver_sql` with two named
 constant statements that set the statement timeout and read-only flag; the
 timeout is a bound parameter. This boundary is pinned by
 `tests/architecture/test_bi_compiler_injection.py`, which proves its AST guard
@@ -744,7 +744,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   book but not its NPL ratio would read `0.00` — a bank exactly on plan).
   `attainment_pct` is not emitted where lower is better: 120 % on an NPL ratio is
   a miss and reads as over-achievement away from its badge.
-- **Content packs are data, validated at import.** `app/domain/bi/packs/<id>.json`
+- **Content packs are data, validated at import.** `app/bi/domain/packs/<id>.json`
   under a pydantic `PackSpec`; a malformed pack fails module import, so a bad pack
   is a start-up failure rather than a 500 in front of a board. **A pack carries no
   date** — `BiPackQuery.for_period(as_of)` resolves it, because a pinned reporting
@@ -881,7 +881,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   `.ai/BI_*.md`). Governed analytics over the bank's own treasury data, so a bank can drop
   its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows
   (current generation only), `live_metrics`, `regulatory_runs` and the registers, and writes
-  **the `bi_*` tables plus `ai_commentary_drafts`** (from `app/jobs/bi_commentary.py`; the
+  **the `bi_*` tables plus `ai_commentary_drafts`** (from `app/bi/jobs/bi_commentary.py`; the
   write guard scans every BI-owned module and names that one permitted write); the
   regulatory plane never imports BI except the two enqueue-seam modules
   (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder,
@@ -919,19 +919,19 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   sensitivity) across measures, dimensions AND filters, deny-by-default, and export
   authority is derived from the member set the query touches — never a client flag, and
   re-checked after compilation where the second check can only refuse.
-- **No `text()` in `app/services/bi` or `app/domain/bi`** (an AST guard that proves
+- **No `text()` in `app/bi/service` or `app/bi/domain`** (an AST guard that proves
   itself), no currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
   `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_` fact
   categories and the `refinitiv` vendor id.
 - **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a
   different capital regime and is refused the packs surface until its own pack set ships
   (the gate resolves through the authority registry and opens by itself).
-- **BI tables span three model modules** (`app/models/bi.py`, `bi_content.py`,
-  `bi_notifications.py`), and three registries each convict you by name if you miss a new
+- **BI tables span three model modules** (`app/bi/models/marts.py`, `app/bi/models/content.py`,
+  `app/bi/models/notifications.py`), and three registries each convict you by name if you miss a new
   table: the plane guard's `BI_OWNED` globs, its writable-table derivation, and the table
   census that requires every `bi_*` table to be named by exactly one module's tuple. **Check
   which Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py`
-  reads `app/models/bi.py` ALONE, and `tests/db/test_bi_phase3_migration.py` gives the other
+  reads `app/bi/models/marts.py` ALONE, and `tests/db/test_bi_phase3_migration.py` gives the other
   modules' tables column, CHECK and FORCE-RLS parity. Without that parity a column too narrow
   for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
   tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the

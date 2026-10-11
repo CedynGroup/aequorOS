@@ -3,7 +3,7 @@
  * standing behind it.
  *
  * WHY THE WIRE HALF EXISTS BESIDE THE SCREEN HALF. The language is the server's
- * (`app/domain/bi/expr.py`) and the browser holds no parser, so the sharpest
+ * (`app/bi/domain/expr.py`) and the browser holds no parser, so the sharpest
  * assertions about a FORMULA are assertions about what the validation route said.
  * The screen half then proves a person can actually get from an empty textarea to
  * a certified figure in Explore's picker.
@@ -38,7 +38,7 @@ import { biApi, SAMPLE_BANK_ID } from "./support/bi";
  * Both are CREDIT, both are a position on a date, and both carry the position
  * dimensions — so they share a time behaviour and a breakdown, which is what
  * makes a formula over them answerable. Picked from
- * `app/domain/bi/catalogue/measures.py`, not invented.
+ * `app/bi/domain/catalogue/measures.py`, not invented.
  */
 const NUMERATOR = "loans.npl_exposure_rc";
 const NUMERATOR_LABEL = "Non-performing exposure";

@@ -831,7 +831,7 @@ test("every value type the catalogue can emit is rendered on its own terms", () 
     );
   }
   // `fraction` is a proportion of one and is stated multiplied by a hundred, in
-  // the browser exactly as `app/services/bi/exports/context.py` and the insights
+  // the browser exactly as `app/bi/service/exports/context.py` and the insights
   // layer state it. A member whose figure differs between the screen and the
   // audit twin is unciteable.
   assert.ok(

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -102,7 +103,6 @@ from app.schemas.ingestion import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,

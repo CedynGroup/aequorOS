@@ -1,7 +1,7 @@
 /**
  * A pack's tiles cannot be narrowed by a field their figures do not carry.
  *
- * `app/services/bi/compiler.py` treats a FILTER as a slice: it checks every
+ * `app/bi/service/compiler.py` treats a FILTER as a slice: it checks every
  * filter's dimension against each measure's `allowed_dimensions` and refuses
  * with `<measure> cannot be sliced by <dimension>`. An engine-copied figure —
  * net interest margin, a capital ratio — is one institution-level number the

@@ -283,11 +283,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"|run_reverse_stress|manage_management_actions|run_scenario_analysis))$",
         "stress",
     ),
-    (
-        r"^(services/bi/.*|domain/bi/.*|models/bi.*|schemas/bi.*|jobs/bi.*"
-        r"|features/(ask_bi|export_bi|manage_bi_.*|read_bi.*))$",
-        "bi",
-    ),
     (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
@@ -825,7 +820,7 @@ def test_recorded_moves_preserve_the_ratchet(
     monkeypatch.setattr(f"{__name__}.MODULE_MOVES", ledger)
     monkeypatch.setattr(f"{__name__}.SPLIT_ORIGINS", origins)
     ledger.write_text("[]", encoding="utf-8")
-    source = "app.services.bi.authorization"
+    source = "app.bi.service.authorization"
     target = "app.identity.service.original_authority"
 
     def import_content() -> str:

@@ -1,6 +1,6 @@
 """Postgres parity for the Phase 3 BI tables, which nothing else covers.
 
-``test_bi_foundation_migration.py`` iterates ``app/models/bi.py::BI_TABLES`` and
+``test_bi_foundation_migration.py`` iterates ``app/bi/models/marts.py::BI_TABLES`` and
 gives the marts four kinds of coverage no hermetic test can: the migrated
 column's TYPE, LENGTH and nullability against the model's, the CHECK constraint
 NAMES as sets, the values each migrated CHECK admits, and FORCE row-level
@@ -29,9 +29,9 @@ from sqlalchemy import inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import DBAPIError
 
+from app.bi.models.content import BI_CONTENT_TABLES, BI_CONTENT_UNALTERABLE_TABLES
+from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
-from app.models.bi_content import BI_CONTENT_TABLES, BI_CONTENT_UNALTERABLE_TABLES
-from app.models.bi_notifications import BI_NOTIFICATION_TABLES
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     migrated_postgres_schema,

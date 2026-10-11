@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import String
 
+from app.bi.models.marts import BiDimBranch
 from app.core.authorization import (
     DATA_SCOPE_VALUE_MAX_LENGTH,
     MACHINE_ROLE_BUNDLES,
@@ -41,7 +42,6 @@ from app.identity.service.authorization import (
     data_scope_column_values,
     reduce_data_scope,
 )
-from app.models.bi import BiDimBranch
 
 _NOW = datetime(2026, 9, 27, 12, tzinfo=UTC)
 

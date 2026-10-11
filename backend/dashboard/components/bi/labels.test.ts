@@ -84,7 +84,7 @@ function hasProductionCopy(
 
 /**
  * The server accepts `^[a-z][a-z0-9_]*$` for a dataset key
- * (`app/schemas/bi.py`, `BiPackWidget.needs_data`). This pattern is the same
+ * (`app/bi/schemas/query.py`, `BiPackWidget.needs_data`). This pattern is the same
  * class, and the parity check below fails if the server's ever widens.
  */
 const NEEDS_DATA_KEY = /"needs_data"\s*:\s*"([a-z][a-z0-9_]*)"/g;
@@ -243,7 +243,7 @@ const componentRoles = [...roleLiteral.matchAll(/"([a-z_]+)"/g)].map(
 );
 assert.ok(
   componentRoles.length >= 3,
-  "could not read BiExplainComponentRead.role from app/schemas/bi.py",
+  "could not read BiExplainComponentRead.role from app/bi/schemas/query.py",
 );
 for (const role of componentRoles) {
   assert.ok(

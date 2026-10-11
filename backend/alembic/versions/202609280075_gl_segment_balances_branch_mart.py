@@ -34,7 +34,7 @@ Three changes, one feature.
    the exact disclosure Phase 4's data scopes exist to prevent.
 3. ``ck_bi_reconciliation_results_check_id`` admits ``R11``, the branch identity:
    the sum of branch ``ytd_rc`` for an account equals the institution's row,
-   exactly. ``app/models/bi.RECONCILIATION_CHECK_IDS`` already names it, so the
+   exactly. ``app/bi/models/marts.RECONCILIATION_CHECK_IDS`` already names it, so the
    hermetic suite is green, but a Postgres database still on ``202609220066``
    refuses an ``R11`` row until this lands. ``reconciliation.persist`` logs the
    skip rather than failing the build, which is the documented degradation.
@@ -50,7 +50,7 @@ already-migrated database on the same constraint after the NEXT kind or check is
 added, and it lets the downgrade restore the historical shape. Parity between the
 constants and the migrated CHECKs is asserted instead, by
 ``tests/db/test_bi_migration_structural_parity.py`` and
-``tests/models/test_bi_models.py``.
+``tests/bi/models/test_bi_models.py``.
 
 Widening moves no data. NARROWING does, so ``downgrade`` deletes the rows that
 cannot satisfy the older constraints first — and those DELETEs run under

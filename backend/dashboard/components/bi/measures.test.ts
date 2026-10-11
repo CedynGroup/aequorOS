@@ -4,8 +4,8 @@
  * Five properties, each of which is a way this surface could lie to a bank:
  *
  * 1. THE LANGUAGE IS THE SERVER'S. Every function name, arity, period word and
- *    bound the editor offers is checked against `app/domain/bi/expr.py` and
- *    `app/schemas/bi_content.py` THEMSELVES, not against a copy. A palette that
+ *    bound the editor offers is checked against `app/bi/domain/expr.py` and
+ *    `app/bi/schemas/content.py` THEMSELVES, not against a copy. A palette that
  *    offered a function the parser does not have would be a control that cannot
  *    work; a length cap smaller than the column's would hide a legal formula.
  * 2. THE BADGE NEVER FLATTERS. The standing mapping is total over the three
@@ -325,7 +325,7 @@ test("nothing in this client parses a formula", () => {
 // this round on the grant composer, where a scope narrowed to two branches would
 // have been stored as the whole institution.)
 //
-// The five measure requests are checked against `app/schemas/bi_content.py`
+// The five measure requests are checked against `app/bi/schemas/content.py`
 // itself. If this fails, do NOT add a cast or post a wider object: either the
 // client is regenerated, or that one call is sent through a hand-written transport
 // that reuses the generated `FromJSON` parsers.

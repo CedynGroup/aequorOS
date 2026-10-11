@@ -134,7 +134,7 @@ class _Index:
         _, aliases = self.imports[module]
         resolved = dict(aliases)
         tree = self.trees[module]
-        # 1. bi_alerts = bi_common.load_module("app.services.bi.alerts")
+        # 1. bi_alerts = bi_common.load_module("app.bi.service.alerts")
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
@@ -488,7 +488,7 @@ def test_the_guard_can_actually_see_the_bi_importlib_seam() -> None:
     and the reachability test above is passing for the wrong reason.
     """
 
-    assert "app.jobs.bi_mart_refresh:run_bi_mart_refresh" in _REACHABLE
+    assert "app.bi.jobs.bi_mart_refresh:run_bi_mart_refresh" in _REACHABLE
     alert_callers = _SITES.get("bi_alert_evaluate", set())
     assert alert_callers, "the alerts enqueue site disappeared"
     assert alert_callers & _REACHABLE, (

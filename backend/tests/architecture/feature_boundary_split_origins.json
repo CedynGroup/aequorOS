@@ -12,7 +12,6 @@
     "importers": [
       "app.operator.services.inspector_fix",
       "app.operator.services.inspector_reads",
-      "app.services.bi.limits",
       "app.services.capital_plan",
       "app.services.credit_concentration",
       "app.services.credit_params",

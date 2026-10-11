@@ -25,8 +25,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.bi.api import manage_bi_notifications as notifications
 from app.core.config import get_settings
-from app.features import manage_bi_notifications as notifications
 from app.identity.schemas.feature_flags import FeatureFlagsRead
 from app.models import Bank
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers

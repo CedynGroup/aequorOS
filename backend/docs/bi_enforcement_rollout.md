@@ -1,7 +1,7 @@
 # BI scoped-binding enforcement rollout
 
 **ENFORCED IN CODE, OFF IN EVERY DEPLOYMENT.** As of this commit the six read
-routes exist and are mounted (`app/features/read_bi.py`,
+routes exist and are mounted (`app/bi/api/read_bi.py`,
 `app/api/router.py`), the `require_bi_read` dependency is registered in
 `deps.MUTATION_ROLE_DEPENDENCY_NAMES`, and every one of them is gated by
 `BI_ENABLED`, which defaults to `False` and is set in no deployment — with the
@@ -9,10 +9,10 @@ flag off each route answers 404, as if it did not exist. So nothing in this
 document changes what any principal can reach TODAY; it becomes live the moment
 a deployment sets `BI_ENABLED=1`.
 
-`app/services/bi/authorization.py::authorize_query` is the decision every BI
-surface consults (`tests/api/test_bi_authorization_matrix.py`,
-`tests/services/bi/test_bi_authorization.py`), and every data route calls it
-before it reads anything (`tests/api/test_bi_routes.py`).
+`app/bi/service/authorization.py::authorize_query` is the decision every BI
+surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
+`tests/bi/service/test_bi_authorization.py`), and every data route calls it
+before it reads anything (`tests/bi/api/test_bi_routes.py`).
 
 Run the inventory against each target deployment immediately before the release
 that TURNS THE FLAG ON — not before the commit that mounts the routes, which
@@ -121,8 +121,8 @@ other regime-selecting surface does.
 ### What the route layer does (all four landed in this commit)
 
 The authorization decision is complete on its own; these four are the handler's,
-and each is now implemented and pinned by `tests/api/test_bi_routes.py` /
-`tests/api/test_bi_query_log.py`:
+and each is now implemented and pinned by `tests/bi/api/test_bi_routes.py` /
+`tests/bi/api/test_bi_query_log.py`:
 
 1. **404 before 403.** Resolve the institution through `resolve_tenant_bank` /
    `scoped_authorization.resolve_bank` so another tenant's `BK-*` is "not found"
@@ -403,7 +403,7 @@ NON-EMPTY list — so "no branches" is storable only as a scope that returns no
 rows, never as an absent filter. Three places make that sentence enforcement
 rather than annotation:
 
-1. **Reduction.** `authorize_query` (`app/services/bi/authorization.py`) loads
+1. **Reduction.** `authorize_query` (`app/bi/service/authorization.py`) loads
    the effective grants that matched EACH (module, sensitivity) pair through
    `authorization.load_effective_grants` and reduces each pair with
    `reduce_data_scope` — no grants → nothing; any `all` → the whole
@@ -417,7 +417,7 @@ rather than annotation:
    `authorization.combine_pair_scopes`, the helper `authorize_query` uses, so
    both surfaces reduce per pair through one function (in the working tree,
    uncommitted at the time of writing).
-2. **Resolution.** `app/services/bi/data_scope.py::resolve` turns the declared
+2. **Resolution.** `app/bi/service/data_scope.py::resolve` turns the declared
    scope into the ONE filter for this institution: the declared branch codes
    plus every `bi_dim_branch` row in a declared region, scoped to the exact
    `(organization, bank)`. A region no ingested branch belongs to, or a code the
@@ -457,9 +457,9 @@ disclosure) or narrowed (a lost figure). Run it before and after any release
 that touches bindings, the evaluator or the resolver. Its hermetic test does
 not yet assert the new column (owed).
 
-Pinned by: `tests/services/bi/test_data_scope.py`, `tests/api/test_bi_data_scope.py`,
+Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
 `tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
-`tests/services/bi/test_bi_authorization.py`, `tests/api/test_bi_feeds.py` and,
+`tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
 for the credit blotter, `tests/api/test_credit_route_authorization.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
@@ -490,11 +490,11 @@ Before the deployment that mounts the BI routes, attach:
 
 | Guarantee                                                                                                            | Test                                                                                                  |
 | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/api/test_bi_authorization_matrix.py`                                                           |
-| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/services/bi/test_bi_authorization.py`                                                          |
+| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix.py`                                                           |
+| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                          |
 | Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                   |
 | Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                    |
-| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
+| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/bi/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
 
 ## Rehearsal record
 

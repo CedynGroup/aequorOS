@@ -7,7 +7,7 @@
  * deliberately is NOT.
  *
  * 1. **THE SERVER OWNS VALIDITY. THERE IS NO PARSER HERE.**
- *    `app/domain/bi/expr.py` is a Pratt parser with a type system, three period
+ *    `app/bi/domain/expr.py` is a Pratt parser with a type system, three period
  *    grains, a retention-derived bound on how far `LAG` may reach, and a dozen
  *    named refusals. A second implementation in TypeScript would be a second
  *    opinion, and the moment the two disagree the faster one is the wrong one —
@@ -55,7 +55,7 @@ import type {
 import type { FigureAddresses, ScopePair } from "@/lib/api/dataScope";
 
 // ---------------------------------------------------------------------------
-// The language's vocabulary, mirrored from app/domain/bi/expr.py
+// The language's vocabulary, mirrored from app/bi/domain/expr.py
 // ---------------------------------------------------------------------------
 
 /**
@@ -78,7 +78,7 @@ export const MEASURE_DESCRIPTION_MAX_LENGTH = 400;
 export const MEASURE_REASON_MAX_LENGTH = 400;
 
 /**
- * `app/schemas/bi_content.py::MEASURE_KEY_PATTERN`, verbatim.
+ * `app/bi/schemas/content.py::MEASURE_KEY_PATTERN`, verbatim.
  *
  * Mirrored so the form can say what is wrong with an id BEFORE the request — the
  * server answers a bad one with a 422 whose message is about a pattern, which is
@@ -777,4 +777,3 @@ export function mergeAddresses(
   }
   return { pairs: [...seen.values()], complete };
 }
-

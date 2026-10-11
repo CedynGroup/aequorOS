@@ -29,7 +29,7 @@
  *
  * The interception is a FIXTURE FOR A GRANT THAT CANNOT YET BE WRITTEN, not a
  * substitute for the server's behaviour — which `backend/tests/api/
- * test_data_scope_grants.py` and `tests/services/bi/test_data_scope.py` own.
+ * test_data_scope_grants.py` and `tests/bi/service/test_data_scope.py` own.
  *
  * WIRE SPELLING. The generated client is stale, and `<Model>FromJSON` spreads
  * `...json` before overwriting the fields it knows, so `data_scope` arrives under

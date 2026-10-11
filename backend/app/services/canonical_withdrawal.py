@@ -50,6 +50,7 @@ from sqlalchemy import CursorResult, and_, func, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -67,7 +68,6 @@ from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from app.services import live_refresh_triggers, system_of_record
 from app.services.audit import record_event
-from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.withdrawal_impact import invalidate_register
 
 REQUESTED_EVENT = "canonical_withdrawal.requested"

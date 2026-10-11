@@ -5,7 +5,7 @@
  *
  * WHAT THIS COMPONENT DOES NOT DO. It does no analytics. Grouping, subtotals,
  * pivoting, Top-N and period comparison are compiled server-side by
- * `app/services/bi/compiler.py` — they always were — and arrive as an ordinary
+ * `app/bi/service/compiler.py` — they always were — and arrive as an ordinary
  * rectangle of keyed rows with a level marker lifted onto each row. The
  * Community edition has no server-side row model and no row-grouping API, so
  * what is left for the library is exactly what a grid should do: draw cells,

@@ -1,14 +1,14 @@
 /**
  * The Explore controls cannot build a question the compiler refuses.
  *
- * `app/services/bi/compiler.py` is deny-by-default and answers a malformed
+ * `app/bi/service/compiler.py` is deny-by-default and answers a malformed
  * query with a 422 and no rows. That is correct on the server and it makes one
  * thing the client's job: every rule about the SHAPE of a query has to be
  * enforced before the request is sent, or a reader clicks a control and gets an
  * error instead of an answer. Each case below is one of those rules, named for
  * the compiler refusal it prevents.
  *
- * The caps are checked against `app/schemas/bi.py` itself, not against a copy of
+ * The caps are checked against `app/bi/schemas/query.py` itself, not against a copy of
  * it, because a cap the client believes is smaller than the server's would hide
  * a legal question, and one it believes is larger would send a refused one.
  *
@@ -68,11 +68,11 @@ const SCHEMA_SOURCE = readFileSync(
 
 function serverCap(name: string): number {
   const match = new RegExp(`^${name}\\s*=\\s*(\\d+)`, "m").exec(SCHEMA_SOURCE);
-  assert.ok(match, `${name} is no longer declared in app/schemas/bi.py`);
+  assert.ok(match, `${name} is no longer declared in app/bi/schemas/query.py`);
   return Number(match![1]);
 }
 
-test("every request cap mirrors app/schemas/bi.py", () => {
+test("every request cap mirrors app/bi/schemas/query.py", () => {
   assert.equal(BI_MEASURE_CAP, serverCap("BI_MAX_MEASURES"));
   assert.equal(BI_DIMENSION_CAP, serverCap("BI_MAX_DIMENSIONS"));
   assert.equal(BI_FILTER_CAP, serverCap("BI_MAX_FILTERS"));

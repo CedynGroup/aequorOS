@@ -2,7 +2,7 @@
 
 Audit A360-4 finding M1. Three suites compared the migrated BI schema to the
 models, and each took its subject from a hand-maintained tuple in one model
-module: ``test_bi_foundation_migration.py`` iterates ``app/models/bi.py::BI_TABLES``
+module: ``test_bi_foundation_migration.py`` iterates ``app/bi/models/marts.py::BI_TABLES``
 (16 tables), ``test_bi_phase3_migration.py`` iterates ``BI_CONTENT_TABLES`` +
 ``BI_NOTIFICATION_TABLES`` (8), and ``test_bi_migration_structural_parity.py`` is
 the only one that also names ``BI_COMMENTARY_TABLES`` — for primary-key order,
@@ -46,11 +46,11 @@ from sqlalchemy.dialects import postgresql
 
 import app.models as models_package
 from alembic import command
+from app.bi.models.commentary import BI_COMMENTARY_TABLES
+from app.bi.models.content import BI_CONTENT_TABLES
+from app.bi.models.marts import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
+from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
-from app.models.bi import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
-from app.models.bi_commentary import BI_COMMENTARY_TABLES
-from app.models.bi_content import BI_CONTENT_TABLES
-from app.models.bi_notifications import BI_NOTIFICATION_TABLES
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
@@ -70,7 +70,7 @@ _PG = postgresql.dialect()
 
 
 def _bi_model_modules() -> tuple[ModuleType, ...]:
-    """Every ``app.models.bi`` / ``app.models.bi_*`` module, imported."""
+    """Every ``app.bi.models.marts`` / ``app.models.bi_*`` module, imported."""
     names = sorted(
         info.name
         for info in pkgutil.iter_modules(models_package.__path__)

@@ -89,7 +89,7 @@ export const FIXTURE_FIGURES = {
 
 /**
  * The seven certified content packs, by id and by the title a reader sees.
- * `app/domain/bi/packs/*.json`, validated by `PackSpec`.
+ * `app/bi/domain/packs/*.json`, validated by `PackSpec`.
  */
 export const CERTIFIED_PACKS = [
   { id: "alco", title: "Asset and liability committee" },

@@ -2,7 +2,7 @@
  * The shapes the BI surfaces render.
  *
  * Two of them mirror a server contract and must keep mirroring it:
- * `BiInsight` is `app/services/bi/insights/statements.py::Insight` in
+ * `BiInsight` is `app/bi/service/insights/statements.py::Insight` in
  * camelCase, and `BiWidgetSpec.query` is the generated `BiQuery` verbatim — a
  * widget binds to a CATALOGUE QUERY and can carry no SQL, no column name and no
  * threshold of its own. The rest describe layout, which is the browser's job.
@@ -22,7 +22,7 @@ import type {
  * How a widget draws its answer.
  *
  * The first six are the shapes Explore offers; the rest are shapes a certified
- * pack authors (`app/schemas/bi.py::BiWidgetKind`). `kpi_row` is its own kind
+ * pack authors (`app/bi/schemas/query.py::BiWidgetKind`). `kpi_row` is its own kind
  * rather than a `kpi` with several measures on purpose: a `kpi` renderer that
  * showed only the first measure of a row would DROP the others silently, and a
  * board tile called "Capital adequacy" that shows the total ratio and quietly
@@ -94,7 +94,7 @@ export type BiDashboard = Readonly<{
 
 /**
  * A platform surface a certified pack embeds rather than querying itself
- * (`app/schemas/bi.py::BiPanelKey`). The pack names the surface; this client
+ * (`app/bi/schemas/query.py::BiPanelKey`). The pack names the surface; this client
  * names where it is, and the surface authorizes its own reader when they arrive.
  */
 export type BiPanelKey =
@@ -104,7 +104,7 @@ export type BiPanelKey =
   | "attestation_status"
   | "ingestion_quality";
 
-/** Platform work a figure is waiting on (`app/schemas/bi.py::BiPendingCapability`). */
+/** Platform work a figure is waiting on (`app/bi/schemas/query.py::BiPendingCapability`). */
 export type BiPendingCapability =
   "catalogue_member" | "governed_limit" | "mart_field";
 
@@ -216,7 +216,7 @@ export type BiMeasure = BiCatalogueMeasureRead;
 /**
  * HOW A SAVED DASHBOARD IS REACHABLE — not who may read its figures.
  *
- * Mirrors `app/models/bi_content.py::DASHBOARD_VISIBILITIES`. Reachability only
+ * Mirrors `app/bi/models/content.py::DASHBOARD_VISIBILITIES`. Reachability only
  * decides whether the document OPENS; every widget on it is authorized for
  * whoever opened it, every time, so widening this can never widen what a reader
  * is shown.

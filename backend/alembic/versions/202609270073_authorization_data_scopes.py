@@ -7,7 +7,7 @@ Revises: 202609270072
 the indivisible binding row was missing: WHICH SLICE of an institution's book
 the sentence admits. Until now a binding said *which institution, which module,
 which sensitivity* and then always meant the whole book — ``BiDataScope`` in
-``app/services/bi/authorization.py`` has carried the shape since Phase 1 with a
+``app/bi/service/authorization.py`` has carried the shape since Phase 1 with a
 docstring saying the columns do not exist yet. They do now.
 
 ``all`` is not a value with no list — it is the ONLY kind whose list is NULL

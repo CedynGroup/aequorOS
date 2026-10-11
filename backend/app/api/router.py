@@ -6,17 +6,20 @@ from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.attestation.api.manage_attestation import router as attestation_router
-from app.features.ask_bi import router as bi_ask_router
+from app.bi.api.ask_bi import router as bi_ask_router
+from app.bi.api.export_bi import router as bi_export_router
+from app.bi.api.manage_bi_commentary import router as bi_commentary_router
+from app.bi.api.manage_bi_content import router as bi_content_router
+from app.bi.api.manage_bi_notifications import router as bi_notifications_router
+from app.bi.api.read_bi import require_bi_enabled
+from app.bi.api.read_bi import router as bi_read_router
+from app.bi.api.read_bi_feeds import router as bi_feeds_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
-from app.features.export_bi import router as bi_export_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_ai_settings import router as ai_settings_router
-from app.features.manage_bi_commentary import router as bi_commentary_router
-from app.features.manage_bi_content import router as bi_content_router
-from app.features.manage_bi_notifications import router as bi_notifications_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
@@ -42,9 +45,6 @@ from app.features.manage_temenos_connections import router as temenos_connection
 from app.features.market_data_sources import router as market_data_sources_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
-from app.features.read_bi import require_bi_enabled
-from app.features.read_bi import router as bi_read_router
-from app.features.read_bi_feeds import router as bi_feeds_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_financial_workspace import router as financial_workspace_router

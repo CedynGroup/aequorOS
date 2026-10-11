@@ -13,7 +13,7 @@
  * value type, and this module is the ONE place that turns one into text — the
  * charts, the tables and the self-service grid all call `formatCell`, so they
  * cannot disagree about a member. The server's exporters
- * (`app/services/bi/exports/context.py`) apply the same rules to the same value
+ * (`app/bi/service/exports/context.py`) apply the same rules to the same value
  * types, which is what makes a figure on screen citable against the audit twin.
  *
  * There is deliberately no catch-all numeric type. The catalogue used to have
@@ -57,7 +57,7 @@ const DURATION_DECIMALS = 2;
 
 /**
  * The catalogue value types that are figures — `NUMERIC_VALUE_TYPES` in
- * `app/domain/bi/catalogue/members.py`, plus `int`, which is not a catalogue
+ * `app/bi/domain/catalogue/members.py`, plus `int`, which is not a catalogue
  * type but the level marker the grid surfaces add.
  */
 const NUMERIC_FORMATS: readonly string[] = [

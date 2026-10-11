@@ -25,6 +25,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
+from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied
@@ -40,8 +42,6 @@ from app.models import (
     User,
 )
 from app.services import job_queue, module_scope
-from app.services.bi.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
-from app.services.bi.versions import BUILDER_VERSION
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"

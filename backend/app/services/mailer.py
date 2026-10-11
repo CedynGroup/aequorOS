@@ -9,7 +9,7 @@ second sender resolution or a second set of failure semantics.
 **What this module is, exactly.** A relay connection and a message builder. It
 decides nothing about WHO may receive WHAT: the caller has already made that
 decision, and for BI subscriptions it makes it once per recipient
-(``app/services/bi/subscriptions.py``). Nothing here reads a tenant table.
+(``app/bi/service/subscriptions.py``). Nothing here reads a tenant table.
 
 **Configuration, never code.** The relay is ``SMTP_*``
 (``app.core.config.SmtpSettings``), which a deployment points at the bank's own
@@ -33,7 +33,7 @@ times and would make a partial failure harder to reason about, not easier.
 
 **Attachments are the caller's decision and the caller's evidence.** This module
 will attach whatever bytes it is handed. What may be attached at all is decided
-by ``app/services/bi/exports/policy.py`` — only an aggregated artifact — and the
+by ``app/bi/service/exports/policy.py`` — only an aggregated artifact — and the
 delivery row records the digest of what went. Keeping the policy out of here is
 deliberate: a transport that classified content would be a second classifier.
 """

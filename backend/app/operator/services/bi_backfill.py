@@ -23,6 +23,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.bi.public import BUILDER_VERSION
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -30,11 +31,10 @@ from app.models import CanonicalPositionSnapshot
 from app.models.canonical import is_current_generation
 from app.schemas.operator import BiBackfillRead, BiBackfillRequest
 from app.services import job_queue
-from app.services.bi.versions import BUILDER_VERSION
 from app.services.public_ids import normalize_public_id
 
 #: Named literally, as ``inspector_fix`` names ``etl_dedup``: importing
-#: ``app.jobs.bi_mart_backfill`` would bind the operator app to the worker's
+#: ``app.bi.jobs.bi_mart_backfill`` would bind the operator app to the worker's
 #: handler tree. ``job_queue.enqueue`` validates it against the allow-list, and
 #: the key below is the handler's own (``bi_mart_backfill.coalesce_key_for``)
 #: so an operator-started chain and its self-enqueued hops share one key.

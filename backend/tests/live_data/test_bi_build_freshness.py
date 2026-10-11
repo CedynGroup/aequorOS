@@ -26,7 +26,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.bi import MART_BUILD_SCOPES
+from app.bi.models.marts import MART_BUILD_SCOPES
 
 
 @dataclass(frozen=True)
