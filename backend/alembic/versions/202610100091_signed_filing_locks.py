@@ -4,6 +4,8 @@ Revision ID: 202610100091
 Revises: 202610100090
 """
 
+from typing import cast
+
 from alembic import op
 
 revision = "202610100091"
@@ -35,9 +37,12 @@ def upgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
     columns = ",".join(CONTENT_COLUMNS)
+    schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
+    quoted_schema = op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
     op.execute(f"""
         CREATE FUNCTION aequoros_signed_package_guard() RETURNS trigger
-        LANGUAGE plpgsql AS $$
+        LANGUAGE plpgsql
+        SET search_path = pg_catalog, {quoted_schema}, pg_temp AS $$
         DECLARE signed boolean; col text;
         BEGIN
             signed := OLD.attestation_state <> 'unsigned' OR EXISTS (

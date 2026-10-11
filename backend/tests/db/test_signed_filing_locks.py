@@ -225,6 +225,54 @@ def _assert_master_data_sealed(
     assert after["signatures"] == before["signatures"]
 
 
+def _assert_content_sealed_under_temp_shadow(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, *, runtime: bool
+) -> None:
+    binding = workflow.compute_binding(package)
+    before = cast(dict[str, object], verify.export_verification_bundle(db, ctx, package))
+    schema = cast(str, db.scalar(text("SELECT current_schema()")))
+    quoted_schema = db.get_bind().dialect.identifier_preparer.quote_identifier(schema)
+    original_path = cast(str, db.scalar(text("SHOW search_path")))
+    db.execute(
+        text("CREATE TEMP TABLE attestation_signatures (package_id uuid, organization_id text)")
+    )
+    for search_path in (original_path, f"pg_temp, {quoted_schema}, pg_catalog"):
+        db.execute(text("SELECT set_config('search_path', :path, true)"), {"path": search_path})
+        db.execute(
+            text(
+                f"UPDATE {quoted_schema}.regulatory_packages "
+                "SET content_digest = content_digest WHERE id = :id"
+            ),
+            {"id": package.id},
+        )
+        for assignment in ("content_digest = repeat('d', 64)", "content_digest = NULL"):
+            savepoint = db.begin_nested()
+            with pytest.raises(DatabaseError, match="signed filing is read-only"):
+                db.execute(
+                    text(
+                        f"UPDATE {quoted_schema}.regulatory_packages "
+                        f"SET {assignment} WHERE id = :id"
+                    ),
+                    {"id": package.id},
+                )
+            savepoint.rollback()
+        if not runtime:
+            savepoint = db.begin_nested()
+            with pytest.raises(DatabaseError, match="signed filing is read-only"):
+                db.execute(
+                    text(f"DELETE FROM {quoted_schema}.regulatory_packages WHERE id = :id"),
+                    {"id": package.id},
+                )
+            savepoint.rollback()
+    db.execute(text("SELECT set_config('search_path', :path, true)"), {"path": original_path})
+    db.execute(text("DROP TABLE pg_temp.attestation_signatures"))
+    db.refresh(package)
+    assert workflow.compute_binding(package) == binding
+    after = cast(dict[str, object], verify.export_verification_bundle(db, ctx, package))
+    assert after["package"] == before["package"]
+    assert after["signatures"] == before["signatures"]
+
+
 @pytest.mark.parametrize("runtime", [False, True], ids=["owner-trigger", "runtime-grants"])
 def test_master_data_provenance_stays_sealed_through_void_and_correction(
     connection: Connection, governance_schema: MigratedPostgresSchema, runtime: bool
@@ -246,6 +294,8 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
             ctx = TenantContext(
                 organization_id=ORG_1, actor_user_id=package.generated_by, authorization_version=1
             )
+            package.content_digest = None
+            db.flush()
             binding = workflow.compute_binding(package)
             assert binding.binding_class == "master_data"
             _assert_master_data_sealed(db, ctx, package, runtime=runtime)
@@ -275,7 +325,9 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
                         entry_hash="c" * 64,
                     )
                 )
+            db.flush()
             package.attestation_state = "fully_certified"
+            package.content_digest = binding.content_digest
             package.certification_digest = binding.certification_digest
             package.fully_certified_at = datetime.now(UTC)
             package.status = "approved"
@@ -297,6 +349,8 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
             assert package.certification_digest is None
             assert workflow.compute_binding(package) == binding
             _assert_master_data_sealed(db, ctx, package, runtime=runtime)
+
+            _assert_content_sealed_under_temp_shadow(db, ctx, package, runtime=runtime)
 
             package.status = "superseded"
             correction = _master_data_package(db, prior=package)
