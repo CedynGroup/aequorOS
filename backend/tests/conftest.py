@@ -118,9 +118,11 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "DESK_CAPTURE_ENABLED",
     ):
         monkeypatch.setenv(_scheduling_flag, "0")
-    # Production paging must not send fixture data to AWS.
+    # Production paging and retention must not send fixture data to AWS.
     for _setting, _value in {
         "AUDIT_INTEGRITY_ALERT_TOPIC_ARN": "",
+        "STORAGE_OBJECT_LOCK_ENABLED": "0",
+        "BACKUP_WORM_BUCKET": "",
     }.items():
         monkeypatch.setenv(_setting, _value)
     # Same guard, same reason, for the ICAAP signing switch: it ships OFF, and a

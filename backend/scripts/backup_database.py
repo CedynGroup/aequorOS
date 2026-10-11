@@ -38,6 +38,8 @@ from typing import Any
 
 import psycopg
 
+from app.storage.backups import publish_backup
+from app.storage.client import StorageError
 from scripts.dr_common import (
     DisasterRecoveryError,
     Toolchain,
@@ -202,8 +204,10 @@ def run_backup(source_url: str, options: BackupOptions) -> BackupManifest:
             if options.schema_only
             else collect_fingerprints(conn, checksum_mode=options.checksum_mode)
         )
-        probe = None if options.schema_only else collect_tenant_probe(
-            conn, table=options.tenant_probe_table
+        probe = (
+            None
+            if options.schema_only
+            else collect_tenant_probe(conn, table=options.tenant_probe_table)
         )
         print(
             f"[backup] fingerprinted {len(tables)} tables "
@@ -256,6 +260,9 @@ def run_backup(source_url: str, options: BackupOptions) -> BackupManifest:
         excluded_schemas=excluded,
     )
     manifest.write(manifest_path)
+    retained_versions = publish_backup(archive, manifest_path)
+    if retained_versions:
+        print(f"[backup] retained cloud versions={retained_versions}")
     print(
         f"[backup] OK archive={archive.name} bytes={manifest.archive_bytes} "
         f"sha256={manifest.archive_sha256[:16]}... dump_seconds={dump_seconds:.1f}"
@@ -309,6 +316,6 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except DisasterRecoveryError as exc:
+    except (DisasterRecoveryError, StorageError) as exc:
         print(f"[backup] FAILED: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

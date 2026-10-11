@@ -79,3 +79,47 @@ blanket grants must not be used as a production reprovisioning procedure; trigge
 still protect records but the intended permission layer requires migration grants.
 Use a separate migration owner and unprivileged application role. The worker's
 BYPASSRLS privilege does not grant permission to alter evidence.
+
+## Write-once objects and backups
+
+Set `STORAGE_OBJECT_LOCK_ENABLED=true` for the AWS deployment. Local MinIO and
+hermetic fixtures retain their existing behavior with this flag off. Provisioning
+creates lock-capable output buckets and refuses an existing output bucket without Object
+Lock. Enable Object Lock/versioning on existing cloud buckets through the
+infrastructure owner before switching on the flag. Every output object (including
+filed PDF/XLSX, archived signed revisions and attachments) is written with
+`COMPLIANCE`, a retain-until date, and a transport checksum. All output versions
+are retained to avoid a path-based classification missing a filing format.
+Idempotent writes verify/apply retention to the existing concrete version;
+retention can be extended but is never shortened. Object version IDs remain the
+reference of record. Retained presigned uploads are refused so they cannot bypass
+application retention checks. A delete marker hides the current key but does not remove a
+locked version. Apply an IAM deny on DeleteObject for evidence buckets if hiding
+current keys must also be prevented.
+
+`STORAGE_OBJECT_LOCK_RETENTION_DAYS` defaults to **2555 days as an operational
+placeholder, confirm with counsel, #246**. This is not a statement of BoG law or
+legal sign-off. Counsel and the infrastructure owner must approve the production
+period before enabling compliance retention, which cannot be shortened on stored
+versions. In AWS, even account administrators cannot delete or shorten a locked
+version during that interval. See [AWS Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html).
+
+`backup_database.py` publishes both its dump and manifest when the flag is on.
+Configure `BACKUP_WORM_BUCKET` to an existing versioned Object Lock bucket and
+`STORAGE_KMS_KEY_ID` to the platform backup encryption key. Uploads use unique
+prefixes, SSE-KMS and compliance retention, verify concrete version IDs, and print
+those locators for the backup runner's evidence record. Publication errors fail
+rather than claiming a retained backup; local recovery artifacts remain available.
+Off-flag backup runs continue to write local files. The retained manifest includes
+the chain tables in its schema fingerprints. Object-store backups copy ciphertext
+and envelope metadata; keep the paired database backup for the envelopes.
+
+Bank-held envelope encryption is applied before retention, unchanged. Object Lock
+retains ciphertext; it does not grant permission to decrypt it or bypass a revoked
+bank key. Existing reads still check the bank key and refuse revoked/unavailable
+keys. Keep retired KMS keys and envelope registries for at least the longest
+retained ciphertext/backup interval, through the existing retained-key recovery
+contract. Destruction of a key is a separate cryptographic loss of access that
+Object Lock cannot prevent. Rotation creates new encrypted versions; old retained
+versions stay recoverable only with their original bank keys. Never shorten key
+recovery windows below the Object Lock interval.
