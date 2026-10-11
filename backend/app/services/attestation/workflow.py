@@ -645,12 +645,12 @@ def void_attestation(
     """Withdraw the current attestation without destroying any evidence.
 
     Increments ``attestation_cycle`` so existing signatures stay readable and
-    attributable forever; the package returns to ``generated`` for rework.
+    attributable forever; the package returns to ``generated`` for review.
+    Changing the financial snapshot requires generation of a new version.
 
     ``commit=False`` is for a caller with more to do in the SAME act — sending a
     reviewed return back for corrections both records the decision and withdraws
-    the certification that froze the figures, and half of that is a package
-    nobody can correct.
+    the certification, so reviewers see one complete withdrawal action.
     """
     if package.attestation_state == "unsigned":
         raise AttestationConflict("nothing_to_void", "This return has no attestation to void.")
@@ -673,8 +673,8 @@ def void_attestation(
     if package.status in {"pending_approval", "approved"}:
         package.status = "generated"
         # The chain follows the status back, or the two would disagree: a
-        # voided certification means the figures are open again and every
-        # reviewing stage has to look afresh. Guarded on ``> 1`` because a
+        # voided certification means every reviewing stage must look afresh.
+        # Financial corrections still create a new version. Guarded on ``> 1`` because a
         # send-back that voids in the same transaction has already moved the
         # chain, and a second bump would report a round nobody ran.
         if package.current_stage_seq is not None and package.current_stage_seq > 1:
