@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi.routing import APIRoute
 
 from app.api.deps import MUTATION_ROLE_DEPENDENCY_NAMES
-from app.main import create_app
+from app.main import app
 
 _BANK = "/api/v1/banks/{bank_id}/icaap"
 _CYCLE = f"{_BANK}/cycles/{{cycle_id}}"
@@ -124,8 +124,7 @@ ROUTE_DEPENDENCIES: dict[tuple[str, str], str] = {
     ): "require_icaap_edit",
     (
         "PUT",
-        f"{_CYCLE}/reconciliation/controls/{{control_code}}"
-        "/explanations/{comparison_key}",
+        f"{_CYCLE}/reconciliation/controls/{{control_code}}/explanations/{{comparison_key}}",
     ): "require_icaap_edit",
     ("GET", f"{_CYCLE}/allocation"): "require_icaap_view",
     ("PUT", f"{_CYCLE}/allocation"): "require_icaap_edit",
@@ -192,9 +191,7 @@ def _dependency_names(route: APIRoute) -> set[str]:
 
 def _icaap_routes() -> list[APIRoute]:
     return [
-        route
-        for route in create_app().routes
-        if isinstance(route, APIRoute) and "/icaap/" in route.path
+        route for route in app.routes if isinstance(route, APIRoute) and "/icaap/" in route.path
     ]
 
 

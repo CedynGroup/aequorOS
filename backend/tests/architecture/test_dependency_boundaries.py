@@ -258,6 +258,25 @@ def test_the_scanner_catches_the_evasions_the_2026_08_22_audit_demonstrated() ->
 
     assert missed == [], f"These evasions still walk through the guard: {missed}"
 
+    # Cached facts must remain isolated from callers and reflect every input.
+    source = "from .capital import CapitalProjection\n"
+    imports = imported_modules(source, module="app.models.example")
+    imports.clear()
+    assert "app.models.capital" in imported_modules(source, module="app.models.example")
+    assert "app.services.capital" in imported_modules(source, module="app.services.example")
+    assert imported_modules(source) == set()
+    names = referenced_names("CapitalProjection()")
+    names.clear()
+    assert referenced_names("CapitalProjection()") == {"CapitalProjection"}
+    assert referenced_names("CalculationRun()") == {"CalculationRun"}
+    sql = 'query = "SELECT id FROM calculation_runs"'
+    tables = frozenset({"calculation_runs"})
+    references = sql_table_references(sql, tables)
+    references.clear()
+    assert sql_table_references(sql, tables) == {"calculation_runs"}
+    assert sql_table_references(sql, frozenset({"other_table"})) == set()
+    assert sql_table_references('query = "SELECT id FROM other_table"', tables) == set()
+
 
 def test_the_two_guards_share_one_definition_of_the_case_plane() -> None:
     """ARCH-5 and CF-4 must not be able to disagree again.

@@ -420,6 +420,12 @@ locks, architecture and storage gates keep their coverage. The stdlib planner/co
 [`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py), so local mise
 commands continue to run their complete suites.
 
+Architecture guards still scan every module and run every check. Their shared
+scanner memoizes immutable facts by source text and import/table context within
+the current process; each caller receives a fresh set. Read-only route guards
+inspect the served application's route graph instead of rebuilding the same app
+for each assertion. Changed source is scanned again automatically.
+
 Refresh the duration baseline after a successful **full** main run, using its four
 `pg-suite-*` artifacts (download them into separate directories under one parent):
 run these commands from the repository root at that run's commit, before changing
