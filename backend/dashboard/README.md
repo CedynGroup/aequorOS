@@ -418,6 +418,11 @@ query/token state after each test. No browser service-worker build is needed.
 The liquidity specs cover stored decimal ladders, sensitivity/class grants and
 cash-flow date submission, currency totals, refusals and bank/authority cache
 isolation; their properties use 100 runs with fast-check's failure seed/path.
+Capital/Basel specs exercise stored scenario selection, missing versus zero ratios,
+percentage-point headroom, governed-floor disclosures and regime-specific columns.
+FX specs cover persisted position/parameter snapshots and scenario figures/verdicts.
+Their 100-run properties preserve decimal values and enforce exact sensitivity,
+whole-institution capital scope and entitlement boundaries.
 
 `test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
 includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
