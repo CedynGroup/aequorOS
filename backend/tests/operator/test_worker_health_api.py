@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import WorkerHeartbeat
+from app.operator.services import operator_views
 from tests.operator.conftest import operator_headers
 
 BASE = "/operator/v1/worker-health"
@@ -22,11 +24,12 @@ def test_requires_authentication(operator_client: TestClient) -> None:
 def test_reports_stale_heartbeats_using_the_governed_threshold(
     operator_client: TestClient,
     operator_db: Session,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("WORKER_HEARTBEAT_STALE_SECONDS", "30")
     get_settings.cache_clear()
     now = utc_now()
+    monkeypatch.setattr(operator_views, "utc_now", lambda: now)
     operator_db.add_all(
         [
             WorkerHeartbeat(

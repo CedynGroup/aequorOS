@@ -10,9 +10,9 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.attestation.public import RegulatoryArtifactVersion
 from app.core.tenancy import TenantContext
-from app.models import RegulatoryArtifactVersion, RegulatoryPackage
-from app.services.ingestion import bank_slug
+from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service.channels import FiledArtifact
 from app.reporting.service.common import get_bank_or_404
 from app.storage.client import StorageError, StorageLocation, StorageValidationError
@@ -67,7 +67,9 @@ def retain_filing(
     try:
         client = get_storage_client()
         bank = get_bank_or_404(db, ctx, package.bank_id)
-        slug = bank_slug(db, bank)
+        slug = bank.storage_slug
+        if slug is None:
+            raise StorageValidationError("The bank has no existing storage location.")
         until = retention_until(settings)
         retained: list[RetainedArtifact] = []
         for artifact in artifacts:

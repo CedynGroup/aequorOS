@@ -184,6 +184,33 @@ def test_sign_before_rollout_then_file_exact_versions(
         assert cast(dict[str, object], locked["Retention"])["Mode"] == "COMPLIANCE"
 
 
+def test_retention_refuses_to_assign_a_missing_storage_location(
+    db_session: Session,
+    storage: tuple[S3CompatibleStorageClient, LockClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, client = storage
+    package = _seed(db_session)
+    _lock_capability(db_session, store, client)
+    _preparer, approver = _fully_certify(db_session, package)
+    signed = _version(db_session, approver)
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    assert bank is not None
+    bank.storage_slug = None
+    db_session.flush()
+    monkeypatch.setenv("STORAGE_OBJECT_LOCK_ENABLED", "true")
+    get_storage_settings.cache_clear()
+
+    with pytest.raises(HTTPException) as raised:
+        retain_filing(db_session, MAKER, package, [signed])
+
+    assert raised.value.status_code == 409
+    detail = TypeAdapter(dict[str, object]).validate_python(raised.value.detail)
+    assert detail["error_code"] == "filing_retention_unconfirmed"
+    db_session.refresh(bank)
+    assert bank.storage_slug is None
+
+
 @pytest.mark.parametrize("return_code", ["BSD2", "SDI-LMT-MONTHLY", "ICAAP-REPORT"])
 def test_filing_classification_controls_working_copy_retention(
     db_session: Session,
