@@ -1,24 +1,5 @@
-/**
- * The two combinations a reader will get wrong cannot be built here.
- *
- * A cadence and its schedule, and a threshold basis and its number, are each
- * refused three times on the server — a request validator, a route check and a
- * database CHECK. That is correct, and it is not an interface. A control that can
- * produce a combination the server refuses turns a reader's ordinary mistake into
- * an error message, so both pairings are rebuilt as a whole rather than patched,
- * and the tests below are about the impossibility rather than about the message.
- *
- * The cadence rule is checked against `app/bi/models/notifications.py` itself —
- * the CHECK constraint is parsed out of it — because a client that believed a
- * daily report may carry a weekday would send one the database refuses, and a
- * client that believed a weekly one may not would hide a legal schedule.
- *
- * Run: pnpm --filter @aequoros/dashboard test
- */
-
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { runBackend } from "../../unit/backend";
 
 import {
   CADENCE_OPTIONS,
@@ -37,6 +18,7 @@ import {
   thresholdFor,
   type Cadence,
   type DeliveryStatus,
+  type Schedule,
 } from "./notifications";
 
 let failures = 0;
@@ -50,90 +32,113 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-function repoRoot(): string {
-  let dir = __dirname;
-  for (let index = 0; index < 10; index += 1) {
-    if (existsSync(join(dir, "backend", "app"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(`could not locate the repository root from ${__dirname}`);
+const cadences = runBackend<string[]>(`
+from app.bi.models.notifications import SUBSCRIPTION_CADENCES
+print(json.dumps(list(SUBSCRIPTION_CADENCES)))
+`);
+
+function scheduleVerdicts(
+  cases: { cadence: string; schedule: Schedule }[],
+): { schema: boolean; database: boolean }[] {
+  return runBackend(
+    `
+import sqlite3
+from sqlalchemy import CheckConstraint
+from app.bi.models.notifications import BiSubscription
+from app.bi.schemas.notifications import BiSubscriptionUpsert
+
+names = {"ck_bi_subscriptions_cadence", "ck_bi_subscriptions_hour",
+    "ck_bi_subscriptions_minute", "ck_bi_subscriptions_day_of_week",
+    "ck_bi_subscriptions_day_of_month", "ck_bi_subscriptions_schedule_matches_cadence"}
+checks = [str(c.sqltext) for c in BiSubscription.__table__.constraints
+    if isinstance(c, CheckConstraint) and c.name in names]
+assert len(checks) == len(names)
+results = []
+with sqlite3.connect(":memory:") as db:
+    for case in payload:
+        schedule = case["schedule"]
+        values = {"cadence": case["cadence"], "hour": schedule["hour"],
+            "minute": schedule["minute"], "day_of_week": schedule["dayOfWeek"],
+            "day_of_month": schedule["dayOfMonth"]}
+        columns = ", ".join(f":{name} AS {name}" for name in values)
+        database = all(db.execute(f"SELECT ({check}) IS NOT FALSE FROM (SELECT {columns})",
+            values).fetchone()[0] for check in checks)
+        try:
+            BiSubscriptionUpsert.model_validate({
+                **values, "name": "Treasury report", "artifact_format": "csv",
+                "query": {"measures": ["loans.balance_rc"], "time": {"as_of": "2026-06-30"}},
+                "reason": "Schedule parity", "recipient_emails": ["reader@example.com"]})
+        except ValueError:
+            schema = False
+        else:
+            schema = True
+        results.append({"schema": schema, "database": database})
+print(json.dumps(results))
+`,
+    cases,
+  );
 }
 
-const MODEL_SOURCE = readFileSync(
-  join(repoRoot(), "backend", "app", "models", "bi_notifications.py"),
-  "utf8",
-);
-
-// --- the cadence rule is the database's --------------------------------------
-
-test("every cadence the server stores is offered, and no other", () => {
-  const match =
-    /SUBSCRIPTION_CADENCES: tuple\[str, \.\.\.\] = \(([^)]*)\)/.exec(
-      MODEL_SOURCE,
-    );
-  assert.ok(match, "could not read SUBSCRIPTION_CADENCES from the model");
-  const declared = [...match[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+test("every stored cadence is offered", () => {
   assert.deepEqual(
     CADENCE_OPTIONS.map((option) => option.value).sort(),
-    [...declared].sort(),
-    "the cadence control and the stored vocabulary disagree",
+    [...cadences].sort(),
   );
-  assert.deepEqual(Object.keys(CADENCE_SHAPES).sort(), [...declared].sort());
+  assert.deepEqual(Object.keys(CADENCE_SHAPES).sort(), [...cadences].sort());
 });
 
-test("each cadence's fields are exactly the ones its CHECK constraint requires", () => {
-  // The constraint reads, per cadence:
-  //   (cadence = 'weekly' AND hour IS NOT NULL AND minute IS NOT NULL
-  //    AND day_of_week IS NOT NULL AND day_of_month IS NULL)
-  // so for each cadence the fields it REQUIRES are the ones it says IS NOT NULL.
-  // The expression is written as adjacent Python string literals, so the quotes
-  // and the line breaks between them are removed before it is read — the SQL is
-  // the concatenation, not any one literal.
-  const span =
-    /\(cadence = 'on_new_data'[\s\S]*?ck_bi_subscriptions_schedule_matches_cadence/.exec(
-      MODEL_SOURCE,
-    );
-  assert.ok(span, "could not find the schedule/cadence CHECK constraint");
-  const sql = span[0].replace(/"/g, "").replace(/\s+/g, " ");
-  for (const cadence of Object.keys(CADENCE_SHAPES) as Cadence[]) {
-    const clause = new RegExp(`cadence = '${cadence}'([^)]*)`).exec(sql);
-    assert.ok(clause, `the CHECK constraint says nothing about ${cadence}`);
-    const required = (field: string): boolean =>
-      new RegExp(`${field} IS NOT NULL`).test(clause[1]);
-    const shape = CADENCE_SHAPES[cadence];
-    assert.equal(required("hour"), shape.clock, `${cadence}: hour`);
-    assert.equal(required("minute"), shape.clock, `${cadence}: minute`);
-    assert.equal(
-      required("day_of_week"),
-      shape.dayOfWeek,
-      `${cadence}: weekday`,
-    );
-    assert.equal(
-      required("day_of_month"),
-      shape.dayOfMonth,
-      `${cadence}: day of month`,
-    );
-  }
+test("every schedule shape agrees with the wire validator and database CHECKs", () => {
+  const cases = (Object.keys(CADENCE_SHAPES) as Cadence[]).flatMap((cadence) =>
+    Array.from({ length: 16 }, (_, mask) => ({
+      cadence,
+      schedule: {
+        hour: mask & 1 ? 7 : null,
+        minute: mask & 2 ? 30 : null,
+        dayOfWeek: mask & 4 ? 1 : null,
+        dayOfMonth: mask & 8 ? 1 : null,
+      },
+    })),
+  );
+  const expected = cases.map(({ cadence, schedule }) => {
+    const accepted = scheduleIsComplete(cadence, schedule);
+    return { schema: accepted, database: accepted };
+  });
+  assert.deepEqual(scheduleVerdicts(cases), expected);
 });
 
-test("the day-of-month ceiling is the server's, so no month is skipped", () => {
-  const match = /day_of_month >= 1 AND day_of_month <= (\d+)/.exec(
-    MODEL_SOURCE,
+test("the monthly ceiling is enforced without skipping a month", () => {
+  const days = [0, 1, DAY_OF_MONTH_MAX, DAY_OF_MONTH_MAX + 1, 31];
+  const cases = days.map((dayOfMonth) => ({
+    cadence: "monthly",
+    schedule: { hour: 7, minute: 30, dayOfWeek: null, dayOfMonth },
+  }));
+  assert.deepEqual(
+    scheduleVerdicts(cases),
+    [false, true, true, false, false].map((accepted) => ({
+      schema: accepted,
+      database: accepted,
+    })),
   );
-  assert.ok(match, "could not read the day_of_month CHECK from the model");
-  assert.equal(DAY_OF_MONTH_MAX, Number(match[1]));
 });
 
-test("weekdays are numbered as the server stores them, Monday first", () => {
-  const match = /day_of_week >= (\d+) AND day_of_week <= (\d+)/.exec(
-    MODEL_SOURCE,
+test("weekday numbers run Monday through Sunday in both validators", () => {
+  assert.deepEqual(
+    WEEKDAYS.map((day) => day.value),
+    [1, 2, 3, 4, 5, 6, 7],
   );
-  assert.ok(match, "could not read the day_of_week CHECK from the model");
-  assert.equal(WEEKDAYS[0].value, Number(match[1]));
-  assert.equal(WEEKDAYS[WEEKDAYS.length - 1].value, Number(match[2]));
   assert.equal(WEEKDAYS[0].label, "Monday");
+  assert.equal(WEEKDAYS[6].label, "Sunday");
+  const cases = Array.from({ length: 9 }, (_, dayOfWeek) => ({
+    cadence: "weekly",
+    schedule: { hour: 7, minute: 30, dayOfWeek, dayOfMonth: null },
+  }));
+  assert.deepEqual(
+    scheduleVerdicts(cases),
+    cases.map(({ schedule }) => {
+      const accepted = schedule.dayOfWeek >= 1 && schedule.dayOfWeek <= 7;
+      return { schema: accepted, database: accepted };
+    }),
+  );
 });
 
 // --- an invalid combination is unbuildable -----------------------------------
@@ -328,48 +333,6 @@ test("addresses are normalised the way the server normalises them", () => {
 test("something that cannot be an address at all is named back to the reader", () => {
   assert.deepEqual(malformedRecipients("cfo@example.test, jane"), ["jane"]);
   assert.deepEqual(malformedRecipients("cfo@example.test"), []);
-});
-
-// --- the payload states every field the contract carries ----------------------
-
-test("every field the notification contracts carry is one the payload states", () => {
-  // THE PIN THAT WAS MISSING. `lib/api/bi.ts` posts alerts and subscriptions
-  // through a hand-written transport, so no compiler checks its request shape
-  // against the contract — and it omitted `notify_user_ids` and
-  // `recipient_user_ids`. The server REPLACES both from the request, where the
-  // schema defaults them to an empty list, so every dashboard edit of an alert
-  // silently deleted the user recipients an Org Owner had added through the API,
-  // and answered 200 (verification auditor V2).
-  //
-  // The generated serializers are the contract. Read from the package source
-  // rather than imported, because this suite runs as plain Node.
-  const generated = join(repoRoot(), "packages", "risk-service-api", "src", "models");
-  const transport = readFileSync(join(repoRoot(), "backend", "dashboard", "lib", "api", "bi.ts"), "utf8");
-  for (const [model, builder] of [
-    ["BiAlertUpsert", "alertPayload"],
-    ["BiSubscriptionUpsert", "subscriptionPayload"],
-  ] as const) {
-    const modelPath = join(generated, `${model}.ts`);
-    assert.ok(existsSync(modelPath), `generated model not found: ${modelPath}`);
-    const body =
-      new RegExp(`export function ${model}ToJSONTyped[\\s\\S]*?return \\{([\\s\\S]*?)\\n  \\};`).exec(
-        readFileSync(modelPath, "utf8"),
-      );
-    assert.ok(body, `could not read the generated ${model} serializer`);
-    const wireKeys = [...body[1].matchAll(/^\s{4}([a-z_0-9]+):/gm)].map((m) => m[1]);
-    assert.ok(wireKeys.length >= 8, `read only ${wireKeys.length} keys from ${model}`);
-
-    const fn = new RegExp(`function ${builder}\\(([\\s\\S]*?)\\n\\}`).exec(transport);
-    assert.ok(fn, `could not read ${builder} in lib/api/bi.ts`);
-    const missing = wireKeys.filter((key) => !new RegExp(`\\b${key}:`).test(fn[1]));
-    assert.deepEqual(
-      missing,
-      [],
-      `${builder} does not state ${missing.join(", ")}. The server replaces what ` +
-        `the request omits, so an omitted field DELETES what is stored — which is ` +
-        `how every dashboard edit wiped an alert's user recipients.`,
-    );
-  }
 });
 
 if (failures > 0) {

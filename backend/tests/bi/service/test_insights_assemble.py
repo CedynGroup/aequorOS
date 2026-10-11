@@ -16,21 +16,23 @@ than the route doing the reading itself:
 * **the read is bounded** — one insights request is charged once against the read
   budget, so the number of compiled statements it may run is a constant here.
 
-The source-reading test at the end is the cheapest guard on the first property:
-the pressure to write ``value or 0`` arrives with the first ``None`` a developer
-sees in a debugger.
 """
 
 from __future__ import annotations
 
-import re
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.bi.domain.catalogue import ColumnRef, EngineRule, MeasureDef, catalogue
+from app.bi.models.marts import BiAggPositionDaily, BiFactEngineMetric, BiFactPositionDaily
+from app.bi.schemas.query import BiDateRange, BiQuery, BiTime
+from app.bi.service.compiler import compile_query
+from app.bi.service.execution import execute
 from app.bi.service.insights.assemble import (
     HEADLINE_MEASURE_CAP,
     MAX_COMPILED_READS,
@@ -39,29 +41,20 @@ from app.bi.service.insights.assemble import (
     _is_bridgeable,
     _movement_or_gap,
     _point_time,
+    assemble,
     default_compare_to,
     engine_measure_applies,
     engine_regime,
     headline_measures,
 )
 from app.bi.service.insights.facts import MovementFact, ObservedFact
+from app.core.authorization import InstitutionScope, ModuleScope, SensitivityScope
+from app.models import Bank
+from tests.bi.api.test_bi_insights import _clone_day
+from tests.bi.api.test_bi_routes import AS_OF, Grant, grant_only, seed_bi_mart
+from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
-
-_SOURCE = Path("app/bi/service/insights/assemble.py")
-
-_DOCSTRING = re.compile(r'(""".*?"""|\'\'\'.*?\'\'\')', re.DOTALL)
-
-
-def _code(path: Path) -> str:
-    """The module's executable text: docstrings and comments removed.
-
-    Both have to go. This file's own prose names the patterns it forbids — that is
-    what makes the prohibition legible — so a scan that read the docstrings would
-    convict the explanation instead of the code.
-    """
-    source = _DOCSTRING.sub("", path.read_text(encoding="utf-8"))
-    return "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
 
 
 def _cat():  # noqa: ANN202 - the catalogue's own type, resolved by the caller
@@ -333,26 +326,94 @@ def test_a_position_is_read_at_a_date_and_an_amount_over_a_period() -> None:
     assert flow_time.compare_to == prior
 
 
-# --- the source guard ----------------------------------------------------------------------
-
-
-def test_the_assembler_carries_no_fallback_that_could_invent_a_figure() -> None:
-    """No ``or 0``, no ``Decimal(0)`` default, no ``fillna``."""
-    code = _code(_SOURCE)
-    forbidden = (
-        r"\bor\s+0\b",
-        r"\bor\s+Decimal\(",
-        r"Decimal\(\s*0\s*\)\s*(?:if|$)",
-        r"\.fillna\(",
-        r"\bdefault\s*=\s*Decimal\(",
+@pytest.fixture
+def assembled_mart(db_session: Session) -> tuple[Bank, TenantContext]:
+    bank = seed_bi_mart(db_session)
+    authv = grant_only(
+        db_session, (Grant(ModuleScope.ALL, SensitivityScope.ALL, InstitutionScope.ORGANIZATION),)
     )
-    for pattern in forbidden:
-        assert not re.search(pattern, code), f"{pattern} appears in {_SOURCE}"
+    return bank, TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=USER_1,
+        authorization_version=authv,
+    )
 
 
-def test_the_assembler_never_writes_its_own_aggregation() -> None:
-    """Every figure comes from the query path's compiler, not from a second one."""
-    code = _code(_SOURCE)
-    for forbidden in ("func.sum(", "func.count(", "text(", "select("):
-        assert forbidden not in code, f"{forbidden} appears in {_SOURCE}"
-    assert "compile_query(" in code
+@pytest.mark.parametrize("missing_current", [False, True])
+def test_missing_mart_values_never_become_zero_or_movements(
+    db_session: Session,
+    assembled_mart: tuple[Bank, TenantContext],
+    missing_current: bool,
+) -> None:
+    bank, ctx = assembled_mart
+    if missing_current:
+        for model in (BiAggPositionDaily, BiFactPositionDaily, BiFactEngineMetric):
+            db_session.execute(delete(model).where(model.bank_id == bank.id))
+        db_session.flush()
+    result = assemble(
+        db_session,
+        ctx=ctx,
+        bank=bank,
+        cat=catalogue(),
+        as_of=AS_OF,
+        surface="insights",
+        row_cap=500,
+        timeout_ms=5000,
+    )
+    assert result.measures_read > 0
+    assert result.sheet.facts
+    assert not any(isinstance(fact, MovementFact) for fact in result.sheet.facts)
+    gaps = [
+        fact
+        for fact in result.sheet.facts
+        if isinstance(fact, ObservedFact) and fact.missing_reason
+    ]
+    assert gaps
+    assert all(fact.value is None for fact in gaps)
+    if missing_current:
+        capital = next(fact for fact in gaps if fact.measure_id == "engine.car_pct.crd.official")
+        assert capital.value is None
+        assert capital.missing_reason is not None
+
+
+def test_assembled_figures_equal_the_public_compiled_query_results(
+    db_session: Session,
+    assembled_mart: tuple[Bank, TenantContext],
+) -> None:
+    bank, ctx = assembled_mart
+    prior = default_compare_to(AS_OF)
+    _clone_day(db_session, bank, target=prior, factor=Decimal("0.8"))
+    cat = catalogue()
+    result = assemble(
+        db_session,
+        ctx=ctx,
+        bank=bank,
+        cat=cat,
+        as_of=AS_OF,
+        surface="insights",
+        row_cap=500,
+        timeout_ms=5000,
+    )
+    movements = [fact for fact in result.sheet.facts if isinstance(fact, MovementFact)]
+    assert movements
+    for fact in movements:
+        time = (
+            BiTime(range=BiDateRange(start=AS_OF.replace(day=1), end=AS_OF), compare_to=prior)
+            if cat.measure(fact.measure_id).time_behaviour == "flow"
+            else BiTime(as_of=AS_OF, compare_to=prior)
+        )
+        query = BiQuery(measures=[fact.measure_id], time=time)
+        compiled = compile_query(
+            db_session,
+            cat,
+            query,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+        )
+        answer = execute(db_session, compiled, timeout_ms=5000, row_cap=500)
+        assert answer.rows
+        values = {
+            column.role: value for column, value in zip(answer.columns, answer.rows[0], strict=True)
+        }
+        assert fact.current == Decimal(str(values["current"]))
+        assert fact.prior == Decimal(str(values["prior"]))

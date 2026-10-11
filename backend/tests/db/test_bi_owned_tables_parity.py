@@ -14,9 +14,8 @@ characters too narrow there would have passed every gate, exactly as A8-01 did.
 This module closes the CLASS rather than the instance. Its subject is not a
 tuple anybody maintains; it is computed two ways and the two must agree:
 
-* every table declared by a model module whose name is ``bi`` or ``bi_*`` under
-  ``app.models`` (found with ``pkgutil``, so a new ``app/models/bi_x.py`` joins
-  by existing);
+* every table declared by a module under ``app.bi.models`` (found with
+  ``pkgutil``, so a new model module joins by existing);
 * every ``bi_``-prefixed table in ``Base.metadata`` (so a BI table declared in
   some other module joins by its name).
 
@@ -44,7 +43,7 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
 
-import app.models as models_package
+import app.bi.models as models_package
 from alembic import command
 from app.bi.models.commentary import BI_COMMENTARY_TABLES
 from app.bi.models.content import BI_CONTENT_TABLES
@@ -58,7 +57,7 @@ from tests.db.test_postgres_migrations import (
     postgres_schema_url,
 )
 
-pytestmark = pytest.mark.skipif(
+requires_postgres = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration tests.",
 )
@@ -70,13 +69,12 @@ _PG = postgresql.dialect()
 
 
 def _bi_model_modules() -> tuple[ModuleType, ...]:
-    """Every ``app.bi.models.marts`` / ``app.models.bi_*`` module, imported."""
+    """Every module under ``app.bi.models``, imported."""
     names = sorted(
         info.name
-        for info in pkgutil.iter_modules(models_package.__path__)
-        if info.name == "bi" or info.name.startswith("bi_")
+        for info in pkgutil.walk_packages(models_package.__path__, f"{models_package.__name__}.")
     )
-    return tuple(importlib.import_module(f"app.models.{name}") for name in names)
+    return tuple(importlib.import_module(name) for name in names)
 
 
 def _tables_declared_by(module: ModuleType) -> frozenset[str]:
@@ -147,10 +145,10 @@ def test_the_subject_is_derived_from_the_model_modules_and_the_prefix() -> None:
     blind spot again."""
     assert len(BI_MODEL_MODULES) >= 4, [module.__name__ for module in BI_MODEL_MODULES]
     assert {module.__name__.rsplit(".", 1)[1] for module in BI_MODEL_MODULES} >= {
-        "bi",
-        "bi_commentary",
-        "bi_content",
-        "bi_notifications",
+        "marts",
+        "commentary",
+        "content",
+        "notifications",
     }
     # 24 since `202609290080` dropped `bi_reconciliation_results` (BI carries no
     # reconciliation verdict — founder's decision of 2026-09-29). The floor is a
@@ -169,7 +167,7 @@ def test_the_subject_is_derived_from_the_model_modules_and_the_prefix() -> None:
 def test_every_bi_owned_table_is_registered_in_exactly_one_hand_tuple() -> None:
     """The three older suites read the tuples; this is what keeps them honest.
 
-    Fails by name in both directions: a table a ``bi*`` module declares (or a
+    Fails by name in both directions: a table a BI model module declares (or a
     ``bi_``-named table anywhere) that no tuple registers — the 26th-table case
     — and a tuple entry that no module declares.
     """
@@ -200,6 +198,7 @@ def test_the_check_axis_is_not_vacuous_for_the_unprefixed_table() -> None:
 # --- axis 1: every table exists and forces RLS under the tenant policy ---------
 
 
+@requires_postgres
 def test_every_bi_owned_table_exists_and_forces_row_level_security(
     bi_schema: MigratedPostgresSchema,
 ) -> None:
@@ -240,6 +239,7 @@ def test_every_bi_owned_table_exists_and_forces_row_level_security(
 # --- axis 2: column type, length, precision, scale, nullability ----------------
 
 
+@requires_postgres
 def test_migrated_columns_match_the_model_type_length_and_nullability(
     bi_schema: MigratedPostgresSchema,
 ) -> None:
@@ -288,6 +288,7 @@ def test_migrated_columns_match_the_model_type_length_and_nullability(
 # --- axis 3: CHECK constraint names are the same set on both sides -------------
 
 
+@requires_postgres
 def test_migrated_check_constraints_are_exactly_the_models(
     bi_schema: MigratedPostgresSchema,
 ) -> None:
@@ -321,6 +322,7 @@ def test_migrated_check_constraints_are_exactly_the_models(
 # --- axis 4: every value a model CHECK admits, the migrated CHECK admits -------
 
 
+@requires_postgres
 def test_migrated_checks_admit_every_value_the_model_admits(
     bi_schema: MigratedPostgresSchema,
 ) -> None:

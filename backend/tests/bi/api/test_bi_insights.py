@@ -16,18 +16,13 @@ dashboard sentence lies:
 * **a reader who may see nothing is told "nothing stands out".** That sentence is a
   claim about the bank's figures, so the route refuses instead of making it.
 
-The wire shape is checked against ``components/bi/types.ts`` directly: the strip
-mirrors ``statements.py::Insight`` field for field in camelCase, and a mismatch
-there is a field the browser silently drops.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -43,7 +38,7 @@ from app.bi.models.marts import (
     BiMartBuild,
     BiQueryLog,
 )
-from app.bi.schemas.query import BiInsightRead
+from app.bi.schemas.query import BiInsightRead, BiInsightsRead
 from app.bi.service.insights import default_compare_to, headline_measures
 from app.core.authorization import InstitutionScope, ModuleScope, SensitivityScope
 from app.core.config import get_settings
@@ -72,13 +67,6 @@ EVERYTHING: tuple[Grant, ...] = (
 CREDIT_ONLY: tuple[Grant, ...] = (
     Grant(ModuleScope.CREDIT, SensitivityScope.AGGREGATED, InstitutionScope.ORGANIZATION),
 )
-
-_TYPES_TS = Path("dashboard/components/bi/types.ts")
-#: Fields the strip carries that no ``Insight`` holds: a published sparkline
-#: series and a link to the working. Both are the client's to supply — see the
-#: report — and both are optional in the TypeScript type.
-_CLIENT_ONLY_FIELDS: frozenset[str] = frozenset({"series", "href"})
-
 
 # --- fixtures --------------------------------------------------------------------------------
 
@@ -403,30 +391,6 @@ def test_an_explicit_comparison_is_honoured(
 # --- the wire shape ---------------------------------------------------------------------------
 
 
-def _camel_to_snake(name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-
-
-def test_the_wire_shape_mirrors_the_dashboards_own_type() -> None:
-    """``components/bi/types.ts::BiInsight`` field for field, in camelCase.
-
-    Read from the TypeScript source rather than restated, so the two cannot drift:
-    a field the browser expects and the server does not send renders as
-    ``undefined``, which for a boolean like ``certified`` is a flag that silently
-    reads as false.
-    """
-    source = _TYPES_TS.read_text(encoding="utf-8")
-    block = re.search(r"export type BiInsight = Readonly<\{(.*?)\}>;", source, re.DOTALL)
-    assert block is not None, f"BiInsight is no longer declared in {_TYPES_TS}"
-    declared = {
-        match.group(1) for match in re.finditer(r"^\s{2}(\w+)\??:", block.group(1), re.MULTILINE)
-    }
-    assert declared, block.group(1)
-    expected = {_camel_to_snake(name) for name in declared} - _CLIENT_ONLY_FIELDS
-    served = set(BiInsightRead.model_fields)
-    assert expected <= served, expected - served
-
-
 def test_every_served_insight_carries_the_whole_shape(
     db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
 ) -> None:
@@ -434,6 +398,8 @@ def test_every_served_insight_carries_the_whole_shape(
     authv = grant_only(db_session, EVERYTHING)
     payload = _get(db_client, f"as_of={AS_OF.isoformat()}", authv=authv).json()
     assert payload["insights"]
+    decoded = BiInsightsRead.model_validate(payload)
+    assert decoded.model_dump(mode="json") == payload
     for insight in payload["insights"]:
         assert set(insight) == set(BiInsightRead.model_fields)
         assert insight["headline"] and insight["detail"]

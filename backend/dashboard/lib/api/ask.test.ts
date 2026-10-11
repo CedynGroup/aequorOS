@@ -26,6 +26,7 @@
  */
 
 import assert from "node:assert/strict";
+import { runBackend } from "../../unit/backend";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -281,7 +282,10 @@ test("the generated response parser would rename a field, and is not used", () =
     const callScan = new RegExp(`${symbol}(?:Typed)?\\s*\\(`);
     // Proven able to fire, and able to tell a call from a mention.
     assert.equal(callScan.test(`const p = ${symbol}(raw);`), true);
-    assert.equal(callScan.test(`// \`${symbol}\` renames fields, so it is unused`), false);
+    assert.equal(
+      callScan.test(`// \`${symbol}\` renames fields, so it is unused`),
+      false,
+    );
     for (const file of [
       "lib/api/ask.ts",
       "lib/api/askTransport.ts",
@@ -620,20 +624,26 @@ test("the page, the tab and the transport reach each other", () => {
 });
 
 test("the question bound matches the route's own", () => {
-  const schema = readFileSync(
-    join(repoRoot(), "backend", "app", "schemas", "bi_nlq.py"),
-    "utf8",
+  const accepted = runBackend<boolean[]>(
+    `
+from app.bi.schemas.nlq import BiAskRequest
+results = []
+for question in payload:
+    try:
+        BiAskRequest.model_validate({"question": question, "as_of": "2026-06-30"})
+    except ValueError:
+        results.append(False)
+    else:
+        results.append(True)
+print(json.dumps(results))
+`,
+    [
+      "q".repeat(ASK_QUESTION_MAX_CHARS),
+      "q".repeat(ASK_QUESTION_MAX_CHARS + 1),
+      "",
+    ],
   );
-  const declared = /QUESTION_MAX_CHARS\s*=\s*(\d+)/.exec(schema);
-  assert.ok(
-    declared,
-    "could not read QUESTION_MAX_CHARS from the wire contract",
-  );
-  assert.equal(
-    ASK_QUESTION_MAX_CHARS,
-    Number(declared![1]),
-    "the box would let a reader type a question the route refuses",
-  );
+  assert.deepEqual(accepted, [true, false, false]);
 });
 
 if (failures > 0) {

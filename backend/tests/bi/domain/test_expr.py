@@ -20,12 +20,13 @@ Four things are worth breaking here, in order of what it would cost:
 
 from __future__ import annotations
 
-import ast as python_ast
+import json
 import re
+import subprocess
+import sys
 import time
 from dataclasses import fields
 from decimal import Decimal
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -1091,29 +1092,46 @@ def test_a_figure_id_the_catalogue_does_not_know_is_a_well_formed_reference() ->
     assert referenced_members(tree) == ("no.such.figure.anywhere", "loans.balance_rc")
 
 
-def test_the_module_reaches_nothing_but_the_standard_library() -> None:
-    """It is scanned by the BI architecture guards, but the contract is tighter
-    than those: no application import at all, so the parser can be reasoned
-    about — and fuzzed — with nothing else loaded."""
-    source = Path(str(expr_module.__file__)).read_text(encoding="utf-8")
-    imported: list[str] = []
-    for node in python_ast.walk(python_ast.parse(source)):
-        if isinstance(node, python_ast.Import):
-            imported.extend(alias.name for alias in node.names)
-        elif isinstance(node, python_ast.ImportFrom) and node.module:
-            imported.append(node.module)
-    assert [
-        name for name in imported if name.split(".")[0] in {"app", "sqlalchemy", "pydantic"}
-    ] == []
+def test_the_parser_runs_without_application_or_third_party_packages() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            """
+import importlib.util
+import json
+import sys
+spec = importlib.util.spec_from_file_location("isolated_bi_expr", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+tree = module.parse("SAFE_DIV([m:loans.balance_rc], [m:deposits.balance_rc])", retention_days=None)
+print(json.dumps(module.referenced_members(tree)))
+""",
+            str(expr_module.__file__),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(result.stdout) == ["loans.balance_rc", "deposits.balance_rc"]
 
 
-def test_the_parser_produces_no_sql_and_holds_no_text_that_looks_like_it() -> None:
-    """The one thing a formula language must never grow. Pinned here as well as
-    in ``tests/architecture/test_bi_compiler_injection.py`` because that guard
-    scans the tree, and this is the module where the temptation lives."""
-    source = Path(str(expr_module.__file__)).read_text(encoding="utf-8")
-    for keyword in ("SELECT", "INSERT", "UPDATE", "DELETE", "FROM ", "WHERE", "JOIN"):
-        assert keyword not in source, keyword
+@pytest.mark.parametrize(
+    "source",
+    [
+        "SELECT balance FROM positions",
+        "[m:loans.balance_rc]; DELETE FROM positions",
+        "IF([m:a] > 0, UPDATE, 1)",
+        "[m:a] + 'WHERE'",
+        "[m:a] JOIN [m:b]",
+    ],
+)
+def test_sql_input_is_refused_as_an_expression(source: str) -> None:
+    with pytest.raises(ExpressionError):
+        parse(source)
 
 
 # ---------------------------------------------------------------------------
