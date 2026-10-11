@@ -74,7 +74,8 @@ superseded by this delta where they differ.
    sub-navs (Liquidity → Submission, Basel → Submissions) are removed; modules link out.
 2. **Packages are immutable.** Generating a return for a reporting date mints a versioned,
    immutable package snapshot carrying the input hashes of every source calculation run.
-   Regeneration supersedes; it never mutates.
+   Regeneration supersedes; it never mutates. Database enforcement and correction
+   rules are owned by [the filing and input seals contract](../backend/docs/tamper_evident_records.md#filing-and-input-seals).
 3. **Every number traces.** Package → source runs (input_hash, engine version) → facts →
    canonical rows → ingestion batch → raw file. Reuses the existing lineage substrate.
 4. **Fidelity is labeled.** Each template in the registry carries a fidelity grade from the
