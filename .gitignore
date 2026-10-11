@@ -1,6 +1,7 @@
 .DS_Store
 node_modules/
 pnpm-debug.log*
+.pnpm-store/
 *.tsbuildinfo
 
 # Never commit credentials or local environment files.

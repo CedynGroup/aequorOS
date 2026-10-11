@@ -15,7 +15,8 @@ name: Dashboard CI
 #                run in CI, and the tree carried one committed
 #                react/no-unescaped-entities error, fixed in the same change so
 #                this can be a gate rather than a warning nobody reads.
-#   test       — node:test suites. These are CONTROLS, not unit trivia, and were
+#   test       — isolated Node suites + Vitest behavior suites and coverage.
+#                The legacy suites are CONTROLS, not unit trivia, and were
 #                the reason this job existed at all without enforcing them:
 #                  * lib/api/fail-open-guard.test.ts — a static guard over 374
 #                    regulatory UI files proving no regulatory surface fails
@@ -121,13 +122,20 @@ jobs:
       - name: Test dashboard
         env:
           DASHBOARD_UNIT_REPORT: ${{ runner.temp }}/dashboard-unit-files.json
-        run: pnpm --filter dashboard test
+        run: pnpm --filter dashboard test:coverage
       - name: Upload dashboard unit collection
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: dashboard-unit-collection
           path: ${{ runner.temp }}/dashboard-unit-files.json
+          if-no-files-found: error
+      - name: Upload dashboard unit coverage
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dashboard-unit-coverage
+          path: backend/dashboard/coverage/
           if-no-files-found: error
       - name: Build dashboard
         run: pnpm --filter dashboard build
