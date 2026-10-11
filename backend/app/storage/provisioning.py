@@ -2,8 +2,10 @@
 
 One call provisions everything a new institution needs: four tier buckets,
 versioning on the retained tiers, and the aggressive lifecycle rule on
-``temp``. Idempotent by design — re-running against an already-provisioned
-institution is a no-op, so onboarding automation can safely retry.
+``temp``. Retries reconcile existing bucket settings and can refuse an
+incompatible output bucket. Output-bucket requirements and deployment preparation
+are governed by ``backend/docs/tamper_evident_records.md`` (Write-once objects
+and backups).
 
 Manual bucket creation in a console is prohibited outside debugging; this
 module is the only sanctioned path (Terraform takes over for GCS/S3 in

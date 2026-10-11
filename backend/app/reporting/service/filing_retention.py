@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TypedDict
@@ -60,7 +60,7 @@ class RetainedArtifact(TypedDict):
 
 
 @contextmanager
-def filing_retention_errors() -> Iterator[None]:
+def filing_retention_errors() -> Generator[None]:
     try:
         yield
     except StorageError as exc:

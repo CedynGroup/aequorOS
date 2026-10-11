@@ -196,8 +196,9 @@ hermetic fixtures retain their existing behavior with this flag off. Provisionin
 creates lock-capable output buckets and refuses an existing output bucket without Object
 Lock or with `Rule.DefaultRetention` in any mode. Bucket defaults retain every new
 version, including working drafts. Provisioning, application writes, presigned uploads
-and filing retention refuse that configuration, naming the bucket and rule, before
-writing objects or changing retention. They never rewrite an existing bucket policy.
+and filing retention refuse incompatible Object Lock configurations before writing
+objects or changing retention. Default-retention refusals name the bucket and rule.
+They never rewrite an existing Object Lock configuration.
 The enabled application and provisioning roles need `s3:GetBucketObjectLockConfiguration`
 on output buckets to verify this policy; inability to read it refuses the operation.
 Enable Object Lock/versioning without a default retention rule on existing output buckets through the
@@ -214,11 +215,16 @@ Exports and signing archive bytes without automatically locking every output;
 read-only filing previews do not apply retention. Attachments are recorded as a
 manifest, not transmitted artifacts, and are outside this object retention set.
 Retention can be extended but is never shortened, including an existing longer
-governance interval. A retention PUT is followed by a version-specific GET;
-submission refuses if compliance mode or the required date cannot be confirmed.
-The API returns HTTP 409 with `error_code=filing_retention_unconfirmed` when
-retention fails; resolve the storage capability, permissions or archived-version
-problem before retrying the submission.
+governance interval. Required deadlines round up to whole seconds so storage
+timestamp precision cannot shorten the interval. A retention PUT is followed by
+a version-specific GET; submission refuses if compliance mode or the required
+date cannot be confirmed.
+The shared submission preparation boundary returns HTTP 409 with
+`error_code=filing_retention_unconfirmed` for storage failures during auto-export
+or exact-version retention, including output buckets without Object Lock or with
+`Rule.DefaultRetention`. Refusal precedes channel delivery and the submission
+event; package status and financial content stay unchanged. Resolve
+the storage capability, permissions or archived-version problem before retrying.
 The submission event records each retained `storage_version_id`.
 
 For historical filings, run the tenant- and bank-scoped inventory from `backend`:
