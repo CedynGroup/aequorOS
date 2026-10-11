@@ -79,8 +79,8 @@ const bogLayoutsDir = path.join(
   "..",
   "..",
   "app",
-  "services",
-  "regulatory_reporting",
+  "reporting",
+  "service",
   "bog_forms",
   "layouts",
 );
