@@ -85,7 +85,7 @@ def test_archived_version_refuses_changed_default_retention(mode: str) -> None:
         assert decrypted.read() == content
         decrypted.close()
     finally:
-        deprovision_institution(storage._s3, settings, slug)  # pyright: ignore[reportPrivateUsage]
+        deprovision_institution(cast(ProvisioningClient, client), settings, slug)
 
 
 class TestS3CompatibleStorageContract(StorageContractSuite):
