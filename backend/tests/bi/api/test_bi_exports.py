@@ -24,11 +24,12 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -630,45 +631,50 @@ def test_an_export_that_does_not_exist_is_404(
     assert response.status_code == 404, response.text
 
 
-def test_a_browser_can_read_the_export_headers_it_needs() -> None:
-    """CORS exposes a short safelist by default, so these must be named.
+@pytest.mark.parametrize("fmt", ["csv", "xlsx", "pdf"])
+@pytest.mark.parametrize("record_level", [False, True])
+def test_a_browser_can_read_the_export_headers_it_needs(  # noqa: PLR0913
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    bi_on: None,
+    user_email: str,
+    monkeypatch: pytest.MonkeyPatch,
+    fmt: str,
+    record_level: bool,
+) -> None:
+    from app.main import create_app  # noqa: PLC0415
 
-    The export route sets the filename and the disclosure class as response
-    headers, and without `expose_headers` a browser cannot READ either: the
-    dashboard silently fell back to a filename it composed itself while the
-    server's choice never arrived, and it could not tell a summary export from a
-    record-level one. Measured on a real download while the export menu was being
-    wired.
-
-    Asserted two ways, because either alone is weak. The declared list must name
-    the headers the export route actually sets, read out of that route's own
-    source rather than restated here; and the middleware must be given that list,
-    so declaring it and not passing it fails too.
-    """
-    import inspect as _inspect  # noqa: PLC0415
-
-    from fastapi.middleware.cors import CORSMiddleware  # noqa: PLC0415
-
-    from app.bi.api import export_bi  # noqa: PLC0415
-    from app.core.logging import REQUEST_ID_HEADER  # noqa: PLC0415
-    from app.main import EXPOSED_RESPONSE_HEADERS, create_app  # noqa: PLC0415
-
-    route_source = _inspect.getsource(export_bi)
-    for header in ("Content-Disposition", "X-Bi-Export-Class"):
-        assert header in route_source, (
-            f"{header} is no longer set by the export route, so exposing it is stale"
-        )
-        assert header in EXPOSED_RESPONSE_HEADERS, (
-            f"the export route sets {header} and a browser cannot read it"
-        )
-    assert REQUEST_ID_HEADER in EXPOSED_RESPONSE_HEADERS
-
-    # And the middleware must actually be GIVEN the list. The test environment
-    # blanks the allowed origins, so the layer is only added when a deployment
-    # configures one; where it is added, it must carry these.
+    origin = "https://dashboard.test"
+    monkeypatch.setenv("CORS_ORIGINS", origin)
+    get_settings.cache_clear()
     app = create_app()
-    for middleware in app.user_middleware:
-        if middleware.cls is CORSMiddleware:
-            declared = middleware.kwargs.get("expose_headers") or ()
-            exposed = set(cast("Iterable[str]", declared))
-            assert set(EXPOSED_RESPONSE_HEADERS) <= exposed, sorted(exposed)
+    app.dependency_overrides.update(cast(FastAPI, db_client.app).dependency_overrides)
+    authv = grant_only(db_session, RECORD_EXPORTER if record_level else AGGREGATE_ONLY)
+    with TestClient(app) as client:
+        response = client.post(
+            f"{BASE}/export",
+            json={"query": RECORD_QUERY if record_level else SUMMARY_QUERY, "format": fmt},
+            headers={**headers(authorization_version=authv), "Origin": origin},
+        )
+        assert response.status_code == 200, response.text
+        assert response.content
+        assert response.headers["content-disposition"].startswith("attachment;")
+        assert f".{fmt}" in response.headers["content-disposition"]
+        assert response.headers["x-bi-export-class"] == (
+            policy.RECORD_LEVEL if record_level else policy.SUMMARY
+        )
+        assert response.headers["x-request-id"]
+        assert response.headers["access-control-allow-origin"] == origin
+        exposed = {
+            name.strip().lower()
+            for name in response.headers["access-control-expose-headers"].split(",")
+        }
+        assert {"content-disposition", "x-bi-export-class", "x-request-id"} <= exposed
+        preflight = client.options(
+            f"{BASE}/export",
+            headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
+        )
+        assert preflight.status_code == 200
+        assert preflight.headers["access-control-allow-origin"] == origin
+        assert "POST" in preflight.headers["access-control-allow-methods"].split(", ")
