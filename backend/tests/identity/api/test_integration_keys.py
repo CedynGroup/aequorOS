@@ -7,7 +7,7 @@ connections, and the services commit their atomic lifecycle transactions.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api import deps
 from app.api.deps import INTEGRATION_KEY_ROUTES
 from app.core.authorization import (
     BindingStatus,
@@ -845,3 +846,88 @@ def test_lifecycle_audit_names_bank_binding_and_service_identity(
         assert events[0].details["authorization_binding_id"]
         assert events[1].details["authorization_binding_ids"]
         assert events[1].details["service_user_id"]
+
+
+@pytest.mark.parametrize("bi_enabled", ["0", "1"])
+def test_account_admin_without_view_cannot_issue_reader_key(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, bi_enabled: str
+) -> None:
+    seed_bank(db_client)
+    _admin_headers()
+    with _session() as db:
+        # The canonical book fixture also grants operational authority. Remove
+        # it so this principal has Account administration alone.
+        bindings = db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.module_scope != ModuleScope.ACCOUNT.value,
+            )
+        ).all()
+        for binding in bindings:
+            db.delete(binding)
+        version = authorization.invalidate_user_authorization(
+            db, organization_id=ORG_1, user_id=USER_1, reason="Account-only regression fixture"
+        )
+        before_keys = db.scalar(select(func.count()).select_from(IntegrationKey))
+        before_users = db.scalar(select(func.count()).select_from(User))
+        before_bindings = db.scalar(select(func.count()).select_from(AuthorizationBinding))
+    admin = headers(user_id=USER_1, roles=("viewer",), authorization_version=version)
+    monkeypatch.setenv("BI_ENABLED", bi_enabled)
+    from app.core.config import get_settings  # noqa: PLC0415
+
+    get_settings.cache_clear()
+    try:
+        response = db_client.post(
+            "/api/v1/integration-keys",
+            headers=admin,
+            json={"bank_id": SAMPLE_BANK_ID, "label": "Unauthorized reader", "purpose": "reader"},
+        )
+        assert response.status_code == 422, response.text
+        with _session() as db:
+            assert db.scalar(select(func.count()).select_from(IntegrationKey)) == before_keys
+            assert db.scalar(select(func.count()).select_from(User)) == before_users
+            assert (
+                db.scalar(select(func.count()).select_from(AuthorizationBinding)) == before_bindings
+            )
+    finally:
+        get_settings.cache_clear()
+
+
+def test_machine_view_binding_cannot_reach_module_route_when_allowlist_widens(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_bank(db_client)
+    issued = _issue(db_client)
+    with _session() as db:
+        key = db.get(IntegrationKey, UUID(cast(str, issued["record"]["id"])))
+        assert key is not None
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=key.service_user_id,
+            principal_type=PrincipalType.MACHINE,
+            role_bundle=RoleBundle.BI_READER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.ALL,
+                SensitivityScope.AGGREGATED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="Historical reader authority to prove module refusal",
+        )
+    monkeypatch.setattr(
+        deps,
+        "INTEGRATION_KEY_ROUTES",
+        deps.INTEGRATION_KEY_ROUTES
+        | {
+            ("GET", "/api/v1/banks/{bank_id}/capital/dashboard"),
+        },
+    )
+    response = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/dashboard", headers=_bearer(issued)
+    )
+    assert response.status_code == 403, response.text
+    assert (
+        response.json()["error"]["message"] == "Capital access requires an active scoped binding."
+    )

@@ -5,28 +5,9 @@ exact machine binding in a single transaction. The raw key is returned once and
 only its SHA-256 hash is persisted. Authentication proves the credential; each
 machine route separately requires the complete binding before any side effect.
 
-**A key is issued for a PURPOSE**, and the two purposes are disjoint authorities:
-
-* ``writer`` — an Integration Writer binding over DATA/restricted carrying
-  ``INGEST``. It pushes canonical data and may read nothing.
-* ``reader`` — a ``bi_reader`` binding over every module at ``aggregated``
-  carrying ``VIEW`` over the whole institution.
-  It pulls the curated analytics feed (``docs/bi.md`` §Phase 4) and may write
-  nothing.
-
-Neither can do the other's job, and NEITHER ROUTE HAS TO KNOW THAT: the bundles'
-permission sets are disjoint in ``app/core/authorization.py``, so the push
-dependency's ``INGEST`` check refuses a reader key and the feed's ``VIEW`` check
-refuses a writer key without either naming the other's bundle. A check that has
-to be in the right place is a check that gets moved.
-
-**The purpose is DERIVED from that binding, never stored on the key row.** There
-is no ``purpose`` column and there must not be one: the binding is the authority,
-so a duplicate of it on the credential could disagree with the thing that
-actually decides — and the disagreement would be invisible until a key did
-something its label said it could not. A legacy row whose identity holds no
-machine binding reports ``purpose = None``: it stays listable and revocable and
-authorizes nothing.
+Only data push (``writer``) credentials may be issued. Analytics reader
+issuance is retired pending a governed BI delegation flow. Purpose is derived
+from the machine binding; retired or unrecognized bundles report no purpose.
 
 Revocation stamps the credential, revokes every machine binding for its
 dedicated service identity — every bundle, not a named one — deactivates that
@@ -64,7 +45,6 @@ from app.identity.models.bank import Bank
 from app.identity.models.integration_key import IntegrationKey
 from app.identity.models.user import User
 from app.identity.schemas.integration_keys import (
-    READER_PURPOSE,
     WRITER_PURPOSE,
     IntegrationKeyIssued,
     IntegrationKeyListRead,
@@ -84,28 +64,8 @@ _KEY_LENGTH = 40
 _LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
 _MAX_ACTIVE_KEYS = 10
 
-#: Purpose → the ONE machine bundle it is. The mapping is total in both
-#: directions and is the only place a wire word becomes an authority.
-BUNDLE_BY_PURPOSE: dict[IntegrationKeyPurpose, RoleBundle] = {
-    WRITER_PURPOSE: RoleBundle.INTEGRATION_WRITER,
-    READER_PURPOSE: RoleBundle.BI_READER,
-}
 PURPOSE_BY_BUNDLE: dict[str, IntegrationKeyPurpose] = {
-    bundle.value: purpose for purpose, bundle in BUNDLE_BY_PURPOSE.items()
-}
-
-#: The scope each purpose is issued over.
-#:
-#: A writer keeps exactly the sentence it has always had: DATA/restricted, the
-#: one the push dependency evaluates. A reader is issued over EVERY module at
-#: ``aggregated``, which is exact rather than broad: every curated feed dataset
-#: is built from ``aggregated`` members (the registry refuses anything else), and
-#: one dataset spans several modules, so a per-module reader key would multiply
-#: credentials without narrowing what any of them discloses. Issuance therefore
-#: requires whole-institution coverage; only Credit grants support narrowing.
-_SCOPE_BY_PURPOSE: dict[IntegrationKeyPurpose, tuple[ModuleScope, SensitivityScope]] = {
-    WRITER_PURPOSE: (ModuleScope.DATA, SensitivityScope.RESTRICTED),
-    READER_PURPOSE: (ModuleScope.ALL, SensitivityScope.AGGREGATED),
+    RoleBundle.INTEGRATION_WRITER.value: WRITER_PURPOSE,
 }
 
 
@@ -142,15 +102,7 @@ def _authority(binding: AuthorizationBinding) -> _Authority | None:
     purpose = PURPOSE_BY_BUNDLE.get(binding.role_bundle)
     if purpose is None:
         return None
-    if purpose == WRITER_PURPOSE:
-        # A push credential reads nothing, so it has no slice to report — its
-        # stored ``all`` is the column default, not a statement about reading.
-        return _Authority(purpose=purpose, data_scope_kind=None, data_scope_values=())
-    return _Authority(
-        purpose=purpose,
-        data_scope_kind=DataScope(binding.data_scope_kind),
-        data_scope_values=tuple(binding.data_scope_values or ()),
-    )
+    return _Authority(purpose=purpose, data_scope_kind=None, data_scope_values=())
 
 
 def _authorities(
@@ -214,14 +166,13 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
     data_scope: DataScope = DataScope.ALL,
     data_scope_values: Sequence[str] = (),
 ) -> IntegrationKeyIssued:
-    """Create the identity, the credential and the ONE binding, atomically.
-
-    ``purpose`` defaults to ``writer`` so every call written before the analytics
-    feed existed keeps meaning what it meant. A ``reader`` additionally accepts a
-    data scope; a ``writer`` must not, and the request schema refuses that
-    combination before this runs — restated here because the service is callable
-    without the schema.
-    """
+    """Create a data push identity, credential and exact binding atomically."""
+    # Enforce this at the service boundary too, including calls bypassing Pydantic.
+    if purpose != WRITER_PURPOSE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Only data push keys may be issued.",
+        )
     normalized_bank_id = normalize_public_id(bank_id)
     bank = db.scalar(
         select(Bank).where(
@@ -252,7 +203,7 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
             detail="Integration keys must be issued by a human account administrator.",
         )
 
-    if purpose == WRITER_PURPOSE and (data_scope is not DataScope.ALL or tuple(data_scope_values)):
+    if data_scope is not DataScope.ALL or tuple(data_scope_values):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
@@ -260,16 +211,6 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
                 "to selected branches or regions."
             ),
         )
-    module_scope, sensitivity_scope = _SCOPE_BY_PURPOSE[purpose]
-    if data_scope is not DataScope.ALL and module_scope is not ModuleScope.CREDIT:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                "Analytics feed keys cover every module and require whole-institution coverage. "
-                "Branch and region narrowing is supported only for Credit."
-            ),
-        )
-
     raw = _generate_key()
     service_user = User(
         organization_id=ctx.organization_id,
@@ -300,12 +241,12 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
         organization_id=ctx.organization_id,
         principal_user_id=service_user.id,
         principal_type=PrincipalType.MACHINE,
-        role_bundle=BUNDLE_BY_PURPOSE[purpose],
+        role_bundle=RoleBundle.INTEGRATION_WRITER,
         scope=authorization.BindingScope(
             InstitutionScope.INSTITUTION,
             bank.id,
-            module_scope,
-            sensitivity_scope,
+            ModuleScope.DATA,
+            SensitivityScope.RESTRICTED,
             data_scope,
             tuple(data_scope_values),
         ),
@@ -326,7 +267,7 @@ def issue_key(  # noqa: PLR0913 - one credential, its target and its whole scope
             "label": label,
             "bank_id": bank.id,
             "purpose": purpose,
-            "role_bundle": BUNDLE_BY_PURPOSE[purpose].value,
+            "role_bundle": RoleBundle.INTEGRATION_WRITER.value,
             "data_scope_kind": data_scope.value,
             "data_scope_values": list(data_scope_values),
             "service_user_id": str(service_user.id),
@@ -378,13 +319,8 @@ def revoke_key(db: Session, ctx: TenantContext, key_id: UUID, reason: str) -> In
             status_code=status.HTTP_409_CONFLICT,
             detail="The key's machine identity is unavailable.",
         )
-    # EVERY machine binding of this dedicated identity, whatever its bundle. The
-    # filter used to name ``integration_writer``, which was complete while that
-    # was the only machine bundle and became a hole the moment ``bi_reader``
-    # existed: a reader key would have been stamped revoked while the binding
-    # that authorizes it stayed active. ``principal_type`` is the honest predicate
-    # — the CHECK already guarantees a machine identity holds only machine
-    # bundles, so this covers every bundle that will ever be added.
+    # Revoke every machine binding of the dedicated identity, including retired
+    # bundles. Revocation must end all authority, regardless of the key's purpose.
     bindings = list(
         db.scalars(
             select(AuthorizationBinding)

@@ -2567,10 +2567,8 @@
   "reportAny": 63
  },
  "tests.api.test_bi_feeds": {
-  "reportAny": 161,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 15,
-  "reportUnknownVariableType": 13,
+  "reportAny": 157,
+  "reportUnknownVariableType": 1,
   "reportUnusedFunction": 1
  },
  "tests.api.test_bi_insights": {

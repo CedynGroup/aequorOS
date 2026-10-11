@@ -32,7 +32,7 @@ import datetime as dt
 import json
 from collections.abc import Iterator
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -249,20 +249,51 @@ def _reader(
     values: tuple[str, ...] = (),
     label: str = "Report server",
 ) -> dict[str, str]:
-    """Issue a key; narrowed fixtures hold Credit plus explicit dimension authority."""
+    """Build a legacy reader fixture; production reader issuance is retired.
 
-    with get_sessionmaker()() as db:
+    Feed behavior remains exercised for future BI release work. This fixture
+    deliberately creates historical state without the issuance service.
+    """
+    with cast(Session, get_sessionmaker()()) as db:
         db.info["organization_id"] = ORG_1
-        issued = integration_keys.issue_key(
-            db,
-            TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
-            bank_id,
-            label,
-            purpose="reader",
+        service = User(
+            organization_id=ORG_1,
+            email=f"legacy.{uuid4().hex}@service.aequoros.invalid",
+            role="viewer",
+            auth_provider="service",
+            is_active=True,
         )
-    reader = {"Authorization": f"Bearer {issued.key}"}
+        db.add(service)
+        db.flush()
+        raw = f"aeq_live_{uuid4().hex}"
+        key = IntegrationKey(
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            service_user_id=service.id,
+            label=label,
+            key_prefix=raw[:13] + "…",
+            key_hash=integration_keys.hash_key(raw),
+            created_by=USER_1,
+        )
+        db.add(key)
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=service.id,
+            principal_type=PrincipalType.MACHINE,
+            role_bundle=RoleBundle.BI_READER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                bank_id,
+                ModuleScope.ALL,
+                SensitivityScope.AGGREGATED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "legacy-reader-fixture"),
+            reason="Historical reader credential for feed contract tests",
+        )
+    reader = {"Authorization": f"Bearer {raw}"}
     if data_scope is not DataScope.ALL:
-        with get_sessionmaker()() as db:
+        with cast(Session, get_sessionmaker()()) as db:
             db.info["organization_id"] = ORG_1
             binding = db.scalar(
                 select(AuthorizationBinding).where(
@@ -469,7 +500,7 @@ def test_a_revoked_key_is_refused(db_client: TestClient, mart: Bank, bi_on: None
     reader = _reader()
     assert _pull(db_client, reader).status_code == 200
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with get_sessionmaker()() as db:
+    with cast(Session, get_sessionmaker()()) as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -494,7 +525,7 @@ def test_revocation_ends_the_reader_binding_and_its_identity(
 
     reader = _reader()
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with get_sessionmaker()() as db:
+    with cast(Session, get_sessionmaker()()) as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -646,7 +677,7 @@ def _service_identity(reader: dict[str, str]) -> Any:
     """The machine principal behind an issued key, found the way the route finds it."""
 
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with get_sessionmaker()() as db:
+    with cast(Session, get_sessionmaker()()) as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -677,7 +708,7 @@ def _add_reader_sentence(  # noqa: PLR0913 - one keyword per binding dimension
     before the route does.
     """
 
-    with get_sessionmaker()() as db:
+    with cast(Session, get_sessionmaker()()) as db:
         db.info["organization_id"] = ORG_1
         authorization.create_role_binding(
             db,
@@ -953,8 +984,8 @@ def test_the_purpose_is_derived_from_the_binding_and_not_stored_on_the_key(
     listed = db_client.get("/api/v1/integration-keys", headers=_account_admin_headers(db_session))
     assert listed.status_code == 200, listed.text
     by_label = {item["label"]: item for item in listed.json()["keys"]}
-    assert by_label["Report server"]["purpose"] == "reader"
-    assert by_label["Report server"]["data_scope_kind"] == "all"
+    assert by_label["Report server"]["purpose"] is None
+    assert by_label["Report server"]["data_scope_kind"] is None
     assert by_label["Report server"]["data_scope_values"] == []
     assert by_label["Test push feed"]["purpose"] == "writer"
     assert by_label["Test push feed"]["data_scope_kind"] is None
@@ -977,29 +1008,17 @@ def test_a_data_push_key_cannot_be_issued_with_a_branch_scope(
     assert response.status_code == 422, response.text
 
 
-def test_a_reader_key_is_issued_through_the_route_under_account_administration(
+def test_reader_issuance_is_retired_even_with_bi_enabled(
     db_client: TestClient, db_session: Session, mart: Bank, bi_on: None
 ) -> None:
-    """The issuance authority is unchanged by the second purpose."""
-
-    admin = _account_admin_headers(db_session)
+    before = db_session.scalar(select(func.count()).select_from(IntegrationKey))
     response = db_client.post(
         "/api/v1/integration-keys",
-        headers=admin,
-        json={
-            "bank_id": BANK_ID,
-            "label": "Report server via route",
-            "purpose": "reader",
-            "data_scope_kind": "all",
-            "data_scope_values": [],
-        },
+        headers=_account_admin_headers(db_session),
+        json={"bank_id": BANK_ID, "label": "Report server", "purpose": "reader"},
     )
-    assert response.status_code == 201, response.text
-    issued = response.json()
-    assert issued["record"]["purpose"] == "reader"
-    pulled = _pull(db_client, {"Authorization": f"Bearer {issued['key']}"})
-    assert pulled.status_code == 200, pulled.text
-    assert {row["branch.code"] for row in _rows(pulled)} == {"B1", "B2"}
+    assert response.status_code == 422, response.text
+    assert db_session.scalar(select(func.count()).select_from(IntegrationKey)) == before
 
 
 @pytest.mark.parametrize("kind", [DataScope.BRANCH, DataScope.REGION])
@@ -1021,14 +1040,13 @@ def test_reader_key_narrowing_is_refused_before_creating_a_credential(
         },
     )
     assert response.status_code == 422, response.text
-    assert "only for Credit" in response.text
     with pytest.raises(HTTPException) as refused:
         integration_keys.issue_key(
             db_session,
             TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
             BANK_ID,
             "Unsupported direct issuance",
-            purpose="reader",
+            purpose="reader",  # type: ignore[arg-type] - exercise untyped callers
             data_scope=kind,
             data_scope_values=("B1",),
         )

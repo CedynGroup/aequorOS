@@ -20,6 +20,39 @@ and rotation evidence with the deployment record, never in this repository.
   Legacy null-bank rows remain inspectable/revocable but never authorize a push.
   Public contract: `docs/API_INTEGRATION.md` §1.
 
+## Reader credential retirement (202610110090)
+
+Reader issuance is unavailable until BI ships. `POST /integration-keys` accepts
+only `writer`; `reader` is rejected before creating an identity, key or binding,
+regardless of `BI_ENABLED`. The shared institution permission dependency refuses
+machine principals even if a module route enters the integration-key allow-list.
+Dedicated API Push and BI feed dependencies remain separate machine surfaces.
+
+There are no active customers. Suspend integration-key issuance for this rollout,
+apply migration `202610110090` **before the application deployment**, then deploy
+the writer-only API and dashboard and resume data push issuance. The migration:
+
+- Finds machine identities with any `bi_reader` binding across every tenant,
+  including orphan bindings and already revoked reader bindings.
+- Revokes every live key and machine binding of each affected dedicated identity;
+  records the system migration and reason on newly revoked bindings and retains
+  previous revocation evidence. It never converts reader authority to writer.
+- Deactivates each affected identity, increments its authorization version and
+  revokes all remaining refresh tokens with `authorization_changed`, under the
+  user lock in the same transaction. Writer-only identities are unaffected.
+- Retains historical rows for inspection and revocation evidence. Listings report
+  no supported purpose for retired reader bundles. Downgrade keeps all retirement
+  and invalidation state; it cannot reactivate credentials. Rolling back code can
+  restore unsafe reader issuance, so keep issuance suspended during any rollback
+  and prefer a forward fix.
+
+Before reintroducing readers, require Org Owner approval or the issuer's own
+complete matching view authority for the proposed institution, modules,
+sensitivity and data scope, **plus the normal assignment-time separation-of-duties
+decision**. Account administration alone is insufficient. Reuse the human grant
+administration policy and audit/invalidation contracts; enabling BI must never
+reactivate a retired key. Issue fresh credentials only through that governed flow.
+
 ## Affected routes
 
 All four routes require one independently complete active binding for the

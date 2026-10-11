@@ -29,24 +29,17 @@ select the bank when issuing the key. It is shown exactly once at generation
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
-**A key is issued for one purpose, and the two purposes cannot substitute for
-one another.**
+Only data push keys (`purpose: writer`, the default) may be issued. Each holds
+`DATA` / `restricted` / `ingest` for one exact bank and cannot read analytics.
+`purpose: reader` is unavailable until BI ships with governed delegation; the API
+rejects it even when `BI_ENABLED` is enabled. Existing reader keys and bindings
+are revoked by migration `202610110090`, their service identities deactivated and
+sessions invalidated. They are never converted into push credentials or
+reactivated by switching BI on. Historical rows remain inspectable.
 
-| Purpose                | Authority                                 | Used by                      |
-| ---------------------- | ----------------------------------------- | ---------------------------- |
-| `writer` (the default) | `DATA` / `restricted` / `ingest`          | API Push, §2 below           |
-| `reader`               | every module at `aggregated`, `view` only | the analytics feed, §8 below |
-
-A `writer` key presented to the feed is refused, and a `reader` key presented to
-any push route is refused. Neither refusal depends on configuration: the two
-authorities carry disjoint permissions, so a push route asking for `ingest` and a
-feed asking for `view` each refuse the other's credential structurally. Issue one
-key per purpose; do not try to make one credential do both.
-
-Analytics feed keys cover every module and require whole-institution coverage.
-Key issuance rejects narrowed scopes. For existing narrowed keys, follow the
-[Credit-only narrowing migration contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
-administrators may deliberately issue a new whole-institution key after revocation.
+Reader issuance may return only with Org Owner approval or the issuer's own
+complete matching view authority, plus the normal separation-of-duties decision.
+Deployment and rollback: [reader retirement contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
@@ -672,6 +665,10 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
 ---
 
 ## 8. Pulling analytics out: the Stage B feed
+
+**Pre-release contract:** reader key issuance is retired. This feed is unavailable
+to newly issued keys; existing reader credentials are revoked before deployment.
+The contract below is retained for BI release work, not as an onboarding path.
 
 The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
 **curated** analytics dataset, streamed, so a report server (Power BI Report
