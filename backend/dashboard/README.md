@@ -422,6 +422,12 @@ Branch, function and statement reports remain separate by engine; their mapping
 schemes differ, so they are not added together. Source-text invariant guards do
 not count as execution of the modules they inspect.
 
+Raw c8 V8 data, including embedded source maps, lives in `.test-out/coverage-v8`,
+which the existing source guards exclude and the coverage runner cleans on exit.
+Final c8 reports stay in `coverage/legacy`; native and combined reports stay under
+`coverage/`. These final reports remain available for ordinary test runs and CI
+artifacts; raw V8 data is not uploaded.
+
 CI uploads `dashboard-unit-coverage`: native Vitest HTML/LCOV/JSON, legacy JSON,
 combined line LCOV and `coverage/combined/summary.json`, plus both collection
 reports. Partial reports are retained on failure. The initial measured combined

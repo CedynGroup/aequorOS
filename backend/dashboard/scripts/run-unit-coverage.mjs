@@ -1,4 +1,10 @@
-import { existsSync, copyFileSync, rmSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  copyFileSync,
+  mkdirSync,
+  rmSync,
+  readdirSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 
 // Keep child-process coverage separate: legacy suites replace Node's module
@@ -7,6 +13,7 @@ const externalReport = process.env.DASHBOARD_UNIT_REPORT;
 const legacyReport = "coverage/legacy-tests.json";
 rmSync("coverage", { recursive: true, force: true });
 rmSync(".test-out", { recursive: true, force: true });
+mkdirSync("coverage", { recursive: true });
 function run(command, args, env = process.env) {
   const result = spawnSync(command, args, { stdio: "inherit", env });
   if (result.status !== 0)

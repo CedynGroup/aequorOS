@@ -1,6 +1,6 @@
 {
   "reports-dir": "coverage/legacy",
-  "temp-directory": "coverage/legacy-v8",
+  "temp-directory": ".test-out/coverage-v8",
   "reporter": ["json", "json-summary", "text-summary"],
   "include": [
     "app/**/*.{ts,tsx}",

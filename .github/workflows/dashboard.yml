@@ -135,9 +135,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: dashboard-unit-coverage
-          path: |
-            backend/dashboard/coverage/
-            !backend/dashboard/coverage/legacy-v8/**
+          path: backend/dashboard/coverage/
           if-no-files-found: error
       - name: Build dashboard
         run: pnpm --filter dashboard build
