@@ -2,7 +2,8 @@ from __future__ import annotations
 
 # pyright: reportMissingTypeStubs=false
 import io
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
+from copy import deepcopy
 from typing import cast
 
 import boto3
@@ -10,6 +11,7 @@ import pytest
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from moto import mock_aws
 from pydantic import TypeAdapter
 from sqlalchemy import func, select
@@ -18,12 +20,16 @@ from sqlalchemy.orm import Session
 from app.models import (
     Bank,
     RegulatoryArtifactVersion,
+    RegulatoryPackage,
     RegulatoryPackageArtifact,
     RegulatorySubmissionEvent,
+    User,
 )
-from app.services.ingestion import bank_slug
 from app.reporting.service import workflow
+from app.reporting.service.channels import FiledArtifact, OrassSandboxChannel
+from app.reporting.service.exports import export_package
 from app.reporting.service.filing_retention import retain_filing
+from app.services.ingestion import bank_slug
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings, get_storage_settings
 from app.storage.encryption import ObjectEncryption
@@ -34,6 +40,7 @@ from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
 from tests.services.test_attestation_artifact_signing import (
     CHECKER,
     MAKER,
+    VALIDATOR,
     _approver_sends_on,  # pyright: ignore[reportPrivateUsage]
     _fully_certify,  # pyright: ignore[reportPrivateUsage]
     _seed,  # pyright: ignore[reportPrivateUsage]
@@ -48,6 +55,7 @@ from tests.storage.test_object_lock import (
     LockClient,
     _moto_retention,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.support.helpers import headers
 
 
 @pytest.fixture
@@ -97,6 +105,131 @@ def _lock_capability(db: Session, storage: S3CompatibleStorageClient, client: Lo
     )
     storage.ensure_institution(slug)
     return slug
+
+
+@pytest.mark.parametrize("interface", ["api", "service"])
+@pytest.mark.parametrize("missing_kind", ["xlsx", "csv"])
+@pytest.mark.parametrize("policy", ["absent", "COMPLIANCE", "GOVERNANCE", "valid"])
+def test_submission_preparation_storage_refusals_are_atomic_conflicts(  # noqa: PLR0913, PLR0915
+    db_session: Session,
+    db_client: TestClient,
+    storage: tuple[S3CompatibleStorageClient, LockClient],
+    monkeypatch: pytest.MonkeyPatch,
+    interface: str,
+    missing_kind: str,
+    policy: str,
+) -> None:
+    store, client = storage
+    package = _seed(db_session)
+    if policy == "absent":
+        bank = db_session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        slug = bank_slug(db_session, bank)
+        store.ensure_institution(slug)
+    else:
+        slug = _lock_capability(db_session, store, client)
+    _preparer, approver = _fully_certify(db_session, package)
+    signed = _version(db_session, approver)
+    if missing_kind == "csv":
+        export_package(db_session, MAKER, package, "xlsx")
+    _approver_sends_on(db_session, package)
+    _validator_releases(db_session, package)
+    snapshot = deepcopy(package.snapshot)
+    seal = package.snapshot_sha256
+    artifact_rows = list(db_session.scalars(select(RegulatoryPackageArtifact)))
+    artifacts_before = {
+        (row.id, row.kind, row.object_path, row.checksum_sha256) for row in artifact_rows
+    }
+    versions_before = set(db_session.scalars(select(RegulatoryArtifactVersion.id)))
+    assert missing_kind not in {row.kind for row in artifact_rows}
+    location = StorageLocation(slug, "outputs", signed.object_path)
+    _, stream = store.read(location, signed.storage_version_id)
+    signed_before = stream.read()
+    stream.close()
+    bucket = location.bucket_name("dev")
+    if policy in {"COMPLIANCE", "GOVERNANCE"}:
+
+        def default_configuration(**_kwargs: str) -> dict[str, object]:
+            return {
+                "ObjectLockConfiguration": {
+                    "ObjectLockEnabled": "Enabled",
+                    "Rule": {"DefaultRetention": {"Mode": policy, "Days": 2555}},
+                }
+            }
+
+        monkeypatch.setattr(client, "get_object_lock_configuration", default_configuration)
+    monkeypatch.setenv("STORAGE_OBJECT_LOCK_ENABLED", "true")
+    get_storage_settings.cache_clear()
+    settings = store._settings.model_copy(update={"object_lock_enabled": True})  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(store, "_settings", settings)
+    delivered: list[list[str]] = []
+    original_submit = OrassSandboxChannel.submit
+
+    def submit(
+        channel: OrassSandboxChannel,
+        submitted: RegulatoryPackage,
+        artifacts: Sequence[FiledArtifact],
+    ) -> str:
+        delivered.append([artifact.kind for artifact in artifacts])
+        return original_submit(channel, submitted, artifacts)
+
+    monkeypatch.setattr(OrassSandboxChannel, "submit", submit)
+    if interface == "api":
+        actor = db_session.get(User, VALIDATOR.actor_user_id)
+        assert actor is not None
+        response = db_client.post(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package.id}/submit",
+            json={"channel": "orass_sandbox"},
+            headers=headers(user_id=actor.id, authorization_version=actor.authorization_version),
+        )
+        if policy == "valid":
+            assert response.status_code == 200, response.text
+        else:
+            assert response.status_code == 409, response.text
+            assert (
+                response.json()["error"]["details"]["error_code"] == "filing_retention_unconfirmed"
+            )
+    elif policy == "valid":
+        workflow.submit_package_via_channel(
+            db_session, VALIDATOR, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
+        )
+    else:
+        with pytest.raises(HTTPException) as raised:
+            workflow.submit_package_via_channel(
+                db_session, VALIDATOR, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
+            )
+        assert raised.value.status_code == 409
+        detail = TypeAdapter(dict[str, object]).validate_python(raised.value.detail)
+        assert detail["error_code"] == "filing_retention_unconfirmed"
+    db_session.refresh(package)
+    assert package.snapshot == snapshot
+    assert package.snapshot_sha256 == seal
+    _, stream = store.read(location, signed.storage_version_id)
+    assert stream.read() == signed_before
+    stream.close()
+    events = list(db_session.scalars(select(RegulatorySubmissionEvent)))
+    if policy == "valid":
+        assert package.status == "submitted"
+        assert len(delivered) == 1
+        assert missing_kind in delivered[0]
+        assert len(events) == 1
+        manifest = retain_filed_objects.FilingManifest.model_validate(events[0].detail)
+        assert manifest.filed_artifacts
+        for artifact in manifest.filed_artifacts:
+            assert artifact.storage_version_id is not None
+            retention = client.get_object_retention(
+                Bucket=bucket, Key=artifact.object_path, VersionId=artifact.storage_version_id
+            )
+            assert cast(dict[str, object], retention["Retention"])["Mode"] == "COMPLIANCE"
+    else:
+        assert package.status == "approved"
+        assert delivered == []
+        assert events == []
+        assert {
+            (row.id, row.kind, row.object_path, row.checksum_sha256)
+            for row in db_session.scalars(select(RegulatoryPackageArtifact))
+        } == artifacts_before
+        assert set(db_session.scalars(select(RegulatoryArtifactVersion.id))) == versions_before
 
 
 @pytest.mark.parametrize("channel", ["manual", "orass_sandbox"])

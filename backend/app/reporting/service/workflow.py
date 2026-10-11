@@ -73,7 +73,10 @@ from app.reporting.service.common import (
     read_package,
     require_actor,
 )
-from app.reporting.service.filing_retention import retain_filing
+from app.reporting.service.filing_retention import (
+    filing_retention_errors,
+    retain_filing,
+)
 from app.reporting.service.registry import ReturnDefinition, get_definition
 from app.services.audit import record_event
 
@@ -958,8 +961,9 @@ def _filing_set(
 def _submission_filing_set(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, *, mint_missing: bool = True
 ) -> tuple[list[FiledArtifact], dict[str, Any]]:
-    artifacts, detail = _filing_set(db, ctx, package, mint_missing=mint_missing)
-    retained = retain_filing(db, ctx, package, artifacts)
+    with filing_retention_errors():
+        artifacts, detail = _filing_set(db, ctx, package, mint_missing=mint_missing)
+        retained = retain_filing(db, ctx, package, artifacts)
     if retained is not None:
         detail["filed_artifacts"] = retained
     return artifacts, detail

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 from typing import TypedDict
 
@@ -58,13 +59,27 @@ class RetainedArtifact(TypedDict):
     storage_version_id: str
 
 
+@contextmanager
+def filing_retention_errors() -> Iterator[None]:
+    try:
+        yield
+    except StorageError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "filing_retention_unconfirmed",
+                "message": "The filed object versions could not be retained. Submission refused.",
+            },
+        ) from exc
+
+
 def retain_filing(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, artifacts: Sequence[FiledArtifact]
 ) -> list[RetainedArtifact] | None:
     settings = get_storage_settings()
     if not settings.object_lock_enabled:
         return None
-    try:
+    with filing_retention_errors():
         client = get_storage_client()
         bank = get_bank_or_404(db, ctx, package.bank_id)
         slug = bank.storage_slug
@@ -89,11 +104,3 @@ def retain_filing(
                 }
             )
         return retained
-    except StorageError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error_code": "filing_retention_unconfirmed",
-                "message": "The filed object versions could not be retained. Submission refused.",
-            },
-        ) from exc

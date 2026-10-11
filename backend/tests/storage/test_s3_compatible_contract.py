@@ -9,6 +9,7 @@ decision) and skips cleanly without credentials, so CI stays hermetic.
 from __future__ import annotations
 
 import io as io_module
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar, cast
 from uuid import uuid4
 
@@ -20,7 +21,7 @@ from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference
 from app.storage.access_log import HashChainedAccessLog
 from app.storage.api import router
-from app.storage.client import StorageClient, StorageLocation
+from app.storage.client import StorageClient, StorageLocation, StorageValidationError
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
 from app.storage.factory import get_storage_client
@@ -31,12 +32,60 @@ from app.storage.provisioning import (
 )
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from tests.storage.contract import StorageContractSuite, metadata_for
+from tests.storage.test_object_lock import LockClient
 from tests.support.key_envelopes import MemoryEnvelopeStore
 
 pytestmark = pytest.mark.skipif(
     not StorageEngineSettings().configured,
     reason="S3_* storage credentials are not configured.",
 )
+
+
+@pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])
+def test_archived_version_refuses_changed_default_retention(mode: str) -> None:
+    settings = StorageEngineSettings().model_copy(update={"object_lock_enabled": True})
+    slug = f"lock-{uuid4().hex[:8]}"
+    key = KeyReference("local", "retention-bank-key", "local", "retention-bank")
+    provider = LocalKeyProvider()
+    provider.add_key(key)
+    storage = S3CompatibleStorageClient(
+        settings, encryption=ObjectEncryption(MemoryEnvelopeStore(slug, key, provider))
+    )
+    client = cast(LockClient, storage._s3)  # pyright: ignore[reportPrivateUsage]
+    provision_institution(cast(ProvisioningClient, client), settings, slug)
+    location = StorageLocation(slug, "outputs", "archived/report.pdf")
+    bucket = location.bucket_name(settings.env)
+    content = b"synthetic archived filing"
+    try:
+        stored = storage.write(
+            location, io_module.BytesIO(content), metadata_for(slug, "outputs", content)
+        )
+        assert stored.version_id is not None
+        kwargs = {"Bucket": bucket, "Key": location.object_path, "VersionId": stored.version_id}
+        original = client.head_object(**kwargs)
+        assert original.get("ObjectLockMode") is None
+        assert original.get("ObjectLockRetainUntilDate") is None
+        _ = client.put_object_lock_configuration(
+            Bucket=bucket,
+            ObjectLockConfiguration={
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {"DefaultRetention": {"Mode": mode, "Days": 2555}},
+            },
+        )
+        policy = client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"]
+        with pytest.raises(StorageValidationError, match="Rule.DefaultRetention"):
+            storage.retain(location, stored.version_id, datetime.now(UTC) + timedelta(days=7))
+        retained = client.head_object(**kwargs)
+        assert retained.get("ObjectLockMode") is None
+        assert retained.get("ObjectLockRetainUntilDate") is None
+        assert (
+            client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"] == policy
+        )
+        _, decrypted = storage.read(location, stored.version_id)
+        assert decrypted.read() == content
+        decrypted.close()
+    finally:
+        deprovision_institution(storage._s3, settings, slug)  # pyright: ignore[reportPrivateUsage]
 
 
 class TestS3CompatibleStorageContract(StorageContractSuite):
