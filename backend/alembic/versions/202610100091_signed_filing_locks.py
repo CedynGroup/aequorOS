@@ -24,6 +24,7 @@ CONTENT_COLUMNS = (
     "snapshot",
     "source_runs",
     "snapshot_sha256",
+    "register_state_digest",
     "is_rehearsal",
     "generated_by",
     "generated_at",
