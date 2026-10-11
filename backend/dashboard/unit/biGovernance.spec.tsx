@@ -21,6 +21,7 @@ import SharePanel, {
 } from "../components/bi/SharePanel";
 import SavedDashboardScreen from "../components/bi/SavedDashboardScreen";
 import MeasuresPage from "../app/(app)/explore/measures/page";
+import SubscriptionsPage from "../app/(app)/explore/subscriptions/page";
 import EditDashboardPage from "../app/(app)/dashboards/[id]/edit/page";
 import ExplainDrawer from "../components/bi/ExplainDrawer";
 import {
@@ -31,7 +32,7 @@ import {
   engineTierLabel,
   regimeLabel,
 } from "../components/bi/labels";
-import { providers, json, query } from "./biTestSupport";
+import { providers, json, query, queryWire, catalogueWire } from "./biTestSupport";
 
 const navigation = vi.hoisted(() => ({
   push: vi.fn(),
@@ -63,6 +64,53 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+it.each([
+  { enabled: true, active: true, label: "Sending" },
+  { enabled: false, active: true, label: "Not sending here" },
+  { enabled: undefined, active: true, label: "Scheduled" },
+  { enabled: true, active: false, label: "Stopped" },
+  { enabled: false, active: false, label: "Stopped" },
+  { enabled: undefined, active: false, label: "Stopped" },
+])(
+  "a report with active=$active and delivery=$enabled renders $label",
+  async ({ enabled, active, label }) => {
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.endsWith("/feature-flags"))
+        return json({ bi_subscriptions_enabled: enabled });
+      if (url.endsWith("/catalogue")) return json(catalogueWire);
+      if (url.endsWith("/subscriptions"))
+        return json({
+          subscriptions: [{
+            id: "report",
+            bank_id: "BK-test",
+            name: "Weekly report",
+            query: queryWire,
+            artifact_format: "xlsx",
+            cadence: "weekly",
+            hour: 8,
+            minute: 30,
+            day_of_week: 2,
+            time_zone: "UTC",
+            is_active: active,
+            owned_by_caller: false,
+            recipients: [],
+            recipient_user_ids: [],
+            disclosure_class: "summary",
+            delivery_note: "Prepared under each recipient's access.",
+          }],
+        });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    render(<SubscriptionsPage />, { wrapper: providers().wrapper });
+    await screen.findByText("Weekly report");
+    await screen.findByText(label, { exact: true });
+    for (const other of ["Sending", "Not sending here", "Scheduled", "Stopped"]) {
+      if (other !== label)
+        expect(screen.queryByText(other, { exact: true })).toBeNull();
+    }
+  },
+);
 const id = "00000000-0000-4000-8000-000000000001";
 const measureWire = (owned = true, awaiting = false, state = "proposed") => ({
   id,
