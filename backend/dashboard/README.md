@@ -410,6 +410,15 @@ Testing Library queries by role, label and text, API-boundary mocks only, and
 fast-check for broad formatting and numeric input spaces. Legacy suites retain
 isolated processes because several replace Node's module loader.
 
+Interactive specs opt into jsdom with `@vitest-environment jsdom`, use
+`user-event` and the real React Query/authority providers, and intercept HTTP
+with MSW's Node server. Treat the generated client and feature hooks as part of
+the behavior under test. Reject unhandled requests, reset handlers and clear
+query/token state after each test. No browser service-worker build is needed.
+The liquidity specs cover stored decimal ladders, sensitivity/class grants and
+cash-flow date submission, currency totals, refusals and bank/authority cache
+isolation; their properties use 100 runs with fast-check's failure seed/path.
+
 `test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
 includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
 including untouched modules. Only tests and declaration files are excluded.
