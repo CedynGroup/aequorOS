@@ -33,7 +33,8 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation
 from app.services import (
     job_queue,
     live_refresh_triggers,
@@ -45,7 +46,6 @@ from app.services import (
     regulatory_irr,
     regulatory_liquidity,
 )
-from app.services.regulatory_reporting import generation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,

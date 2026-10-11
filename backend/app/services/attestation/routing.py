@@ -263,7 +263,7 @@ def awaiting_signature(
         .order_by(RegulatoryPackage.reporting_date.desc(), RegulatoryPackage.return_code)
     ).all()
     from app.identity.public import Bank  # noqa: PLC0415
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     visible: dict[tuple[str, str], bool] = {}
     result = []
@@ -318,7 +318,7 @@ def _ensure_nominee_may_sign(
 ) -> None:
     """Nominees need the same scoped authority as the certification ceremony."""
     from app.identity.public import Bank  # noqa: PLC0415
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank = db.get(Bank, package.bank_id)
     nominee_ctx = replace(ctx, actor_user_id=user.id, roles=(user.role,))

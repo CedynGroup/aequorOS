@@ -22,7 +22,7 @@ import pytest
 from fontTools.ttLib import TTFont
 
 from app.icaap.service.render.pdf import render_pdf
-from app.services.regulatory_reporting.exports import icaap_fonts
+from app.reporting.service.exports import icaap_fonts
 from tests.icaap.service.test_draft_pdf import build_document
 from tests.icaap.service.test_icaap_filing_pdf import font_resources, render
 

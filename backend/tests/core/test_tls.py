@@ -38,9 +38,9 @@ from app.core.tls import (
 from app.core.tls_evidence import probe_https
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
+from app.reporting.service.channels.errors import ChannelPreconditionError
+from app.reporting.service.channels.orass_api import OrassApiChannel
 from app.services.attestation.tsa import build_pdf_timestamper
-from app.services.regulatory_reporting.channels.errors import ChannelPreconditionError
-from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
 
 
 @pytest.fixture

@@ -17,10 +17,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services.regulatory_reporting import calendar, generation
-from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.regulatory_reporting.templates import get_template
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import calendar, generation
+from app.reporting.service.registry import REGISTRY
+from app.reporting.service.templates import get_template
 from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")

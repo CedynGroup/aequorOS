@@ -290,7 +290,7 @@ Tools Directive (February 2026) is an exposure draft that does not take effect u
 
 Measured: `grep -rn "exposure draft" backend/app/` returns **10 hits — none in
 `liquidity_thresholds.py`.** The draft status _is_ disclosed in
-`app/services/regulatory_reporting/templates.py` and `registry.py`; it is **not** disclosed
+`app/reporting/service/templates.py` and `registry.py`; it is **not** disclosed
 where the numbers are used as the fallback regulatory floor. Mitigating: a board row
 overrides, and the board register is the primary mechanism — so the defect is the fallback
 and the framing, not every computed ratio.

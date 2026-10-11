@@ -19,10 +19,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import BankReportingPeriod, RegulatoryPackage, RegulatoryRun
+from app.reporting.service.exports import export_package
+from app.reporting.service.validation import run_validation_rules
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import reverse_stress
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.validation import run_validation_rules
 from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
 from tests.icaap.service.test_icaap_stress_reverse_stress import (
     MAKER,

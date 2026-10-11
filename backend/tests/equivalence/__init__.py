@@ -28,7 +28,7 @@ Scope, and the sibling gate
 
 This package covers the CALCULATION-PLANE overlaps: forecast year 0 against the
 capital and liquidity runs, and each run-backed RETURN PACKAGE against the run
-it sealed. ``tests/services/test_reporting_equivalence.py`` (WS-D) covers the
+it sealed. ``tests/reporting/service/test_reporting_equivalence.py`` (WS-D) covers the
 other half — every BoG form CELL bound to an engine-backed resolver, against
 the source run's persisted line items. ``test_declared_divergences.py`` holds
 the ledger that says which claims either gate actually proves.

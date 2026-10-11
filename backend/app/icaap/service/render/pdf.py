@@ -13,7 +13,7 @@ Three properties are load-bearing rather than cosmetic:
   watermark is the only thing separating its output from the real one.
 * **Author text is never markup.** reportlab's ``Paragraph`` parses a small
   markup language, so every run of user text goes through
-  :func:`~app.services.regulatory_reporting.exports.pdf_parts.escape_text`
+  :func:`~app.reporting.service.exports.pdf_parts.escape_text`
   first and the only tags in the document are the ones this module writes
   around already-escaped text. A section containing ``<b>x</b> & <script>``
   prints those characters.

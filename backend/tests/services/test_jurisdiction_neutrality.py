@@ -46,7 +46,7 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/services/credit_params.py",
     "app/services/capital_plan.py",
     "app/services/reverse_stress.py",
-    "app/services/examiner_mode.py",
+    "app/reporting/service/examiner_mode.py",
     "app/domain/capital/ecl.py",
     # Joined the guard 2026-08-21 (enterprise audit §6): enterprise_stress was
     # explicitly called out as a module the guard did not scan, and the policy

@@ -200,7 +200,7 @@ Every BSD11 sheet is a **register grid whose data cells are BLANK in the officia
 - **Sheet 8 columns B–I**: exposures to relatives of directors / significant shareholders — the register has no relative role.
 - Any director / officer / customer row beyond the register or population (rank exhausted) stays blank + input_required (see §7 ask 3).
 
-## 5. Critical totals / relationships proven by `tests/services/bog_forms/test_bsd10_11_16_17.py`
+## 5. Critical totals / relationships proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17.py`
 
 Three directors, one officer and an inactive former director are created through the platform's OWN register API (`POST /banks/{id}/related-parties`, `…/shareholdings`); their facilities and a corporate customer through canonical positions. Then, on the generated package snapshot:
 
@@ -231,7 +231,7 @@ Three directors, one officer and an inactive former director are created through
 
 ```python
 # DATABASE_URL="" PYTHONPATH=. uv run python -  (from backend/)
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.linemaps import line_maps_for
 for sheet, lines in line_maps_for("BSD11").items():
     for line in lines:
         print(sheet, line.code, line.label, line.cells, line.source, line.params, line.unscaled, line.notes)

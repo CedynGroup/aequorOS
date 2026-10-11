@@ -126,7 +126,7 @@ any regeneration for the same (return_code, reporting_date, basis)
 - `regulatory_channel_configs`: org, bank, channel, config JSON (institution_code, contacts,
   solo/consolidated), credential_ciphertext (EncryptedDbVault pattern — write-only at API).
 
-## 4. Return-family registry (`app/services/regulatory_reporting/registry.py`)
+## 4. Return-family registry (`app/reporting/service/registry.py`)
 
 | family               | return_code(s)                                                                                                                                                                                                | source                                                                                                                                                                                                                                                              | frequency/deadline (per research)                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -170,7 +170,7 @@ that kind in `WORKING_ARTIFACT_FILING_GENERATORS` (today `bog_form` only). An SD
 working copy is an AequorOS calculation sheet, not BoG's workbook, so it is **not** filed and
 keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
 
-## 5. Services (`app/services/regulatory_reporting/`)
+## 5. Services (`app/reporting/service/`)
 
 - `generation.py` — generators pull ONLY from existing services/run snapshots (no recomputation);
   snapshot embeds every value that will be exported; records source_runs with input hashes.
@@ -200,7 +200,7 @@ keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
   horizon, not just the returned page; see [disclosure below](#filing-state-disclosure).
   Omitting `limit` preserves the original full-horizon response. The contract
   is pinned by
-  `tests/services/test_regulatory_reporting_calendar_query_shape.py`.
+  `tests/reporting/service/test_regulatory_reporting_calendar_query_shape.py`.
 
 ### 5a. Reporting date vs data arrival (corrected 2026-08-23)
 
@@ -224,7 +224,7 @@ on the primary:
 - A tenant that had ingested nothing had an **empty** reporting calendar rather than a full one with
   nothing computed yet.
 
-Corrected direction, now pinned by `tests/services/test_reporting_anchors.py`:
+Corrected direction, now pinned by `tests/reporting/service/test_reporting_anchors.py`:
 
 ```
 ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
@@ -262,14 +262,14 @@ the calendar still never lists event-driven packs as obligations.
 
 - **The reporting date is the REGULATOR's — never derived from ingestion.** A return's
   reporting dates come from its `ReturnDefinition` (cadence + BoG anchor conventions)
-  through the ONE authority `app/services/regulatory_reporting/anchors.py`, which touches
+  through the ONE authority `app/reporting/service/anchors.py`, which touches
   no tenant data; the calendar and the Returns workspace both bind to it, so they cannot
   disagree. `bank_reporting_periods` is the KEY FOR ONE COMPUTED FACT SNAPSHOT — created by
   the data path when a book arrives with an as-of date — and must never be offered as the
   user's reporting-date list: that makes BoG's calendar a function of ingestion cadence,
   leaves most weekly (Friday-close) filing dates unselectable, and shows a tenant that has
   ingested nothing an EMPTY calendar. Direction, pinned by
-  `tests/services/test_reporting_anchors.py`:
+  `tests/reporting/service/test_reporting_anchors.py`:
   `ReturnDefinition -> reporting date -> snapshot lookup`. The snapshot match is **exact
   for every cadence** (`common.get_snapshot_for_reporting_date`) — a "latest period ending
   on or before" fallback would fail open by filing a month-old book as a business day's
@@ -304,7 +304,7 @@ the calendar still never lists event-driven packs as obligations.
   Template metadata resolves status as of today, while sealed package provenance records
   status at the reporting date, the resolved commencement and the registry citation.
   Exports consume that sealed disclosure. The contract is pinned by
-  `backend/tests/services/test_reporting_instrument_status.py`.
+  `backend/tests/reporting/service/test_reporting_instrument_status.py`.
 
 ### Filing-state disclosure
 
@@ -326,9 +326,9 @@ responses (404 when hidden), mark-all-read and each email-mirror recipient. An
 org-wide notification or an administrator email destination confers no return
 access. The HTTP contract is pinned by
 `backend/tests/api/test_notification_authorization.py`; calendar and anchor
-redaction by `backend/tests/api/test_narrowed_institution_figures.py`.
+redaction by `backend/tests/reporting/api/test_narrowed_institution_figures.py`.
 
-## 6. API (`app/features/manage_regulatory_reporting.py`)
+## 6. API (`app/reporting/api/manage_regulatory_reporting.py`)
 
 listReportingObligations (calendar; `horizon_months` 1–24, optional `limit` 1–100 and zero-based
 `offset`; response includes whole-horizon `summary`/`total` plus `limit`/`offset`/`has_more`),

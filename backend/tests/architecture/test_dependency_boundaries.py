@@ -57,7 +57,8 @@ CASE_PLANE_MODULES: frozenset[str] = CASE_PLANE_MEMBERS
 REGULATORY_PLANE: tuple[str, ...] = (
     "domain",
     "icaap/domain",
-    "services/regulatory_reporting",
+    "reporting/domain",
+    "reporting/service",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
     "services/regulatory_irr.py",
@@ -120,7 +121,7 @@ def test_regulatory_reporting_never_reads_a_case_calculation_run() -> None:
     that no examiner has ever seen and that carry no ``input_hash`` lineage into
     the regulatory spine.
     """
-    offenders = _scan(_python_files("services/regulatory_reporting"))
+    offenders = _scan(_python_files("reporting/service"))
 
     assert offenders == {}, f"Regulatory reporting reached into the case plane: {offenders}"
 
@@ -135,7 +136,7 @@ def test_the_official_bank_run_never_reads_case_financial_records() -> None:
     paths = [
         path
         for relative in REGULATORY_PLANE
-        if relative != "services/regulatory_reporting"
+        if relative != "reporting/service"
         for path in _python_files(relative)
     ]
 
@@ -143,10 +144,12 @@ def test_the_official_bank_run_never_reads_case_financial_records() -> None:
 
 
 def test_the_pure_domain_layer_imports_no_application_state() -> None:
-    """`app/domain/**` is pure by contract (CLAUDE.md) — it is what the golden
+    """Shared and feature domain engines are pure — they are what the golden
     suites pin and what a second product segment will reuse."""
     impure: dict[str, set[str]] = {}
-    for path in _python_files("domain"):
+    for path in (
+        _python_files("domain") + _python_files("icaap/domain") + _python_files("reporting/domain")
+    ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
         # check that cannot see them is a purity check with a hole in it.
@@ -164,13 +167,21 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.identity.models",
                     "app.identity.service",
                     "app.identity.public",
+                    "app.icaap.api",
+                    "app.icaap.models",
+                    "app.icaap.service",
+                    "app.icaap.public",
+                    "app.reporting.api",
+                    "app.reporting.models",
+                    "app.reporting.service",
+                    "app.reporting.public",
                 )
             )
         }
         if stateful:
             impure[module] = stateful
 
-    assert impure == {}, f"app/domain must stay pure: {impure}"
+    assert impure == {}, f"Domain engines must stay pure: {impure}"
 
 
 def test_the_boundary_scanner_catches_a_deliberate_violation(tmp_path: Path) -> None:

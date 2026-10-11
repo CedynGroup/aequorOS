@@ -86,6 +86,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_irr import (
     IrrDashboardRead,
     IrrEarAnalysisRead,
@@ -102,7 +103,6 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services import (
-    filing_reconciliation,
     institution_types,
     jurisdictions,
     market_data_sources,

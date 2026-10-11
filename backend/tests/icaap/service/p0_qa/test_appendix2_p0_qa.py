@@ -29,15 +29,15 @@ from app.api.deps import TenantContext
 from app.domain.stress.credit_bottom_up import CRD_EXPOSURE_CLASSES
 from app.models import Bank, RegulatoryPackage, RegulatoryParameter, User
 from app.models.stress import MACRO_VARIABLES
-from app.services.attestation import digests
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.templates import (
+from app.reporting.service.exports import export_package
+from app.reporting.service.templates import (
     APPENDIX2_EXPOSURE_CLASS_LABELS,
     APPENDIX2_RISK_DRIVER_LABELS,
     build_rendered_return,
     get_template,
 )
-from app.services.regulatory_reporting.validation import run_validation_rules
+from app.reporting.service.validation import run_validation_rules
+from app.services.attestation import digests
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
@@ -209,7 +209,7 @@ def _string_constants(path: Path) -> list[tuple[int, str]]:
 
 @pytest.mark.parametrize("module", ["templates.py", "generation.py"])
 def test_no_13_percent_literal_outside_docstrings(module: str) -> None:
-    path = BACKEND / "app" / "services" / "regulatory_reporting" / module
+    path = BACKEND / "app" / "reporting" / "service" / module
     offenders = [
         (line, text) for line, text in _string_constants(path) if re.search(r"13\s*%", text)
     ]

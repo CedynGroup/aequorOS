@@ -2228,7 +2228,7 @@ def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is exp
     conditions: tuple[ConditionCheck, ...],
 ) -> PackageAccess | None:
     """Try the scoped review-chain authority; never fall back to a scalar role."""
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     scoped = get_scoped_mutation_tenant_context(ctx)
     verdict = family_access.chain_decision_verdict(
@@ -2274,7 +2274,7 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
     conditions: tuple[ConditionCheck, ...] = (),
     authority: Literal["family", "transmission", "chain"] = "family",
 ) -> PackageAccess:
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank, package = _resolve_package_from_path(request, db, ctx)
     if package is None or bank is None:
@@ -2414,7 +2414,7 @@ def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant)
 
     Both branches require stored bindings; scalar roles provide no fallback.
     """
-    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+    from app.reporting.service.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
     _bank, package = _resolve_package_from_path(request, db, ctx)
     stage = None if package is None else filing_chain.stage_for_decision(db, ctx, package)

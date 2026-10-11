@@ -133,8 +133,9 @@ CASE_PLANE_OWNERS: frozenset[str] = CASE_PLANE_MEMBERS
 REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "domain/**/*.py",
     "icaap/domain/**/*.py",
+    "reporting/domain/**/*.py",
     "services/regulatory_*.py",
-    "services/regulatory_reporting/**/*.py",
+    "reporting/service/**/*.py",
     "services/sdi_*.py",
     "services/attestation/**/*.py",
     "services/fact_derivation.py",
@@ -147,7 +148,7 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "features/run_regulatory_*.py",
     "features/run_forecasting.py",
     "features/run_reverse_stress.py",
-    "features/manage_regulatory_reporting.py",
+    "reporting/api/manage_regulatory_reporting.py",
     "features/manage_enterprise_stress*.py",
     "features/manage_capital_plan.py",
     "features/manage_attestation.py",
@@ -179,7 +180,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.models.parameter_register",
         "app.models.regulatory",
         "app.models.regulatory_run",
-        "app.models.regulatory_reporting",
+        "app.reporting.models.packages",
         "app.services.fact_derivation",
         "app.services.regulatory_capital",
         "app.services.regulatory_liquidity",
@@ -187,7 +188,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.services.regulatory_fx",
         "app.services.regulatory_irr",
         "app.services.regulatory_ftp",
-        "app.services.regulatory_reporting",
+        "app.reporting.service",
         "app.domain.capital",
         "app.domain.liquidity",
         "app.domain.forecasting",
@@ -401,7 +402,7 @@ def test_the_regulatory_plane_scan_is_not_vacuous() -> None:
         "app.services.regulatory_capital",
         "app.services.regulatory_liquidity",
         "app.services.regulatory_forecasting",
-        "app.services.regulatory_reporting.generation",
+        "app.reporting.service.generation",
         "app.services.fact_derivation",
         "app.services.sdi_capital",
     }
@@ -548,7 +549,7 @@ def test_the_forward_guard_convicts_a_relative_import() -> None:
     """`node.level == 0` used to exclude EVERY relative import from the scan.
 
     `app/` carries 88 relative imports today, several inside the regulatory
-    plane (`services/regulatory_reporting/bog_forms/render.py`), so this was
+    plane (`reporting/service/bog_forms/render.py`), so this was
     not a theoretical gap: one `from ..models.calculation import ...` walked
     past both boundary guards. Resolution is against the importing module's own
     package, which is why the detectors take `module`.
@@ -567,7 +568,7 @@ def test_the_forward_guard_convicts_a_relative_import() -> None:
     # the same two dots from one level deeper resolve somewhere else entirely.
     assert "app.models.calculation" in case_plane_dependencies(
         "from ...models.calculation import CalculationRun as Run\n",
-        "app.services.regulatory_reporting.generation",
+        "app.reporting.service.generation",
     )
 
     # ...and the old rule saw neither, which is what made this worth adding.

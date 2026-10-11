@@ -68,7 +68,7 @@ Two short schedules whose amount cells are **BLANK in the official file**; the e
 
 None once the `remittance_flows` register is ingested for the month (2026-08-16). A month with no push resolves every amount cell to `input_required`.
 
-## 5. Critical totals proven by `tests/services/bog_forms/test_bsd10_11_16_17.py` (structure) and `tests/services/data_gaps/test_remittance_flows.py` (data-gap closure)
+## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17.py` (structure) and `tests/services/data_gaps/test_remittance_flows.py` (data-gap closure)
 
 1. every captured item number and every blank-grid amount cell (21) is declared and bound to a source, no bound cell is a label cell; without a register the form generates 7 mapped / 14 input_required with 0 unmapped cells and no errors;
 2. item numbers `A8 = 1 … A13 = 6`, `A15 = 7` in the snapshot; every amount cell blank without a register;
@@ -83,7 +83,7 @@ None. (The BSD2 spine has no remittance line; the scoping doc's "which BoG form 
 
 ```python
 # DATABASE_URL="" PYTHONPATH=. uv run python -  (from backend/)
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.linemaps import line_maps_for
 for sheet, lines in line_maps_for("BSD17").items():
     for line in lines:
         print(sheet, line.code, line.label, line.cells, line.source, line.params, line.unscaled, line.notes)

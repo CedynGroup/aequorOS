@@ -79,9 +79,9 @@ from app.models import (
     RegulatoryPackage,
     RegulatoryRun,
 )
+from app.reporting.service.generation import snapshot_content_hash
 from app.services.attestation import digests, workflow
 from app.services.attestation.workflow import AttestationConflict
-from app.services.regulatory_reporting.generation import snapshot_content_hash
 from app.storage.client import StorageClient, StorageError, StorageLocation
 
 CHECK_PDF_SIGNATURE = "pdf_signature"

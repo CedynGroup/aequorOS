@@ -298,7 +298,7 @@ def _require_placeable_return(return_code: str) -> None:
     unknown code here would block nothing and break the workspace for a return
     added between releases.
     """
-    from app.services.regulatory_reporting.registry import (  # noqa: PLC0415 - cycle
+    from app.reporting.service.registry import (  # noqa: PLC0415 - cycle
         get_definition,
     )
 

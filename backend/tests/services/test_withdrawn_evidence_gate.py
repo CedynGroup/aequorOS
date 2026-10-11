@@ -572,7 +572,7 @@ def test_a_withdrawal_at_another_date_leaves_the_run_alone(db_session: Session) 
 
 
 def _frozen_build(run: RegulatoryRun | None):  # noqa: ANN202 - a test-local closure
-    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+    from app.reporting.service import generation  # noqa: PLC0415
 
     def _build() -> generation.FrozenSnapshot:
         return generation.FrozenSnapshot(
@@ -593,7 +593,7 @@ def _frozen_build(run: RegulatoryRun | None):  # noqa: ANN202 - a test-local clo
 
 
 def _mint_frozen(db_session: Session, run: RegulatoryRun | None):  # noqa: ANN202
-    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+    from app.reporting.service import generation  # noqa: PLC0415
 
     return generation.generate_frozen_package(
         db_session,

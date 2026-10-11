@@ -416,7 +416,7 @@ def ensure_checked_release(
     """
     # Lazily imported: the reporting workflow reaches back into this module, so
     # a module-level import would close the cycle.
-    from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415
+    from app.reporting.service.workflow import (  # noqa: PLC0415
         ensure_decidable,
     )
 
@@ -496,10 +496,10 @@ def ensure_submittable(db: Session, ctx: TenantContext, package: RegulatoryPacka
     checks stay inside the ``require_signature`` branch, exactly as they were,
     and the attachment check sits outside it.
     """
-    from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks an import cycle
+    from app.reporting.service import (  # noqa: PLC0415 - breaks an import cycle
         attachments as reporting_attachments,
     )
-    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415
+    from app.reporting.service import family_hooks  # noqa: PLC0415
 
     policy = package_policy(db, ctx, package)
     if policy.require_signature:
@@ -549,7 +549,7 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
     row here is what makes "signed but undecided" unreachable from any endpoint
     rather than from one. ``filing_chain.hand_off`` remains the only release.
     """
-    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+    from app.reporting.service.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
     now = datetime.now(UTC)
     if role == "preparer":
@@ -584,7 +584,7 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
             #
             # Lazily imported: the reporting workflow reaches back into this
             # module, so a module-level import would close the cycle.
-            from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415
+            from app.reporting.service.workflow import (  # noqa: PLC0415
                 record_certification_approval,
             )
 
@@ -597,7 +597,7 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
             )
         # The family's own reaction to a complete attestation, after the chain
         # decision has been recorded (ICAAP: the cycle becomes board_approved).
-        from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks a cycle
+        from app.reporting.service import (  # noqa: PLC0415 - breaks a cycle
             family_hooks,
         )
 
@@ -658,7 +658,7 @@ def void_attestation(
             "already_submitted",
             "This return has already been submitted; use the resubmission path instead.",
         )
-    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415 - breaks a cycle
+    from app.reporting.service import family_hooks  # noqa: PLC0415 - breaks a cycle
 
     family_hooks.ensure_voidable(db, ctx, package)
     voided_cycle = package.attestation_cycle

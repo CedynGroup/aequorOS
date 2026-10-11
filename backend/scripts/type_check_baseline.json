@@ -1339,8 +1339,7 @@
   "reportAny": 18
  },
  "app.services.examiner_mode": {
-  "reportAny": 1,
-  "reportPrivateUsage": 2
+  "reportAny": 1
  },
  "app.services.fact_derivation": {
   "reportAny": 35,
@@ -1677,8 +1676,7 @@
   "reportUnknownArgumentType": 1,
   "reportUnknownLambdaType": 4,
   "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 3,
-  "reportUnusedFunction": 1
+  "reportUnknownVariableType": 3
  },
  "app.services.live_view": {
   "reportAny": 1,
@@ -2092,7 +2090,6 @@
  },
  "app.services.regulatory_reporting.npl_generation": {
   "reportAny": 3,
-  "reportPrivateUsage": 5,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 2
  },
@@ -5126,12 +5123,6 @@
   "reportUnknownMemberType": 13,
   "reportUnknownParameterType": 3,
   "reportUnknownVariableType": 5
- },
- "tests.test_cors": {
-  "reportMissingParameterType": 2,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 2,
-  "reportUnknownVariableType": 2
  },
  "tests.test_database_fixture_isolation": {
   "reportPrivateUsage": 5,

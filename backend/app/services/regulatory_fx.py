@@ -91,6 +91,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_fx import (
     FxCurrencyPositionRead,
     FxDashboardRead,
@@ -106,7 +107,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
-from app.services import filing_reconciliation, regulatory_dashboard_batching
+from app.services import regulatory_dashboard_batching
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency
 from app.services.live_block import live_block

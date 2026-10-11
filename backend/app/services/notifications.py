@@ -24,9 +24,9 @@ from app.api.deps import TenantContext
 from app.core.security import ROLES
 from app.identity.public import Bank, User
 from app.models import Notification, RegulatoryPackage
-from app.models.regulatory_reporting import RETURN_FAMILIES
-from app.services.regulatory_reporting import family_access
-from app.services.regulatory_reporting.registry import REGISTRY
+from app.reporting.models.packages import RETURN_FAMILIES
+from app.reporting.service import family_access
+from app.reporting.service.registry import REGISTRY
 
 
 def _roles_at_or_above(role: str) -> tuple[str, ...]:

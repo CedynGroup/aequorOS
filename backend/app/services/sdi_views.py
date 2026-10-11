@@ -15,8 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.identity.public import Bank
-from app.services import regulatory_parameters, sdi_capital
-from app.services.regulatory_reporting.le_generation import (
+from app.reporting.service.le_generation import (
     _BUCKET_CODES,
     _LE_POSITION_TYPES,
     _TABLE1_RATIOS,
@@ -36,6 +35,7 @@ from app.services.regulatory_reporting.le_generation import (
     _table1_thresholds,
     _unencumbered,
 )
+from app.services import regulatory_parameters, sdi_capital
 
 _ZERO = Decimal("0")
 

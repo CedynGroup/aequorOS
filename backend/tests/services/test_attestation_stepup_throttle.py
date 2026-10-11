@@ -589,9 +589,7 @@ def test_the_preparer_then_approver_ceremony_still_completes(
     from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
 
     storage = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: storage
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: storage)
     monkeypatch.setattr(
         "app.services.attestation.artifact_signing.get_storage_client", lambda: storage
     )

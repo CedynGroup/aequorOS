@@ -31,12 +31,12 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.regulatory_reporting.bog_forms.catalog import (
+from app.reporting.service.bog_forms.catalog import (
     all_form_codes,  # noqa: E402
     form_spec,  # noqa: E402
 )
-from app.services.regulatory_reporting.bog_forms.engine import FormResult  # noqa: E402
-from app.services.regulatory_reporting.bog_forms.render import render_form_xlsx  # noqa: E402
+from app.reporting.service.bog_forms.engine import FormResult  # noqa: E402
+from app.reporting.service.bog_forms.render import render_form_xlsx  # noqa: E402
 
 
 def _client(base_url: str, token: str) -> httpx.Client:

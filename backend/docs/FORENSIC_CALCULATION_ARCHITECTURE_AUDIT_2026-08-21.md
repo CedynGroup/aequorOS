@@ -105,7 +105,7 @@ Canonical positions/reference rows
 
 Formula: `LCR = HQLA / (weighted outflows - min(weighted inflows, outflows x cap)) x 100`; decimal values quantized in the domain engine.
 
-Evidence: `domain/liquidity/engine.py::compute_lcr`; `regulatory_liquidity.py::compute_live`; `regulatory_reporting/generation.py::_generate_liquidity`; `tests/api/test_regulatory_reporting.py::_assert_snapshot_binds_run`.
+Evidence: `domain/liquidity/engine.py::compute_lcr`; `regulatory_liquidity.py::compute_live`; `regulatory_reporting/generation.py::_generate_liquidity`; `tests/reporting/api/test_regulatory_reporting.py::_assert_snapshot_binds_run`.
 
 ### 4.2 Universal CAR
 

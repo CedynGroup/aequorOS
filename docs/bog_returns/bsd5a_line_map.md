@@ -4,7 +4,7 @@
 
 **Sheets (3, official order):** `CAR FORMAT` (item No column C · amount column E; 96 captured input cells = 45 amounts + 51 printed item numbers; 12 BoG formulas) · `NEW RISK WEIGHTS` (the risk-weight table: No · Basle · Proposed · Existing = 139 printed percentages, no formulas) · `PROVISION` (the % provision × days-of-delinquency ladder: 10 printed values, no formulas).
 
-Generated from `bog_forms/linemaps/bsd5a.py` + `layouts/BSD5A.json` (do not hand-edit the tables; regenerate — every row is a `LineSpec` and its `params`, see "Regenerating the table"). Resolvers: `bog_forms/sources_ext/bsd5.py`. Tests: `backend/tests/services/bog_forms/test_bsd5.py`.
+Generated from `bog_forms/linemaps/bsd5a.py` + `layouts/BSD5A.json` (do not hand-edit the tables; regenerate — every row is a `LineSpec` and its `params`, see "Regenerating the table"). Resolvers: `bog_forms/sources_ext/bsd5.py`. Tests: `backend/tests/reporting/service/bog_forms/test_bsd5.py`.
 
 ## What the form is (and is not)
 
@@ -100,7 +100,7 @@ Generated from `bog_forms/linemaps/bsd5a.py` + `layouts/BSD5A.json` (do not hand
 
 Template formulas (BoG's, evaluated — never bound): `E10` `=SUM(E7:E9)`; `E17` `=E10-SUM(E12:E16)`; `E24` `=SUM(E20:E23)`; `E25` `=E17+E24`; `E31` `=SUM(E32:E36)`; `E38` `=E39+E40`; `E53` `=E27-E29-E30-E31-E38-SUM(E41:E52)`; `E54` `=SUM(E55:E61)`; `E65` `=SUM(E55:E61)-E63-E64`; `E69` `=E53+E65+E67+E68`; `E70` `=E25/E69`; `E71` `=E25-(E69*6%)`
 
-**CAR FORMAT totals:** 96 cells declared — 82 mapped (31 amounts + 51 item numbers), 14 input_required; 0 unmapped. On the hermetic book (`tests/services/bog_forms/test_bsd5.py`) after a capital baseline run: E7 150.0 · E8 150.0 · E9 20.0 · E10 320.0 · E12 25.0 · E17 295.0 · E22 45.0 · E24 45.0 · **E25 340.0** · E27 2,400.0 · E29 45.0 · E31 505.0 · E38 360.0 · E51 100.0 · E53 1,365.0 · E56 320.0 · E65 320.0 · E67 22.5 · E68 373.33 · **E69 2,080.83** · E70 0.1634 · E71 215.15 (¢'Million).
+**CAR FORMAT totals:** 96 cells declared — 82 mapped (31 amounts + 51 item numbers), 14 input_required; 0 unmapped. On the hermetic book (`tests/reporting/service/bog_forms/test_bsd5.py`) after a capital baseline run: E7 150.0 · E8 150.0 · E9 20.0 · E10 320.0 · E12 25.0 · E17 295.0 · E22 45.0 · E24 45.0 · **E25 340.0** · E27 2,400.0 · E29 45.0 · E31 505.0 · E38 360.0 · E51 100.0 · E53 1,365.0 · E56 320.0 · E65 320.0 · E67 22.5 · E68 373.33 · **E69 2,080.83** · E70 0.1634 · E71 215.15 (¢'Million).
 
 ## Sheet `NEW RISK WEIGHTS` — 139 captured input cells · 0 template formulas · 139 cells declared
 
@@ -145,7 +145,7 @@ Guide BSD8 minimum provisions (1 / 10 / 25 / 50 / 100 % of the net unsecured bal
 
 ## Tests
 
-`backend/tests/services/bog_forms/test_bsd5.py`: (1) every input cell of all three sheets bound, every `constant` equal to the template's printed value, the 14 input_required rows exactly, PROVISION = 1/10/25/50/100; (2) after `POST /regulatory-runs` (capital, baseline) and `POST /regulatory-packages` (BSD5A): counts (231 mapped / 14 input_required / 0 unmapped, no errors), Tier 1 `E10 = E7+E8+E9 = 320.0`, `E25 = 340.0` = the signed sum of the run's capital-component line items that have a BSD5A row = the run's total capital less `{cet1:deferred_tax_assets, t2:general_provisions}`; `E27` = Σ balance-sheet asset facts = 2,400.0; `E31`, `E38`, `E51 = 50% × residential_mortgage`, `E53 = 1,365.0`, `E55/E56` LC book never double counted, `E67 = 50% × the run's fx_charge exposure`, `E68` = mean of the run's gross_income lines; BoG's `E69 = E53+E65+E67+E68`, `E70 = E25/E69`, `E71 = E25 − 6%×E69`; the add-ons reconcile to the run's market / operational RWA and the two ratios differ; the xlsx export carries millions on E, item numbers and percentages unscaled; (3) BSD5B group = solo cell for cell, BoG's group formulas verbatim; (4) resolver semantics on inserted rows (deficit sign, tier residual, AT1-named-hybrid routing, `pct_of`, LC residual, run lines, memoisation, no-run → input_required).
+`backend/tests/reporting/service/bog_forms/test_bsd5.py`: (1) every input cell of all three sheets bound, every `constant` equal to the template's printed value, the 14 input_required rows exactly, PROVISION = 1/10/25/50/100; (2) after `POST /regulatory-runs` (capital, baseline) and `POST /regulatory-packages` (BSD5A): counts (231 mapped / 14 input_required / 0 unmapped, no errors), Tier 1 `E10 = E7+E8+E9 = 320.0`, `E25 = 340.0` = the signed sum of the run's capital-component line items that have a BSD5A row = the run's total capital less `{cet1:deferred_tax_assets, t2:general_provisions}`; `E27` = Σ balance-sheet asset facts = 2,400.0; `E31`, `E38`, `E51 = 50% × residential_mortgage`, `E53 = 1,365.0`, `E55/E56` LC book never double counted, `E67 = 50% × the run's fx_charge exposure`, `E68` = mean of the run's gross_income lines; BoG's `E69 = E53+E65+E67+E68`, `E70 = E25/E69`, `E71 = E25 − 6%×E69`; the add-ons reconcile to the run's market / operational RWA and the two ratios differ; the xlsx export carries millions on E, item numbers and percentages unscaled; (3) BSD5B group = solo cell for cell, BoG's group formulas verbatim; (4) resolver semantics on inserted rows (deficit sign, tier residual, AT1-named-hybrid routing, `pct_of`, LC residual, run lines, memoisation, no-run → input_required).
 
 ## Framework asks (outside this form's files)
 
@@ -157,8 +157,8 @@ Guide BSD8 minimum provisions (1 / 10 / 25 / 50 / 100 % of the net unsecured bal
 ## Regenerating the table
 
 ```python
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
+from app.reporting.service.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.layout import load_layout
 maps, layout = line_maps_for("BSD5A"), load_layout("BSD5A")
 for sheet in layout.sheets:
     for line in maps[sheet.name]:            # one row per LineSpec: code · label · cells · source · params · notes · unscaled

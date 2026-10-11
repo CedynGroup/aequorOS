@@ -322,7 +322,7 @@ the depositor count. Prerequisite for the platform to feed them: a **subsidiary 
 `subsidiary_exposures` roster dataset keyed by `subsidiary_id` (ingested under the subsidiary, or tagged
 with a subsidiary `owning_entity` that the register recognises).
 
-## 5. Critical checks proven by `tests/services/bog_forms/test_bsd3.py`
+## 5. Critical checks proven by `tests/reporting/service/bog_forms/test_bsd3.py`
 
 1. BSD3B generates through the real package pipeline with `basis == "consolidated"`, no engine
    errors, `unmapped == 0`; `mapped == 4` (row numbers), every other declared cell `input_required`;

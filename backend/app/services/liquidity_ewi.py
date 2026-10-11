@@ -575,3 +575,8 @@ def escalation_state(evaluations: list[EwiEvaluationRead], cfp_active: bool) -> 
     if "watch" in statuses:
         return "heightened_monitoring"
     return "normal"
+
+
+# Public aliases retain the existing implementations for reporting consumers.
+get_bank_or_404 = _get_bank_or_404
+get_period_or_404 = _get_period_or_404

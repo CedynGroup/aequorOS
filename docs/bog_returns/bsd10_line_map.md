@@ -45,7 +45,7 @@ Binding: cell (row, column) = `refs.sum {kind: capital_expenditure, value_field:
 
 None as line-map gaps. Every cell reads the register; what remains bank-supplied is the register itself — the bank pushes its fixed-asset sub-ledger's half-year figures per class (a class with no row reads `0`; a bank whose sub-ledger does not track commitments / authorisations / forecasts leaves those optional fields blank and they read `0` — state them, or the form says nil).
 
-## 5. Critical totals proven by `tests/services/bog_forms/test_bsd10_11_16_17.py`
+## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17.py`
 
 1. every one of the 50 official leaf cells is declared (`test_every_data_cell_is_declared_and_split_matches_doc`), none is a label/formula cell, and the split is 50 mapped / 0 input_required as stated above;
 2. the form generates through the real package pipeline with 0 unmapped cells and no engine errors;
@@ -62,7 +62,7 @@ None (`depends_on = ()`). BSD2 rows 115–121 + 123 (fixed assets at cost by cla
 
 ```python
 # DATABASE_URL="" PYTHONPATH=. uv run python -  (from backend/)
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.linemaps import line_maps_for
 for line in line_maps_for("BSD10")["BSD10"]:
     print(line.code, line.label, line.cells, line.source, line.notes)
 ```

@@ -63,6 +63,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_credit import (
     CreditActivityRead,
     CreditDashboardRead,
@@ -93,7 +94,7 @@ from app.schemas.sdi import (
     PortfolioAtRiskRead,
     ProvisionsHeldRead,
 )
-from app.services import filing_reconciliation, jurisdictions
+from app.services import jurisdictions
 from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
 from app.services.live_block import live_block
@@ -1318,7 +1319,7 @@ def _blotter_period(
     if as_of is None:
         return current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
 
-    from app.services.regulatory_reporting.common import (  # noqa: PLC0415 - breaks an import cycle
+    from app.reporting.service.common import (  # noqa: PLC0415 - breaks an import cycle
         get_snapshot_for_reporting_date,
     )
 
@@ -2244,3 +2245,11 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
         segments=reads(by_segment),
         ecl_suggestions=suggestions,
     )
+
+
+# Public aliases retain the existing implementations for reporting consumers.
+classified_loan_rows = _classified_loan_rows
+event_amount_ghs = _event_amount_ghs
+load_events = _load_events
+loan_states = _loan_states
+previous_month_end_as_of = _previous_month_end_as_of

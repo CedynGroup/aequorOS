@@ -69,15 +69,15 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "liquidity_breach_multiplier",
     ),
     "app.services.regulatory_reporting.bog_forms.engine:compute_form": (
-        "app.services.regulatory_reporting.bog_forms.engine",
+        "app.reporting.service.bog_forms.engine",
         "compute_form",
     ),
     "app.services.regulatory_reporting.le_generation:_table11_section": (
-        "app.services.regulatory_reporting.le_generation",
+        "app.reporting.service.le_generation",
         "_table11_section",
     ),
     "app.services.regulatory_reporting.le_generation:_table1_inputs": (
-        "app.services.regulatory_reporting.le_generation",
+        "app.reporting.service.le_generation",
         "_table1_inputs",
     ),
     "app.services.sdi_capital:compute_sdi_capital_summary": (

@@ -29,9 +29,10 @@ from app.domain.ingestion.constants import (
     VALIDATION_STATUSES,
 )
 from app.models import Bank, BankReportingPeriod, CanonicalPositionSnapshot
-from app.services import ingestion, regulatory_reporting
+from app.reporting.service import hub as regulatory_reporting
+from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
+from app.services import ingestion
 from app.services.fact_derivation import _INCLUDED_VALIDATION_STATUSES
-from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -274,7 +275,7 @@ def test_every_filed_return_query_carries_the_shared_accepted_scope() -> None:
     it right, and no existing test could see it.
 
     Both inputs are derived: guarded models from the ORM mapper, modules from
-    walking ``app/services/regulatory_reporting``. The
+    walking ``app/reporting/service``. The
     ``INCLUDED_VALIDATION_STATUSES`` requirement is on the SHARED name — a
     module-private ``("accepted", "warning")`` that agrees today is how eighteen
     copies drifted apart and how the reporting layer came to omit the scope

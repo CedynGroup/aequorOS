@@ -114,7 +114,7 @@ Line specs: 50 detail rows × 13 fields = 650 grid cells + 50 serial numbers = 7
 
 ## Tests
 
-`backend/tests/services/bog_forms/test_bsd8.py` — every input cell of both sheets bound and the counts above; the classification rule (explicit → stage proxy → unclassified); end-to-end generation through `POST /api/v1/banks/{bank}/regulatory-packages` on a LOAN book inserted with `bog_classification` / `ifrs9_stage` / provision / suspense / collateral attributes: item 1 buckets and `H7 = Σ C7:G7`, items 2–7 input_required, `item 8 = Σ items 1–7`, item 8(b) FX, items 10/11/13, `item 12 = 8 − 9 − 10 − 11` per bucket, the annexure ranking / per-row `I = G+H`, `K = I+J`, TOTAL row, `C56 = K55/H19×100`, positively-empty tail rows, and `BSD8!H22 = BSD2!D38 + BSD2!D39` (non-zero, from securities inserted to feed BSD2 rows 38/39); a stage-3-only book leaves the NPL split input_required while Current/OLEM resolve.
+`backend/tests/reporting/service/bog_forms/test_bsd8.py` — every input cell of both sheets bound and the counts above; the classification rule (explicit → stage proxy → unclassified); end-to-end generation through `POST /api/v1/banks/{bank}/regulatory-packages` on a LOAN book inserted with `bog_classification` / `ifrs9_stage` / provision / suspense / collateral attributes: item 1 buckets and `H7 = Σ C7:G7`, items 2–7 input_required, `item 8 = Σ items 1–7`, item 8(b) FX, items 10/11/13, `item 12 = 8 − 9 − 10 − 11` per bucket, the annexure ranking / per-row `I = G+H`, `K = I+J`, TOTAL row, `C56 = K55/H19×100`, positively-empty tail rows, and `BSD8!H22 = BSD2!D38 + BSD2!D39` (non-zero, from securities inserted to feed BSD2 rows 38/39); a stage-3-only book leaves the NPL split input_required while Current/OLEM resolve.
 
 ## Framework asks
 
@@ -124,8 +124,8 @@ Line specs: 50 detail rows × 13 fields = 650 grid cells + 50 serial numbers = 7
 ## Regenerating the table
 
 ```python
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
+from app.reporting.service.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.layout import load_layout
 maps, layout = line_maps_for("BSD8"), load_layout("BSD8")
 for line in maps["BSD8"]:                      # one row per LineSpec: code · label · cells · source · params · notes
     print(line.code, line.label, line.cells, line.source, line.params, line.notes, line.unscaled)

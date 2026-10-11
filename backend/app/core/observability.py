@@ -135,7 +135,8 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "own row on a block). The FILING plane deliberately writes no audit row — it runs "
         "inside caller transactions holding pending writes — so for a refused package, "
         "approval, certification, transmission or official run this log line (emitted from "
-        "app/services/filing_reconciliation.py, carrying purpose= and plane=) plus the 409 "
+        "app/reporting/service/filing_reconciliation.py, carrying purpose= and plane=) "
+        "plus the 409 "
         "itself are the record"
     ),
     Condition.MARKET_DATA_STALE: (
@@ -147,7 +148,7 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
     ),
     Condition.PACKAGE_FAILED: (
         "this log line only, from the single package-mint site "
-        "(app/services/regulatory_reporting/generation.py::generate_package). A refusal "
+        "(app/reporting/service/generation.py::generate_package). A refusal "
         "writes no audit event and no row BY DESIGN — the package never comes into "
         "existence, so there is nothing to attach one to; the log line is the record"
     ),

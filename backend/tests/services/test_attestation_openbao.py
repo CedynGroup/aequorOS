@@ -1114,9 +1114,7 @@ def openbao_env(bao: BaoServer, monkeypatch: pytest.MonkeyPatch) -> Iterator[Non
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     """One object store behind both writers — the exporter and the signer."""
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     monkeypatch.setattr(
         "app.services.attestation.artifact_signing.get_storage_client", lambda: client
     )

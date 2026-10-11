@@ -255,11 +255,11 @@ def test_every_artifact_kind_vocabulary_agrees() -> None:
     """
     from typing import get_args, get_type_hints  # noqa: PLC0415
 
-    from app.features import manage_regulatory_reporting as routes  # noqa: PLC0415
-    from app.models.regulatory_reporting import ARTIFACT_KINDS  # noqa: PLC0415
-    from app.schemas.regulatory_reporting import ArtifactKind  # noqa: PLC0415
-    from app.services.regulatory_reporting import exports  # noqa: PLC0415
-    from app.services.regulatory_reporting import workflow as reporting_workflow  # noqa: PLC0415
+    from app.reporting.api import manage_regulatory_reporting as routes  # noqa: PLC0415
+    from app.reporting.models.packages import ARTIFACT_KINDS  # noqa: PLC0415
+    from app.reporting.schemas.packages import ArtifactKind  # noqa: PLC0415
+    from app.reporting.service import exports  # noqa: PLC0415
+    from app.reporting.service import workflow as reporting_workflow  # noqa: PLC0415
 
     model = set(ARTIFACT_KINDS)
     assert model == set(get_args(ArtifactKind.__value__))

@@ -8,7 +8,7 @@ from app.schemas.capital_plan import (
     CapitalPlanSummaryRead,
     IlaapSnapshotRead,
 )
-from app.services import capital_plan
+from app.services import capital_plan, regulatory_capital, sdi_capital
 from app.services.regulatory_capital import OfficialCapitalPosition, official_capital_position
 
 __all__ = [
@@ -21,4 +21,6 @@ __all__ = [
     "OfficialCapitalPosition",
     "capital_plan",
     "official_capital_position",
+    "regulatory_capital",
+    "sdi_capital",
 ]

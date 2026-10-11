@@ -14,7 +14,7 @@ Generated from `bog_forms/linemaps/bsd13.py` + `layouts/BSD13.json` (tables are 
 FORM BSD13 (Form FXP) is the monthly forex-position return. Its four sheets ship
 with EMPTY data grids (no `0` placeholders), so the official data cells are named
 explicitly from the header labels (`grid_lines`); the cell atlas below is the
-authority and `tests/services/bog_forms/test_bsd13.py` pins it.
+authority and `tests/reporting/service/bog_forms/test_bsd13.py` pins it.
 
 | Component | Sheet / cells | Platform source |
 |---|---|---|

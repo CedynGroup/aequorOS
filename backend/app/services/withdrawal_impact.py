@@ -66,8 +66,8 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.canonical_withdrawal import CanonicalWithdrawal
-from app.models.regulatory_reporting import RegulatoryPackage
 from app.models.regulatory_run import RegulatoryRun
+from app.reporting.models.packages import RegulatoryPackage
 
 __all__ = [
     "WITHDRAWN_EVIDENCE_BLOCK_CODE",

@@ -4,7 +4,7 @@
 
 **Sheets (2, official order):** `CAR FORMAT-GROUP` (item No column B · amount column D; 94 captured input cells + **4 official data cells the template leaves blank** — D8 Paid-up Ordinary Share Capital, D24 Undisclosed Reserves, D71 50% of NOP, D72 3-yr average gross income — bound through `grid_lines`; 14 BoG formulas) · `Sheet2` (empty placeholder — no cells, reproduced so the exported workbook's sheet set matches the official file).
 
-Generated from `bog_forms/linemaps/bsd5b.py` + `layouts/BSD5B.json` (do not hand-edit the table; regenerate). Resolvers: `bog_forms/sources_ext/bsd5.py` (shared with BSD5A). Tests: `backend/tests/services/bog_forms/test_bsd5.py`.
+Generated from `bog_forms/linemaps/bsd5b.py` + `layouts/BSD5B.json` (do not hand-edit the table; regenerate). Resolvers: `bog_forms/sources_ext/bsd5.py` (shared with BSD5A). Tests: `backend/tests/reporting/service/bog_forms/test_bsd5.py`.
 
 ## Basis and how the group form is fed
 
@@ -94,7 +94,7 @@ Template formulas (BoG's, evaluated — never bound): `D12` `=SUM(D8:D11)`; `D20
 
 ## Tests
 
-`backend/tests/services/bog_forms/test_bsd5.py::test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas` (+ the resolver test's BSD5B tail): every captured input cell plus D8/D24/D71/D72 bound, `Sheet2` empty, group-only rows input_required, group = solo cell for cell (18 pairs incl. the blank cells), `D12 = D8+D9+D11 = E10`, `D20 = E17`, `D29 = E24` (finer Tier 2 rows, same total — proven with latent revaluation / cumulative preference / hybrid probe facts), **`D30 = D20+D29 = E25 = 340.0`**, the D46–D50 copies and the `D50=D20` quirk verbatim, `D55`, `D65 = E54`, `D73` excludes rows 50–51, `D74 = D30/D73×100`, `D75 = D30 − 10%×D73`, `E15 = 0`.
+`backend/tests/reporting/service/bog_forms/test_bsd5.py::test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas` (+ the resolver test's BSD5B tail): every captured input cell plus D8/D24/D71/D72 bound, `Sheet2` empty, group-only rows input_required, group = solo cell for cell (18 pairs incl. the blank cells), `D12 = D8+D9+D11 = E10`, `D20 = E17`, `D29 = E24` (finer Tier 2 rows, same total — proven with latent revaluation / cumulative preference / hybrid probe facts), **`D30 = D20+D29 = E25 = 340.0`**, the D46–D50 copies and the `D50=D20` quirk verbatim, `D55`, `D65 = E54`, `D73` excludes rows 50–51, `D74 = D30/D73×100`, `D75 = D30 − 10%×D73`, `E15 = 0`.
 
 ## Framework asks
 
@@ -108,8 +108,8 @@ Rows 3 (`D10`) and 18 (`D26`) — the two consolidation-only lines — now read 
 ## Regenerating the table
 
 ```python
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
+from app.reporting.service.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.layout import load_layout
 maps, layout = line_maps_for("BSD5B"), load_layout("BSD5B")
 for line in maps["CAR FORMAT-GROUP"]:      # one row per LineSpec: code · label · cells · source · params · notes · unscaled
     print(line.code, line.label, line.cells, line.source, line.params, line.notes, line.unscaled)

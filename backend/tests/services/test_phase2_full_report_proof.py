@@ -32,12 +32,12 @@ from app.identity.schemas.institution_profile import (
 )
 from app.identity.service import institution_profile
 from app.models import BankReportingPeriod, RegulatoryPackage
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import data_activation, reverse_stress
-from app.services.regulatory_reporting import generation
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -92,9 +92,7 @@ FREEZE_GATED = {
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 

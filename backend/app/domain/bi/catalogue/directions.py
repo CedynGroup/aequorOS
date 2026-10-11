@@ -1,7 +1,7 @@
 """Favourable direction per engine metric, declared explicitly.
 
 The substantive judgment ("when this figure rises, is the bank stronger or
-weaker?") lives in ``app.services.report_comparison`` — the module the
+weaker?") lives in ``app.reporting.service.report_comparison`` — the module the
 comparison and board-pack surfaces already use. ``app.domain`` may not import
 ``app.services``, so the catalogue restates the direction for each engine
 metric it exposes, and ``tests/services/bi/test_catalogue_directions.py``

@@ -32,8 +32,8 @@ import pytest
 
 from app.icaap.domain.document import WORKING_COPY_NOTICE
 from app.icaap.service.render.from_snapshot import filing_from_snapshot
-from app.services.regulatory_reporting.exports import icaap_docx, icaap_pdf
-from app.services.regulatory_reporting.workflow import (
+from app.reporting.service.exports import icaap_docx, icaap_pdf
+from app.reporting.service.workflow import (
     FILABLE_WORKING_ARTIFACT_KINDS,
     UNFILABLE_WORKING_ARTIFACT_KINDS,
     WORKING_ARTIFACT_KINDS,

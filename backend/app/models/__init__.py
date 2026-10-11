@@ -127,11 +127,6 @@ from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
 from app.models.facts import FinancialFactRow
-from app.models.filing_workflow import (
-    FilingWorkflowTemplate,
-    PackageStageDecision,
-    PackageWorkflowStage,
-)
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -205,17 +200,6 @@ from app.models.parameter_register import (
 from app.models.reconciliation import ReconciliationException
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_parameter import RegulatoryParameter
-from app.models.regulatory_reporting import (
-    RegulatoryChannelConfig,
-    RegulatoryPackage,
-    RegulatoryPackageApproval,
-    RegulatoryPackageArtifact,
-    RegulatoryPackageAttachment,
-    RegulatoryPackageAttachmentWithdrawal,
-    RegulatoryReportingSettings,
-    RegulatoryResubmissionRequest,
-    RegulatorySubmissionEvent,
-)
 from app.models.regulatory_run import (
     RegulatoryLineItem,
     RegulatoryMetricResult,
@@ -246,6 +230,22 @@ from app.models.stress import (
 )
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
+from app.reporting.models.filing_workflow import (
+    FilingWorkflowTemplate,
+    PackageStageDecision,
+    PackageWorkflowStage,
+)
+from app.reporting.models.packages import (
+    RegulatoryChannelConfig,
+    RegulatoryPackage,
+    RegulatoryPackageApproval,
+    RegulatoryPackageArtifact,
+    RegulatoryPackageAttachment,
+    RegulatoryPackageAttachmentWithdrawal,
+    RegulatoryReportingSettings,
+    RegulatoryResubmissionRequest,
+    RegulatorySubmissionEvent,
+)
 
 __all__ = [
     "BankEncryptionKey",

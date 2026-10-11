@@ -68,6 +68,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.common import FigureRefusalRead, JsonObject
 from app.schemas.regulatory_liquidity import (
     Bsd3HeaderRead,
@@ -95,7 +96,6 @@ from app.schemas.regulatory_liquidity import (
 )
 from app.services import (
     enterprise_run_visibility,
-    filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
     withdrawal_impact,

@@ -12,14 +12,14 @@ read that before changing anything in §3.3 or §6 step 1.
 
 - The engine is `app/domain/workflow/chain.py` (pure: stage-field parsing, the
   round rules, the D-067 scale normaliser) plus
-  `app/services/filing_workflow/engine.py` (the blocker ladder, the officer-title
+  `app/reporting/service/filing_workflow/engine.py` (the blocker ladder, the officer-title
   check, the send-back rules, signer display). **Both planes run it.**
   `app/icaap/domain/workflow.py` and `app/icaap/service/workflow.py` were
   rewritten onto it with byte-identical refusal sentences; ICAAP keeps its own
   structural rules (a chain that starts with a preparation and ends at the Board,
   with exactly one freeze stage) and its own `Stage` shape, because
   `freeze_on_approve` is an ICAAP concept.
-- The filing chain's shape is `app/domain/filing/workflow.py`. Its structural
+- The filing chain's shape is `app/reporting/domain/workflow.py`. Its structural
   rules: exactly one preparation stage first, at least one reviewing stage after
   it, exactly one `transmit_on_approve` stage which must be LAST and must be an
   approval. `DEFAULT_STAGES` is Bernard's Preparer -> Approver -> Validator,

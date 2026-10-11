@@ -333,7 +333,7 @@ class TestTheTransaction:
     def test_a_precommencement_rehearsal_freezes_but_cannot_be_filed(
         self, canonical_book: Session, extra_frameworks: None
     ) -> None:
-        from app.services.regulatory_reporting import (  # noqa: PLC0415
+        from app.reporting.service import (  # noqa: PLC0415
             workflow as reporting_workflow,
         )
 
@@ -438,7 +438,7 @@ class TestTheTransaction:
         mean?", and this is the one return that prints CAR, CET1, Tier 1 and
         leverage beside LCR, IRRBB and stress figures.
         """
-        from app.services.regulatory_reporting import common  # noqa: PLC0415
+        from app.reporting.service import common  # noqa: PLC0415
 
         db = canonical_book
         access, _r, _a, cycle = _build(db)

@@ -29,15 +29,15 @@ from app.models import (
     LineageRecord,
     RegulatoryRun,
 )
+from app.reporting.service import dbk_generation, generation
+from app.reporting.service.bog_forms.sources import ResolveContext
+from app.reporting.service.bog_forms.sources_ext import bsd13
+from app.reporting.service.registry import get_definition
 from app.services import regulatory_fx
 from app.services.fact_derivation import (
     GroupResult,
     _derive_fx_positions,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.regulatory_reporting import dbk_generation, generation
-from app.services.regulatory_reporting.bog_forms.sources import ResolveContext
-from app.services.regulatory_reporting.bog_forms.sources_ext import bsd13
-from app.services.regulatory_reporting.registry import get_definition
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.live_plane import materialize_live_plane
 from tests.services.test_derivation_fail_closed_defaults import (

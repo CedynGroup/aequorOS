@@ -187,10 +187,10 @@ BSD2 foreign-column lines with **no BSD2A row** under the official headings (doc
 
 ## Cross-form dependencies
 
-- `BSD2A` ← `BSD2` (same reporting date): 21 category cedi cells (`form.cell` / `bsd2a.form_cells_sum` over BSD2 `C…`), 24 net-worth cells (`D135`), 21 ratios, 1 provision (`C69`). BSD2's own foreign column is fed by `positions.sum` / `facts.sum` under the Guide's currency rule — the tie is by construction and is asserted in `tests/services/bog_forms/test_bsd2a.py`.
+- `BSD2A` ← `BSD2` (same reporting date): 21 category cedi cells (`form.cell` / `bsd2a.form_cells_sum` over BSD2 `C…`), 24 net-worth cells (`D135`), 21 ratios, 1 provision (`C69`). BSD2's own foreign column is fed by `positions.sum` / `facts.sum` under the Guide's currency rule — the tie is by construction and is asserted in `tests/reporting/service/bog_forms/test_bsd2a.py`.
 - `BSD13` (NOP) depends on `BSD2A` per the registry — nothing in this map is consumed by BSD13 yet (Wave 4).
 
-## Critical relationships proved (`tests/services/bog_forms/test_bsd2a.py`)
+## Critical relationships proved (`tests/reporting/service/bog_forms/test_bsd2a.py`)
 
 - `E13 = BSD2!C7`, `E27 = BSD2!C68` with `N27 = BSD2!C69`, `E30 = BSD2!C34 + C72 + C102`, `E39 = BSD2!C113`, `E66 = C228 + C233` — every category `E` equals its named BSD2 cell(s) on a book with FX cash, an FX loan and an FX cocoa bill;
 - `G = BSD2!D135` on all 24 category rows; `H = 100 × E / D135` (unscaled) on the 21 mapped rows; judgement rows blank;

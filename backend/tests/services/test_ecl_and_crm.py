@@ -43,11 +43,11 @@ from app.models import (
     ParamStressShock,
     RegulatoryRun,
 )
+from app.reporting.service.provenance import declared_methodology_notes
 from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
-from app.services.regulatory_reporting.provenance import declared_methodology_notes
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

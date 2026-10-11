@@ -1,7 +1,7 @@
 """BSD7's P&L ledger rules, lifted pure (D-021; recon §B4).
 
 Everything here was extracted from
-``app/services/regulatory_reporting/bog_forms/sources_ext/bsd7.py`` without
+``app/reporting/service/bog_forms/sources_ext/bsd7.py`` without
 changing a figure: BSD7 now delegates to these functions (its own tests pin
 byte-identical output), and ``bi_fact_gl_monthly`` is computed from the same
 functions, so the mart can only ever say what the filed return says. Nothing

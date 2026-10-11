@@ -62,7 +62,7 @@ cover all of them — which the digest in §3.1 does. The run persists
 `RegulatoryMetricResult`, and `RegulatoryValidation` rows.
 
 **Stage 3 — the package.** `POST /banks/{bank_id}/regulatory-packages`
-→ `generate_package` (`app/services/regulatory_reporting/generation.py:95`),
+→ `generate_package` (`app/reporting/service/generation.py:95`),
 which dispatches to one of the registered generators (`generation.py:1068`,
 plus `le_generation.py`, `dbk_generation.py`, `lrt_generation.py`). All thirteen
 produce the same `regulatory-package-v1` snapshot shape — envelope + sections +
@@ -83,12 +83,12 @@ ICAAP and LRT families have their own section sets in their respective
 generators.
 
 **Stage 4 — artifacts.** `export_package` renders xlsx (openpyxl), csv/zip, and
-**pdf (reportlab)** — `app/services/regulatory_reporting/exports/`. A PDF
+**pdf (reportlab)** — `app/reporting/service/exports/`. A PDF
 already exists and already renders an attestation block; the block is
 **empty label text**, not a signature:
 
 ```python
-# app/services/regulatory_reporting/templates.py:47-52
+# app/reporting/service/templates.py:47-52
 STANDARD_ATTESTATION_LINES = (
     "Prepared by (name / designation / signature / date): ",
     "Reviewed and approved by (name / designation / signature / date): ",
@@ -140,8 +140,8 @@ Attestation binds to `RegulatoryRun` only.
 
 ### 1.3 The maker-checker workflow as it actually stands
 
-`PACKAGE_STATUSES` (`app/models/regulatory_reporting.py:37`) and
-`ALLOWED_TRANSITIONS` (`app/services/regulatory_reporting/workflow.py:80`):
+`PACKAGE_STATUSES` (`app/reporting/models/packages.py:37`) and
+`ALLOWED_TRANSITIONS` (`app/reporting/service/workflow.py:80`):
 
 | From                    | Permitted to                                              |
 | ----------------------- | --------------------------------------------------------- |
@@ -270,7 +270,7 @@ defensible, however good the cryptography is.
 
 ### 1.7 The full return inventory — and why the family matters
 
-Thirteen returns are registered (`app/services/regulatory_reporting/registry.py`).
+Thirteen returns are registered (`app/reporting/service/registry.py`).
 They do **not** share the properties a signature needs to bind to:
 
 | Return         | Family          | Frequency                | Engine runs bound                        | Fidelity       |

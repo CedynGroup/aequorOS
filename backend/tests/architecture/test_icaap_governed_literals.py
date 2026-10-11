@@ -31,8 +31,8 @@ from pathlib import Path
 
 import pytest
 
-from app.services.regulatory_reporting.registry import get_definition
-from app.services.regulatory_reporting.templates import get_template
+from app.reporting.service.registry import get_definition
+from app.reporting.service.templates import get_template
 
 BACKEND = Path(__file__).parents[2]
 
@@ -47,7 +47,7 @@ ICAAP_MODULES = (
 )
 
 #: ICAAP functions inside the shared generator module.
-GENERATION = "app/services/regulatory_reporting/generation.py"
+GENERATION = "app/reporting/service/generation.py"
 GENERATION_FUNCTION = re.compile(
     r"^_(generate_icaap_stress|generate_attested_appendix2|generate_icaap_stress_appendix2"
     r"|appendix2_.*|pending_minimum_notes|minimum_basis|applied_minimum|governed_row"
@@ -158,7 +158,7 @@ def _template_percentages(template: object) -> list[str]:
 def test_the_template_scan_sees_a_literal_where_one_exists() -> None:
     """Not vacuous: the frozen pre-P0 text (D-021) still carries the literals the
     current templates dropped, and the same scan finds them there."""
-    from app.services.regulatory_reporting.templates_legacy import (  # noqa: PLC0415
+    from app.reporting.service.templates_legacy import (  # noqa: PLC0415
         LEGACY_TEMPLATES,
     )
 

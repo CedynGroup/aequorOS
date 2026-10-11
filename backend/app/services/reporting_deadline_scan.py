@@ -30,10 +30,10 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models import Job, Notification, RegulatoryPackage
-from app.schemas.regulatory_reporting import ReportingObligationRead
+from app.reporting.schemas.packages import ReportingObligationRead
+from app.reporting.service import calendar
+from app.reporting.service.workflow import has_pending_orass_reupload
 from app.services import job_queue, notifications
-from app.services.regulatory_reporting import calendar
-from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DEADLINE_SCAN = "reporting_deadline_scan"
 _HORIZON_MONTHS = 2

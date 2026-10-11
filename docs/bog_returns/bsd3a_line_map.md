@@ -320,7 +320,7 @@ Template formulas on this sheet (50 cells; evaluated by the engine, never bound)
 
 Data quality prerequisites for a full roster: DEPOSIT / LOAN / … positions ingested **with counterparty references** (`counterparty_reference`; pooled positions cannot rank), `group_reference` on connected counterparties, `deposit_account_type`, `contractual_maturity`, and the foreign-currency inputs required by the [reporting-currency amount contract](../API_INTEGRATION.md#34-position).
 
-## 5. Critical totals proven by `tests/services/bog_forms/test_bsd3.py`
+## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd3.py`
 
 Generated through `POST /api/v1/banks/{bank}/regulatory-packages` on the hermetic book plus an inserted canonical slice (9 counterparties incl. a connected group, a pooled counterparty-less deposit, a prior-month snapshot; distinct balances):
 
@@ -358,8 +358,8 @@ import re
 import sys
 from collections import defaultdict
 
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.layout import load_layout
+from app.reporting.service.bog_forms.linemaps import line_maps_for
 
 form = sys.argv[1]
 layout = load_layout(form)

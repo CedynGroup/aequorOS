@@ -37,7 +37,7 @@ Template fidelity is graded per return in Governance → Regulatory Reporting �
    AES-256-GCM encrypted, write-only — the UI shows only a fingerprint; requires
    `CREDENTIAL_VAULT_MASTER_KEY` on the backend).
 4. **Swap the channel.** The sandbox channel is a drop-in seam
-   (`app/services/regulatory_reporting/channels/`). A live `OrassChannel` implementing the
+   (`app/reporting/service/channels/`). A live `OrassChannel` implementing the
    same `submit`/`poll` protocol replaces it per return family — no workflow, UI, or
    pipeline changes. This is deliberately the only code change between demo and production.
 5. **Parallel-run.** BoG expects continuity: run AequorOS packages alongside your current

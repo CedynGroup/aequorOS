@@ -61,6 +61,17 @@ from pyhanko.sign.validation import validate_pdf_signature
 from pyhanko_certvalidator import ValidationContext
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 
+from app.reporting.service.exports.pdf import render_pdf
+from app.reporting.service.templates import (
+    STANDARD_ATTESTATION_LINES,
+    ColumnSpec,
+    RenderedCell,
+    RenderedReturn,
+    RenderedRow,
+    RenderedSection,
+    ReturnTemplate,
+    SectionLayout,
+)
 from app.services.attestation.pdf_signing import (
     APPROVER_FIELD_NAME,
     ATTESTATION_PAGE_INDEX,
@@ -74,17 +85,6 @@ from app.services.attestation.pdf_signing import (
     sign_as_preparer,
 )
 from app.services.attestation.verify import attestation_diff_policy
-from app.services.regulatory_reporting.exports.pdf import render_pdf
-from app.services.regulatory_reporting.templates import (
-    STANDARD_ATTESTATION_LINES,
-    ColumnSpec,
-    RenderedCell,
-    RenderedReturn,
-    RenderedRow,
-    RenderedSection,
-    ReturnTemplate,
-    SectionLayout,
-)
 
 NOW = datetime(2026, 7, 31, 14, 2, 11, tzinfo=UTC)
 CLOCK_NOW = datetime.now(UTC)
@@ -337,9 +337,7 @@ def pki() -> _Pki:
     signer_key = ec.generate_private_key(ec.SECP256R1())
     signer_cert = _issue(signer_key.public_key(), "Ama Mensah", ca_key, ca_cert)
     tsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    tsa_cert = _issue(
-        tsa_key.public_key(), "AequorOS Pin TSA", ca_key, ca_cert, timestamping=True
-    )
+    tsa_cert = _issue(tsa_key.public_key(), "AequorOS Pin TSA", ca_key, ca_cert, timestamping=True)
     return _Pki(
         signer=signers.SimpleSigner(
             signing_cert=_asn1_cert(signer_cert),
@@ -572,9 +570,7 @@ def test_default_placements_are_exactly_the_eight_standard_cells() -> None:
         "preparer",
         "approver",
     }
-    assert all(
-        placement.page_index == ATTESTATION_PAGE_INDEX for placement in DEFAULT_PLACEMENTS
-    )
+    assert all(placement.page_index == ATTESTATION_PAGE_INDEX for placement in DEFAULT_PLACEMENTS)
 
 
 def test_prepared_acroform_structure_is_unchanged(prepared_pdf: bytes) -> None:

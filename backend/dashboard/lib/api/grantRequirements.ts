@@ -19,7 +19,7 @@
  *
  * This module MIRRORS a backend constant and must not drift from it:
  * `CHAIN_DECISION_GATE` in
- * `backend/app/services/regulatory_reporting/family_access.py`.
+ * `backend/app/reporting/service/family_access.py`.
  * `grantRequirements.parity.test.ts` imports the backend gate at runtime and
  * fails if the two disagree — fix the mirror, never the test.
  */

@@ -212,7 +212,7 @@ export function FidelityPill({ fidelity }: { fidelity: FidelityGrade }) {
 
 // ---------------------------------------------------------------------------
 // Registry display copy (deadline rules + template sections) — transcribed
-// from app/services/regulatory_reporting/{registry,templates}.py.
+// from app/reporting/service/{registry,templates}.py.
 // ---------------------------------------------------------------------------
 
 export const DEADLINE_RULE_TEXT: Record<string, string> = {

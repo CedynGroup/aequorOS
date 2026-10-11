@@ -44,7 +44,7 @@ The judgement
 favourable direction and the two values. The DIRECTIONS are not restated here:
 they are the catalogue's ``MeasureDef.favourable_direction``, which
 ``app/domain/bi/catalogue/directions.py`` already pins, metric by metric, to
-``app.services.report_comparison.favorable_direction``. What this function adds
+``app.reporting.service.report_comparison.favorable_direction``. What this function adds
 is the same verdict keyed on the direction rather than on a run-metric key,
 which is what a portfolio measure — a measure with no run-metric key at all —
 needs. ``tests/services/bi/test_insights_drivers.py`` asserts the two agree for
@@ -67,7 +67,7 @@ from fractions import Fraction
 from typing import Literal
 
 from app.domain.bi.catalogue.members import FavourableDirection, ValueType
-from app.services.report_comparison import favorability_for_disposition
+from app.reporting.public import favorability_for_disposition
 
 __all__ = [
     "BridgeComponent",

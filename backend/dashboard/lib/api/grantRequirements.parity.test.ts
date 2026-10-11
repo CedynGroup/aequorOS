@@ -2,7 +2,7 @@
  * The grant warning must mirror the backend gate it warns about.
  *
  * `CHAIN_DECISION_GATE` in
- * `backend/app/services/regulatory_reporting/family_access.py` is the single
+ * `backend/app/reporting/service/family_access.py` is the single
  * authority on what a filing-chain decision is evaluated against. This file
  * reads it and fails if the dashboard's mirror has drifted — because a warning
  * that names the wrong requirement is worse than none: it would send an Org
@@ -110,7 +110,7 @@ from app.identity.schemas.authorization import (
     BranchDirectoryRead,
     ScopedGrantInput,
 )
-from app.services.regulatory_reporting.family_access import CHAIN_DECISION_GATE
+from app.reporting.service.family_access import CHAIN_DECISION_GATE
 
 def accepts(kind, values):
     try:

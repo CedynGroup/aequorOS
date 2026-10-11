@@ -94,5 +94,5 @@ ask 1 above.
 ## Cross-form dependencies
 
 - `depends_on` BSD7A (catalogue). BSD7B `D<row+2>` == BSD7A `H<row>` for the same reporting date (same
-  ledger, same window) — proved in `tests/services/bog_forms/test_bsd7.py`; in the fiscal year's first quarter
+  ledger, same window) — proved in `tests/reporting/service/bog_forms/test_bsd7.py`; in the fiscal year's first quarter
   BSD7B `C` == `D`.

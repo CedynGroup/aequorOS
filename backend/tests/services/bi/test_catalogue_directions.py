@@ -10,7 +10,7 @@ from __future__ import annotations
 from app.domain.bi.authority import TEXT_VALUED_METRIC_IDS, engine_authorities
 from app.domain.bi.catalogue import catalogue
 from app.domain.bi.catalogue.directions import ENGINE_DIRECTIONS, engine_direction
-from app.services.report_comparison import favorable_direction
+from app.reporting.service.report_comparison import favorable_direction
 
 
 def test_every_engine_measure_direction_matches_report_comparison() -> None:

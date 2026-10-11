@@ -131,7 +131,7 @@ need it?" but "which of the two owns it, and is that written down?".
 
 ## 3. `family_hooks` is the ONE seam a return family may use
 
-`app/services/regulatory_reporting/family_hooks.py`. The regulatory reporting
+`app/reporting/service/family_hooks.py`. The regulatory reporting
 plane is family-agnostic by construction. ICAAP is the first family that
 genuinely needs more: a package minted by freezing a workspace cycle, a Board
 resolution as a submission precondition, a document rendered from a frozen

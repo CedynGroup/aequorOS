@@ -818,7 +818,7 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
+Executable evidence: `tests/reporting/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
 regulatory figures, every registered return family's read/download paths,
 generation, legacy approval, signing inboxes and calendar links alongside a

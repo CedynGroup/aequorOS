@@ -226,7 +226,7 @@ def test_the_withdrawable_model_set_is_read_from_the_mapper_registry() -> None:
 def test_bsd4_and_bsd8_are_now_inside_the_guards_reach() -> None:
     """D-22 named these two files; pin that they are actually scanned and clean."""
     for name in ("bsd4.py", "bsd8.py"):
-        path = APP_ROOT / "services" / "regulatory_reporting" / "bog_forms" / "sources_ext" / name
+        path = APP_ROOT / "reporting" / "service" / "bog_forms" / "sources_ext" / name
         source = path.read_text()
         assert "snap.superseded_by.is_(None)" in source, f"{name} lost its predicate"
         assert offenders_in(source, name) == []

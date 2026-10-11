@@ -80,6 +80,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_capital import (
     Bsd2HeaderRead,
     Bsd2PreviewRead,
@@ -105,7 +106,6 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services import (
-    filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
     sdi_capital,

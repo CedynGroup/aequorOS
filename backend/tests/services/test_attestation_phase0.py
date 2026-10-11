@@ -60,18 +60,18 @@ from app.models import (
     RelatedPartyRole,
     Shareholding,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import regulatory_liquidity
-from app.services.attestation import digests, register_state
-from app.services.regulatory_reporting import exports as reporting_exports
-from app.services.regulatory_reporting import generation, workflow
-from app.services.regulatory_reporting.eligibility import (
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import exports as reporting_exports
+from app.reporting.service import generation, workflow
+from app.reporting.service.eligibility import (
     governed_effective_parameter_codes,
 )
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
+from app.reporting.service.templates import CONSOLIDATED_BASIS
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.services import regulatory_liquidity
+from app.services.attestation import digests, register_state
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -95,9 +95,7 @@ REPORTING_DATE = date(2026, 3, 31)
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 

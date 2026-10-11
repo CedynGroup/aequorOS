@@ -16,7 +16,7 @@ from app.domain.authority.provenance import (
     parameter_digest,
 )
 from app.models.regulatory_run import RegulatoryRun
-from app.services.regulatory_reporting.generation import _source_run_entry
+from app.reporting.service.generation import _source_run_entry
 
 BANK_ID = "BK-SAMP0001"
 ORG_ID = "OR-DEM00001"

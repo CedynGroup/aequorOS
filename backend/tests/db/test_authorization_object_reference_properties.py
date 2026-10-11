@@ -55,7 +55,7 @@ from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import AuthorizationBinding, Organization, RegulatoryPackage, User
-from app.services.regulatory_reporting import common as regulatory_common
+from app.reporting.service import common as regulatory_common
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     clear_database_caches,
@@ -379,9 +379,7 @@ def test_object_reference_property_detects_weakened_package_guard(
         )
         patched.setattr(deps, "_resolve_package_from_path", unscoped_resolve)
         patched.setattr(regulatory_common, "get_package_or_404", unscoped_lookup)
-        patched.setattr(
-            "app.services.regulatory_reporting.packages.get_package_or_404", unscoped_lookup
-        )
+        patched.setattr("app.reporting.service.packages.get_package_or_404", unscoped_lookup)
         weakened = sweep.run(auth, "sibling_bank")
         assert weakened, "the weakened package guard went unnoticed"
     with TestClient(app, raise_server_exceptions=False) as client:

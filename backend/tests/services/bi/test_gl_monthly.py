@@ -1,7 +1,7 @@
 """``bi_fact_gl_monthly`` mirrors BSD7's own P&L semantics (D-021), by construction.
 
 A small INCOME/EXPENSE ledger is inserted beside the canonical fixture — the
-shape ``tests/services/bog_forms/test_bsd7.py`` uses, moved to the fixture's
+shape ``tests/reporting/service/bog_forms/test_bsd7.py`` uses, moved to the fixture's
 fiscal year — with every case the h_b5 contract names: a year-to-date account
 with a prior month (movement = difference), one booked only this month
 (``missing_prior``, never a fabricated month), a foreign-currency account, a
@@ -39,7 +39,7 @@ from app.models import (
     CanonicalReferenceRow,
 )
 from app.models.canonical import CanonicalGlAccount
-from app.services.regulatory_reporting.bog_forms.sources import ResolveContext, get_resolver
+from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.services.bi.test_mart_builder import AS_OF, CTX, MID_MONTH, build, new_batch, seed_book
 from tests.support.helpers import ORG_1
