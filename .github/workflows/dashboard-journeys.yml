@@ -34,7 +34,8 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh journeys
-          '^(backend/dashboard/|backend/app/|backend/alembic/|backend/scripts/|backend/tests/|backend/pyproject\.toml$|backend/uv\.lock$|backend/mise\.toml$|packages/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|mise\.toml$|\.github/workflows/dashboard-journeys\.yml$|\.github/actions/setup-minio/|\.github/scripts/)'
+          '^([^/]+\.md$|LICENSE$|docs/|backend/docs/|(backend|backend/dashboard|console|frontend|deploy)/README\.md$|frontend/(app/|components/|lib/|public/))'
+          --ignore
 
   journeys:
     name: Dashboard journeys shard ${{ matrix.shard }}/4

@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
@@ -61,7 +62,7 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
 
 
 @pytest.mark.parametrize(
-    ("changed_path", "expected"),
+    ("changed_paths", "expected"),
     [
         ("backend/dashboard/app/page.tsx", "true"),
         ("backend/dashboard/playwright.config.ts", "true"),
@@ -85,23 +86,148 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         ("backend/tests/support/factories/reconciliation.py", "true"),
         ("backend/tests/adapters/market_data/manual_upload/fixtures.py", "true"),
         ("packages/shared/index.ts", "true"),
+        ("backend/.python-version", "true"),
+        ("backend/package.json", "true"),
+        ("backend/dashboard/package.json", "true"),
+        ("frontend/package.json", "true"),
+        ("console/package.json", "true"),
+        ("package.json", "true"),
         ("pnpm-lock.yaml", "true"),
+        ("backend/uv.lock", "true"),
+        ("pnpm-workspace.yaml", "true"),
+        ("new-runtime/config.toml", "true"),
+        ("frontend/new-build-hook.js", "true"),
+        (".github/workflows/web.yml", "true"),
+        (".github/actions/new-action/action.yml", "true"),
+        (".github/scripts/new-script.sh", "true"),
+        ("backend/app/services/ai/consent/ai-consent-2026-09-v1.md", "true"),
+        ("backend/dashboard/public/branding/aequoros-mark.png", "true"),
         (".github/workflows/dashboard-journeys.yml", "true"),
         (".github/actions/setup-minio/action.yml", "true"),
         ("README.md", "false"),
+        ("LICENSE", "false"),
+        ("docs/product.md", "false"),
+        ("backend/docs/transport_security.md", "false"),
+        ("backend/dashboard/README.md", "false"),
         ("frontend/app/page.tsx", "false"),
+        ("frontend/components/Navigation.tsx", "false"),
+        ("frontend/lib/product-screens.ts", "false"),
+        ("frontend/public/images/founder.jpg", "false"),
+        (("README.md", "docs/product.md", "frontend/app/page.tsx"), "false"),
+        (("README.md", "backend/.python-version"), "true"),
+        (("frontend/app/page.tsx", "frontend/package.json"), "true"),
+        (("frontend/public/images/founder.jpg", "console/package.json"), "true"),
     ],
 )
 def test_workflow_change_detector_selects_its_inputs(
-    tmp_path: Path, changed_path: str, expected: str
+    tmp_path: Path, changed_paths: str | tuple[str, ...], expected: str
 ) -> None:
     """Run the workflow's configured detector against a real disposable diff."""
+    paths = (changed_paths,) if isinstance(changed_paths, str) else changed_paths
+    output = _run_change_detector(tmp_path, paths, _workflow_detector_command())
+    assert output == f"journeys={expected}"
+
+
+@pytest.mark.parametrize(
+    ("event", "base_state"),
+    [
+        ("pull_request", "valid"),
+        ("pull_request", "missing"),
+        ("pull_request", "invalid"),
+        ("push", "valid"),
+        ("workflow_dispatch", "valid"),
+        ("", "valid"),
+    ],
+)
+def test_journey_detector_runs_for_empty_or_unknown_decisions(
+    tmp_path: Path, event: str, base_state: str
+) -> None:
+    paths = () if base_state == "valid" and event == "pull_request" else ("README.md",)
+    command = _workflow_detector_command()
+    if base_state == "missing":
+        command = f"PR_BASE_SHA='' {command}"
+    elif base_state == "invalid":
+        command = f"PR_BASE_SHA=not-a-revision {command}"
+    output = _run_change_detector(tmp_path, paths, command, event=event)
+    assert output == "journeys=true"
+
+
+@pytest.mark.parametrize(
+    ("old_path", "new_path", "expected"),
+    [
+        ("backend/runtime.py", "docs/runtime.md", "true"),
+        ("docs/runtime.md", "backend/runtime.py", "true"),
+        ("docs/old.md", "docs/new.md", "false"),
+    ],
+)
+def test_journey_detector_considers_both_rename_paths(
+    tmp_path: Path, old_path: str, new_path: str, expected: str
+) -> None:
+    output = _run_change_detector(
+        tmp_path, (new_path,), _workflow_detector_command(), original_path=old_path
+    )
+    assert output == f"journeys={expected}"
+
+
+@pytest.mark.parametrize(
+    ("changed_path", "expected"),
+    [("frontend/package.json", "true"), ("frontend/app/page.tsx", "false")],
+)
+def test_journey_detector_classifies_deletions(
+    tmp_path: Path, changed_path: str, expected: str
+) -> None:
+    output = _run_change_detector(
+        tmp_path, (), _workflow_detector_command(), original_path=changed_path
+    )
+    assert output == f"journeys={expected}"
+
+
+@pytest.mark.parametrize(
+    ("workflow_step", "changed_path"),
+    [
+        (("dashboard.yml", "changes", "areas", "dashboard"), "backend/dashboard/app/page.tsx"),
+        (("risk-service.yml", "preflight", "backend", "backend"), "backend/app/main.py"),
+        (("risk-service.yml", "preflight", "guards", "guards"), ".github/workflows/web.yml"),
+        (
+            ("risk-service.yml", "preflight", "api_client", "api_client"),
+            "packages/risk-service-api/index.ts",
+        ),
+        (("web.yml", "changes", "areas", "web"), "frontend/app/page.tsx"),
+    ],
+)
+@pytest.mark.parametrize("selected", [True, False])
+def test_other_workflows_keep_inclusion_selection(
+    tmp_path: Path, workflow_step: tuple[str, str, str, str], changed_path: str, selected: bool
+) -> None:
+    workflow, job, step_id, output_name = workflow_step
+    path = changed_path if selected else "README.md"
+    output = _run_change_detector(
+        tmp_path, (path,), _workflow_detector_command(workflow, step_id, job)
+    )
+    assert output == f"{output_name}={str(selected).lower()}"
+
+
+def _workflow_detector_command(
+    workflow: str = "dashboard-journeys.yml", step_id: str = "areas", job: str = "changes"
+) -> str:
     repo = GATE.parents[2]
     document = yaml.load(
-        (repo / ".github/workflows/dashboard-journeys.yml").read_text(),
+        (repo / ".github/workflows" / workflow).read_text(),
         Loader=yaml.BaseLoader,
     )
-    step = next(step for step in document["jobs"]["changes"]["steps"] if step.get("id") == "areas")
+    step = next(step for step in document["jobs"][job]["steps"] if step.get("id") == step_id)
+    return cast(str, step["run"])
+
+
+def _run_change_detector(
+    tmp_path: Path,
+    changed_paths: tuple[str, ...],
+    command: str,
+    *,
+    event: str = "pull_request",
+    original_path: str | None = None,
+) -> str:
+    repo = GATE.parents[2]
     detector = tmp_path / ".github/scripts/changed_area.sh"
     detector.parent.mkdir(parents=True)
     shutil.copy2(repo / ".github/scripts/changed_area.sh", detector)
@@ -125,21 +251,31 @@ def test_workflow_change_detector_selects_its_inputs(
         ).stdout.strip()
 
     git("init", "-q")
-    git("add", ".")
+    if original_path:
+        initial = tmp_path / original_path
+        initial.parent.mkdir(parents=True, exist_ok=True)
+        initial.write_text("changed\n")
+    git("add", "--force", ".")
     git("commit", "-qm", "baseline")
     base = git("rev-parse", "HEAD")
-    changed = tmp_path / changed_path
-    changed.parent.mkdir(parents=True, exist_ok=True)
-    changed.write_text("changed\n")
-    git("add", ".")
-    git("commit", "-qm", "change")
+    for changed_path in changed_paths:
+        changed = tmp_path / changed_path
+        changed.parent.mkdir(parents=True, exist_ok=True)
+        if original_path:
+            (tmp_path / original_path).rename(changed)
+        else:
+            changed.write_text("changed\n")
+    if original_path and not changed_paths:
+        (tmp_path / original_path).unlink()
+    git("add", "--force", ".")
+    git("commit", "--allow-empty", "-qm", "change")
     output = tmp_path / "outputs"
     subprocess.run(
-        ["bash", "-c", step["run"]],
+        ["bash", "-c", command],
         cwd=tmp_path,
         env={
             **os.environ,
-            "GITHUB_EVENT_NAME": "pull_request",
+            "GITHUB_EVENT_NAME": event,
             "PR_BASE_SHA": base,
             "GITHUB_OUTPUT": str(output),
         },
@@ -147,4 +283,4 @@ def test_workflow_change_detector_selects_its_inputs(
         text=True,
         check=True,
     )
-    assert output.read_text().strip() == f"journeys={expected}"
+    return output.read_text().strip()

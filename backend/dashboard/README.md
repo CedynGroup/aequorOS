@@ -577,12 +577,24 @@ The `Dashboard Playwright journeys` workflow in
 `.github/workflows/dashboard-journeys.yml` runs automatically on pull requests
 and pushes to main, and remains available through the Actions UI or
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`.
-The shared change detector filters expensive PR jobs for dashboard changes,
-backend application, migration, script and test inputs, shared packages, and
-their build and workflow inputs. Main pushes and manual dispatch run every shard; unknown
-change decisions fail closed. The **`Dashboard journeys gate`** is the stable
-check to require before merge: it always reports, including on unrelated PRs,
-and accepts a skipped suite only after successful detection of unrelated changes.
+Journeys run for every change except PRs whose entire diff is on this ignore list:
+
+- Root Markdown files and `LICENSE`.
+- `docs/` and `backend/docs/` documentation and their images.
+- `README.md` directly under `backend/`, `backend/dashboard/`, `console/`,
+  `frontend/` or `deploy/`.
+- Marketing source and images under `frontend/app/`, `frontend/components/`,
+  `frontend/lib/` and `frontend/public/`.
+
+These paths are not consumed by the journey stack. Other files, including every
+workspace manifest, lockfile, interpreter file, workflow, action and script,
+select the suite. Dashboard images and runtime Markdown also select it.
+The shared detector's ignore mode is used only by this workflow; other workflows
+keep their inclusion predicates. Renames consider both the old and new path.
+Main pushes and manual dispatch run every shard; unknown or empty change
+decisions fail closed. The **`Dashboard journeys gate`** is the stable check to
+require before merge: it always reports and accepts a skipped suite only after
+successful detection of an ignored-only PR.
 
 Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
 worker and its own disposable SQLite database, fixture bank, loopback MinIO
