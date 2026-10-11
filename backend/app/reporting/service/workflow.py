@@ -608,13 +608,18 @@ def submit_package(  # noqa: PLR0913
 ) -> RegulatoryPackageRead:
     """Record a channel submission: ``approved -> submitted`` + submission event.
 
-    Concrete channels (export/submission wave) obtain ``external_ref`` from
-    :class:`~app.reporting.service.channels.base.SubmissionChannel`
-    and delegate here; this function never talks to a channel itself.
+    Channel delivery and governed email-to-ORASS re-uploads use
+    :func:`submit_package_via_channel`; they do not delegate here.
     """
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
+    if package.status == "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This package is already submitted. A governed ORASS re-upload must "
+            "use the channel submission workflow.",
+        )
     # Transmission is the last moment the platform can refuse (audit D-2).
     filing_reconciliation.assert_package_reconciled(db, ctx, package, purpose="package_submission")
     transition(db, ctx, package, "submitted", details={"channel": channel})

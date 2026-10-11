@@ -98,14 +98,13 @@ superseded by this delta where they differ.
 
 ## 2. Package lifecycle
 
-```
-draft → generated → validated → pending_approval → approved → submitted
-                                      ↓ rejected(approval)          ↓
-                                   generated (rework)      acknowledged | rejected(BoG)
-                                                                    ↓ rejected → resubmitted (new version, supersedes)
-any regeneration for the same (return_code, reporting_date, basis)
-  ⇒ new version, prior → superseded
-```
+The [as-built filing chain](../backend/docs/filing_workflow_redesign.md)
+owns review stages, hand-off and submission gates; the original linear lifecycle
+does not describe those separate decisions.
+
+Recording a manual submission of an already submitted package returns HTTP 409
+without adding another receipt. A governed downtime-email → ORASS re-upload uses
+the channel submission workflow and preserves the filed snapshot.
 
 ## 3. Data model (migration 202607170009, all RLS + tenant-scoped)
 

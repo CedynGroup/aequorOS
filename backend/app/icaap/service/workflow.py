@@ -133,10 +133,10 @@ def _decision_rows(
     )
 
 
-def _fact(row: IcaapStageDecision) -> domain.DecisionFact:
+def _fact(row: IcaapStageDecision, *, round_number: int) -> domain.DecisionFact:
     return domain.DecisionFact(
         stage_seq=row.stage_seq,
-        round=row.round,
+        round=round_number,
         decision=row.decision,
         return_to_seq=row.return_to_seq,
         review_digest=row.review_digest,
@@ -269,7 +269,22 @@ def content_authors(db: Session, access: IcaapAccess, cycle: IcaapCycle) -> froz
 def load_state(db: Session, access: IcaapAccess, cycle: IcaapCycle) -> ChainState:
     framework, _matches = guards.framework_for(cycle)
     decisions = _decision_rows(db, access, cycle)
-    facts = tuple(_fact(row) for row in decisions)
+    frozen_rounds = {
+        row.package_id: row.round
+        for row in decisions
+        if row.decision == "frozen" and row.package_id is not None
+    }
+    facts = tuple(
+        _fact(
+            row,
+            round_number=(
+                frozen_rounds.get(row.package_id, row.round)
+                if row.decision == "returned" and row.package_id is not None
+                else row.round
+            ),
+        )
+        for row in decisions
+    )
     return ChainState(
         cycle=cycle,
         framework=framework,

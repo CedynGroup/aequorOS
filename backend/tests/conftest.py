@@ -22,6 +22,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from hypothesis import settings as hypothesis_settings
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
@@ -49,6 +50,18 @@ from tests.real_data import REAL_DATA_DATABASE_URL
 from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
+
+# No scheduled property-test job exists: local and PR runs share this bounded,
+# reproducible budget. Expensive database machines may lower it explicitly.
+hypothesis_settings.register_profile(
+    "ci",
+    max_examples=25,
+    stateful_step_count=20,
+    deadline=None,
+    derandomize=True,
+    print_blob=True,
+)
+hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 
 #: Each feature keeps its fixtures in ``tests/<feature>/fixtures.py``. They are
 #: registered here because pytest accepts ``pytest_plugins`` only in the root
