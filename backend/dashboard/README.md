@@ -388,6 +388,18 @@ pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys nee
 Regenerate the API client after any backend contract change:
 `mise run risk-service:openapi-client`.
 
+### Unit-test collection
+
+The dashboard currently uses Node assertion suites, not Vitest. `tsconfig.test.json`
+compiles every `*.test.ts` and `*.test.tsx` file; its explicit production roots
+support existing tests that load modules dynamically. `scripts/run-unit-tests.mjs`
+discovers all source test files, fails below the 55-file floor or when any source
+test lacks compiled output, and executes each file in its own Node process.
+There is no hand-maintained execution list. New nested TS and TSX tests are
+included automatically. CI uploads the discovered, executed and failed file
+names in `dashboard-unit-collection`, including partial evidence on failure.
+The script contract tests also run through the standard `test` command.
+
 ## End-to-end (Playwright)
 
 `playwright.config.ts` boots a **disposable** stack: the FastAPI backend on a
@@ -603,8 +615,23 @@ mutable bank or storage is shared between shards. Each runner restores or
 installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
-counts. Each shard requires at least 20 executed journeys and the quarantine
-in `e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
+counts. The aggregate requires all four reports, unique journey identities,
+and at least **243 executed journeys**, with zero skips. It verifies the
+reported counters against the named results and prints every skipped journey
+in the log and job summary before failing. Retries replace the same journey's
+result and cannot inflate the count. Missing/unfinished tests or a lost shard
+fail the gate even when the remaining reports pass. Raise the floor when adding
+coverage; reducing it requires a reviewed suite change.
+
+The previous four skips were diagnostics: three temporary home/bell/stress
+screenshot probes were retired, and the assertion-free whole-site visual tour
+moved out of the required suite. Run `pnpm --filter @aequoros/dashboard e2e:visual`
+to capture that tour separately against the same disposable stack. It neither
+pads the journey count nor skips a required journey. Its output remains in
+`e2e/.tmp/visual-tour/`.
+
+Each shard also requires at least 20 executed journeys and the quarantine in
+`e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
 declared with `test.fail` and a reason beside it, and with the workflow's gate
 edited to admit it; the custom reporter fails the run for any non-quarantined
 failure, unexpected quarantine pass, skipped or undiscovered quarantine entry,

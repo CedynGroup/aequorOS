@@ -1,9 +1,9 @@
 /**
  * Visual tour — full-page screenshots of every route against the hermetic
  * stack, for design-audit before/after evidence. Not part of the regular
- * gate: runs only when VISUAL_TOUR=1 is set.
+ * gate: invoke the separate e2e:visual command.
  *
- *   VISUAL_TOUR=1 pnpm exec playwright test visual-tour
+ *   pnpm e2e:visual
  *
  * Output: e2e/.tmp/visual-tour/<route>.png
  */
@@ -11,9 +11,9 @@ import { test } from "@playwright/test";
 import { mkdirSync } from "fs";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
-import { requireObjectStorage } from "./support/object-storage";
+import { requireObjectStorage } from "../e2e/support/object-storage";
 
-const OUT = path.join(__dirname, ".tmp", "visual-tour");
+const OUT = path.join(E2E_TMP, "visual-tour");
 
 const ROUTES = [
   "/",
@@ -94,7 +94,6 @@ const ROUTES = [
 ];
 
 test.describe("visual tour", () => {
-  test.skip(!process.env.VISUAL_TOUR, "set VISUAL_TOUR=1 to capture");
   test.beforeAll(() => requireObjectStorage());
   test.use({
     storageState: path.join(E2E_TMP, "admin.json"),

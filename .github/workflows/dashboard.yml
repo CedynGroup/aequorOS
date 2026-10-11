@@ -119,7 +119,16 @@ jobs:
       - name: Lint dashboard
         run: pnpm --filter dashboard lint
       - name: Test dashboard
+        env:
+          DASHBOARD_UNIT_REPORT: ${{ runner.temp }}/dashboard-unit-files.json
         run: pnpm --filter dashboard test
+      - name: Upload dashboard unit collection
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dashboard-unit-collection
+          path: ${{ runner.temp }}/dashboard-unit-files.json
+          if-no-files-found: error
       - name: Build dashboard
         run: pnpm --filter dashboard build
 
