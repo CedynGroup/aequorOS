@@ -16,9 +16,7 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
 
 ## The ten steps
 
-1. First follow the
-   [reader credential retirement deployment contract](integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
-   **Deploy the release; `risk-migrate` applies `202609220066` … `202609290079`**
+1. **Deploy the release; `risk-migrate` applies `202609220066` … `202609290079`**
    (fourteen BI revisions; single head, `alembic heads` — HEAD's count: a fifteenth,
    `202609290080_reconciliation_leaves_bi.py`, which drops `bi_reconciliation_results`
    under the founder's 2026-09-29 decision, is in the working tree at the time of

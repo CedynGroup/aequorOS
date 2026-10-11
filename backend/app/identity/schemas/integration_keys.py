@@ -33,7 +33,7 @@ class IntegrationKeyRead(ClosedModel):
     #: DERIVED from the machine binding the key's service identity holds, never
     #: stored on the key row: the binding IS the authority, so a second copy of
     #: it could disagree with the thing that decides. ``None`` means no supported
-    #: purpose, including legacy rows and retired reader bindings. Historical
+    #: purpose, including legacy rows and reader bindings. Historical
     #: credentials remain listable for lifecycle evidence.
     purpose: IntegrationKeyPurpose | None = None
     # Reserved scope metadata; data push keys read no slice.

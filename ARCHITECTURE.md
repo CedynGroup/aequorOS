@@ -832,7 +832,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 - **Power BI Stage B** has a
   [pre-release feed contract](backend/docs/powerbi_stage_b.md); credential
   availability and reintroduction are governed by the
-  [reader retirement contract](backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
+  [reader issuance contract](backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance).
   Stage A (governed file exports into Power BI Desktop) is
   `backend/docs/powerbi_stage_a.md`.
 - **Credit routes moved onto scoped bindings** (`app/api/deps.py::require_credit_*`,

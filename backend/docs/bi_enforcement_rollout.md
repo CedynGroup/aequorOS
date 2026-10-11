@@ -327,7 +327,7 @@ are included so the release record proves no integration was assumed to have BI
 read authority on the INTERACTIVE routes, which refuse every machine credential.
 The [Power BI Stage B feed](powerbi_stage_b.md) has a separate pre-release
 contract; credential availability and deployment are governed by the
-[reader retirement contract](integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
+[reader issuance contract](integration_key_machine_principal_rollout.md#reader-key-issuance).
 The SQL above still reports every machine principal as denied, which is correct
 for the interactive surfaces it inventories.
 

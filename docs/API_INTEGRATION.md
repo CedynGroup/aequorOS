@@ -32,9 +32,9 @@ middleware, verifying a push, then revoking the old one.
 Only data push keys (`purpose: writer`, the default) may be issued. Each holds
 `DATA` / `restricted` / `ingest` for one exact bank and cannot read analytics.
 `purpose: reader` is unavailable until BI ships with governed delegation; the API
-rejects it with `422` even when `BI_ENABLED` is enabled. For existing credentials,
-deployment, rollback and the approval requirements for reintroduction, see the
-[reader retirement contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
+rejects it with `422` even when `BI_ENABLED` is enabled. The approval requirements
+for reintroduction are in the
+[reader issuance contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance).
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
