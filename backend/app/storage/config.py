@@ -38,6 +38,12 @@ class StorageEngineSettings(BaseSettings):
     download_base_url: str = Field(default="", alias="STORAGE_DOWNLOAD_BASE_URL")
     kms_key_id: str | None = Field(default=None, alias="STORAGE_KMS_KEY_ID")
 
+    object_lock_enabled: bool = Field(default=False, alias="STORAGE_OBJECT_LOCK_ENABLED")
+    # Operational placeholder only: confirm the legal period with counsel (#246).
+    object_lock_retention_days: int = Field(
+        default=2555, gt=0, le=36500, alias="STORAGE_OBJECT_LOCK_RETENTION_DAYS"
+    )
+
     @property
     def configured(self) -> bool:
         return self.backend == "s3" or bool(self.endpoint and self.access_key and self.secret_key)
