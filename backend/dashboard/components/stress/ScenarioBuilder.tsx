@@ -233,7 +233,6 @@ export default function ScenarioBuilder({
   return (
     <SectionCard
       title={isEdit ? `Edit scenario · ${editScenario?.code}` : 'New macro scenario'}
-      subtitle="Author macro-variable paths (Table 6 drivers) as base + stress over the horizon — governed, versioned, maker-checker"
       actions={<StatusPill tone="action">Builder</StatusPill>}
     >
       <div className="space-y-5">

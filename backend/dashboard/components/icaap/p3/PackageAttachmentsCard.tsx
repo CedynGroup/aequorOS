@@ -133,7 +133,6 @@ export default function PackageAttachmentsCard({
       {data && (
         <SectionCard
           title="Documents filed with this report"
-          subtitle="What the regime requires alongside the report itself, and what has been attached."
           actions={
             canEdit ? (
               <SecondaryButton onClick={() => setUploadKind(BOARD_RESOLUTION)}>

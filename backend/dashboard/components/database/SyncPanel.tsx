@@ -90,9 +90,7 @@ export default function SyncPanel({
         </button>
       </div>
       <p className="text-caption text-slate">
-        Extracts through the adapter, runs the ETL preprocess + dedup pass, validates,
-        and persists an immutable batch. Re-syncing a date supersedes rather than
-        duplicates.
+        Re-syncing a date supersedes rather than duplicates.
       </p>
 
       {error && (

@@ -196,7 +196,6 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
       {selected && (
         <SectionCard
           title={`${selected.label} — member products`}
-          subtitle="Backend product rows contributing to this line"
           noPadding
           actions={
             <button

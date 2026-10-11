@@ -198,8 +198,7 @@ export default function CashflowWindowPanel({
 
         {!applied ? (
           <p className="text-caption text-slate">
-            Pick a start and end date, then Compute — the engine aggregates the
-            book&apos;s contractual maturities inside the window server-side.
+            Pick a start and end date, then Compute.
           </p>
         ) : query.isFetching ? (
           <div className="space-y-2.5" aria-busy="true" aria-label="Computing">

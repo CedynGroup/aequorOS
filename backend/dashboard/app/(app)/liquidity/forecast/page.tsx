@@ -372,10 +372,7 @@ export default function CashFlowForecast() {
                 </div>
               </SectionCard>
 
-              <SectionCard
-                title="Method comparison"
-                subtitle="Switch the method toggle to view each forecast"
-              >
+              <SectionCard title="Method comparison">
                 <div className="space-y-3 text-body text-navy/85 leading-relaxed">
                   <p>
                     <span className="font-medium text-navy">LSTM behavioral model</span>{' '}
@@ -398,7 +395,7 @@ export default function CashFlowForecast() {
               </SectionCard>
             </div>
 
-            <SectionCard title="Hybrid forecast composition" subtitle="Every projected day separates contractual maturities, behavioural flow, and the active scenario overlay.">
+            <SectionCard title="Hybrid forecast composition">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-caption">
                 <div><p className="text-slate">Behavioural component</p><p className="mt-1 text-body font-medium text-navy">{fmtCurrency(chartForecast.reduce((sum, point) => sum + point.behavioral, 0))}</p></div>
                 <div><p className="text-slate">Contractual maturities</p><p className="mt-1 text-body font-medium text-navy">{fmtCurrency(chartForecast.reduce((sum, point) => sum + point.contractual, 0))}</p></div>

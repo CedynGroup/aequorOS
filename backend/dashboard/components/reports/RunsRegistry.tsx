@@ -182,7 +182,7 @@ export default function RunsRegistry({
   return (
     <SectionCard
       title="Official runs registry"
-      subtitle={`Immutable calculation runs with full provenance · ${total} on record`}
+      subtitle={`${total} on record`}
       noPadding
       actions={
         <label className="inline-flex items-center gap-2 text-caption text-slate">

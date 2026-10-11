@@ -316,7 +316,7 @@ function NiiDashboard({
 
         <SectionCard
           title="Sensitivity vs base"
-          subtitle="Per-year NII by scenario, delta vs the base-case run"
+          subtitle="Δ vs the base case"
           noPadding
           computedAt={primary.createdAt}
         >

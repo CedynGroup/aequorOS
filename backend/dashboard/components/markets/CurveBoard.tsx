@@ -164,7 +164,7 @@ export default function CurveBoard({
           subtitle={
             showAdjusted
               ? "Official published (solid) vs your adjusted composition (dashed)"
-              : "Every published curve at the as-of date, keyed by curve name"
+              : undefined
           }
           height={300}
           footer={
@@ -206,7 +206,6 @@ export default function CurveBoard({
 
         <SectionCard
           title="Curve points"
-          subtitle="Per-tenor rates behind the chart"
           noPadding
           footer={
             <span>

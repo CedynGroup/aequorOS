@@ -93,7 +93,6 @@ export default function RiskRegister({
         <div className="space-y-4">
           <SectionCard
             title="Risk register"
-            subtitle="Every risk the framework names, with the bank's own assessment."
             actions={
               canEdit ? (
                 <SecondaryButton onClick={() => setAddingRisk(true)}>

@@ -170,7 +170,6 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
 
         <SectionCard
           title="Hedge inventory"
-          subtitle="Per-hedge instrument, marks, and prospective test results"
           noPadding
           actions={
             <StatusPill tone={m.hedgeEffectiveCount === m.hedgeTotalCount ? 'compliant' : 'amber'}>

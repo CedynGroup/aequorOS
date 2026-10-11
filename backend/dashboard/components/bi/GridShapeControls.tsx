@@ -75,10 +75,7 @@ export default function GridShapeControls({
   };
 
   return (
-    <SectionCard
-      title="Shape the grid"
-      subtitle="Roll the rows up, spread one field across the columns, or keep only the largest groups."
-    >
+    <SectionCard title="Shape the grid">
       <div className="space-y-4">
         <div className="space-y-1">
           <label className="flex items-start gap-2">
