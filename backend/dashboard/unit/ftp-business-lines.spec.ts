@@ -30,6 +30,24 @@ const categories = [
   ["Special facility", "liability", "other_funding"],
 ] as const;
 
+function expectImpliedMargin(
+  actual: number | null | undefined,
+  balanceCents: number,
+  contributionsCents: number[],
+) {
+  const contributionCents = contributionsCents.reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const expected = (contributionCents * 100) / balanceCents;
+  const magnitude =
+    (contributionsCents.reduce((sum, value) => sum + Math.abs(value), 0) * 100) /
+    balanceCents;
+  const errorBudget =
+    4 * (contributionsCents.length + 4) * Number.EPSILON * Math.max(1, magnitude);
+  expect(Math.abs((actual ?? NaN) - expected)).toBeLessThanOrEqual(errorBudget);
+}
+
 describe("FTP business-line view aggregation", () => {
   it("groups by the disclosed name/category rule and keeps asset and funding books separate", () => {
     const rows = categories.map(([name, category]) =>
@@ -95,9 +113,10 @@ describe("FTP business-line view aggregation", () => {
             );
             expect(line?.balanceGhs).toBeCloseTo(balance / 100, 8);
             expect(line?.contributionGhs).toBeCloseTo(contribution / 100, 8);
-            expect(line?.impliedMarginPct).toBeCloseTo(
-              (contribution * 100) / balance,
-              8,
+            expectImpliedMargin(
+              line?.impliedMarginPct,
+              balance,
+              members.map((r) => r.contribution),
             );
             expect(line?.belowFloorCount).toBe(
               members.filter((r) => r.flagged).length,
@@ -112,6 +131,14 @@ describe("FTP business-line view aggregation", () => {
             lines.map((line) => line.key),
           );
           lines.forEach((line, index) => {
+            const members = generated.filter(
+              (r) => categories[r.group][2] === line.key,
+            );
+            expectImpliedMargin(
+              reversed[index].impliedMarginPct,
+              members.reduce((sum, r) => sum + r.balance, 0),
+              members.map((r) => r.contribution),
+            );
             expect(reversed[index].balanceGhs).toBeCloseTo(line.balanceGhs, 8);
             expect(reversed[index].contributionGhs).toBeCloseTo(
               line.contributionGhs,
@@ -123,6 +150,16 @@ describe("FTP business-line view aggregation", () => {
       ),
       { numRuns: 100 },
     );
+  });
+
+  it("accepts large-margin roundoff while rejecting materially incorrect margins", () => {
+    const [line] = aggregateBusinessLines([
+      product({ balanceGhs: "0.01", contributionGhs: "9999.98" }),
+    ]);
+    expectImpliedMargin(line.impliedMarginPct, 1, [999_998]);
+    for (const incorrect of [99_999_800 - 0.01, 99_999_800 + 0.01, 0]) {
+      expect(() => expectImpliedMargin(incorrect, 1, [999_998])).toThrow();
+    }
   });
 
   it("shows no computable margin without positive grouped balance, while preserving zero contribution", () => {
