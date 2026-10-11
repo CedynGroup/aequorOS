@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -13,14 +14,18 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
-from app.core.audit_integrity import scheduled_verification, verify_chains
+from app.core import audit_integrity
+from app.core.audit_integrity import run_due_verification, scheduled_verification, verify_chains
+from app.core.config import get_settings
 from app.db.session import force_rls_suspended
 from tests.db import test_governance_append_only as governance_fixtures
+from tests.db import test_postgres_migrations as migration_fixtures
 from tests.db.test_postgres_migrations import MigratedPostgresSchema
 from tests.support.helpers import ORG_1
 
 governance_schema = governance_fixtures.governance_schema
 tenant_connection = governance_fixtures.connection
+forward_migrated_postgres_schema = migration_fixtures.forward_migrated_postgres_schema
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 
@@ -28,7 +33,6 @@ pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="Post
 @pytest.fixture
 def connection(tenant_connection: Connection) -> Iterator[Connection]:
     with force_rls_suspended(tenant_connection, "audit_events", "operator_audit_log"):
-        tenant_connection.execute(text("SET LOCAL row_security = off"))
         tenant_connection.execute(
             text(
                 "GRANT UPDATE, DELETE, TRUNCATE ON audit_events, operator_audit_log, "
@@ -165,3 +169,150 @@ def test_privileged_tampering_is_detected_and_alerted(
     assert results[1].valid
     assert len(calls) == 1
     assert pages == [("chain_mismatch", "audit_events")]
+
+
+@pytest.mark.parametrize(
+    "table", ["audit_events", "operator_audit_log", "audit_chain_entries", "audit_chain_heads"]
+)
+def test_runtime_role_cannot_alter_or_rewrite_history(
+    connection: Connection, governance_schema: MigratedPostgresSchema, table: str
+) -> None:
+    role = governance_schema.runtime_role
+    assert role is not None
+    _append(connection)
+    connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+    connection.execute(text("SET LOCAL row_security = on"))
+    assert not connection.scalar(
+        text("SELECT pg_has_role(current_user, 'aequoros_audit_owner', 'MEMBER')")
+    )
+    for statement in (
+        f"ALTER TABLE {table} DISABLE TRIGGER USER",
+        f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY",
+        f"DELETE FROM {table}",
+        f"UPDATE {table} SET "
+        + (
+            "event_type = 'rewritten'"
+            if table == "audit_events"
+            else "action = 'rewritten'"
+            if table == "operator_audit_log"
+            else "entry_hash = repeat('0', 64)"
+        ),
+        f"TRUNCATE {table} CASCADE",
+    ):
+        savepoint = connection.begin_nested()
+        with pytest.raises(DatabaseError, match="permission denied|must be owner"):
+            connection.execute(text(statement))
+        savepoint.rollback()
+    connection.execute(text("RESET ROLE"))
+    connection.execute(text("SET LOCAL row_security = off"))
+    with Session(bind=connection) as session:
+        assert all(result.valid for result in verify_chains(session))
+
+
+def test_runtime_insert_uses_definer_but_cannot_forge_links(
+    connection: Connection, governance_schema: MigratedPostgresSchema
+) -> None:
+    role = governance_schema.runtime_role
+    assert role is not None
+    with Session(bind=connection) as session:
+        before = verify_chains(session)
+    connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+    connection.execute(text("SET LOCAL row_security = on"))
+    _append(connection)
+    connection.execute(
+        text("""
+        INSERT INTO operator_audit_log (id, operator_email, auth_mode, action, detail, created_at)
+        VALUES (:id, 'synthetic@example.test', 'dev', 'integrity.probe', '{}', now())
+    """),
+        {"id": uuid4()},
+    )
+    for statement in (
+        "INSERT INTO audit_chain_entries VALUES ('audit_events', 999, gen_random_uuid(), '', '', '{}')",
+        "SELECT aequoros_chain_append('audit_events', gen_random_uuid(), '{}'::jsonb)",
+        "CREATE OR REPLACE FUNCTION aequoros_append_only_guard() RETURNS trigger "
+        "LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+        "CREATE OR REPLACE FUNCTION aequoros_audit_chain_insert() RETURNS trigger "
+        "LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+        "CREATE OR REPLACE FUNCTION aequoros_chain_append(text, uuid, jsonb) RETURNS void "
+        "LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$",
+    ):
+        savepoint = connection.begin_nested()
+        with pytest.raises(DatabaseError, match="permission denied|must be owner"):
+            connection.execute(text(statement))
+        savepoint.rollback()
+    connection.execute(text("RESET ROLE"))
+    connection.execute(text("SET LOCAL row_security = off"))
+    with Session(bind=connection) as session:
+        results = verify_chains(session)
+        assert all(result.valid for result in results)
+        assert [result.entries for result in results] == [result.entries + 1 for result in before]
+
+
+@pytest.mark.parametrize("failure", ["mismatch", "unavailable"])
+def test_platform_schedule_runs_once_hourly_without_banks(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
+    get_settings.cache_clear()
+    now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
+    pages: list[str] = []
+
+    def verify(session: Session) -> list[audit_integrity.ChainVerification]:
+        if failure == "unavailable":
+            raise RuntimeError("verification unavailable")
+        return [audit_integrity.ChainVerification("operator_audit_log", 1, False)]
+
+    monkeypatch.setattr(audit_integrity, "verify_chains", verify)
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        pages.append(reason)
+        return True
+
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    with Session(forward_migrated_postgres_schema.app_engine) as session:
+        assert session.scalar(text("SELECT count(*) FROM banks")) == 0
+        assert run_due_verification(session, now)
+        assert not run_due_verification(session, now)
+        assert not run_due_verification(session, now.replace(minute=59))
+        assert run_due_verification(session, now + timedelta(hours=1))
+    reason = "chain_mismatch" if failure == "mismatch" else "verification_unavailable"
+    assert pages == [reason, reason]
+
+
+def test_peer_worker_cannot_repeat_locked_platform_sweep(
+    governance_schema: MigratedPostgresSchema, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
+    get_settings.cache_clear()
+    with governance_schema.app_engine.begin() as connection:
+        connection.execute(text("UPDATE audit_integrity_schedule SET run_after = '-infinity'"))
+    calls: list[Session] = []
+    now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
+    with Session(governance_schema.app_engine) as peer:
+
+        def verify(session: Session) -> list[audit_integrity.ChainVerification]:
+            calls.append(session)
+            assert not run_due_verification(peer, now)
+            return []
+
+        monkeypatch.setattr(audit_integrity, "scheduled_verification", verify)
+        with Session(governance_schema.app_engine) as first:
+            assert run_due_verification(first, now)
+            assert not run_due_verification(peer, now)
+            assert calls == [first]
+
+
+def test_chain_rls_hides_rows_even_with_runtime_select(
+    connection: Connection, governance_schema: MigratedPostgresSchema
+) -> None:
+    role = governance_schema.runtime_role
+    assert role is not None
+    _append(connection)
+    connection.execute(text(f'GRANT SELECT ON audit_chain_entries, audit_chain_heads TO "{role}"'))
+    connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+    connection.execute(text("SET LOCAL row_security = on"))
+    assert connection.scalar(text("SELECT count(*) FROM audit_chain_heads")) == 0
+    assert connection.scalar(text("SELECT count(*) FROM audit_chain_entries")) == 0
+    connection.execute(text("RESET ROLE"))

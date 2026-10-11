@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Protocol, cast
 
 import boto3
@@ -102,10 +103,9 @@ def verify_chains(session: Session) -> list[ChainVerification]:
         session.scalar(
             text("""
         SELECT rolsuper OR rolbypassrls OR (
-            current_setting('row_security') = 'off' AND
             NOT EXISTS (SELECT 1 FROM pg_class WHERE oid IN
                 ('audit_events'::regclass, 'operator_audit_log'::regclass)
-                AND (relowner <> (SELECT oid FROM pg_roles WHERE rolname = current_user)
+                AND (NOT pg_has_role(relowner, 'USAGE')
                      OR relforcerowsecurity)))
         FROM pg_roles WHERE rolname = current_user
     """)
@@ -113,6 +113,7 @@ def verify_chains(session: Session) -> list[ChainVerification]:
     )
     if not privileged:
         raise RuntimeError("Audit integrity verification requires an all-tenant role.")
+    session.execute(text("SET LOCAL row_security = on"))
     session.execute(text("SET LOCAL TimeZone = 'UTC'"))
     results: list[ChainVerification] = []
     for stream in STREAMS:
@@ -178,3 +179,28 @@ def scheduled_verification(session: Session) -> list[ChainVerification]:
                 "Audit integrity verification passed"
             )
     return results
+
+
+def run_due_verification(session: Session, now: datetime) -> bool:
+    """Run the single platform task, serialized across worker processes."""
+    if not get_settings().worker.audit_integrity_enabled:
+        return False
+    due = cast(
+        bool | None,
+        session.scalar(
+            text("""
+                SELECT id FROM audit_integrity_schedule
+                WHERE run_after <= :now FOR UPDATE SKIP LOCKED
+            """),
+            {"now": now},
+        ),
+    )
+    if due is None:
+        return False
+    _ = scheduled_verification(session)
+    session.execute(
+        text("UPDATE audit_integrity_schedule SET run_after = :next_hour WHERE id = true"),
+        {"next_hour": now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)},
+    )
+    session.commit()
+    return True
