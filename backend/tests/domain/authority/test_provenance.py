@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -171,13 +173,48 @@ def test_run_without_parameters_still_yields_a_stable_digest() -> None:
 
 
 def test_domain_authority_imports_no_database_layer() -> None:
-    """``app/domain`` must stay pure: no SQLAlchemy / FastAPI / service imports."""
-    package = Path(__file__).resolve().parents[3] / "app" / "domain" / "authority"
-    forbidden = ("sqlalchemy", "fastapi", "from app.models", "from app.services", "from app.db")
-    for path in sorted(package.glob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        for needle in forbidden:
-            assert needle not in source, f"{path.name} must not import {needle}"
+    program = """
+import importlib
+import importlib.abc
+import pkgutil
+import sys
+
+class RejectInfrastructure(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        forbidden = ("sqlalchemy", "fastapi", "app.models", "app.services", "app.db")
+        if any(fullname == name or fullname.startswith(name + ".") for name in forbidden):
+            raise AssertionError("domain imported infrastructure: " + fullname)
+
+sys.meta_path.insert(0, RejectInfrastructure())
+import app.domain.authority as authority
+for module in pkgutil.iter_modules(authority.__path__, authority.__name__ + "."):
+    importlib.import_module(module.name)
+from app.domain.authority.provenance import CalculationProvenance, parameter_digest
+from types import SimpleNamespace
+from datetime import datetime, UTC
+run = SimpleNamespace(
+    id="run", organization_id="OR-TEST0001", bank_id="BK-TEST0001",
+    reporting_period_id="period", module="capital", scenario_code="baseline",
+    status="succeeded", engine_version="capital-v1", input_schema_version="input-v1",
+    output_schema_version="output-v1", input_hash="a" * 64, created_by="actor",
+    inputs={"parameters": {"car_min": "13"}}, started_at=datetime.now(UTC), completed_at=None,
+)
+provenance = CalculationProvenance.from_run(run)
+assert provenance.is_complete
+assert provenance.source_run_entry()["input_hash"] == "a" * 64
+assert provenance.digest()
+assert parameter_digest({"car_min": "13"}) == parameter_digest({"car_min": "13"})
+assert parameter_digest({"car_min": "14"}) != parameter_digest({"car_min": "13"})
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=Path(__file__).parents[3],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _uuid_check(value: object) -> None:  # pragma: no cover - typing aid
