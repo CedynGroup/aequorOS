@@ -32,14 +32,9 @@ middleware, verifying a push, then revoking the old one.
 Only data push keys (`purpose: writer`, the default) may be issued. Each holds
 `DATA` / `restricted` / `ingest` for one exact bank and cannot read analytics.
 `purpose: reader` is unavailable until BI ships with governed delegation; the API
-rejects it even when `BI_ENABLED` is enabled. Existing reader keys and bindings
-are revoked by migration `202610110090`, their service identities deactivated and
-sessions invalidated. They are never converted into push credentials or
-reactivated by switching BI on. Historical rows remain inspectable.
-
-Reader issuance may return only with Org Owner approval or the issuer's own
-complete matching view authority, plus the normal separation-of-duties decision.
-Deployment and rollback: [reader retirement contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
+rejects it with `422` even when `BI_ENABLED` is enabled. For existing credentials,
+deployment, rollback and the approval requirements for reintroduction, see the
+[reader retirement contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
@@ -666,9 +661,9 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
 
 ## 8. Pulling analytics out: the Stage B feed
 
-**Pre-release contract:** reader key issuance is retired. This feed is unavailable
-to newly issued keys; existing reader credentials are revoked before deployment.
-The contract below is retained for BI release work, not as an onboarding path.
+**Pre-release contract:** credential availability is governed by
+[§1 Authentication](#1-authentication). The contract below is retained for BI
+release work, not as an onboarding path.
 
 The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
 **curated** analytics dataset, streamed, so a report server (Power BI Report

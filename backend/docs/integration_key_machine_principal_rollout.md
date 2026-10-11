@@ -22,11 +22,10 @@ and rotation evidence with the deployment record, never in this repository.
 
 ## Reader credential retirement (202610110090)
 
-Reader issuance is unavailable until BI ships. `POST /integration-keys` accepts
-only `writer`; `reader` is rejected before creating an identity, key or binding,
-regardless of `BI_ENABLED`. The shared institution permission dependency refuses
-machine principals even if a module route enters the integration-key allow-list.
-Dedicated API Push and BI feed dependencies remain separate machine surfaces.
+The [public issuance contract](../../docs/API_INTEGRATION.md#1-authentication)
+defines the supported purpose. Rejection occurs before creating an identity,
+key or binding. Module-route isolation is governed by the
+[human institution permission boundary](authorization_foundation.md#authority-model).
 
 There are no active customers. Suspend integration-key issuance for this rollout,
 apply migration `202610110090` **before the application deployment**, then deploy

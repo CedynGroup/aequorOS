@@ -829,12 +829,10 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   [BI scope reduction and compiler injection](backend/docs/bi_enforcement_rollout.md#branch-and-region-scope-is-enforced-desk-and-currency-are-not)
   and [Credit row filtering](backend/docs/credit_enforcement_rollout.md)
   describe the row-filtered surfaces; `/auth/me` projects scope per capability.
-- **`bi_reader` is the second machine bundle** (`{view}`, disjoint from
-  `integration_writer`'s `{ingest}`, machine-only by CHECK; `202609270074`),
-  minted with an integration key (`purpose=reader`) for the **Power BI Stage B
-  feed** — `GET …/bi/feeds/{dataset}`, curated aggregated datasets only, NDJSON
-  or CSV, a cursor anchored on the MART BUILD rather than the business date so
-  a restated month re-arrives, every pull logged (`backend/docs/powerbi_stage_b.md`).
+- **Power BI Stage B** has a
+  [pre-release feed contract](backend/docs/powerbi_stage_b.md); credential
+  availability and reintroduction are governed by the
+  [reader retirement contract](backend/docs/integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
   Stage A (governed file exports into Power BI Desktop) is
   `backend/docs/powerbi_stage_a.md`.
 - **Credit routes moved onto scoped bindings** (`app/api/deps.py::require_credit_*`,
@@ -957,9 +955,9 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   the shared `combine_pair_scopes`) — resolved by `services/bi/data_scope.py` and injected
   BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py`
   reports it (`data scope` column, `scoped_reader` flag) and is the gate for any change that
-  touches it. `bi_reader` is the second machine bundle (`{view}`, disjoint from
-  `integration_writer`'s `{ingest}`) for the Stage B feed (`backend/docs/powerbi_stage_b.md`);
-  Stage A is `powerbi_stage_a.md`.
+  touches it. Power BI integration contracts:
+  [Stage B](backend/docs/powerbi_stage_b.md) and
+  [Stage A](backend/docs/powerbi_stage_a.md).
 - **BI carries NO reconciliation to the regulatory returns:** treasury/ALM and the
   regulatory spine are different planes, and BI is intelligence over the bank's own treasury
   data. There are no regulatory reconciliation checks, no trust badge on BI payloads or

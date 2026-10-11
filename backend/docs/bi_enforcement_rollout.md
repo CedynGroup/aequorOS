@@ -325,13 +325,11 @@ authorization module values whose entitlement slug differs from the module name.
 human and machine principal that will be denied on each pair. Machine principals
 are included so the release record proves no integration was assumed to have BI
 read authority on the INTERACTIVE routes, which refuse every machine credential.
-The Power BI Stage B feed (`GET …/bi/feeds/{dataset}`, `app/features/read_bi_feeds.py`,
-built 2026-09-27) is the one machine-facing BI route: it requires a `bi_reader`
-binding (migration `202609270074`; `{view}` only, disjoint from
-`integration_writer`'s `{ingest}`, machine-only by CHECK) issued through the
-integration-key flow with `purpose=reader`, and it is inventoried by its own
-contract, `backend/docs/powerbi_stage_b.md`. The SQL above still reports every
-machine principal as denied, which is correct for the surfaces it inventories.
+The [Power BI Stage B feed](powerbi_stage_b.md) has a separate pre-release
+contract; credential availability and deployment are governed by the
+[reader retirement contract](integration_key_machine_principal_rollout.md#reader-credential-retirement-202610110090).
+The SQL above still reports every machine principal as denied, which is correct
+for the interactive surfaces it inventories.
 
 ## Exact binding rows
 
@@ -342,14 +340,13 @@ under that row. Anything further is an institution decision made through
 `grant_administration.create_scoped_grant`, so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
-| Need                                                                                  | `principal_type` | `role_bundle`                                                   | `institution_scope`                      | `institution_id`                             | `module_scope`      | `sensitivity_scope`      | `data_scope_kind` / `data_scope_values`                                                               |
-| ------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------- | ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Aggregate BI for one engine (dashboards, trends, Explore aggregates)                  | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator`      | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated`             | `all` / NULL — institution-grain figures (ratios, bank-wide totals) are refused to any narrower scope |
-| The same, for one branch network or region only (portfolio slices; a branch manager)  | `human`          | same                                                            | `institution`                            | exact `BK-*`                                 | `credit`            | `aggregated`             | `branch` / `["B001", …]` or `region` / `["Northern", …]` — a non-empty list, or the row is refused    |
-| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human`          | same                                                            | same                                     | same                                         | `risk`              | `confidential`           | `all` / NULL                                                                                          |
-| Named obligors: counterparty name / group / reference, largest-single-name share      | `human`          | same                                                            | same                                     | same                                         | `credit`            | `restricted`             | `all`, or the same slice as the aggregate row                                                         |
-| Record-level BI export                                                                | `human`          | `analyst` (the only bundle carrying `export`)                   | same                                     | same                                         | the member's module | the member's sensitivity | same as the read row it accompanies                                                                   |
-| Power BI Stage B feed pull                                                            | `machine`        | `bi_reader` (issued with the integration key, `purpose=reader`) | `institution`                            | exact `BK-*`                                 | `all`               | `aggregated`             | See [feed-key issuance](../../docs/API_INTEGRATION.md#1-authentication)                               |
+| Need                                                                                  | `principal_type` | `role_bundle`                                              | `institution_scope`                      | `institution_id`                             | `module_scope`      | `sensitivity_scope`      | `data_scope_kind` / `data_scope_values`                                                               |
+| ------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------- | ---------------------------------------- | -------------------------------------------- | ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Aggregate BI for one engine (dashboards, trends, Explore aggregates)                  | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated`             | `all` / NULL — institution-grain figures (ratios, bank-wide totals) are refused to any narrower scope |
+| The same, for one branch network or region only (portfolio slices; a branch manager)  | `human`          | same                                                       | `institution`                            | exact `BK-*`                                 | `credit`            | `aggregated`             | `branch` / `["B001", …]` or `region` / `["Northern", …]` — a non-empty list, or the row is refused    |
+| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human`          | same                                                       | same                                     | same                                         | `risk`              | `confidential`           | `all` / NULL                                                                                          |
+| Named obligors: counterparty name / group / reference, largest-single-name share      | `human`          | same                                                       | same                                     | same                                         | `credit`            | `restricted`             | `all`, or the same slice as the aggregate row                                                         |
+| Record-level BI export                                                                | `human`          | `analyst` (the only bundle carrying `export`)              | same                                     | same                                         | the member's module | the member's sensitivity | same as the read row it accompanies                                                                   |
 
 The common least-privilege credit analyst therefore needs two independently
 complete rows — the aggregate portfolio and the named obligors are separate
