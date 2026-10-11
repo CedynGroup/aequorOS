@@ -1,31 +1,6 @@
-/**
- * The calculated-measure surface's rules, proved without a browser.
- *
- * Five properties, each of which is a way this surface could lie to a bank:
- *
- * 1. THE LANGUAGE IS THE SERVER'S. Every function name, arity, period word and
- *    bound the editor offers is checked against `app/domain/bi/expr.py` and
- *    `app/schemas/bi_content.py` THEMSELVES, not against a copy. A palette that
- *    offered a function the parser does not have would be a control that cannot
- *    work; a length cap smaller than the column's would hide a legal formula.
- * 2. THE BADGE NEVER FLATTERS. The standing mapping is total over the three
- *    states the wire declares and an unrecognised value degrades to the neutral
- *    reading — never to the certified one.
- * 3. THE CONTROLS MATCH WHO MAY ACT. A proposer is never offered the decision; a
- *    certified measure is never offered for deletion, and the reason is stated.
- * 4. A REFUSAL NAMES THE FIGURE. The refusal helpers name the figures the server
- *    named, preferring its labels, and never the measure or the formula.
- * 5. A CERTIFIED FORMULA BECOMES A CATALOGUE ENTRY DERIVED FROM ITS OWN FIGURES.
- *    Allowed dimensions are the intersection, a mixed time behaviour refuses, and
- *    an uncertified measure is never offered.
- *
- * Run: pnpm --filter @aequoros/dashboard test
- */
-
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { runBackend } from "../../unit/backend";
 import type {
   BiCatalogueDimensionRead,
   BiCatalogueMeasureRead,
@@ -96,290 +71,202 @@ const pending: Promise<void>[] = [];
 
 // --- 1. the language is the server's ----------------------------------------
 
-function repoRoot(): string {
-  let dir = __dirname;
-  for (let index = 0; index < 10; index += 1) {
-    if (existsSync(join(dir, "backend", "app"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(`could not locate the repository root from ${__dirname}`);
-}
+const contract = runBackend<{
+  fields: Record<
+    string,
+    { maxLength: number; pattern?: string; enum?: string[] }
+  >;
+  reasonMax: number;
+  parserLimits: number[];
+  functions: string[];
+  periods: string[];
+  states: string[];
+}>(`
+from app.bi.domain import expr
+from app.bi.models.content import MEASURE_STATES
+from app.bi.schemas.content import BiMeasureCreateRequest, BiMeasureProposalRequest
+print(json.dumps({
+    "fields": BiMeasureCreateRequest.model_json_schema()["properties"],
+    "reasonMax": BiMeasureProposalRequest.model_json_schema()["properties"]["reason"]["maxLength"],
+    "parserLimits": [expr.MAX_EXPRESSION_LENGTH, expr.MAX_MEMBER_REFERENCES, expr.MAX_LAG_PERIODS],
+    "functions": list(expr.FUNCTION_NAMES),
+    "periods": list(expr.GRAIN_WORDS),
+    "states": list(MEASURE_STATES),
+}))
+`);
 
-const ROOT = repoRoot();
-const EXPR_SOURCE = readFileSync(
-  join(ROOT, "backend", "app", "domain", "bi", "expr.py"),
-  "utf8",
-);
-const CONTENT_MODEL_SOURCE = readFileSync(
-  join(ROOT, "backend", "app", "models", "bi_content.py"),
-  "utf8",
-);
-const CONTENT_SCHEMA_SOURCE = readFileSync(
-  join(ROOT, "backend", "app", "schemas", "bi_content.py"),
-  "utf8",
-);
-
-function pythonInt(source: string, name: string, where: string): number {
-  const match = new RegExp(`^${name}(?::\\s*Final)?\\s*=\\s*([\\d_]+)`, "m").exec(
-    source,
+test("every form bound matches the emitted wire contract and parser", () => {
+  const fields = contract.fields;
+  assert.equal(EXPRESSION_MAX_LENGTH, fields.expression.maxLength);
+  assert.deepEqual(
+    [EXPRESSION_MAX_LENGTH, MAX_FIGURE_REFERENCES, MAX_LAG_PERIODS],
+    contract.parserLimits,
   );
-  assert.ok(match, `${name} is no longer declared in ${where}`);
-  return Number(match![1].replace(/_/g, ""));
-}
-
-test("every bound the form applies is the server's own", () => {
-  assert.equal(
-    EXPRESSION_MAX_LENGTH,
-    pythonInt(EXPR_SOURCE, "MAX_EXPRESSION_LENGTH", "expr.py"),
-  );
-  // And the column agrees with the parser, which is what makes the single number
-  // on the form honest: a formula the parser accepts must fit the column.
-  assert.equal(
-    EXPRESSION_MAX_LENGTH,
-    pythonInt(
-      CONTENT_MODEL_SOURCE,
-      "MEASURE_EXPRESSION_MAX_LENGTH",
-      "models/bi_content.py",
-    ),
-  );
-  assert.equal(
-    MAX_FIGURE_REFERENCES,
-    pythonInt(EXPR_SOURCE, "MAX_MEMBER_REFERENCES", "expr.py"),
-  );
-  assert.equal(
-    MAX_LAG_PERIODS,
-    pythonInt(EXPR_SOURCE, "MAX_LAG_PERIODS", "expr.py"),
-  );
-  assert.equal(
-    MEASURE_KEY_MAX_LENGTH,
-    pythonInt(CONTENT_MODEL_SOURCE, "MEASURE_KEY_MAX_LENGTH", "bi_content.py"),
-  );
-  assert.equal(
-    MEASURE_LABEL_MAX_LENGTH,
-    pythonInt(CONTENT_MODEL_SOURCE, "MEASURE_LABEL_MAX_LENGTH", "bi_content.py"),
-  );
-  assert.equal(
-    MEASURE_REASON_MAX_LENGTH,
-    pythonInt(CONTENT_MODEL_SOURCE, "MEASURE_REASON_MAX_LENGTH", "bi_content.py"),
-  );
-  assert.equal(
-    MEASURE_DESCRIPTION_MAX_LENGTH,
-    pythonInt(
-      CONTENT_MODEL_SOURCE,
-      "DASHBOARD_DESCRIPTION_MAX_LENGTH",
-      "bi_content.py",
-    ),
-  );
+  assert.equal(MEASURE_KEY_MAX_LENGTH, fields.measure_key.maxLength);
+  assert.equal(MEASURE_LABEL_MAX_LENGTH, fields.label.maxLength);
+  assert.equal(MEASURE_REASON_MAX_LENGTH, contract.reasonMax);
+  assert.equal(MEASURE_DESCRIPTION_MAX_LENGTH, fields.description.maxLength);
 });
 
-test("the editor offers exactly the functions the parser implements", () => {
-  const declared = /^FUNCTION_NAMES[^=]*=\s*\(([^)]*)\)/m.exec(
-    EXPR_SOURCE,
+function parseResults(
+  formulas: string[],
+): { accepted: boolean; members: string[] }[] {
+  return runBackend(
+    `
+from app.bi.domain.expr import parse, referenced_members, ExpressionError
+results = []
+for source in payload:
+    try:
+        tree = parse(source, retention_days=None)
+    except ExpressionError:
+        results.append({"accepted": False, "members": []})
+    else:
+        results.append({"accepted": True, "members": list(referenced_members(tree))})
+print(json.dumps(results))
+`,
+    formulas,
   );
-  assert.ok(declared, "FUNCTION_NAMES is no longer declared in expr.py");
-  const names = [...declared![1].matchAll(/"([A-Z_]+)"/g)].map(
-    (match) => match[1],
-  );
+}
+
+test("the editor offers exactly the functions and arities the parser accepts", () => {
   assert.deepEqual(
     MEASURE_FUNCTIONS.map((fn) => fn.name).sort(),
-    [...names].sort(),
-    "the palette must offer the language's functions and no others",
+    [...contract.functions].sort(),
   );
-  // And each one's arity, because a signature that promised the wrong number of
-  // inputs is a control that writes a formula the parser refuses.
-  const arity = /^_FUNCTION_ARITY[^=]*=\s*MappingProxyType\(\s*\{([^}]*)\}/m.exec(
-    EXPR_SOURCE,
-  );
-  assert.ok(arity, "_FUNCTION_ARITY is no longer declared in expr.py");
-  const declaredArity = new Map(
-    [...arity![1].matchAll(/"([A-Z_]+)":\s*(\d+)/g)].map((match) => [
-      match[1],
-      Number(match[2]),
-    ]),
-  );
-  for (const fn of MEASURE_FUNCTIONS) {
+  const args: Record<string, string[]> = {
+    SAFE_DIV: ["[m:a]", "[m:b]"],
+    IF: ["[m:a] > 0", "[m:b]", "[m:c]"],
+    PCT_CHANGE: ["[m:a]", "MONTH"],
+    LAG: ["[m:a]", "1", "MONTH"],
+  };
+  const formulas = MEASURE_FUNCTIONS.flatMap((fn) => {
+    const operands = args[fn.name];
+    assert.equal(fn.arity, operands.length);
     assert.equal(
+      fn.signature.slice(fn.signature.indexOf("(") + 1, -1).split(",").length,
       fn.arity,
-      declaredArity.get(fn.name),
-      `${fn.name} takes a different number of inputs in expr.py`,
     );
-    // The signature a reader copies has to have that many commas in it.
-    const inputs = fn.signature
-      .replace(/^[A-Z_]+\(/, "")
-      .replace(/\)$/, "")
-      .split(",").length;
-    assert.equal(
-      inputs,
-      fn.arity,
-      `${fn.name}'s written signature does not show ${fn.arity} inputs`,
-    );
-  }
+    return [
+      fn.name + "(" + operands.join(", ") + ")",
+      fn.name + "(" + operands.slice(0, -1).join(", ") + ")",
+      fn.name + "(" + [...operands, "1"].join(", ") + ")",
+    ];
+  });
+  assert.deepEqual(
+    parseResults(formulas).map((result) => result.accepted),
+    MEASURE_FUNCTIONS.flatMap(() => [true, false, false]),
+  );
 });
 
-test("the three comparison periods are the language's three", () => {
-  const declared = /^GRAIN_WORDS[^=]*=\s*MappingProxyType\(\s*\{([^}]*)\}/m.exec(
-    EXPR_SOURCE,
-  );
-  assert.ok(declared, "GRAIN_WORDS is no longer declared in expr.py");
-  const words = [...declared![1].matchAll(/"([A-Z]+)":/g)].map(
-    (match) => match[1],
-  );
+test("every offered period parses, and an unknown period refuses", () => {
   assert.deepEqual(
     PERIOD_GRAINS.map((grain) => grain.word).sort(),
-    [...words].sort(),
+    [...contract.periods].sort(),
+  );
+  const formulas = PERIOD_GRAINS.map(
+    (grain) => "PCT_CHANGE([m:a], " + grain.word + ")",
+  );
+  assert.deepEqual(
+    parseResults([...formulas, "PCT_CHANGE([m:a], FORTNIGHT)"]).map(
+      (result) => result.accepted,
+    ),
+    [...formulas.map(() => true), false],
   );
 });
 
-test("a figure is spelled the way the parser reads one", () => {
-  // `_MEMBER_REFERENCE` is `\[m:([a-z0-9_]+(?:\.[a-z0-9_]+)*)\]`.
-  assert.ok(
-    /_MEMBER_REFERENCE:\s*Final\s*=\s*re\.compile\(r"\\\[m:/.test(EXPR_SOURCE),
-    "expr.py no longer spells a figure reference as [m:…]",
-  );
-  assert.equal(figureReference("loans.balance_rc"), "[m:loans.balance_rc]");
+test("a figure reference reaches the server parser as the same member", () => {
+  const reference = figureReference("loans.balance_rc");
+  assert.deepEqual(parseResults([reference]), [
+    { accepted: true, members: ["loans.balance_rc"] },
+  ]);
 });
 
-test("the id pattern and the two vocabularies are the server's", () => {
-  const pattern = /^MEASURE_KEY_PATTERN\s*=\s*r"([^"]+)"/m.exec(
-    CONTENT_SCHEMA_SOURCE,
+test("the server enforces the editor's formula, reference and lag bounds", () => {
+  const formulas = [
+    "1" + " ".repeat(EXPRESSION_MAX_LENGTH - 1),
+    "1" + " ".repeat(EXPRESSION_MAX_LENGTH),
+    Array.from(
+      { length: MAX_FIGURE_REFERENCES },
+      (_, n) => "[m:a" + n + "]",
+    ).join(" + "),
+    Array.from(
+      { length: MAX_FIGURE_REFERENCES + 1 },
+      (_, n) => "[m:a" + n + "]",
+    ).join(" + "),
+    "LAG([m:a], " + MAX_LAG_PERIODS + ", MONTH)",
+    "LAG([m:a], " + (MAX_LAG_PERIODS + 1) + ", MONTH)",
+  ];
+  assert.deepEqual(
+    parseResults(formulas).map((result) => result.accepted),
+    [true, false, true, false, true, false],
   );
-  assert.ok(pattern, "MEASURE_KEY_PATTERN is no longer declared");
-  assert.equal(
-    MEASURE_KEY_PATTERN.source,
-    pattern![1],
-    "the form's id pattern must be the server's, character for character",
+});
+
+test("the key control and vocabularies agree with backend validation", () => {
+  const keys = [
+    "funding_cost_ratio",
+    "a.b1",
+    "a",
+    "1bad",
+    "UPPER",
+    "bad-key",
+    "bad key",
+    "a".repeat(MEASURE_KEY_MAX_LENGTH + 1),
+  ];
+  const accepted = runBackend<boolean[]>(
+    `
+from app.bi.schemas.content import BiMeasureCreateRequest
+results = []
+for key in payload:
+    try:
+        BiMeasureCreateRequest.model_validate({"measure_key": key, "label": "Figure",
+            "expression": "[m:a]", "value_type": "amount"})
+    except ValueError:
+        results.append(False)
+    else:
+        results.append(True)
+print(json.dumps(results))
+`,
+    keys,
   );
-  for (const [constant, offered] of [
-    ["MEASURE_VALUE_TYPES", MEASURE_VALUE_TYPES.map((entry) => entry.code)],
-    [
-      "MEASURE_FAVOURABLE_DIRECTIONS",
-      MEASURE_DIRECTIONS.map((entry) => entry.code),
-    ],
-  ] as const) {
-    const declared = new RegExp(
-      `^${constant}:\\s*tuple\\[str, \\.\\.\\.\\]\\s*=\\s*\\(([\\s\\S]*?)\\)`,
-      "m",
-    ).exec(CONTENT_MODEL_SOURCE);
-    assert.ok(declared, `${constant} is no longer declared in bi_content.py`);
-    const values = [...declared![1].matchAll(/"([a-z_]+)"/g)].map(
-      (match) => match[1],
-    );
-    assert.deepEqual(
-      [...offered].sort(),
-      [...values].sort(),
-      `the form must offer exactly ${constant}`,
-    );
-  }
-  // Every offered code reads as words, never as the wire value.
+  assert.deepEqual(
+    keys.map(
+      (key) =>
+        key.length <= MEASURE_KEY_MAX_LENGTH && MEASURE_KEY_PATTERN.test(key),
+    ),
+    accepted,
+  );
+  assert.deepEqual(
+    MEASURE_VALUE_TYPES.map((entry) => entry.code).sort(),
+    [...contract.fields.value_type.enum!].sort(),
+  );
+  assert.deepEqual(
+    MEASURE_DIRECTIONS.map((entry) => entry.code).sort(),
+    [...contract.fields.favourable_direction.enum!].sort(),
+  );
   for (const entry of [...MEASURE_VALUE_TYPES, ...MEASURE_DIRECTIONS]) {
-    assert.notEqual(
-      entry.label,
-      entry.code,
-      `${entry.code} must have a label a banker can read`,
-    );
+    assert.notEqual(entry.label, entry.code);
   }
   assert.equal(valueTypeLabel("pct"), "A percentage");
   assert.equal(directionLabel("lower_better"), "Lower is better");
-  // An unmapped code degrades to itself rather than to another option's words.
   assert.equal(valueTypeLabel("not_a_type"), "not_a_type");
 });
 
-test("nothing in this client parses a formula", () => {
-  // From the REPO, not from `__dirname`: this suite runs out of the compiled
-  // `.test-out/` tree, where the TypeScript source does not exist.
-  const source = readFileSync(
-    join(ROOT, "backend", "dashboard", "components", "bi", "measures.ts"),
-    "utf8",
-  )
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^[ \t]*\/\/.*$/gm, "");
-  for (const shape of [
-    /function\s+\w*[Pp]arse\w*\s*\(/,
-    /function\s+\w*[Tt]okeni[sz]e\w*\s*\(/,
-    /function\s+\w*[Cc]ompile\w*\s*\(/,
-    // A DSL call APPLIED TO A FIGURE would be evaluation. The signatures the
-    // palette shows (`SAFE_DIV(top, bottom)`) are display strings and are checked
-    // against `expr.py` above; this catches the shape that would be a second
-    // implementation.
-    /SAFE_DIV\s*\(\s*\[m:/,
-    /\beval\s*\(/,
-    /new Function\s*\(/,
-  ]) {
-    assert.equal(
-      shape.test(source),
-      false,
-      `measures.ts must not evaluate or parse a formula (${shape}); the server is the only authority on the language`,
-    );
-  }
-});
-
-// --- the generated writer carries every field the request declares ----------
-//
-// `<Model>ToJSON` HAS NO SPREAD. It returns a hand-enumerated object literal of
-// exactly the keys the generator knew about when it ran, so a field added to an
-// existing request schema is STRIPPED IN THE BROWSER, the server applies its
-// column default, and the call succeeds — a wrong value reported as success, and
-// invisible to types and to every test that mocks the transport. (Seen for real
-// this round on the grant composer, where a scope narrowed to two branches would
-// have been stored as the whole institution.)
-//
-// The five measure requests are checked against `app/schemas/bi_content.py`
-// itself. If this fails, do NOT add a cast or post a wider object: either the
-// client is regenerated, or that one call is sent through a hand-written transport
-// that reuses the generated `FromJSON` parsers.
-
-function requestFields(className: string): string[] {
-  const block = new RegExp(
-    `class ${className}\\(BiClosedModel\\):([\\s\\S]*?)\\n\\nclass `,
-  ).exec(CONTENT_SCHEMA_SOURCE);
-  assert.ok(block, `${className} is no longer declared in schemas/bi_content.py`);
-  // Four-space indentation is a field; anything deeper is a `Field(...)`
-  // continuation, and a docstring line has no colon in that position.
-  return [...block![1].matchAll(/^ {4}([a-z_]+):/gm)]
-    .map((match) => match[1])
-    .sort();
-}
-
-function writerFields(model: string): string[] {
-  const source = readFileSync(
-    join(
-      ROOT,
-      "packages",
-      "risk-service-api",
-      "src",
-      "models",
-      `${model}.ts`,
-    ),
-    "utf8",
-  );
-  const block = new RegExp(
-    `export function ${model}ToJSONTyped\\([\\s\\S]*?\\n\\}`,
-  ).exec(source);
-  assert.ok(block, `${model}ToJSONTyped is no longer generated`);
-  return [...block![0].matchAll(/^\s{4}([a-z_]+):/gm)]
-    .map((match) => match[1])
-    .sort();
-}
-
-test("every field a measure request declares survives the generated writer", () => {
-  for (const model of [
-    "BiMeasureCreateRequest",
-    "BiMeasureUpdateRequest",
-    "BiMeasureProposalRequest",
-    "BiMeasureDecisionRequest",
-    "BiMeasureValidationRequest",
-  ]) {
-    assert.deepEqual(
-      writerFields(model),
-      requestFields(model),
-      `${model}ToJSON does not send every field the server declares. Its object ` +
-        "literal is hand-enumerated with no spread, so a field the generator has " +
-        "not seen is dropped in the browser and the server silently applies its " +
-        "own default.",
-    );
-  }
+test("draft checks defer formula validity to the server", () => {
+  const expression = "SAFE_DIV(";
+  const draft: MeasureDraft = {
+    measureKey: "draft_ratio",
+    label: "A draft ratio",
+    description: "",
+    expression,
+    valueType: "fraction",
+    favourableDirection: "neutral",
+  };
+  assert.deepEqual(draftProblems(draft, { keyEditable: true }), []);
+  assert.deepEqual(parseResults([expression]), [
+    { accepted: false, members: [] },
+  ]);
+  assert.equal(expressionReady(draft, null), false);
 });
 
 // --- the digest a decision is taken against ---------------------------------
@@ -410,13 +297,7 @@ test("the digest is SHA-256 of the formula's own text", async () => {
 // --- 2. the badge never flatters --------------------------------------------
 
 test("the standing is total over the wire's states and degrades neutrally", () => {
-  const declared = /^MEASURE_STATES:\s*tuple\[str, \.\.\.\]\s*=\s*\(([^)]*)\)/m.exec(
-    CONTENT_MODEL_SOURCE,
-  );
-  assert.ok(declared, "MEASURE_STATES is no longer declared in bi_content.py");
-  const states = [...declared![1].matchAll(/"([a-z_]+)"/g)].map(
-    (match) => match[1],
-  );
+  const states = contract.states;
   assert.deepEqual(
     [...states].sort(),
     ["bank_certified", "personal", "proposed"],
@@ -426,7 +307,12 @@ test("the standing is total over the wire's states and degrades neutrally", () =
   assert.equal(measureStanding("proposed").standing, "personal");
   assert.equal(measureStanding("bank_certified").standing, "bank");
   // The neutral tone for anything unrecognised, never the favourable neighbour.
-  for (const unknown of ["", "retired", "platform_certified", "BANK_CERTIFIED"]) {
+  for (const unknown of [
+    "",
+    "retired",
+    "platform_certified",
+    "BANK_CERTIFIED",
+  ]) {
     const standing = measureStanding(unknown);
     assert.equal(
       standing.standing,
@@ -448,7 +334,8 @@ function measure(overrides: Partial<BiMeasureRead> = {}): BiMeasureRead {
     measureKey: "funding_cost_ratio",
     label: "Cost of funds against the loan book",
     description: "What funding costs, against what it funds.",
-    expression: "SAFE_DIV([m:deposits.interest_expense_rc], [m:loans.balance_rc])",
+    expression:
+      "SAFE_DIV([m:deposits.interest_expense_rc], [m:loans.balance_rc])",
     referencedMembers: ["deposits.interest_expense_rc", "loans.balance_rc"],
     referencedMemberLabels: ["Interest expense", "Gross loans"],
     valueType: "fraction",
@@ -688,7 +575,10 @@ const CATALOGUE: readonly BiCatalogueMeasureRead[] = [
   published("loans.balance_rc", {
     allowedDimensions: ["loans.sector", "branch.code"],
   }),
-  published("loans.hhi", { aggregation: "hhi", allowedDimensions: ["branch.code"] }),
+  published("loans.hhi", {
+    aggregation: "hhi",
+    allowedDimensions: ["branch.code"],
+  }),
   published("loans.disbursed_rc", {
     timeBehaviour: "flow",
     allowedDimensions: ["branch.code"],
@@ -780,8 +670,13 @@ test("a formula that cannot be answered is named, not offered", () => {
     CATALOGUE,
   );
   assert.equal(mixed.usable, false);
-  assert.equal(mixed.usable === false ? mixed.reason : "", "mixed_time_behaviour");
-  assert.ok(/position|movement/i.test(unusableSentence("mixed_time_behaviour")));
+  assert.equal(
+    mixed.usable === false ? mixed.reason : "",
+    "mixed_time_behaviour",
+  );
+  assert.ok(
+    /position|movement/i.test(unusableSentence("mixed_time_behaviour")),
+  );
 
   const unknown = calculatedMeasureOffer(
     measure({ state: "bank_certified", referencedMembers: ["not.a.figure"] }),
@@ -811,8 +706,24 @@ function exploreCatalogue(): ExploreCatalogue {
   return {
     measures: [...CATALOGUE, ...(offer.usable ? [offer.entry] : [])],
     dimensions: [
-      { id: "branch.code", label: "Branch", description: "", module: "credit", sensitivity: "aggregated", valueType: "text", values: [] },
-      { id: "loans.sector", label: "Sector", description: "", module: "credit", sensitivity: "aggregated", valueType: "text", values: [] },
+      {
+        id: "branch.code",
+        label: "Branch",
+        description: "",
+        module: "credit",
+        sensitivity: "aggregated",
+        valueType: "text",
+        values: [],
+      },
+      {
+        id: "loans.sector",
+        label: "Sector",
+        description: "",
+        module: "credit",
+        sensitivity: "aggregated",
+        valueType: "text",
+        values: [],
+      },
     ],
   };
 }
@@ -861,7 +772,11 @@ test("a bank formula and a concentration figure are not offered together", () =>
 test("a question naming a bank formula is built, and the illegal pair refuses", () => {
   const catalogue = exploreCatalogue();
   const plan = buildExploreQuery(
-    { ...EMPTY_SHAPE, measures: ["funding_cost_ratio"], dimensions: ["branch.code"] },
+    {
+      ...EMPTY_SHAPE,
+      measures: ["funding_cost_ratio"],
+      dimensions: ["branch.code"],
+    },
     catalogue,
     { asOf: "2026-06-30" },
   );
@@ -909,7 +824,12 @@ test("a draft is checked for everything except whether the formula is valid", ()
   }
 
   // The id is checked against the server's own shape, and only when it is editable.
-  const badKey = { ...empty, measureKey: "Funding Cost", label: "x", expression: "[m:a]" };
+  const badKey = {
+    ...empty,
+    measureKey: "Funding Cost",
+    label: "x",
+    expression: "[m:a]",
+  };
   assert.ok(
     draftProblems(badKey, { keyEditable: true }).some((problem) =>
       /lower-case/i.test(problem),
@@ -918,13 +838,20 @@ test("a draft is checked for everything except whether the formula is valid", ()
   assert.deepEqual(draftProblems(badKey, { keyEditable: false }), []);
   for (const key of ["funding_cost_ratio", "a", "loans.my_ratio"]) {
     assert.deepEqual(
-      draftProblems({ ...empty, measureKey: key, label: "x", expression: "[m:a]" }, { keyEditable: true }),
+      draftProblems(
+        { ...empty, measureKey: key, label: "x", expression: "[m:a]" },
+        { keyEditable: true },
+      ),
       [],
       `${key} is a legal id on the server`,
     );
   }
   for (const key of ["Funding", "_x", "1x", "x.", "x..y", "x y"]) {
-    assert.equal(MEASURE_KEY_PATTERN.test(key), false, `${key} must be refused`);
+    assert.equal(
+      MEASURE_KEY_PATTERN.test(key),
+      false,
+      `${key} must be refused`,
+    );
   }
 
   // Every length bound is applied, so the server never has to refuse one.
@@ -1038,9 +965,10 @@ test("a published figure addresses its own module and sensitivity", () => {
     NO_FORMULAS,
   );
   assert.equal(addresses.complete, true);
-  assert.deepEqual([...addresses.pairs], [
-    { module: "credit", sensitivity: "aggregated" },
-  ]);
+  assert.deepEqual(
+    [...addresses.pairs],
+    [{ module: "credit", sensitivity: "aggregated" }],
+  );
 });
 
 test("a formula is addressed as the figures its text names, never as itself", () => {

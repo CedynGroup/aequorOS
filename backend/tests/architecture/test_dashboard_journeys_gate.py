@@ -78,7 +78,7 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         ("backend/scripts/local_services.py", "true"),
         ("backend/tests/__init__.py", "true"),
         ("backend/tests/fixtures/canonical_bank_fixture.py", "true"),
-        ("backend/tests/fixtures/bi_plane.py", "true"),
+        ("backend/tests/bi/fixtures.py", "true"),
         ("backend/tests/fixtures/live_plane.py", "true"),
         ("backend/tests/fixtures/reference_data.py", "true"),
         ("backend/tests/fixtures/icaap/frameworks/gh/test_icaap_e2e.json", "true"),

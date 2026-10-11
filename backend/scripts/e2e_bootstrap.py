@@ -96,7 +96,7 @@ from app.services.fact_derivation import (
     _fact,  # pyright: ignore[reportPrivateUsage]
     _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.fixtures.bi_plane import materialize_bi_plane
+from tests.bi.fixtures import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     extend_canonical_test_book,

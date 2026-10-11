@@ -57,6 +57,7 @@ from tests.support.inmemory_storage import InMemoryStorageClient
 #: whole suite shares: settings, the database, session and client, storage fakes
 #: and the demo tenants.
 pytest_plugins = [
+    "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",

@@ -8,13 +8,13 @@ is how a bank STATES a budget or reforecast. This revision creates the table BI
 reads it back from, and it is deliberately not the register: a target is
 declared per period against a measure id, while every catalogue variant
 (``.actual`` / ``.target`` / ``.variance`` / ``.variance_pct`` /
-``.attainment_pct`` — ``app/domain/bi/catalogue/targets.py``) is answered per
+``.attainment_pct`` — ``app/bi/domain/catalogue/targets.py``) is answered per
 as-of date beside the ACTUAL it is compared with.
 
 Why the comparison is stored and not joined (D-064)
 ---------------------------------------------------
 The compiler admits exactly one fact table per query
-(``app/services/bi/compiler.py``). A target joined at query time would either
+(``app/bi/service/compiler.py``). A target joined at query time would either
 break that rule or fan out: a bank-wide target row multiplied across the
 scoped rows of the same measure double-counts, and the double count is
 invisible because both operands are legitimate figures. So the mart builder

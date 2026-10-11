@@ -7,7 +7,7 @@
  * deliberately is NOT.
  *
  * 1. **THE SERVER OWNS VALIDITY. THERE IS NO PARSER HERE.**
- *    `app/domain/bi/expr.py` is a Pratt parser with a type system, three period
+ *    `app/bi/domain/expr.py` is a Pratt parser with a type system, three period
  *    grains, a retention-derived bound on how far `LAG` may reach, and a dozen
  *    named refusals. A second implementation in TypeScript would be a second
  *    opinion, and the moment the two disagree the faster one is the wrong one —
@@ -55,12 +55,12 @@ import type {
 import type { FigureAddresses, ScopePair } from "@/lib/api/dataScope";
 
 // ---------------------------------------------------------------------------
-// The language's vocabulary, mirrored from app/domain/bi/expr.py
+// The language's vocabulary, mirrored from app/bi/domain/expr.py
 // ---------------------------------------------------------------------------
 
 /**
  * `MAX_EXPRESSION_LENGTH`. Also the column width
- * (`bi_content.MEASURE_EXPRESSION_MAX_LENGTH`) and the request field's
+ * (`app/bi/models/content.py::MEASURE_EXPRESSION_MAX_LENGTH`) and the request field's
  * `max_length`, all three pinned equal by the parity test.
  */
 export const EXPRESSION_MAX_LENGTH = 2_000;
@@ -71,14 +71,14 @@ export const MAX_FIGURE_REFERENCES = 25;
 /** `MAX_LAG_PERIODS` — the language's structural ceiling on `LAG`'s reach. */
 export const MAX_LAG_PERIODS = 60;
 
-/** `bi_content.MEASURE_KEY_MAX_LENGTH` / `LABEL` / `REASON`, and the description. */
+/** `app/bi/models/content.py` owns the key, label, reason and description bounds. */
 export const MEASURE_KEY_MAX_LENGTH = 64;
 export const MEASURE_LABEL_MAX_LENGTH = 120;
 export const MEASURE_DESCRIPTION_MAX_LENGTH = 400;
 export const MEASURE_REASON_MAX_LENGTH = 400;
 
 /**
- * `app/schemas/bi_content.py::MEASURE_KEY_PATTERN`, verbatim.
+ * `app/bi/schemas/content.py::MEASURE_KEY_PATTERN`, verbatim.
  *
  * Mirrored so the form can say what is wrong with an id BEFORE the request — the
  * server answers a bad one with a 422 whose message is about a pattern, which is
@@ -122,8 +122,7 @@ export const MEASURE_FUNCTIONS = [
     name: "LAG",
     arity: 3,
     signature: "LAG(figure, periods, PERIOD)",
-    purpose:
-      "The same figure as it stood a stated number of periods earlier.",
+    purpose: "The same figure as it stood a stated number of periods earlier.",
   },
 ] as const;
 
@@ -143,8 +142,14 @@ export const PERIOD_GRAINS = [
 
 /** The operators the language accepts, for the reference panel. */
 export const MEASURE_OPERATORS = [
-  { symbol: "+ − × ÷", reads: "written + - * /, with brackets where the order matters" },
-  { symbol: "> >= < <= = !=", reads: "compare two figures; the answer is a yes or no, not a number" },
+  {
+    symbol: "+ − × ÷",
+    reads: "written + - * /, with brackets where the order matters",
+  },
+  {
+    symbol: "> >= < <= = !=",
+    reads: "compare two figures; the answer is a yes or no, not a number",
+  },
   { symbol: "AND OR NOT", reads: "combine two yes-or-no answers" },
 ] as const;
 
@@ -179,7 +184,7 @@ export { DigestUnavailable, expressionDigest } from "./expressionDigest";
 // Standing
 // ---------------------------------------------------------------------------
 
-/** `bi_content.MEASURE_STATES`. */
+/** `app/bi/models/content.py::MEASURE_STATES`. */
 export type MeasureState = BiMeasureRead["state"];
 
 export type MeasureStanding = Readonly<{
@@ -228,7 +233,11 @@ const STANDINGS: Readonly<Record<MeasureState, MeasureStanding>> = {
 };
 
 export function measureStanding(state: string): MeasureStanding {
-  if (state === "personal" || state === "proposed" || state === "bank_certified") {
+  if (
+    state === "personal" ||
+    state === "proposed" ||
+    state === "bank_certified"
+  ) {
     return STANDINGS[state];
   }
   // Neutral, never the most favourable neighbour: a state this build does not
@@ -357,7 +366,10 @@ export type FigureRefusal = Readonly<{
 
 function strings(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    ? value.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && entry.length > 0,
+      )
     : [];
 }
 
@@ -427,9 +439,7 @@ export function refusedFiguresSentence(refusal: FigureRefusal): string | null {
  *   offered with nothing to break it down by.
  */
 export type CalculatedUnusable =
-  | "not_certified"
-  | "figure_not_in_catalogue"
-  | "mixed_time_behaviour";
+  "not_certified" | "figure_not_in_catalogue" | "mixed_time_behaviour";
 
 export type CalculatedMeasureOffer =
   | Readonly<{ usable: true; entry: BiCatalogueMeasureRead }>
@@ -580,7 +590,7 @@ export function draftFromMeasure(measure: BiMeasureRead): MeasureDraft {
   };
 }
 
-/** What a measure's number IS (`bi_content.MEASURE_VALUE_TYPES`), in words. */
+/** What a measure's number IS (`app/bi/models/content.py::MEASURE_VALUE_TYPES`), in words. */
 export const MEASURE_VALUE_TYPES = [
   { code: "amount", label: "An amount of money" },
   { code: "pct", label: "A percentage" },
@@ -602,7 +612,9 @@ export const MEASURE_DIRECTIONS = [
 ] as const;
 
 export function valueTypeLabel(code: string): string {
-  return MEASURE_VALUE_TYPES.find((entry) => entry.code === code)?.label ?? code;
+  return (
+    MEASURE_VALUE_TYPES.find((entry) => entry.code === code)?.label ?? code
+  );
 }
 
 export function directionLabel(code: string): string {
@@ -626,7 +638,9 @@ export function draftProblems(
   if (options.keyEditable) {
     const key = draft.measureKey.trim();
     if (key.length === 0) {
-      problems.push("Give the measure an id, so a formula and a chart can name it.");
+      problems.push(
+        "Give the measure an id, so a formula and a chart can name it.",
+      );
     } else if (key.length > MEASURE_KEY_MAX_LENGTH) {
       problems.push(
         `An id can be up to ${MEASURE_KEY_MAX_LENGTH} characters long.`,
@@ -640,7 +654,9 @@ export function draftProblems(
   if (draft.label.trim().length === 0) {
     problems.push("Give the measure a name that will read well on a chart.");
   } else if (draft.label.length > MEASURE_LABEL_MAX_LENGTH) {
-    problems.push(`A name can be up to ${MEASURE_LABEL_MAX_LENGTH} characters long.`);
+    problems.push(
+      `A name can be up to ${MEASURE_LABEL_MAX_LENGTH} characters long.`,
+    );
   }
   if (draft.description.length > MEASURE_DESCRIPTION_MAX_LENGTH) {
     problems.push(
@@ -666,7 +682,10 @@ export function draftProblems(
  */
 export function expressionReady(
   draft: MeasureDraft,
-  verdict: Readonly<{ expression: string; read: BiMeasureValidationRead }> | null,
+  verdict: Readonly<{
+    expression: string;
+    read: BiMeasureValidationRead;
+  }> | null,
 ): boolean {
   if (verdict === null) return false;
   return verdict.expression === draft.expression && verdict.read.valid;
@@ -675,7 +694,8 @@ export function expressionReady(
 /** A reason string a mutation route requires, with the field's own bound. */
 export function reasonProblem(reason: string, what: string): string | null {
   const trimmed = reason.trim();
-  if (trimmed.length === 0) return `Say why, so the decision is on the record: ${what}`;
+  if (trimmed.length === 0)
+    return `Say why, so the decision is on the record: ${what}`;
   if (reason.length > MEASURE_REASON_MAX_LENGTH) {
     return `A reason can be up to ${MEASURE_REASON_MAX_LENGTH} characters long.`;
   }
@@ -777,4 +797,3 @@ export function mergeAddresses(
   }
   return { pairs: [...seen.values()], complete };
 }
-

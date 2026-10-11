@@ -13,7 +13,7 @@
  *
  * The SCREEN half drives the confirmation, which needs a `proposed` state that no
  * hermetic stack can produce without a model. So the two ask routes are
- * intercepted with bodies shaped exactly as `app/schemas/bi_nlq.py` declares —
+ * intercepted with bodies shaped exactly as `app/bi/schemas/nlq.py` declares —
  * the same technique `bi-authorization.spec.ts` uses on `/feature-flags`, and for
  * the same reason: the state under test is a deployment fact, not a data fact.
  * What is NOT faked is the thing that matters most, and it cannot be: the browser
@@ -24,13 +24,13 @@
  *
  * WHAT HAS NO JOURNEY HERE, SO NOBODY MISTAKES THE ABSENCE FOR COVERAGE. The
  * AI-gate refusal — the sentence an admin gets on a platform with AI switched off —
- * cannot be reached in this stack today: `app/jobs/bi_nlq.py::request_translation`
+ * cannot be reached in this stack today: `app/bi/jobs/bi_nlq.py::request_translation`
  * meters the AI quota BEFORE it honours the gate decision, and the quota query
  * touches `ai_commentary_drafts`, which `Base.metadata.create_all` does not build
- * because `app/models/bi_commentary.py` is not imported by `app/models/__init__.py`.
+ * because `app/bi/models/commentary.py` is not imported by `app/models/__init__.py`.
  * So the route answers 500 rather than its refusal. Diagnosis, traceback and the
  * two-line fix are in `.ai/bi_recon/p5g_ask_surface_report.md`; the refusal itself
- * is covered by `backend/tests/api/test_bi_ask_routes.py`, where the table exists.
+ * is covered by `backend/tests/bi/api/test_bi_ask_routes.py`, where the table exists.
  * Add the journey when the ordering is fixed.
  *
  * `BI_NLQ_ENABLED` is set in `playwright.config.ts` beside `BI_ENABLED`, for the
@@ -226,7 +226,7 @@ test.describe("a reader asking in words", () => {
     // with no institution, whose screen never offers the box at all — asserted on
     // its own terms in the next journey — and every other refusal is behind the
     // 500 named in the file docstring. The BODY here is the route's own, copied
-    // from `app/features/ask_bi.py::_unavailable`.
+    // from `app/bi/api/ask_bi.py::_unavailable`.
     await page.route(
       `**/api/v1/banks/${SAMPLE_BANK_ID}/bi/ask`,
       async (route) => {

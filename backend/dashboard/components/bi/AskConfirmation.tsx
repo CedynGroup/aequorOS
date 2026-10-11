@@ -9,7 +9,7 @@
  * launder a model's guess as a person's decision. So:
  *
  * * EVERY WORD IS THE SERVER'S. The sentence and its clauses are rendered by
- *   `app/services/bi/nlq/reading.py` from the catalogue's own labels. Nothing
+ *   `app/bi/service/nlq/reading.py` from the catalogue's own labels. Nothing
  *   here composes a phrase out of member ids, and nothing here shows the model's
  *   words — the model contributes the SHAPE of the question and no text at all.
  * * IT IS A CHECKLIST, NOT A PARAGRAPH. A reader checks a figure, a breakdown, a

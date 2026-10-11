@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.adapters.market_data.scope_taxonomy import DataScope
 from app.api.deps import TenantContext
+from app.bi.domain.catalogue import catalogue
 from app.domain.authority.results import Computed
-from app.domain.bi.catalogue import catalogue
 from app.domain.policy import PolicyUnresolvedError
 from app.models import (
     Bank,

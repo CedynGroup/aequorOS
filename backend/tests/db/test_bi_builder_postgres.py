@@ -25,6 +25,7 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.bi.service import mart_builder, partitions
 from app.db.session import set_tenant_rls_context
 from app.models import (
     BankReportingPeriod,
@@ -37,7 +38,6 @@ from app.models import (
     LineageRecord,
     RegulatoryRun,
 )
-from app.services.bi import mart_builder, partitions
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,

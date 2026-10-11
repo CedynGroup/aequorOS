@@ -99,7 +99,7 @@ INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
         # The Power BI Stage B feed. Spelled literally because ``read_bi_feeds``
         # imports THIS module, so importing its ``FEED_INTEGRATION_KEY_ROUTE``
         # here would be a cycle. The duplication is pinned instead: a test in
-        # ``tests/api/test_bi_feeds.py`` asserts this entry equals that constant,
+        # ``tests/bi/api/test_bi_feeds.py`` asserts this entry equals that constant,
         # so the two strings cannot drift apart silently.
         ("GET", "/api/v1/banks/{bank_id}/bi/feeds/{dataset}"),
     }

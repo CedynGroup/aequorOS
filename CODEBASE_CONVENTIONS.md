@@ -489,7 +489,7 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
   only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
   `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
-  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` or `jobs/` where the
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
@@ -530,9 +530,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   imports, string patch targets, slash paths and doc references in the text files selected by
   `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
-  `packages/` files and the codemod's own source and tests are excluded. Schema class docstrings are
-  preserved because Pydantic publishes them as OpenAPI descriptions; a move must not churn
-  the generated client. The boundary baseline
+  `packages/` files and the codemod's own source and tests are excluded. Schema class and
+  routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
+  descriptions; a move must not churn the generated client. The boundary baseline
   retains its historical names as described above.
   It validates a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight

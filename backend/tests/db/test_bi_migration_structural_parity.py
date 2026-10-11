@@ -33,11 +33,11 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
+from app.bi.models.commentary import BI_COMMENTARY_TABLES
+from app.bi.models.content import BI_CONTENT_TABLES
+from app.bi.models.marts import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
+from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
-from app.models.bi import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
-from app.models.bi_commentary import BI_COMMENTARY_TABLES
-from app.models.bi_content import BI_CONTENT_TABLES
-from app.models.bi_notifications import BI_NOTIFICATION_TABLES
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     migrated_postgres_schema,

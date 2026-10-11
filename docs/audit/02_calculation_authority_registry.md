@@ -75,7 +75,7 @@ boundary described in §01 §2.
 The executable [`AdvisoryDesignation`](../../backend/app/domain/authority/registry.py)
 enum owns each designation's meaning, including `basel_reference`; the census
 command in §1 derives their counts. BI's projection is owned by
-[`app/domain/bi/authority.py`](../../backend/app/domain/bi/authority.py).
+[`app/bi/domain/authority.py`](../../backend/app/bi/domain/authority.py).
 
 `test_unresolved_divergences_are_never_designated_filed` is the guard: an authority whose
 `divergence.resolution_status` is not `accepted_by_authority` can never carry `FILED`.

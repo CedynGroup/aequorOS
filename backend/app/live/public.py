@@ -13,6 +13,7 @@ from app.live.position_book import (
     credit_source_basis,
     load_position_records,
 )
+from app.models.live import LiveMetric
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_run import RegulatoryLineItem, RegulatoryMetricResult, RegulatoryRun
 from app.services import fact_derivation
@@ -23,6 +24,7 @@ __all__ = [
     "BankReportingPeriod",
     "CREDIT_POSITION_TYPES",
     "INCLUDED_VALIDATION_STATUSES",
+    "LiveMetric",
     "RegulatoryLineItem",
     "RegulatoryMetricResult",
     "RegulatoryRun",

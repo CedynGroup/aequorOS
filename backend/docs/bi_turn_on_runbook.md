@@ -56,7 +56,7 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    tick. **Kill every local `lane:bi` worker first**
    (`ps -eo pid,lstart,command | grep -E "app\.worker"`): they poll the same shared
    `jobs` table and would run old builder code against production marts.
-7. **`BI_ENABLED=1`** mounts the tenant routers; the dashboard shows Insights /
+7. **`BI_ENABLED=1`** allows access through the mounted tenant routers; the dashboard shows Insights /
    Dashboards / Explore. **Was UNSAFE** — this is the step that exposed
    `bi_enforcement_rollout.md`'s scope section, which stated the opposite of the
    code until 2026-09-29 (A360-7 S1; corrected). The module-level insight strip and

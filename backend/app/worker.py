@@ -23,15 +23,7 @@ from uuid import uuid4
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core import audit_integrity
-from app.core.config import get_settings
-from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
-from app.core.observability import Condition, emit
-from app.core.tls import validate_service_transports
-from app.db.base import utc_now
-from app.db.session import assert_worker_database_access, get_worker_sessionmaker
-from app.icaap.service import ai_jobs as icaap_ai_jobs
-from app.jobs import (
+from app.bi.jobs import (
     bi_alerts,
     bi_commentary,
     bi_export,
@@ -41,6 +33,14 @@ from app.jobs import (
     bi_retention,
     bi_subscriptions,
 )
+from app.core import audit_integrity
+from app.core.config import get_settings
+from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
+from app.core.observability import Condition, emit
+from app.core.tls import validate_service_transports
+from app.db.base import utc_now
+from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,

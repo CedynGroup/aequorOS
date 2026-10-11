@@ -3998,7 +3998,7 @@
   "reportPrivateUsage": 23
  },
  "tests.services.bi.test_catalogue_parity": {
-  "reportAny": 3,
+  "reportAny": 2,
   "reportPrivateUsage": 7
  },
  "tests.services.bi.test_commentary_job": {
