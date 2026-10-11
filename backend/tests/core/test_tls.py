@@ -25,7 +25,7 @@ from starlette.routing import Route
 from app.adapters.database_direct.config import ConnectionConfig, TlsConfig
 from app.adapters.database_direct.drivers.base import require_verified_transport
 from app.adapters.database_direct.errors import DatabaseDirectError
-from app.core.config import Settings, TsaSettings, get_operator_settings, get_settings
+from app.core.config import Settings, TsaSettings, get_settings
 from app.core.serve import listener_options
 from app.core.tls import (
     RequireTLSMiddleware,
@@ -38,7 +38,6 @@ from app.core.tls import (
 from app.core.tls_evidence import probe_https
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
-from app.operator.features.provision import get_provisioning_clients
 from app.services.attestation.tsa import build_pdf_timestamper
 from app.services.regulatory_reporting.channels.errors import ChannelPreconditionError
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
@@ -291,26 +290,19 @@ def test_orass_refuses_certificate_bypass(
 
 
 @pytest.mark.parametrize("scheme", ["http", "https"])
-def test_provisioning_exposes_only_verified_kms_clients(
+def test_bank_key_provider_exposes_only_verified_kms_clients(
     production: None, monkeypatch: pytest.MonkeyPatch, scheme: str
 ) -> None:
-    from app.storage.config import get_storage_settings  # noqa: PLC0415
+    from app.core.key_management.aws import kms_client  # noqa: PLC0415
 
-    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
     monkeypatch.setenv("AWS_ENDPOINT_URL_KMS", f"{scheme}://kms.example")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "synthetic")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic")
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
-    monkeypatch.setenv("S3_ACCESS_KEY", "")
-    monkeypatch.setenv("S3_SECRET_KEY", "")
-    get_operator_settings.cache_clear()
-    get_storage_settings.cache_clear()
-    try:
-        clients = get_provisioning_clients()
-        assert (cast(object, clients.kms_client) is not None) == (scheme == "https")
-    finally:
-        get_operator_settings.cache_clear()
-        get_storage_settings.cache_clear()
+    if scheme == "https":
+        assert kms_client("us-east-1") is not None
+    else:
+        with pytest.raises(TransportSecurityError):
+            kms_client("us-east-1")
 
 
 def test_dashboard_backend_requests_refuse_http_redirects(tmp_path: Path) -> None:

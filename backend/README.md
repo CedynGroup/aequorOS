@@ -18,6 +18,9 @@ and `python -m app.core.serve operator`. Certificate, trust-store, database URL,
 and local-development exceptions are governed by
 [the transport contract](docs/transport_security.md).
 
+Bank-owned encryption key requirements are in
+[the bank key setup guide](docs/bank_key_setup.md).
+
 - Health and readiness under `/api/health`; readiness reports database, storage,
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no

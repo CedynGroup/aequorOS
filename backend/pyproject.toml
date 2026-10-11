@@ -55,6 +55,7 @@ dependencies = [
   "sqlalchemy",
   "torch",
   "requests>=2.34.2",
+  "aws-encryption-sdk[mpl]>=4.0.5,<5",
 ]
 
 # Driver-heavy database-direct backends. Lazily imported by
@@ -89,6 +90,7 @@ dev = [
   "ruff",
   "pytest-xdist",
   "types-requests>=2.33.0.20261006",
+  "moto[kms,s3]>=5,<6",
 ]
 
 [tool.pytest.ini_options]
