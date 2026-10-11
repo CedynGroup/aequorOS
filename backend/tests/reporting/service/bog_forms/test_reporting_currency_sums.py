@@ -191,6 +191,169 @@ def book(db_session: Session) -> _Book:
     return book
 
 
+def _classified_snapshot(book: _Book, reader: str) -> CanonicalPositionSnapshot:
+    loan = book.position(
+        "LIFECYCLE/LOAN",
+        "LOAN",
+        {
+            "balance_ghs": "100000",
+            "sector": "agriculture.cocoa_production",
+            "bog_classification": "loss",
+            "borrower_class": "private_indigenous",
+            "ecl_provision_ghs": "10000",
+            "interest_in_suspense_ghs": "1000",
+            "crm_collateral_ghs": "20000",
+        },
+        currency="GHS",
+    )
+    loan.ifrs9_stage = 3
+    if reader == "BSD8-OBS":
+        loan = book.position(
+            "LIFECYCLE/OBS", "LC_GUARANTEE", {"notional_ghs": "100000"}, currency="GHS"
+        )
+    cutoff = (
+        book.period.period_start - timedelta(days=1)
+        if reader == "BSD8-previous"
+        else book.period.period_end
+    )
+    loan.as_of_date = cutoff - timedelta(days=1)
+    book.db.flush()
+    return loan
+
+
+def _reader_cells(book: _Book, reader: str) -> dict[str, object]:
+    if reader == "BSD4":
+        cells = {
+            measure: book.resolver("bsd4.cell", f"private_indigenous.{measure}")(
+                {"sector": "agriculture.cocoa_production"}
+            )
+            for measure in ("performing", "non_performing", "customer_count")
+        }
+        for name, bucket in (("annex4a", "nonfinancial_corporations"), ("annex4b", "domestic")):
+            for measure in ("amount", "share"):
+                cells[f"{name}.{measure}"] = book.resolver(f"bsd4.{name}", measure)(
+                    {"bucket": bucket}
+                )
+        return cells
+    if reader == "BSD8-OBS":
+        return {"obs": book.resolver("bsd8.annexure", "obs")({"rank": 1})}
+    as_of = "previous" if reader == "BSD8-previous" else "current"
+    cells = {
+        measure: book.resolver("bsd8.bucket", "loss")({"measure": measure, "as_of": as_of})
+        for measure in (
+            "balance",
+            "provision",
+            "interest_in_suspense",
+            "security",
+            "customer_count",
+        )
+    }
+    if as_of == "current":
+        for field in ("capital", "provision", "interest", "security_value"):
+            cells[f"annexure.{field}"] = book.resolver("bsd8.annexure", field)({"rank": 1})
+    return cells
+
+
+def _later_snapshot(
+    book: _Book, previous: CanonicalPositionSnapshot, amount: Decimal
+) -> CanonicalPositionSnapshot:
+    attrs = dict(cast(dict[str, object], previous.attributes))
+    attrs.update(balance_ghs=str(amount), notional_ghs=str(amount))
+    row = CanonicalPositionSnapshot(
+        organization_id=previous.organization_id,
+        bank_id=previous.bank_id,
+        source_system=previous.source_system,
+        source_reference=previous.source_reference,
+        as_of_date=previous.as_of_date + timedelta(days=1),
+        ingestion_batch_id=previous.ingestion_batch_id,
+        lineage_id=previous.lineage_id,
+        position_id=previous.position_id,
+        counterparty_id=previous.counterparty_id,
+        product_id=previous.product_id,
+        balance=amount,
+        attributes=attrs,
+        ifrs9_stage=previous.ifrs9_stage,
+        validation_status="accepted",
+    )
+    book.db.add(row)
+    book.db.flush()
+    return row
+
+
+@pytest.mark.parametrize("reader", ["BSD4", "BSD8-current", "BSD8-previous", "BSD8-OBS"])
+@pytest.mark.parametrize("state", ["pending", "error", "blocked", "withdrawn", "superseded"])
+def test_classified_readers_keep_the_older_admitted_snapshot(
+    book: _Book, reader: str, state: str
+) -> None:
+    previous = _classified_snapshot(book, reader)
+    expected = _reader_cells(book, reader)
+    amount_key = (
+        "non_performing" if reader == "BSD4" else "obs" if reader == "BSD8-OBS" else "balance"
+    )
+    assert expected[amount_key] == Decimal("100000")
+    if reader == "BSD4":
+        assert expected["customer_count"] == 1
+        assert expected["annex4a.amount"] == expected["annex4b.amount"] == Decimal("100000")
+    newest = _later_snapshot(book, previous, Decimal("888000000"))
+    assert _reader_cells(book, reader)[amount_key] == Decimal("888000000")
+    if state == "withdrawn":
+        newest.withdrawn_at = datetime.now(UTC)
+    elif state == "superseded":
+        newest.superseded_by = previous.id
+    else:
+        newest.validation_status = state
+    book.db.flush()
+    assert _reader_cells(book, reader) == expected
+
+
+@pytest.mark.parametrize("reader", ["BSD4", "BSD8-current", "BSD8-previous", "BSD8-OBS"])
+@pytest.mark.parametrize("state", ["withdrawn", "superseded"])
+def test_classified_readers_exclude_a_retired_parent_independently(
+    book: _Book, reader: str, state: str
+) -> None:
+    snapshot = _classified_snapshot(book, reader)
+    expected = _reader_cells(book, reader)
+    amount_key = (
+        "non_performing" if reader == "BSD4" else "obs" if reader == "BSD8-OBS" else "balance"
+    )
+    assert expected[amount_key] == Decimal("100000")
+    parent = book.db.get(CanonicalPosition, snapshot.position_id)
+    assert parent is not None
+    if state == "withdrawn":
+        parent.withdrawn_at = datetime.now(UTC)
+    else:
+        parent.superseded_by = parent.id
+    book.db.flush()
+    assert snapshot.superseded_by is None and snapshot.withdrawn_at is None
+    cells = _reader_cells(book, reader)
+    assert cells[amount_key] in (None, 0)
+    if reader == "BSD4":
+        assert cells["customer_count"] in (None, 0)
+        assert cells["annex4a.amount"] in (None, 0)
+        assert cells["annex4b.amount"] in (None, 0)
+
+
+@pytest.mark.parametrize("reader", ["BSD4", "BSD8-current", "BSD8-previous", "BSD8-OBS"])
+@pytest.mark.parametrize("state", ["withdrawn", "superseded"])
+def test_classified_readers_exclude_a_retired_snapshot_at_the_selected_date(
+    book: _Book, reader: str, state: str
+) -> None:
+    retired = _classified_snapshot(book, reader)
+    amount_key = (
+        "non_performing" if reader == "BSD4" else "obs" if reader == "BSD8-OBS" else "balance"
+    )
+    assert _reader_cells(book, reader)[amount_key] == Decimal("100000")
+    if state == "withdrawn":
+        retired.withdrawn_at = datetime.now(UTC)
+    else:
+        retired.superseded_by = retired.id
+    book.db.flush()
+    admitted = _later_snapshot(book, retired, Decimal("200000"))
+    admitted.as_of_date = retired.as_of_date
+    book.db.flush()
+    assert _reader_cells(book, reader)[amount_key] == Decimal("200000")
+
+
 @pytest.fixture
 def dated_spots(book: _Book) -> None:
     rates = {
