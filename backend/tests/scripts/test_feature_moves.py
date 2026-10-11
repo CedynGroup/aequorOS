@@ -778,3 +778,37 @@ def test_unresolved_relative_imports_refuse_all_commands(repository: Path, kind:
     assert before == after
     assert _python(repository, "from app.fx.service import run\nprint(run())") == "1"
     assert not (repository / "backend/app/currency").exists()
+
+
+@pytest.mark.parametrize(
+    ("imports", "operation"),
+    [
+        ("from app.services import regulatory_reporting", "regulatory_reporting.generate_package"),
+        (
+            "import app.services.regulatory_reporting as reporting",
+            "reporting.generate_package",
+        ),
+        ("from app.services.regulatory_reporting import generate_package", "generate_package"),
+    ],
+)
+def test_rewritten_facade_imports_remain_executable(imports: str, operation: str) -> None:
+    rename = feature_moves.Renamer(tuple(feature_moves.load_ledger(feature_moves.BACKEND)))
+    program = feature_moves.rewrite_imports(imports, None, False, rename, feature_moves.BACKEND)
+    program = feature_moves.rewrite_dotted(program, rename)
+    _python(
+        feature_moves.BACKEND.parent,
+        program
+        + "\nfrom app.reporting.service.generation import generate_package as expected\n"
+        + f"assert {operation} is expected\n",
+    )
+
+
+def test_reporting_descendant_moves_keep_their_destinations() -> None:
+    ledger = feature_moves.load_ledger(feature_moves.BACKEND)
+    rename = feature_moves.Renamer(tuple(ledger))
+    descendants = [
+        (old, new) for old, new in ledger if old.startswith("app.services.regulatory_reporting.")
+    ]
+    assert descendants
+    for old, new in descendants:
+        assert rename(old) == new

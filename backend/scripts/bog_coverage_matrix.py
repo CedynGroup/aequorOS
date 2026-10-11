@@ -24,7 +24,7 @@ from app.reporting.service.bog_forms.catalog import all_form_specs
 from app.reporting.service.bog_forms.layout import load_layout
 from app.reporting.service.registry import REGISTRY
 
-TESTS = Path(__file__).resolve().parents[1] / "tests" / "services" / "bog_forms"
+TESTS = Path(__file__).resolve().parents[1] / "tests" / "reporting" / "service" / "bog_forms"
 
 
 def _test_files_for(code: str) -> list[str]:

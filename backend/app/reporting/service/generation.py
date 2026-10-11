@@ -406,7 +406,7 @@ def _generate_package(
         purpose="package_generation",
     )
 
-    generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
+    generated = _generators()[definition.generator](db, ctx, bank, period, definition)
 
     # The withdrawn-evidence gate (audit 2026-08-22 D-12), on the same line and
     # for the same reason as the two gates above: a return bound to a run that
@@ -3344,31 +3344,37 @@ lcr_snapshot_sections = _lcr_sections
 lcr_snapshot_totals = _lcr_totals
 liquidity_snapshot_metadata = _liquidity_metadata
 
-# Imported at the bottom — after the seams above are defined — so the module
-# pairs load cleanly regardless of which side is imported first.
-from app.reporting.service.bog_forms.generation import BOG_GENERATORS  # noqa: E402
-from app.reporting.service.dbk_generation import DBK_GENERATORS  # noqa: E402
-from app.reporting.service.le_generation import LE_GENERATORS  # noqa: E402
-from app.reporting.service.lrt_generation import LRT_GENERATORS  # noqa: E402
-from app.reporting.service.npl_generation import NPL_GENERATORS  # noqa: E402
 
-_GENERATORS = {
-    "liquidity": _generate_liquidity,
-    "capital": _generate_capital,
-    "irrbb": _generate_irrbb,
-    "sdi_irrbb": _generate_sdi_irrbb,
-    "fx": _generate_fx,
-    "icaap_stress": _generate_icaap_stress,
-    "icaap_stress_appendix2": _generate_icaap_stress_appendix2,
-    "sdi_stress_annual": _generate_sdi_stress_annual,
-    "stress_pack": _generate_stress_pack,
-    "template_pending": _generate_template_pending,
-    **LRT_GENERATORS,
-    **NPL_GENERATORS,
-    **LE_GENERATORS,
-    **DBK_GENERATORS,
-    **BOG_GENERATORS,
-}
+def _generators() -> dict[
+    str,
+    Callable[
+        [Session, TenantContext, Bank, BankReportingPeriod, ReturnDefinition], GeneratedReturn
+    ],
+]:
+    from app.reporting.service.bog_forms.generation import BOG_GENERATORS  # noqa: PLC0415
+    from app.reporting.service.dbk_generation import DBK_GENERATORS  # noqa: PLC0415
+    from app.reporting.service.le_generation import LE_GENERATORS  # noqa: PLC0415
+    from app.reporting.service.lrt_generation import LRT_GENERATORS  # noqa: PLC0415
+    from app.reporting.service.npl_generation import NPL_GENERATORS  # noqa: PLC0415
+
+    return {
+        "liquidity": _generate_liquidity,
+        "capital": _generate_capital,
+        "irrbb": _generate_irrbb,
+        "sdi_irrbb": _generate_sdi_irrbb,
+        "fx": _generate_fx,
+        "icaap_stress": _generate_icaap_stress,
+        "icaap_stress_appendix2": _generate_icaap_stress_appendix2,
+        "sdi_stress_annual": _generate_sdi_stress_annual,
+        "stress_pack": _generate_stress_pack,
+        "template_pending": _generate_template_pending,
+        **LRT_GENERATORS,
+        **NPL_GENERATORS,
+        **LE_GENERATORS,
+        **DBK_GENERATORS,
+        **BOG_GENERATORS,
+    }
+
 
 __all__ = [
     "GeneratedReturn",

@@ -1,6 +1,5 @@
 """Policy's interface for other features: re-exports only, no logic."""
 
-from app.models import parameter_register
 from app.models.parameter_register import (
     ParamCapitalThreshold,
     ParamEclAssumption,
@@ -30,7 +29,6 @@ __all__ = [
     "institution_types",
     "jurisdiction_code",
     "jurisdictions",
-    "parameter_register",
     "regulator_short",
     "regulatory_parameters",
 ]

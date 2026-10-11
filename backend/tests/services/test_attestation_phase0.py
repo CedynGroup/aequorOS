@@ -437,7 +437,7 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     2026-08-20 — the annual enterprise-wide stress return in the Appendix II
     Tables 1–6 formats; docs/stress.md §3.6, also routed through generate_package).
     """
-    generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
+    generators = generation._generators()  # pyright: ignore[reportPrivateUsage]
     # 39 bank returns + the 4 SDI reports added 2026-08-22 (family "sdi":
     # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL)
     # + NPL-MONTHLY (family "credit", 2026-09-01) - the Notice 2025/23 monthly
