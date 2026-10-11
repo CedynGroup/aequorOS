@@ -296,9 +296,8 @@ def _assert_signatures_and_content_sealed_under_temp_shadow(
     assert after["signatures"] == before["signatures"]
 
 
-@pytest.mark.parametrize("runtime", [False, True], ids=["owner-trigger", "runtime-grants"])
-def test_master_data_provenance_stays_sealed_through_void_and_correction(
-    connection: Connection, governance_schema: MigratedPostgresSchema, runtime: bool
+def _prepare_filing_role(
+    connection: Connection, governance_schema: MigratedPostgresSchema, *, runtime: bool
 ) -> None:
     role = governance_schema.runtime_role
     assert role is not None
@@ -321,6 +320,13 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
                 "WHERE oid = 'regulatory_packages'::regclass"
             )
         )
+
+
+@pytest.mark.parametrize("runtime", [False, True], ids=["owner-trigger", "runtime-grants"])
+def test_master_data_provenance_stays_sealed_through_void_and_correction(
+    connection: Connection, governance_schema: MigratedPostgresSchema, runtime: bool
+) -> None:
+    _prepare_filing_role(connection, governance_schema, runtime=runtime)
     try:
         with Session(bind=connection, join_transaction_mode="create_savepoint") as db:
             package = _master_data_package(db)
