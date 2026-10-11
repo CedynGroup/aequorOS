@@ -6,7 +6,7 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import datetime
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import worker
@@ -44,9 +44,9 @@ def test_worker_starts_platform_schedule_without_tenant_ticks(
     stop = threading.Event()
     calls: list[Session] = []
 
-    def verify(session: Session, _now: datetime) -> bool:
+    def verify(session: Session, _now: datetime) -> list[ChainVerification]:
         calls.append(session)
-        return True
+        return [ChainVerification("audit_events", 0, True)]
 
     def poll(_types: tuple[str, ...], *, worker_id: str) -> bool:
         stop.set()
@@ -66,50 +66,53 @@ def test_worker_starts_platform_schedule_without_tenant_ticks(
     assert calls == ([db_session] if "scheduled_tick" in job_types else [])
 
 
-def test_unavailable_verification_emits_paging_condition(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calls: list[tuple[Condition, dict[str, object]]] = []
+@pytest.fixture
+def paging_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]]:
+    conditions: list[tuple[Condition, dict[str, object]]] = []
+    pages: list[tuple[str, str | None]] = []
 
     def capture(condition: Condition, _message: str, **fields: object) -> None:
-        calls.append((condition, fields))
+        conditions.append((condition, fields))
 
-    monkeypatch.setattr("app.core.audit_integrity.emit", capture)
-    pages: list[str] = []
-
-    def page(reason: str, _stream: str | None = None) -> bool:
-        pages.append(reason)
+    def page(reason: str, stream: str | None = None) -> bool:
+        pages.append((reason, stream))
         return True
 
-    monkeypatch.setattr("app.core.audit_integrity.publish_alert", page)
+    monkeypatch.setattr(audit_integrity, "emit", capture)
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    return conditions, pages
+
+
+def test_unavailable_verification_returns_failed_outcome(
+    db_session: Session,
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
     assert scheduled_verification(db_session) == [
         ChainVerification("verification_unavailable", 0, False)
     ]
-    assert calls == [
-        (Condition.AUDIT_CHAIN_BROKEN, {"severity": "error", "reason": "verification_unavailable"})
-    ]
-    assert pages == ["verification_unavailable"]
+    assert paging_evidence == ([], [])
 
 
 @pytest.mark.parametrize(
     "failure",
-    ["acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
 )
+@pytest.mark.parametrize("verifier_unavailable", [False, True])
 def test_platform_task_failure_pages_and_preserves_job_dispatch(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, failure: str
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str | None,
+    verifier_unavailable: bool,
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
 ) -> None:
     monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
     get_settings.cache_clear()
     stop = threading.Event()
-    conditions: list[tuple[Condition, dict[str, object]]] = []
-    pages: list[tuple[str, str | None]] = []
+    conditions, pages = paging_evidence
     polls: list[tuple[str, ...]] = []
     stages: list[str] = []
-    db_session.execute(text("CREATE TABLE audit_integrity_schedule (id boolean, run_after text)"))
-    db_session.execute(text("INSERT INTO audit_integrity_schedule VALUES (true, '-infinity')"))
-    db_session.commit()
-    original_execute = db_session.execute
-    original_commit = db_session.commit
 
     def fail_at(stage: str) -> None:
         stages.append(stage)
@@ -123,11 +126,9 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
 
     def advance(*args: object, **kwargs: object) -> None:
         fail_at("advance")
-        original_execute(text("UPDATE audit_integrity_schedule SET run_after = 'next hour'"))
 
     def commit() -> None:
         fail_at("commit")
-        original_commit()
 
     @contextmanager
     def session_context() -> Generator[Session]:
@@ -143,18 +144,14 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
 
     def verify(_session: Session) -> list[ChainVerification]:
         stages.append("verification")
+        if verifier_unavailable:
+            stop.set()
+            raise RuntimeError("private verification failure detail")
         return [ChainVerification("audit_events", 0, True)]
 
     def poll(types: tuple[str, ...], *, worker_id: str) -> bool:
         polls.append(types)
         stop.set()
-        return True
-
-    def capture(condition: Condition, _message: str, **fields: object) -> None:
-        conditions.append((condition, fields))
-
-    def page(reason: str, stream: str | None = None) -> bool:
-        pages.append((reason, stream))
         return True
 
     def ignore(*args: object, **kwargs: object) -> None:
@@ -163,9 +160,7 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
     monkeypatch.setattr(db_session, "scalar", acquire)
     monkeypatch.setattr(db_session, "execute", advance)
     monkeypatch.setattr(db_session, "commit", commit)
-    monkeypatch.setattr(audit_integrity, "scheduled_verification", verify)
-    monkeypatch.setattr(audit_integrity, "emit", capture)
-    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    monkeypatch.setattr(audit_integrity, "verify_chains", verify)
     monkeypatch.setattr(worker, "assert_worker_database_access", ignore)
     monkeypatch.setattr(worker, "_heartbeat_safely", ignore)
     monkeypatch.setattr(worker, "_reap_stale", ignore)
@@ -173,8 +168,15 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
     monkeypatch.setattr(worker, "run_once", poll)
     worker.run_worker(job_types=("scheduled_tick",), stop_event=stop)
     assert polls == [("scheduled_tick",)]
-    assert conditions == [
-        (Condition.AUDIT_CHAIN_BROKEN, {"severity": "error", "reason": "verification_unavailable"})
-    ]
-    assert pages == [("verification_unavailable", None)]
-    assert ("verification" in stages) == (failure in {"advance", "commit", "session_exit"})
+    assert conditions == (
+        [
+            (
+                Condition.AUDIT_CHAIN_BROKEN,
+                {"severity": "error", "reason": "verification_unavailable"},
+            )
+        ]
+        if failure is not None or verifier_unavailable
+        else []
+    )
+    assert pages == ([("verification_unavailable", None)] if conditions else [])
+    assert ("verification" in stages) == (failure in {None, "advance", "commit", "session_exit"})

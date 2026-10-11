@@ -84,10 +84,14 @@ runtime-role inserts, denied ALTER/UPDATE/DELETE/TRUNCATE and helper replacement
 forced chain RLS, a bank-free hourly cadence and concurrent worker exclusion.
 An unavailable verifier emits and publishes the same paging condition; the
 platform task advances to the next hour even after a mismatch or refusal.
-Schedule acquisition, advance, commit and session failures use that safe paging
-condition while ordinary job dispatch continues. Migration regressions exercise
+The worker reports unavailability once at the complete task boundary, including
+combined verifier and schedule acquisition, advance, commit or session failures,
+while ordinary job dispatch continues. Migration regressions exercise
 both forward and round-trip upgrades with superuser test credentials, using and
-cleaning up an ordinary restricted migration role.
+cleaning up an ordinary restricted migration role. Administrator regressions use
+either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser
+credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
+is set. Ordinary migration tests still need only `TEST_DATABASE_URL`.
 `tests/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role. `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe
 incident payload, and visible missing/failed delivery with a fake publisher.

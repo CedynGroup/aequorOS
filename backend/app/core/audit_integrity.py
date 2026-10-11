@@ -162,12 +162,11 @@ def report_verification_unavailable() -> None:
 
 
 def scheduled_verification(session: Session) -> list[ChainVerification]:
-    """Emit a paging condition on every failed sweep, without audit recursion."""
+    """Verify the streams and page on detected chain mismatches."""
     try:
         with session.begin_nested():
             results = verify_chains(session)
     except Exception:
-        report_verification_unavailable()
         return [ChainVerification("verification_unavailable", 0, False)]
     for result in results:
         if not result.valid:
@@ -185,10 +184,10 @@ def scheduled_verification(session: Session) -> list[ChainVerification]:
     return results
 
 
-def run_due_verification(session: Session, now: datetime) -> bool:
+def run_due_verification(session: Session, now: datetime) -> list[ChainVerification] | None:
     """Run the single platform task, serialized across worker processes."""
     if not get_settings().worker.audit_integrity_enabled:
-        return False
+        return None
     due = cast(
         bool | None,
         session.scalar(
@@ -200,11 +199,11 @@ def run_due_verification(session: Session, now: datetime) -> bool:
         ),
     )
     if due is None:
-        return False
-    _ = scheduled_verification(session)
+        return None
+    results = scheduled_verification(session)
     session.execute(
         text("UPDATE audit_integrity_schedule SET run_after = :next_hour WHERE id = true"),
         {"next_hour": now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)},
     )
     session.commit()
-    return True
+    return results

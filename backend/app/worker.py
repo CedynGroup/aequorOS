@@ -302,9 +302,14 @@ def run_worker(
         if settings.worker.audit_integrity_enabled and "scheduled_tick" in job_types:
             try:
                 with _new_session() as session:
-                    _ = audit_integrity.run_due_verification(session, utc_now())
+                    results = audit_integrity.run_due_verification(session, utc_now())
             except Exception:
                 audit_integrity.report_verification_unavailable()
+            else:
+                if results is not None and any(
+                    result.stream == "verification_unavailable" for result in results
+                ):
+                    audit_integrity.report_verification_unavailable()
         try:
             worked = run_once(job_types, worker_id=worker_id)
         except Exception as exc:  # noqa: BLE001 - a claim failure must not kill the loop
