@@ -934,7 +934,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
 ) -> InstitutionPermissionAccess:
-    """Require one complete active binding for an exact tenant institution.
+    """Require a human principal and one complete binding for an exact institution.
 
     ``require_whole_institution`` is the DATA-scope half of the sentence, and it
     is a refusal rather than a narrowing. A figure that is the institution's —
@@ -970,6 +970,18 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
         authorization_denied(
             reason="scoped_binding_principal_required",
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=detail)
+
+    if ctx.integration_key_id is not None or ctx.authorization_version is None:
+        authorization_denied(
+            reason="human_institution_principal_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
             bank_id=bank.id,
             module=module.value,
             permission=permission.value,

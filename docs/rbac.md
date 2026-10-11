@@ -369,10 +369,10 @@ human — the CHECK on `authorization_bindings` (generalised by migration
 bundle only on a human. They carry **disjoint** permission sets by construction,
 so neither route has to name the other's bundle to refuse it:
 
-| Bundle                   | Permissions | Issued by                                                     | What it reaches                                                                                                                                                 |
-| ------------------------ | ----------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `integration_writer`     | `{ingest}`  | an integration key (Data Engine → API Push, `purpose=writer`) | the push routes for ONE exact `BK-*`; never a read                                                                                                              |
-| `bi_reader` (2026-09-27) | `{view}`    | the same integration-key flow with `purpose=reader`           | the Power BI Stage B feed `GET …/bi/feeds/{dataset}` for one exact `BK-*`; never a push, never the interactive BI routes, which refuse every machine credential |
+| Bundle                   | Permissions | Issued by                                                                                             | What it reaches                                                                         |
+| ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `integration_writer`     | `{ingest}`  | an integration key (Data Engine → API Push, `purpose=writer`)                                         | the push routes for ONE exact `BK-*`; never a read                                      |
+| `bi_reader` (2026-09-27) | `{view}`    | [issuance contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance) | the pre-release Power BI Stage B feed contract; never a push or an interactive BI route |
 
 Feed-key scope and issuance are governed by the
 [public integration contract](API_INTEGRATION.md#1-authentication). Related contracts:

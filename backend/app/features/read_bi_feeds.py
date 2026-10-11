@@ -62,14 +62,11 @@ commits. That is also what lets the row count be the number of rows that actuall
 LEFT the platform: a client that disconnects halfway is recorded as having
 received halfway, which is more useful than a count promised in advance.
 
-**No dedicated feed kill-switch yet.** The surface is gated by ``BI_ENABLED``,
-by the ``INTEGRATION_KEY_ROUTES`` allow-list in ``app/api/deps.py``, and by the
-fact that a ``bi_reader`` credential has to be issued before anything can
-authenticate. A ``BI_FEED_ENABLED`` flag in ``BiSettings`` would let an operator
-close the outbound flow without closing the bank's own dashboards; it is named
-in this track's report as a one-line follow-up rather than added here, because
-``app/core/config.py`` belongs to nobody in this phase and a silent edit to it
-would be the kind of change nobody reviews.
+**No dedicated feed kill-switch yet.** The surface is gated by ``BI_ENABLED``
+and the ``INTEGRATION_KEY_ROUTES`` allow-list in ``app/api/deps.py``.
+Credential availability and reintroduction are governed by
+``backend/docs/integration_key_machine_principal_rollout.md``; this route
+retains the pre-release feed contract for BI release work.
 """
 
 from __future__ import annotations

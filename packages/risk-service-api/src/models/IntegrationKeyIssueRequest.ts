@@ -54,18 +54,8 @@ export interface IntegrationKeyIssueRequest {
    * @type {string}
    * @memberof IntegrationKeyIssueRequest
    */
-  purpose?: IntegrationKeyIssueRequestPurposeEnum;
+  purpose?: string;
 }
-
-/**
- * @export
- */
-export const IntegrationKeyIssueRequestPurposeEnum = {
-  Writer: "writer",
-  Reader: "reader",
-} as const;
-export type IntegrationKeyIssueRequestPurposeEnum =
-  (typeof IntegrationKeyIssueRequestPurposeEnum)[keyof typeof IntegrationKeyIssueRequestPurposeEnum];
 
 /**
  * Check if a given object implements the IntegrationKeyIssueRequest interface.

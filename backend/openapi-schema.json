@@ -39609,11 +39609,8 @@
             "type": "string"
           },
           "purpose": {
+            "const": "writer",
             "default": "writer",
-            "enum": [
-              "writer",
-              "reader"
-            ],
             "title": "Purpose",
             "type": "string"
           }
@@ -39736,10 +39733,7 @@
           "purpose": {
             "anyOf": [
               {
-                "enum": [
-                  "writer",
-                  "reader"
-                ],
+                "const": "writer",
                 "type": "string"
               },
               {
@@ -119445,7 +119439,7 @@
         ]
       },
       "post": {
-        "description": "Issue one credential for one exact institution, for one purpose.\n\nThe authority required is unchanged by the second purpose: one\norganization-wide ACCOUNT/restricted ``administer`` binding\n(``require_account_administration``) plus an exact ``BK-*`` target, which the\nservice resolves inside the caller's tenant.",
+        "description": "Issue a data push key for an exact bank under Account administration.",
         "operationId": "issueIntegrationKey",
         "requestBody": {
           "content": {

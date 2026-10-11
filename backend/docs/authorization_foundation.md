@@ -105,6 +105,14 @@ aggregation are live. Subsequent product cutovers are tracked in the
 `User` classified as either `human` or `machine`; a service user is not treated
 as a human preset or seat.
 
+The shared institution permission gate
+(`app/api/deps.py::_require_institution_permission`) requires a human session:
+it refuses an integration-key context or a context without an authorization
+version before evaluating bindings. An expanded authentication allow-list cannot
+give a machine principal module-route access, even with a matching view binding.
+API Push and the BI feed use their dedicated machine dependencies. Regression:
+`tests/identity/api/test_integration_keys.py::test_machine_view_binding_cannot_reach_module_route_when_allowlist_widens`.
+
 The policy vocabulary lives only in `backend/app/core/authorization.py`:
 
 - permissions: `view`, `create`, `edit`, `run`, `review`, `approve`,

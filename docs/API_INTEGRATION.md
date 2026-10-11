@@ -20,33 +20,21 @@ An **integration key**, sent as the bearer credential on every API Push request:
 Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Your account administrator generates the key once in the dashboard (Data
-Engine → API Push → Integration keys). It authenticates your middleware as a
-dedicated machine identity with one exact institution-scoped Integration
-Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
+Your account administrator generates the key once in the dashboard (Access →
+Integration keys, also linked from Data Engine → API Push). It authenticates your
+middleware as a dedicated machine identity with one exact institution-scoped
+Integration Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
 select the bank when issuing the key. It is shown exactly once at generation
 (the platform stores only a hash) and can be revoked instantly from the same
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
-**A key is issued for one purpose, and the two purposes cannot substitute for
-one another.**
-
-| Purpose                | Authority                                 | Used by                      |
-| ---------------------- | ----------------------------------------- | ---------------------------- |
-| `writer` (the default) | `DATA` / `restricted` / `ingest`          | API Push, §2 below           |
-| `reader`               | every module at `aggregated`, `view` only | the analytics feed, §8 below |
-
-A `writer` key presented to the feed is refused, and a `reader` key presented to
-any push route is refused. Neither refusal depends on configuration: the two
-authorities carry disjoint permissions, so a push route asking for `ingest` and a
-feed asking for `view` each refuse the other's credential structurally. Issue one
-key per purpose; do not try to make one credential do both.
-
-Analytics feed keys cover every module and require whole-institution coverage.
-Key issuance rejects narrowed scopes. For existing narrowed keys, follow the
-[Credit-only narrowing migration contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
-administrators may deliberately issue a new whole-institution key after revocation.
+Only data push keys (`purpose: writer`, the default) may be issued; they cannot
+read analytics.
+`purpose: reader` is unavailable until BI ships with governed delegation; the API
+rejects it with `422` even when `BI_ENABLED` is enabled. The approval requirements
+for reintroduction are in the
+[reader issuance contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance).
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
@@ -672,6 +660,10 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
 ---
 
 ## 8. Pulling analytics out: the Stage B feed
+
+**Pre-release contract:** credential availability is governed by
+[§1 Authentication](#1-authentication). The contract below is retained for BI
+release work, not as an onboarding path.
 
 The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
 **curated** analytics dataset, streamed, so a report server (Power BI Report
