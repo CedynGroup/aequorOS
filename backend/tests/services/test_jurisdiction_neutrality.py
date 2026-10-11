@@ -59,11 +59,11 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/domain/policy/resolver.py",
     # ICAAP (2026-09-19): the workspace narrates figures for a Board and a
     # supervisor, so its copy must name neither a currency nor a country.
-    "app/services/icaap/blocks.py",
-    "app/services/icaap/cycles.py",
-    "app/services/icaap/readiness.py",
-    "app/services/icaap/sections.py",
-    "app/services/icaap/attachments.py",
+    "app/icaap/service/blocks.py",
+    "app/icaap/service/cycles.py",
+    "app/icaap/service/readiness.py",
+    "app/icaap/service/sections.py",
+    "app/icaap/service/attachments.py",
     # IRRBB Standardised Framework (P5, 2026-09-19): it narrates a change in
     # economic value and an outlier verdict for a supervisor, so its copy must
     # name neither a currency nor a country. Joined the guard with the module.

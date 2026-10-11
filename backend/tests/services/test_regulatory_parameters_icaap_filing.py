@@ -40,9 +40,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.policy import parameter_shapes
+from app.icaap.service import parameters as workspace_parameters
 from app.models import RegulatoryParameter
 from app.services import regulatory_parameters
-from app.services.icaap import parameters as workspace_parameters
 
 BACKEND = Path(__file__).resolve().parents[2]
 VERSIONS = BACKEND / "alembic" / "versions"

@@ -65,7 +65,7 @@ TEMPLATE_GATED = {"LAS-QUARTERLY"}  # BSD-MONTHLY retired: official BSD forms ge
 # BOARD-ATTESTED enterprise-stress run. The Phase-2 official-run sweep mints no
 # enterprise-stress run and no sign-off, so this return REFUSES here by design —
 # that governance gate is its specified behaviour, proven end to end in
-# tests/services/test_icaap_stress_appendix2_report.py.
+# tests/icaap/service/test_icaap_stress_appendix2_report.py.
 STRESS_RUN_GATED = {"ICAAP-STRESS-APPENDIX2"}
 
 # Returns scoped to an institution class this fixture is not. The sample tenant is

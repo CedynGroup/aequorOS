@@ -32,8 +32,8 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from app.domain.icaap.document import WORKING_COPY_NOTICE
-from app.services.icaap.render import format as fmt
+from app.icaap.domain.document import WORKING_COPY_NOTICE
+from app.icaap.service.render import format as fmt
 
 # P1 owns the Word renderer and P3's filing copy is explicitly one of the two
 # documents its module docstring says it serves. Subclassing its renderer — even
@@ -41,8 +41,8 @@ from app.services.icaap.render import format as fmt
 # list markers identical between a draft and a working copy of the same cycle;
 # re-implementing them here is how the two would drift. ``test_icaap_docx.py``
 # pins the attribute, so a rename in P1 fails a test rather than an export.
-from app.services.icaap.render.docx import _DocxRenderer
-from app.services.icaap.render.from_snapshot import IcaapFiling, SnapshotTable
+from app.icaap.service.render.docx import _DocxRenderer
+from app.icaap.service.render.from_snapshot import IcaapFiling, SnapshotTable
 
 #: What the artifact kind is called everywhere: the DB CHECK, the ORM tuple, the
 #: export route's Literal, the filing-set exclusion and the generated client.

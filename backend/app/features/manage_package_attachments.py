@@ -24,7 +24,7 @@ from fastapi.responses import StreamingResponse
 from app.api.deps import DbSession, PackageEdit, PackageView
 from app.core.config import get_settings
 from app.features.ingest_data import IngestionStorage
-from app.features.manage_icaap_attachments import IcaapStorage
+from app.icaap.api.manage_icaap_attachments import IcaapStorage
 from app.schemas.common import ErrorResponse
 from app.schemas.regulatory_reporting import (
     PackageAttachmentListRead,

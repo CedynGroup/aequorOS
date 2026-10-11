@@ -2,7 +2,7 @@
 
 ``app/services/bi/limits.py`` is the only BI module that may speak to the
 regulatory-parameter control plane or to the tenant's board register (D-069,
-mirroring ``app/services/icaap/parameters.py`` and the guard in
+mirroring ``app/icaap/service/parameters.py`` and the guard in
 ``test_icaap_boundaries.py``). Two separate invariants are pinned here, and they
 fail for different reasons:
 

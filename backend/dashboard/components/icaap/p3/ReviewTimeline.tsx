@@ -14,7 +14,7 @@
  *
  *  - **A send-back does not erase what came before it.** `stillStands` is the
  *    server's answer, computed from the round rule in
- *    `app/domain/icaap/workflow.py`; this screen never recomputes it.
+ *    `app/icaap/domain/workflow.py`; this screen never recomputes it.
  *  - **The signature stage records no decision.** The board signs the
  *    document itself, in the Filing tab; a "decide" control on that stage
  *    would be an invitation to an act the server refuses (409
@@ -56,7 +56,10 @@ export default function ReviewTimeline({ stages }: { stages: IcaapStages }) {
         title="Review chain"
         subtitle="Who reads this assessment, and in what order."
       >
-        <EmptyState title="The chain has not been set yet" description={NO_REVIEW_YET} />
+        <EmptyState
+          title="The chain has not been set yet"
+          description={NO_REVIEW_YET}
+        />
       </SectionCard>
     );
   }
@@ -90,7 +93,9 @@ function StageCard({
   return (
     <li
       className={`rounded border p-3 ${
-        isCurrent ? "border-action/40 bg-action-light/20" : "border-border-light"
+        isCurrent
+          ? "border-action/40 bg-action-light/20"
+          : "border-border-light"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">

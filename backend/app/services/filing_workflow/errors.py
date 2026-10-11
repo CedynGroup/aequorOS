@@ -1,6 +1,6 @@
 """The refusal shapes a review chain raises, shared by both planes.
 
-Lifted out of ``services/icaap/guards.py`` so the shared engine can raise them
+Lifted out of ``icaap/service/guards.py`` so the shared engine can raise them
 without importing the ICAAP. ``guards`` re-exports these names, so every
 existing ``guards.conflict(...)`` call site is unchanged and there is still one
 implementation.

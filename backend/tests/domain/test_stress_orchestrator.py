@@ -17,7 +17,6 @@ import pytest
 
 from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.fx.engine import FxPosition
-from app.domain.icaap.pillar2 import fx as icaap_fx
 from app.domain.irr.engine import IrrPosition
 from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
@@ -36,6 +35,7 @@ from app.domain.stress.orchestrator import (
     run_enterprise_stress,
 )
 from app.domain.stress.translation import MacroPathPoint
+from app.icaap.domain.pillar2 import fx as icaap_fx
 from tests.domain.stress_fixtures import base_paths as base_macro_paths
 from tests.domain.stress_fixtures import (
     bog_capital_params,
@@ -514,7 +514,7 @@ def _fx_positions() -> tuple[FxPosition, ...]:
 #
 # The overlay that feeds Appendix II Table 5 used to restate
 # ``Tier 1 × max(stressed NOP% − base NOP%, 0)`` — the change in a RATIO, which
-# ``app/domain/icaap/pillar2/fx.py`` records as "not a loss (audit M8)". A
+# ``app/icaap/domain/pillar2/fx.py`` records as "not a loss (audit M8)". A
 # single filed ICAAP therefore carried two different definitions of the FX
 # add-on and the source-consistency control compared them against each other
 # (audit W3). These tests pin the extraction three ways: the value, the SIGN

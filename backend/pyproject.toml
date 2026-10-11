@@ -38,7 +38,7 @@ dependencies = [
   "pyhanko[opentype]",
   "pyhanko-certvalidator",
   "pyjwt[crypto]",
-  # The ICAAP working copy (app/services/icaap/render/docx.py) is an editable
+  # The ICAAP working copy (app/icaap/service/render/docx.py) is an editable
   # Word document, not a rendering of one: the bank's own reviewers redline it
   # outside the platform. python-docx (MIT) writes the OOXML package directly;
   # its own dependencies (lxml, typing-extensions) were already locked.

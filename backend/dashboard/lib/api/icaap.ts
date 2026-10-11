@@ -91,7 +91,7 @@ export type {
  *
  * The contract types it as an opaque object (`{ [key: string]: any }`) because
  * the ALLOWLIST, not the OpenAPI schema, is what decides a document's shape —
- * `app/domain/icaap/editor_schema.json`, which the editor mirrors and
+ * `app/icaap/domain/editor_schema.json`, which the editor mirrors and
  * `components/icaap/editor/schema.parity.test.ts` pins.
  */
 export type ProseMirrorDoc = { type: "doc"; content?: unknown[] };
@@ -144,7 +144,12 @@ function invalidateCycle(
   scope: QueryAuthorityScope,
   bankId: string | undefined,
 ): Promise<void[]> {
-  return invalidateScopedPrefixes(queryClient, [...ICAAP_PREFIXES], scope, bankId);
+  return invalidateScopedPrefixes(
+    queryClient,
+    [...ICAAP_PREFIXES],
+    scope,
+    bankId,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +161,8 @@ export function useIcaapFrameworks(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
     queryKey: scopedQueryKey("icaap-frameworks", scope, bankId ?? null),
-    queryFn: () => apiCall(() => icaapApi.listIcaapFrameworks({ bankId: bankId! })),
+    queryFn: () =>
+      apiCall(() => icaapApi.listIcaapFrameworks({ bankId: bankId! })),
     enabled: workspaceEnabled && Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -167,7 +173,8 @@ export function useIcaapBlockTypes(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
     queryKey: scopedQueryKey("icaap-block-types", scope, bankId ?? null),
-    queryFn: () => apiCall(() => icaapApi.listIcaapBlockTypes({ bankId: bankId! })),
+    queryFn: () =>
+      apiCall(() => icaapApi.listIcaapBlockTypes({ bankId: bankId! })),
     enabled: workspaceEnabled && Boolean(bankId),
     staleTime: 5 * 60_000,
   });
@@ -207,9 +214,16 @@ export function useIcaapCycle(
   const workspaceEnabled = useIcaapWorkspaceEnabled();
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey("icaap-cycle", scope, bankId ?? null, cycleId ?? null),
+    queryKey: scopedQueryKey(
+      "icaap-cycle",
+      scope,
+      bankId ?? null,
+      cycleId ?? null,
+    ),
     queryFn: () =>
-      apiCall(() => icaapApi.getIcaapCycle({ bankId: bankId!, cycleId: cycleId! })),
+      apiCall(() =>
+        icaapApi.getIcaapCycle({ bankId: bankId!, cycleId: cycleId! }),
+      ),
     enabled: workspaceEnabled && Boolean(bankId && cycleId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -403,7 +417,10 @@ export function useCreateIcaapCycle(bankId: string | undefined) {
   return useMutation({
     mutationFn: (payload: IcaapCycleCreate) =>
       apiCall(() =>
-        icaapApi.createIcaapCycle({ bankId: bankId!, icaapCycleCreate: payload }),
+        icaapApi.createIcaapCycle({
+          bankId: bankId!,
+          icaapCycleCreate: payload,
+        }),
       ),
     onSuccess: () => {
       void invalidateCycle(queryClient, scope, bankId);
@@ -747,7 +764,9 @@ export function useUploadIcaapAttachment(
  */
 export function filenameFrom(response: Response, fallback: string): string {
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  return /filename\*?=(?:UTF-8'')?"?([^";]+)"?/.exec(disposition)?.[1] ?? fallback;
+  return (
+    /filename\*?=(?:UTF-8'')?"?([^";]+)"?/.exec(disposition)?.[1] ?? fallback
+  );
 }
 
 export function saveBlob(blob: Blob, filename: string): void {

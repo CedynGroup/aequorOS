@@ -1,7 +1,7 @@
 """The ICAAP governed codes are seeded EXACTLY ONCE, and every seed is well formed.
 
 Two workstreams seed ICAAP parameters into one global table: the workspace
-(``202609190055`` via ``app/services/icaap/parameters.py``, eight codes) and the
+(``202609190055`` via ``app/icaap/service/parameters.py``, eight codes) and the
 Pillar 2 engine (``202609190056`` via ``regulatory_parameters``, twenty). Six
 codes were drafted into both sets. A code seeded twice does not fail loudly —
 ``uq_regulatory_parameter_generation`` would reject the second INSERT at the same
@@ -37,9 +37,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.policy import parameter_shapes
+from app.icaap.service import parameters as workspace_parameters
 from app.models import RegulatoryParameter
 from app.services import regulatory_parameters
-from app.services.icaap import parameters as workspace_parameters
 
 BACKEND = Path(__file__).resolve().parents[2]
 MIGRATION = BACKEND / "alembic" / "versions" / "202609190056_icaap_pillar2_parameters.py"

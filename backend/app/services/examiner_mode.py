@@ -226,8 +226,8 @@ def _examiner_icaap_cycles(
     applies to every other examiner ICAAP read, resolved from that module so
     there is one definition of "what a supervisor may see" rather than two.
     """
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415 - avoid an import cycle
-    from app.services.icaap.guards import EXAMINER_VISIBLE_STATUSES  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415 - avoid an import cycle
+    from app.icaap.service.guards import EXAMINER_VISIBLE_STATUSES  # noqa: PLC0415
 
     if "icaap" in hidden:
         return []

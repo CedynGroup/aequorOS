@@ -36,7 +36,7 @@ from typing import Final
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-from app.services.icaap.render.pdf import FontSet
+from app.icaap.service.render.pdf import FontSet
 from app.services.regulatory_reporting.exports.text import xml_safe
 
 #: The committed faces. Documented, with checksums, in ``fonts/README.md``.

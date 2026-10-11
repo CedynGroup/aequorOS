@@ -37,7 +37,7 @@ opportunities but are load-bearing.
   (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them
   by construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process)
   because the process holding the model key must run nothing else. **Jurisdiction is data
-  under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and the
+  under `app/icaap/domain/frameworks/<code>/`** with no `if jurisdiction ==` — and the
   Nigeria and Kenya manifests were built WITHOUT reading their primary texts (recorded in
   each file's `## Provenance of this manifest`); obtain and verify them before a customer
   relies on either.
@@ -46,7 +46,7 @@ opportunities but are load-bearing.
 - The DISPATCH plane must not write to the CALCULATION plane's parameter ledger, so
   `PrefetchedParameterResolver.load()` requires an explicit `record=` with no default (with
   a default, adding one registry entry moves an unrelated family's content digest). Every
-  ICAAP read of a governed row goes through `app/services/icaap/parameters.py`; no ICAAP
+  ICAAP read of a governed row goes through `app/icaap/service/parameters.py`; no ICAAP
   module may touch the live plane (`tests/architecture/test_icaap_boundaries.py`).
 
 ---
@@ -55,12 +55,12 @@ opportunities but are load-bearing.
 
 Four planes, deliberately separate.
 
-**The workspace** (`app/domain/icaap/`, `app/services/icaap/`,
-`app/features/manage_icaap*.py`) is a narrative document under review: cycles,
+**The workspace** (`app/icaap/domain/`, `app/icaap/service/`,
+`app/icaap/api/manage_icaap*.py`) is a narrative document under review: cycles,
 sections of ProseMirror text, data blocks bound to computed evidence, a
 requirement checklist, a stage/decision chain, attachments.
 
-**The Pillar 2 engines** (`app/domain/icaap/pillar2/`, plus
+**The Pillar 2 engines** (`app/icaap/domain/pillar2/`, plus
 `app/domain/credit/`, `app/domain/irr/standardised*.py`) are pure. They take
 governed parameters and a book, and return typed results or typed refusals.
 
@@ -112,7 +112,7 @@ gate; **neither may drop it**. The two resolutions went in opposite directions,
 deliberately:
 
 - the **reporting-period and reconciliation** gates sit in `freeze_cycle`
-  (`app/services/icaap/freeze.py`), because they need the cycle's as-of date and
+  (`app/icaap/service/freeze.py`), because they need the cycle's as-of date and
   produce ICAAP-named 409s (`no_computed_position`, `filing_reconciliation`);
 - the **withdrawn-evidence** gate sits at the MINT
   (`_assert_evidence_current`), because a freeze-minted filing binds engine runs
@@ -213,7 +213,7 @@ two registry-driven sites (`eligibility.parameter_resolver()`,
 `calendar._governed_deadlines`) pass `record=False`; the engines pass
 `record=True`. The ICAAP report plane seals no run at all and writes its own
 governed-row record onto the frozen snapshot, so every ICAAP read goes through
-`app/services/icaap/parameters.py` — the plane's one non-recording door, pinned
+`app/icaap/service/parameters.py` — the plane's one non-recording door, pinned
 by `tests/architecture/test_icaap_boundaries.py`.
 
 Nothing special-cases ICAAP or any parameter code. A future registry entry —
@@ -341,7 +341,7 @@ reasoning about it.
 ## 9. Jurisdiction is data — including for ICAAP
 
 A jurisdiction's ICAAP framework is JSON under
-`app/domain/icaap/frameworks/<code>/`, with no `if jurisdiction ==` anywhere
+`app/icaap/domain/frameworks/<code>/`, with no `if jurisdiction ==` anywhere
 (D-076). Ghana's four-month window, Nigeria's absent Table 5, Kenya's absent
 disclosure, an absent return family and an absent method mandate are each data,
 each with a test. This applies the
@@ -374,7 +374,7 @@ is **not** verified provenance.
 
 Also open by design, and visible rather than hidden: NG and KE have **no
 governed parameter rows at all** (6 and 8 codes drafted). That gap is pinned as
-a shrinkable ceiling in `tests/domain/icaap/test_framework_param_refs.py`, so it
+a shrinkable ceiling in `tests/icaap/domain/test_framework_param_refs.py`, so it
 cannot grow unnoticed.
 
 ### One thing that is NOT a jurisdiction leak

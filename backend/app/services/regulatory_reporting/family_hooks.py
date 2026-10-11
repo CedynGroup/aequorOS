@@ -135,7 +135,7 @@ class FamilyHooks:
 #: family -> the module that carries its ``HOOKS`` instance. Declared here so
 #: the set of families with hooks is READABLE in one place; resolved lazily.
 HOOK_MODULES: Final[dict[str, str]] = {
-    "icaap": "app.services.icaap.filing_hooks",
+    "icaap": "app.icaap.service.filing_hooks",
 }
 
 #: Explicitly installed hooks, which take precedence over :data:`HOOK_MODULES`.

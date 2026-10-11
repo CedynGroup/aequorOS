@@ -1,7 +1,7 @@
 """The filing review chain: the bank's template, a package's pinned chain, its decisions.
 
 Three tables, and each is the package-plane twin of an ICAAP one
-(``models/icaap.py``, P3) because they run the same engine
+(``icaap/models/workspace.py``, P3) because they run the same engine
 (``domain/workflow/chain.py``):
 
 * ``filing_workflow_templates`` — the bank's own chain, proposed and approved by

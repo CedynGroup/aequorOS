@@ -14,11 +14,48 @@ turns out to have been recomputed under somebody's feet.
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
+from typing import Protocol, cast
 
 import pytest
 
-from app.domain.icaap.frameworks import registry
+from app.domain.fx.engine import FxPosition
+from app.domain.stress.appendix_ii import build_appendix_ii
+from app.domain.stress.management_actions import RecognitionCaps
+from app.domain.stress.orchestrator import EnterpriseStressOutcome
+from app.domain.stress.projection import EnterpriseProjection
+from app.domain.stress.translation import MacroPathPoint
+from app.icaap.domain.frameworks import registry
+from app.services import enterprise_stress
+from tests.domain import test_stress_appendix_ii, test_stress_orchestrator
+from tests.domain.stress_fixtures import severe_paths
+
+
+class _AppendixFixtures(Protocol):
+    _RECOGNITION_CAPS: RecognitionCaps
+
+    def _projection(self, paths: Sequence[MacroPathPoint]) -> EnterpriseProjection: ...
+
+
+class _FxFixtures(Protocol):
+    def _fx_positions(self) -> tuple[FxPosition, ...]: ...
+
+    def _short_usd(self) -> tuple[FxPosition, ...]: ...
+
+    def _fx_run(self, positions: Sequence[FxPosition]) -> EnterpriseStressOutcome: ...
+
+
+# Type only the fixture calls used here; their legacy helpers remain unchanged.
+APPENDIX_FIXTURES = cast(_AppendixFixtures, test_stress_appendix_ii)
+FX_FIXTURES = cast(_FxFixtures, test_stress_orchestrator)
+# Reusing private test fixtures is intentional, rather than an application API.
+RECOGNITION_CAPS = APPENDIX_FIXTURES._RECOGNITION_CAPS  # pyright: ignore[reportPrivateUsage]
+projection = APPENDIX_FIXTURES._projection  # pyright: ignore[reportPrivateUsage]
+fx_positions = FX_FIXTURES._fx_positions  # pyright: ignore[reportPrivateUsage]
+short_usd = FX_FIXTURES._short_usd  # pyright: ignore[reportPrivateUsage]
+fx_run = FX_FIXTURES._fx_run  # pyright: ignore[reportPrivateUsage]
 
 BACKEND = Path(__file__).parents[2]
 #: The whole ICAAP surface, not just its two packages. The route layer is
@@ -27,8 +64,9 @@ BACKEND = Path(__file__).parents[2]
 #: guard scanned two of the five (architecture audit M6), so its docstring's
 #: promise to fail "the moment the dependency is WRITTEN" did not hold there.
 SCANNED = (
-    "app/domain/icaap",
-    "app/services/icaap",
+    "app/icaap/domain",
+    "app/icaap/service",
+    "app/icaap/api",
     "app/domain/ai",
     "app/services/ai",
 )
@@ -71,6 +109,10 @@ STATEFUL_PREFIXES = (
     "app.identity.models",
     "app.identity.service",
     "app.identity.public",
+    "app.icaap.api",
+    "app.icaap.models",
+    "app.icaap.service",
+    "app.icaap.public",
 )
 
 
@@ -148,7 +190,7 @@ def test_no_icaap_module_names_a_live_model(path: Path) -> None:
     assert not offending, f"{path.relative_to(BACKEND)} names {offending}"
 
 
-DOMAIN_FILES = _python_files("app/domain/icaap")
+DOMAIN_FILES = _python_files("app/icaap/domain")
 DOMAIN_IDS = [str(path.relative_to(BACKEND)) for path in DOMAIN_FILES]
 
 
@@ -165,7 +207,7 @@ def test_the_domain_package_reads_its_data_from_its_own_directory() -> None:
     """The framework JSON and the editor schema ship inside the image."""
     assert registry.FRAMEWORK_ROOT.is_dir()
     assert list(registry.FRAMEWORK_ROOT.glob("*/*.json")), "no framework is published"
-    assert (BACKEND / "app/domain/icaap/editor_schema.json").is_file()
+    assert (BACKEND / "app/icaap/domain/editor_schema.json").is_file()
 
 
 def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
@@ -177,7 +219,7 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     tree = ast.parse(violation.read_text(encoding="utf-8"))
-    imported = _imported_modules(tree, "app.services.icaap.leaky")
+    imported = _imported_modules(tree, "app.icaap.service.leaky")
     assert any(name.startswith("app.services.live_block") for name in imported)
     assert _called_names(tree) & FORBIDDEN_CALLS
 
@@ -191,14 +233,14 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
 # taken anywhere in that session is credited to whichever run seals next. The
 # ICAAP workspace is a REPORT plane: it seals no run and writes its own
 # governed-row record onto the frozen snapshot. Every ICAAP read therefore goes
-# through ``app/services/icaap/parameters.py``, which passes ``record=False``.
+# through ``app/icaap/service/parameters.py``, which passes ``record=False``.
 #
 # This replaces the invariant "no ICAAP request session ever seals a
 # ``RegulatoryRun``", which nothing stated and nothing tested, and which a
 # "run the engine now" action on an ICAAP block would break in one line.
 
 #: The one ICAAP module permitted to speak to the control plane directly.
-PARAMETER_DOOR = "app/services/icaap/parameters.py"
+PARAMETER_DOOR = "app/icaap/service/parameters.py"
 #: Reads that would enter the ambient ledger unless the plane is stated.
 LEDGER_ENTRY_POINTS = frozenset({"try_resolve", "resolve", "resolve_class_value", "seed_values"})
 
@@ -230,7 +272,7 @@ def test_icaap_reads_governed_parameters_only_through_its_own_door(path: Path) -
     assert not offending, (
         f"{path.relative_to(BACKEND)} calls regulatory_parameters.{offending} directly. "
         f"The ICAAP report plane seals no RegulatoryRun, so its reads must not enter the "
-        f"session consumption ledger — go through app.services.icaap.parameters, which "
+        f"session consumption ledger — go through app.icaap.service.parameters, which "
         f"passes record=False."
     )
 
@@ -290,73 +332,56 @@ def test_the_plane_scanner_would_catch_a_deliberate_violation(tmp_path: Path) ->
 # --- D-038: one FX Pillar 2 definition across the filed document -------------
 
 
-#: The FX outcome fields the retired overlay formula read. Table 5's
-#: ``country_and_fx`` was ``Tier 1 × max(stressed NOP% − base NOP%, 0)``, the
-#: change in a RATIO; the ICAAP register used the revaluation loss. Both
-#: appeared in one filed ICAAP and the source-consistency control compared
-#: them, so a preparer had to explain a discrepancy the platform created
-#: (audit W3). D-038 recorded the extraction as done when it was not, which is
-#: why this is a test rather than a note.
-_RETIRED_FX_OVERLAY_FIELDS = ("stressed_nop_pct_tier1", "base_nop_pct_tier1")
-
-_FX_OVERLAY_OWNERS = (
-    "app/services/enterprise_stress.py",
-    "app/domain/stress/appendix_ii.py",
+@pytest.mark.parametrize(
+    ("short", "loss", "addon"),
+    [(False, Decimal("0"), Decimal("0")), (True, Decimal("8000000"), Decimal("3500000"))],
 )
+def test_the_stress_orchestrator_computes_the_fx_revaluation_addon(
+    short: bool, loss: Decimal, addon: Decimal
+) -> None:
+    outcome = fx_run(short_usd() if short else fx_positions())
+    assert outcome.fx is not None
+    assert outcome.fx.revaluation_loss == loss
+    assert outcome.fx.pillar1_fx_capital == Decimal("4500000")
+    assert outcome.fx.pillar2_addon == addon
+    serialized = outcome.serialize()["fx"]
+    assert isinstance(serialized, dict)
+    serialized_fx = cast(dict[str, object], serialized)
+    serialized_addon = serialized_fx["pillar2_addon"]
+    assert isinstance(serialized_addon, str)
+    assert Decimal(serialized_addon) == addon
 
 
-@pytest.mark.parametrize("relative", _FX_OVERLAY_OWNERS)
-def test_the_stress_overlay_does_not_restate_the_fx_addon(relative: str) -> None:
-    source = (BACKEND / relative).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    read = {
-        node.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr in _RETIRED_FX_OVERLAY_FIELDS
-    }
-    assert read == set(), (
-        f"{relative} computes an FX figure from NOP percentages. The Pillar 2 FX "
-        f"add-on has one definition (app/domain/icaap/pillar2/fx.py); the overlay "
-        f"reads FxOutcome.pillar2_addon."
+@pytest.mark.parametrize("short", [False, True])
+def test_the_stress_overlay_and_appendix_preserve_the_fx_addon(short: bool) -> None:
+    outcome = fx_run(short_usd() if short else fx_positions())
+    expected = Decimal("3500") if short else Decimal("0")
+    # Exercise the internal overlay seam without changing its public interface.
+    overlay = enterprise_stress._pillar2_overlay(outcome, 3)  # pyright: ignore[reportPrivateUsage]
+    assert overlay is not None
+    assert set(overlay) == {1, 2, 3}
+    assert all(row.country_and_fx == expected for row in overlay.values())
+    tables = build_appendix_ii(
+        projection(severe_paths()),
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=Decimal("13"),
+        recognition_caps=RECOGNITION_CAPS,
+        pillar2_by_stress_year=overlay,
     )
-
-
-def test_the_stress_orchestrator_computes_the_fx_addon_with_the_icaap_function() -> None:
-    """The positive half: D-038 is true in code, not only in the decision log."""
-    source = (BACKEND / "app/domain/stress/orchestrator.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported = _imported_modules(tree, "app.domain.stress.orchestrator")
-
-    assert "app.domain.icaap.pillar2.fx" in imported, (
-        "the enterprise stress orchestrator must derive Table 5's country_and_fx "
-        "from the ICAAP Pillar 2 FX method (D-038)"
-    )
-    called = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
-    assert "fx_revaluation_addon" in called
-
-
-def test_the_fx_guard_convicts_the_retired_overlay() -> None:
-    """Proof the guard above reports rather than merely being present.
-
-    This is the overlay body verbatim as it stood until 2026-09-20.
-    """
-    retired = (
-        "def _pillar2_overlay(outcome, tier1, horizon_years):\n"
-        "    if outcome.fx is not None:\n"
-        "        nop_uplift = max(\n"
-        "            outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1, _ZERO\n"
-        "        )\n"
-        "        country_fx = thousands(tier1 * nop_uplift / _HUNDRED)\n"
-        "    return country_fx\n"
-    )
-    tree = ast.parse(retired)
-    read = {
-        node.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr in _RETIRED_FX_OVERLAY_FIELDS
-    }
-    assert read == set(_RETIRED_FX_OVERLAY_FIELDS)
+    for row in tables.table5_rwa.rows:
+        assert row.pillar2.country_and_fx == (
+            expected if row.label.startswith("stress_y") else None
+        )
+    serialized = tables.serialize()["table5_rwa"]
+    assert isinstance(serialized, dict)
+    serialized_table = cast(dict[str, object], serialized)
+    for row in cast(list[dict[str, object]], serialized_table["rows"]):
+        value = cast(dict[str, object], row["pillar2"])["country_and_fx"]
+        label = row["label"]
+        assert isinstance(label, str)
+        if label.startswith("stress_y"):
+            assert isinstance(value, str)
+            assert Decimal(value) == expected
+        else:
+            assert value is None

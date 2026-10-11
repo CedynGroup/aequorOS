@@ -7,7 +7,7 @@ is the first-order correction for that — the capital the asymptotic formula
 leaves out because a finite number of names still carry undiversified risk.
 
 **This is the full adjustment, and it is not what the platform already had.**
-``app/domain/icaap/pillar2/concentration.py`` ships ``hhi_proportional_heuristic``
+``app/icaap/domain/pillar2/concentration.py`` ships ``hhi_proportional_heuristic``
 — a governed coefficient multiplied by the book's HHI — and its own docstring
 says it is *not* a granularity adjustment (D-016). That is the honest position:
 a coefficient × HHI has no obligor PD, no LGD, no correlation and no confidence

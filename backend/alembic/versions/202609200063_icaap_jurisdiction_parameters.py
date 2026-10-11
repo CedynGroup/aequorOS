@@ -16,7 +16,7 @@ platform policy, not a regulator's number, in every jurisdiction.
 **Sourcing, stated plainly because the rows will outlive this message.**
 Neither primary text is in this repository and nobody on this platform has read
 either one. The values come from the extraction record behind
-``app/domain/icaap/frameworks/{ng,ke}/SOURCES.md`` — a whole-document reading
+``app/icaap/domain/frameworks/{ng,ke}/SOURCES.md`` — a whole-document reading
 made in the P5 design session of 2026-09-19 whose ``sha256`` identifies a copy
 to obtain and cannot be re-verified from a checkout (D-076). Every row is
 therefore ``confirmation_status='pending'`` and says so in its own citation, in
@@ -24,7 +24,7 @@ words that describe the actual gap: *we have not read the regulator*, which is
 not what Ghana's "awaiting stakeholder confirmation" rows say. What is the
 platform's judgement rather than a regulator's number — the 5x5 materiality
 matrix, which per that extraction neither instrument prescribes — carries the
-``REPRESENTATIVE:`` prefix, which is load-bearing: ``services/icaap/params.py``
+``REPRESENTATIVE:`` prefix, which is load-bearing: ``icaap/service/params.py``
 tests for it at the START of the string and that flag is what labels the value
 on readiness, in the Pillar 2 register and in a frozen report's provenance.
 

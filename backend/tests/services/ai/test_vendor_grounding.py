@@ -26,7 +26,7 @@ from app.core import outbound
 from app.core.config import get_settings
 from app.domain.ai import grounding as grounding_domain
 from app.domain.ai.lexicon import load_lexicon
-from app.schemas.icaap_ai import SectionDraft
+from app.icaap.schemas.ai import SectionDraft
 from app.services.ai import client as ai_client
 from app.services.ai import google_model, openai_model, tiered, vendors
 from app.services.ai.grounding import limits_from_settings

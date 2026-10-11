@@ -1,6 +1,6 @@
 """The bank's own filing review chain: proposing one, and approving it by four eyes.
 
-The package-plane twin of ``services/icaap/workflow_templates.py``, and for the
+The package-plane twin of ``icaap/service/workflow_templates.py``, and for the
 same reason: a bank whose Head of Compliance sits between the Approver and the
 Validator does not have the platform default, and a platform that made it
 pretend otherwise would be recording the wrong governance.

@@ -1,6 +1,6 @@
 """What a review chain is, and what a decision round means (pure, shared).
 
-This is the ICAAP stage engine (``domain/icaap/workflow.py``, P3) with the
+This is the ICAAP stage engine (``icaap/domain/workflow.py``, P3) with the
 ICAAP out of it. Two planes run it — the ICAAP review chain and the BoG filing
 chain — and they run the SAME code, because the alternative is two
 implementations of "does this approval still stand" that drift.

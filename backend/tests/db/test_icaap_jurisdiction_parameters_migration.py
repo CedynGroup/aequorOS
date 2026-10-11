@@ -29,7 +29,7 @@ import pytest
 from sqlalchemy import text
 
 from alembic import command
-from app.services.icaap.parameters import ICAAP_JURISDICTION_SEED_PARAMETERS
+from app.icaap.service.parameters import ICAAP_JURISDICTION_SEED_PARAMETERS
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
